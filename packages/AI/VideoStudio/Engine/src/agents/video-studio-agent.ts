@@ -1,5 +1,4 @@
 import { BaseAgent } from '@memberjunction/ai-agents';
-import { type ChatMessage } from '@memberjunction/ai';
 import {
     type AgentConfiguration,
     type AgentSubAgentRequest,
@@ -14,6 +13,7 @@ import {
     LogError,
     RunView,
     type IRunViewProvider,
+    type UserInfo,
 } from '@memberjunction/core';
 import {
     BrandKitEngine,
@@ -24,7 +24,6 @@ import {
 import { EscapeSQLString, RegisterClass, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
     BuildGenerationProvenanceSummary,
-    RestoreStrippedFormatKeys,
     ValidateVideoGenerationSpec,
     VIDEO_INTERACTION_MODES,
     VIDEO_STUDIO_SPEC_VERSION,
@@ -43,8 +42,13 @@ import {
     EvaluateGates,
     FindIntegrityOrGateCriterionFailure,
     GENERATED_ASSET_INTEGRITY_CRITERION_KEY,
+    IsVideoStudioStageName,
+    NormalizeStageName,
     ReadApprovalDecision,
     RequestRegeneration,
+    ResolveCanonicalStage,
+    VIDEO_STUDIO_STAGES,
+    type VideoStudioStageName,
 } from '../gates.js';
 import { BuildRepairBrief } from '../review/critic-input.js';
 import { ComposeHumanReviewNotes } from '../review/human-review-notes.js';
@@ -56,20 +60,7 @@ import {
 import { INLINE_EPHEMERAL_FILE_PREFIX, StoreFile } from '../storage.js';
 import { ValidateVideoGenerationSpecAsync } from '../validate-spec-async.js';
 
-/**
- * Ordered stage sub-agent names under the root `Video Studio` agent.
- */
-export const VIDEO_STUDIO_STAGES = [
-    'Video Studio - Director',
-    'Video Studio - Art Director',
-    'Video Studio - Storyboard',
-    'Video Studio - Pre-Production',
-    'Video Studio - Motion Engineer',
-    'Video Studio - Render',
-    'Video Studio - Critic',
-] as const;
-
-export type VideoStudioStageName = (typeof VIDEO_STUDIO_STAGES)[number];
+export { VIDEO_STUDIO_STAGES, type VideoStudioStageName };
 
 /**
  * Sentinel value placed in `Output.Videos[*].InlineBase64` inside the root `Video Studio`
@@ -88,65 +79,26 @@ const STAGE_PROGRESS_PERCENTAGE: Readonly<Record<string, number>> = {
     'Video Studio - Critic': 95,
 };
 
-const STAGE_UPSTREAM_SECTION_PATHS: Readonly<Record<string, readonly string[]>> = {
-    'Video Studio - Director': [
-        'Film',
-        'Archetype',
-        'Assets.Required',
-        'Assets.NeverInvent',
-        'Assets.Generate',
-        'DataBindings',
-    ],
-    'Video Studio - Art Director': ['Style', 'Assets.Generate'],
-    'Video Studio - Storyboard': ['Beats', 'StateList', 'Audio'],
-    'Video Studio - Pre-Production': ['DataSnapshot', 'Audio', 'Beats', 'Assets'],
-    'Video Studio - Motion Engineer': ['Output.Source'],
-    'Video Studio - Render': ['Output', 'Review.Gates'],
-    'Video Studio - Critic': ['Review.Rounds', 'Review.Scores'],
-};
+interface ConversationAttachmentRow {
+    ID: string;
+    MimeType?: string | null;
+    FileName?: string | null;
+    FileID?: string | null;
+    InlineData?: string | null;
+    ArtifactVersionID?: string | null;
+}
+
+interface AttachmentDedupeSets {
+    ExistingFileIds: UUIDSet;
+    ExistingArtifactVersionIds: UUIDSet;
+    ExistingSources: Set<string>;
+}
 
 function isValidInteractionMode(value: unknown): value is VideoInteractionMode {
     return (
         typeof value === 'string' &&
         (VIDEO_INTERACTION_MODES as readonly string[]).includes(value)
     );
-}
-
-function resolveCanonicalStage(name: string | undefined | null): VideoStudioStageName | null {
-    if (!name) {
-        return null;
-    }
-    const trimmed = name.trim();
-    const lower = trimmed.toLowerCase();
-    const strippedLower = trimmed.replace(/^video\s+studio\s*-\s*/i, '').trim().toLowerCase();
-    for (const stage of VIDEO_STUDIO_STAGES) {
-        if (lower === stage.toLowerCase()) {
-            return stage;
-        }
-        const suffixLower = stage.replace('Video Studio - ', '').toLowerCase();
-        if (strippedLower === suffixLower && /^video\s+studio\s*-\s*/i.test(trimmed)) {
-            return stage;
-        }
-    }
-    return null;
-}
-
-function isVideoStudioStageName(name: string | undefined | null): boolean {
-    if (!name) {
-        return false;
-    }
-    return resolveCanonicalStage(name) !== null || /^video\s+studio\s*-\s*/i.test(name.trim());
-}
-
-function normalizeStageKey(stageName: string): string {
-    const canonical = resolveCanonicalStage(stageName);
-    if (canonical) {
-        return canonical.replace('Video Studio - ', '');
-    }
-    return (stageName ?? '')
-        .trim()
-        .replace(/^video\s+studio\s*-\s*/i, '')
-        .trim();
 }
 
 /**
@@ -167,36 +119,7 @@ export class VideoStudioAgent extends BaseAgent {
     private _callerMode: VideoInteractionMode | null = null;
     private _startedWithBrief: boolean = false;
     private _initialRoundCount: number = 0;
-    // INTERIM: PayloadManager drops keys that contain a dot (plan-notes 37)
-    private _lastSubAgentPayload: Partial<VideoGenerationSpec> | undefined;
     private _inlineVideoBase64ByFormat: Partial<Record<VideoFormat, string>> = {};
-
-    protected override async ExecuteSubAgent<SC = any, SR = any>(
-        params: ExecuteAgentParams<SC>,
-        subAgentRequest: AgentSubAgentRequest<SC>,
-        subAgent: MJAIAgentEntityExtended,
-        stepEntity: MJAIAgentRunStepEntityExtended,
-        payload?: SR,
-        contextMessage?: ChatMessage,
-        stepCount: number = 0,
-    ): Promise<ExecuteAgentResult<SR>> {
-        this._lastSubAgentPayload = undefined;
-        const result = await super.ExecuteSubAgent(
-            params,
-            subAgentRequest,
-            subAgent,
-            stepEntity,
-            payload,
-            contextMessage,
-            stepCount,
-        );
-        if (result.success && result.payload && typeof result.payload === 'object') {
-            this._lastSubAgentPayload = structuredClone(
-                result.payload as unknown as Partial<VideoGenerationSpec>,
-            );
-        }
-        return result;
-    }
 
     protected override async validateAgent(
         agent: MJAIAgentEntityExtended,
@@ -212,31 +135,28 @@ export class VideoStudioAgent extends BaseAgent {
         const hasCycle = parentHierarchy.some(
             (ancestor) => ancestor.trim().toLowerCase() === normalizedSelf,
         );
-
-        if (hasCycle) {
-            const lastEntry = this.AgentHierarchy[this.AgentHierarchy.length - 1];
-            const chainEntries =
-                lastEntry && lastEntry.trim().toLowerCase() === normalizedSelf
-                    ? [...this.AgentHierarchy]
-                    : [...this.AgentHierarchy, agentName];
-            const chain = chainEntries.join(' → ');
-            const errorMessage = `${agentName} is already running higher in this call chain (${chain}). A production cannot start another production.`;
-
-            const run = this.AgentRun;
-            if (run) {
-                run.ErrorMessage = errorMessage;
-                run.Status = 'Failed';
-                run.Success = false;
-                run.FinalStep = 'Failed';
-            }
-
-            return {
-                success: false,
-                agentRun: run!,
-            };
+        if (!hasCycle) {
+            return null;
         }
 
-        return null;
+        const lastEntry = this.AgentHierarchy[this.AgentHierarchy.length - 1];
+        const chainEntries =
+            lastEntry && lastEntry.trim().toLowerCase() === normalizedSelf
+                ? [...this.AgentHierarchy]
+                : [...this.AgentHierarchy, agentName];
+        const errorMessage = `${agentName} is already running higher in this call chain (${chainEntries.join(' → ')}). A production cannot start another production.`;
+
+        const run = this.AgentRun;
+        if (run) {
+            run.ErrorMessage = errorMessage;
+            run.Status = 'Failed';
+            run.Success = false;
+            run.FinalStep = 'Failed';
+        }
+        return {
+            success: false,
+            agentRun: run!,
+        };
     }
 
     /**
@@ -249,7 +169,7 @@ export class VideoStudioAgent extends BaseAgent {
         return { active: false, approved: false };
     }
 
-    protected override async executeAgentInternal<P = any>(
+    protected override async executeAgentInternal<P>(
         params: ExecuteAgentParams,
         config: AgentConfiguration,
     ): Promise<{ finalStep: BaseAgentNextStep<P>; stepCount: number }> {
@@ -268,24 +188,12 @@ export class VideoStudioAgent extends BaseAgent {
         const outcome = await super.executeAgentInternal(nextParams, config);
         const isTerminalExit =
             outcome.finalStep?.step === 'Success' || outcome.finalStep?.step === 'Failed';
-        if (outcome.finalStep?.newPayload && typeof outcome.finalStep.newPayload === 'object') {
-            const finalSpec = outcome.finalStep.newPayload as unknown as Partial<VideoGenerationSpec>;
-            this.restoreInlineVideoBase64(finalSpec);
-            if (isTerminalExit) {
-                this.clearEphemeralOutputFileIds(finalSpec);
-            }
-        }
-        if (this.AgentRun?.FinalPayloadObject && typeof this.AgentRun.FinalPayloadObject === 'object') {
-            const finalObj = this.AgentRun.FinalPayloadObject as Partial<VideoGenerationSpec>;
-            this.restoreInlineVideoBase64(finalObj);
-            if (isTerminalExit) {
-                this.clearEphemeralOutputFileIds(finalObj);
-            }
-        }
+        this.finalizePayloadInlineAndEphemeralOutputs(outcome.finalStep?.newPayload, isTerminalExit);
+        this.finalizePayloadInlineAndEphemeralOutputs(this.AgentRun?.FinalPayloadObject, isTerminalExit);
         return outcome;
     }
 
-    protected override async executeNextStep<P = any>(
+    protected override async executeNextStep<P>(
         params: ExecuteAgentParams,
         config: AgentConfiguration,
         previousDecision: BaseAgentNextStep<P> | null,
@@ -298,50 +206,15 @@ export class VideoStudioAgent extends BaseAgent {
                 previousDecision.subAgent?.name ??
                 previousDecision.subAgents?.[0]?.name ??
                 '';
-            const canonicalStage = resolveCanonicalStage(stageName);
+            const canonicalStage = ResolveCanonicalStage(stageName);
             if (canonicalStage) {
                 const candidatePayload = (result.newPayload ?? params.payload ?? {}) as Partial<VideoGenerationSpec>;
                 const stageSucceeded = result.step !== 'Failed';
-                const subAgentPayload = this._lastSubAgentPayload;
-                this._lastSubAgentPayload = undefined;
-                // INTERIM: PayloadManager drops keys that contain a dot (plan-notes 37)
-                if (
-                    stageSucceeded &&
-                    canonicalStage === 'Video Studio - Motion Engineer' &&
-                    subAgentPayload?.Output?.Source
-                ) {
-                    candidatePayload.Output = {
-                        Videos: candidatePayload.Output?.Videos ?? {},
-                        RenderMetadata: candidatePayload.Output?.RenderMetadata ?? {
-                            Renderer: 'HyperFrames',
-                            RendererVersion: '',
-                            Seed: 0,
-                            Fps: 30,
-                            DurationByFormat: {},
-                            RenderedAt: '',
-                        },
-                        ...(candidatePayload.Output ?? {}),
-                        Source: structuredClone(subAgentPayload.Output.Source),
-                    };
-                } else if (
-                    stageSucceeded &&
-                    canonicalStage === 'Video Studio - Render' &&
-                    subAgentPayload?.Output
-                ) {
-                    candidatePayload.Output = {
-                        ...(candidatePayload.Output ?? {}),
-                        ...structuredClone(subAgentPayload.Output),
-                        ...(candidatePayload.Output?.Source
-                            ? { Source: candidatePayload.Output.Source }
-                            : {}),
-                    };
-                }
                 const updatedPayload = this.ApplyStageResult(
                     params,
                     canonicalStage,
                     candidatePayload,
                     stageSucceeded,
-                    subAgentPayload,
                 );
                 if (this.AgentRun) {
                     this.AgentRun.FinalPayloadObject = updatedPayload;
@@ -366,15 +239,9 @@ export class VideoStudioAgent extends BaseAgent {
         stageName: string,
         payload: Partial<VideoGenerationSpec>,
         stageSucceeded: boolean = true,
-        subAgentPayload?: Partial<VideoGenerationSpec>,
     ): Partial<VideoGenerationSpec> {
-        const canonicalStage = resolveCanonicalStage(stageName) ?? stageName.trim();
+        const canonicalStage = ResolveCanonicalStage(stageName) ?? stageName.trim();
         const cloned = structuredClone(payload ?? {});
-
-        // INTERIM: JSONValidator.CleanValidationSyntax strips ':' from keys (plan-notes 38)
-        RestoreStrippedFormatKeys(cloned);
-        // INTERIM: PayloadManager.MergeUpstreamPayload drops empty arrays (plan-notes 39)
-        this.restoreDroppedEmptyArrays(cloned, subAgentPayload ?? this._lastSubAgentPayload, canonicalStage);
 
         this.syncArchetypeId(cloned);
         this.syncDeliverableFormats(cloned);
@@ -388,80 +255,13 @@ export class VideoStudioAgent extends BaseAgent {
         }
         this.stripInlineVideoBase64(cloned);
 
-        const effectiveMode = this.resolveEffectiveInteractionMode(cloned);
-        const gates = EvaluateGates(cloned, {
-            Settings: this._currentSettings,
-            BrandKitInScope: this._brandKitInScope,
-            EffectiveInteractionMode: effectiveMode,
-            InitialRoundCount: this._initialRoundCount,
-        });
-        cloned.Review = {
-            ...(cloned.Review ?? { Rounds: [] }),
-            Gates: gates,
-            Rounds: Array.isArray(cloned.Review?.Rounds) ? cloned.Review.Rounds : [],
-        };
-
+        const gates = this.evaluateAndAssignGates(cloned);
         if (stageSucceeded && canonicalStage === 'Video Studio - Critic') {
-            const rounds = cloned.Review.Rounds;
-            const newestRound = rounds.length > 0 ? rounds[rounds.length - 1] : undefined;
-            if (newestRound && Array.isArray(newestRound.Defects)) {
-                const handledKeys = new Set<string>();
-                for (const defect of newestRound.Defects) {
-                    const assetKey = defect?.AssetKey?.trim();
-                    if (defect && defect.Status === 'Open' && assetKey && !handledKeys.has(assetKey)) {
-                        const isGenerated = (cloned.Assets?.Approved ?? []).some(
-                            (a) => a?.Key === assetKey && a.Provenance === 'Generated',
-                        );
-                        if (isGenerated) {
-                            handledKeys.add(assetKey);
-                            const regen = RequestRegeneration(
-                                cloned,
-                                assetKey,
-                                this._currentSettings.MaxRegenerations,
-                            );
-                            if (regen.Allowed && regen.Spec.Assets) {
-                                cloned.Assets = regen.Spec.Assets;
-                            }
-                        }
-                    }
-                }
-            }
-
-            const g5 = gates.find((g) => g.Gate === 'G5');
-            if (g5?.Status === 'Passed') {
-                if (newestRound && Array.isArray(newestRound.Defects)) {
-                    for (const defect of newestRound.Defects) {
-                        if (
-                            defect &&
-                            defect.Status === 'Open' &&
-                            defect.Criterion !== GENERATED_ASSET_INTEGRITY_CRITERION_KEY
-                        ) {
-                            defect.Status = 'Deferred';
-                        }
-                    }
-                }
-                cloned.Review.HumanReviewNotes = ComposeHumanReviewNotes(cloned);
-            }
+            this.applyCriticRoundSideEffects(cloned, gates);
         }
 
         cloned.Status = DeriveStatus(cloned, gates);
-
-        const progressText = DescribeStageProgress(canonicalStage, cloned);
-        const formattedMessage = this.formatHierarchicalMessage(progressText);
-        try {
-            params.onProgress?.({
-                step: 'subagent_execution',
-                message: formattedMessage,
-                percentage: STAGE_PROGRESS_PERCENTAGE[canonicalStage] ?? 50,
-                metadata: {
-                    VideoStudioStatus: cloned.Status,
-                    Gates: gates,
-                },
-                displayMode: 'live',
-            });
-        } catch {
-            // Swallow progress callback errors so a UI listener cannot abort the production loop
-        }
+        this.emitStageProgress(params, canonicalStage, cloned, gates);
 
         return cloned;
     }
@@ -473,7 +273,7 @@ export class VideoStudioAgent extends BaseAgent {
         agentRun: MJAIAgentRunEntityExtended,
         currentStep: MJAIAgentRunStepEntityExtended,
     ): Promise<BaseAgentNextStep<P>> {
-        if (nextStep.step === 'ForEach' && isVideoStudioStageName(nextStep.forEach?.subAgent?.name)) {
+        if (nextStep.step === 'ForEach' && IsVideoStudioStageName(nextStep.forEach?.subAgent?.name)) {
             const msg = 'Call stages with a Sub-Agent step, one at a time';
             return {
                 ...nextStep,
@@ -483,7 +283,7 @@ export class VideoStudioAgent extends BaseAgent {
                 errorMessage: msg,
             };
         }
-        if (nextStep.step === 'While' && isVideoStudioStageName(nextStep.while?.subAgent?.name)) {
+        if (nextStep.step === 'While' && IsVideoStudioStageName(nextStep.while?.subAgent?.name)) {
             const msg = 'Call stages with a Sub-Agent step, one at a time';
             return {
                 ...nextStep,
@@ -532,167 +332,37 @@ export class VideoStudioAgent extends BaseAgent {
             return baseResult;
         }
 
-        const requestedList =
-            Array.isArray(baseResult.subAgents) && baseResult.subAgents.length > 0
-                ? baseResult.subAgents
-                : baseResult.subAgent
-                  ? [baseResult.subAgent]
-                  : [];
-
-        const stageRequests = requestedList.filter((req) => isVideoStudioStageName(req?.name));
-        if (stageRequests.length > 1) {
-            const names = stageRequests.map((r) => r.name).join(', ');
-            const msg = `Only one Video Studio stage sub-agent may run at a time (requested: ${names}). Invoke stages sequentially.`;
-            return {
-                ...baseResult,
-                step: 'Retry',
-                retryInstructions: msg,
-                errorMessage: msg,
-            };
-        }
-
+        const stageRequests = this.extractRequestedStages(baseResult);
         if (stageRequests.length === 0) {
             return baseResult;
         }
-
-        const hasStepFinishIf =
-            (baseResult.finishIf !== undefined && baseResult.finishIf !== null) ||
-            (nextStep.finishIf !== undefined && nextStep.finishIf !== null);
-        if (hasStepFinishIf || stageRequests.some((req) => req?.terminateAfter === true)) {
-            const msg = 'Stages never end the run; finish with Success';
-            return {
-                ...baseResult,
-                step: 'Retry',
-                terminate: false,
-                retryInstructions: msg,
-                errorMessage: msg,
-            };
+        const constraintRetry = this.validateStageSequenceConstraints(baseResult, nextStep, stageRequests);
+        if (constraintRetry) {
+            return constraintRetry;
         }
 
-        const stageReq = stageRequests[0];
-        const stageName = resolveCanonicalStage(stageReq.name) ?? stageReq.name;
-        const normalizedStage = normalizeStageKey(stageName);
+        const stageName = ResolveCanonicalStage(stageRequests[0].name) ?? stageRequests[0].name;
+        const normalizedStage = NormalizeStageName(stageName);
+        const { spec, gates, effectiveMode } = this.prepareSpecAndGates(currentPayload ?? params.payload);
 
-        const spec = structuredClone((currentPayload ?? params.payload ?? {}) as Partial<VideoGenerationSpec>);
-        this.syncDeliverableFormats(spec);
-        this.restoreCallerInteraction(spec);
-
-        const effectiveMode = this.resolveEffectiveInteractionMode(spec);
-        const gates = EvaluateGates(spec, {
-            Settings: this._currentSettings,
-            BrandKitInScope: this._brandKitInScope,
-            EffectiveInteractionMode: effectiveMode,
-            InitialRoundCount: this._initialRoundCount,
-        });
-        spec.Review = {
-            ...(spec.Review ?? { Rounds: [] }),
-            Gates: gates,
-            Rounds: Array.isArray(spec.Review?.Rounds) ? spec.Review.Rounds : [],
-        };
-
-        // Gate G2 Plan checkpoint before Pre-Production spend
-        if (normalizedStage === 'Pre-Production') {
-            const g1 = gates.find((g) => g.Gate === 'G1');
-            const g2 = gates.find((g) => g.Gate === 'G2');
-            if (g1?.Status === 'Passed' && g2?.Status === 'Pending' && g2?.Notes === 'AwaitingApproval') {
-                const pausedGates = gates.map((g): GateRecord =>
-                    g.Gate === 'G2'
-                        ? { ...g, Status: 'Blocked', Notes: 'AwaitingApproval' }
-                        : g,
-                );
-                spec.Review.Gates = pausedGates;
-                spec.Status = DeriveStatus(spec, pausedGates);
-                return {
-                    step: 'Plan' as BaseAgentNextStep<P>['step'],
-                    terminate: false,
-                    planDetails: {
-                        plan: DescribeStoryboardForApproval(spec),
-                    },
-                    message:
-                        "Storyboard ready for approval. Reply starting with 'Approve' to continue, or say what to change.",
-                    previousPayload: currentPayload,
-                    newPayload: spec as unknown as P,
-                };
-            }
+        const g2Pause = this.checkG2PlanCheckpoint(normalizedStage, spec, gates, currentPayload);
+        if (g2Pause) {
+            return g2Pause;
         }
 
-        const refusal = CheckStagePrerequisite(
-            stageName,
-            spec,
-            gates,
-            this._currentSettings,
-            this._initialRoundCount,
-        );
-        if (refusal) {
-            return {
-                ...baseResult,
-                step: 'Retry',
-                retryInstructions: refusal,
-                errorMessage: refusal,
-                newPayload: spec as unknown as P,
-            };
+        const prereqRetry = this.checkStagePrerequisites(baseResult, stageName, spec, gates);
+        if (prereqRetry) {
+            return prereqRetry;
         }
 
-        // Pre-Render async/structural spec validation (VS-SPEC-2b)
         if (normalizedStage === 'Render') {
-            const candidateForRender = this.buildNormalizedSpecForValidation(
-                spec,
-                'Composed',
-                effectiveMode,
-            );
-            const validationResult = params.contextUser
-                ? await ValidateVideoGenerationSpecAsync(
-                      candidateForRender,
-                      'Composed',
-                      params.contextUser,
-                      { MaxGeneratedVideoSeconds: this._currentSettings.MaxGeneratedVideoSeconds },
-                  )
-                : ValidateVideoGenerationSpec(candidateForRender, 'Composed', {
-                      MaxGeneratedVideoSeconds: this._currentSettings.MaxGeneratedVideoSeconds,
-                  });
-
-            if (!validationResult.Valid) {
-                const errSummary = validationResult.Errors.map(
-                    (e) => `${e.Code} (${e.Path}): ${e.Message}`,
-                ).join('; ');
-                const msg = `G3 (Stills): spec validation failed before Render: ${errSummary}`;
-                return {
-                    ...baseResult,
-                    step: 'Retry',
-                    retryInstructions: msg,
-                    errorMessage: msg,
-                    newPayload: spec as unknown as P,
-                };
+            const renderRetry = await this.validatePreRenderSpec(params, spec, effectiveMode, baseResult);
+            if (renderRetry) {
+                return renderRetry;
             }
         }
 
-        // Populate stage-specific prompt templateParameters (VS-AGT-1)
-        const stageTemplateParams = this.buildStageTemplateParameters(normalizedStage, spec);
-        if (Object.keys(stageTemplateParams).length > 0) {
-            if (baseResult.subAgent && isVideoStudioStageName(baseResult.subAgent.name)) {
-                baseResult.subAgent = {
-                    ...baseResult.subAgent,
-                    templateParameters: {
-                        ...(baseResult.subAgent.templateParameters ?? {}),
-                        ...stageTemplateParams,
-                    },
-                };
-            }
-            if (Array.isArray(baseResult.subAgents)) {
-                baseResult.subAgents = baseResult.subAgents.map((entry) =>
-                    isVideoStudioStageName(entry?.name)
-                        ? {
-                              ...entry,
-                              templateParameters: {
-                                  ...(entry.templateParameters ?? {}),
-                                  ...stageTemplateParams,
-                              },
-                          }
-                        : entry,
-                );
-            }
-        }
-
+        this.injectStageTemplateParameters(baseResult, normalizedStage, spec);
         return baseResult;
     }
 
@@ -714,24 +384,9 @@ export class VideoStudioAgent extends BaseAgent {
             return baseResult;
         }
 
-        const spec = structuredClone(
-            (baseResult.newPayload ?? currentPayload ?? params.payload ?? {}) as Partial<VideoGenerationSpec>,
+        const { spec, gates, effectiveMode } = this.prepareSpecAndGates(
+            baseResult.newPayload ?? currentPayload ?? params.payload,
         );
-        this.syncDeliverableFormats(spec);
-        this.restoreCallerInteraction(spec);
-
-        const effectiveMode = this.resolveEffectiveInteractionMode(spec);
-        const gates = EvaluateGates(spec, {
-            Settings: this._currentSettings,
-            BrandKitInScope: this._brandKitInScope,
-            EffectiveInteractionMode: effectiveMode,
-            InitialRoundCount: this._initialRoundCount,
-        });
-        spec.Review = {
-            ...(spec.Review ?? { Rounds: [] }),
-            Gates: gates,
-            Rounds: Array.isArray(spec.Review?.Rounds) ? spec.Review.Rounds : [],
-        };
 
         const terminalFailure = FindIntegrityOrGateCriterionFailure(spec, {
             Settings: this._currentSettings,
@@ -753,63 +408,392 @@ export class VideoStudioAgent extends BaseAgent {
             };
         }
 
-        // Gate G4 Plan checkpoint under ApproveStoryboardAndRoughCut
+        const g4Pause = this.checkG4PlanCheckpoint(spec, gates, currentPayload);
+        if (g4Pause) {
+            return g4Pause;
+        }
+
+        const nonPassing = gates.filter((g) => g.Status !== 'Passed');
+        if (nonPassing.length > 0) {
+            return this.buildNonPassingGatesRetry(baseResult, spec, gates, nonPassing, currentPayload);
+        }
+
+        return this.finalizeDeliveredStep(baseResult, spec, currentPayload);
+    }
+
+    // -----------------------------------------------------------------------
+    // Private / Protected Helpers
+    // -----------------------------------------------------------------------
+
+    private finalizePayloadInlineAndEphemeralOutputs(
+        payloadObj: unknown,
+        isTerminalExit: boolean,
+    ): void {
+        if (!payloadObj || typeof payloadObj !== 'object') {
+            return;
+        }
+        const spec = payloadObj as Partial<VideoGenerationSpec>;
+        this.restoreInlineVideoBase64(spec);
+        if (isTerminalExit) {
+            this.clearEphemeralOutputFileIds(spec);
+        }
+    }
+
+    private evaluateAndAssignGates(spec: Partial<VideoGenerationSpec>): GateRecord[] {
+        const effectiveMode = this.resolveEffectiveInteractionMode(spec);
+        const gates = EvaluateGates(spec, {
+            Settings: this._currentSettings,
+            BrandKitInScope: this._brandKitInScope,
+            EffectiveInteractionMode: effectiveMode,
+            InitialRoundCount: this._initialRoundCount,
+        });
+        spec.Review = {
+            ...(spec.Review ?? { Rounds: [] }),
+            Gates: gates,
+            Rounds: Array.isArray(spec.Review?.Rounds) ? spec.Review.Rounds : [],
+        };
+        return gates;
+    }
+
+    private prepareSpecAndGates(rawPayload: unknown): {
+        spec: Partial<VideoGenerationSpec>;
+        gates: GateRecord[];
+        effectiveMode: VideoInteractionMode;
+    } {
+        const spec = structuredClone((rawPayload ?? {}) as Partial<VideoGenerationSpec>);
+        this.syncDeliverableFormats(spec);
+        this.restoreCallerInteraction(spec);
+        const effectiveMode = this.resolveEffectiveInteractionMode(spec);
+        const gates = this.evaluateAndAssignGates(spec);
+        return { spec, gates, effectiveMode };
+    }
+
+    private applyCriticRoundSideEffects(
+        spec: Partial<VideoGenerationSpec>,
+        gates: ReadonlyArray<GateRecord>,
+    ): void {
+        const rounds = spec.Review?.Rounds ?? [];
+        const newestRound = rounds.length > 0 ? rounds[rounds.length - 1] : undefined;
+        if (newestRound) {
+            this.requestGeneratedAssetRegenerations(spec, newestRound);
+        }
+
+        const g5 = gates.find((g) => g.Gate === 'G5');
+        if (g5?.Status === 'Passed') {
+            if (newestRound && Array.isArray(newestRound.Defects)) {
+                for (const defect of newestRound.Defects) {
+                    if (
+                        defect &&
+                        defect.Status === 'Open' &&
+                        defect.Criterion !== GENERATED_ASSET_INTEGRITY_CRITERION_KEY
+                    ) {
+                        defect.Status = 'Deferred';
+                    }
+                }
+            }
+            if (spec.Review) {
+                spec.Review.HumanReviewNotes = ComposeHumanReviewNotes(spec);
+            }
+        }
+    }
+
+    private requestGeneratedAssetRegenerations(
+        spec: Partial<VideoGenerationSpec>,
+        round: VideoGenerationSpec['Review']['Rounds'][number],
+    ): void {
+        if (!Array.isArray(round.Defects)) {
+            return;
+        }
+        const handledKeys = new Set<string>();
+        for (const defect of round.Defects) {
+            const assetKey = defect?.AssetKey?.trim();
+            if (!defect || defect.Status !== 'Open' || !assetKey || handledKeys.has(assetKey)) {
+                continue;
+            }
+            const isGenerated = (spec.Assets?.Approved ?? []).some(
+                (a) => a?.Key === assetKey && a.Provenance === 'Generated',
+            );
+            if (!isGenerated) {
+                continue;
+            }
+            handledKeys.add(assetKey);
+            const regen = RequestRegeneration(
+                spec,
+                assetKey,
+                this._currentSettings.MaxRegenerations,
+            );
+            if (regen.Allowed && regen.Spec.Assets) {
+                spec.Assets = regen.Spec.Assets;
+            }
+        }
+    }
+
+    private emitStageProgress(
+        params: ExecuteAgentParams,
+        canonicalStage: string,
+        spec: Partial<VideoGenerationSpec>,
+        gates: ReadonlyArray<GateRecord>,
+    ): void {
+        const progressText = DescribeStageProgress(canonicalStage, spec);
+        const formattedMessage = this.formatHierarchicalMessage(progressText);
+        try {
+            params.onProgress?.({
+                step: 'subagent_execution',
+                message: formattedMessage,
+                percentage: STAGE_PROGRESS_PERCENTAGE[canonicalStage] ?? 50,
+                metadata: {
+                    VideoStudioStatus: spec.Status,
+                    Gates: gates,
+                },
+                displayMode: 'live',
+            });
+        } catch {
+            // Swallow progress callback errors so a UI listener cannot abort the production loop
+        }
+    }
+
+    private extractRequestedStages<P>(
+        stepResult: BaseAgentNextStep<P>,
+    ): Array<AgentSubAgentRequest<P>> {
+        const requestedList =
+            Array.isArray(stepResult.subAgents) && stepResult.subAgents.length > 0
+                ? stepResult.subAgents
+                : stepResult.subAgent
+                  ? [stepResult.subAgent]
+                  : [];
+        return requestedList.filter((req) => IsVideoStudioStageName(req?.name));
+    }
+
+    private validateStageSequenceConstraints<P>(
+        baseResult: BaseAgentNextStep<P>,
+        nextStep: BaseAgentNextStep<P>,
+        stageRequests: ReadonlyArray<AgentSubAgentRequest<P>>,
+    ): BaseAgentNextStep<P> | null {
+        if (stageRequests.length > 1) {
+            const names = stageRequests.map((r) => r.name).join(', ');
+            const msg = `Only one Video Studio stage sub-agent may run at a time (requested: ${names}). Invoke stages sequentially.`;
+            return { ...baseResult, step: 'Retry', retryInstructions: msg, errorMessage: msg };
+        }
+        if (this.hasForbiddenStageTermination(baseResult, nextStep, stageRequests)) {
+            const msg = 'Stages never end the run; finish with Success';
+            return { ...baseResult, step: 'Retry', terminate: false, retryInstructions: msg, errorMessage: msg };
+        }
+        return null;
+    }
+
+    private hasForbiddenStageTermination<P>(
+        baseResult: BaseAgentNextStep<P>,
+        nextStep: BaseAgentNextStep<P>,
+        stageRequests: ReadonlyArray<AgentSubAgentRequest<P>>,
+    ): boolean {
+        const hasStepFinishIf =
+            (baseResult.finishIf !== undefined && baseResult.finishIf !== null) ||
+            (nextStep.finishIf !== undefined && nextStep.finishIf !== null);
+        return hasStepFinishIf || stageRequests.some((req) => req?.terminateAfter === true);
+    }
+
+    private checkStagePrerequisites<P>(
+        baseResult: BaseAgentNextStep<P>,
+        stageName: string,
+        spec: Partial<VideoGenerationSpec>,
+        gates: ReadonlyArray<GateRecord>,
+    ): BaseAgentNextStep<P> | null {
+        const refusal = CheckStagePrerequisite(
+            stageName,
+            spec,
+            gates,
+            this._currentSettings,
+            this._initialRoundCount,
+        );
+        if (refusal) {
+            return {
+                ...baseResult,
+                step: 'Retry',
+                retryInstructions: refusal,
+                errorMessage: refusal,
+                newPayload: spec as unknown as P,
+            };
+        }
+        return null;
+    }
+
+    private checkG2PlanCheckpoint<P>(
+        normalizedStage: string,
+        spec: Partial<VideoGenerationSpec>,
+        gates: ReadonlyArray<GateRecord>,
+        currentPayload: P,
+    ): BaseAgentNextStep<P> | null {
+        if (normalizedStage !== 'Pre-Production') {
+            return null;
+        }
+        const g1 = gates.find((g) => g.Gate === 'G1');
+        const g2 = gates.find((g) => g.Gate === 'G2');
+        if (g1?.Status !== 'Passed' || g2?.Status !== 'Pending' || g2?.Notes !== 'AwaitingApproval') {
+            return null;
+        }
+        const pausedGates = gates.map((g): GateRecord =>
+            g.Gate === 'G2' ? { ...g, Status: 'Blocked', Notes: 'AwaitingApproval' } : g,
+        );
+        spec.Review!.Gates = pausedGates;
+        spec.Status = DeriveStatus(spec, pausedGates);
+        return {
+            step: 'Plan' as BaseAgentNextStep<P>['step'],
+            terminate: false,
+            planDetails: {
+                plan: DescribeStoryboardForApproval(spec),
+            },
+            message:
+                "Storyboard ready for approval. Reply starting with 'Approve' to continue, or say what to change.",
+            previousPayload: currentPayload,
+            newPayload: spec as unknown as P,
+        };
+    }
+
+    private async validatePreRenderSpec<P>(
+        params: ExecuteAgentParams,
+        spec: Partial<VideoGenerationSpec>,
+        effectiveMode: VideoInteractionMode,
+        baseResult: BaseAgentNextStep<P>,
+    ): Promise<BaseAgentNextStep<P> | null> {
+        const candidateForRender = this.buildNormalizedSpecForValidation(
+            spec,
+            'Composed',
+            effectiveMode,
+        );
+        const validationResult = params.contextUser
+            ? await ValidateVideoGenerationSpecAsync(
+                  candidateForRender,
+                  'Composed',
+                  params.contextUser,
+                  { MaxGeneratedVideoSeconds: this._currentSettings.MaxGeneratedVideoSeconds },
+              )
+            : ValidateVideoGenerationSpec(candidateForRender, 'Composed', {
+                  MaxGeneratedVideoSeconds: this._currentSettings.MaxGeneratedVideoSeconds,
+              });
+
+        if (validationResult.Valid) {
+            return null;
+        }
+        const errSummary = validationResult.Errors.map(
+            (e) => `${e.Code} (${e.Path}): ${e.Message}`,
+        ).join('; ');
+        const msg = `G3 (Stills): spec validation failed before Render: ${errSummary}`;
+        return {
+            ...baseResult,
+            step: 'Retry',
+            retryInstructions: msg,
+            errorMessage: msg,
+            newPayload: spec as unknown as P,
+        };
+    }
+
+    private injectStageTemplateParameters<P>(
+        baseResult: BaseAgentNextStep<P>,
+        normalizedStage: string,
+        spec: Partial<VideoGenerationSpec>,
+    ): void {
+        const stageTemplateParams = this.buildStageTemplateParameters(normalizedStage, spec);
+        if (Object.keys(stageTemplateParams).length === 0) {
+            return;
+        }
+        if (baseResult.subAgent && IsVideoStudioStageName(baseResult.subAgent.name)) {
+            baseResult.subAgent = {
+                ...baseResult.subAgent,
+                templateParameters: {
+                    ...(baseResult.subAgent.templateParameters ?? {}),
+                    ...stageTemplateParams,
+                },
+            };
+        }
+        if (Array.isArray(baseResult.subAgents)) {
+            baseResult.subAgents = baseResult.subAgents.map((entry) =>
+                IsVideoStudioStageName(entry?.name)
+                    ? {
+                          ...entry,
+                          templateParameters: {
+                              ...(entry.templateParameters ?? {}),
+                              ...stageTemplateParams,
+                          },
+                      }
+                    : entry,
+            );
+        }
+    }
+
+    private checkG4PlanCheckpoint<P>(
+        spec: Partial<VideoGenerationSpec>,
+        gates: ReadonlyArray<GateRecord>,
+        currentPayload: P,
+    ): BaseAgentNextStep<P> | null {
         const g1 = gates.find((g) => g.Gate === 'G1');
         const g2 = gates.find((g) => g.Gate === 'G2');
         const g3 = gates.find((g) => g.Gate === 'G3');
         const g4 = gates.find((g) => g.Gate === 'G4');
 
         if (
-            g1?.Status === 'Passed' &&
-            g2?.Status === 'Passed' &&
-            g3?.Status === 'Passed' &&
-            g4?.Status === 'Pending' &&
-            g4?.Notes === 'AwaitingApproval'
+            g1?.Status !== 'Passed' ||
+            g2?.Status !== 'Passed' ||
+            g3?.Status !== 'Passed' ||
+            g4?.Status !== 'Pending' ||
+            g4?.Notes !== 'AwaitingApproval'
         ) {
-            const pausedGates = gates.map((g): GateRecord =>
-                g.Gate === 'G4'
-                    ? { ...g, Status: 'Blocked', Notes: 'AwaitingApproval' }
-                    : g,
-            );
-            spec.Review.Gates = pausedGates;
-            spec.Status = DeriveStatus(spec, pausedGates);
-            this.restoreInlineVideoBase64(spec);
-            return {
-                step: 'Plan' as BaseAgentNextStep<P>['step'],
-                terminate: false,
-                planDetails: {
-                    plan: this.describeRoughCutForApproval(spec),
-                },
-                message:
-                    "Rough cut ready for approval. Reply starting with 'Approve' to deliver, or say what to change.",
-                previousPayload: currentPayload,
-                newPayload: spec as unknown as P,
-            };
+            return null;
         }
 
-        const nonPassing = gates.filter((g) => g.Status !== 'Passed');
-        if (nonPassing.length > 0) {
-            spec.Status = DeriveStatus(spec, gates);
-            const primary =
-                nonPassing.find((g) => g.Status === 'Failed' || g.Status === 'Blocked') ??
-                nonPassing[0];
-            const summary = nonPassing
-                .map((g) => `${g.Gate} (${g.Status}): ${g.Notes ?? 'requirements not met'}`)
-                .join('; ');
-            const msg = `Cannot deliver Video Studio production because gate ${primary.Gate} has not passed (${primary.Notes ?? primary.Status}). Non-passing gates: ${summary}`;
-            return {
-                ...baseResult,
-                step: 'Retry',
-                retryInstructions: msg,
-                errorMessage: msg,
-                previousPayload: currentPayload,
-                newPayload: spec as unknown as P,
-            };
-        }
+        const pausedGates = gates.map((g): GateRecord =>
+            g.Gate === 'G4' ? { ...g, Status: 'Blocked', Notes: 'AwaitingApproval' } : g,
+        );
+        spec.Review!.Gates = pausedGates;
+        spec.Status = DeriveStatus(spec, pausedGates);
+        this.restoreInlineVideoBase64(spec);
+        return {
+            step: 'Plan' as BaseAgentNextStep<P>['step'],
+            terminate: false,
+            planDetails: {
+                plan: this.describeRoughCutForApproval(spec),
+            },
+            message:
+                "Rough cut ready for approval. Reply starting with 'Approve' to deliver, or say what to change.",
+            previousPayload: currentPayload,
+            newPayload: spec as unknown as P,
+        };
+    }
 
+    private buildNonPassingGatesRetry<P>(
+        baseResult: BaseAgentNextStep<P>,
+        spec: Partial<VideoGenerationSpec>,
+        gates: ReadonlyArray<GateRecord>,
+        nonPassing: ReadonlyArray<GateRecord>,
+        currentPayload: P,
+    ): BaseAgentNextStep<P> {
+        spec.Status = DeriveStatus(spec, gates);
+        const primary =
+            nonPassing.find((g) => g.Status === 'Failed' || g.Status === 'Blocked') ??
+            nonPassing[0];
+        const summary = nonPassing
+            .map((g) => `${g.Gate} (${g.Status}): ${g.Notes ?? 'requirements not met'}`)
+            .join('; ');
+        const msg = `Cannot deliver Video Studio production because gate ${primary.Gate} has not passed (${primary.Notes ?? primary.Status}). Non-passing gates: ${summary}`;
+        return {
+            ...baseResult,
+            step: 'Retry',
+            retryInstructions: msg,
+            errorMessage: msg,
+            previousPayload: currentPayload,
+            newPayload: spec as unknown as P,
+        };
+    }
+
+    private finalizeDeliveredStep<P>(
+        baseResult: BaseAgentNextStep<P>,
+        spec: Partial<VideoGenerationSpec>,
+        currentPayload: P,
+    ): BaseAgentNextStep<P> {
         spec.Status = 'Delivered';
         this.restoreInlineVideoBase64(spec);
-        spec.Review.HumanReviewNotes = ComposeHumanReviewNotes(spec);
+        if (spec.Review) {
+            spec.Review.HumanReviewNotes = ComposeHumanReviewNotes(spec);
+        }
         this.clearEphemeralOutputFileIds(spec);
         const provenance = BuildGenerationProvenanceSummary(spec);
         if (spec.Output) {
@@ -822,31 +806,9 @@ export class VideoStudioAgent extends BaseAgent {
 
         const isSubAgentRun = this.AgentHierarchy.length > 1;
         if (isSubAgentRun) {
-            const videos = spec.Output?.Videos ?? {};
-            for (const [fmt, entry] of Object.entries(videos)) {
-                if (entry?.FileID && !this.FileOutputs.some((f) => f.fileId === entry.FileID)) {
-                    this.FileOutputs.push({
-                        fileName: `video-${fmt.replace(':', 'x')}.mp4`,
-                        mimeType: entry.MimeType ?? 'video/mp4',
-                        fileId: entry.FileID,
-                        sizeBytes: entry.FileSizeBytes,
-                        visibility: 'System Only',
-                    });
-                }
-            }
+            this.populateSubAgentFileOutputs(spec);
         }
-
-        const archetypeName = spec.Archetype?.Name?.trim() || 'Video Production';
-        const oneSentence = spec.Film?.OneSentence ?? '';
-        const artifactDirective: BaseAgentNextStep<P>['artifactDirective'] = isSubAgentRun
-            ? undefined
-            : this._startedWithBrief
-              ? { behavior: 'version-source' }
-              : {
-                    behavior: 'create-new',
-                    name: `${archetypeName}: ${oneSentence}`.slice(0, 120),
-                    description: spec.Film?.Purpose,
-                };
+        const artifactDirective = this.buildDeliveryArtifactDirective<P>(spec, isSubAgentRun);
 
         return {
             ...baseResult,
@@ -857,9 +819,39 @@ export class VideoStudioAgent extends BaseAgent {
         };
     }
 
-    // -----------------------------------------------------------------------
-    // Private / Protected Helpers
-    // -----------------------------------------------------------------------
+    private populateSubAgentFileOutputs(spec: Partial<VideoGenerationSpec>): void {
+        const videos = spec.Output?.Videos ?? {};
+        for (const [fmt, entry] of Object.entries(videos)) {
+            if (entry?.FileID && !this.FileOutputs.some((f) => f.fileId === entry.FileID)) {
+                this.FileOutputs.push({
+                    fileName: `video-${fmt.replace(':', 'x')}.mp4`,
+                    mimeType: entry.MimeType ?? 'video/mp4',
+                    fileId: entry.FileID,
+                    sizeBytes: entry.FileSizeBytes,
+                    visibility: 'System Only',
+                });
+            }
+        }
+    }
+
+    private buildDeliveryArtifactDirective<P>(
+        spec: Partial<VideoGenerationSpec>,
+        isSubAgentRun: boolean,
+    ): BaseAgentNextStep<P>['artifactDirective'] {
+        if (isSubAgentRun) {
+            return undefined;
+        }
+        if (this._startedWithBrief) {
+            return { behavior: 'version-source' };
+        }
+        const archetypeName = spec.Archetype?.Name?.trim() || 'Video Production';
+        const oneSentence = spec.Film?.OneSentence ?? '';
+        return {
+            behavior: 'create-new',
+            name: `${archetypeName}: ${oneSentence}`.slice(0, 120),
+            description: spec.Film?.Purpose,
+        };
+    }
 
     private stripInlineVideoBase64(spec: Partial<VideoGenerationSpec>): void {
         const videos = spec.Output?.Videos;
@@ -981,18 +973,10 @@ export class VideoStudioAgent extends BaseAgent {
             seeded.CompanyID = companyId;
         }
 
-        // Seed optional narration & caption preferences from AppContext.VideoStudio when supplied
         this.seedAudioPreferencesFromContext(params, seeded);
-
-        // Brand Kit seeding
         this.seedBrandKit(seeded, companyId);
-
-        // Interaction mode: the driver never writes Interaction.Mode; preserve only caller-supplied Interaction.Mode
         this.restoreCallerInteraction(seeded);
-
         this.syncDeliverableFormats(seeded);
-
-        // Resume from a paused G2 or G4 approval gate
         this.applyApprovalResume(params, seeded);
 
         return seeded;
@@ -1078,43 +1062,49 @@ export class VideoStudioAgent extends BaseAgent {
         seeded: Partial<VideoGenerationSpec>,
         companyId: string | null,
     ): void {
-        this._brandKitInScope = true;
-        let kit: MJBrandKitEntity | null = null;
-
-        const engine = BrandKitEngine.Instance;
-        if (seeded.BrandKitID?.trim()) {
-            const allKits = Array.isArray(engine.BrandKits) ? engine.BrandKits : [];
-            kit = allKits.find((k) => UUIDsEqual(k.ID, seeded.BrandKitID)) ?? null;
-            if (!kit) {
-                this._brandKitInScope = false;
-                return;
-            }
-        } else {
-            kit = engine.GetDefaultKit(companyId) ?? null;
-        }
-
+        const kit = this.resolveBrandKitForSpec(seeded, companyId);
         if (!kit) {
             return;
         }
-
         if (!seeded.BrandKitID) {
             seeded.BrandKitID = kit.ID;
         }
-
         this._brandKitInScope =
             !kit.CompanyID || Boolean(companyId && UUIDsEqual(kit.CompanyID, companyId));
 
-        // 1. Seed Brand Kit assets into Assets.Approved
-        const kitAssets = engine.GetAssets(kit.ID) ?? [];
+        this.seedBrandKitAssets(seeded, kit);
+        this.seedBrandKitNeverInvent(seeded, kit);
+        this.seedBrandKitVoiceDefaults(seeded, kit);
+    }
+
+    private resolveBrandKitForSpec(
+        seeded: Partial<VideoGenerationSpec>,
+        companyId: string | null,
+    ): MJBrandKitEntity | null {
+        this._brandKitInScope = true;
+        const engine = BrandKitEngine.Instance;
+        if (seeded.BrandKitID?.trim()) {
+            const allKits = Array.isArray(engine.BrandKits) ? engine.BrandKits : [];
+            const kit = allKits.find((k) => UUIDsEqual(k.ID, seeded.BrandKitID)) ?? null;
+            if (!kit) {
+                this._brandKitInScope = false;
+            }
+            return kit;
+        }
+        return engine.GetDefaultKit(companyId) ?? null;
+    }
+
+    private seedBrandKitAssets(
+        seeded: Partial<VideoGenerationSpec>,
+        kit: MJBrandKitEntity,
+    ): void {
+        const kitAssets = BrandKitEngine.Instance.GetAssets(kit.ID) ?? [];
         const approvedList = seeded.Assets!.Approved;
         const existingFileIds = new UUIDSet(
             approvedList.map((a) => a.FileID).filter((id): id is string => Boolean(id)),
         );
         for (const asset of kitAssets) {
-            if (!asset || !asset.FileID) {
-                continue;
-            }
-            if (existingFileIds.Has(asset.FileID)) {
+            if (!asset || !asset.FileID || existingFileIds.Has(asset.FileID)) {
                 continue;
             }
             const baseKey = `brand:${(asset.Name ?? 'asset').trim()}`;
@@ -1135,46 +1125,57 @@ export class VideoStudioAgent extends BaseAgent {
             });
             existingFileIds.Add(asset.FileID);
         }
+    }
 
-        // 2. Merge NeverInventObject entries
+    private seedBrandKitNeverInvent(
+        seeded: Partial<VideoGenerationSpec>,
+        kit: MJBrandKitEntity,
+    ): void {
         const kitNeverInvent = kit.NeverInventObject;
-        if (Array.isArray(kitNeverInvent)) {
-            const existingSet = new Set(seeded.Assets!.NeverInvent);
-            for (const item of kitNeverInvent) {
-                if (typeof item === 'string' && item.trim() && !existingSet.has(item.trim())) {
-                    seeded.Assets!.NeverInvent.push(item.trim());
-                    existingSet.add(item.trim());
-                }
+        if (!Array.isArray(kitNeverInvent)) {
+            return;
+        }
+        const existingSet = new Set(seeded.Assets!.NeverInvent);
+        for (const item of kitNeverInvent) {
+            if (typeof item === 'string' && item.trim() && !existingSet.has(item.trim())) {
+                seeded.Assets!.NeverInvent.push(item.trim());
+                existingSet.add(item.trim());
             }
         }
+    }
 
-        // 3. Default VoiceID / Provider on Audio.Narration when empty (unless narration is explicitly disabled)
+    private seedBrandKitVoiceDefaults(
+        seeded: Partial<VideoGenerationSpec>,
+        kit: MJBrandKitEntity,
+    ): void {
         if (seeded.Audio?.Narration?.Enabled === false) {
             return;
         }
         const voiceObj = kit.VoiceObject;
-        if (voiceObj && typeof voiceObj === 'object') {
-            const defaultVoiceId = (voiceObj.VoiceID ?? '').trim();
-            const defaultProvider = (voiceObj.Provider ?? '').trim();
-            if (defaultVoiceId || defaultProvider) {
-                if (!seeded.Audio) {
-                    seeded.Audio = { Cues: [], Captions: 'None' };
-                }
-                if (!seeded.Audio.Narration) {
-                    seeded.Audio.Narration = {
-                        VoiceID: defaultVoiceId,
-                        Provider: defaultProvider,
-                        Script: [],
-                    };
-                } else {
-                    if (!seeded.Audio.Narration.VoiceID?.trim() && defaultVoiceId) {
-                        seeded.Audio.Narration.VoiceID = defaultVoiceId;
-                    }
-                    if (!seeded.Audio.Narration.Provider?.trim() && defaultProvider) {
-                        seeded.Audio.Narration.Provider = defaultProvider;
-                    }
-                }
-            }
+        if (!voiceObj || typeof voiceObj !== 'object') {
+            return;
+        }
+        const defaultVoiceId = (voiceObj.VoiceID ?? '').trim();
+        const defaultProvider = (voiceObj.Provider ?? '').trim();
+        if (!defaultVoiceId && !defaultProvider) {
+            return;
+        }
+        if (!seeded.Audio) {
+            seeded.Audio = { Cues: [], Captions: 'None' };
+        }
+        if (!seeded.Audio.Narration) {
+            seeded.Audio.Narration = {
+                VoiceID: defaultVoiceId,
+                Provider: defaultProvider,
+                Script: [],
+            };
+            return;
+        }
+        if (!seeded.Audio.Narration.VoiceID?.trim() && defaultVoiceId) {
+            seeded.Audio.Narration.VoiceID = defaultVoiceId;
+        }
+        if (!seeded.Audio.Narration.Provider?.trim() && defaultProvider) {
+            seeded.Audio.Narration.Provider = defaultProvider;
         }
     }
 
@@ -1189,141 +1190,16 @@ export class VideoStudioAgent extends BaseAgent {
         }
 
         try {
-            const rv = new RunView(this.ProviderToUse as unknown as IRunViewProvider);
-            const escapedId = EscapeSQLString(conversationId);
-            const res = await rv.RunView<{
-                ID: string;
-                MimeType?: string | null;
-                FileName?: string | null;
-                FileID?: string | null;
-                InlineData?: string | null;
-                ArtifactVersionID?: string | null;
-            }>(
-                {
-                    EntityName: 'MJ: Conversation Detail Attachments',
-                    ExtraFilter: `ConversationDetailID IN (SELECT ID FROM __mj.vwConversationDetails WHERE ConversationID = '${escapedId}') AND (MimeType LIKE 'image/%' OR MimeType LIKE 'video/%')`,
-                    Fields: ['ID', 'MimeType', 'FileName', 'FileID', 'InlineData', 'ArtifactVersionID'],
-                    ResultType: 'simple',
-                },
-                params.contextUser,
-            );
-
-            if (!res?.Success || !Array.isArray(res.Results)) {
-                if (res && !res.Success) {
-                    LogError(
-                        `VideoStudioAgent: failed to query conversation attachments for conversation "${conversationId}": ${res.ErrorMessage ?? 'Unknown error'}`,
-                    );
-                }
+            const rows = await this.fetchConversationAttachmentRows(conversationId, params.contextUser);
+            if (rows.length === 0) {
                 return;
             }
-
             if (!seeded.Assets) {
                 seeded.Assets = { Approved: [], Required: [], NeverInvent: [] };
             }
-            const approvedList = seeded.Assets.Approved;
-            const existingFileIds = new UUIDSet(
-                approvedList.map((a) => a.FileID).filter((id): id is string => Boolean(id)),
-            );
-            const existingArtifactVersionIds = new UUIDSet(
-                approvedList
-                    .map((a) => a.ArtifactVersionID)
-                    .filter((id): id is string => Boolean(id)),
-            );
-            const existingSources = new Set(
-                approvedList
-                    .map((a) => a.Source?.trim().toLowerCase())
-                    .filter((s): s is string => Boolean(s)),
-            );
-
-            for (const row of res.Results) {
-                const rowId = row?.ID?.trim();
-                if (!row || !rowId) {
-                    continue;
-                }
-                try {
-                    const attachmentSource = `Conversation attachment ${rowId}`;
-                    let fileId = row.FileID?.trim() || undefined;
-                    const artifactVersionId = row.ArtifactVersionID?.trim() || undefined;
-
-                    if (fileId && existingFileIds.Has(fileId)) {
-                        continue;
-                    }
-                    if (artifactVersionId && existingArtifactVersionIds.Has(artifactVersionId)) {
-                        continue;
-                    }
-                    if (existingSources.has(attachmentSource.toLowerCase())) {
-                        continue;
-                    }
-
-                    if (!fileId && !artifactVersionId) {
-                        const rawInline = row.InlineData?.trim() ?? '';
-                        if (!rawInline) {
-                            continue;
-                        }
-                        const base64Payload = rawInline.includes(',')
-                            ? rawInline.slice(rawInline.indexOf(',') + 1)
-                            : rawInline;
-                        const content = Buffer.from(base64Payload, 'base64');
-                        const fileName = row.FileName?.trim() || rowId;
-                        const mimeType = row.MimeType?.trim() || 'image/png';
-                        const storedFileId = await StoreFile({
-                            Content: content,
-                            FileName: fileName,
-                            MimeType: mimeType,
-                            Description: 'Conversation attachment',
-                            ContextUser: params.contextUser,
-                            Provider: this.ProviderToUse,
-                        });
-                        if (!storedFileId) {
-                            LogError(
-                                `VideoStudioAgent: StoreFile returned no FileID for inline conversation attachment "${rowId}".`,
-                            );
-                            continue;
-                        }
-                        fileId = storedFileId;
-                        if (existingFileIds.Has(fileId)) {
-                            continue;
-                        }
-                    }
-
-                    const kind: VideoAssetKind = (row.MimeType ?? '')
-                        .toLowerCase()
-                        .startsWith('video/')
-                        ? 'Video'
-                        : 'Image';
-
-                    const baseKey = `attachment:${row.FileName?.trim() || rowId}`;
-                    let uniqueKey = baseKey;
-                    let suffix = 2;
-                    while (approvedList.some((a) => a.Key === uniqueKey)) {
-                        uniqueKey = `${baseKey}:${suffix}`;
-                        suffix++;
-                    }
-
-                    approvedList.push({
-                        Key: uniqueKey,
-                        Kind: kind,
-                        ...(fileId ? { FileID: fileId } : {}),
-                        ...(artifactVersionId ? { ArtifactVersionID: artifactVersionId } : {}),
-                        Source: attachmentSource,
-                        Provenance: 'Supplied',
-                        Usage: 'User-supplied reference',
-                        MustUse: false,
-                    });
-
-                    if (fileId) {
-                        existingFileIds.Add(fileId);
-                    }
-                    if (artifactVersionId) {
-                        existingArtifactVersionIds.Add(artifactVersionId);
-                    }
-                    existingSources.add(attachmentSource.toLowerCase());
-                } catch (rowErr) {
-                    const msg = rowErr instanceof Error ? rowErr.message : String(rowErr);
-                    LogError(
-                        `VideoStudioAgent: failed to intake conversation attachment "${rowId}": ${msg}`,
-                    );
-                }
+            const dedupeSets = this.buildAttachmentDedupeSets(seeded.Assets.Approved);
+            for (const row of rows) {
+                await this.intakeSingleAttachmentRow(row, params, seeded.Assets.Approved, dedupeSets);
             }
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
@@ -1331,6 +1207,154 @@ export class VideoStudioAgent extends BaseAgent {
                 `VideoStudioAgent: unexpected error during conversation attachment intake: ${msg}`,
             );
         }
+    }
+
+    private async fetchConversationAttachmentRows(
+        conversationId: string,
+        contextUser?: UserInfo,
+    ): Promise<ConversationAttachmentRow[]> {
+        const rv = new RunView(this.ProviderToUse as unknown as IRunViewProvider);
+        const escapedId = EscapeSQLString(conversationId);
+        const res = await rv.RunView<ConversationAttachmentRow>(
+            {
+                EntityName: 'MJ: Conversation Detail Attachments',
+                ExtraFilter: `ConversationDetailID IN (SELECT ID FROM __mj.vwConversationDetails WHERE ConversationID = '${escapedId}') AND (MimeType LIKE 'image/%' OR MimeType LIKE 'video/%')`,
+                Fields: ['ID', 'MimeType', 'FileName', 'FileID', 'InlineData', 'ArtifactVersionID'],
+                ResultType: 'simple',
+            },
+            contextUser,
+        );
+        if (!res?.Success || !Array.isArray(res.Results)) {
+            if (res && !res.Success) {
+                LogError(
+                    `VideoStudioAgent: failed to query conversation attachments for conversation "${conversationId}": ${res.ErrorMessage ?? 'Unknown error'}`,
+                );
+            }
+            return [];
+        }
+        return res.Results;
+    }
+
+    private buildAttachmentDedupeSets(
+        approvedList: VideoGenerationSpec['Assets']['Approved'],
+    ): AttachmentDedupeSets {
+        return {
+            ExistingFileIds: new UUIDSet(
+                approvedList.map((a) => a.FileID).filter((id): id is string => Boolean(id)),
+            ),
+            ExistingArtifactVersionIds: new UUIDSet(
+                approvedList
+                    .map((a) => a.ArtifactVersionID)
+                    .filter((id): id is string => Boolean(id)),
+            ),
+            ExistingSources: new Set(
+                approvedList
+                    .map((a) => a.Source?.trim().toLowerCase())
+                    .filter((s): s is string => Boolean(s)),
+            ),
+        };
+    }
+
+    private async intakeSingleAttachmentRow(
+        row: ConversationAttachmentRow,
+        params: ExecuteAgentParams,
+        approvedList: VideoGenerationSpec['Assets']['Approved'],
+        dedupeSets: AttachmentDedupeSets,
+    ): Promise<void> {
+        const rowId = row?.ID?.trim();
+        if (!row || !rowId) {
+            return;
+        }
+        try {
+            const attachmentSource = `Conversation attachment ${rowId}`;
+            let fileId = row.FileID?.trim() || undefined;
+            const artifactVersionId = row.ArtifactVersionID?.trim() || undefined;
+
+            if (
+                (fileId && dedupeSets.ExistingFileIds.Has(fileId)) ||
+                (artifactVersionId && dedupeSets.ExistingArtifactVersionIds.Has(artifactVersionId)) ||
+                dedupeSets.ExistingSources.has(attachmentSource.toLowerCase())
+            ) {
+                return;
+            }
+
+            if (!fileId && !artifactVersionId) {
+                fileId = await this.storeInlineAttachmentRow(row, rowId, params.contextUser);
+                if (!fileId || dedupeSets.ExistingFileIds.Has(fileId)) {
+                    return;
+                }
+            }
+
+            const kind: VideoAssetKind = (row.MimeType ?? '').toLowerCase().startsWith('video/')
+                ? 'Video'
+                : 'Image';
+            const uniqueKey = this.buildUniqueAttachmentKey(approvedList, row.FileName?.trim() || rowId);
+
+            approvedList.push({
+                Key: uniqueKey,
+                Kind: kind,
+                ...(fileId ? { FileID: fileId } : {}),
+                ...(artifactVersionId ? { ArtifactVersionID: artifactVersionId } : {}),
+                Source: attachmentSource,
+                Provenance: 'Supplied',
+                Usage: 'User-supplied reference',
+                MustUse: false,
+            });
+
+            if (fileId) {
+                dedupeSets.ExistingFileIds.Add(fileId);
+            }
+            if (artifactVersionId) {
+                dedupeSets.ExistingArtifactVersionIds.Add(artifactVersionId);
+            }
+            dedupeSets.ExistingSources.add(attachmentSource.toLowerCase());
+        } catch (rowErr) {
+            const msg = rowErr instanceof Error ? rowErr.message : String(rowErr);
+            LogError(`VideoStudioAgent: failed to intake conversation attachment "${rowId}": ${msg}`);
+        }
+    }
+
+    private async storeInlineAttachmentRow(
+        row: ConversationAttachmentRow,
+        rowId: string,
+        contextUser?: UserInfo,
+    ): Promise<string | undefined> {
+        const rawInline = row.InlineData?.trim() ?? '';
+        if (!rawInline) {
+            return undefined;
+        }
+        const base64Payload = rawInline.includes(',')
+            ? rawInline.slice(rawInline.indexOf(',') + 1)
+            : rawInline;
+        const storedFileId = await StoreFile({
+            Content: Buffer.from(base64Payload, 'base64'),
+            FileName: row.FileName?.trim() || rowId,
+            MimeType: row.MimeType?.trim() || 'image/png',
+            Description: 'Conversation attachment',
+            ContextUser: contextUser,
+            Provider: this.ProviderToUse,
+        });
+        if (!storedFileId) {
+            LogError(
+                `VideoStudioAgent: StoreFile returned no FileID for inline conversation attachment "${rowId}".`,
+            );
+            return undefined;
+        }
+        return storedFileId;
+    }
+
+    private buildUniqueAttachmentKey(
+        approvedList: ReadonlyArray<{ Key: string }>,
+        nameOrId: string,
+    ): string {
+        const baseKey = `attachment:${nameOrId}`;
+        let uniqueKey = baseKey;
+        let suffix = 2;
+        while (approvedList.some((a) => a.Key === uniqueKey)) {
+            uniqueKey = `${baseKey}:${suffix}`;
+            suffix++;
+        }
+        return uniqueKey;
     }
 
     private captureCallerMode(params: ExecuteAgentParams): void {
@@ -1437,281 +1461,6 @@ export class VideoStudioAgent extends BaseAgent {
         } else if (decision === 'Reject') {
             awaitingGate.Status = 'Pending';
             delete awaitingGate.Notes;
-        }
-    }
-
-    // INTERIM: PayloadManager.MergeUpstreamPayload drops empty arrays (plan-notes 39)
-    private restoreDroppedEmptyArrays(
-        spec: Partial<VideoGenerationSpec>,
-        subAgentPayload?: Partial<VideoGenerationSpec>,
-        canonicalStage?: string,
-    ): void {
-        if (subAgentPayload && typeof subAgentPayload === 'object') {
-            RestoreStrippedFormatKeys(subAgentPayload);
-            const allowedSections = canonicalStage
-                ? STAGE_UPSTREAM_SECTION_PATHS[canonicalStage]
-                : undefined;
-            if (allowedSections) {
-                for (const sectionPath of allowedSections) {
-                    this.syncExplicitEmptyArraysAtPath(
-                        spec as Record<string, unknown>,
-                        subAgentPayload as Record<string, unknown>,
-                        sectionPath,
-                    );
-                }
-            } else {
-                this.syncNestedEmptyArrays(spec, subAgentPayload);
-            }
-        }
-
-        if (spec.Film && typeof spec.Film === 'object') {
-            if (!Array.isArray(spec.Film.Formats)) {
-                spec.Film.Formats = [];
-            }
-        }
-        if (!Array.isArray(spec.DataBindings)) {
-            spec.DataBindings = [];
-        }
-
-        if (spec.Assets && typeof spec.Assets === 'object') {
-            if (!Array.isArray(spec.Assets.Approved)) {
-                spec.Assets.Approved = [];
-            }
-            if (!Array.isArray(spec.Assets.Required)) {
-                spec.Assets.Required = [];
-            }
-            if (!Array.isArray(spec.Assets.NeverInvent)) {
-                spec.Assets.NeverInvent = [];
-            }
-            for (const asset of spec.Assets.Approved) {
-                if (
-                    asset?.Generation &&
-                    typeof asset.Generation === 'object' &&
-                    !Array.isArray(asset.Generation.ReferenceKeys)
-                ) {
-                    asset.Generation.ReferenceKeys = [];
-                }
-            }
-            if (Array.isArray(spec.Assets.Generate)) {
-                for (const req of spec.Assets.Generate) {
-                    if (req && typeof req === 'object' && !Array.isArray(req.ReferenceKeys)) {
-                        req.ReferenceKeys = [];
-                    }
-                }
-            }
-        }
-
-        if (spec.Style && typeof spec.Style === 'object') {
-            if (!Array.isArray(spec.Style.Palette)) {
-                spec.Style.Palette = [];
-            }
-            if (!Array.isArray(spec.Style.Typography)) {
-                spec.Style.Typography = [];
-            }
-            if (!Array.isArray(spec.Style.MotionRules)) {
-                spec.Style.MotionRules = [];
-            }
-            if (!Array.isArray(spec.Style.Keep)) {
-                spec.Style.Keep = [];
-            }
-            if (!Array.isArray(spec.Style.Avoid)) {
-                spec.Style.Avoid = [];
-            }
-            if (!Array.isArray(spec.Style.References)) {
-                spec.Style.References = [];
-            }
-            for (const ref of spec.Style.References) {
-                if (ref && typeof ref === 'object' && !Array.isArray(ref.DoNotCopy)) {
-                    ref.DoNotCopy = [];
-                }
-            }
-        }
-
-        if (Array.isArray(spec.Beats)) {
-            for (const beat of spec.Beats) {
-                if (beat && typeof beat === 'object') {
-                    if (!Array.isArray(beat.OnScreenText)) {
-                        beat.OnScreenText = [];
-                    }
-                    if (!Array.isArray(beat.DataRefs)) {
-                        beat.DataRefs = [];
-                    }
-                    if (!Array.isArray(beat.AssetRefs)) {
-                        beat.AssetRefs = [];
-                    }
-                }
-            }
-        }
-
-        if (spec.DataSnapshot && typeof spec.DataSnapshot === 'object') {
-            if (!Array.isArray(spec.DataSnapshot.Sources)) {
-                spec.DataSnapshot.Sources = [];
-            }
-        }
-
-        if (spec.Audio && typeof spec.Audio === 'object') {
-            if (!Array.isArray(spec.Audio.Cues)) {
-                spec.Audio.Cues = [];
-            }
-            if (
-                spec.Audio.Narration &&
-                typeof spec.Audio.Narration === 'object' &&
-                !Array.isArray(spec.Audio.Narration.Script)
-            ) {
-                spec.Audio.Narration.Script = [];
-            }
-        }
-
-        if (spec.Review && typeof spec.Review === 'object') {
-            if (!Array.isArray(spec.Review.Gates)) {
-                spec.Review.Gates = [];
-            }
-            for (const gate of spec.Review.Gates) {
-                if (gate && typeof gate === 'object' && !Array.isArray(gate.EvidenceRefs)) {
-                    gate.EvidenceRefs = [];
-                }
-            }
-            if (!Array.isArray(spec.Review.Rounds)) {
-                spec.Review.Rounds = [];
-            }
-            for (const round of spec.Review.Rounds) {
-                if (round && typeof round === 'object' && !Array.isArray(round.Defects)) {
-                    round.Defects = [];
-                }
-            }
-            if (
-                spec.Review.Scores &&
-                typeof spec.Review.Scores === 'object' &&
-                !Array.isArray(spec.Review.Scores.Criteria)
-            ) {
-                spec.Review.Scores.Criteria = [];
-            }
-        }
-
-        if (spec.Output && typeof spec.Output === 'object') {
-            if (spec.Output.Source && typeof spec.Output.Source === 'object') {
-                for (const entry of Object.values(spec.Output.Source)) {
-                    if (entry && typeof entry === 'object' && !Array.isArray(entry.AssetKeys)) {
-                        entry.AssetKeys = [];
-                    }
-                }
-            }
-            if (
-                spec.Output.GenerationProvenance &&
-                typeof spec.Output.GenerationProvenance === 'object' &&
-                !Array.isArray(spec.Output.GenerationProvenance.Assets)
-            ) {
-                spec.Output.GenerationProvenance.Assets = [];
-            }
-        }
-    }
-
-    private hasEmptyArrayDescendant(val: unknown): boolean {
-        if (Array.isArray(val)) {
-            return val.length === 0 || val.some((item) => this.hasEmptyArrayDescendant(item));
-        }
-        if (val && typeof val === 'object') {
-            return Object.values(val as Record<string, unknown>).some((v) =>
-                this.hasEmptyArrayDescendant(v),
-            );
-        }
-        return false;
-    }
-
-    private syncExplicitEmptyArraysAtPath(
-        targetRoot: Record<string, unknown>,
-        sourceRoot: Record<string, unknown>,
-        sectionPath: string,
-    ): void {
-        const segments = sectionPath.split('.');
-        let tgtParent: Record<string, unknown> | undefined = targetRoot;
-        let srcParent: Record<string, unknown> | undefined = sourceRoot;
-        for (let i = 0; i < segments.length - 1; i++) {
-            const seg = segments[i]!;
-            const nextSrc = srcParent?.[seg];
-            if (!nextSrc || typeof nextSrc !== 'object' || Array.isArray(nextSrc)) {
-                return;
-            }
-            let nextTgt = tgtParent?.[seg];
-            if ((!nextTgt || typeof nextTgt !== 'object' || Array.isArray(nextTgt)) && tgtParent) {
-                if (!this.hasEmptyArrayDescendant(nextSrc)) {
-                    return;
-                }
-                nextTgt = {};
-                tgtParent[seg] = nextTgt;
-            }
-            if (!nextTgt || typeof nextTgt !== 'object' || Array.isArray(nextTgt)) {
-                return;
-            }
-            srcParent = nextSrc as Record<string, unknown>;
-            tgtParent = nextTgt as Record<string, unknown>;
-        }
-        const leafKey = segments[segments.length - 1]!;
-        if (!srcParent || !tgtParent || !Object.prototype.hasOwnProperty.call(srcParent, leafKey)) {
-            return;
-        }
-        const srcVal = srcParent[leafKey];
-        if (Array.isArray(srcVal) && srcVal.length === 0) {
-            tgtParent[leafKey] = [];
-            return;
-        }
-        let tgtVal = tgtParent[leafKey];
-        if (
-            srcVal &&
-            typeof srcVal === 'object' &&
-            !Array.isArray(srcVal) &&
-            (!tgtVal || typeof tgtVal !== 'object' || Array.isArray(tgtVal)) &&
-            this.hasEmptyArrayDescendant(srcVal)
-        ) {
-            tgtVal = {};
-            tgtParent[leafKey] = tgtVal;
-        }
-        if (srcVal && typeof srcVal === 'object' && tgtVal && typeof tgtVal === 'object') {
-            this.syncNestedEmptyArrays(tgtVal, srcVal);
-        }
-    }
-
-    private syncNestedEmptyArrays(target: unknown, source: unknown): void {
-        if (!target || typeof target !== 'object' || !source || typeof source !== 'object') {
-            return;
-        }
-        if (Array.isArray(source) && Array.isArray(target)) {
-            const len = Math.min(source.length, target.length);
-            for (let i = 0; i < len; i++) {
-                const srcItem = source[i];
-                const tgtItem = target[i];
-                if (Array.isArray(srcItem) && srcItem.length === 0) {
-                    target[i] = [];
-                } else if (
-                    srcItem &&
-                    typeof srcItem === 'object' &&
-                    tgtItem &&
-                    typeof tgtItem === 'object'
-                ) {
-                    this.syncNestedEmptyArrays(tgtItem, srcItem);
-                }
-            }
-            return;
-        }
-        if (!Array.isArray(source) && !Array.isArray(target)) {
-            const tgtObj = target as Record<string, unknown>;
-            const srcObj = source as Record<string, unknown>;
-            for (const [key, srcVal] of Object.entries(srcObj)) {
-                if (Array.isArray(srcVal) && srcVal.length === 0) {
-                    tgtObj[key] = [];
-                } else if (srcVal && typeof srcVal === 'object') {
-                    if (
-                        !Array.isArray(srcVal) &&
-                        (!tgtObj[key] || typeof tgtObj[key] !== 'object' || Array.isArray(tgtObj[key])) &&
-                        this.hasEmptyArrayDescendant(srcVal)
-                    ) {
-                        tgtObj[key] = {};
-                    }
-                    if (tgtObj[key] && typeof tgtObj[key] === 'object') {
-                        this.syncNestedEmptyArrays(tgtObj[key], srcVal);
-                    }
-                }
-            }
         }
     }
 
