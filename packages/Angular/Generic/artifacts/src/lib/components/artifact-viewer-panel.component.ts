@@ -2844,16 +2844,9 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   /** True while an export is being prepared: the header button shows progress and ignores clicks. */
   IsExporting = false;
 
-  /** Whether the header's Export menu is open. */
-  ShowExportMenu = false;
-
   /** The export formats the loaded viewer offers. The header shows no Export button when empty. */
   get ExportOptions(): ArtifactExportOption[] {
     return this.pluginViewer?.GetExportOptions() ?? [];
-  }
-
-  ToggleExportMenu(): void {
-    this.ShowExportMenu = !this.ShowExportMenu;
   }
 
   /** True when the option at `index` starts a new group, so the menu shows the group's heading above it. */
@@ -2862,31 +2855,19 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     return !!group && group !== options[index - 1]?.Group;
   }
 
-  /** Closes header dropdown menus on any click outside them (menus stop their own clicks) or on Escape. */
+  /** Closes the version dropdown on any click outside it (it stops its own clicks) or on Escape. */
   @HostListener('document:click')
   @HostListener('document:keydown.escape')
   CloseHeaderMenus(): void {
-    let changed = false;
-    if (this.ShowExportMenu) {
-      this.ShowExportMenu = false;
-      changed = true;
-    }
     if (this.ShowVersionDropdown) {
       this.ShowVersionDropdown = false;
-      changed = true;
-    }
-    if (changed) {
       this.cdr.detectChanges();
     }
   }
 
   /** Runs the chosen Export menu option through the viewer and tells the user if it fails. */
   async OnExport(option: ArtifactExportOption): Promise<void> {
-    if (option.DisabledReason) {
-      return;
-    }
-    this.ShowExportMenu = false;
-    if (this.IsExporting) {
+    if (option.DisabledReason || this.IsExporting) {
       return;
     }
     this.IsExporting = true;

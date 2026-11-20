@@ -6,7 +6,8 @@ import { ConversationEngine, type ConversationScope, MJArtifactEntity, MJArtifac
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ArtifactFileService } from '../services/artifact-file.service';
 import { ArtifactIconService } from '../services/artifact-icon.service';
-import { renderComponentFixture, query, queryAll, text, capture, StubEmptyStateComponent } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, text, capture, StubEmptyStateComponent, overlayQuery, overlayQueryAll, clearOverlayContainers } from '@memberjunction/ng-test-utils';
+import { MJMenuComponent, MJMenuItemComponent, MJMenuTriggerDirective } from '@memberjunction/ng-ui-components';
 import { ArtifactViewerPanelComponent } from './artifact-viewer-panel.component';
 import type { ArtifactExportOption, ArtifactNavigationAnchor, ArtifactSelectionAnchor, ArtifactViewerTab, ArtifactViewerViewMode, NavigationRequest, PreVerifiedFrozenSnapshotEntry } from './base-artifact-viewer.component';
 import type { InteractiveFormApplyResult } from '../services/interactive-form-apply.service';
@@ -50,7 +51,7 @@ function stubEntity<T extends object>(fields: Partial<T>): T {
   return Object.assign(Object.create(null) as T, fields);
 }
 
-const CHILDREN = [FormsModule, PluginViewerStub, CodeEditorStub, MarkdownStub, StubEmptyStateComponent, ArtifactVersionCompareComponent];
+const CHILDREN = [FormsModule, PluginViewerStub, CodeEditorStub, MarkdownStub, StubEmptyStateComponent, ArtifactVersionCompareComponent, MJMenuComponent, MJMenuItemComponent, MJMenuTriggerDirective];
 const ARTIFACT = stubEntity<MJArtifactEntity>({ Name: 'Q3 Report', Description: 'Quarterly numbers' });
 const VERSION = stubEntity<MJArtifactVersionEntity>({ ID: 'v1', VersionNumber: 2 });
 
@@ -443,6 +444,7 @@ describe('ArtifactViewerPanelComponent — collection and link rows by version I
 });
 
 describe('ArtifactViewerPanelComponent (DOM) — Export menu', () => {
+  afterEach(() => clearOverlayContainers());
   type PluginViewerLike = { GetExportOptions: () => ArtifactExportOption[]; RunExport: (key: string) => Promise<void> };
   const QUERY_OPTIONS: ArtifactExportOption[] = [
     { Key: 'excel', Label: 'Excel (.xlsx)', Icon: 'fa-solid fa-file-excel', Group: 'Results' },
@@ -474,7 +476,7 @@ describe('ArtifactViewerPanelComponent (DOM) — Export menu', () => {
   it('shows the Export button, with its menu closed, when the plugin offers export options', () => {
     const { f } = renderWithPlugin({ GetExportOptions: () => QUERY_OPTIONS, RunExport: vi.fn(async () => undefined) });
     expect(query(f, '.export-btn')).not.toBeNull();
-    expect(query(f, '.export-dropdown')).toBeNull();
+    expect(overlayQuery('mj-menu')).toBeNull();
   });
 
   it('lists the options under their group labels and runs the chosen one', async () => {
@@ -482,30 +484,66 @@ describe('ArtifactViewerPanelComponent (DOM) — Export menu', () => {
     const { f } = renderWithPlugin({ GetExportOptions: () => QUERY_OPTIONS, RunExport: runExport });
     (query(f, '.export-btn') as HTMLButtonElement).click();
     f.detectChanges();
-    expect(queryAll(f, '.export-group-label').map((label) => label.textContent?.trim())).toEqual(['Results', 'Query']);
-    const items = queryAll(f, '.export-dropdown button');
+    expect(overlayQueryAll('.export-group-label').map((label) => label.textContent?.trim())).toEqual(['Results', 'Query']);
+    const items = overlayQueryAll('mj-menu-item') as HTMLElement[];
     expect(items.map((item) => item.querySelector('.export-option-label')?.textContent?.trim())).toEqual(['Excel (.xlsx)', 'CSV (.csv)', 'SQL (.sql)']);
-    (items[1] as HTMLButtonElement).click();
+    items[1].click();
+    f.detectChanges();
     await f.whenStable();
     expect(runExport).toHaveBeenCalledWith('csv');
-    expect(f.componentInstance.ShowExportMenu).toBe(false);
+    expect(overlayQuery('mj-menu')).toBeNull();
     expect(f.componentInstance.IsExporting).toBe(false);
   });
 
-  it('shows an unavailable option greyed out with its reason, and does not run it', async () => {
+  it('does not run an unavailable option when the handler is called directly', async () => {
+    const runExport = vi.fn(async () => undefined);
+    const sheet: ArtifactExportOption = { Key: 'live-sheet', Label: 'Live Sheet', Icon: 'fa-solid fa-table-cells', Group: 'Save as', DisabledReason: 'Save the query first' };
+    const { f } = renderWithPlugin({ GetExportOptions: () => [...QUERY_OPTIONS, sheet], RunExport: runExport });
+    await f.componentInstance.OnExport(sheet);
+    expect(runExport).not.toHaveBeenCalled();
+  });
+
+  /** A keydown as a browser sends it: the CDK menu reads the legacy `keyCode`. */
+  function key(target: HTMLElement, name: 'ArrowDown'): void {
+    const event = new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'keyCode', { value: 40 });
+    target.dispatchEvent(event);
+  }
+
+  it('moves between the export options with the arrow keys', () => {
+    const { f } = renderWithPlugin({ GetExportOptions: () => QUERY_OPTIONS, RunExport: vi.fn(async () => undefined) });
+    const trigger = query(f, '.export-btn') as HTMLButtonElement;
+    trigger.focus();
+    key(trigger, 'ArrowDown');
+    f.detectChanges();
+    const items = overlayQueryAll('mj-menu-item') as HTMLElement[];
+    expect(document.activeElement).toBe(items[0]);
+    key(items[0], 'ArrowDown');
+    expect(document.activeElement).toBe(items[1]);
+  });
+
+  it('lets the keyboard reach an unavailable option and read its reason, but does not run it', async () => {
     const runExport = vi.fn(async () => undefined);
     const options: ArtifactExportOption[] = [
       ...QUERY_OPTIONS,
       { Key: 'live-sheet', Label: 'Live Sheet', Icon: 'fa-solid fa-table-cells', Description: 'Spreadsheet that stays current', Group: 'Save as', DisabledReason: 'Save the query first' },
     ];
     const { f } = renderWithPlugin({ GetExportOptions: () => options, RunExport: runExport });
-    (query(f, '.export-btn') as HTMLButtonElement).click();
+    const trigger = query(f, '.export-btn') as HTMLButtonElement;
+    trigger.focus();
+    key(trigger, 'ArrowDown');
     f.detectChanges();
-    const sheet = queryAll(f, '.export-dropdown button')[3] as HTMLButtonElement;
-    expect(sheet.disabled).toBe(true);
+    const items = overlayQueryAll('mj-menu-item') as HTMLElement[];
+    for (const item of items.slice(0, 3)) {
+      key(item, 'ArrowDown');
+    }
+    const sheet = items[3];
+    expect(document.activeElement).toBe(sheet);
     expect(sheet.getAttribute('aria-disabled')).toBe('true');
     expect(sheet.querySelector('.export-option-desc')?.textContent?.trim()).toBe('Save the query first');
-    await f.componentInstance.OnExport(options[3]);
+    sheet.click();
+    f.detectChanges();
+    await f.whenStable();
     expect(runExport).not.toHaveBeenCalled();
   });
 

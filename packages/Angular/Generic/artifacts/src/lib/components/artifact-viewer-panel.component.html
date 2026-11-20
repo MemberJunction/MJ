@@ -68,32 +68,28 @@
         }
         @let exportOptions = ExportOptions;
         @if (exportOptions.length > 0) {
-          <div class="export-menu" (click)="$event.stopPropagation()">
-            <button class="export-btn"
-                    (click)="ToggleExportMenu()"
-                    [disabled]="IsExporting"
-                    aria-haspopup="menu"
-                    [attr.aria-expanded]="ShowExportMenu"
-                    [title]="IsExporting ? 'Exporting…' : 'Export'">
-              <i class="fa-solid" [ngClass]="IsExporting ? 'fa-spinner fa-spin' : 'fa-file-export'"></i>
-            </button>
-            @if (ShowExportMenu) {
-              <div class="export-dropdown" role="menu">
-                @for (option of exportOptions; track option.Key; let i = $index) {
-                  @if (StartsExportGroup(exportOptions, i)) {
-                    <div class="export-group-label" role="presentation">{{ option.Group }}</div>
-                  }
-                  <button type="button" role="menuitem" (click)="OnExport(option)" [disabled]="!!option.DisabledReason" [attr.aria-disabled]="option.DisabledReason ? 'true' : null">
-                    <i [ngClass]="option.Icon" aria-hidden="true"></i>
-                    <span class="export-option-text">
-                      <span class="export-option-label">{{ option.Label }}</span>
-                      @if (option.DisabledReason || option.Description) { <span class="export-option-desc">{{ option.DisabledReason || option.Description }}</span> }
-                    </span>
-                  </button>
+          <button class="export-btn"
+                  [mjMenuTriggerFor]="exportMenu"
+                  [disabled]="IsExporting"
+                  [attr.aria-label]="IsExporting ? 'Exporting…' : 'Export'"
+                  [title]="IsExporting ? 'Exporting…' : 'Export'">
+            <i class="fa-solid" [ngClass]="IsExporting ? 'fa-spinner fa-spin' : 'fa-file-export'" aria-hidden="true"></i>
+          </button>
+          <ng-template #exportMenu>
+            <mj-menu class="export-menu" AriaLabel="Export">
+              @for (option of exportOptions; track option.Key; let i = $index) {
+                @if (StartsExportGroup(exportOptions, i)) {
+                  <div class="export-group-label" role="presentation">{{ option.Group }}</div>
                 }
-              </div>
-            }
-          </div>
+                <mj-menu-item [Icon]="option.Icon" [Disabled]="!!option.DisabledReason" (Triggered)="OnExport(option)">
+                  <span class="export-option-label">{{ option.Label }}</span>
+                  @if (option.DisabledReason || option.Description) {
+                    <span class="export-option-desc">{{ option.DisabledReason || option.Description }}</span>
+                  }
+                </mj-menu-item>
+              }
+            </mj-menu>
+          </ng-template>
         }
         @if (showSaveToCollection) {
           <button class="save-to-collection-btn"

@@ -173,6 +173,59 @@ describe('DataArtifactViewerComponent export options', () => {
         expect(await readBlobText(blobs[0])).toBe(SQL);
     });
 
+    it('downloads the SQL of every table, under its name, when the artifact has several tables', async () => {
+        const blobs: Blob[] = [];
+        URL.createObjectURL = vi.fn((blob: Blob) => {
+            blobs.push(blob);
+            return 'blob:sql';
+        });
+        URL.revokeObjectURL = vi.fn();
+        vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+        await makeViewer([liveTable('Orders'), liveTable('Customers', 'SELECT * FROM Customers')]).RunExport('sql');
+        expect(await readBlobText(blobs[0])).toBe(`-- ═══ Orders ═══\n${SQL}\n\n-- ═══ Customers ═══\nSELECT * FROM Customers`);
+    });
+
+    it.each<[string, boolean, Record<string, unknown>[]]>([
+        ['while the results are loading', true, ROWS],
+        ['before any rows are on screen', false, []],
+    ])('offers no results formats %s', (_when, loading, rows) => {
+        const viewer = makeViewer([liveTable()]);
+        viewer.IsLoading = loading;
+        viewer.GridData = rows;
+        expect(viewer.GetExportOptions().filter((o) => o.Group !== 'Save as').map((o) => o.Key)).toEqual(['sql']);
+    });
+
+    describe('warning when the results file is incomplete', () => {
+        /** A viewer whose grid asks for every row, and keeps the rows on screen when that fails, as the real grid does. */
+        function viewerWithQuery(result: Partial<RunQueryResult>): { viewer: DataArtifactViewerComponent; notify: ReturnType<typeof vi.fn> } {
+            const viewer = makeViewer([liveTable()]);
+            viewer.Provider = stubObj<IMetadataProvider & IRunQueryProvider>({
+                RunQuery: vi.fn(async () => ({ Success: true, Results: ROWS, RowCount: 2, TotalRowCount: 2, ...result }) as RunQueryResult),
+            });
+            viewer.ResultsGrid = stubObj<QueryDataGridComponent>({
+                Export: vi.fn(async () => {
+                    await viewer.ExportAllRows().catch(() => ROWS);
+                    return { success: true, fileName: 'x', mimeType: 'text/csv', sizeBytes: 1 } as ExportResult;
+                }),
+            });
+            const notify = vi.fn();
+            vi.spyOn(MJNotificationService, 'Instance', 'get').mockReturnValue(stubObj<MJNotificationService>({ CreateSimpleNotification: notify }));
+            return { viewer, notify };
+        }
+
+        it('warns when the file stops at the row limit', async () => {
+            const { viewer, notify } = viewerWithQuery({ Results: new Array(100000).fill(ROWS[0]) });
+            await viewer.RunExport('csv');
+            expect(notify).toHaveBeenCalledWith(expect.stringContaining('Exported the first'), 'warning', 6000);
+        });
+
+        it('warns when the query could not run again, so the file has only the rows on screen', async () => {
+            const { viewer, notify } = viewerWithQuery({ Success: false, ErrorMessage: 'timeout', Results: [] });
+            await viewer.RunExport('csv');
+            expect(notify).toHaveBeenCalledWith('Could not run the query again, so the file has only the rows on screen.', 'warning', 6000);
+        });
+    });
+
     describe('saved query, Excel (live) and Live Sheet', () => {
         const PROVIDER = stubObj<IMetadataProvider & IRunQueryProvider>({});
         const notify = vi.fn();
@@ -261,6 +314,13 @@ describe('DataArtifactViewerComponent export options', () => {
             expect(option(viewer, 'excel-live')?.DisabledReason).toBe('Update the saved query first');
             expect(option(viewer, 'live-sheet')?.DisabledReason).toBe('Update the saved query first');
         });
+
+        it.each(['no-query-older', 'query-ahead', 'query-behind'] as const)(
+            'offers no saved-query, Excel (live) or Live Sheet target on an older version (%s)',
+            (state) => {
+                expect(viewerIn(state).GetExportOptions().map((o) => o.Key)).toEqual(['excel', 'csv', 'json', 'sql', 'list']);
+            },
+        );
 
         it('greys out Excel (live) when a required parameter has no value', () => {
             const viewer = viewerIn('synced');
