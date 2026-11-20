@@ -1494,26 +1494,12 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
       Callbacks?.OnProgress?.('Config', 'Removing config, client bootstrap, and package references...');
 
       // Collect other installed apps' manifests so we don't remove shared prebundle excludes
-      const otherApps = (await ListInstalledApps(context.ContextUser))
-        .filter(a => a.Name !== options.AppName && a.Status !== 'Removed');
-      // Skip a corrupt OTHER-app manifest — it must not break THIS app's removal (B24).
-      const otherManifests = otherApps.flatMap(a => {
-        try {
-          return [JSON.parse(a.ManifestJSON) as MJAppManifest];
-        } catch {
-          Callbacks?.OnWarn?.('Config', `Ignoring app '${a.Name}' when computing shared excludes — its ManifestJSON could not be parsed.`);
-          return [];
-        }
-      });
+      const otherManifests = await ListOtherAppManifests(options.AppName, context);
 
       // Same shared-survival rule for npm deps: any package another installed app still
       // declares (server/client/shared) must survive this app's removal, or the survivor's
       // next boot fails on a missing dependency.
-      const retainPackages = [...new Set(otherManifests.flatMap(m => [
-        ...(m.packages?.server ?? []),
-        ...(m.packages?.client ?? []),
-        ...(m.packages?.shared ?? []),
-      ].map(p => p.name)))];
+      const retainPackages = ListDeclaredPackageNames(otherManifests);
 
       await Promise.all([
         Promise.resolve(RemoveServerDynamicPackages(context.RepoRoot, options.AppName, context.ServerPackagePath)),
@@ -1599,6 +1585,29 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     Callbacks?.OnError?.('Remove', message);
     return BuildFailureResult('Remove', options.AppName, '', phase, startTime, message);
   }
+}
+
+/**
+ * The parsed manifests of every installed app other than `appName` (status `Removed` excluded).
+ * A corrupt OTHER-app manifest is skipped with a warning: it must not break an operation on THIS
+ * app (B24).
+ */
+async function ListOtherAppManifests(appName: string, context: OrchestratorContext): Promise<MJAppManifest[]> {
+  const otherApps = (await ListInstalledApps(context.ContextUser)).filter((a) => a.Name !== appName && a.Status !== 'Removed');
+  return otherApps.flatMap((a) => {
+    try {
+      return [JSON.parse(a.ManifestJSON) as MJAppManifest];
+    } catch {
+      context.Callbacks?.OnWarn?.('Config', `Ignoring app '${a.Name}' when computing shared excludes — its ManifestJSON could not be parsed.`);
+      return [];
+    }
+  });
+}
+
+/** Every npm package name the manifests declare, across server, client and shared, deduplicated. */
+function ListDeclaredPackageNames(manifests: MJAppManifest[]): string[] {
+  const names = manifests.flatMap((m) => [...(m.packages?.server ?? []), ...(m.packages?.client ?? []), ...(m.packages?.shared ?? [])].map((p) => p.name));
+  return [...new Set(names)];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
