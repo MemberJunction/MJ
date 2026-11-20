@@ -326,6 +326,7 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
             const message = new Message();
             message.From = process.env.CLAIM_FROM_EMAIL || process.env.NOTIFICATION_FROM_EMAIL || 'notifications@memberjunction.com';
             message.To = claim.NormalizedEmail;
+            message.ContainsSecrets = true;
 
             // Generate claim / magic link URL with token
             const baseUrl = params.ClaimBaseURL || process.env.PORTAL_BASE_URL || 'https://app.memberjunction.com';

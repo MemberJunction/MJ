@@ -260,6 +260,35 @@ describe('CommunicationEngineBase', () => {
             expect(mockLog.CommunicationRunID).toBeUndefined();
         });
 
+        it('keeps the body of a message that contains secrets out of the log', async () => {
+            const mockLog = {
+                CommunicationRunID: undefined as string | undefined,
+                Status: '',
+                CommunicationProviderID: '',
+                CommunicationProviderMessageTypeID: '',
+                MessageDate: null as Date | null,
+                Direction: '',
+                MessageContent: '',
+                Save: mockSave.mockResolvedValue(true),
+            };
+            mockGetEntityObject.mockResolvedValue(mockLog);
+
+            const processedMessage = {
+                MessageType: { CommunicationProviderID: 'prov-1', ID: 'pmt-1' },
+                To: 'user@test.com',
+                From: 'sender@test.com',
+                ProcessedSubject: 'Your link',
+                ProcessedHTMLBody: '<a href="https://x.test/redeem?token=marker-123">Open</a>',
+                ProcessedBody: 'https://x.test/redeem?token=marker-123',
+                ContainsSecrets: true,
+            };
+
+            await (engine as unknown as Record<string, Function>)['StartLog'](processedMessage);
+
+            expect(mockLog.MessageContent).not.toContain('marker-123');
+            expect(JSON.parse(mockLog.MessageContent)).toMatchObject({ To: 'user@test.com', Subject: 'Your link' });
+        });
+
         it('should return null when log Save fails', async () => {
             const mockLog = {
                 CommunicationRunID: '',

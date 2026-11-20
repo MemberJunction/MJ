@@ -269,6 +269,12 @@ describe('RuntimeVerificationPorts', () => {
             expect(mocks.sendSingleMessage.mock.calls[0][2].DryRun).toBe(false);
         });
 
+        it('marks a delivered verification email as containing secrets, so its body is not logged', async () => {
+            mocks.sendSingleMessage.mockResolvedValue({ Success: true });
+            await ports.SendEmail(email);
+            expect(mocks.sendSingleMessage.mock.calls[0][2].ContainsSecrets).toBe(true);
+        });
+
         it('reports a provider failure', async () => {
             mocks.sendSingleMessage.mockResolvedValue({ Success: false, Error: 'quota' });
             expect(await ports.SendEmail(email)).toEqual({ Success: false, ErrorMessage: 'quota' });
