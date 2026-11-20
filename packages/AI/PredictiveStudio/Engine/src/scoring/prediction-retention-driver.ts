@@ -44,9 +44,13 @@ export interface PredictionRetentionDetails {
  */
 @RegisterClass(BaseScheduledJob, 'PredictiveStudioPredictionRetentionJobDriver')
 export class PredictiveStudioPredictionRetentionJobDriver extends BaseScheduledJob {
-  /** @inheritdoc Runs as the job's user on the provider the engine read the job with, on the run's start date. */
+  /**
+   * @inheritdoc Runs as the job's user on the provider the engine read the job with, on the run's start date, renewing
+   * the job's lease as it goes (a hand-built context without `heartbeat` renews nothing).
+   */
   public async Execute(context: ScheduledJobExecutionContext): Promise<ScheduledJobResult> {
-    const ctx = PredictionRetention.ContextOf({ ContextUser: context.ContextUser, Provider: context.Provider });
+    const heartbeat = context.heartbeat ?? (async (): Promise<void> => undefined);
+    const ctx = PredictionRetention.ContextOf({ ContextUser: context.ContextUser, Provider: context.Provider }, heartbeat);
     return this.RunMaintenance(ctx, context.Run.StartedAt || new Date());
   }
 
@@ -89,6 +93,7 @@ export class PredictiveStudioPredictionRetentionJobDriver extends BaseScheduledJ
     const bindings = await ctx.Store.ReadRetainedBindings();
     const out: BindingSweepOutcome[] = [];
     for (const binding of bindings) {
+      await ctx.Heartbeat();
       const swept = await PredictionRetention.SweepBinding(binding, sweepDate, ctx);
       if (swept !== null) out.push(swept);
     }

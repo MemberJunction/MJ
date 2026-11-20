@@ -8,8 +8,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { AuthorizationInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
-  PREDICTION_RETENTION_BATCH_SIZE,
-  PredictionRetention,
+    PredictionRetention,
   type IPredictionRetentionStore,
   type PredictionRetentionContext,
   type RetentionBatchOutcome,
@@ -81,10 +80,13 @@ class FakeRetentionStore implements IPredictionRetentionStore {
     }));
   }
 
-  public async DeleteExpiredModelRows(bindingId: string, before: Date, max: number): Promise<RetentionBatchOutcome> {
+  public async DeleteExpiredModelRows(bindingId: string, before: Date, max: number, skipIDs: readonly string[]): Promise<RetentionBatchOutcome> {
     this.BatchSizes.push(max);
-    const batch = this.ModelRows({ ID: bindingId }).filter((v) => v.EffectiveAsOf.getTime() < before.getTime()).slice(0, max);
-    const failures = batch.filter((v) => this.FailingDeletes.has(v.ID)).map((v) => `${v.ID}: refused`);
+    const batch = this.ModelRows({ ID: bindingId })
+      .filter((v) => v.EffectiveAsOf.getTime() < before.getTime() && !skipIDs.includes(v.ID))
+      .slice(0, max);
+    const failed = batch.filter((v) => this.FailingDeletes.has(v.ID));
+    const failures = failed.map((v) => ({ ID: v.ID, Message: 'refused' }));
     const gone = new Set(batch.filter((v) => !this.FailingDeletes.has(v.ID)).map((v) => v.ID));
     this.Values = this.Values.filter((v) => !gone.has(v.ID));
     for (let i = 0; i < gone.size; i++) this.DeletedEntities.push('MJ: Feature Values');
@@ -106,6 +108,8 @@ class AuthorizationsProvider {
 let values: FakeRetentionStore;
 let authorizations: AuthorizationsProvider;
 let ctx: PredictionRetentionContext;
+/** Every heartbeat the maintenance sent, in order. */
+let heartbeats: number;
 let active: StoredBinding;
 let withdrawn: StoredBinding;
 let unlimited: StoredBinding;
@@ -115,7 +119,8 @@ let custom: StoredBinding;
 beforeEach(() => {
   values = new FakeRetentionStore();
   authorizations = new AuthorizationsProvider();
-  ctx = { Authorizations: authorizations, Store: values };
+  heartbeats = 0;
+  ctx = { Authorizations: authorizations, Store: values, Heartbeat: async () => { heartbeats++; } };
   active = values.AddBinding('active', 30, 'Active', null);
   withdrawn = values.AddBinding('withdrawn', 30, 'Withdrawn', null);
   unlimited = values.AddBinding('unlimited', null, 'Active', SEEDED_AUTH);
@@ -162,14 +167,14 @@ describe('PredictiveStudioPredictionRetentionJobDriver', () => {
     const details = await runDriver();
     expect(details.Bindings.map((b) => [b.BindingID, b.Status, b.Deleted])).toEqual([['active', 'Active', 3], ['withdrawn', 'Withdrawn', 3], ['boundary', 'Active', 1], ['custom', 'Active', 0]]);
     expect([details.Deleted, details.DeleteFailures, details.BackfilledBindings, details.AuthorizationLoaded]).toEqual([7, 0, 2, true]);
-    expect(new Set(values.BatchSizes)).toEqual(new Set([PREDICTION_RETENTION_BATCH_SIZE]));
+    expect(new Set(values.BatchSizes)).toEqual(new Set([PredictionRetention.BatchSize]));
   });
 
   it('a batch of 1,000 is followed by another until the expired rows are gone', async () => {
-    const many = Array.from({ length: PREDICTION_RETENTION_BATCH_SIZE + 5 }, (_, i) => new Date(Date.UTC(2025, 0, 1) + i * 60_000));
+    const many = Array.from({ length: PredictionRetention.BatchSize + 5 }, (_, i) => new Date(Date.UTC(2025, 0, 1) + i * 60_000));
     values.AddValues(custom.ID, many);
     const details = await runDriver();
-    expect(details.Bindings.find((b) => b.BindingID === 'custom')?.Deleted).toBe(PREDICTION_RETENTION_BATCH_SIZE + 5);
+    expect(details.Bindings.find((b) => b.BindingID === 'custom')?.Deleted).toBe(PredictionRetention.BatchSize + 5);
     expect(values.ModelRows(custom)).toEqual([]);
   });
 
@@ -180,6 +185,26 @@ describe('PredictiveStudioPredictionRetentionJobDriver', () => {
     expect(result.Success).toBe(false);
     expect(result.ErrorMessage).toContain('1 prediction delete(s) failed');
     expect(values.ModelRows(active).map((r) => r.EffectiveAsOf)).toEqual([OLD_DAYS[0], KEPT_DAY]);
+  });
+
+  it('a row whose delete keeps failing is tried and reported once, and the rows behind it are still swept', async () => {
+    const many = Array.from({ length: PredictionRetention.BatchSize + 5 }, (_, i) => new Date(Date.UTC(2025, 0, 1) + i * 60_000));
+    values.AddValues(custom.ID, many);
+    const [oldest] = values.ModelRows(custom);
+    values.FailingDeletes.add(oldest.ID);
+    const details = await new PredictiveStudioPredictionRetentionJobDriver().Maintain(ctx, SWEEP_DAY);
+    const swept = details.Bindings.find((b) => b.BindingID === 'custom');
+    expect(swept?.Failures).toEqual([`${oldest.ID}: refused`]);
+    expect(swept?.Deleted).toBe(PredictionRetention.BatchSize + 4);
+    expect(values.ModelRows(custom).map((r) => r.ID)).toEqual([oldest.ID]);
+  });
+
+  it('renews the job lease once per binding and once per batch', async () => {
+    const many = Array.from({ length: PredictionRetention.BatchSize + 5 }, (_, i) => new Date(Date.UTC(2025, 0, 1) + i * 60_000));
+    values.AddValues(custom.ID, many);
+    await runDriver();
+    // Four bindings with a RetentionDays: one beat each; batches: active 1, withdrawn 1, boundary 1, custom 2.
+    expect(heartbeats).toBe(4 + 5);
   });
 });
 
@@ -202,5 +227,10 @@ describe('PredictionRetention.ExpiredFilter', () => {
   it('selects the binding\'s Model rows strictly before the cutoff', () => {
     expect(PredictionRetention.ExpiredFilter("o'brien", BOUNDARY_DAY))
       .toBe(`MLModelScoringBindingID = 'o''brien' AND Source = 'Model' AND EffectiveAsOf < '2026-10-20T00:00:00.000Z'`);
+  });
+
+  it('leaves out the rows whose delete already failed this run', () => {
+    expect(PredictionRetention.ExpiredFilter('b', BOUNDARY_DAY, ['x1', "x'2"]))
+      .toBe(`MLModelScoringBindingID = 'b' AND Source = 'Model' AND EffectiveAsOf < '2026-10-20T00:00:00.000Z' AND ID NOT IN ('x1', 'x''2')`);
   });
 });

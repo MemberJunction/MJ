@@ -454,7 +454,7 @@ describe('M5b.10 harness', () => {
   }, CASE_TIMEOUT_MS);
 
   it('binding backfill and retention sweep through the production store: only a binding without a view authorization is assigned, once; only expired Model rows go', async () => {
-    const ctx = PredictionRetention.ContextOf({ Provider: server.Provider, ContextUser: server.User });
+    const ctx = PredictionRetention.ContextOf({ Provider: server.Provider, ContextUser: server.User }, async () => undefined);
     const seeded = PredictionRetention.SeededAuthorizationID(server.Provider);
     if (seeded === null) throw new Error('the seeded view authorization is not in metadata: run mj sync push');
     // Adversary: a binding saved before the view authorization existed (the server entity now refuses a null one).
