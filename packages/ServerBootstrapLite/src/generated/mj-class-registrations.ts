@@ -1493,22 +1493,25 @@ import {
     XMLParserAction,
 } from '@memberjunction/core-actions';
 
-// @memberjunction/predictive-studio (22 classes)
+// @memberjunction/predictive-studio (25 classes)
 import {
-    EvaluateFeatureAndPredictionDriftAction,
     MLModelInferenceProcessor,
     MLModelScoreEnricher,
     PredictiveStudioControlExperimentSessionServerOperation,
     PredictiveStudioCreateScoringProcessServerOperation,
     PredictiveStudioGetModelEvidenceServerOperation,
     PredictiveStudioMigratePipelinesAction,
+    PredictiveStudioMigratePreGateModelsServerOperation,
     PredictiveStudioModelDevAgent,
+    PredictiveStudioModelMonitoringJobDriver,
     PredictiveStudioPipelineBuilderAgent,
     PredictiveStudioPredictionRetentionJobDriver,
     PredictiveStudioPromoteModelAction,
     PredictiveStudioPromoteModelServerOperation,
+    PredictiveStudioRegistryCheckJobDriver,
     PredictiveStudioRunExperimentAction,
     PredictiveStudioRunFeaturePipelineServerOperation,
+    PredictiveStudioRunModelMonitoringServerOperation,
     PredictiveStudioScheduleModelScoringAction,
     PredictiveStudioScoreRecordSetAction,
     PredictiveStudioScoreRecordSetServerOperation,
@@ -2786,20 +2789,23 @@ const CLASS_REGISTRATIONS_5: any[] = [
     WebSearchAction,
     WriteEntityFieldsAction,
     XMLParserAction,
-    EvaluateFeatureAndPredictionDriftAction,
     MLModelInferenceProcessor,
     MLModelScoreEnricher,
     PredictiveStudioControlExperimentSessionServerOperation,
     PredictiveStudioCreateScoringProcessServerOperation,
     PredictiveStudioGetModelEvidenceServerOperation,
     PredictiveStudioMigratePipelinesAction,
+    PredictiveStudioMigratePreGateModelsServerOperation,
     PredictiveStudioModelDevAgent,
+    PredictiveStudioModelMonitoringJobDriver,
     PredictiveStudioPipelineBuilderAgent,
     PredictiveStudioPredictionRetentionJobDriver,
     PredictiveStudioPromoteModelAction,
     PredictiveStudioPromoteModelServerOperation,
+    PredictiveStudioRegistryCheckJobDriver,
     PredictiveStudioRunExperimentAction,
     PredictiveStudioRunFeaturePipelineServerOperation,
+    PredictiveStudioRunModelMonitoringServerOperation,
     PredictiveStudioScheduleModelScoringAction,
     PredictiveStudioScoreRecordSetAction,
     PredictiveStudioScoreRecordSetServerOperation,
@@ -2809,13 +2815,13 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PredictiveStudioTrainModelServerOperation,
     PredictiveStudioWithdrawScoringBindingServerOperation,
     CreateScheduledJobAction,
-    DeleteScheduledJobAction,
-    ExecuteScheduledJobNowAction,
-    GetScheduledJobStatisticsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    DeleteScheduledJobAction,
+    ExecuteScheduledJobNowAction,
+    GetScheduledJobStatisticsAction,
     QueryScheduledJobsAction,
     UpdateScheduledJobAction,
     AgentEvalDriver,
@@ -2869,7 +2875,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1236;
+export const CLASS_REGISTRATIONS_COUNT = 1239;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
