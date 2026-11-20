@@ -19,7 +19,7 @@ import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
 
 import { Metadata, RunView, UserInfo, LogError, LogStatus, IMetadataProvider } from '@memberjunction/core';
-import { UUIDsEqual, BaseSingleton, IsValidUUID } from '@memberjunction/global';
+import { UUIDsEqual, BaseSingleton, IsValidUUID, EscapeSQLString } from '@memberjunction/global';
 import { CredentialEngine } from '@memberjunction/credentials';
 import {
     MJMCPServerEntity,
@@ -1775,7 +1775,7 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
             const rv = new RunView();
             const result = await rv.RunView<{ ID: string }>({
                 EntityName: MCPClientManager.ENTITY_MCP_TOOLS,
-                ExtraFilter: `MCPServerID = '${serverId}' AND ToolName = '${toolName}'`,
+                ExtraFilter: `MCPServerID = '${serverId}' AND ToolName = '${EscapeSQLString(toolName)}'`,
                 ResultType: 'simple',
                 Fields: ['ID']
             }, contextUser);

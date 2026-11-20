@@ -47,4 +47,17 @@ describe('MCPClientManager connection ID filters', () => {
 
         expect(filtersSent(spy).filter((f) => f.includes(MARKER))).toEqual([]);
     });
+
+    it('keeps a tool name inside one string literal in the tool lookup filter', async () => {
+        const spy = spyOnRunView();
+        const manager = new MCPClientManager() as unknown as {
+            getToolId(serverId: string, toolName: string, user: UserInfo): Promise<string | undefined>;
+        };
+
+        await manager.getToolId('22222222-3333-4444-5555-666666666666', "tool'name", contextUser);
+
+        expect(filtersSent(spy)).toEqual([
+            "MCPServerID = '22222222-3333-4444-5555-666666666666' AND ToolName = 'tool''name'",
+        ]);
+    });
 });

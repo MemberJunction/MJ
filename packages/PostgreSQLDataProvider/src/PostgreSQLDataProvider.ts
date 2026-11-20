@@ -1407,7 +1407,12 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
 
     /** `text` without leading and trailing spaces and tabs. */
     private trimSpacesAndTabs(text: string): string {
-        return text.replace(/^[ \t]+|[ \t]+$/g, '');
+        const isSpaceOrTab = (ch: string) => ch === ' ' || ch === '\t';
+        let start = 0;
+        let end = text.length;
+        while (start < end && isSpaceOrTab(text[start])) start++;
+        while (end > start && isSpaceOrTab(text[end - 1])) end--;
+        return text.slice(start, end);
     }
 
     /**
@@ -1471,7 +1476,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             if (!op || !value || bit === null || !/^(\s|\)|,|$)/.test(sql.slice(value.End, value.End + 1))) continue;
             // Only whitespace may lie between the column, the operator and the value; a comment there stays.
             const gaps = sql.slice(col.End, tokens[i + 1].Start) + sql.slice(tokens[i + op.length].End, value.Start);
-            if (!/^\s*$/.test(gaps)) continue;
+            if (gaps.trim().length > 0) continue;
             edits.push({ Start: col.Start, End: value.End, Text: `${sql.slice(col.Start, col.End)} ${op} ${bit ? 'TRUE' : 'FALSE'}` });
             i += op.length + 1;
         }

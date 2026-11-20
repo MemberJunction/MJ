@@ -279,4 +279,13 @@ describe('RunView.GetEntityNameFromRunViewParams', () => {
         expect(filters).toEqual(["Name = 'Bob''s view'"]);
         expect(entityName).toBe('MJ: Users');
     });
+
+    it('refuses a ViewID that is not a UUID with a fixed message', async () => {
+        const { provider } = viewLookupProvider();
+
+        const message = await RunView.GetEntityNameFromRunViewParams({ ViewID: 'not-a-uuid-marker' }, provider as never)
+            .then(() => '', (e: Error) => e.message);
+
+        expect(message).toBe('RunView: ViewID must be a UUID');
+    });
 });

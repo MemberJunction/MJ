@@ -14,4 +14,4 @@ Server code now validates caller values before it puts them into RunView filters
 
 RunView refuses a ViewID that is not a UUID when it looks up the entity of a view, and escapes a ViewName in that lookup.
 
-The Add Records to List, Remove Records from List, Update List Item Status, Get List Records and Get Record List Membership actions refuse a ListID, EntityID or UserID that is not a UUID, and escape record IDs, status values and entity names in their filters.
+The Add Records to List, Remove Records from List, Update List Item Status, Get List Records and Get Record List Membership actions refuse a ListID, EntityID or UserID that is not a UUID, and escape record IDs, status values and entity names in their filters. The MCP tool lookup escapes the tool name, and the Agent Architect reports an action ID that is not a UUID as not valid.

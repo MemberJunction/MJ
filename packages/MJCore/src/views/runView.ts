@@ -1074,7 +1074,7 @@ export class RunView  {
             //      not a semantic change: the undefined already produced a throw downstream —
             //      just an unreadable one.)
             if (params.ViewID && !IsValidUUID(params.ViewID)) {
-                throw new Error(`RunView: ViewID '${params.ViewID}' is not a UUID`);
+                throw new Error('RunView: ViewID must be a UUID');
             }
             const rv = RunView.FromMetadataProvider(p);
             const result = await rv.RunView({

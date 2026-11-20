@@ -4,7 +4,8 @@
  * (identifier quoting, T-SQL date functions, boolean literals) in code only: string literals stay
  * as written. These tests run the real hook, the real PostgreSQL rewrite and the real view query
  * builder, with only ExecuteSQL recorded, and pin that the tenant predicate stays a separate
- * top-level AND term and that a caller's string literal reaches the WHERE as written. The last
+ * top-level AND term, that a caller's string literal reaches the WHERE as written, and that a
+ * rewrite which leaves a term unbalanced is refused before any SQL runs. The last
  * block runs the same path with no hook and pins that the per-term rewrite keeps a SQL Server
  * bracket name whole.
  */
@@ -43,6 +44,16 @@ class RecordingPostgreSQLProvider extends PostgreSQLDataProvider {
     public override async ExecuteSQL<T>(sql: string): Promise<T[]> {
         this.ExecutedSQL.push(sql);
         return [];
+    }
+}
+
+/**
+ * A recording provider whose clause rewrite returns each clause with one more closing parenthesis
+ * and a second term, so the rewritten text is not balanced.
+ */
+class UnbalancingPostgreSQLProvider extends RecordingPostgreSQLProvider {
+    protected override TransformExternalSQLClause(clause: string, _entityInfo: EntityInfo): string {
+        return clause ? `${clause}) AND (1 = 1` : clause;
     }
 }
 
@@ -148,6 +159,17 @@ describe('Multi-tenancy on PostgreSQL — the provider rewrite cannot reach the 
 
     it('runs a filter whose string literal holds unbalanced parentheses, with the literal as written', async () => {
         await expectCallerLiteralKept(`"IsActive" = '1) AND (1 = 1'`);
+    });
+
+    it('refuses a caller term that the rewrite leaves unbalanced, and runs no SQL', async () => {
+        const unbalanced = new UnbalancingPostgreSQLProvider([customersEntity()]);
+        Metadata.Provider = unbalanced;
+
+        const result = await unbalanced.RunView({ EntityName: 'Customers', ExtraFilter: `"Name" = 'a'` }, user);
+
+        expect(unbalanced.ExecutedSQL).toEqual([]);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/ExtraFilter/);
     });
 
     it('leaves an ordinary filter and the tenant predicate as written, each in its own term', async () => {
