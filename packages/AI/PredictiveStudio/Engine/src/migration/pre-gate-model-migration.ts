@@ -18,13 +18,15 @@
  * the job run (`{ kind: 'scheduled-job', scheduledJobRunId }`), every read and write runs on `ctx.Provider` as
  * `ctx.ContextUser`, and every ID comparison uses `UUIDsEqual`.
  */
-import { LogError } from '@memberjunction/core';
+import { CompositeKey, LogError } from '@memberjunction/core';
 import type {
   MJMLModelEntity,
   MJMLModelPublishRecordEntity,
+  MJMLModelScoringBindingEntity,
   MJMLTrainingPipelineEntity,
   MJMLTrainingRunEntity,
   MJMLTrainingSnapshotEntity,
+  MJRecordChangeEntity,
   MJRecordProcessEntity,
   MJScheduledJobRunEntity,
 } from '@memberjunction/core-entities';
@@ -233,6 +235,8 @@ export class PreGateModelMigration {
   /** The `StatusReason` the data section gives the pre-change model that keeps serving its pipeline. */
   public static readonly ServingReason =
     'Trained before the Predictive Studio lifecycle gate and still serving; never evaluated under an Evaluation Protocol; replaced automatically when a model is published through the gate.';
+  /** Record Changes rows read per keyset page by the change detection ({@link InputRowChangedAfter}). */
+  public static readonly ChangePageSize = 500;
   /** The job configuration's defaults (D4-22). */
   public static readonly DefaultConfig: PreChangeMigrationConfig = { BatchSize: 50, RetrainPerRun: 3 };
 
@@ -672,10 +676,13 @@ export class PreGateModelMigration {
   }
 
   /**
-   * True when one of the pipeline's change-detection columns moved after its last attempt (D4-22): the pipeline row's
-   * `__mj_UpdatedAt`; its bound protocol version's ID against the protocol the attempt's run was evaluated under; the
-   * newest `__mj_UpdatedAt` of its target entity's rows (the unit's source rows) and of the `MJ: Feature Values` of
-   * that entity.
+   * True when one of the pipeline's change-detection inputs moved after its last attempt (D4-22, D4-211 as amended):
+   * the pipeline row's `__mj_UpdatedAt`; its bound protocol version's ID against the protocol the attempt's run was
+   * evaluated under; the newest `__mj_UpdatedAt` of its target entity's input `MJ: Feature Values` (`Source` `Pipeline`
+   * or `Human`: a `Model` row is scoring's own prediction, never an input); and its target entity's rows. Scoring writes
+   * back into the target rows only through a binding's `TargetColumn` ({@link CopiedColumns}), so for an entity with
+   * such a column a row counts only through what changed in it ({@link InputRowChangedAfter}) or a row created after
+   * the attempt; an entity with none counts its rows' newest `__mj_UpdatedAt`.
    *
    * @throws Error when a read fails
    */
@@ -684,8 +691,67 @@ export class PreGateModelMigration {
     if (after(pipeline.__mj_UpdatedAt ? new Date(pipeline.__mj_UpdatedAt) : null)) return true;
     const run = await PreGateModelMigration.ReadRunRow(attempt.TrainingRunID, ctx);
     if (run !== null && pipeline.EvaluationProtocolID && !UUIDsEqual(run.EvaluationProtocolID, pipeline.EvaluationProtocolID)) return true;
-    if (pipeline.TargetEntityID && after(await PreGateModelMigration.NewestUpdate('MJ: Feature Values', `EntityID='${EscapeSQLString(pipeline.TargetEntityID)}'`, ctx))) return true;
-    return pipeline.TargetEntity ? after(await PreGateModelMigration.NewestUpdate(pipeline.TargetEntity, '', ctx)) : false;
+    const entityId = pipeline.TargetEntityID;
+    const inputValues = entityId ? `EntityID='${EscapeSQLString(entityId)}' AND Source IN ('Pipeline', 'Human')` : null;
+    if (inputValues !== null && after(await PreGateModelMigration.NewestStamp('MJ: Feature Values', '__mj_UpdatedAt', inputValues, ctx))) return true;
+    if (!pipeline.TargetEntity) return false;
+    const copied = entityId ? await PreGateModelMigration.CopiedColumns(entityId, ctx) : new Set<string>();
+    if (!entityId || copied.size === 0) return after(await PreGateModelMigration.NewestStamp(pipeline.TargetEntity, '__mj_UpdatedAt', '', ctx));
+    if (after(await PreGateModelMigration.NewestStamp(pipeline.TargetEntity, '__mj_CreatedAt', '', ctx))) return true;
+    return PreGateModelMigration.InputRowChangedAfter(entityId, copied, attempt.RecordedAt, ctx);
+  }
+
+  /**
+   * The columns of the entity that scoring writes back into: the `TargetColumn` of every scoring binding of the entity,
+   * whatever its status (a withdrawal clears its copies too), trimmed and lower-cased.
+   *
+   * @throws Error when the read fails
+   */
+  protected static async CopiedColumns(entityId: string, ctx: RegistryContext): Promise<Set<string>> {
+    const r = await StoredRowReads.Run<Pick<MJMLModelScoringBindingEntity, 'TargetColumn'>>(
+      { EntityName: 'MJ: ML Model Scoring Bindings', ExtraFilter: `TargetEntityID='${EscapeSQLString(entityId)}' AND TargetColumn IS NOT NULL`, Fields: ['TargetColumn'], ResultType: 'simple' },
+      ctx,
+    );
+    if (!r.Success) throw new Error(`Reading the scoring bindings of entity ${entityId} failed: ${r.ErrorMessage || 'unknown error'}`);
+    return new Set(r.Results.map((b) => (b.TargetColumn || '').trim().toLowerCase()).filter((c) => c.length > 0));
+  }
+
+  /**
+   * True when a complete Record Changes row of the entity after `since` is an input change ({@link IsInputChange}):
+   * read in keyset pages of {@link ChangePageSize}, stopping at the first one. An entity that does not track record
+   * changes has no rows, so only its created rows ({@link ChangedSince}) count.
+   *
+   * @throws Error when a read fails
+   */
+  protected static async InputRowChangedAfter(entityId: string, copiedColumns: ReadonlySet<string>, since: Date, ctx: RegistryContext): Promise<boolean> {
+    let afterKey: CompositeKey | undefined;
+    for (;;) {
+      const r = await StoredRowReads.Run<Pick<MJRecordChangeEntity, 'ID' | 'Type' | 'ChangesJSON'>>(
+        {
+          EntityName: 'MJ: Record Changes',
+          ExtraFilter: `EntityID='${EscapeSQLString(entityId)}' AND Status='Complete' AND ChangedAt > '${since.toISOString()}'`,
+          OrderBy: 'ID ASC', Fields: ['ID', 'Type', 'ChangesJSON'], MaxRows: PreGateModelMigration.ChangePageSize, ResultType: 'simple', ...(afterKey ? { AfterKey: afterKey } : {}),
+        },
+        ctx,
+      );
+      if (!r.Success) throw new Error(`Reading the record changes of entity ${entityId} failed: ${r.ErrorMessage || 'unknown error'}`);
+      if (r.Results.some((c) => PreGateModelMigration.IsInputChange(c, copiedColumns))) return true;
+      if (r.Results.length < PreGateModelMigration.ChangePageSize) return false;
+      afterKey = CompositeKey.FromID(r.Results[r.Results.length - 1].ID); // 'MJ: Record Changes' is an MJ core entity keyed by ID
+    }
+  }
+
+  /**
+   * True when a Record Changes row changed a training input: a `Create` or a `Delete`, or an `Update` listing a field
+   * that is not one of `copiedColumns` (scoring's write-backs), or whose `ChangesJSON` does not parse. A `Snapshot` (a
+   * history baseline) changes nothing. Pure.
+   */
+  public static IsInputChange(change: Pick<MJRecordChangeEntity, 'Type' | 'ChangesJSON'>, copiedColumns: ReadonlySet<string>): boolean {
+    if (change.Type === 'Snapshot') return false;
+    if (change.Type !== 'Update') return true;
+    const parsed = JsonParse.ParseJsonText(change.ChangesJSON, 'ChangesJSON');
+    if (parsed.Ok === false || !JsonParse.IsJsonObject(parsed.Value)) return true;
+    return Object.keys(parsed.Value).some((field) => !copiedColumns.has(field.trim().toLowerCase()));
   }
 
   /**
@@ -807,14 +873,14 @@ export class PreGateModelMigration {
     return r.Results.find((x) => UUIDsEqual(x.ID, snapshotId)) || null;
   }
 
-  /** The newest `__mj_UpdatedAt` of `entityName`'s rows matching `filter`; null for none. */
-  protected static async NewestUpdate(entityName: string, filter: string, ctx: RegistryContext): Promise<Date | null> {
-    const r = await StoredRowReads.Run<{ readonly __mj_UpdatedAt: Date | string | null }>(
-      { EntityName: entityName, ExtraFilter: filter, OrderBy: '__mj_UpdatedAt DESC', Fields: ['__mj_UpdatedAt'], MaxRows: 1, ResultType: 'simple' },
+  /** The newest `column` stamp of `entityName`'s rows matching `filter`; null for none. */
+  protected static async NewestStamp(entityName: string, column: '__mj_UpdatedAt' | '__mj_CreatedAt', filter: string, ctx: RegistryContext): Promise<Date | null> {
+    const r = await StoredRowReads.Run<Readonly<Record<typeof column, Date | string | null>>>(
+      { EntityName: entityName, ExtraFilter: filter, OrderBy: `${column} DESC`, Fields: [column], MaxRows: 1, ResultType: 'simple' },
       ctx,
     );
-    if (!r.Success) throw new Error(`Reading the newest change of ${entityName} failed: ${r.ErrorMessage || 'unknown error'}`);
-    const value = r.Results[0]?.__mj_UpdatedAt;
+    if (!r.Success) throw new Error(`Reading the newest ${column} of ${entityName} failed: ${r.ErrorMessage || 'unknown error'}`);
+    const value = r.Results[0]?.[column];
     return value ? new Date(value) : null;
   }
 

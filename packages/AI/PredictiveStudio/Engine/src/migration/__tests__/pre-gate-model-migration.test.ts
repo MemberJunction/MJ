@@ -64,6 +64,52 @@ function Pipeline(unit: string | null = GateWorld.UnitID): string {
   return pipelineId;
 }
 
+/** The target entity of {@link ScoredPipeline}: its rows, and the `ChurnScore` column a scoring binding copies into. */
+const MEMBERS = 'PS Pre-Gate Members';
+const MEMBERS_ENTITY_ID = '6A1D2E3F-0000-4000-8000-0000000007B1';
+
+/** A pipeline over a scored target entity, one member row, and the binding that copies predictions into `ChurnScore`. */
+interface ScoredPipelineRows {
+  readonly PipelineID: string;
+  readonly EntityID: string;
+  readonly RecordID: string;
+}
+
+/** A moment after any attempt a case records (attempts are stamped now). */
+function Later(): Date {
+  return new Date(Date.now() + 60_000);
+}
+
+/** A pipeline whose target entity a column-copy scoring binding writes back into; every row last changed long ago. */
+function ScoredPipeline(): ScoredPipelineRows {
+  const pipelineId = id();
+  const long = new Date('2025-01-01T00:00:00Z');
+  store.Insert('MJ: ML Training Pipelines', {
+    ID: pipelineId, Name: `pipeline ${pipelineId}`, PredictionUnitID: GateWorld.UnitID, EvaluationProtocolID: null, TargetEntityID: MEMBERS_ENTITY_ID, TargetEntity: MEMBERS,
+    __mj_UpdatedAt: long,
+  });
+  const recordId = id();
+  store.Insert(MEMBERS, { ID: recordId, Email: 'a@example.com', ChurnScore: null, __mj_CreatedAt: long, __mj_UpdatedAt: long });
+  store.Insert('MJ: ML Model Scoring Bindings', { ID: id(), TargetEntityID: MEMBERS_ENTITY_ID, TargetColumn: 'ChurnScore', Status: 'Active' });
+  return { PipelineID: pipelineId, EntityID: MEMBERS_ENTITY_ID, RecordID: recordId };
+}
+
+/** A tracked update of the member row (its `__mj_UpdatedAt` and its Record Changes row) listing `changes`. */
+function RowChanged(scored: ScoredPipelineRows, changes: JsonObject): void {
+  const at = Later();
+  const row = store.Row(MEMBERS, scored.RecordID);
+  if (row) row['__mj_UpdatedAt'] = at;
+  store.Insert('MJ: Record Changes', {
+    ID: id(), EntityID: scored.EntityID, RecordID: `ID|${scored.RecordID}`, Type: 'Update', Status: 'Complete', ChangedAt: at, ChangesJSON: JSON.stringify(changes),
+  });
+}
+
+/** What one scoring of the member writes: its `Model` prediction as a Feature Value, and the binding's column copy. */
+function ScoringWrote(scored: ScoredPipelineRows): void {
+  store.Insert('MJ: Feature Values', { ID: id(), EntityID: scored.EntityID, RecordID: scored.RecordID, Source: 'Model', __mj_UpdatedAt: Later() });
+  RowChanged(scored, { ChurnScore: { field: 'ChurnScore', oldValue: null, newValue: 0.7 } });
+}
+
 /** Moves a gate-world model, its training run and its snapshot onto `pipelineId`. */
 function MoveTo(model: WorldModel, pipelineId: string): WorldModel {
   const row = store.Row('MJ: ML Models', model.ID);
@@ -434,6 +480,67 @@ describe('step 5: automated re-evaluation', () => {
     if (row) row['__mj_UpdatedAt'] = new Date(Date.now() + 60_000);
     await PreGateModelMigration.ReEvaluate(3, ctx);
     expect(trainer.Runs(noisy)).toHaveLength(2);
+  });
+
+  it('a withheld pipeline whose entity is scored is not retrained by its own predictions or their column copies (I-1)', async () => {
+    const scored = ScoredPipeline();
+    Legacy(scored.PipelineID, 'Unevaluated', 'none', { Serving: true });
+    await PreGateModelMigration.ReEvaluate(3, ctx);
+    ScoringWrote(scored);
+    const second = await PreGateModelMigration.ReEvaluate(3, ctx);
+    expect(trainer.Runs(scored.PipelineID)).toHaveLength(1);
+    expect(second).toMatchObject({ Trained: 0, Findings: [expect.objectContaining({ PipelineID: scored.PipelineID, Kind: 'unchanged-since-last-attempt' })] });
+  });
+
+  it('a withheld pipeline whose entity is scored is retrained after an input Feature Value changes', async () => {
+    const scored = ScoredPipeline();
+    Legacy(scored.PipelineID, 'Unevaluated', 'none', { Serving: true });
+    await PreGateModelMigration.ReEvaluate(3, ctx);
+    ScoringWrote(scored);
+    store.Insert('MJ: Feature Values', { ID: id(), EntityID: scored.EntityID, RecordID: scored.RecordID, Source: 'Pipeline', __mj_UpdatedAt: Later() });
+    await PreGateModelMigration.ReEvaluate(3, ctx);
+    expect(trainer.Runs(scored.PipelineID)).toHaveLength(2);
+  });
+
+  it('a withheld pipeline whose entity is scored is retrained after an input column of a target row changes', async () => {
+    const scored = ScoredPipeline();
+    Legacy(scored.PipelineID, 'Unevaluated', 'none', { Serving: true });
+    await PreGateModelMigration.ReEvaluate(3, ctx);
+    ScoringWrote(scored);
+    RowChanged(scored, { Email: { field: 'Email', oldValue: 'a@example.com', newValue: 'b@example.com' } });
+    await PreGateModelMigration.ReEvaluate(3, ctx);
+    expect(trainer.Runs(scored.PipelineID)).toHaveLength(2);
+  });
+
+  it('finds an input change past a full page of column copies (keyset pages of the Record Changes)', async () => {
+    const scored = ScoredPipeline();
+    Legacy(scored.PipelineID, 'Unevaluated', 'none', { Serving: true });
+    await PreGateModelMigration.ReEvaluate(3, ctx);
+    for (let i = 0; i <= PreGateModelMigration.ChangePageSize; i++) ScoringWrote(scored);
+    RowChanged(scored, { Email: { field: 'Email', oldValue: 'a@example.com', newValue: 'b@example.com' } });
+    await PreGateModelMigration.ReEvaluate(3, ctx);
+    expect(trainer.Runs(scored.PipelineID)).toHaveLength(2);
+  });
+
+  it('counts a Create, a Delete, a malformed or a non-copy Update as an input change, and a Snapshot or a copy-only Update as none', () => {
+    const copied = new Set(['churnscore']);
+    expect([
+      PreGateModelMigration.IsInputChange({ Type: 'Create', ChangesJSON: '{}' }, copied),
+      PreGateModelMigration.IsInputChange({ Type: 'Delete', ChangesJSON: '{}' }, copied),
+      PreGateModelMigration.IsInputChange({ Type: 'Update', ChangesJSON: 'not json' }, copied),
+      PreGateModelMigration.IsInputChange({ Type: 'Update', ChangesJSON: JSON.stringify({ ChurnScore: {}, Email: {} }) }, copied),
+      PreGateModelMigration.IsInputChange({ Type: 'Snapshot', ChangesJSON: '{}' }, copied),
+      PreGateModelMigration.IsInputChange({ Type: 'Update', ChangesJSON: JSON.stringify({ ' churnScore ': {} }) }, copied),
+    ]).toEqual([true, true, true, true, false, false]);
+  });
+
+  it('a withheld pipeline whose entity is scored is retrained after a target row is created', async () => {
+    const scored = ScoredPipeline();
+    Legacy(scored.PipelineID, 'Unevaluated', 'none', { Serving: true });
+    await PreGateModelMigration.ReEvaluate(3, ctx);
+    store.Insert(MEMBERS, { ID: id(), Email: 'new@example.com', ChurnScore: null, __mj_CreatedAt: Later(), __mj_UpdatedAt: Later() });
+    await PreGateModelMigration.ReEvaluate(3, ctx);
+    expect(trainer.Runs(scored.PipelineID)).toHaveLength(2);
   });
 
   it('records no-prediction-unit for a legacy pipeline and invents no unit', async () => {

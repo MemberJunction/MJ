@@ -468,6 +468,7 @@ export class GateTestStore {
     let rows = (cached || this.Tables[params.EntityName || ''] || []).filter((r) => predicates.every((p) => p(r)));
     if (orderBy.includes('RecordedAt DESC')) rows = [...rows].reverse();   // rows are appended in RecordedAt order
     else rows = GateTestStore.ordered(rows, orderBy);
+    if (params.AfterKey) rows = GateTestStore.afterKey(rows, String(params.AfterKey.KeyValuePairs[0]?.Value));
     if (params.MaxRows) rows = rows.slice(0, params.MaxRows);
     const results = params.ResultType === 'entity_object'
       ? rows.map((r) => this.record(params.EntityName || '', { ...r }, true, contextUser))
@@ -646,6 +647,14 @@ export class GateTestStore {
     if (text) return (row) => row[text[1]] !== null && row[text[1]] !== undefined && String(row[text[1]]).toLowerCase() === text[2].replace(/''/g, "'").toLowerCase();
     const num = /^(\w+)\s*=\s*(-?\d+)$/.exec(clause);
     if (num) return (row) => Number(row[num[1]]) === Number(num[2]);
+    const later = /^(\w+) > '(\d{4}-\d{2}-\d{2}T[^']*)'$/.exec(clause);
+    if (later) {
+      const bound = new Date(later[2]).getTime();
+      return (row) => {
+        const cell = row[later[1]];
+        return cell instanceof Date && cell.getTime() > bound;
+      };
+    }
     throw new Error(`GateTestStore cannot evaluate the filter clause "${clause}"`);
   }
 
@@ -678,6 +687,12 @@ export class GateTestStore {
       const y = key(b);
       return x === y ? 0 : (x < y ? -1 : 1) * sign;
     });
+  }
+
+  /** A keyset page's rows (`AfterKey` on the single-column `ID`): ordered by ID, those after `after` (case-insensitively). */
+  private static afterKey(rows: Row[], after: string): Row[] {
+    const key = (r: Row): string => String(r['ID']).toLowerCase();
+    return [...rows].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0)).filter((r) => key(r) > after.toLowerCase());
   }
 
   /** A stored cell, or null for a column the row does not hold. */
