@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT180 - Archive Runs Page Through Every Eligible Row",
+    "Name": "IT182 - Archive Runs Page Through Every Eligible Row",
     "Description": "A Purge + StripFields archive configuration over throwaway MJ: Action Execution Logs rows, run with a batch size smaller than the eligible row count, so the engine pages with the keyset cursor and the driver's eligibility filter on the real database. ARP1 one run strips every row older than the cutoff across several pages, counts no row as skipped (an already-stripped row is never loaded), and leaves recent rows and non-stripped columns alone; ARP2 a second run of the same configuration loads no rows; ARP3 a Purge + HardDelete configuration over throwaway MJ: Entity Document Runs deletes every row older than the cutoff across several pages and keeps the recent rows (a deleted entity object clears its own key, so the paging cursor must be taken before processing). Mutating; self-cleaning.",
     "InputDefinition": {},
     "ExpectedOutcomes": {

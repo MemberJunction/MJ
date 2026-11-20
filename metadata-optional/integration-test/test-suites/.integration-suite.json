@@ -1921,7 +1921,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT180 - Archive Runs Page Through Every Eligible Row",
+            "TestID": "@lookup:MJ: Tests.Name=IT182 - Archive Runs Page Through Every Eligible Row",
             "Sequence": 49,
             "Status": "Active"
           },
