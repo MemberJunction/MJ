@@ -704,7 +704,7 @@ detached for a moment.
 
 | `type` | Fires | What saving creates or updates |
 |---|---|---|
-| `OnDemand` | Only when something asks: **Run** in the Workflows app, an agent, the `TaskGraph.Submit` operation | Nothing |
+| `OnDemand` | Only when something asks: **Run** on the workflow's agent form (opened from the Workflows app), an agent, the `TaskGraph.Submit` operation | Nothing |
 | `Schedule` | On `cron`, in `timezone` (an IANA zone; absent means the job's own default) | One `MJ: Scheduled Jobs` row of the existing `Agent` job type, pointing at the workflow's agent |
 | `EntityEvent` | After a record of `entityName` is created, updated or deleted, when `filter` allows | An `MJ: Entity Actions` binding on that entity dispatching to the existing `Execute Agent` action: an `MJ: Entity Action Invocations` row for the event, `MJ: Entity Action Params` carrying the agent and the changed record, and, when `filter` is set, an `MJ: Action Filters` row bound through `MJ: Entity Action Filters` |
 
@@ -756,6 +756,11 @@ A trigger follows the workflow's status. A schedule's job, and a record-change t
 `MJ: Entity Actions` binding, are `Active` only while the spec is `Active`; a `Draft` or `Paused`
 workflow keeps them, `Disabled`, without running on them.
 
+The workflow's Flow agent follows the status too: a `Draft` or `Paused` spec is saved as an
+`MJ: AI Agents` row with `Status = 'Disabled'`
+(`packages/AI/AgentManager/core/src/workflow-agent-writer.ts`), and the agent form's **Run** button is
+disabled unless the agent is `Active`. A draft cannot be run on demand until it is saved `Active`.
+
 Removing a trigger from the spec **disables** what it owned: the Scheduled Job, or the binding.
 Re-adding it reactivates the same row, with its history.
 
@@ -768,9 +773,9 @@ or split them into two workflows.
 
 | Surface | What it does with triggers |
 |---|---|
-| **Workflows** app → **Create** (*Blank canvas*, *Describe it*, *From a past run*) | Saves the workflow **on demand**. It asks for no trigger, on purpose: creating a workflow captures *what* worked, and *when* is a separate decision |
+| **Workflows** app → **Create** (*Blank canvas*, *Describe it*, *From a past run*) | Saves the workflow through `Workflow.Save` as a `Draft` with no triggers (its Flow agent is `Disabled`) and opens it on the AI Agents form. It asks for no trigger, on purpose: creating a workflow captures *what* worked, and *when* is a separate decision |
 | **Workflows** app → list | Does not read triggers back yet, so every workflow shows as *On demand* |
-| A conversation's plan card → **Save as workflow** | Saves an agent's plan as an on-demand workflow |
+| A conversation's plan card → **Save as workflow** | Saves an agent's plan as a `Draft` on-demand workflow (`status: 'Draft'`, no triggers) |
 | **Scheduling** app | Shows the job a `Schedule` trigger owns, and its runs |
 | `Workflow.Save`, from code, an agent or an MCP client | The way to add or change a `Schedule` or `EntityEvent` trigger today |
 

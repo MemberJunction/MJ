@@ -17143,6 +17143,9 @@ importers:
       '@memberjunction/api-keys':
         specifier: 6.3.0-edge.1
         version: link:../../APIKeys/Engine
+      '@memberjunction/archiving-engine':
+        specifier: 6.3.0-edge.1
+        version: link:../../Archiving/Engine
       '@memberjunction/auth-providers':
         specifier: 6.3.0-edge.1
         version: link:../../AuthProviders
