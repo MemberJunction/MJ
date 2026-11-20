@@ -93,6 +93,13 @@ export class CommsActivityWorker {
     for (const event of deduped) {
       try {
         await this.processSingleEvent(event, persistActivity, contextUser);
+        if (event.ProviderEventID) {
+          await this.insertProviderEvent(
+            event.CommunicationProviderID,
+            event.ProviderEventID,
+            contextUser,
+          );
+        }
         processedCount++;
       } catch (err) {
         errorCount++;
@@ -252,14 +259,7 @@ export class CommsActivityWorker {
       }
 
       seenInBatch.add(key);
-      const inserted = await this.insertProviderEvent(
-        event.CommunicationProviderID,
-        event.ProviderEventID,
-        contextUser,
-      );
-      if (inserted) {
-        accepted.push(event);
-      }
+      accepted.push(event);
     }
 
     return accepted;

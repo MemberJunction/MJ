@@ -15,7 +15,6 @@ import { RegisterClass } from '@memberjunction/global';
 import {
     CommsActivityWorker,
     CommunicationEngine,
-    DEFAULT_COMMS_TRACKING_HMAC_SECRET,
 } from '@memberjunction/communication-engine';
 import type {
     MessagePayload,
@@ -58,8 +57,7 @@ export function ConfigureCommsV2WorkQueue(
 ): void {
     const resolvedSecret =
         trackingHmacSecret ??
-        process.env.MJ_COMMS_HMAC_SECRET ??
-        DEFAULT_COMMS_TRACKING_HMAC_SECRET;
+        process.env.MJ_COMMS_HMAC_SECRET;
 
     CommunicationEngine.Instance.ConfigureV2Dispatch({
         BaseTrackingURL: baseTrackingUrl,

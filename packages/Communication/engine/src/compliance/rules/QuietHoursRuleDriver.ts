@@ -49,14 +49,18 @@ function isHourInWindow(hour: number, win: QuietHoursWindow): boolean {
 }
 
 function getLocalHourInTimezone(date: Date, timeZone: string): number {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    hour: 'numeric',
-    hourCycle: 'h23',
-  });
-  const formatted = formatter.format(date);
-  const parsed = Number(formatted);
-  return Number.isFinite(parsed) ? parsed % 24 : date.getUTCHours();
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hour: 'numeric',
+      hourCycle: 'h23',
+    });
+    const formatted = formatter.format(date);
+    const parsed = Number(formatted);
+    return Number.isFinite(parsed) ? parsed % 24 : date.getUTCHours();
+  } catch {
+    return date.getUTCHours();
+  }
 }
 
 function readSenderTimezone(ctx: ComplianceEvalContext): string | undefined {

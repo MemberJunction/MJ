@@ -6,13 +6,17 @@
       "TransportID": "@lookup:MJ: Work Queue Transports.Name=Database",
       "IsFifo": false,
       "AllowExternalPublish": false,
-      "MaxPayloadBytes": 1048576,
+      "MaxPayloadBytes": 262144,
       "DefaultDeduplicationTTLSeconds": 3600,
       "RetentionDays": 14,
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "0D819429-D436-4DF5-B8D4-BD4986192962"
+    },
+    "sync": {
+      "lastModified": "2026-11-20T03:22:26.613Z",
+      "checksum": "c82ed3650fd2f2ec99a9151b422288e3f77c3524ae149202bb72057f77183891"
     }
   },
   {
@@ -22,13 +26,17 @@
       "TransportID": "@lookup:MJ: Work Queue Transports.Name=Database",
       "IsFifo": false,
       "AllowExternalPublish": false,
-      "MaxPayloadBytes": 1048576,
+      "MaxPayloadBytes": 262144,
       "DefaultDeduplicationTTLSeconds": 3600,
       "RetentionDays": 14,
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "6F46A97E-2E08-417F-AB11-D73DC3F47B2A"
+    },
+    "sync": {
+      "lastModified": "2026-11-20T03:22:26.633Z",
+      "checksum": "516e765749cf1ac7b3de0f9b96eda1daf3958022d89ca51c046b81a93932dfbd"
     }
   },
   {
@@ -38,13 +46,17 @@
       "TransportID": "@lookup:MJ: Work Queue Transports.Name=Database",
       "IsFifo": false,
       "AllowExternalPublish": false,
-      "MaxPayloadBytes": 1048576,
+      "MaxPayloadBytes": 262144,
       "DefaultDeduplicationTTLSeconds": 3600,
       "RetentionDays": 14,
       "Status": "Active"
     },
     "primaryKey": {
       "ID": "7B4C94A2-1686-46E8-8069-8772982BEF2F"
+    },
+    "sync": {
+      "lastModified": "2026-11-20T03:22:26.651Z",
+      "checksum": "5b33efe3e09056ff2390a78807fd35fd56ea0b872a5596485976743557556a79"
     }
   }
 ]

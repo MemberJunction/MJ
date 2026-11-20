@@ -532,20 +532,20 @@ export class SendGridProvider extends BaseCommunicationProvider {
             return fail('Empty notification body');
         }
 
-        let signatureValid: boolean | undefined;
         const verificationKey = credentials?.webhookVerificationKey;
-        if (verificationKey) {
-            const sig = extractHeaderCaseInsensitive(input?.Headers, 'x-twilio-email-event-webhook-signature');
-            const ts = extractHeaderCaseInsensitive(input?.Headers, 'x-twilio-email-event-webhook-timestamp');
-            if (!sig || !ts) {
-                return fail('Missing SendGrid Event Webhook signature or timestamp header', 401, false);
-            }
-            const verification = VerifySendGridWebhookSignature(verificationKey, rawBody, sig, ts);
-            if (!verification.Valid) {
-                return fail(verification.Reason ?? 'Invalid SendGrid Event Webhook signature', 401, false);
-            }
-            signatureValid = true;
+        if (!verificationKey) {
+            return fail('Missing SendGrid Event Webhook verification key', 401, false);
         }
+        const sig = extractHeaderCaseInsensitive(input?.Headers, 'x-twilio-email-event-webhook-signature');
+        const ts = extractHeaderCaseInsensitive(input?.Headers, 'x-twilio-email-event-webhook-timestamp');
+        if (!sig || !ts) {
+            return fail('Missing SendGrid Event Webhook signature or timestamp header', 401, false);
+        }
+        const verification = VerifySendGridWebhookSignature(verificationKey, rawBody, sig, ts);
+        if (!verification.Valid) {
+            return fail(verification.Reason ?? 'Invalid SendGrid Event Webhook signature', 401, false);
+        }
+        const signatureValid = true;
 
         let parsed: unknown;
         try {

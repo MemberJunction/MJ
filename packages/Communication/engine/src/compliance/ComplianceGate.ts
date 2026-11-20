@@ -158,6 +158,7 @@ export class ComplianceGate {
     const senderChain = new UUIDSet([ctx.Sender.ID, ...ctx.SenderAncestors]);
     const nowMs = ctx.Now.getTime();
     let overridable: MJCommunicationSuppressionEntity | undefined;
+    let hardBlock: MJCommunicationSuppressionEntity | undefined;
 
     for (const s of suppressions) {
       if (s.Status !== 'Active') continue;
@@ -178,9 +179,15 @@ export class ComplianceGate {
         continue;
       }
 
-      return { HardBlock: s };
+      if (s.Reason === 'Hard Bounce' || s.Reason === 'Invalid Address') {
+        return { HardBlock: s };
+      }
+      hardBlock = hardBlock ?? s;
     }
 
+    if (hardBlock) {
+      return { HardBlock: hardBlock };
+    }
     return { OverridableBlock: overridable };
   }
 

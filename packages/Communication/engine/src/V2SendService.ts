@@ -68,7 +68,6 @@ export interface ProtectedComplianceSnapshot {
 
 const DEFAULT_CHUNK_SIZE = 50;
 const DEFAULT_ASYNC_THRESHOLD = 100;
-export const DEFAULT_COMMS_TRACKING_HMAC_SECRET = 'mj-comms-dev-tracking-secret';
 
 export function ComputeTrackingSignature(
   trackingToken: string,
@@ -104,11 +103,12 @@ export function RewriteLinksForTracking(
   return html.replace(
     /(<a\b[^>]*?\bhref\s*=\s*)(["'])(https?:\/\/[^"']+)\2/gi,
     (fullMatch, prefix: string, quote: string, url: string) => {
-      if (excluded.has(url)) {
+      const decodedUrl = url.replace(/&amp;/gi, '&');
+      if (excluded.has(decodedUrl) || excluded.has(url)) {
         return fullMatch;
       }
-      const sig = ComputeTrackingSignature(trackingToken, url, secret);
-      const tracked = `${cleanBase}/api/comms/click/${trackingToken}?u=${encodeURIComponent(url)}&sig=${sig}`;
+      const sig = ComputeTrackingSignature(trackingToken, decodedUrl, secret);
+      const tracked = `${cleanBase}/api/comms/click/${trackingToken}?u=${encodeURIComponent(decodedUrl)}&sig=${sig}`;
       return `${prefix}${quote}${tracked}${quote}`;
     },
   );
@@ -508,10 +508,7 @@ export class V2SendService {
     const trackingToken = log.TrackingToken ?? randomUUID();
     const unsubscribeToken = log.UnsubscribeToken ?? randomUUID();
     const baseUrl = this.config.BaseTrackingURL ?? '';
-    const hmacSecret =
-      this.config.TrackingHMACSecret ??
-      process.env.MJ_COMMS_HMAC_SECRET ??
-      DEFAULT_COMMS_TRACKING_HMAC_SECRET;
+    const hmacSecret = this.config.TrackingHMACSecret ?? process.env.MJ_COMMS_HMAC_SECRET ?? '';
 
     const obligations = this.enrichObligations(target.Obligations, baseUrl, unsubscribeToken);
     const snapshot: ProtectedComplianceSnapshot = {
@@ -596,22 +593,23 @@ export class V2SendService {
   ): MessagePayload {
     let html = `${hookState.HeaderHTML}${payload.HTMLBody ?? ''}${hookState.FooterHTML}`;
     let text = `${hookState.HeaderText}${payload.Body ?? ''}${hookState.FooterText}`;
+    const hasHtml = html.trim().length > 0;
 
-    if (obligations.AllowClickTracking && envelope.TrackClicks !== false && html) {
+    if (hasHtml && obligations.AllowClickTracking && envelope.TrackClicks !== false && hmacSecret) {
       const excluded = [obligations.UnsubscribeURL, obligations.PreferenceCenterURL].filter(
         (u): u is string => Boolean(u),
       );
       html = RewriteLinksForTracking(html, trackingToken, hmacSecret, baseUrl, excluded);
     }
 
-    if (snapshot.FooterHTML) {
+    if (hasHtml && snapshot.FooterHTML) {
       html = `${html}${snapshot.FooterHTML}`;
     }
     if (snapshot.FooterText) {
       text = `${text}${snapshot.FooterText}`;
     }
 
-    if (obligations.AllowOpenPixel && envelope.TrackOpens !== false && html) {
+    if (hasHtml && obligations.AllowOpenPixel && envelope.TrackOpens !== false) {
       html = InjectOpenPixel(html, trackingToken, baseUrl);
     }
 
@@ -630,7 +628,7 @@ export class V2SendService {
       Subject: hookState.SubjectOverride ?? payload.Subject,
       PreviewText: hookState.PreviewTextOverride ?? payload.PreviewText,
       Body: text,
-      HTMLBody: html,
+      HTMLBody: hasHtml ? html : undefined,
       Headers: headers,
     };
   }

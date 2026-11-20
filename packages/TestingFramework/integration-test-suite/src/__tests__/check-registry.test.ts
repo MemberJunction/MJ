@@ -214,7 +214,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['comms-v2-core', CommsV2CoreChecks, 3], // CV2C1-CV2C3 Comms V2 schema, seeds, endpoint resolution (IT179)
         ['comms-v2-compliance', CommsV2ComplianceChecks, 4], // CV2G1-CV2G4 Comms V2 compliance gate & jurisdiction rollup (IT180)
         ['comms-v2-send', CommsV2SendChecks, 3], // CV2S1-CV2S3 Comms V2 send pipeline, chunking, templated delivery (IT181)
-        ['comms-v2-activity', CommsV2ActivityChecks, 3], // CV2A1-CV2A3 Comms V2 activity worker, soft bounce policy, GDPR erasure (IT182)
+        ['comms-v2-activity', CommsV2ActivityChecks, 4], // CV2A1-CV2A4 Comms V2 activity worker, soft bounce policy, GDPR erasure, HTTP->worker seam (IT182)
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 18],
         ['chief-of-staff', ChiefOfStaffChecks, 8], // COS1-COS8 ownership guards, run-now, policy cache, email approval-before-transport (IT157)
@@ -411,7 +411,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'cloudflare-clef': 6,
         'codegen-determinism': 6,
         'communication': 5,
-        'comms-v2-activity': 3,
+        'comms-v2-activity': 4,
         'comms-v2-compliance': 4,
         'comms-v2-core': 3,
         'comms-v2-send': 3,

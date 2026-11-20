@@ -18,7 +18,8 @@ import type {
   MJCommunicationSenderEntity,
   MJCommunicationSuppressionEntity,
 } from '@memberjunction/core-entities';
-import { CommsActivityWorker, CommunicationEngine } from '@memberjunction/communication-engine';
+import { CommsActivityWorker, CommunicationEngine, ComputeTrackingSignature, VerifyTrackingSignature } from '@memberjunction/communication-engine';
+import { WorkQueueEngine } from '@memberjunction/work-queue-engine';
 import {
   Assert,
   AssertEqual,
@@ -258,6 +259,77 @@ export const CommsV2ActivityChecks: NamedCheck[] = [
           ctx.User,
         );
         Assert(supps.Success && supps.Results.length >= 1, 'Suppression record must survive GDPR PII erasure');
+      } finally {
+        await cleanupActivityFixture(fixture, ctx);
+      }
+    },
+  },
+  {
+    Id: 'comms-v2-activity.CV2A4',
+    Name: 'CV2A4: Click HMAC verification + WorkQueue comms.activity publish + CommsActivityWorker DB seam',
+    Fn: async (ctx: IntegrationCheckContext) => {
+      const fixture = await createActivityFixture(ctx, `cv2a4-${Date.now()}@integration.test`);
+      const trackingToken = randomUUID();
+      const unsubscribeToken = randomUUID();
+      fixture.log.TrackingToken = trackingToken;
+      fixture.log.UnsubscribeToken = unsubscribeToken;
+      Assert(await fixture.log.Save(), 'Failed saving tracking/unsubscribe tokens on fixture log');
+
+      const hmacSecret = 'cv2a4-e2e-hmac-secret-32-chars-min';
+      const targetUrl = 'https://memberjunction.org/e2e?a=1&b=2';
+      const sig = ComputeTrackingSignature(trackingToken, targetUrl, hmacSecret);
+      Assert(VerifyTrackingSignature(trackingToken, targetUrl, sig, hmacSecret), 'Expected Compute/VerifyTrackingSignature parity');
+
+      await WorkQueueEngine.Instance.Config(false, ctx.User);
+      const publishResults = await WorkQueueEngine.Instance.Publish('comms.activity', [
+        {
+          Payload: {
+            Source: 'unsubscribe',
+            EventType: 'Unsubscribed',
+            UnsubscribeToken: unsubscribeToken,
+            OccurredAt: new Date().toISOString(),
+          },
+        },
+      ]);
+      Assert(publishResults.length === 1 && publishResults[0].Status === 'Accepted', 'Expected comms.activity publish to succeed');
+
+      const worker = new CommsActivityWorker();
+      try {
+        const batchRes = await worker.ProcessActivityBatch(
+          [
+            {
+              CommunicationProviderID: fixture.providerId,
+              NormalizedAddress: fixture.address,
+              EventType: 'Clicked',
+              OccurredAt: new Date(),
+              TrackingToken: trackingToken,
+              TargetURL: targetUrl,
+              IsMachineEvent: false,
+            },
+            {
+              CommunicationProviderID: fixture.providerId,
+              NormalizedAddress: fixture.address,
+              EventType: 'Unsubscribed',
+              OccurredAt: new Date(),
+              UnsubscribeToken: unsubscribeToken,
+              IsMachineEvent: false,
+            },
+          ],
+          ctx.User,
+        );
+        AssertEqual(batchRes.ProcessedCount, 2, 'Expected both click and unsubscribe processed');
+        AssertEqual(batchRes.ErrorCount, 0, 'Expected 0 processing errors');
+
+        const rv = new RunView();
+        const supps = await rv.RunView<MJCommunicationSuppressionEntity>(
+          {
+            EntityName: 'MJ: Communication Suppressions',
+            ExtraFilter: `CommunicationEndpointID='${fixture.endpoint.ID}' AND Reason='User Unsubscribe'`,
+            ResultType: 'entity_object',
+          },
+          ctx.User,
+        );
+        Assert(supps.Success && supps.Results.length >= 1, 'Expected User Unsubscribe suppression persisted from seam');
       } finally {
         await cleanupActivityFixture(fixture, ctx);
       }

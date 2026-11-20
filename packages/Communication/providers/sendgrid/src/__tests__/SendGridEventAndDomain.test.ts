@@ -337,11 +337,19 @@ describe('SendGridProvider — Event Webhook ParseNotification', () => {
       { email: 'd@b.com', timestamp: nowSec, event: 'dropped', sg_event_id: 'd4', reason: 'Spam Reporting Address' },
     ]);
 
-    const res = await provider.ParseNotification({
-      Headers: { 'content-type': 'application/json' },
-      QueryParams: {},
-      RawBody: rawBody,
-    });
+    const { signature, timestamp } = signPayload(rawBody, nowSec);
+    const res = await provider.ParseNotification(
+      {
+        Headers: {
+          'content-type': 'application/json',
+          'x-twilio-email-event-webhook-signature': signature,
+          'x-twilio-email-event-webhook-timestamp': timestamp,
+        },
+        QueryParams: {},
+        RawBody: rawBody,
+      },
+      { webhookVerificationKey: publicKeyPem },
+    );
 
     expect(res.Success).toBe(true);
     expect(res.Notifications[0].ActivityEvents?.map((e) => e.DropReason)).toEqual([

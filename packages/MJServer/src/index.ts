@@ -2720,6 +2720,8 @@ export type { HostAssertedIdentity, HostAssertionResult } from './realtimeWidget
 export { IsScopeLimitedPrincipal } from './auth/scopeLimitedPrincipal.js';
 export const GetServerStartupSummary = () => StartupLogger.GetLastStartupSnapshot();
 export type { StartupSummarySnapshot } from './logging/StartupLogger.js';
+export { CreateCommsWebhookHandler } from './rest/CommsWebhookHandler.js';
+export type { CommsActivityWorkPayload, CommsWebhookHandlerOptions } from './rest/CommsWebhookHandler.js';
 
 export * from './generic/RedisClusterPubSubEngine.js';
 export { WrapSharedCacheWithL1 } from './sharedCache.js';

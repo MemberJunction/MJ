@@ -20,7 +20,6 @@ import BodyParser from 'body-parser';
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     ComputeTrackingSignature,
-    DEFAULT_COMMS_TRACKING_HMAC_SECRET,
     VerifyTrackingSignature,
 } from '@memberjunction/communication-engine';
 import { EscapeSQLString, UUIDMap, UUIDsEqual } from '@memberjunction/global';
@@ -482,7 +481,7 @@ function resolveSecretAccessor(hmacSecret?: string | (() => string | undefined))
     if (typeof hmacSecret === 'string') {
         return () => hmacSecret;
     }
-    return () => process.env.MJ_COMMS_HMAC_SECRET ?? DEFAULT_COMMS_TRACKING_HMAC_SECRET;
+    return () => process.env.MJ_COMMS_HMAC_SECRET;
 }
 
 async function defaultResolveWebhookKey(credentialId?: string): Promise<string | undefined> {
@@ -494,6 +493,10 @@ async function defaultResolveWebhookKey(credentialId?: string): Promise<string |
         await CredentialEngine.Instance.Config(false, systemUser);
         const cred = CredentialEngine.Instance.getCredentialById(credentialId);
         if (!cred) {
+            return undefined;
+        }
+        const typeOrName = `${cred.CredentialType ?? ''} ${cred.Name ?? ''}`.toLowerCase();
+        if (!typeOrName.includes('sendgrid')) {
             return undefined;
         }
         const resolved = await CredentialEngine.Instance.GetCredential<{
@@ -931,7 +934,9 @@ async function upsertPrincipalPreferenceAndAudit(
     pp.CommunicationLogID = params.LogID;
     pp.IPAddress = params.IPAddress ?? null;
     pp.UserAgent = params.UserAgent ?? null;
-    await pp.Save();
+    if (!(await pp.Save())) {
+        throw new Error(`Failed to save principal preference: ${pp.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    }
 
     const audit = await md.GetEntityObject<MJCommunicationConsentAuditLogEntity>('MJ: Communication Consent Audit Logs', systemUser);
     audit.CommunicationPrincipalPreferenceID = pp.ID;
@@ -942,7 +947,9 @@ async function upsertPrincipalPreferenceAndAudit(
     audit.CommunicationLogID = params.LogID;
     audit.IPAddress = params.IPAddress ?? null;
     audit.UserAgent = params.UserAgent ?? null;
-    await audit.Save();
+    if (!(await audit.Save())) {
+        throw new Error(`Failed to save consent audit log: ${audit.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    }
 }
 
 async function defaultSavePreferenceCenterChoices(
@@ -981,7 +988,9 @@ async function defaultSavePreferenceCenterChoices(
         supp.Status = 'Active';
         supp.EffectiveAt = new Date();
         supp.CommunicationLogID = found.log.ID;
-        await supp.Save();
+        if (!(await supp.Save())) {
+            return { Found: true, Success: false, UnsubscribedAll: false, Preferences: data.Preferences };
+        }
 
         if (principal) {
             for (const pref of data.Preferences) {
@@ -1061,12 +1070,26 @@ async function defaultConfirmDoubleOptIn(
             ConfirmedAt: pref.ConfirmedAt?.toISOString(),
         };
     }
+    if (pref.State === 'Opted Out') {
+        return {
+            Found: true,
+            Confirmed: false,
+            State: pref.State,
+            ErrorMessage: 'Cannot confirm an opted-out preference',
+        };
+    }
 
     const prevValue = JSON.stringify({ State: pref.State, ConfirmedAt: pref.ConfirmedAt });
     const now = new Date();
     pref.State = 'Opted In';
     pref.ConfirmedAt = now;
-    await pref.Save();
+    if (!(await pref.Save())) {
+        return {
+            Found: true,
+            Confirmed: false,
+            ErrorMessage: pref.LatestResult?.CompleteMessage ?? 'Failed to save confirmation',
+        };
+    }
 
     const md = provider ?? new Metadata();
     const audit = await md.GetEntityObject<MJCommunicationConsentAuditLogEntity>('MJ: Communication Consent Audit Logs', systemUser);
@@ -1078,7 +1101,9 @@ async function defaultConfirmDoubleOptIn(
     audit.CommunicationLogID = pref.CommunicationLogID ?? null;
     audit.IPAddress = input.IPAddress ?? null;
     audit.UserAgent = input.UserAgent ?? null;
-    await audit.Save();
+    if (!(await audit.Save())) {
+        LogError(`[CommsWebhook] Failed to save confirmation audit log: ${audit.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    }
 
     return {
         Found: true,

@@ -66,10 +66,6 @@ export class SqsTransportConsumer<TPayload extends WorkJson = WorkJson> implemen
             await this.deadLetterAndDelete(message, 'InvalidEnvelope', 'Body is not a work-queue envelope');
             return null;
         }
-        if (message.ReceiveCount > this.binding.Policy.MaxAttempts + RECEIVE_GUARD_MARGIN) {
-            await this.deadLetterAndDelete(message, 'MaxAttemptsExceeded', `Received ${message.ReceiveCount} times without being settled`);
-            return null;
-        }
         if (envelope.ScheduledAt !== undefined) {
             const scheduledMs = Date.parse(envelope.ScheduledAt);
             const nowMs = this.now();
@@ -78,6 +74,10 @@ export class SqsTransportConsumer<TPayload extends WorkJson = WorkJson> implemen
                 await this.gateway.ChangeVisibility(this.config.QueueUrl, message.ReceiptHandle, delaySeconds);
                 return null;
             }
+        }
+        if (message.ReceiveCount > this.binding.Policy.MaxAttempts + RECEIVE_GUARD_MARGIN) {
+            await this.deadLetterAndDelete(message, 'MaxAttemptsExceeded', `Received ${message.ReceiveCount} times without being settled`);
+            return null;
         }
         const receivedAt = this.now();
         this.tracked.set(message.MessageId, { Raw: message, ReceivedAt: receivedAt });
