@@ -9,7 +9,7 @@
  * ({@link IMonitoringParity}), the D4-18 notification ({@link IMonitoringNotifier}) and the clock. Production
  * implementations are in `monitoring-store.ts`.
  */
-import type { MJMLModelEntity, MJMLModelScoringBindingEntity, MJMLMonitoringResultEntity } from '@memberjunction/core-entities';
+import type { MJFeatureValueEntity, MJMLModelEntity, MJMLModelScoringBindingEntity, MJMLMonitoringResultEntity, MJMLScoringRunEntity } from '@memberjunction/core-entities';
 import type {
   Actor,
   MetricWithInterval,
@@ -27,6 +27,7 @@ import type {
 } from '@memberjunction/predictive-studio-core';
 
 import type { EvaluateOutcome, PublishOutcome, PublishRequest } from '../registry/gate-context';
+import type { RecordResourceConfiguration } from '../registry/record-notification-links';
 import type { RegistryContext } from '../registry/registry-context';
 import type { CanonicalLabelValue } from '../prediction-unit/unit-row-reader';
 import type { ChallengerSelection } from '../scoring/scoring-seams';
@@ -85,8 +86,6 @@ export interface JoinedRow {
   readonly DecisionDate: Date;
   readonly InTraining: boolean;
   /** The score the model gave this record as of this period (never a later one). */
-  readonly ScoreFromPeriod: number;
-  /** Alias of {@link ScoreFromPeriod} the evaluation reads. */
   readonly Score: number;
   readonly Probabilities: Readonly<Record<string, number>> | null;
   readonly Outcome: CanonicalLabelValue | null;
@@ -106,7 +105,8 @@ export interface MonitoredUnit {
 /** A shadow scoring run's result (`Path = 'monitoring'`, `DryRun = 1`, nothing written). */
 export interface ShadowScoring {
   readonly ScoringRunID: string;
-  readonly Status: 'completed' | 'refused' | 'failed';
+  /** How the run ended (a shadow run is never left `running`). */
+  readonly Status: Exclude<MJMLScoringRunEntity['Status'], 'running'>;
   /** Why the run did not complete; null when it did. */
   readonly Reason: string | null;
   readonly Predictions: readonly ModelPrediction[];
@@ -175,7 +175,7 @@ export interface IMonitoringStore {
    * The model's stored `Source = 'Model'` rows of `role` with `EffectiveAsOf` in the period, one per record (the row as
    * of the period, never a later one), including `InTraining` rows (the caller counts and excludes them).
    */
-  ModelRows(modelId: string, bindingId: string, role: 'Champion' | 'Challenger', period: MonitoringPeriod, ctx: RegistryContext): Promise<ModelPrediction[]>;
+  ModelRows(modelId: string, bindingId: string, role: MJFeatureValueEntity['Role'], period: MonitoringPeriod, ctx: RegistryContext): Promise<ModelPrediction[]>;
   /**
    * True when the context user (the job's owner) holds the binding's view authorization (D4-157): monitoring reads the
    * binding's rows as that user, so one who does not hold it is the period's finding, never read around.
@@ -213,6 +213,11 @@ export interface IMonitoringScorer {
 
 /** Procedure M in the sidecar (`POST /monitor/drift`, M6.1). */
 export interface IMonitoringDrift {
+  /**
+   * One look of procedure M: each input's z, empirical p and BH-adjusted p at the request's look, and the flagged ones.
+   *
+   * @throws when the sidecar refuses the request, fails, or answers outside the contract
+   */
   MonitorDrift(request: MonitorDriftRequest): Promise<MonitorDriftResponse>;
 }
 
@@ -242,18 +247,28 @@ export interface IMonitoringPublisher {
 
 /** The rollback's publish through the lifecycle gate (`purpose: 'rollback'`). */
 export interface IMonitoringGate {
+  /** `LifecycleGate.Publish` of the request: the outcome is `published`, `already-published` or `withheld` with its record. */
   Publish(request: PublishRequest, ctx: RegistryContext): Promise<PublishOutcome>;
 }
 
 /** M5's parity check over a binding's stored rows. */
 export interface IMonitoringParity {
-  /** Samples `n` of the binding's stored rows with `seed`, recomputes them and compares at `tolerance`. */
+  /**
+   * Samples `n` of the binding's stored rows with `seed`, recomputes them on the `parity` path and compares at
+   * `tolerance`: how many were sampled (0 when the binding stores none), the largest absolute difference, and whether
+   * every sampled row is within the tolerance.
+   */
   Check(binding: MonitoredBinding, n: number, seed: number, tolerance: number, ctx: RegistryContext): Promise<{ readonly Sampled: number; readonly MaxAbsDifference: number; readonly Passed: boolean }>;
 }
 
 /** One `MJ: User Notifications` row to the job's owner (D4-18); informational, nothing waits for it. */
 export interface IMonitoringNotifier {
-  Notify(userId: string, title: string, message: string, modelId: string, ctx: RegistryContext): Promise<void>;
+  /**
+   * Sends `userId` one notification, linked to `subject` (the record of its own entity it is about; null links none).
+   *
+   * @throws Error when the notification does not save
+   */
+  Notify(userId: string, title: string, message: string, subject: RecordResourceConfiguration | null, ctx: RegistryContext): Promise<void>;
 }
 
 /** Every collaborator of the monitoring driver. */

@@ -8,9 +8,12 @@ export type StatRule = 'noise-publish-60' | 'noise-publish-400' | 'false-alarm-4
 
 /** The P11 statistical gate rules over n seeds (§3.3), and their acceptance ranges. */
 export class SeedRule {
+  /** The rate a noise count may not be shown to exceed: a Wilson lower bound above it fails. */
+  private static readonly NOISE_RATE_LIMIT = 0.05;
+
   /** Noise publication passes when the Wilson interval's lower bound is at most 5%. */
   public static NoisePublishPasses(published: number, n: number): boolean {
-    return ConfidenceInterval.Wilson(published, n).Lower <= 0.05;
+    return SeedRule.lowerBoundWithinLimit(published, n);
   }
 
   /**
@@ -18,7 +21,7 @@ export class SeedRule {
    * no-drift replays that raised any alarm is at most the documented 5% (at n = 400: at most 28).
    */
   public static FalseAlarmPasses(alarms: number, n: number): boolean {
-    return ConfidenceInterval.Wilson(alarms, n).Lower <= 0.05;
+    return SeedRule.lowerBoundWithinLimit(alarms, n);
   }
 
   /**
@@ -49,5 +52,10 @@ export class SeedRule {
     // Defensive: every rule accepts some count at every n ≥ 1, so no test reaches this throw.
     if (accepted.length === 0) throw new Error(`${rule} accepts no count at n = ${n}`);
     return { Min: Math.min(...accepted), Max: Math.max(...accepted) };
+  }
+
+  /** Whether the Wilson interval's lower bound of `count` of `n` is at most {@link NOISE_RATE_LIMIT}. */
+  private static lowerBoundWithinLimit(count: number, n: number): boolean {
+    return ConfidenceInterval.Wilson(count, n).Lower <= SeedRule.NOISE_RATE_LIMIT;
   }
 }

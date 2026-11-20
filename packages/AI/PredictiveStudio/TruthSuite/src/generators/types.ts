@@ -140,8 +140,6 @@ export interface ScenarioSpec {
   startYear?: number;  // case-violation-ok-legacy-back-compat: mirrors the fixture JSON keys
   covariateShift?: ScenarioCovariateShift;  // case-violation-ok-legacy-back-compat: mirrors the fixture JSON keys
   shiftFrom?: number;  // case-violation-ok-legacy-back-compat: mirrors the fixture JSON keys
-  /** The D1c-revert variant (M6.6, D4-11): the planted shift is removed from this period on. */
-  revertFrom?: number;  // case-violation-ok-legacy-back-compat: mirrors the fixture JSON keys
   deltaIntercept?: number;  // case-violation-ok-legacy-back-compat: mirrors the fixture JSON keys
   stateFeature?: string;  // case-violation-ok-legacy-back-compat: mirrors the fixture JSON keys
   traps?: ScenarioTraps;  // case-violation-ok-legacy-back-compat: mirrors the fixture JSON keys

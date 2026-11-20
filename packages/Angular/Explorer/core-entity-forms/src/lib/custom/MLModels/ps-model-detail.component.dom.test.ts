@@ -54,9 +54,9 @@ const makeModel = (over: Partial<ModelDouble>): ModelDouble => ({
   ...over,
 });
 
-// The component's input is the generated entity class; the double carries only the members it reads.
+// Inputs are set untyped (setInput), so the double carrying only the members the component reads is passed as is.
 const render = (model: ModelDouble) =>
-  renderComponentFixture(PSModelDetailComponent, { inputs: { Model: model as unknown as MJMLModelEntity } });
+  renderComponentFixture(PSModelDetailComponent, { inputs: { Model: model } });
 
 describe('PSModelDetailComponent (DOM) — importance containment', () => {
   it('a tree model shows the hidden note, no bars, no caption and no top-feature name', () => {
@@ -124,7 +124,7 @@ describe('PSModelDetailComponent (DOM) — the performance tiles', () => {
 describe('PSModelDetailComponent (DOM) — the Bindings section', () => {
   it('hosts the scoring binding editor in a Bindings section when it has a provider', () => {
     const provider = CreateFakeProvider({ runViewResults: [] });
-    const fixture = renderComponentFixture(PSModelDetailComponent, { inputs: { Model: makeModel({}) as unknown as MJMLModelEntity, Provider: provider } });
+    const fixture = renderComponentFixture(PSModelDetailComponent, { inputs: { Model: makeModel({}), Provider: provider } });
     expect(query(fixture, '[data-testid="ps-model-bindings"] ps-scoring-binding-editor')).not.toBeNull();
   });
 

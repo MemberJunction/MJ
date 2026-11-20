@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { MJScheduledJobEntity, MJScheduledJobRunEntity } from '@memberjunction/core-entities';
@@ -30,10 +30,7 @@ async function Context(now: Date, spec: MonitoringJobSpec = SPEC): Promise<Sched
   return { Schedule: schedule, Run: run, ContextUser: MonitoringWorld.Scheduler, Provider: world.Provider };
 }
 
-/** The process-wide user cache `BaseScheduledJob.resolveScheduleOwnerUser` reads the job's owner from. */
-const userCacheHost = globalThis as typeof globalThis & { ___SINGLETON__UserCache?: { FindUser(criteria: { ID?: string }): Promise<UserInfo | undefined> } };
-let previousUserCache: typeof userCacheHost.___SINGLETON__UserCache;
-/** The users the cache knows (the job's owner unless a case removes it). */
+/** The users the process-wide user cache knows (the job's owner unless a case removes it). */
 let cachedUsers: UserInfo[];
 
 /** `n` July-scored predictions of June decisions with realised outcomes: a well-calibrated period (`p`, rate `rate`). */
@@ -49,16 +46,16 @@ function PeriodRows(day: Date, n: number, score: number, positives: number, pref
 const challengerOf = (): MonitoringChallengerResult | null => world.Store.Last().Challenger;
 
 beforeEach(() => {
-  previousUserCache = userCacheHost.___SINGLETON__UserCache;
   cachedUsers = [MonitoringWorld.User, MonitoringWorld.Scheduler];
-  userCacheHost.___SINGLETON__UserCache = { FindUser: async (c) => cachedUsers.find((u) => UUIDsEqual(u.ID, c.ID)) };
+  // `BaseScheduledJob.resolveScheduleOwnerUser` reads the job's owner from the process-wide UserCache.
+  vi.stubGlobal('___SINGLETON__UserCache', { FindUser: async (c: { readonly ID?: string }): Promise<UserInfo | undefined> => cachedUsers.find((u) => UUIDsEqual(u.ID, c.ID)) });
   world = new MonitoringWorld();
   world.Store.Binding = MonitoringWorld.BINDING;
   driver = new PredictiveStudioModelMonitoringJobDriver(world.Seams());
 });
 
 afterEach(() => {
-  userCacheHost.___SINGLETON__UserCache = previousUserCache;
+  vi.unstubAllGlobals();
 });
 
 describe('PredictiveStudioModelMonitoringJobDriver.Execute', () => {
@@ -233,7 +230,7 @@ describe('PredictiveStudioModelMonitoringJobDriver.Execute', () => {
   });
 
   it('a withheld challenger is recorded with the gate\'s refusal record', async () => {
-    world.Publisher.Answer = (id) => ({ Kind: 'withheld', Purpose: 'publish', ModelID: `model-of-${id}`, Status: 'Validated', Refusal: { kind: 'gate-no-signal' }, Transient: false, RefusalRecordID: `refusal-of-${id}` });
+    world.Publisher.Answer = (id) => ({ Kind: 'withheld', Purpose: 'publish', ModelID: `model-of-${id}`, Status: 'Validated', Refusal: { kind: 'gate-no-signal', reason: 'the challenger\'s paired lower bound did not beat the margin' }, Transient: false, RefusalRecordID: `refusal-of-${id}` });
     PeriodRows(JUNE, 300, 0.1, 150);
     await driver.Execute(await Context(D('2026-07-31')));
     expect(challengerOf()).toMatchObject({ outcome: 'withheld', recordId: 'refusal-of-run-1', reason: expect.any(String) });
@@ -288,6 +285,25 @@ describe('PredictiveStudioModelMonitoringJobDriver.Execute', () => {
     await driver.Execute(await Context(D('2026-07-31')));
     expect(world.Store.Last().Parity).toMatchObject({ passed: true, resampled: true, trainingRunId: null });
     expect(world.Publisher.Trained).toHaveLength(1);
+  });
+
+  it('a confirmed parity failure\'s notification and outcome say what the gate did with its training run, never a publish it withheld (M6-2)', async () => {
+    PeriodRows(JUNE, 200, 0.3, 60);
+    world.Store.Reference = null;
+    world.Publisher.Answer = (id) => ({ Kind: 'withheld', Purpose: 'publish', ModelID: `model-of-${id}`, Status: 'Validated', Refusal: { kind: 'no-sign-off' }, Transient: false, RefusalRecordID: `refusal-of-${id}` });
+    world.Parity.Queue.push({ Sampled: 100, MaxAbsDifference: 1e-6, Passed: false }, { Sampled: 100, MaxAbsDifference: 1e-6, Passed: false });
+    const r = await driver.Execute(await Context(D('2026-07-31')));
+    const parity = world.Notifier.Sent.find((n) => n.Title.startsWith('Scoring parity failure'));
+    expect(parity?.Message).toContain('withheld');
+    expect(parity?.Message).not.toContain('publishes through the gate');
+    expect(r.Details?.['Periods']).toEqual([expect.objectContaining({ ParityRetrain: expect.objectContaining({ outcome: 'withheld', trainingRunId: 'run-1', recordId: 'refusal-of-run-1' }) })]);
+  });
+
+  it('reads the model\'s reference score once per period (M6-15)', async () => {
+    PeriodRows(JUNE, 200, 0.3, 60);
+    const reads = vi.spyOn(world.Store, 'ReferenceScore');
+    await driver.Execute(await Context(NOW));
+    expect(reads).toHaveBeenCalledTimes(1);
   });
 
   it('rolls back through the gate when the protocol\'s rule fires on the predecessor\'s shadow scores', async () => {

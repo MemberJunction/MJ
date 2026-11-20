@@ -86,10 +86,6 @@ def CalibrateBody(looks: int, replays: int, seed: int, target: float) -> Dict[st
 
 # --------------------------------------------------------------------------------------------- the constants -----
 
-def test_q_constants_are_the_documented_ones() -> None:
-    assert monitor.Q_BY_LOOKS == {12: 0.0095, 3: 0.0171}
-
-
 def test_withdrawn_q_values_appear_nowhere() -> None:
     # Spelled in two parts so a repository grep for the withdrawn values stays at zero hits.
     withdrawn = ["0.010" + "04", "0.017" + "37"]

@@ -11,7 +11,7 @@ const spec = (over: Partial<PeriodScoringSpec> = {}): PeriodScoringSpec => ({ Pr
 
 const row = (id: string, score: number, outcome: string | number | null, day = 1): JoinedRow => ({
   RecordID: id, EffectiveAsOf: new Date(Date.UTC(2026, 0, day)), DecisionDate: new Date(Date.UTC(2026, 0, day)), InTraining: false,
-  ScoreFromPeriod: score, Score: score, Probabilities: { '0': 1 - score, '1': score }, Outcome: outcome, GroupKey: id,
+  Score: score, Probabilities: { '0': 1 - score, '1': score }, Outcome: outcome, GroupKey: id,
 });
 const rows = (n: number, score: number, positives: number): JoinedRow[] => Array.from({ length: n }, (_, i) => row(`r${i}`, score, i < positives ? '1' : '0', (i % 28) + 1));
 
@@ -80,7 +80,7 @@ describe('PeriodEvaluation.Degradation and PairedDifference', () => {
 
   it('the paired difference is current minus predecessor loss on identical rows', () => {
     const current = rows(80, 0.6, 0);
-    const predecessor = current.map((r) => ({ ...r, Score: 0.1, ScoreFromPeriod: 0.1 }));
+    const predecessor = current.map((r) => ({ ...r, Score: 0.1 }));
     const d = PeriodEvaluation.PairedDifference(current, predecessor, spec());
     expect(d.value).toBeCloseTo(-Math.log(0.4) + Math.log(0.9), 12);
     expect(d.interval.lower).toBeGreaterThan(0);

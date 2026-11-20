@@ -90,7 +90,7 @@ export class PublishRecords {
   public static readonly BACKING_PURPOSES = ['publish', 'rollback', 'adopt'] as const satisfies readonly MJMLModelPublishRecordEntity['Purpose'][];
 
   /** True when `record` is an applied `publish` record of a {@link BACKING_PURPOSES} purpose. Pure. */
-  public static BacksPublishedModel(record: { readonly Kind: string; readonly Purpose: string }): boolean {
+  public static BacksPublishedModel(record: Pick<MJMLModelPublishRecordEntity, 'Kind' | 'Purpose'>): boolean {
     return record.Kind === 'publish' && PublishRecords.BACKING_PURPOSES.some((p) => p === record.Purpose);
   }
 

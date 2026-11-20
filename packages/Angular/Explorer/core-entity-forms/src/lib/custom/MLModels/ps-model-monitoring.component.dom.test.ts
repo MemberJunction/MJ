@@ -2,9 +2,10 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { CreateFakeProvider, renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
-import { PredictiveStudioRunModelMonitoringOperation, type MJMLModelEntity, type MJMLMonitoringResultEntity } from '@memberjunction/core-entities';
+import { PredictiveStudioRunModelMonitoringOperation, type MJMLMonitoringResultEntity } from '@memberjunction/core-entities';
 import type { RunViewParams, RunViewResult } from '@memberjunction/core';
 import { PSModelMonitoringComponent } from './ps-model-monitoring.component';
+import { GatedReads, SettleReads } from './ps-gated-reads.dom-fixture';
 
 try {
   TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
@@ -56,7 +57,7 @@ const RolledBack = (record: { ID: string }): MJMLMonitoringResultEntity['Rollbac
 interface RegistryRunDouble { ID: string; StartedAt: Date; Details: string }
 
 async function RenderMonitoring(opts: { periods: PeriodDouble[]; registryRuns?: RegistryRunDouble[]; failRegistryRuns?: string }) {
-  const rowsOf = (p: RunViewParams): unknown[] => (p.EntityName === 'MJ: ML Monitoring Results' ? opts.periods : p.EntityName === 'MJ: Scheduled Job Runs' ? opts.registryRuns || [] : []);
+  const rowsOf = (p: RunViewParams): Array<PeriodDouble | RegistryRunDouble> => (p.EntityName === 'MJ: ML Monitoring Results' ? opts.periods : p.EntityName === 'MJ: Scheduled Job Runs' ? opts.registryRuns || [] : []);
   const provider = CreateFakeProvider({ runViewResults: rowsOf });
   const failure = opts.failRegistryRuns;
   if (failure !== undefined) {
@@ -66,7 +67,8 @@ async function RenderMonitoring(opts: { periods: PeriodDouble[]; registryRuns?: 
     Object.assign(provider, { RunViews: async (all: RunViewParams[]): Promise<RunViewResult[]> => all.map(failed) });
   }
   const f = renderComponentFixture(PSModelMonitoringComponent, { inputs: { Provider: provider } });
-  f.componentInstance.Model = { ID: 'M-1' } as unknown as MJMLModelEntity;
+  // inputs are set untyped (setInput), so the model double is passed as is
+  f.componentRef.setInput('Model', { ID: 'M-1' });
   await f.componentInstance.Reload();
   f.detectChanges();
   return f;
@@ -177,5 +179,23 @@ describe('PSModelMonitoringComponent (DOM)', () => {
       expect(reload).not.toHaveBeenCalled();
       expect(Text(f, 'ps-monitoring-check-error')).toContain('the model has no open monitoring job');
     });
+  });
+});
+
+describe('a model change while its rows load (M7-3)', () => {
+  it('shows the current model\'s monitored periods when an earlier model\'s read finishes last', async () => {
+    const reads = new GatedReads((modelId, p) => (p.EntityName === 'MJ: ML Monitoring Results' ? (modelId === 'M-A' ? [P(0), P(1), P(2)] : [P(0)]) : []));
+    const f = renderComponentFixture(PSModelMonitoringComponent, { inputs: { Provider: reads.Provider() } });
+    f.componentRef.setInput('Model', { ID: 'M-A' });
+    f.detectChanges();
+    f.componentRef.setInput('Model', { ID: 'M-B' });
+    f.detectChanges();
+    await SettleReads();
+    reads.Release('M-B');
+    await SettleReads();
+    reads.Release('M-A');
+    await SettleReads();
+    f.detectChanges();
+    expect(queryAll(f, '[data-testid="ps-monitoring-period"]').length).toBe(1);
   });
 });

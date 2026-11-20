@@ -23,7 +23,7 @@
  */
 import { ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import type { MJScheduledJobEntity } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { NormalizeUUID, RegisterClass } from '@memberjunction/global';
 import type { NotificationContent, ScheduledJobResult } from '@memberjunction/scheduling-base-types';
 import { BaseScheduledJob, type ScheduledJobExecutionContext } from '@memberjunction/scheduling-engine';
 import {
@@ -56,14 +56,28 @@ import { RollbackStep } from './rollback-step';
 export interface MonitoredPeriodOutcome {
   /** The period's first day, `YYYY-MM-DD`. */
   readonly Period: string;
+  /** The period's `MJ: ML Monitoring Results` row (a re-run updates it). */
   readonly MonitoringResultID: string;
+  /** The row's `State`: `window-open`, `evaluated` or `failed`. */
   readonly State: PeriodRowWrite['State'];
+  /** Predictions joined to a realised outcome. */
   readonly JoinedRows: number;
+  /** The period's primary score with its interval; null unless evaluated. */
   readonly Primary: MetricWithInterval | null;
+  /** How many inputs raised a drift alarm at the period's look. */
   readonly DriftAlarms: number;
+  /** The retrain triggers that fired. */
   readonly TriggersFired: readonly MonitoringTriggerFired[];
+  /** What a fired trigger's challenger came to; null unless evaluated. */
   readonly Challenger: MonitoringChallengerResult | null;
+  /**
+   * What the gate did with the training run a confirmed parity failure started ({@link ChallengerStep.FromOutcome}'s
+   * words); null when parity started none. The period row's `Parity` stores the run's ID.
+   */
+  readonly ParityRetrain: MonitoringChallengerResult | null;
+  /** The rollback check in words; null unless evaluated. */
   readonly Rollback: string | null;
+  /** Why the period failed; null otherwise. */
   readonly ErrorMessage: string | null;
 }
 
@@ -96,6 +110,18 @@ export interface PeriodPlan {
   readonly Task: TaskType;
   readonly Spec: MonitoringJobReadSpec;
   readonly Initiator: Actor;
+}
+
+/** The parity step's stored check, and what the gate did with the training run a confirmed failure started (null when none). */
+export interface ParityStepResult {
+  readonly Parity: MonitoringParity;
+  readonly Retrain: MonitoringChallengerResult | null;
+}
+
+/** A period's row to write, and the parity retrain's outcome the run's `Details` carry beside it. */
+interface ActedPeriod {
+  readonly Write: PeriodRowWrite;
+  readonly ParityRetrain: MonitoringChallengerResult | null;
 }
 
 /** The procedure-M look of a period: every input's result and the alarms. */
@@ -230,13 +256,13 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
     if (!join.Rows.some((r) => r.Outcome !== null)) {
       return this.WritePeriod({ ...counted, State: 'failed', ErrorMessage: `no realised outcome among the period's ${join.Rows.length} joined prediction(s)` }, ctx);
     }
-    let write: PeriodRowWrite;
+    let acted: ActedPeriod;
     try {
-      write = await this.evaluateAndAct(plan, period, join, counted, ctx);
+      acted = await this.evaluateAndAct(plan, period, join, counted, ctx);
     } catch (e) {
       return this.WritePeriod({ ...counted, State: 'failed', ErrorMessage: e instanceof Error ? e.message : String(e) }, ctx);
     }
-    return this.WritePeriod(write, ctx);
+    return this.WritePeriod(acted.Write, ctx, acted.ParityRetrain);
   }
 
   /**
@@ -255,24 +281,29 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
     }
   }
 
-  /** Steps 2–8 of a joined period, each named in the error that stops it; the period's row to write. */
-  private async evaluateAndAct(plan: PeriodPlan, period: MonitoringPeriod, join: OutcomeJoinResult, counted: PeriodRowWrite, ctx: MonitoringContext): Promise<PeriodRowWrite> {
+  /**
+   * Steps 2–8 of a joined period, each named in the error that stops it; the period's row to write. The model's
+   * reference score is read once and handed to the evaluation and the triggers.
+   */
+  private async evaluateAndAct(plan: PeriodPlan, period: MonitoringPeriod, join: OutcomeJoinResult, counted: PeriodRowWrite, ctx: MonitoringContext): Promise<ActedPeriod> {
     const step = PredictiveStudioModelMonitoringJobDriver.step;
     const history = await step('the period history read', () => ctx.Seams.Store.EarlierPeriods(plan.Model.ID, period.Grain, period.Start, ctx));
-    const evaluated = await step('the evaluation', () => this.EvaluatePeriod(plan, join.Rows, period, ctx));
+    const reference = await step('the reference score read', () => ctx.Seams.Store.ReferenceScore(plan.Model.ID, ctx));
+    const evaluated = await step('the evaluation', async () => this.EvaluatePeriod(plan, join.Rows, period, reference));
     const drift = await step('the drift look', () => this.LookForDrift(plan, join, period, history, ctx));
     const current = PredictiveStudioModelMonitoringJobDriver.periodResult(plan.Model.ID, period, join.Rows.length, evaluated.Scores, evaluated.Degradation);
-    const fired = await step('the retrain triggers', () => this.FireTriggers(plan, history, current, ctx));
+    const fired = await step('the retrain triggers', async () => this.FireTriggers(plan, history, current, reference));
     const previousFired = history.filter((h) => h.State === 'evaluated').slice(-1).flatMap((h) => h.TriggersFired);
     const mirror = await step('the live mirror', () => this.MeasureDivergence(plan, join, period, ctx));
     const challenger = await step('the challenger', () => this.RunChallenger(plan, fired, previousFired, mirror, ctx));
     const rollback = await step('the rollback check', () => this.CheckRollback(plan, history, period, ctx));
     const parity = await step('the parity check', () => this.CheckParity(plan, join.Binding, period, ctx));
-    return {
+    const write: PeriodRowWrite = {
       ...counted, State: 'evaluated', Primary: evaluated.Scores.Primary, Tracked: evaluated.Scores.Tracked, Calibration: evaluated.Scores.Calibration,
-      DriftLook: drift.Look, DriftAlarms: drift.Alarms, Parity: parity, TriggersFired: fired, ChallengerRunID: challenger.ChallengerRunID,
+      DriftLook: drift.Look, DriftAlarms: drift.Alarms, Parity: parity.Parity, TriggersFired: fired, ChallengerRunID: challenger.ChallengerRunID,
       Challenger: challenger.Result, Rollback: rollback,
     };
+    return { Write: write, ParityRetrain: parity.Retrain };
   }
 
   /** Runs one named step; an error it throws is rethrown as a {@link PeriodStepError} naming the step. */
@@ -289,10 +320,12 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
     return OutcomeJoin.Join(plan.Model, plan.Unit, period, ctx);
   }
 
-  /** Step 2: the period's scores under the protocol, and the degradation against the model's stored holdout score. */
-  protected async EvaluatePeriod(plan: PeriodPlan, rows: readonly JoinedRow[], period: MonitoringPeriod, ctx: MonitoringContext): Promise<EvaluatedPeriod> {
+  /**
+   * Step 2: the period's scores under the protocol, and the degradation against `reference`, the model's stored
+   * holdout score (null: no degradation). Pure.
+   */
+  protected EvaluatePeriod(plan: PeriodPlan, rows: readonly JoinedRow[], period: MonitoringPeriod, reference: MetricWithInterval | null): EvaluatedPeriod {
     const scores = PeriodEvaluation.Score(rows, this.scoringSpec(plan, period));
-    const reference = await ctx.Seams.Store.ReferenceScore(plan.Model.ID, ctx);
     return { Scores: scores, Degradation: reference === null ? null : PeriodEvaluation.Degradation(scores.Primary, reference) };
   }
 
@@ -317,9 +350,11 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
     return { Look: response.results, Alarms: response.alarms };
   }
 
-  /** Step 4: the protocol's retrain triggers over the stored periods and this one (realised performance only). */
-  protected async FireTriggers(plan: PeriodPlan, history: readonly StoredPeriodRow[], current: MonitoringPeriodResult, ctx: MonitoringContext): Promise<MonitoringTriggerFired[]> {
-    const reference = await ctx.Seams.Store.ReferenceScore(plan.Model.ID, ctx);
+  /**
+   * Step 4: the protocol's retrain triggers over the stored periods and this one (realised performance only), each
+   * earlier period's degradation recomputed against `reference`, the model's stored holdout score. Pure.
+   */
+  protected FireTriggers(plan: PeriodPlan, history: readonly StoredPeriodRow[], current: MonitoringPeriodResult, reference: MetricWithInterval | null): MonitoringTriggerFired[] {
     const earlier = history.filter((h) => h.State === 'evaluated').map((h) => PredictiveStudioModelMonitoringJobDriver.storedResult(plan.Model.ID, h, reference));
     const periods = [...earlier, current];
     const fired: MonitoringTriggerFired[] = [];
@@ -360,31 +395,35 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
 
   /**
    * Step 8: M5's parity check on the binding's stored rows, re-sampled once when it fails; a confirmed failure starts a
-   * training run on a fresh snapshot through the automated publisher (D4-20). The shadow path stores nothing to check.
+   * training run on a fresh snapshot through the automated publisher (D4-20), and the gate's outcome for that run
+   * (published, withheld or stopped, {@link ChallengerStep.FromOutcome}) is what the notification says and what the
+   * result carries. The shadow path stores nothing to check.
    */
-  protected async CheckParity(plan: PeriodPlan, binding: MonitoredBinding | null, period: MonitoringPeriod, ctx: MonitoringContext): Promise<MonitoringParity> {
+  protected async CheckParity(plan: PeriodPlan, binding: MonitoredBinding | null, period: MonitoringPeriod, ctx: MonitoringContext): Promise<ParityStepResult> {
     const tolerance = plan.Spec.parity.tolerance;
-    const skipped = (reason: string): MonitoringParity => ({ sampled: 0, maxAbsDifference: 0, passed: true, tolerance, resampled: false, trainingRunId: null, skipped: reason });
+    const checked = (parity: MonitoringParity): ParityStepResult => ({ Parity: parity, Retrain: null });
+    const skipped = (reason: string): ParityStepResult => checked({ sampled: 0, maxAbsDifference: 0, passed: true, tolerance, resampled: false, trainingRunId: null, skipped: reason });
     if (binding === null) return skipped('no Active binding stores this model\'s predictions');
     const seed = PredictiveStudioModelMonitoringJobDriver.SeedOf(plan.Model.ID, period, 'parity');
     const first = await ctx.Seams.Parity.Check(binding, plan.Spec.parity.sampleRows, seed, tolerance, ctx);
     if (first.Sampled === 0) return skipped('the binding has no stored row to sample');
-    if (first.Passed) return { sampled: first.Sampled, maxAbsDifference: first.MaxAbsDifference, passed: true, tolerance, resampled: false, trainingRunId: null, skipped: null };
+    if (first.Passed) return checked({ sampled: first.Sampled, maxAbsDifference: first.MaxAbsDifference, passed: true, tolerance, resampled: false, trainingRunId: null, skipped: null });
     const second = await ctx.Seams.Parity.Check(binding, plan.Spec.parity.sampleRows, seed + 1, tolerance, ctx);
-    if (second.Passed) return { sampled: second.Sampled, maxAbsDifference: second.MaxAbsDifference, passed: true, tolerance, resampled: true, trainingRunId: null, skipped: null };
+    if (second.Passed) return checked({ sampled: second.Sampled, maxAbsDifference: second.MaxAbsDifference, passed: true, tolerance, resampled: true, trainingRunId: null, skipped: null });
     const trained = await ctx.Seams.Publisher.Train(plan.Model.PipelineID, ctx);
-    await ctx.Seams.Publisher.EvaluateAndPublish(trained.TrainingRunID, plan.Initiator, ctx);
+    const retrain = ChallengerStep.FromOutcome(trained.TrainingRunID, await ctx.Seams.Publisher.EvaluateAndPublish(trained.TrainingRunID, plan.Initiator, ctx), null);
+    const maxAbsDifference = Math.max(first.MaxAbsDifference, second.MaxAbsDifference);
     await this.notify(plan, `Scoring parity failure: ML Model ${plan.Model.ID}`,
-      `Recomputed predictions differ from stored ones by up to ${Math.max(first.MaxAbsDifference, second.MaxAbsDifference)} (tolerance ${tolerance}) in two samples; training run ${trained.TrainingRunID} was started and publishes through the gate.`, ctx);
-    return { sampled: second.Sampled, maxAbsDifference: Math.max(first.MaxAbsDifference, second.MaxAbsDifference), passed: false, tolerance, resampled: true, trainingRunId: trained.TrainingRunID, skipped: null };
+      `Recomputed predictions differ from stored ones by up to ${maxAbsDifference} (tolerance ${tolerance}) in two samples; training run ${trained.TrainingRunID} was started and ${PredictiveStudioModelMonitoringJobDriver.describeRetrain(retrain)}.`, ctx);
+    return { Parity: { sampled: second.Sampled, maxAbsDifference, passed: false, tolerance, resampled: true, trainingRunId: trained.TrainingRunID, skipped: null }, Retrain: retrain };
   }
 
-  /** Step 9: the period's one row (a re-run updates it), and the period's outcome. */
-  protected async WritePeriod(write: PeriodRowWrite, ctx: MonitoringContext): Promise<MonitoredPeriodOutcome> {
+  /** Step 9: the period's one row (a re-run updates it), and the period's outcome (with the parity retrain's, when one ran). */
+  protected async WritePeriod(write: PeriodRowWrite, ctx: MonitoringContext, parityRetrain: MonitoringChallengerResult | null = null): Promise<MonitoredPeriodOutcome> {
     const id = await ctx.Seams.Store.WritePeriod(write, ctx);
     return {
       Period: UtcDay.UtcDayIso(write.Period.Start), MonitoringResultID: id, State: write.State, JoinedRows: write.JoinedRows, Primary: write.Primary,
-      DriftAlarms: write.DriftAlarms.length, TriggersFired: write.TriggersFired, Challenger: write.Challenger,
+      DriftAlarms: write.DriftAlarms.length, TriggersFired: write.TriggersFired, Challenger: write.Challenger, ParityRetrain: parityRetrain,
       Rollback: write.Rollback === null ? null : RollbackStep.Describe(write.Rollback), ErrorMessage: write.ErrorMessage,
     };
   }
@@ -393,13 +432,23 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
 
   /** A deterministic 32-bit seed of a model, a period and a purpose (FNV-1a), so a re-run of a period reproduces it. Pure. */
   public static SeedOf(modelId: string, period: MonitoringPeriod, purpose: string): number {
-    const text = `${modelId.toLowerCase()}|${period.Grain}|${UtcDay.UtcDayIso(period.Start)}|${purpose}`;
+    const text = `${NormalizeUUID(modelId)}|${period.Grain}|${UtcDay.UtcDayIso(period.Start)}|${purpose}`;
     let h = 0x811c9dc5;
     for (let i = 0; i < text.length; i++) {
       h ^= text.charCodeAt(i);
       h = Math.imul(h, 0x01000193);
     }
     return (h >>> 0) % 2_147_483_647;
+  }
+
+  /** What the gate did with a parity retrain, in the words the notification ends with. Pure. */
+  private static describeRetrain(retrain: MonitoringChallengerResult): string {
+    switch (retrain.outcome) {
+      case 'published': return `the gate published its model (record ${retrain.recordId})`;
+      case 'withheld': return `the gate withheld its model: ${retrain.reason || 'no reason given'}`;
+      case 'stopped': return `it stopped before a publish: ${retrain.reason || 'no reason given'}`;
+      default: return `its outcome was ${retrain.outcome}`;
+    }
   }
 
   private scoringSpec(plan: PeriodPlan, period: MonitoringPeriod): PeriodScoringSpec {
@@ -411,7 +460,7 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
    * resolves it before any read, so there is no second read that could drop it), the operation's caller otherwise.
    */
   private async notify(plan: PeriodPlan, title: string, message: string, ctx: MonitoringContext): Promise<void> {
-    await ctx.Seams.Notifier.Notify(ctx.ContextUser.ID, title, message, plan.Model.ID, ctx);
+    await ctx.Seams.Notifier.Notify(ctx.ContextUser.ID, title, message, { Entity: 'MJ: ML Models', RecordID: plan.Model.ID }, ctx);
   }
 
   /**

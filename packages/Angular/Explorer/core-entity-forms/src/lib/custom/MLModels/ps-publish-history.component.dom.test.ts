@@ -2,10 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { CreateFakeProvider, renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
-import type { MJMLModelEntity, MJMLModelPublishRecordEntity } from '@memberjunction/core-entities';
+import type { MJMLModelPublishRecordEntity } from '@memberjunction/core-entities';
 import { TransitionRefusalText } from '@memberjunction/predictive-studio-core';
 import { PSPublishHistoryComponent } from './ps-publish-history.component';
 import type { PSOpenRecordRequest } from './ps-model-detail-events';
+import { GatedReads, SettleReads } from './ps-gated-reads.dom-fixture';
 
 try {
   TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
@@ -47,7 +48,8 @@ const GateNoSignal = (): NonNullable<RecordDouble['RefusalObject']> => ({ kind: 
 async function RenderHistory(opts: { records: RecordDouble[] }) {
   const provider = CreateFakeProvider({ runViewResults: (p) => (p.EntityName === 'MJ: ML Model Publish Records' ? opts.records : []) });
   const f = renderComponentFixture(PSPublishHistoryComponent, { inputs: { Provider: provider } });
-  f.componentInstance.Model = MODEL as unknown as MJMLModelEntity;
+  // inputs are set untyped (setInput), so the model double is passed as is
+  f.componentRef.setInput('Model', MODEL);
   await f.componentInstance.Reload();
   f.detectChanges();
   return f;
@@ -83,5 +85,23 @@ describe('PSPublishHistoryComponent (DOM)', () => {
 
   it('says so when nothing has been recorded', async () => {
     expect(query(await RenderHistory({ records: [] }), '[data-testid="ps-publish-history-empty"]')).not.toBeNull();
+  });
+});
+
+describe('a model change while its rows load (M7-3)', () => {
+  it('shows the current model\'s publish history when an earlier model\'s read finishes last', async () => {
+    const reads = new GatedReads((modelId, p) => (p.EntityName === 'MJ: ML Model Publish Records' ? (modelId === 'M-A' ? [Publish({}), Publish({}), Publish({})] : [Publish({})]) : []));
+    const f = renderComponentFixture(PSPublishHistoryComponent, { inputs: { Provider: reads.Provider() } });
+    f.componentRef.setInput('Model', { ID: 'M-A' });
+    f.detectChanges();
+    f.componentRef.setInput('Model', { ID: 'M-B' });
+    f.detectChanges();
+    await SettleReads();
+    reads.Release('M-B');
+    await SettleReads();
+    reads.Release('M-A');
+    await SettleReads();
+    f.detectChanges();
+    expect(queryAll(f, '[data-testid="ps-publish-history-row"]').length).toBe(1);
   });
 });

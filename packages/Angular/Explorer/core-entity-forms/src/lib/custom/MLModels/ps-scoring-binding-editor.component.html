@@ -68,7 +68,7 @@
 
       <div class="psbe-field">
         <label for="psbe-entity">Target entity</label>
-        <select id="psbe-entity" class="psbe-input" data-testid="ps-binding-target-entity" [disabled]="d.Binding !== null || Busy" [(ngModel)]="d.TargetEntityID">
+        <select id="psbe-entity" class="psbe-input" data-testid="ps-binding-target-entity" [disabled]="d.Binding !== null || Busy" [ngModel]="d.TargetEntityID" (ngModelChange)="SetTargetEntity($event)">
           <option [ngValue]="null">Choose an entity…</option>
           @for (e of Entities; track e.ID) {
             <option [ngValue]="e.ID">{{ e.Name }}</option>

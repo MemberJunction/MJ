@@ -21,7 +21,7 @@ export const PsGateD1rS82Checks: NamedCheck[] = [
       const periods = await MonitoringFixture.RunPeriods(h, model, [3, 4, 5]);
       const preUpper = await MonitoringFixture.ReferenceUpper(h, model.ModelID);
       const bounded = periods.filter((p) => p.PrimaryValue !== null && p.PrimaryLower !== null && p.PrimaryUpper !== null);
-      const above = preUpper === null ? 0 : bounded.filter((p) => (p.PrimaryValue || 0) > preUpper).length;
+      const above = preUpper === null ? 0 : bounded.filter((p) => p.PrimaryValue !== null && p.PrimaryValue > preUpper).length;
       PsGate.Assert({
         Passed: periods.length === 3 && bounded.length === 3 && preUpper !== null && above === 3,
         Measured: { labelledPeriods: periods.length, withBounds: bounded.length, preShiftUpper: preUpper, aboveUpper: above, rmse: periods.map((p) => p.PrimaryValue).join(' ') },

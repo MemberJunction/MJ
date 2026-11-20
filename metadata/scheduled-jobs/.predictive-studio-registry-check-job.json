@@ -24,9 +24,9 @@
           "Enabled": true
         },
         "StaleScoringRunHours": 6,
-        "migration": {
-          "batchSize": 50,
-          "retrainPerRun": 3
+        "Migration": {
+          "BatchSize": 50,
+          "RetrainPerRun": 3
         }
       }
     },

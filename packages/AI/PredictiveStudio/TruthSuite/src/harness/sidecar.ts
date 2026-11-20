@@ -58,6 +58,9 @@ export type SuitePredictOutcome =
 
 /** `TruthHarness.UseSuiteSidecar`, the gate fixture's default, the suite sidecar's trainer and its restart. */
 export class HarnessSidecar {
+  /** The started remote-mode client of each suite sidecar URL ({@link suiteClient}). */
+  private static readonly clients = new Map<string, Promise<MLSidecar>>();
+
   /** Where the truth sidecar writes its URL when it starts (`pnpm run truth:sidecar`). */
   private static urlFile(): string {
     return SuiteSidecarFiles.UrlFile();
@@ -122,9 +125,29 @@ export class HarnessSidecar {
    * @throws when the sidecar's URL file is missing, or the call fails
    */
   public static async SuiteMonitorDrift(req: MonitorDriftRequest): Promise<MonitorDriftResponse> {
-    const sidecar = new MLSidecar({ url: HarnessSidecar.UseSuiteSidecar() });
-    await sidecar.Start();
-    return sidecar.MonitorDrift(req);
+    return (await HarnessSidecar.suiteClient(HarnessSidecar.UseSuiteSidecar())).MonitorDrift(req);
+  }
+
+  /**
+   * The one started remote-mode client per suite sidecar URL (a statistical gate makes thousands of `/monitor/drift`
+   * calls, so the client and its `Start()` health check are made once, not per call). A restart on the same URL
+   * ({@link Restart}) keeps the client valid: remote mode holds only the URL.
+   */
+  private static async suiteClient(url: string): Promise<MLSidecar> {
+    const cached = HarnessSidecar.clients.get(url);
+    if (cached !== undefined) return cached;
+    const started = (async (): Promise<MLSidecar> => {
+      const sidecar = new MLSidecar({ url });
+      await sidecar.Start();
+      return sidecar;
+    })();
+    HarnessSidecar.clients.set(url, started);
+    try {
+      return await started;
+    } catch (e) {
+      HarnessSidecar.clients.delete(url);
+      throw e;
+    }
   }
 
   /** A trainer on the sidecar at `url` (remote mode: no child process is started). */

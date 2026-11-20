@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { CreateFakeProvider, renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
-import type { MJMLModelEntity, MJMLScoringRunEntity } from '@memberjunction/core-entities';
+import type { MJMLScoringRunEntity } from '@memberjunction/core-entities';
 import { PSScoringRunsComponent } from './ps-scoring-runs.component';
+import { GatedReads, SettleReads } from './ps-gated-reads.dom-fixture';
 
 try {
   TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
@@ -39,7 +40,8 @@ const SchemaMismatch = (missing: string[]): NonNullable<RunDouble['RefusalObject
 async function RenderRuns(opts: { runs: RunDouble[] }) {
   const provider = CreateFakeProvider({ runViewResults: (p) => (p.EntityName === 'MJ: ML Scoring Runs' ? opts.runs : []) });
   const f = renderComponentFixture(PSScoringRunsComponent, { inputs: { Provider: provider } });
-  f.componentInstance.Model = { ID: 'M-1', ArtifactSha256: 'f'.repeat(64) } as unknown as MJMLModelEntity;
+  // inputs are set untyped (setInput), so the model double is passed as is
+  f.componentRef.setInput('Model', { ID: 'M-1', ArtifactSha256: 'f'.repeat(64) });
   await f.componentInstance.Reload();
   f.detectChanges();
   return f;
@@ -60,5 +62,23 @@ describe('PSScoringRunsComponent (DOM)', () => {
 
   it('says so when the model has not scored anything', async () => {
     expect(query(await RenderRuns({ runs: [] }), '[data-testid="ps-scoring-runs-empty"]')).not.toBeNull();
+  });
+});
+
+describe('a model change while its rows load (M7-3)', () => {
+  it('shows the current model\'s scoring runs when an earlier model\'s read finishes last', async () => {
+    const reads = new GatedReads((modelId, p) => (p.EntityName === 'MJ: ML Scoring Runs' ? (modelId === 'M-A' ? [Run({}), Run({}), Run({})] : [Run({})]) : []));
+    const f = renderComponentFixture(PSScoringRunsComponent, { inputs: { Provider: reads.Provider() } });
+    f.componentRef.setInput('Model', { ID: 'M-A' });
+    f.detectChanges();
+    f.componentRef.setInput('Model', { ID: 'M-B' });
+    f.detectChanges();
+    await SettleReads();
+    reads.Release('M-B');
+    await SettleReads();
+    reads.Release('M-A');
+    await SettleReads();
+    f.detectChanges();
+    expect(queryAll(f, '[data-testid="ps-scoring-run"]').length).toBe(1);
   });
 });

@@ -13,10 +13,11 @@ import {
     type PredictionCard,
 } from './model-prediction.logic';
 
-/** A row of the panel's first batch: a binding, a value or a pipeline value. */
-type PanelRow = PanelBindingRow | PanelValueRow | FeatureValueRow;
-/** A row of the panel's lineage batch. */
-type LineageRow = PanelOutputBindingRow | PanelRunRow;
+/** The lineage of the shown values: the scoring models' `record-panel` output bindings and the scoring runs. */
+interface PanelLineage {
+    OutputBindings: PanelOutputBindingRow[];
+    Runs: PanelRunRow[];
+}
 
 /**
  * Model Prediction panel — an **entity-agnostic** form panel that shows the predictions stored as Feature Values on
@@ -49,7 +50,7 @@ type LineageRow = PanelOutputBindingRow | PanelRunRow;
     styleUrls: ['./model-prediction.panel.css'],
 })
 export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
-    private cdr = inject(ChangeDetectorRef);
+    private readonly cdr = inject(ChangeDetectorRef);
 
     /** One card per authorized binding with a value for the record. */
     public Cards: PredictionCard[] = [];
@@ -63,6 +64,7 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
     /** Why the last read failed, shown in place of the cards; null after a successful read. */
     public LoadError: string | null = null;
 
+    /** Reads the record's predictions once the panel mounts. */
     public async ngOnInit(): Promise<void> {
         await this.load();
     }
@@ -84,7 +86,7 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
 
     /**
      * Reads the record's predictions: the panel batch (`PredictionPanelQueries.For`, the one G5.6 replays), then — only when an
-     * authorized binding has a value — the lineage batch ({@link ModelPredictionLogic.LineageQueries}). A failed read
+     * authorized binding has a value — the lineage batch (`PredictionPanelQueries.Lineage`). A failed read
      * is logged and shown as an error state naming the reason, never as an empty panel.
      */
     private async load(): Promise<void> {
@@ -97,19 +99,19 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
             return;
         }
         try {
-            const [bindingRes, latestRes, historyRes, derivedRes] = await RunView.FromMetadataProvider(provider).RunViews<PanelRow>(
-                PredictionPanelQueries.For(entityId, recordId, []),
-                provider.CurrentUser,
-            );
-            for (const r of [bindingRes, latestRes, historyRes, derivedRes]) {
-                if (!r?.Success) throw new Error(r?.ErrorMessage || 'a panel read failed');
-            }
-            const derived = FeatureValuesPanelModel.Latest(derivedRes.Results.filter(ModelPredictionPanel.isDerivedRow));
-            const bindings = ModelPredictionLogic.AuthorizedBindings(bindingRes.Results.filter(ModelPredictionPanel.isBindingRow), provider.CurrentUser, provider.Authorizations);
+            const results = await RunView.FromMetadataProvider(provider).RunViews(PredictionPanelQueries.For(entityId, recordId, []), provider.CurrentUser);
+            // RunViews answers in request order: each result is typed by its PredictionPanelQueries.Index position.
+            const { Bindings, Latest, History, Derived } = PredictionPanelQueries.Index;
+            const bindingRes = ModelPredictionPanel.succeeded<PanelBindingRow>(results[Bindings], 'the scoring bindings');
+            const latestRes = ModelPredictionPanel.succeeded<PanelValueRow>(results[Latest], 'the latest predictions');
+            const historyRes = ModelPredictionPanel.succeeded<PanelValueRow>(results[History], 'the prediction history');
+            const derivedRes = ModelPredictionPanel.succeeded<FeatureValueRow>(results[Derived], 'the derived values');
+            const derived = FeatureValuesPanelModel.Latest(derivedRes.Results);
+            const bindings = ModelPredictionLogic.AuthorizedBindings(bindingRes.Results, provider.CurrentUser, provider.Authorizations);
             const held = new UUIDSet(bindings.map((b) => b.ID));
             const isHeld = (v: PanelValueRow): boolean => v.MLModelScoringBindingID !== null && held.Has(v.MLModelScoringBindingID);
-            const latest = latestRes.Results.filter(ModelPredictionPanel.isValueRow).filter(isHeld);
-            const history = historyRes.Results.filter(ModelPredictionPanel.isValueRow).filter(isHeld);
+            const latest = latestRes.Results.filter(isHeld);
+            const history = historyRes.Results.filter(isHeld);
             const lineage = await this.loadLineage(provider, latest);
             this.finish(this.buildCards(bindings, latest, history, lineage), derived);
         } catch (e) {
@@ -120,17 +122,16 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
     }
 
     /** The scoring models' `record-panel` output bindings and the scoring runs of the shown values, in one batch. */
-    private async loadLineage(provider: IMetadataProvider, latest: readonly PanelValueRow[]): Promise<{ OutputBindings: PanelOutputBindingRow[]; Runs: PanelRunRow[] }> {
+    private async loadLineage(provider: IMetadataProvider, latest: readonly PanelValueRow[]): Promise<PanelLineage> {
         const modelIds = ModelPredictionPanel.distinctIDs(latest.map((v) => v.MLModelID));
         const runIds = ModelPredictionPanel.distinctIDs(latest.map((v) => v.MLScoringRunID));
-        const queries = ModelPredictionLogic.LineageQueries(modelIds, runIds);
-        if (queries.length === 0) return { OutputBindings: [], Runs: [] };
-        const results: RunViewResult<LineageRow>[] = await RunView.FromMetadataProvider(provider).RunViews<LineageRow>(queries, provider.CurrentUser);
-        for (const r of results) {
-            if (!r?.Success) throw new Error(r?.ErrorMessage || 'a lineage read failed');
-        }
-        const rows = results.flatMap((r) => r.Results);
-        return { OutputBindings: rows.filter(ModelPredictionPanel.isOutputBindingRow), Runs: rows.filter(ModelPredictionPanel.isRunRow) };
+        if (modelIds.length === 0 && runIds.length === 0) return { OutputBindings: [], Runs: [] };
+        const results = await RunView.FromMetadataProvider(provider).RunViews(PredictionPanelQueries.Lineage(modelIds, runIds), provider.CurrentUser);
+        // RunViews answers in request order: each result is typed by its PredictionPanelQueries.LineageIndex position.
+        const { OutputBindings, Runs } = PredictionPanelQueries.LineageIndex;
+        const outputRes = ModelPredictionPanel.succeeded<PanelOutputBindingRow>(results[OutputBindings], 'the output bindings');
+        const runRes = ModelPredictionPanel.succeeded<PanelRunRow>(results[Runs], 'the scoring runs');
+        return { OutputBindings: outputRes.Results, Runs: runRes.Results };
     }
 
     /** One card per authorized binding that has a value for the record, in the bindings' order. */
@@ -138,7 +139,7 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
         bindings: readonly PanelBindingRow[],
         latest: readonly PanelValueRow[],
         history: readonly PanelValueRow[],
-        lineage: { OutputBindings: PanelOutputBindingRow[]; Runs: PanelRunRow[] },
+        lineage: PanelLineage,
     ): PredictionCard[] {
         const latestByBinding = new UUIDMap<PanelValueRow>();
         for (const v of latest) if (v.MLModelScoringBindingID !== null) latestByBinding.Set(v.MLModelScoringBindingID, v);
@@ -183,24 +184,10 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
         return [...byId.Values()];
     }
 
-    private static isBindingRow(r: PanelRow): r is PanelBindingRow {
-        return 'ViewAuthorizationID' in r;
-    }
-
-    private static isValueRow(r: PanelRow): r is PanelValueRow {
-        return 'MLScoringRunID' in r;
-    }
-
-    private static isDerivedRow(r: PanelRow): r is FeatureValueRow {
-        return 'Reasoning' in r;
-    }
-
-    private static isOutputBindingRow(r: LineageRow): r is PanelOutputBindingRow {
-        return 'Surface' in r;
-    }
-
-    private static isRunRow(r: LineageRow): r is PanelRunRow {
-        return 'ModelVersion' in r;
+    /** `result` when it succeeded; throws naming `what` when it failed or is missing. */
+    private static succeeded<T>(result: RunViewResult<T> | undefined, what: string): RunViewResult<T> {
+        if (!result?.Success) throw new Error(`reading ${what} failed: ${result?.ErrorMessage || 'the view returned no result'}`);
+        return result;
     }
 }
 

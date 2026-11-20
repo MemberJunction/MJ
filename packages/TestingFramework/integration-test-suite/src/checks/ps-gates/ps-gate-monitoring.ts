@@ -9,7 +9,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { RunView } from '@memberjunction/core';
 import type { MJMLModelPublishRecordEntity, MJMLMonitoringResultEntity, MJMLModelEntity, MJScheduledJobEntity } from '@memberjunction/core-entities';
-import { EscapeSQLString } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { StoredRuns, type StoredRunRecord } from '@memberjunction/predictive-studio';
 import {
   DatasetCatalog,
   DatasetSeeds,
@@ -25,10 +26,15 @@ import {
 import {
   EvaluationProtocol,
   JsonParse,
+  MONITORING_CHALLENGER_OUTCOMES,
+  MONITORING_ROLLBACK_CHECK_KINDS,
   MonitoringJobSpecs,
   MonitoringResultSchemas,
+  UtcDay,
   type MonitorDriftInput,
+  type MonitoringChallengerOutcome,
   type MonitoringJobSpec,
+  type MonitoringRollbackCheck,
   type RetrainTrigger,
   type TaskType,
 } from '@memberjunction/predictive-studio-core';
@@ -65,16 +71,35 @@ export interface MonitoredGatePeriod {
   readonly PrimaryUpper: number | null;
   /** The tracked positive rate (from the realised labels) with its 95% bounds; null when the row tracks none. */
   readonly PositiveRate: { readonly Value: number; readonly Lower: number; readonly Upper: number } | null;
-  readonly TriggersFired: readonly string[];
+  readonly TriggersFired: readonly RetrainTrigger['kind'][];
   readonly ChallengerRunID: string | null;
-  /** `ChallengerResult.outcome` (`none`, `waiting`, `published`, `withheld`, `stopped`, `failed`); null when absent. */
-  readonly ChallengerOutcome: string | null;
-  /** `RollbackCheck.kind`; null when absent. */
-  readonly RollbackKind: string | null;
+  /** `ChallengerResult.outcome`; null when the row stores no challenger result. */
+  readonly ChallengerOutcome: MonitoringChallengerOutcome | null;
+  /** `RollbackCheck.kind`; null when the row stores no rollback check. */
+  readonly RollbackKind: MonitoringRollbackCheck['kind'] | null;
   /** `Parity.passed`; null when the row stores no parity. */
   readonly ParityPassed: boolean | null;
   readonly ParityMaxAbsDifference: number | null;
 }
+
+/** What a challenger gate measured: the first period that started a challenger, and what came of it. */
+export interface ChallengerGateOutcome {
+  /** The first monitored period whose row names a challenger run; undefined when none started one. */
+  readonly Started: MonitoredGatePeriod | undefined;
+  /** The challenger run's gate compared it with the monitored model on the model's own rows. */
+  readonly SameRows: boolean;
+  /** The model the challenger run trained, with its status; null when none started or it shipped none. */
+  readonly Challenger: Pick<MJMLModelEntity, 'ID' | 'Status'> | null;
+  /** The challenger is Published and the monitored model Archived. */
+  readonly Replaced: boolean;
+  /** The challenger run's stored gate record (its decision and paired incumbent comparison); null when none started or it has none. */
+  readonly Gate: StoredRunRecord['Gate'];
+}
+
+/** The `MJ: ML Monitoring Results` columns a gate reads back. */
+export type StoredMonitoringRow = Pick<MJMLMonitoringResultEntity,
+  'ID' | 'Period' | 'State' | 'ErrorMessage' | 'ScoredRows' | 'JoinedRows' | 'ExcludedInTrainingRows' | 'PrimaryValue' | 'PrimaryLower' | 'PrimaryUpper'
+  | 'TrackedMetrics' | 'TriggersFired' | 'ChallengerRunID' | 'ChallengerResult' | 'RollbackCheck' | 'Parity'>;
 
 /** How a monitored gate model is set up. */
 export interface PublishOnPeriodsOptions {
@@ -108,7 +133,25 @@ export class MonitoringFixture {
   /** The first day of period `index` under the calendar, `YYYY-MM-DD`. */
   public static PeriodStart(calendar: PeriodCalendar, index: number): string {
     const d = calendar.Kind === 'year' ? new Date(Date.UTC(calendar.BaseYear + index, 0, 1)) : new Date(Date.UTC(calendar.BaseYear, index, 1));
-    return d.toISOString().slice(0, 10);
+    return UtcDay.UtcDayIso(d);
+  }
+
+  /**
+   * What the first challenger of the monitored periods came to (G6.9–G6.11): its stored run's gate read to see whether it
+   * was paired on the monitored model's rows, its model's status, and whether it replaced the monitored model.
+   *
+   * @throws Error when a read fails (a negative gate must not pass on a read that failed)
+   */
+  public static async ChallengerOutcome(h: TruthHarness, model: MonitoredGateModel, periods: readonly MonitoredGatePeriod[]): Promise<ChallengerGateOutcome> {
+    const started = periods.find((p) => p.ChallengerRunID !== null);
+    const runId = started ? started.ChallengerRunID : null;
+    if (runId === null) return { Started: started, SameRows: false, Challenger: null, Replaced: false, Gate: null };
+    const run = await StoredRuns.Read(runId, { ContextUser: h.User, Provider: h.Provider });
+    const diff = run === null || run.Gate === null ? null : run.Gate.incumbentDiff;
+    const sameRows = diff !== null && UUIDsEqual(diff.incumbentModelId, model.ModelID);
+    const challenger = await MonitoringFixture.ChallengerModel(h, runId);
+    const replaced = challenger !== null && challenger.Status === 'Published' && (await MonitoringFixture.StatusOf(h, model.ModelID)) === 'Archived';
+    return { Started: started, SameRows: sameRows, Challenger: challenger, Replaced: replaced, Gate: run === null ? null : run.Gate };
   }
 
   /**
@@ -167,16 +210,28 @@ export class MonitoringFixture {
     const r = await RunView.FromMetadataProvider(h.Provider).RunView<MJMLMonitoringResultEntity>({ EntityName: 'MJ: ML Monitoring Results', ExtraFilter: `ID='${EscapeSQLString(resultId)}'`, ResultType: 'entity_object', BypassCache: true }, h.User); // pk-filter-ok: MJ core entity keyed by ID
     const row = r.Results[0];
     if (!r.Success || !row) throw new Error(`monitoring fixture: period row ${resultId} not read: ${r.ErrorMessage}`);
+    return MonitoringFixture.PeriodOf(index, row);
+  }
+
+  /**
+   * A stored period row as the gates read it, its JSON columns parsed. Pure.
+   *
+   * @throws Error naming the row when `TriggersFired` does not parse, or a stored challenger outcome or rollback kind is
+   * not one the contract has (a negative gate must not pass on a corrupt row)
+   */
+  public static PeriodOf(index: number, row: StoredMonitoringRow): MonitoredGatePeriod {
+    const resultId = row.ID;
     const triggers = MonitoringResultSchemas.ParseTriggersFired(row.TriggersFired);
+    if (triggers.Ok === false) throw new Error(`monitoring fixture: period row ${resultId}'s TriggersFired does not parse: ${triggers.Errors.join('; ')}`);
     return {
-      Index: index, Start: new Date(row.Period).toISOString().slice(0, 10), ResultID: row.ID, State: row.State, ErrorMessage: row.ErrorMessage,
+      Index: index, Start: UtcDay.UtcDayIso(new Date(row.Period)), ResultID: row.ID, State: row.State, ErrorMessage: row.ErrorMessage,
       ScoredRows: row.ScoredRows, JoinedRows: row.JoinedRows, ExcludedInTrainingRows: row.ExcludedInTrainingRows, ClosedWindowPredictions: row.ScoredRows - row.ExcludedInTrainingRows,
       PrimaryValue: row.PrimaryValue, PrimaryLower: row.PrimaryLower, PrimaryUpper: row.PrimaryUpper,
       PositiveRate: MonitoringFixture.positiveRate(row.TrackedMetrics),
-      TriggersFired: triggers.Ok ? triggers.Value.map((t) => t.kind) : [],
+      TriggersFired: triggers.Value.map((t) => t.kind),
       ChallengerRunID: row.ChallengerRunID,
-      ChallengerOutcome: MonitoringFixture.member(row.ChallengerResult, 'ChallengerResult', 'outcome'),
-      RollbackKind: MonitoringFixture.member(row.RollbackCheck, 'RollbackCheck', 'kind'),
+      ChallengerOutcome: MonitoringFixture.member(row.ChallengerResult, 'ChallengerResult', 'outcome', MONITORING_CHALLENGER_OUTCOMES),
+      RollbackKind: MonitoringFixture.member(row.RollbackCheck, 'RollbackCheck', 'kind', MONITORING_ROLLBACK_CHECK_KINDS),
       ParityPassed: MonitoringFixture.parity(row.Parity).Passed,
       ParityMaxAbsDifference: MonitoringFixture.parity(row.Parity).MaxAbsDifference,
     };
@@ -187,7 +242,8 @@ export class MonitoringFixture {
     const r = await RunView.FromMetadataProvider(h.Provider).RunView<MJMLModelPublishRecordEntity>({
       EntityName: 'MJ: ML Model Publish Records', ExtraFilter: `ModelID='${EscapeSQLString(modelId)}' AND Kind='publish'`, OrderBy: 'RecordedAt DESC', MaxRows: 1, ResultType: 'entity_object', BypassCache: true,
     }, h.User);
-    const evidence = r.Success && r.Results[0] ? r.Results[0].EvidenceObject : null;
+    if (!r.Success) throw new Error(`monitoring fixture: reading the publish records of ML Model ${modelId} failed: ${r.ErrorMessage}`);
+    const evidence = r.Results[0] ? r.Results[0].EvidenceObject : null;
     return evidence === null ? null : evidence.holdoutPrimary.interval.upper;
   }
 
@@ -218,7 +274,19 @@ export class MonitoringFixture {
     const r = await RunView.FromMetadataProvider(h.Provider).RunView<Pick<MJMLModelEntity, 'ID' | 'Status'>>({
       EntityName: 'MJ: ML Models', ExtraFilter: `TrainingRunID='${EscapeSQLString(trainingRunId)}'`, Fields: ['ID', 'Status'], ResultType: 'simple', BypassCache: true,
     }, h.User);
-    return r.Success && r.Results[0] ? r.Results[0] : null;
+    if (!r.Success) throw new Error(`monitoring fixture: reading the model of training run ${trainingRunId} failed: ${r.ErrorMessage}`);
+    return r.Results[0] || null;
+  }
+
+  /** A model's pipeline. @throws Error when the read fails or the model is gone */
+  public static async PipelineOf(h: Pick<TruthHarness, 'Provider' | 'User'>, modelId: string): Promise<string> {
+    const r = await RunView.FromMetadataProvider(h.Provider).RunView<Pick<MJMLModelEntity, 'ID' | 'PipelineID'>>({
+      EntityName: 'MJ: ML Models', ExtraFilter: `ID='${EscapeSQLString(modelId)}'`, Fields: ['ID', 'PipelineID'], ResultType: 'simple', BypassCache: true, // pk-filter-ok: MJ core entity keyed by ID
+    }, h.User);
+    if (!r.Success) throw new Error(`monitoring fixture: reading ML Model ${modelId} failed: ${r.ErrorMessage}`);
+    const row = r.Results[0];
+    if (!row) throw new Error(`monitoring fixture: ML Model ${modelId} is gone`);
+    return row.PipelineID;
   }
 
   /** A model's status now. */
@@ -226,7 +294,8 @@ export class MonitoringFixture {
     const r = await RunView.FromMetadataProvider(h.Provider).RunView<Pick<MJMLModelEntity, 'ID' | 'Status'>>({
       EntityName: 'MJ: ML Models', ExtraFilter: `ID='${EscapeSQLString(modelId)}'`, Fields: ['ID', 'Status'], ResultType: 'simple', BypassCache: true, // pk-filter-ok: MJ core entity keyed by ID
     }, h.User);
-    return r.Success && r.Results[0] ? r.Results[0].Status : null;
+    if (!r.Success) throw new Error(`monitoring fixture: reading ML Model ${modelId} failed: ${r.ErrorMessage}`);
+    return r.Results[0] ? r.Results[0].Status : null;
   }
 
   // ----- the statistical replays (M6.7) -----------------------------------------------------------------------------
@@ -264,11 +333,19 @@ export class MonitoringFixture {
     };
   }
 
-  /** A string member of a stored JSON object column; null when the column or the member is absent. */
-  private static member(text: string | null, column: string, key: string): string | null {
+  /**
+   * A member of a stored JSON object column that must be one of `allowed`; null when the column is absent.
+   *
+   * @throws Error naming the column when the stored text does not parse, or the member is missing or not one of `allowed`
+   */
+  private static member<T extends string>(text: string | null, column: string, key: string, allowed: readonly T[]): T | null {
     if (text === null) return null;
     const json = JsonParse.ParseJsonText(text, column);
-    return json.Ok && JsonParse.IsJsonObject(json.Value) ? JsonParse.JsonString(json.Value, key) : null;
+    if (json.Ok === false || !JsonParse.IsJsonObject(json.Value)) throw new Error(`monitoring fixture: the stored ${column} is not a JSON object`);
+    const raw = JsonParse.JsonString(json.Value, key);
+    const value = allowed.find((a) => a === raw);
+    if (value === undefined) throw new Error(`monitoring fixture: the stored ${column}.${key} '${String(raw)}' is not one of ${allowed.join(', ')}`);
+    return value;
   }
 
   /** The stored parity's `passed` and `maxAbsDifference`. */

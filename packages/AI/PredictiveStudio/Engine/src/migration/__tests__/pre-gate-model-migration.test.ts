@@ -15,7 +15,7 @@ import { JsonParse, type Actor, type JsonObject } from '@memberjunction/predicti
 
 import { FakeClock, GATE_TASK, GateTestStore, GateWorld, type Row, type WorldModel } from '../../__tests__/fakes/gate-test-store';
 import { RecordingScoringActions } from '../../__tests__/fakes/scoring-action-fakes';
-import { Records, ScoringServiceWorld } from '../../__tests__/fakes/scoring-service-world';
+import { Records, ScoringServiceWorld, type WorldModelRef } from '../../__tests__/fakes/scoring-service-world';
 import { MemoryStorageAccount, ProviderRow, RegisterMemoryStorage, ServeStorageProviders } from '../../__tests__/fakes/storage-fakes';
 import { AutomatedPublisher } from '../../registry/automated-publisher';
 import { LifecycleGate } from '../../registry/lifecycle-gate';
@@ -27,6 +27,7 @@ import { SnapshotHash } from '../../snapshot/snapshot-hash';
 import { LocalArtifactPath } from '../../training/artifact-store';
 import { ProtocolRowFixture } from '../../training/__tests__/fixtures/protocol-row';
 import { TrainerResultFixtures } from '../../training/__tests__/fixtures/trainer-result';
+import { PreChangeArtifacts } from '../pre-change-artifacts';
 import { PreGateMigrationContexts, PreGateModelMigration, type PreGateMigrationContext } from '../pre-gate-model-migration';
 
 const log: string[] = [];
@@ -342,6 +343,26 @@ describe('step 2: evidence-bearing models re-verified on their stored record', (
     expect(ModelOf(pr3BadIncumbent.ID)['Status']).toBe('Published');
   });
 
+  it('rolls back to the newest archived model whose artifact verifies, passing over one whose bytes are gone (M7-7)', async () => {
+    const pipelineId = Pipeline();
+    const archived = (version: number): WorldModel => {
+      const m = MoveTo(world.Model('Archived', 'model', { Version: version }), pipelineId);
+      store.Insert('MJ: ML Model Publish Records', {
+        ID: id(), ModelID: m.ID, TrainingRunID: m.RunID, Kind: 'publish', Purpose: 'publish', ApproverKind: 'automated-gate',
+        Initiator: JSON.stringify({ kind: 'system', component: 'test' }), RecordedAt: new Date('2026-01-01T00:00:00Z'),
+      });
+      return m;
+    };
+    const older = archived(1);
+    const newerWithoutBytes = archived(2);
+    storage.Objects.delete(`artifacts/${String(ModelOf(newerWithoutBytes.ID)['ArtifactFileID'])}`);
+    const pr3Bad = EvidenceBearing('Published', pipelineId);
+    RecomputesToNoSignal(pr3Bad);
+    const result = await PreGateModelMigration.ReverifyEvidenceBearing(50, ctx);
+    expect(result.Demoted).toEqual([expect.objectContaining({ ModelID: pr3Bad.ID, RolledBackTo: older.ID })]);
+    expect([ModelOf(older.ID)['Status'], ModelOf(newerWithoutBytes.ID)['Status']]).toEqual(['Published', 'Archived']);
+  });
+
   it('a demoted model with no incumbent leaves its pipeline without a model, and nothing is published', async () => {
     const pr3BadNoIncumbent = EvidenceBearing('Published');
     RecomputesToNoSignal(pr3BadNoIncumbent);
@@ -390,6 +411,51 @@ describe('step 3: legacy artifacts', () => {
     const r = await new ScoringService(scoringWorld.Ctx()).Score(binding, Records('r1', 'r2'), new Date('2026-03-04T00:00:00Z'), false);
     expect([r.Status, scoringWorld.ModelRow(legacyServing)?.['Status']]).toEqual(['completed', 'Unevaluated']);
     expect(scoringWorld.ModelRow(legacyServing)).toMatchObject({ ServingWhileUnevaluated: true, ArtifactStatus: 'verified', ArtifactSha256: SnapshotHash.Sha256Hex(bytes) });
+  });
+
+  /** A pre-change model kept serving while Unevaluated, its artifact in storage and still `unverified`. */
+  async function LegacyServingWorld(): Promise<{ readonly World: ScoringServiceWorld; readonly Model: WorldModelRef; readonly Bytes: Uint8Array; readonly Binding: Awaited<ReturnType<ScoringServiceWorld['Binding']>> }> {
+    const scoringWorld = new ScoringServiceWorld();
+    const legacyServing = scoringWorld.Model({ Status: 'Unevaluated', ServingWhileUnevaluated: true });
+    const fileId = id();
+    const bytes = new TextEncoder().encode(`legacy serving artifact ${legacyServing.ID}`);
+    scoringWorld.Artifacts.Set(fileId, bytes);
+    scoringWorld.Store.Insert('MJ: Files', { ID: fileId, ProviderID: GateWorld.StorageProviderID, ProviderKey: `legacy/${fileId}` });
+    Object.assign(scoringWorld.ModelRow(legacyServing) || {}, { ArtifactFileID: fileId, ArtifactSha256: null, ArtifactStatus: 'unverified' });
+    return { World: scoringWorld, Model: legacyServing, Bytes: bytes, Binding: await scoringWorld.Binding(legacyServing) };
+  }
+
+  it('a serving model whose artifact is already checked is served without checking it again (M7-26)', async () => {
+    const w = await LegacyServingWorld();
+    Object.assign(w.World.ModelRow(w.Model) || {}, { ArtifactSha256: SnapshotHash.Sha256Hex(w.Bytes), ArtifactStatus: 'verified' });
+    const migrate = vi.spyOn(PreChangeArtifacts, 'Migrate');
+    const r = await new ScoringService(w.World.Ctx()).Score(w.Binding, Records('r1'), new Date('2026-03-04T00:00:00Z'), false);
+    expect([r.Status, migrate.mock.calls.length]).toEqual(['completed', 0]);
+  });
+
+  it('a serving model whose artifact check fails is refused on its stored, unverified row, never on the unsaved check (M7-26)', async () => {
+    const w = await LegacyServingWorld();
+    vi.spyOn(PreChangeArtifacts, 'Migrate').mockImplementation(async (model) => {
+      model.ArtifactStatus = 'verified';
+      model.ArtifactSha256 = SnapshotHash.Sha256Hex(w.Bytes);
+      throw new Error('the save of the artifact check failed');
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const r = await new ScoringService(w.World.Ctx()).Score(w.Binding, Records('r1'), new Date('2026-03-04T00:00:00Z'), false);
+    expect([r.Status, w.World.ModelRow(w.Model)?.['ArtifactStatus']]).toEqual(['refused', 'unverified']);
+  });
+
+  it('a serving model whose row is gone when its artifact check fails is refused, never served from the unsaved object (M7-6)', async () => {
+    const w = await LegacyServingWorld();
+    vi.spyOn(PreChangeArtifacts, 'Migrate').mockImplementation(async (model) => {
+      model.ArtifactStatus = 'verified';
+      model.ArtifactSha256 = SnapshotHash.Sha256Hex(w.Bytes);
+      w.World.Store.Tables['MJ: ML Models'] = (w.World.Store.Tables['MJ: ML Models'] || []).filter((m) => m['ID'] !== model.ID);
+      throw new Error('the model row is gone');
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const r = await new ScoringService(w.World.Ctx()).Score(w.Binding, Records('r1'), new Date('2026-03-04T00:00:00Z'), false);
+    expect(r).toMatchObject({ Status: 'refused', Reason: { kind: 'no-published-model' } });
   });
 
   it('a non-serving Unevaluated model is refused: its pipeline has no published model', async () => {
@@ -463,6 +529,18 @@ describe('step 4: bounded and idempotent', () => {
     ]);
   });
 
+  it('a model whose scoring Action was not disabled is not recorded as handled, so a later run retries it (M7-1)', async () => {
+    const demoted = Legacy(Pipeline(), 'Unevaluated', 'none');
+    scoringActions.DisableRefused = true;
+    const first = await PreGateModelMigration.DisableDemotedSchedules(50, ctx);
+    expect(first.ScoringActionsDisabled).toEqual([]);
+    store.Insert('MJ: Scheduled Job Runs', {
+      ID: id(), ScheduledJobID: registryRun.ScheduledJobID, Status: 'Completed', Details: JSON.stringify({ [PreGateModelMigration.DetailsKey]: { Schedules: first, DisabledProcessIDs: first.Disabled } }),
+    });
+    scoringActions.DisableRefused = false;
+    expect((await PreGateModelMigration.DisableDemotedSchedules(50, ctx)).ScoringActionsDisabled).toEqual([demoted.ID]);
+  });
+
   it('a run after every demoted model was handled disables nothing and calls no scoring Action again', async () => {
     const pipelineId = Pipeline();
     const demoted = Legacy(pipelineId, 'Unevaluated', 'none');
@@ -501,6 +579,15 @@ describe('step 5: automated re-evaluation', () => {
     const second = await PreGateModelMigration.ReEvaluate(3, ctx);
     expect(trainer.Runs(noisy)).toHaveLength(1);
     expect(second.Findings).toContainEqual(expect.objectContaining({ PipelineID: noisy, Kind: 'unchanged-since-last-attempt' }));
+  });
+
+  it('reads the last attempt without naming a database schema (M7-2)', async () => {
+    const noisy = Pipeline();
+    Legacy(noisy, 'Unevaluated', 'none');
+    await PreGateModelMigration.ReEvaluate(3, ctx);
+    const reads = store.Reads.length;
+    expect((await PreGateModelMigration.ReEvaluate(3, ctx)).Findings).toContainEqual(expect.objectContaining({ PipelineID: noisy, Kind: 'unchanged-since-last-attempt' }));
+    expect(store.Reads.slice(reads).filter((r) => r.includes('__mj'))).toEqual([]);
   });
 
   it('a withheld pipeline whose row changed after its last attempt is retrained', async () => {
@@ -616,8 +703,17 @@ describe('the registry step (g)', () => {
     expect(PreGateModelMigration.DisabledProcessIDsOf(JSON.stringify({ [PreGateModelMigration.DetailsKey]: details }))).toEqual([plain.ID]);
   });
 
+  it('heartbeats the job run before each step and for every model and pipeline it visits (M7-5)', async () => {
+    Legacy(Pipeline(), 'Unevaluated', 'none');
+    let beats = 0;
+    const beating: PreGateMigrationContext = { ...ctx, Heartbeat: async () => { beats++; } };
+    await PreGateModelMigration.RunRegistryStep(PreGateModelMigration.DefaultConfig, beating);
+    // 4 steps; step 3 checks the model's artifact, step 4 disables its scoring Action, step 5 visits its pipeline.
+    expect(beats).toBe(4 + 3);
+  });
+
   it('reads its configuration with the defaults of D4-22', () => {
-    expect([PreGateModelMigration.ConfigFrom(null), PreGateModelMigration.ConfigFrom({ batchSize: 10, retrainPerRun: 1 }), PreGateModelMigration.ConfigFrom({ batchSize: -1 })])
+    expect([PreGateModelMigration.ConfigFrom(null), PreGateModelMigration.ConfigFrom({ BatchSize: 10, RetrainPerRun: 1 }), PreGateModelMigration.ConfigFrom({ BatchSize: -1 })])
       .toEqual([{ BatchSize: 50, RetrainPerRun: 3 }, { BatchSize: 10, RetrainPerRun: 1 }, { BatchSize: 50, RetrainPerRun: 3 }]);
   });
 

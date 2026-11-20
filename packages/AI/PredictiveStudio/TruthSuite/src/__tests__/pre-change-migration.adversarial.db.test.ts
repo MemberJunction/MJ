@@ -63,9 +63,9 @@ import { ConsoleCapture } from './fixtures/console-capture';
 /** One stored model row as a case reads it back. */
 interface ModelRow {
   readonly ID: string;
-  readonly Status: string;
+  readonly Status: MJMLModelEntity['Status'];
   readonly StatusReason: string | null;
-  readonly ArtifactStatus: string;
+  readonly ArtifactStatus: MJMLModelEntity['ArtifactStatus'];
   readonly ServingWhileUnevaluated: boolean;
   readonly TrainingRunID: string | null;
 }
@@ -166,8 +166,8 @@ async function ModelRows(request: () => sql.Request, ids: readonly string[]): Pr
   });
 }
 
-/** Writes a model's `Status` by SQL (a plain string, as a pre-change database or an adversary would). */
-async function RawStatusWrite(request: () => sql.Request, modelId: string, status: string): Promise<void> {
+/** Writes a model's `Status` by SQL, past the entity and its status guard (as a pre-change database or an adversary would). */
+async function RawStatusWrite(request: () => sql.Request, modelId: string, status: MJMLModelEntity['Status']): Promise<void> {
   await request().input('ID', sql.UniqueIdentifier, modelId).input('Status', sql.NVarChar(20), status)
     .query(`UPDATE ${tableOf('MJ: ML Models')} SET Status = @Status WHERE ID = @ID`);
 }
@@ -175,7 +175,7 @@ async function RawStatusWrite(request: () => sql.Request, modelId: string, statu
 /** The SQL state a pre-change row is given after its entity save (applied later, on the case's transaction). */
 interface PreChangeState {
   readonly ModelID: string;
-  readonly Status: string;
+  readonly Status: MJMLModelEntity['Status'];
   readonly CreatedAt: string;
   readonly Delivery: string | null;
 }
@@ -190,7 +190,7 @@ let pendingStates: PreChangeState[] = [];
  * pipeline, which `UX_MLModel_OnePublishedPerPipeline` refuses, so the states are written only after the index is
  * dropped, on the transaction that then runs the data section.
  */
-async function PreChangeModel(pipelineId: string, algorithmId: string, version: number, status: string, o: { readonly CreatedAt: string; readonly Delivery?: string }): Promise<string> {
+async function PreChangeModel(pipelineId: string, algorithmId: string, version: number, status: MJMLModelEntity['Status'], o: { readonly CreatedAt: string; readonly Delivery?: string }): Promise<string> {
   const model = await createRow<MJMLModelEntity>('MJ: ML Models', (m) => {
     m.PipelineID = pipelineId;
     m.AlgorithmID = algorithmId;
@@ -474,7 +474,7 @@ describe('the M7.8 harness: the data section committed, then the Registry Check 
   /** One registry step as the job run; its Details saved on the run, as the job driver records them. */
   async function registryStep(): Promise<PreChangeStepDetails | null> {
     const ctx = PreGateMigrationContexts.ForJobRun({ ContextUser: server.User, Provider: server.Provider }, jobRunId);
-    const config = PreGateModelMigration.ConfigFrom({ batchSize: 50, retrainPerRun: 3 });
+    const config = PreGateModelMigration.ConfigFrom({ BatchSize: 50, RetrainPerRun: 3 });
     const details = await PreGateModelMigration.RunRegistryStep(config, ctx);
     const run = await server.Provider.GetEntityObject<MJScheduledJobRunEntity>('MJ: Scheduled Job Runs', server.User);
     if (!(await run.Load(jobRunId))) throw new Error(`Scheduled Job Run ${jobRunId} is gone`);

@@ -15,9 +15,9 @@ export interface PredictiveStudioMonitoredPeriod {
     /** Inputs whose drift alarm fired at the period's look. */
     driftAlarms: number;
     /** Kinds of the retrain triggers that fired. */
-    triggersFired: string[];
-    /** What a fired trigger's challenger came to (`none`, `waiting`, `published`, `withheld`, `stopped`, `failed`). */
-    challengerOutcome?: string;
+    triggersFired: ('outcome-degradation' | 'calibration-drift')[];
+    /** What a fired trigger's challenger came to. */
+    challengerOutcome?: 'none' | 'waiting' | 'published' | 'withheld' | 'stopped' | 'failed';
     /** The challenger's `MJ: ML Training Runs` row, when one was started. */
     challengerRunId?: string;
     /** The rollback check in words. */

@@ -5,8 +5,8 @@ import type { ComponentFixture } from '@angular/core/testing';
 import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { of, Subject } from 'rxjs';
-import type { IMetadataProvider, RunViewParams } from '@memberjunction/core';
-import { ResourceData, type MJListDetailEntity, type MJListEntity, type MJMLModelEntity, type MJMLModelScoringBindingEntity, type MJMLOutputBindingEntity, type MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
+import { BaseEntityResult, TransactionGroupBase, type IMetadataProvider, type RunViewParams, type TransactionResult } from '@memberjunction/core';
+import { MJListDetailEntity, MJListEntity, MJMLModelEntity, MJMLModelScoringBindingEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, ResourceData, type MJMLOutputBindingEntity } from '@memberjunction/core-entities';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { RenderComponentFixture, CreateFakeProvider, Query } from '@memberjunction/ng-test-utils';
@@ -16,6 +16,7 @@ import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { PSPredictionsGridComponent, type PredictionGridRowsLoadedEvent } from '../components/ps-predictions-grid.component';
 import type { LatestPredictionRow } from '../latest-prediction-rows';
 import { PSPredictionsResourceComponent } from './ps-predictions-resource.component';
+import { TestEntityRows } from '../../__tests__/fixtures/test-entity-rows';
 
 try {
   getTestBed().initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
@@ -80,7 +81,8 @@ class GridStub {
 const MODEL_ID = 'M0000000-0000-4000-8000-000000000001';
 const ENTITY_ID = 'E0000000-0000-4000-8000-000000000001';
 
-const model = {
+/** The published model's stored fields (built into a typed entity row by {@link fakeEngine}). */
+const model: Partial<MJMLModelEntity> = {
   ID: MODEL_ID,
   Status: 'Published',
   ProblemType: 'classification',
@@ -91,7 +93,7 @@ const model = {
   FeatureImportance: null,
   PipelineID: 'P1',
   __mj_UpdatedAt: new Date('2026-10-01T00:00:00Z'),
-} as unknown as MJMLModelEntity;
+};
 
 const SHIPPED: GateDecision = { outcome: 'model', branch: 'a:Q15-only-model-beats-dummy', shipped: 'xgb', shippedRole: 'model', note: null };
 const NO_SIGNAL: GateDecision = { outcome: 'no-signal', branch: 'c:no-signal', shipped: null, shippedRole: null, note: null };
@@ -136,23 +138,34 @@ function keptGlmResults(): string {
   });
 }
 
-/** The engine members the workspace reads. `LoadRunDetails` must never be called: the grid reads the run. */
-function fakeEngine(validationResults: string | null = storedResults(SHIPPED), lineage: string | null = null) {
-  const published = { ...model, Lineage: lineage } as MJMLModelEntity;
+/**
+ * The engine the workspace reads: the real engine instance (what `GetProviderInstance` returns here), its cache getters
+ * answering typed entity rows and its methods spied. `LoadRunDetails` must never be called: the grid reads the run.
+ */
+async function fakeEngine(validationResults: string | null = storedResults(SHIPPED), lineage: string | null = null) {
+  const engine = PredictiveStudioEngine.Instance;
+  const published = await TestEntityRows.Of(MJMLModelEntity, 'MJ: ML Models', { ...model, Lineage: lineage });
+  // newest first, as the engine loads them: the older run of the same model must not be the one the card reads
+  const runs = await TestEntityRows.Many(MJMLTrainingRunEntity, 'MJ: ML Training Runs', [
+    { ID: 'run-new', ResultingModelID: MODEL_ID.toLowerCase(), ValidationResults: validationResults },
+    { ID: 'run-old', ResultingModelID: MODEL_ID, ValidationResults: storedResults(NO_SIGNAL) },
+  ]);
+  const pipelines = await TestEntityRows.Many(MJMLTrainingPipelineEntity, 'MJ: ML Training Pipelines', [{ ID: 'P1', TargetEntityID: ENTITY_ID }]);
+  vi.spyOn(engine, 'Models', 'get').mockReturnValue([published]);
+  vi.spyOn(engine, 'PublishedModels', 'get').mockReturnValue([published]);
+  vi.spyOn(engine, 'Sessions', 'get').mockReturnValue([]);
+  vi.spyOn(engine, 'TrainingRuns', 'get').mockReturnValue(runs);
+  vi.spyOn(engine, 'Pipelines', 'get').mockReturnValue(pipelines);
+  vi.spyOn(engine, 'ModelDisplayName').mockReturnValue('Who will renew?');
   return {
-    Config: vi.fn(async () => undefined),
-    Models: [published],
-    Sessions: [],
-    PublishedModels: [published],
-    // newest first, as the engine loads them: the older run of the same model must not be the one the card reads
-    TrainingRuns: [
-      { ID: 'run-new', ResultingModelID: MODEL_ID.toLowerCase(), ValidationResults: validationResults },
-      { ID: 'run-old', ResultingModelID: MODEL_ID, ValidationResults: storedResults(NO_SIGNAL) },
-    ],
-    Pipelines: [{ ID: 'P1', TargetEntityID: ENTITY_ID } as unknown as MJMLTrainingPipelineEntity],
-    ModelDisplayName: () => 'Who will renew?',
-    LoadRecentRunsForModel: vi.fn(async () => [{ ID: 'run-1' }]),
-    LoadRunDetails: vi.fn(async () => ({ Rows: [], Capped: false })),
+    Engine: engine,
+    Config: vi.spyOn(engine, 'Config').mockResolvedValue(undefined),
+    LoadRecentRunsForModel: vi.spyOn(engine, 'LoadRecentRunsForModel').mockResolvedValue([
+      { ID: 'run-1', Status: 'Complete', StartTime: null, CreatedAt: null, SuccessCount: 0, ProcessName: null, EntityName: null, DryRun: false },
+    ]),
+    LoadRunDetails: vi.spyOn(engine, 'LoadRunDetails').mockResolvedValue({ Rows: [], Capped: false }),
+    // the embedded grid reads its model pipeline's scoring bindings from the engine's cache
+    ScoringBindingsForPipeline: vi.spyOn(engine, 'ScoringBindingsForPipeline').mockReturnValue([]),
   };
 }
 
@@ -178,8 +191,8 @@ const settle = async (fixture: ComponentFixture<PSPredictionsResourceComponent>)
 };
 
 async function renderCatalog(provider: IMetadataProvider, validationResults?: string | null, lineage: string | null = null, grid: typeof GridStub | typeof PSPredictionsGridComponent = GridStub) {
-  const engine = fakeEngine(validationResults, lineage);
-  vi.spyOn(PredictiveStudioEngine, 'GetProviderInstance').mockReturnValue(engine as unknown as PredictiveStudioEngine);
+  const engine = await fakeEngine(validationResults, lineage);
+  vi.spyOn(PredictiveStudioEngine, 'GetProviderInstance').mockReturnValue(engine.Engine);
   const fixture = RenderComponentFixture(PSPredictionsResourceComponent, {
     imports: [MJButtonDirective, PageHeaderInteriorStub, PageBodyInteriorStub, SplitStub, SplitAreaStub, LoadingStub, grid],
     declarations: [PSPredictionsResourceComponent],
@@ -235,9 +248,7 @@ const latestValue = (recordId: string, score: number): LatestPredictionRow => ({
  * Opens the prediction in the workspace with the real embedded grid (appended to `host`): the provider serves the model
  * and its at-risk-list binding row, the latest run holds `scores` in that stored order.
  */
-async function RenderResource(host: HTMLElement, options: RenderResourceOptions): Promise<RunViewParams[]> {
-  // the engine's cached scoring binding of the model's pipeline: the double carries only the members the grid reads
-  vi.spyOn(PredictiveStudioEngine.Instance, 'ScoringBindingsForPipeline').mockReturnValue([{ ID: 'SB1', MLTrainingPipelineID: options.model.PipelineID, FeatureName: 'Renewal risk', TargetEntityID: ENTITY_ID, Status: 'Active' } as unknown as MJMLModelScoringBindingEntity]);
+async function RenderResource(host: HTMLElement, options: RenderResourceOptions): Promise<{ Reads: RunViewParams[]; Engine: Awaited<ReturnType<typeof fakeEngine>> }> {
   const reads: RunViewParams[] = [];
   const binding: BindingRow = {
     ID: 'B-list', ModelID: options.model.ID, Surface: options.binding.Surface || 'at-risk-list', SortsBy: options.binding.SortsBy || 'adverse-probability-desc',
@@ -251,12 +262,16 @@ async function RenderResource(host: HTMLElement, options: RenderResourceOptions)
     return [];
   };
   const provider = CreateFakeProvider<GridModelRow | BindingRow | LatestPredictionRow>({ entities: [{ ID: ENTITY_ID, Name: 'Members' }], runViewResults: served });
-  const { fixture, resource } = await renderCatalog(provider, undefined, null, PSPredictionsGridComponent);
+  const { fixture, resource, engine } = await renderCatalog(provider, undefined, null, PSPredictionsGridComponent);
+  // the engine's cached scoring binding of the model's pipeline: the double carries only the members the grid reads
+  engine.ScoringBindingsForPipeline.mockReturnValue([
+    await TestEntityRows.Of(MJMLModelScoringBindingEntity, 'MJ: ML Model Scoring Bindings', { ID: 'SB1', MLTrainingPipelineID: options.model.PipelineID, FeatureName: 'Renewal risk', TargetEntityID: ENTITY_ID, Status: 'Active' }),
+  ]);
   resource.Open(resource.Cards[0]);
   await settle(fixture);
   await settle(fixture);
   host.appendChild(fixture.nativeElement);
-  return reads;
+  return { Reads: reads, Engine: engine };
 }
 
 /** The scores of the at-risk list's rows as the embedded grid shows them, top row first. */
@@ -271,7 +286,46 @@ const atRiskListBinding = (sortsBy: SemanticsCheckBinding['SortsBy']): Semantics
 });
 
 /** A List Detail double: the group it joined, its latest result, and a save that queues it (or refuses it). */
-interface ListDetailDouble { ListID: string; RecordID: string; TransactionGroup: object | null; LatestResult: { CompleteMessage: string }; Save: () => Promise<boolean> }
+/** A transaction group whose submit the test decides (no provider is reached). */
+class GroupDouble extends TransactionGroupBase {
+  constructor(private readonly submit: () => Promise<boolean>) {
+    super();
+  }
+  public override async Submit(): Promise<boolean> {
+    return this.submit();
+  }
+  protected async HandleSubmit(): Promise<TransactionResult[]> {
+    return [];
+  }
+}
+
+/** A List Detail whose save queues it or is refused, as the test decides (no provider is reached). */
+class ListDetailDouble extends MJListDetailEntity {
+  constructor(public readonly Index: number, private readonly queues: (i: number) => boolean) {
+    super(TestEntityRows.Entity('MJ: List Details', ['ID', 'ListID', 'RecordID', 'Sequence', 'Status']));
+  }
+  public override async Save(): Promise<boolean> {
+    if (this.queues(this.Index)) return true;
+    this.Refuse();
+    return false;
+  }
+
+  /** Records this detail's save as refused (its own refusal, or the group's rollback). */
+  public Refuse(): void {
+    this.RegisterResultHistoryEntry(new BaseEntityResult(false, `detail ${this.Index} refused`, 'create'));
+  }
+}
+
+/** A List that saves without a provider. */
+class ListDouble extends MJListEntity {
+  constructor() {
+    super(TestEntityRows.Entity('MJ: Lists', ['ID', 'Name', 'EntityID', 'UserID', 'RefreshMode', 'UseSnapshot']));
+    this.ID = 'L1';
+  }
+  public override async Save(): Promise<boolean> {
+    return true;
+  }
+}
 
 /**
  * A provider whose List saves and whose List Details join one transaction group the test controls: `submit` decides the
@@ -279,20 +333,25 @@ interface ListDetailDouble { ListID: string; RecordID: string; TransactionGroup:
  */
 function listProvider(submit: () => Promise<boolean>, queues: (i: number) => boolean = () => true) {
   const Details: ListDetailDouble[] = [];
-  const Submit = vi.fn(submit);
-  const Group = { Submit };
+  // a failed submit rolls the group back, marking each queued detail refused, as a real group's result does
+  const Submit = vi.fn(async (): Promise<boolean> => {
+    const ok = await submit();
+    if (!ok) for (const d of Details) d.Refuse();
+    return ok;
+  });
+  const Group = new GroupDouble(Submit);
   const base = CreateFakeProvider({ entities: [{ ID: ENTITY_ID, Name: 'Members' }] });
-  const Provider = {
-    ...base,
-    CreateTransactionGroup: vi.fn(async () => Group),
-    GetEntityObject: vi.fn(async (entityName: string) => {
-      if (entityName === 'MJ: Lists') return { ID: 'L1', Name: '', Save: async () => true } as unknown as MJListEntity;
-      const i = Details.length;
-      const d: ListDetailDouble = { ListID: '', RecordID: '', TransactionGroup: null, LatestResult: { CompleteMessage: `detail ${i} refused` }, Save: async () => queues(i) };
-      Details.push(d);
-      return d as unknown as MJListDetailEntity;
-    }),
-  } as unknown as IMetadataProvider;
+  // GetEntityObject<T> is generic: a typed mock resolves to the List first, then one new List Detail per call
+  const getEntityObject = vi.fn<IMetadataProvider['GetEntityObject']>().mockImplementation(async (entityName: string) => {
+    if (entityName === 'MJ: Lists') return new ListDouble();
+    const d = new ListDetailDouble(Details.length, queues);
+    Details.push(d);
+    return d;
+  });
+  const Provider = Object.assign(base, {
+    CreateTransactionGroup: vi.fn<IMetadataProvider['CreateTransactionGroup']>().mockResolvedValue(Group),
+    GetEntityObject: getEntityObject,
+  });
   return { Provider, Group, Submit, Details };
 }
 
@@ -527,10 +586,9 @@ describe('PSPredictionsResourceComponent (DOM) — the At-Risk list from its bin
   });
 
   it("reads the At-Risk list from MJ: Latest Feature Values for the binding's feature, never a run's details", async () => {
-    const runDetails = vi.spyOn(PredictiveStudioEngine.Instance, 'LoadRunDetails');
-    const reads = await RenderResource(fixture, { model: renewalNamed, binding: { Surface: 'at-risk-list', SortsBy: 'adverse-probability-desc' }, scores: [0.9] });
-    expect(reads.find((p) => p.EntityName === 'MJ: Latest Feature Values')?.ExtraFilter).toBe(`EntityID='${ENTITY_ID}' AND FeatureName='Renewal risk' AND Source='Model'`);
-    expect(runDetails).not.toHaveBeenCalled();
+    const { Reads, Engine } = await RenderResource(fixture, { model: renewalNamed, binding: { Surface: 'at-risk-list', SortsBy: 'adverse-probability-desc' }, scores: [0.9] });
+    expect(Reads.find((p) => p.EntityName === 'MJ: Latest Feature Values')?.ExtraFilter).toBe(`EntityID='${ENTITY_ID}' AND FeatureName='Renewal risk' AND Source='Model'`);
+    expect(Engine.LoadRunDetails).not.toHaveBeenCalled();
   });
 
   it("keeps the stored scoring order when the binding row sorts by 'none'", async () => {

@@ -27,13 +27,13 @@
 import { createHash } from 'node:crypto';
 import {
     AuthorizationEvaluator, DatabaseProviderBase, RunView,
-    type BaseEntity, type IMetadataProvider, type UserInfo,
+    type BaseEntity, type IMetadataProvider, type RunViewResult, type UserInfo,
 } from '@memberjunction/core';
 import type {
     MJFeatureValueEntity, MJFileEntity, MJKnowledgeHubSavedSearchEntity, MJMLModelEntity, MJMLModelScoringBindingEntity,
     MJMLTrainingPipelineEntity, MJUserEntity, MJUserRoleEntity,
 } from '@memberjunction/core-entities';
-import { EscapeSQLString, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
     InMemoryArtifactLoader, LoadMLModelInferenceProcessor, PublishLocks, ScoringBindings, ScoringService,
     type IScoringModelRuntime, type IScoringPreparedModel, type ISidecarPredictor, type LoadedModel, type ScoringContext,
@@ -177,25 +177,51 @@ export class PsPredictionServing {
             const authorized = await make('authorized', 'Developer');
             return { Restricted: restricted, Authorized: authorized, Keys: keys, UserIDs: userIds };
         } catch (e) {
-            await PsPredictionServing.releaseCreated(ctx, keys, userIds);
+            for (const warning of await PsPredictionServing.releaseCreated(ctx, keys, userIds)) console.warn(`      ⚠ ${tag}: ${warning}`);
             throw e;
         }
     }
 
-    /** Deletes the identities' keys, role rows and users, best effort (teardown never throws). */
-    public static async ReleaseIdentities(ctx: IntegrationCheckContext, ids: ServingIdentities): Promise<void> {
-        await PsPredictionServing.releaseCreated(ctx, ids.Keys, ids.UserIDs);
+    /**
+     * Deletes the identities' keys, role rows and users, best effort: every step runs whatever an earlier one did, and
+     * each failure is returned as a warning (teardown never throws).
+     *
+     * @returns what could not be released, one line each; empty when everything was
+     */
+    public static async ReleaseIdentities(ctx: IntegrationCheckContext, ids: ServingIdentities): Promise<string[]> {
+        return PsPredictionServing.releaseCreated(ctx, ids.Keys, ids.UserIDs);
     }
 
-    /** Deletes minted keys (with their scope rules and usage logs), then each user's role rows and the user. */
-    private static async releaseCreated(ctx: IntegrationCheckContext, keys: MintedUserKeyIds, userIds: readonly string[]): Promise<void> {
-        await DeleteMintedUserKeys(ctx, keys);
-        for (const userId of userIds) {
-            const roles = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJUserRoleEntity>({ EntityName: 'MJ: User Roles', ExtraFilter: `UserID = '${EscapeSQLString(userId)}'`, ResultType: 'entity_object' }, ctx.User);
-            for (const r of roles.Results || []) await r.Delete();
-            const user = await ctx.Provider.GetEntityObject<MJUserEntity>('MJ: Users', ctx.User);
-            if (await user.Load(userId)) await user.Delete();
+    /** Deletes minted keys (with their scope rules and usage logs), then each user's role rows and the user; returns the failures. */
+    private static async releaseCreated(ctx: IntegrationCheckContext, keys: MintedUserKeyIds, userIds: readonly string[]): Promise<string[]> {
+        const warnings: string[] = [];
+        try {
+            await DeleteMintedUserKeys(ctx, keys);
+        } catch (e) {
+            warnings.push(`deleting the minted keys failed: ${e instanceof Error ? e.message : String(e)}`);
         }
+        for (const userId of userIds) {
+            try {
+                warnings.push(...(await PsPredictionServing.releaseUser(ctx, userId)));
+            } catch (e) {
+                warnings.push(`releasing user ${userId} failed: ${e instanceof Error ? e.message : String(e)}`);
+            }
+        }
+        return warnings;
+    }
+
+    /** Deletes one scratch user's role rows, then the user (a user whose role row stays is left active: say so). */
+    private static async releaseUser(ctx: IntegrationCheckContext, userId: string): Promise<string[]> {
+        const roles = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJUserRoleEntity>({ EntityName: 'MJ: User Roles', ExtraFilter: `UserID = '${EscapeSQLString(userId)}'`, ResultType: 'entity_object' }, ctx.User);
+        if (!roles.Success) return [`reading user ${userId}'s role rows failed: ${roles.ErrorMessage || 'unknown error'}; the user and its roles are left`];
+        const warnings: string[] = [];
+        for (const r of roles.Results) {
+            if (!(await r.Delete())) warnings.push(`user ${userId}'s role row ${r.ID} was not deleted: ${r.LatestResult?.CompleteMessage || 'unknown error'}`);
+        }
+        const user = await ctx.Provider.GetEntityObject<MJUserEntity>('MJ: Users', ctx.User);
+        if (!(await user.Load(userId))) return warnings;
+        if (!(await user.Delete())) warnings.push(`user ${userId} was not deleted: ${user.LatestResult?.CompleteMessage || 'unknown error'}`);
+        return warnings;
     }
 
     /** The feature's prediction rows each gated entity returns through `provider` (its key's identity). */
@@ -205,7 +231,7 @@ export class PsPredictionServing {
             { EntityName: 'MJ: Feature Values', ExtraFilter: `${feature} AND Source = 'Model'`, Fields: ['ID'], ResultType: 'simple', IgnoreMaxRows: true, BypassCache: true },
             { EntityName: 'MJ: Latest Feature Values', ExtraFilter: `${feature} AND Source = 'Model'`, Fields: ['ID'], ResultType: 'simple', IgnoreMaxRows: true, BypassCache: true },
         ]);
-        if (!values.Success || !latest.Success) throw new Error(`reading ${featureName}'s predictions failed: ${values.ErrorMessage || latest.ErrorMessage}`);
+        if (!values.Success || !latest.Success) throw new Error(`reading ${featureName}'s predictions failed: ${values.ErrorMessage || latest.ErrorMessage || 'unknown error'}`);
         return { FeatureValues: values.Results.length, LatestFeatureValues: latest.Results.length };
     }
 
@@ -245,6 +271,13 @@ export class PsPredictionServing {
     }
 
     /**
+     * APPROVED EXCEPTION to "no direct DML on entities" (audit M5b-5): the teardown deletes by SQL. It must remove the
+     * rows of a Setup that failed at any step, keyed only by its tag, and the entity layer refuses the steps it would
+     * need — `MJMLModelScoringBindingEntityServer.Delete` refuses an Active binding and any binding a Feature Value still
+     * names — so an entity-layer teardown would first have to withdraw each binding (clearing column copies, a scoring
+     * side effect) and still could not run for a Setup that failed before its rows were read back. The rows are this
+     * bundle's own fixtures (the tag carries "safe to delete"); no Record Change is wanted for them.
+     *
      * The teardown's SQL for the rows a Setup tagged `tag` can have written, children before the rows they reference:
      * the Feature Values and scoring runs of the tagged bindings, the bindings, the models of the tagged pipelines, the
      * pipelines, the files and the target records. Keyed by the tag alone, so a Setup that failed before its fixture
@@ -334,7 +367,8 @@ class ServingSidecar implements ISidecarPredictor {
 class ServingRuntime implements IScoringModelRuntime {
     constructor(private readonly recordIds: readonly string[]) {}
     public async Prepare(model: MJMLModelEntity, bytes: Uint8Array): Promise<IScoringPreparedModel> {
-        const index = new Map(this.recordIds.map((id, i) => [id.toLowerCase(), i]));
+        const index = new UUIDMap<number>();
+        this.recordIds.forEach((id, i) => index.Set(id, i));
         const loaded: LoadedModel = {
             modelId: model.ID, targetEntityName: TARGET, artifactB64: Buffer.from(bytes).toString('base64'), fittedPreprocessing: {}, featureSchema: [...FEATURES],
             problemType: 'classification', targetVariable: 'Lapsed', sourceBindings: [], featureSteps: { Steps: [] }, asOf: { Mode: 'none' },
@@ -343,11 +377,17 @@ class ServingRuntime implements IScoringModelRuntime {
         return {
             Loaded: loaded,
             Assemble: async (ids) => ({
-                Status: 'assembled', Matrix: { columns: ['Tenure'], rows: ids.map((id) => [0.1 + (index.get(id.toLowerCase()) || 0) / 10]) },
+                Status: 'assembled', Matrix: { columns: ['Tenure'], rows: ids.map((id) => [0.1 + (index.Get(id) || 0) / 10]) },
                 Columns: [...FEATURES], HashColumns: null, RowIDs: [...ids],
             }),
         };
     }
+}
+
+/** `result` when it succeeded; throws naming `what` with the read's message when it failed or is missing. */
+function succeeded<T>(result: RunViewResult<T> | undefined, what: string): RunViewResult<T> {
+    if (!result?.Success) throw new Error(`${what} failed: ${result?.ErrorMessage || 'the view returned no result'}`);
+    return result;
 }
 
 /** `[schema].[table]` of an entity. */
@@ -378,37 +418,72 @@ async function modelRows(ctx: IntegrationCheckContext, bindingId: string): Promi
         EntityName: 'MJ: Feature Values', ExtraFilter: `MLModelScoringBindingID = '${EscapeSQLString(bindingId)}' AND Source = 'Model'`,
         Fields: ['ID', 'RecordID', 'ValueNumeric', 'EffectiveAsOf'], ResultType: 'simple', IgnoreMaxRows: true, BypassCache: true,
     }, ctx.User);
-    if (!r.Success) throw new Error(`reading binding ${bindingId}'s Model rows failed: ${r.ErrorMessage}`);
+    if (!r.Success) throw new Error(`reading binding ${bindingId}'s Model rows failed: ${r.ErrorMessage || 'unknown error'}`);
     return r.Results;
 }
 
-/** The latest value of each record of `featureName`, as the system identity reads it, by record ID (lower case). */
-async function latestByRecord(ctx: IntegrationCheckContext, featureName: string): Promise<Map<string, string>> {
+/** The latest value of each record of `featureName`, as the system identity reads it, by record ID. */
+async function latestByRecord(ctx: IntegrationCheckContext, featureName: string): Promise<UUIDMap<string>> {
     const r = await RunView.FromMetadataProvider(ctx.Provider).RunView<Pick<MJFeatureValueEntity, 'RecordID' | 'EffectiveAsOf'>>({
         EntityName: 'MJ: Latest Feature Values', ExtraFilter: `FeatureName = '${EscapeSQLString(featureName)}'`, Fields: ['RecordID', 'EffectiveAsOf'], ResultType: 'simple', IgnoreMaxRows: true, BypassCache: true,
     }, ctx.User);
-    if (!r.Success) throw new Error(`reading ${featureName}'s latest values failed: ${r.ErrorMessage}`);
-    return new Map(r.Results.map((row) => [row.RecordID.toLowerCase(), row.EffectiveAsOf === null ? 'null' : new Date(row.EffectiveAsOf).toISOString()]));
+    if (!r.Success) throw new Error(`reading ${featureName}'s latest values failed: ${r.ErrorMessage || 'unknown error'}`);
+    const byRecord = new UUIDMap<string>();
+    for (const row of r.Results) byRecord.Set(row.RecordID, row.EffectiveAsOf === null ? 'null' : new Date(row.EffectiveAsOf).toISOString());
+    return byRecord;
 }
 
-/** The target records' `MinScore`, by record ID (lower case). */
-async function minScores(ctx: IntegrationCheckContext, recordIds: readonly string[]): Promise<Map<string, number | null>> {
+/** The target records' `MinScore`, by record ID. */
+async function minScores(ctx: IntegrationCheckContext, recordIds: readonly string[]): Promise<UUIDMap<number | null>> {
     const r = await RunView.FromMetadataProvider(ctx.Provider).RunView<Pick<MJKnowledgeHubSavedSearchEntity, 'ID' | 'MinScore'>>({
         EntityName: TARGET, ExtraFilter: `ID IN (${recordIds.map((id) => `'${EscapeSQLString(id)}'`).join(',')})`, Fields: ['ID', 'MinScore'], ResultType: 'simple', BypassCache: true,
     }, ctx.User);
-    if (!r.Success) throw new Error(`reading ${TARGET} failed: ${r.ErrorMessage}`);
-    return new Map(r.Results.map((row) => [row.ID.toLowerCase(), row.MinScore === null ? null : Number(row.MinScore)]));
+    if (!r.Success) throw new Error(`reading ${TARGET} failed: ${r.ErrorMessage || 'unknown error'}`);
+    const byRecord = new UUIDMap<number | null>();
+    for (const row of r.Results) byRecord.Set(row.ID, row.MinScore === null ? null : Number(row.MinScore));
+    return byRecord;
 }
 
 /** Builds the world: fingerprint, pipeline, Published model, records, two bindings, one scoring run, the two identities. */
 async function setup(ctx: IntegrationCheckContext): Promise<void> {
     fixture = null;
-    const provider = sqlProvider(ctx);
     const tag = `IT182 ${Date.now()} ${TAG_SUFFIX}`;
     setupTag = tag;
     const before = await PsPredictionServing.Fingerprint(ctx.Provider, ctx.User);
     const targetEntityId = ctx.Provider.EntityByName(TARGET)?.ID;
     if (!targetEntityId) throw new Error(`${TARGET} is not in metadata`);
+    const published = await createPublishedModel(ctx, tag, targetEntityId);
+    const recordIds: string[] = [];
+    for (let i = 0; i < RECORDS; i++) {
+        recordIds.push((await PsPredictionServing.CreateRow<MJKnowledgeHubSavedSearchEntity>(ctx, TARGET, (t) => { t.Name = `${tag} r${i}`; t.UserID = ctx.User.ID; t.Query = tag; })).ID);
+    }
+    const binding = await createBinding(ctx, tag, published.PipelineID, targetEntityId, 'renewal', null);
+    const copyBinding = await createBinding(ctx, tag, published.PipelineID, targetEntityId, 'copied', 'MinScore');
+    const run = await score(ctx, { Artifacts: published.Artifacts, RecordIDs: recordIds }, binding, DAY3, new ServingSidecar());
+    const identities = await PsPredictionServing.MintIdentities(ctx, tag);
+    fixture = {
+        Tag: tag, TargetEntityID: targetEntityId, PipelineID: published.PipelineID, ModelID: published.ModelID, Artifacts: published.Artifacts, RecordIDs: recordIds,
+        Binding: binding, CopyBinding: copyBinding, Before: before, Run: run, Identities: identities,
+    };
+}
+
+/** The fixture pipeline and its Published model, with the model's artifact held in memory. */
+interface PublishedFixtureModel {
+    readonly PipelineID: string;
+    readonly ModelID: string;
+    readonly Artifacts: InMemoryArtifactLoader;
+}
+
+/**
+ * Creates the pipeline tagged `tag` and its model, and places the model Published with a registered artifact.
+ *
+ * APPROVED EXCEPTION to "no direct DML on entities" (audit M5b-5), as IT166's fixture: `Status` is the lifecycle gate's
+ * to write — the PreSave status guard re-derives every move into `Published` from the model's stored training and
+ * evaluation evidence — and the deterministic tier has no sidecar, so nothing is trained and no evidence exists for the
+ * gate to accept. G5.6 (mutation tier) publishes the trained C1 model through the gate itself.
+ */
+async function createPublishedModel(ctx: IntegrationCheckContext, tag: string, targetEntityId: string): Promise<PublishedFixtureModel> {
+    const provider = sqlProvider(ctx);
     const algorithmId = await PsPredictionServing.FirstId(ctx, 'MJ: ML Algorithms');
     const storageId = await PsPredictionServing.FirstId(ctx, 'MJ: File Storage Providers');
     const pipeline = await PsPredictionServing.CreateRow<MJMLTrainingPipelineEntity>(ctx, 'MJ: ML Training Pipelines', (p) => {
@@ -427,25 +502,16 @@ async function setup(ctx: IntegrationCheckContext): Promise<void> {
             `ArtifactSha256 = '${createHash('sha256').update(bytes).digest('hex')}', OutputSemantics = '${EscapeSQLString(semantics)}' WHERE ID = '${EscapeSQLString(model.ID)}'`,
         undefined, { isMutation: true, description: 'IT182: place the fixture model Published outside the lifecycle gate (no sidecar in this tier)' }, undefined,
     );
-    const recordIds: string[] = [];
-    for (let i = 0; i < RECORDS; i++) {
-        recordIds.push((await PsPredictionServing.CreateRow<MJKnowledgeHubSavedSearchEntity>(ctx, TARGET, (t) => { t.Name = `${tag} r${i}`; t.UserID = ctx.User.ID; t.Query = tag; })).ID);
-    }
+    return { PipelineID: pipeline.ID, ModelID: model.ID, Artifacts: artifacts };
+}
+
+/** An Active OnDemand binding of the fixture pipeline, feature `<tag> <label>`, copying into `column` when given. */
+function createBinding(ctx: IntegrationCheckContext, tag: string, pipelineId: string, targetEntityId: string, label: string, column: string | null): Promise<MJMLModelScoringBindingEntity> {
     const viewAuthorizationId = ScoringBindings.ResolveViewAuthorizationID(null, ctx.Provider);
-    const newBinding = (label: string, column: string | null): Promise<MJMLModelScoringBindingEntity> =>
-        PsPredictionServing.CreateRow<MJMLModelScoringBindingEntity>(ctx, 'MJ: ML Model Scoring Bindings', (b) => {
-            b.MLTrainingPipelineID = pipeline.ID; b.FeatureName = `${tag} ${label}`; b.TargetEntityID = targetEntityId; b.Mode = 'OnDemand'; b.Status = 'Active';
-            b.ViewAuthorizationID = viewAuthorizationId; b.TargetColumn = column; b.TargetColumnSource = column === null ? null : '$.AdverseProbability';
-        });
-    const binding = await newBinding('renewal', null);
-    const copyBinding = await newBinding('copied', 'MinScore');
-    const base = { Artifacts: artifacts, RecordIDs: recordIds };
-    const run = await score(ctx, base, binding, DAY3, new ServingSidecar());
-    const identities = await PsPredictionServing.MintIdentities(ctx, tag);
-    fixture = {
-        Tag: tag, TargetEntityID: targetEntityId, PipelineID: pipeline.ID, ModelID: model.ID, Artifacts: artifacts, RecordIDs: recordIds,
-        Binding: binding, CopyBinding: copyBinding, Before: before, Run: run, Identities: identities,
-    };
+    return PsPredictionServing.CreateRow<MJMLModelScoringBindingEntity>(ctx, 'MJ: ML Model Scoring Bindings', (b) => {
+        b.MLTrainingPipelineID = pipelineId; b.FeatureName = `${tag} ${label}`; b.TargetEntityID = targetEntityId; b.Mode = 'OnDemand'; b.Status = 'Active';
+        b.ViewAuthorizationID = viewAuthorizationId; b.TargetColumn = column; b.TargetColumnSource = column === null ? null : '$.AdverseProbability';
+    });
 }
 
 /**
@@ -459,12 +525,19 @@ async function teardown(ctx: IntegrationCheckContext): Promise<void> {
     fixture = null;
     setupTag = null;
     if (tag === null) return;
+    // Two independent steps: a failed identity release never skips the fixture cleanup.
+    if (f !== null) {
+        try {
+            for (const warning of await PsPredictionServing.ReleaseIdentities(ctx, f.Identities)) console.warn(`      ⚠ IT182 teardown: ${warning}`);
+        } catch (e) {
+            console.warn(`      ⚠ IT182 teardown (identities): ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
     try {
-        if (f !== null) await PsPredictionServing.ReleaseIdentities(ctx, f.Identities);
         const provider = sqlProvider(ctx);
         await provider.ExecuteSQL(PsPredictionServing.TeardownSql(tag, (entityName) => tableOf(provider, entityName)), undefined, { isMutation: true, description: 'IT182: delete its fixtures' }, undefined);
     } catch (e) {
-        console.warn(`      ⚠ IT182 teardown: ${e instanceof Error ? e.message : String(e)}`);
+        console.warn(`      ⚠ IT182 teardown (fixtures): ${e instanceof Error ? e.message : String(e)}`);
     }
 }
 
@@ -478,6 +551,7 @@ export const PsPredictionServingChecks: NamedCheck[] = [
             const r = await RunView.FromMetadataProvider(ctx.Provider).RunView<Pick<MJMLModelEntity, 'Status' | 'ArtifactSha256'>>({
                 EntityName: 'MJ: ML Models', ExtraFilter: `ID = '${EscapeSQLString(f.ModelID)}'`, Fields: ['Status', 'ArtifactSha256'], ResultType: 'simple', BypassCache: true,
             }, ctx.User);
+            Assert(r.Success, `Z1: reading the fixture model failed: ${r.ErrorMessage || 'unknown error'}`);
             AssertEqual(r.Results[0]?.Status, 'Published', 'Z1: the fixture model is Published');
             Assert(!!r.Results[0]?.ArtifactSha256, 'Z1: the model has a registered artifact hash');
             Assert(f.Before.ColumnCount > 0 && f.Before.MigrationCount > 0, `Z1: the fingerprint was read before the publish (${JSON.stringify(f.Before)})`);
@@ -508,16 +582,16 @@ export const PsPredictionServingChecks: NamedCheck[] = [
             const f = PsPredictionServing.Fixture();
             if (f.Run.Status !== 'completed') throw new Error('Z4: the Setup run did not complete');
             const runId = `'${EscapeSQLString(f.Run.ScoringRunID)}'`;
-            const [values, runs, models] = await RunView.FromMetadataProvider(ctx.Provider).RunViews<LineageValueRow | LineageRunRow | LineageModelRow>([
+            const results = await RunView.FromMetadataProvider(ctx.Provider).RunViews([
                 { EntityName: 'MJ: Feature Values', ExtraFilter: `Source = 'Model' AND MLScoringRunID = ${runId}`, Fields: ['ID', 'RecordID', 'MLModelID', 'MLScoringRunID', 'EffectiveAsOf'], ResultType: 'simple', IgnoreMaxRows: true, BypassCache: true },
                 { EntityName: 'MJ: ML Scoring Runs', ExtraFilter: `ID = ${runId}`, Fields: ['ID', 'ModelID', 'ArtifactSha256', 'AsOfDate'], ResultType: 'simple', BypassCache: true },
                 { EntityName: 'MJ: ML Models', ExtraFilter: `ID = '${EscapeSQLString(f.ModelID)}'`, Fields: ['ID', 'ArtifactSha256'], ResultType: 'simple', BypassCache: true },
             ], ctx.User);
-            const joined = ScoringLineage.Join(
-                values.Results.filter((r): r is LineageValueRow => 'MLScoringRunID' in r),
-                runs.Results.filter((r): r is LineageRunRow => 'AsOfDate' in r),
-                models.Results.filter((r): r is LineageModelRow => !('MLScoringRunID' in r) && !('AsOfDate' in r)),
-            );
+            // RunViews answers in request order: the values, the run, the model.
+            const values = succeeded<LineageValueRow>(results[0], 'Z4: reading the lineage values');
+            const runs = succeeded<LineageRunRow>(results[1], 'Z4: reading the lineage run');
+            const models = succeeded<LineageModelRow>(results[2], 'Z4: reading the lineage model');
+            const joined = ScoringLineage.Join(values.Results, runs.Results, models.Results);
             const scored = new UUIDSet(joined.filter((row) => ScoringLineage.Complete(row)).map((row) => row.Value.RecordID));
             AssertEqual(f.RecordIDs.filter((id) => scored.Has(id)).length, RECORDS, `Z4: every scored record's lineage joins (${joined.map((row) => ScoringLineage.Lacks(row)).join('; ')})`);
         },
@@ -527,7 +601,7 @@ export const PsPredictionServingChecks: NamedCheck[] = [
         Fn: async (ctx) => {
             const f = PsPredictionServing.Fixture();
             const latest = await latestByRecord(ctx, f.Binding.FeatureName);
-            AssertEqual(f.RecordIDs.filter((id) => latest.get(id.toLowerCase()) === DAY3.toISOString()).length, RECORDS, 'Z5: each record\'s latest value is the run\'s');
+            AssertEqual(f.RecordIDs.filter((id) => latest.Get(id) === DAY3.toISOString()).length, RECORDS, 'Z5: each record\'s latest value is the run\'s');
         },
     },
     {
@@ -555,8 +629,9 @@ export const PsPredictionServingChecks: NamedCheck[] = [
             AssertEqual(rerun.Status, 'completed', 'Z7: the re-run completed');
             const after = await modelRows(ctx, f.Binding.ID);
             AssertEqual(after.length, before.length, 'Z7: a same-asOf re-run adds no row (the writer replaces each row on its Model-row key in place)');
-            const oldValue = new Map(before.map((r) => [r.RecordID.toLowerCase(), r.ValueNumeric]));
-            Assert(after.every((r) => r.ValueNumeric !== oldValue.get(r.RecordID.toLowerCase())), 'Z7: every value was updated');
+            const oldValue = new UUIDMap<number | null>();
+            for (const r of before) oldValue.Set(r.RecordID, r.ValueNumeric);
+            Assert(after.every((r) => r.ValueNumeric !== oldValue.Get(r.RecordID)), 'Z7: every value was updated');
             const failing = new ServingSidecar();
             failing.FailCall = 2;
             const failed = await score(ctx, f, f.Binding, DAY5, failing, 2);
@@ -572,7 +647,7 @@ export const PsPredictionServingChecks: NamedCheck[] = [
             const copied = await score(ctx, f, f.CopyBinding, DAY3, new ServingSidecar());
             AssertEqual(copied.Status, 'completed', 'Z8: the copying binding scored');
             const columnBefore = await minScores(ctx, f.RecordIDs);
-            Assert([...columnBefore.values()].every((v) => v !== null), 'Z8: the copying binding wrote its column');
+            Assert([...columnBefore.Values()].every((v) => v !== null), 'Z8: the copying binding wrote its column');
             const latestBefore = await latestByRecord(ctx, f.Binding.FeatureName);
             const rowsBefore = (await modelRows(ctx, f.Binding.ID)).length;
             const older = new ServingSidecar();
@@ -580,8 +655,8 @@ export const PsPredictionServingChecks: NamedCheck[] = [
             AssertEqual((await score(ctx, f, f.Binding, DAY1, older)).Status, 'completed', 'Z8: the backfill completed');
             AssertEqual((await score(ctx, f, f.CopyBinding, DAY1, older)).Status, 'completed', 'Z8: the copying binding\'s backfill completed');
             AssertEqual((await modelRows(ctx, f.Binding.ID)).length, rowsBefore + RECORDS, 'Z8: the backfill adds one history row per record');
-            AssertEqual(JSON.stringify([...(await latestByRecord(ctx, f.Binding.FeatureName)).entries()].sort()), JSON.stringify([...latestBefore.entries()].sort()), 'Z8: the latest values are unchanged');
-            AssertEqual(JSON.stringify([...(await minScores(ctx, f.RecordIDs)).entries()].sort()), JSON.stringify([...columnBefore.entries()].sort()), 'Z8: the older backfill does not overwrite the column copy');
+            AssertEqual(JSON.stringify([...(await latestByRecord(ctx, f.Binding.FeatureName))].sort()), JSON.stringify([...latestBefore].sort()), 'Z8: the latest values are unchanged');
+            AssertEqual(JSON.stringify([...(await minScores(ctx, f.RecordIDs))].sort()), JSON.stringify([...columnBefore].sort()), 'Z8: the older backfill does not overwrite the column copy');
         },
     },
 ];

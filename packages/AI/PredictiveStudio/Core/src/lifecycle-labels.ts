@@ -9,7 +9,7 @@ import type { LeakageFlag } from './trainer-contract';
 import type { PersistedLifecycleState, PersistedModelStatus, TransitionRefusal } from './registry-contracts';
 import type { ScoringRefusal } from './scoring-contracts';
 
-/** Every persisted model status, in lifecycle order. */
+/** Every persisted model status, in lifecycle order: the one list of them (the engine reads it through {@link LifecycleLabels.IsPersistedStatus}). */
 export const PERSISTED_MODEL_STATUSES = ['Draft', 'Validated', 'Published', 'Archived', 'KeepBaseline', 'Unevaluated'] as const satisfies readonly PersistedModelStatus[];
 /** Compile-time completeness: a status added to `PersistedModelStatus` without listing it here breaks the build. */
 const persistedStatusesComplete: ListsEveryMember<PersistedModelStatus, (typeof PERSISTED_MODEL_STATUSES)[number]> = true;
@@ -91,7 +91,7 @@ export class LifecycleLabels {
 
   /** True when `value` is a persisted model status (an operation output carries the status as a plain string). */
   public static IsPersistedStatus(value: string): value is PersistedModelStatus {
-    return (PERSISTED_MODEL_STATUSES as readonly string[]).includes(value);
+    return PERSISTED_MODEL_STATUSES.some((status) => status === value);
   }
 
   /**

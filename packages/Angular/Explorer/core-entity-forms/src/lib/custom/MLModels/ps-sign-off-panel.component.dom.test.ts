@@ -11,6 +11,7 @@ import {
   type MJMLModelEntity,
   type MJMLModelPublishRecordEntity,
   type PredictiveStudioEvidenceSnapshot,
+  type PredictiveStudioGetModelEvidenceInput,
   type PredictiveStudioGetModelEvidenceOutput,
   type PredictiveStudioLeakageFlagKind,
   type PredictiveStudioPromoteModelInput,
@@ -131,7 +132,8 @@ async function RenderSignOff(s: SignOffScenario) {
   }
   const f = renderComponentFixture(PSSignOffPanelComponent, { inputs: { Provider: provider } });
   f.componentInstance.Published.subscribe((st) => published.values.push(st));
-  f.componentInstance.Model = s.model as unknown as MJMLModelEntity;
+  // inputs are set untyped (setInput), so the model double is passed as is
+  f.componentRef.setInput('Model', s.model);
   await f.componentInstance.Reload();
   f.detectChanges();
   return f;
@@ -220,5 +222,32 @@ describe('PSSignOffPanelComponent (DOM)', () => {
     Click(f, 'ps-sign-off-publish');
     await ConfirmDialog(f);
     expect([Text(f, 'ps-sign-off-refusal'), published.Emitted()]).toEqual([expect.stringContaining('the server is unreachable'), []]);
+  });
+});
+
+describe('a model change while the evidence loads (M7-3)', () => {
+  it('shows the current model\'s evidence when an earlier model\'s read finishes last', async () => {
+    const f = await RenderSignOff({ model: validated });
+    const pending = new Map<string, (flags: PredictiveStudioLeakageFlagKind[]) => void>();
+    vi.spyOn(PredictiveStudioGetModelEvidenceOperation.prototype, 'Execute').mockImplementation((input: PredictiveStudioGetModelEvidenceInput) =>
+      new Promise<RemoteOpResult<PredictiveStudioGetModelEvidenceOutput>>((resolve) => {
+        pending.set(input.modelId, (flags) => resolve({ Success: true, ResultCode: 'SUCCESS', Output: { evidence: Evidence(flags), evidenceSha256: 'e'.repeat(64) } }));
+      }));
+    const answer = (modelId: string, flags: PredictiveStudioLeakageFlagKind[]): void => {
+      const resolve = pending.get(modelId);
+      if (!resolve) throw new Error(`no evidence read of ${modelId} is pending`);
+      resolve(flags);
+    };
+    f.componentRef.setInput('Model', flagged);
+    f.detectChanges();
+    f.componentRef.setInput('Model', held);
+    f.detectChanges();
+    await Settle(f);
+    answer(held.ID, []);
+    await Settle(f);
+    answer(flagged.ID, ['single-feature-auc']);
+    await Settle(f);
+    expect([query(f, '[data-testid="ps-override-single-feature-auc"]'), query(f, '[data-testid="ps-sign-off-approve"]')]).toEqual([null, null]);
+    expect(Text(f, 'ps-evidence-primary')).toContain('0.412');
   });
 });

@@ -16,6 +16,7 @@ import type {
 
 import type { EvaluateOutcome, PublishOutcome, PublishRequest } from '../../registry/gate-context';
 import { GateTestProvider, GateTestStore } from '../../__tests__/fakes/gate-test-store';
+import type { RecordResourceConfiguration } from '../../registry/record-notification-links';
 import type { RegistryContext } from '../../registry/registry-context';
 import type { ChallengerSelection } from '../../scoring/scoring-seams';
 import type {
@@ -63,7 +64,7 @@ export const Month = (iso: string): MonitoringPeriod => {
 
 const UNIT_SPEC: PredictionUnitSpec = {
   id: 'U1', lineageRootId: 'U1', version: 1, name: 'members',
-  rows: { kind: 'grain-x-periods', grainEntity: 'Members', periodEntity: 'Member Periods', grainForeignKey: 'MemberID', periodDate: 'PeriodStart', periodIndex: 'PeriodIndex', filter: [] },
+  rows: { kind: 'grain-x-periods', grainEntity: 'Members', childEntity: 'Member Periods', foreignKey: 'MemberID', periodDate: 'PeriodStart', filter: [] },
   label: { rule: { kind: 'column', column: 'Renewed' }, windowDays: 30, gapDays: 0, outcome: BINARY, labelVersion: 1 },
   censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'now' } },
   history: { onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' }, groupKey: null, temporal: null,
@@ -268,9 +269,12 @@ export class WorldParity implements IMonitoringParity {
 
 /** Notifier double. */
 export class WorldNotifier implements IMonitoringNotifier {
-  public readonly Sent: { readonly UserID: string; readonly Title: string }[] = [];
-  public async Notify(userId: string, title: string): Promise<void> {
-    this.Sent.push({ UserID: userId, Title: title });
+  public readonly Sent: { readonly UserID: string; readonly Title: string; readonly Message: string; readonly Subject: RecordResourceConfiguration | null }[] = [];
+  /** The error every `Notify` throws (a notification that does not save); null sends. */
+  public Failure: Error | null = null;
+  public async Notify(userId: string, title: string, message: string, subject: RecordResourceConfiguration | null): Promise<void> {
+    if (this.Failure !== null) throw this.Failure;
+    this.Sent.push({ UserID: userId, Title: title, Message: message, Subject: subject });
   }
 }
 

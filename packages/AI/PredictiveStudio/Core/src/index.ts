@@ -61,3 +61,5 @@ export * from './lifecycle-labels';
 export * from './monitoring-rules';
 export * from './monitoring-result-schemas';
 export * from './prediction-panel-queries';
+export * from './stored-prediction';
+export * from './registry-check-details';

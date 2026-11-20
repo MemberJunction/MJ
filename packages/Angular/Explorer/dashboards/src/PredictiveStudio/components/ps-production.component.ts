@@ -607,6 +607,9 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
   /**
    * The last auto-train outcome of each model's pipeline: the newest `MJ: ML Model Publish Records` row, over the
    * pipeline's models, whose `Initiator` is auto-train — "published", or "withheld: <reason>" (one batched `RunView`).
+   * `Initiator LIKE '%auto-train%'` only bounds the read (the token appears in no other initiator); each row is then
+   * matched on its typed `InitiatorObject` (`kind: 'system'`, `component: 'auto-train'`). The read stays a RunView, so
+   * the publish records' entity permissions apply (a stored query would bypass them).
    *
    * @throws Error with the read's message when the publish records cannot be read
    */

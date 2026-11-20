@@ -8,6 +8,13 @@
  * matrix's unit test fails when a mirrored title leaves that file, so a change to the TypeScript rule re-opens this
  * matrix (A-FV-AUTHZ re-reads it at every refresh).
  */
+import type { MJAuthorizationRoleEntity, MJUserEntity } from '@memberjunction/core-entities';
+
+/** A grant's type, as `MJ: Authorization Roles.Type` stores it. */
+export type MatrixGrantType = MJAuthorizationRoleEntity['Type'];
+
+/** A user's type, as `MJ: Users.Type` stores it. */
+export type MatrixUserType = MJUserEntity['Type'];
 
 /** One authorization of a case's tree. */
 export interface MatrixAuthorization {
@@ -26,7 +33,7 @@ export interface MatrixGrant {
   /** The role's key. */
   readonly RoleKey: string;
   /** Allow or Deny. */
-  readonly Type: 'Allow' | 'Deny';
+  readonly Type: MatrixGrantType;
 }
 
 /** One case: a tree, roles with grants, a user, the authorization asked about and MJ's answer. */
@@ -36,7 +43,7 @@ export interface AuthorizationMatrixCase {
   /** The `it(...)` title in `actionAuthorization.test.ts` the case mirrors. */
   readonly Mirrors: string;
   /** The user's `Type`. */
-  readonly UserType: 'User' | 'Owner';
+  readonly UserType: MatrixUserType;
   /** The authorization tree, parents before children. */
   readonly Authorizations: readonly MatrixAuthorization[];
   /** The roles the user holds (keys); every role a grant names is created, held or not. */
@@ -56,11 +63,11 @@ export interface AuthorizationMatrixWriter {
   /** Creates an `MJ: Roles` row. */
   CreateRole(name: string): Promise<string>;
   /** Creates an active `MJ: Users` row. */
-  CreateUser(name: string, email: string, type: 'User' | 'Owner'): Promise<string>;
+  CreateUser(name: string, email: string, type: MatrixUserType): Promise<string>;
   /** Creates an `MJ: User Roles` row. */
   AddUserRole(userId: string, roleId: string): Promise<string>;
   /** Creates an `MJ: Authorization Roles` row. */
-  Grant(authorizationId: string, roleId: string, type: 'Allow' | 'Deny'): Promise<string>;
+  Grant(authorizationId: string, roleId: string, type: MatrixGrantType): Promise<string>;
 }
 
 /** The IDs a seeded case is read by. */
@@ -76,7 +83,7 @@ const root = (key: string, isActive = true): MatrixAuthorization => ({ Key: key,
 /** A child authorization. */
 const child = (key: string, parent: string, isActive = true): MatrixAuthorization => ({ Key: key, ParentKey: parent, IsActive: isActive });
 /** A grant. */
-const grant = (authorizationKey: string, roleKey: string, type: 'Allow' | 'Deny'): MatrixGrant => ({ AuthorizationKey: authorizationKey, RoleKey: roleKey, Type: type });
+const grant = (authorizationKey: string, roleKey: string, type: MatrixGrantType): MatrixGrant => ({ AuthorizationKey: authorizationKey, RoleKey: roleKey, Type: type });
 
 /** The grant matrix and its seeding. */
 export class AuthorizationMatrix {

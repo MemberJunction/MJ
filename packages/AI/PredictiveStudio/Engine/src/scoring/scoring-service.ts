@@ -234,14 +234,15 @@ export class ScoringService {
   /**
    * The pipeline's Published model (newest version), else its model kept serving while Unevaluated — its artifact
    * checked first when the registry job has not reached it yet ({@link MigrateServingArtifact}) — else
-   * `no-published-model`.
+   * `no-published-model` (also when the serving model's row is gone after a failed check).
    */
   protected async ResolvePublishedModel(binding: MJMLModelScoringBindingEntity): Promise<ResolvedModel | ScoringRefusal> {
     const pipeline = EscapeSQLString(binding.MLTrainingPipelineID);
     const published = await this.readModels(`PipelineID='${pipeline}' AND Status='Published'`);
     if (published) return { Model: published, Admission: 'published' };
     const serving = await this.readModels(`PipelineID='${pipeline}' AND Status='Unevaluated' AND ServingWhileUnevaluated=1`);
-    if (serving) return { Model: await this.MigrateServingArtifact(serving), Admission: 'serving-while-unevaluated' };
+    const checked = serving ? await this.MigrateServingArtifact(serving) : null;
+    if (checked) return { Model: checked, Admission: 'serving-while-unevaluated' };
     return { kind: 'no-published-model', pipelineId: binding.MLTrainingPipelineID };
   }
 
@@ -251,15 +252,16 @@ export class ScoringService {
    * service's artifact loader ({@link PreChangeArtifacts.Migrate}), so serving never waits for the job. A check that
    * cannot finish (storage unreachable, or a caller who may not write the model or the file) is logged and the stored row
    * is read again and returned: the artifact check that follows refuses it `artifact-unverified`, and the job retries it.
+   * Null when that row is gone: nothing is served from the object the failed check may have changed.
    */
-  protected async MigrateServingArtifact(model: MJMLModelEntity): Promise<MJMLModelEntity> {
+  protected async MigrateServingArtifact(model: MJMLModelEntity): Promise<MJMLModelEntity | null> {
     if (model.ArtifactStatus !== 'unverified') return model;
     try {
       await PreChangeArtifacts.Migrate(model, this.ctx, this.seams.ArtifactLoader);
     } catch (error) {
       LogError(`ScoringService: checking the pre-change artifact of ML Model ${model.ID} before serving it failed; the registry job retries it: ${error instanceof Error ? error.message : String(error)}`);
       // The check may have changed the object before its save failed: serve the stored row, never an unsaved verification.
-      return (await this.loadModel(model.ID)) || model;
+      return this.loadModel(model.ID);
     }
     return model;
   }

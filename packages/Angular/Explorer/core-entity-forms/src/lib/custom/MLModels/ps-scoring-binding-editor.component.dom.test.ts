@@ -1,18 +1,18 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
-import { AuthorizationInfo, type EntityFieldInfo, type EntityInfo, type IMetadataProvider, type RemoteOpResult, type RunViewParams } from '@memberjunction/core';
+import { AuthorizationInfo, BaseEntityResult, EntityInfo, RunView, type IMetadataProvider, type RemoteOpResult, type RunViewParams, type UserInfo } from '@memberjunction/core';
 import { ValidationErrorInfo } from '@memberjunction/global';
 import {
   PredictiveStudioWithdrawScoringBindingOperation,
   type MJMLModelEntity,
-  type MJMLModelScoringBindingEntity,
+  MJMLModelScoringBindingEntity,
   type PredictiveStudioWithdrawScoringBindingInput,
   type PredictiveStudioWithdrawScoringBindingOutput,
 } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CreateFakeProvider, Query, QueryAll, RenderComponentFixture } from '@memberjunction/ng-test-utils';
-import { DEFAULT_VIEW_AUTHORIZATION_NAME } from '@memberjunction/predictive-studio-core';
+import { PredictionViewAuthorization } from '@memberjunction/predictive-studio-core';
 import { PSScoringBindingEditorComponent } from './ps-scoring-binding-editor.component';
 
 try {
@@ -30,25 +30,26 @@ try {
 /** The model members the editor reads. */
 type ModelDouble = Pick<MJMLModelEntity, 'ID' | 'PipelineID' | 'Pipeline' | 'ProblemType' | 'Version'>;
 
-/** The binding fields the editor writes, plus the members of the entity layer it calls. */
-class BindingDouble {
-  public ID = '';
-  public MLTrainingPipelineID = '';
-  public FeatureName = '';
-  public TargetEntityID: string | null = null;
-  public TargetColumn: string | null = null;
-  public TargetColumnSource: string | null = null;
-  public ViewAuthorizationID: string | null = null;
-  public RetentionDays: number | null = null;
-  public Status: MJMLModelScoringBindingEntity['Status'] = 'Active';
-  public LatestResult: { Success: boolean; Errors: ValidationErrorInfo[]; CompleteMessage: string } | null = null;
+/** The binding fields the double's in-memory entity holds. */
+const BINDING_FIELDS = ['ID', 'MLTrainingPipelineID', 'FeatureName', 'TargetEntityID', 'TargetEntity', 'TargetColumn', 'TargetColumnSource', 'ViewAuthorizationID', 'ViewAuthorization', 'RetentionDays', 'Status'];
 
+/**
+ * A scoring binding double: the generated entity over an in-memory `EntityInfo`, with the entity-layer members the
+ * editor calls (NewRecord, Save, Revert) answered by the test's world (no provider is reached).
+ */
+class BindingDouble extends MJMLModelScoringBindingEntity {
   /** The stored values {@link Revert} restores; set by {@link MarkStored} and by a successful save. */
   private stored: ReturnType<BindingDouble['fields']> | null = null;
 
-  constructor(private readonly world: World) {}
+  constructor(private readonly world: World) {
+    super(new EntityInfo({
+      ID: 'E-BINDINGS', Name: 'MJ: ML Model Scoring Bindings',
+      EntityFields: BINDING_FIELDS.map((f, i) => ({ Name: f, Sequence: i + 1, Type: f === 'RetentionDays' ? 'int' : 'nvarchar', IsPrimaryKey: f === 'ID', AllowUpdateAPI: f !== 'ID' })),
+    }));
+    this.Status = 'Active';
+  }
 
-  public NewRecord(): boolean {
+  public override NewRecord(): boolean {
     return true;
   }
 
@@ -59,15 +60,18 @@ class BindingDouble {
   }
 
   /** Puts back the stored values, as `BaseEntity.Revert` does. */
-  public Revert(): boolean {
+  public override Revert(): boolean {
     if (this.stored) Object.assign(this, this.stored);
     return true;
   }
 
-  public async Save(): Promise<boolean> {
+  public override async Save(): Promise<boolean> {
+    if (this.world.HoldSave) await this.world.HoldSave;
     const refusal = this.world.SaveRefusal;
     if (refusal) {
-      this.LatestResult = { Success: false, Errors: [new ValidationErrorInfo(refusal.Source, refusal.Message, null)], CompleteMessage: refusal.Message };
+      const result = new BaseEntityResult(false, refusal.Message, 'update');
+      result.Errors = [new ValidationErrorInfo(refusal.Source, refusal.Message, null)];
+      this.RegisterResultHistoryEntry(result);
       return false;
     }
     this.ID = this.ID || `B-${this.world.Saved.length + 1}`;
@@ -85,20 +89,23 @@ class BindingDouble {
 interface World {
   Saved: Array<Partial<BindingDouble>>;
   SaveRefusal: { Source: string; Message: string } | null;
+  /** When set, every save waits for it (a slow save). */
+  HoldSave?: Promise<void>;
 }
 
-const viewModelPredictions = new AuthorizationInfo({ ID: 'A-VIEW', Name: DEFAULT_VIEW_AUTHORIZATION_NAME, IsActive: true });
+const viewModelPredictions = new AuthorizationInfo({ ID: 'A-VIEW', Name: PredictionViewAuthorization.DefaultName, IsActive: true });
 const otherAuthorization = new AuthorizationInfo({ ID: 'A-OTHER', Name: 'Run Reports', IsActive: true });
 
-const persons: Pick<EntityInfo, 'ID' | 'Name'> & { Fields: Array<Pick<EntityFieldInfo, 'Name' | 'ReadOnly' | 'IsPrimaryKey' | 'AllowUpdateAPI'>> } = {
+/** A real entity: its fields' ReadOnly derives from AllowUpdateAPI and the key, as in production. */
+const persons = new EntityInfo({
   ID: 'E-PERSONS',
   Name: 'Persons',
-  Fields: [
-    { Name: 'ID', ReadOnly: false, IsPrimaryKey: true, AllowUpdateAPI: false },
-    { Name: 'RenewalRisk', ReadOnly: false, IsPrimaryKey: false, AllowUpdateAPI: true },
-    { Name: 'CreatedAt', ReadOnly: true, IsPrimaryKey: false, AllowUpdateAPI: false },
+  EntityFields: [
+    { Name: 'ID', IsPrimaryKey: true, AllowUpdateAPI: false },
+    { Name: 'RenewalRisk', IsPrimaryKey: false, AllowUpdateAPI: true },
+    { Name: 'CreatedAt', IsPrimaryKey: false, AllowUpdateAPI: false },
   ],
-};
+});
 
 const pipeline = { ID: 'P1', Name: 'Renewal', TargetEntityID: persons.ID };
 const model: ModelDouble = { ID: 'M1', PipelineID: pipeline.ID, Pipeline: pipeline.Name, ProblemType: 'classification', Version: 3 };
@@ -106,25 +113,50 @@ const model: ModelDouble = { ID: 'M1', PipelineID: pipeline.ID, Pipeline: pipeli
 interface RenderOptions {
   saveRefusal?: { Source: string; Message: string };
   existing?: BindingDouble[];
+  /** Holds each batched read until the returned promise settles (a slow read). */
+  holdRead?: (params: RunViewParams[]) => Promise<void>;
+  /** The bindings each pipeline's read returns, by pipeline ID; `existing` when absent. */
+  bindingsByPipeline?: Record<string, BindingDouble[]>;
+  /** The model the editor opens on; the Renewal model when absent. */
+  model?: ModelDouble;
 }
 
 async function RenderEditor(o: RenderOptions = {}): Promise<{ f: ComponentFixture<PSScoringBindingEditorComponent>; world: World }> {
   const world: World = { Saved: [], SaveRefusal: o.saveRefusal || null };
   const fake = CreateFakeProvider<BindingDouble | typeof pipeline>({
-    runViewResults: (p: RunViewParams) => (p.EntityName === 'MJ: ML Training Pipelines' ? [pipeline] : p.EntityName === 'MJ: ML Model Scoring Bindings' ? o.existing || [] : []),
-    // the entity double carries only the members the editor reads (its fields' updatability)
-    entities: [persons as unknown as Partial<EntityInfo>],
+    runViewResults: (p: RunViewParams) => (p.EntityName === 'MJ: ML Training Pipelines' ? [pipeline] : p.EntityName === 'MJ: ML Model Scoring Bindings' ? bindingsFor(p, o) : []),
+    entities: [persons],
   });
+  // the provider's own RunViews, typed through the RunView seam the editor reads with
+  const runViews = RunView.FromMetadataProvider(fake).ProviderToUse;
+  const fakeRunViews = runViews.RunViews.bind(runViews);
   const provider: IMetadataProvider = Object.assign(fake, {
+    RunViews: async (params: RunViewParams[], user?: UserInfo) => {
+      if (o.holdRead) await o.holdRead(params);
+      return fakeRunViews(params, user);
+    },
     Authorizations: [otherAuthorization, viewModelPredictions],
-    // the editor creates its entity through the provider; the double carries only the members the editor calls
-    GetEntityObject: async () => new BindingDouble(world) as unknown as MJMLModelScoringBindingEntity,
+    // the editor creates its entity through the provider: a typed mock of the generic GetEntityObject
+    GetEntityObject: vi.fn<IMetadataProvider['GetEntityObject']>().mockImplementation(async () => new BindingDouble(world)),
   });
   vi.spyOn(MJNotificationService.prototype, 'CreateSimpleNotification').mockImplementation(() => undefined);
-  // The component's input is the generated entity class; the double carries only the members it reads.
-  const f = RenderComponentFixture(PSScoringBindingEditorComponent, { inputs: { Model: model as unknown as MJMLModelEntity, Provider: provider } });
+  // Inputs are set untyped (setInput), so the double carrying only the members the editor reads is passed as is.
+  const f = RenderComponentFixture(PSScoringBindingEditorComponent, { inputs: { Model: o.model || model, Provider: provider } });
   await settle(f);
   return { f, world };
+}
+
+/** True when the read's filter names `id` (quoted). */
+function filterNames(p: RunViewParams, id: string): boolean {
+  return typeof p.ExtraFilter === 'string' && p.ExtraFilter.includes(`'${id}'`);
+}
+
+/** The bindings a binding read returns: its pipeline's, from `bindingsByPipeline`, else `existing`. */
+function bindingsFor(p: RunViewParams, o: RenderOptions): BindingDouble[] {
+  for (const [pipelineId, rows] of Object.entries(o.bindingsByPipeline || {})) {
+    if (filterNames(p, pipelineId)) return rows;
+  }
+  return o.existing || [];
 }
 
 const settle = async (f: ComponentFixture<PSScoringBindingEditorComponent>): Promise<void> => {
@@ -244,5 +276,42 @@ describe('PSScoringBindingEditorComponent (DOM)', () => {
     await Click(f, 'ps-binding-edit');
     expect(el<HTMLInputElement>(f, 'ps-binding-retention').value).toBe('30');
     expect(f.componentInstance.Draft?.ViewAuthorizationID).toBe(viewModelPredictions.ID);
+  });
+
+  it('a slow read of the previous model never replaces the current model\'s bindings', async () => {
+    const world: World = { Saved: [], SaveRefusal: null };
+    const slowPipeline = 'P-SLOW';
+    let release: () => void = () => undefined;
+    const slowRead = new Promise<void>((resolve) => { release = resolve; });
+    const { f } = await RenderEditor({
+      bindingsByPipeline: {
+        [slowPipeline]: [Object.assign(new BindingDouble(world), { ID: 'B-OLD', FeatureName: 'Old model feature', MLTrainingPipelineID: slowPipeline })],
+        [pipeline.ID]: [Object.assign(new BindingDouble(world), { ID: 'B-NEW', FeatureName: 'Current model feature', MLTrainingPipelineID: pipeline.ID })],
+      },
+      holdRead: (params) => (params.some((p) => filterNames(p, slowPipeline)) ? slowRead : Promise.resolve()),
+      model: { ...model, ID: 'M-OLD', PipelineID: slowPipeline },
+    });
+    f.componentRef.setInput('Model', model);
+    await settle(f);
+    release();
+    await settle(f);
+    expect(f.componentInstance.Bindings.map((b) => b.FeatureName)).toEqual(['Current model feature']);
+  });
+
+  it('a save that settles after the model changed leaves the new model\'s editor untouched', async () => {
+    const { f, world } = await RenderEditor({ saveRefusal: { Source: 'FeatureName', Message: 'already used' } });
+    let release: () => void = () => undefined;
+    world.HoldSave = new Promise<void>((resolve) => { release = resolve; });
+    await Click(f, 'ps-binding-new');
+    Type(f, 'ps-binding-feature-name', 'Renewal risk');
+    el<HTMLElement>(f, 'ps-binding-save').click();
+    await settle(f);
+    f.componentRef.setInput('Model', { ...model, ID: 'M-OTHER' });
+    await settle(f);
+    release();
+    await settle(f);
+    // the refusal belongs to the previous model's draft: the new model's editor shows no form and no error
+    expect([f.componentInstance.Draft, f.componentInstance.GeneralError, f.componentInstance.ErrorsFor('FeatureName')]).toEqual([null, null, []]);
+    expect(Query(f, '[data-testid="ps-binding-form"]')).toBeNull();
   });
 });

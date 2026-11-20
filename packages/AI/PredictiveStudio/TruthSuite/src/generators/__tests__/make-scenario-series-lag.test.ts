@@ -5,13 +5,16 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { GenLib } from '../gen_lib';
+import type { ScenarioSpec } from '../types';
+
 /** D4-181 — T4's previous-month column: `seriesLag` writes `LagTarget` after the series is drawn, so no RNG stream moves. */
 const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(here, '../../..');
-const T4 = JSON.parse(readFileSync(resolve(ROOT, 'fixtures/scenarios/specs/T4.json'), 'utf8')) as Record<string, unknown>;
+const T4 = GenLib.ReadJson<ScenarioSpec>(resolve(ROOT, 'fixtures/scenarios/specs/T4.json'));
 
 /** The generated rows.csv of `spec` at seed 2209 (T4's base seed): its header and its rows as cells. */
-function generate(spec: Record<string, unknown>): { Header: string[]; Rows: string[][]; Truth: string } {
+function generate(spec: ScenarioSpec): { Header: string[]; Rows: string[][]; Truth: string } {
   const dir = mkdtempSync(join(tmpdir(), 'ps-t4-lag-'));
   try {
     writeFileSync(join(dir, 'spec.json'), JSON.stringify(spec));

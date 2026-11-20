@@ -10,6 +10,7 @@
     "Configuration": {
       "tier": "deterministic",
       "transport": "server",
+      "requiresSharedServerDatabase": true,
       "checks": [
         {
           "type": "ps-prediction-serving"

@@ -25,7 +25,7 @@ import type {
   MJUserRoleEntity, MJvwLatestFeatureValuesEntity,
 } from '@memberjunction/core-entities';
 import { FeatureValueCacheService, type ModelValueRow } from '@memberjunction/feature-pipelines';
-import { EscapeSQLString, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
   BindingNotAuthorizedError, InMemoryArtifactLoader, PredictionRetention, ScoringBindings, ScoringService,
   type IScoringModelRuntime, type IScoringPreparedModel, type ISidecarPredictor, type LoadedModel, type ScoringContext,
@@ -122,7 +122,7 @@ async function scratchUser(label: string, roleIds: readonly string[]): Promise<U
 }
 
 /** `entityName`'s rows matching `filter`, read as `user` (row-filtered). */
-async function ReadAs(user: UserInfo, entityName: string, filter: string): Promise<GatedRow[]> {
+async function readAs(user: UserInfo, entityName: string, filter: string): Promise<GatedRow[]> {
   const r = await RunView.FromMetadataProvider(server.Provider).RunView<GatedRow>({
     EntityName: entityName, ExtraFilter: filter, ResultType: 'simple', IgnoreMaxRows: true, BypassCache: true,
     Fields: ['ID', 'RecordID', 'FeatureName', 'Source', 'MLModelScoringBindingID', 'MLModelID', 'MLScoringRunID', 'EffectiveAsOf'],
@@ -137,21 +137,21 @@ function onRecord(recordName: string): string {
 }
 
 /** The binding's Model rows as SQL Server stores them (unfiltered). */
-async function ModelRowCount(bindingId: string): Promise<number> {
+async function modelRowCount(bindingId: string): Promise<number> {
   const r = await pool.request().input('BindingID', sql.UniqueIdentifier, bindingId)
     .query<{ N: number }>(`SELECT COUNT(*) AS N FROM ${tableOf(server.Provider, 'MJ: Feature Values')} WHERE MLModelScoringBindingID = @BindingID AND Source = 'Model'`);
   return r.recordset[0].N;
 }
 
 /** The target records' `MinScore` as stored, by record name. */
-async function TargetColumnValues(): Promise<Record<string, number | null>> {
+async function targetColumnValues(): Promise<Record<string, number | null>> {
   const r = await pool.request().input('Prefix', sql.NVarChar(255), `${TAG}-%`)
     .query<{ Name: string; MinScore: number | null }>(`SELECT Name, CAST(MinScore AS FLOAT) AS MinScore FROM ${tableOf(server.Provider, TARGET)} WHERE Name LIKE @Prefix ORDER BY Name`);
   return Object.fromEntries(r.recordset.map((row) => [row.Name.slice(TAG.length + 1), row.MinScore]));
 }
 
 /** The role names whose read grant of `entities` carries no row-level security filter. */
-async function GrantsWithoutFilter(entities: readonly string[]): Promise<string[]> {
+async function grantsWithoutFilter(entities: readonly string[]): Promise<string[]> {
   const ids = entities.map((e) => {
     const id = server.Provider.EntityByName(e)?.ID;
     if (!id) throw new Error(`${e} is not in metadata`);
@@ -173,7 +173,8 @@ class StubSidecar implements ISidecarPredictor {
 /** The model runtime double: a unitless model on the target entity assembling each record's planted probability. */
 class StubRuntime implements IScoringModelRuntime {
   public async Prepare(model: MJMLModelEntity): Promise<IScoringPreparedModel> {
-    const byId = new Map(Object.entries(base.Records).map(([name, id]) => [id.toLowerCase(), ADVERSE[name]]));
+    const byId = new UUIDMap<number>();
+    for (const [name, id] of Object.entries(base.Records)) byId.Set(id, ADVERSE[name]);
     const loaded: LoadedModel = {
       modelId: model.ID, targetEntityName: TARGET, artifactB64: Buffer.from(artifact).toString('base64'), fittedPreprocessing: {}, featureSchema: [...FEATURES],
       problemType: 'classification', targetVariable: 'Lapsed', sourceBindings: [], featureSteps: { Steps: [] }, asOf: { Mode: 'none' },
@@ -182,7 +183,7 @@ class StubRuntime implements IScoringModelRuntime {
     return {
       Loaded: loaded,
       Assemble: async (ids) => ({
-        Status: 'assembled', Matrix: { columns: ['Tenure'], rows: ids.map((id) => [byId.get(id.toLowerCase()) || 0]) }, Columns: [...FEATURES], HashColumns: null, RowIDs: [...ids],
+        Status: 'assembled', Matrix: { columns: ['Tenure'], rows: ids.map((id) => [byId.Get(id) || 0]) }, Columns: [...FEATURES], HashColumns: null, RowIDs: [...ids],
       }),
     };
   }
@@ -199,12 +200,12 @@ function scoringCtx(user: UserInfo, day: Date): ScoringContext {
 }
 
 /** Scores every fixture record of `binding` as `user` on `asOf`. */
-function ScoreAs(user: UserInfo, binding: MJMLModelScoringBindingEntity, asOf: Date): Promise<ScoringResult> {
+function scoreAs(user: UserInfo, binding: MJMLModelScoringBindingEntity, asOf: Date): Promise<ScoringResult> {
   return new ScoringService(scoringCtx(user, asOf)).Score(binding, { kind: 'record-ids', entity: TARGET, ids: Object.values(base.Records) }, asOf, false);
 }
 
 /** Withdraws `bindingId` as `user`: Ok false with the refusal's name when refused. */
-async function WithdrawAs(user: UserInfo, bindingId: string): Promise<{ readonly Ok: boolean; readonly Refusal: string | null }> {
+async function withdrawAs(user: UserInfo, bindingId: string): Promise<{ readonly Ok: boolean; readonly Refusal: string | null }> {
   try {
     await ScoringBindings.Withdraw(bindingId, { ContextUser: user, Provider: server.Provider });
     return { Ok: true, Refusal: null };
@@ -222,7 +223,7 @@ function newBinding(label: string, viewAuthorizationId: string, targetColumn: st
 }
 
 /** The panel's batch (the builder `ModelPredictionPanel` sends) for `recordName`, read as `user`. */
-async function PanelAs(user: UserInfo, recordName: string, featureNames: readonly string[]): Promise<{ readonly Bindings: string[]; readonly Latest: GatedRow[]; readonly History: GatedRow[] }> {
+async function panelAs(user: UserInfo, recordName: string, featureNames: readonly string[]): Promise<{ readonly Bindings: string[]; readonly Latest: GatedRow[]; readonly History: GatedRow[] }> {
   const params: RunViewParams[] = PredictionPanelQueries.For(f.TargetEntityID, f.Records[recordName], featureNames);
   const results = await RunView.FromMetadataProvider(server.Provider).RunViews<Record<string, string | number | boolean | Date | null>>(params, user);
   results.forEach((r, i) => { if (!r.Success) throw new Error(`panel read ${params[i].EntityName} as ${user.Email} failed: ${r.ErrorMessage}`); });
@@ -247,6 +248,30 @@ function ofBinding(rows: readonly GatedRow[], bindingId: string): GatedRow[] {
 async function createFixtures(): Promise<ViewGateFixtures> {
   const targetEntityId = server.Provider.EntityByName(TARGET)?.ID;
   if (!targetEntityId) throw new Error(`${TARGET} is not in metadata`);
+  const published = await createPublishedModel(targetEntityId);
+  const records: Record<string, string> = {};
+  for (const name of Object.keys(ADVERSE)) {
+    records[name] = (await createRow<MJKnowledgeHubSavedSearchEntity>(TARGET, (t) => { t.Name = `${TAG}-${name}`; t.UserID = server.User.ID; t.Query = TAG; })).ID;
+  }
+  const custom = await createRow<MJAuthorizationEntity>('MJ: Authorizations', (a) => {
+    a.Name = `${TAG} custom predictions`; a.IsActive = true; a.UseAuditLog = false; a.Description = 'Predictive Studio truth suite view-gate scratch (safe to delete)';
+  });
+  const uiRole = await firstId('MJ: Roles', `Name = 'UI'`);
+  const developerRole = await firstId('MJ: Roles', `Name = 'Developer'`);
+  // The provider caches authorizations: reload so the scratch one resolves.
+  await server.Provider.Refresh();
+  base = { TargetEntityID: targetEntityId, ...published, Records: records };
+  const binding = await newBinding('renewal', ScoringBindings.ResolveViewAuthorizationID(null, server.Provider), null);
+  const customBinding = await newBinding('custom', custom.ID, 'MinScore');
+  const uiOnly = await scratchUser('ui only', [uiRole]);
+  const developer = await scratchUser('developer', [developerRole]);
+  await scoreFixtures(binding, customBinding);
+  const pipelineFeature = await insertPipelineRow(targetEntityId, records['r1']);
+  return { ...base, Binding: binding, CustomBinding: customBinding, CustomAuthorizationID: custom.ID, PipelineFeature: pipelineFeature, UIOnly: uiOnly, Developer: developer };
+}
+
+/** The fixture pipeline, its model placed Published with a registered artifact, and the artifact's file. */
+async function createPublishedModel(targetEntityId: string): Promise<Pick<ViewGateFixtures, 'PipelineID' | 'ModelID' | 'FileID'>> {
   const algorithmId = await firstId('MJ: ML Algorithms');
   const providerId = await firstId('MJ: File Storage Providers');
   const pipeline = await createRow<MJMLTrainingPipelineEntity>('MJ: ML Training Pipelines', (p) => {
@@ -262,36 +287,31 @@ async function createFixtures(): Promise<ViewGateFixtures> {
     .input('Sha', sql.Char(64), createHash('sha256').update(artifact).digest('hex'))
     .input('Semantics', sql.NVarChar(sql.MAX), JSON.stringify({ task: { kind: 'binary', classOrder: ['renewed', 'lapsed'], adverseIndex: 1 } }))
     .query(`UPDATE ${tableOf(server.Provider, 'MJ: ML Models')} SET Status = 'Published', ArtifactFileID = @FileID, ArtifactSha256 = @Sha, OutputSemantics = @Semantics WHERE ID = @ID`);
-  const records: Record<string, string> = {};
-  for (const name of Object.keys(ADVERSE)) {
-    records[name] = (await createRow<MJKnowledgeHubSavedSearchEntity>(TARGET, (t) => { t.Name = `${TAG}-${name}`; t.UserID = server.User.ID; t.Query = TAG; })).ID;
-  }
-  const custom = await createRow<MJAuthorizationEntity>('MJ: Authorizations', (a) => {
-    a.Name = `${TAG} custom predictions`; a.IsActive = true; a.UseAuditLog = false; a.Description = 'Predictive Studio truth suite view-gate scratch (safe to delete)';
-  });
-  const uiRole = await firstId('MJ: Roles', `Name = 'UI'`);
-  const developerRole = await firstId('MJ: Roles', `Name = 'Developer'`);
-  // The provider caches authorizations: reload so the scratch one resolves.
-  await server.Provider.Refresh();
-  base = { TargetEntityID: targetEntityId, PipelineID: pipeline.ID, ModelID: model.ID, FileID: file.ID, Records: records };
-  const binding = await newBinding('renewal', ScoringBindings.ResolveViewAuthorizationID(null, server.Provider), null);
-  const customBinding = await newBinding('custom', custom.ID, 'MinScore');
-  const uiOnly = await scratchUser('ui only', [uiRole]);
-  const developer = await scratchUser('developer', [developerRole]);
-  const pipelineFeature = `${TAG} pipeline tier`;
+  return { PipelineID: pipeline.ID, ModelID: model.ID, FileID: file.ID };
+}
+
+/** Scores the renewal binding on DAY1 and DAY3 and the custom binding on DAY1, as the system user; throws when a run does not complete. */
+async function scoreFixtures(binding: MJMLModelScoringBindingEntity, customBinding: MJMLModelScoringBindingEntity): Promise<void> {
   for (const day of [DAY1, DAY3]) {
-    const scored = await ScoreAs(server.User, binding, day);
+    const scored = await scoreAs(server.User, binding, day);
     if (scored.Status !== 'completed') throw new Error(`fixture scoring on ${day.toISOString()} did not complete: ${JSON.stringify(scored)}`);
   }
-  const customScored = await ScoreAs(server.User, customBinding, DAY1);
+  const customScored = await scoreAs(server.User, customBinding, DAY1);
   if (customScored.Status !== 'completed') throw new Error(`fixture scoring of the custom binding did not complete: ${JSON.stringify(customScored)}`);
-  // A Pipeline row on r1 (a row no entity save shapes without running the pipeline): it names an existing Record Process.
+}
+
+/**
+ * A Pipeline row on `recordId` (a row no entity save shapes without running the pipeline): it names an existing Record
+ * Process. Returns its feature name.
+ */
+async function insertPipelineRow(targetEntityId: string, recordId: string): Promise<string> {
+  const pipelineFeature = `${TAG} pipeline tier`;
   const processId = await firstId('MJ: Record Processes');
-  await pool.request().input('EntityID', sql.UniqueIdentifier, targetEntityId).input('RecordID', sql.NVarChar(900), records['r1'])
+  await pool.request().input('EntityID', sql.UniqueIdentifier, targetEntityId).input('RecordID', sql.NVarChar(900), recordId)
     .input('FeatureName', sql.NVarChar(255), pipelineFeature).input('ProcessID', sql.UniqueIdentifier, processId)
     .query(`INSERT INTO ${tableOf(server.Provider, 'MJ: Feature Values')} (EntityID, RecordID, FeatureName, Source, Role, RecordProcessID, ValueText, Confidence)
             VALUES (@EntityID, @RecordID, @FeatureName, 'Pipeline', 'Champion', @ProcessID, 'Gold', 0.81)`);
-  return { ...base, Binding: binding, CustomBinding: customBinding, CustomAuthorizationID: custom.ID, PipelineFeature: pipelineFeature, UIOnly: uiOnly, Developer: developer };
+  return pipelineFeature;
 }
 
 /** Deletes every row the file created, children first, by the tag. */
@@ -334,32 +354,32 @@ afterAll(async () => {
 describe('the view gate', () => {
   it('a user without the authorization reads no Model row from either entity and every Pipeline and Human row', async () => {
     for (const entity of GATED_ENTITIES) {
-      const rows = await ReadAs(f.UIOnly, entity, onRecord('r1'));
+      const rows = await readAs(f.UIOnly, entity, onRecord('r1'));
       expect(rows.filter((r) => r.Source === 'Model')).toHaveLength(0);
       expect(rows.filter((r) => r.Source !== 'Model').map((r) => r.FeatureName)).toEqual([f.PipelineFeature]);
     }
   });
 
   it('a Developer reads the binding\'s Model rows', async () => {
-    const latest = await ReadAs(f.Developer, 'MJ: Latest Feature Values', `FeatureName = '${EscapeSQLString(f.Binding.FeatureName)}'`);
+    const latest = await readAs(f.Developer, 'MJ: Latest Feature Values', `FeatureName = '${EscapeSQLString(f.Binding.FeatureName)}'`);
     expect(latest.length).toBe(Object.keys(f.Records).length);
     expect(latest.every((r) => r.EffectiveAsOf !== null && new Date(r.EffectiveAsOf).getTime() === DAY3.getTime())).toBe(true);
-    const history = await ReadAs(f.Developer, 'MJ: Feature Values', `MLModelScoringBindingID = '${EscapeSQLString(f.Binding.ID)}' AND Source = 'Model'`);
+    const history = await readAs(f.Developer, 'MJ: Feature Values', `MLModelScoringBindingID = '${EscapeSQLString(f.Binding.ID)}' AND Source = 'Model'`);
     expect(history.length).toBe(2 * Object.keys(f.Records).length);
   });
 
   it('every read grant of both entities carries the view gate', async () => {
-    expect(await GrantsWithoutFilter(GATED_ENTITIES)).toEqual([]);
+    expect(await grantsWithoutFilter(GATED_ENTITIES)).toEqual([]);
   });
 
   it('a writer without the binding\'s authorization is refused before reading: no duplicate rows, no column write, no withdrawal (D4-60)', async () => {
-    const before = await ModelRowCount(f.CustomBinding.ID);
-    const copiedBefore = await TargetColumnValues();
-    const rerun = await ScoreAs(f.Developer, f.CustomBinding, DAY1);
+    const before = await modelRowCount(f.CustomBinding.ID);
+    const copiedBefore = await targetColumnValues();
+    const rerun = await scoreAs(f.Developer, f.CustomBinding, DAY1);
     expect(rerun).toMatchObject({ Status: 'refused', Reason: { kind: 'binding-not-authorized' } });
-    expect(await ModelRowCount(f.CustomBinding.ID)).toBe(before);              // UQ_FeatureValue_ModelRow never reached
-    expect(await TargetColumnValues()).toEqual(copiedBefore);
-    expect(await WithdrawAs(f.Developer, f.CustomBinding.ID)).toMatchObject({ Ok: false, Refusal: 'binding-not-authorized' });
+    expect(await modelRowCount(f.CustomBinding.ID)).toBe(before);              // UQ_FeatureValue_ModelRow never reached
+    expect(await targetColumnValues()).toEqual(copiedBefore);
+    expect(await withdrawAs(f.Developer, f.CustomBinding.ID)).toMatchObject({ Ok: false, Refusal: 'binding-not-authorized' });
   }, CASE_TIMEOUT_MS);
 
   it('the filter text names the reader and matches no binding without a view authorization', () => {
@@ -378,15 +398,15 @@ describe('the view gate', () => {
 describe('M5b.10 harness', () => {
   it('null or missing score: a binding with no rows renders no card and no error', async () => {
     const empty = await newBinding('never scored', ScoringBindings.ResolveViewAuthorizationID(null, server.Provider), null);
-    const panel = await PanelAs(f.Developer, 'r1', [empty.FeatureName]);
+    const panel = await panelAs(f.Developer, 'r1', [empty.FeatureName]);
     expect(panel.Bindings.some((id) => UUIDsEqual(id, empty.ID))).toBe(true);
     expect([panel.Latest, panel.History]).toEqual([[], []]);
   }, CASE_TIMEOUT_MS);
 
   it('withdrawn binding: the panel\'s binding read excludes a withdrawn binding', async () => {
     const gone = await newBinding('withdrawn', ScoringBindings.ResolveViewAuthorizationID(null, server.Provider), null);
-    expect(await WithdrawAs(server.User, gone.ID)).toEqual({ Ok: true, Refusal: null });
-    const panel = await PanelAs(f.Developer, 'r1', [f.Binding.FeatureName]);
+    expect(await withdrawAs(server.User, gone.ID)).toEqual({ Ok: true, Refusal: null });
+    const panel = await panelAs(f.Developer, 'r1', [f.Binding.FeatureName]);
     expect(panel.Bindings.some((id) => UUIDsEqual(id, gone.ID))).toBe(false);
     expect(panel.Bindings.some((id) => UUIDsEqual(id, f.Binding.ID))).toBe(true);
   }, CASE_TIMEOUT_MS);
@@ -401,7 +421,7 @@ describe('M5b.10 harness', () => {
     // A successful Delete resets the entity object (BaseEntity.resetDeletedRecords), so the ID is read before it.
     const deletedId = extra.ID;
     expect(await extra.Delete()).toBe(true);
-    const byId = await ReadAs(f.Developer, 'MJ: Latest Feature Values', `RecordID = '${EscapeSQLString(deletedId)}'`);
+    const byId = await readAs(f.Developer, 'MJ: Latest Feature Values', `RecordID = '${EscapeSQLString(deletedId)}'`);
     expect(byId.map((r) => r.Source)).toEqual(['Model']);
     // The panel opens on a record's form; the record is gone, so no form (and no panel) can show it.
     const target = await RunView.FromMetadataProvider(server.Provider).RunView<{ ID: string }>({ EntityName: TARGET, ExtraFilter: `ID = '${EscapeSQLString(deletedId)}'`, Fields: ['ID'], ResultType: 'simple' }, f.Developer);
@@ -412,7 +432,7 @@ describe('M5b.10 harness', () => {
     // Adversary: the model is archived by SQL after it scored (as the lifecycle gate writes Status).
     await pool.request().input('ID', sql.UniqueIdentifier, f.ModelID).query(`UPDATE ${tableOf(server.Provider, 'MJ: ML Models')} SET Status = 'Archived' WHERE ID = @ID`);
     try {
-      const panel = await PanelAs(f.Developer, 'r1', [f.Binding.FeatureName]);
+      const panel = await panelAs(f.Developer, 'r1', [f.Binding.FeatureName]);
       const [latest] = ofBinding(panel.Latest, f.Binding.ID);
       if (!latest) throw new Error('the panel read no latest value of the fixture binding');
       expect(UUIDsEqual(latest.MLModelID, f.ModelID)).toBe(true);
@@ -431,7 +451,7 @@ describe('M5b.10 harness', () => {
       fv.ValueNumeric = 0.9; fv.RecordProcessID = null; fv.MLModelScoringBindingID = f.Binding.ID; fv.EffectiveAsOf = new Date('2026-10-05T00:00:00Z');
     });
     for (const entity of GATED_ENTITIES) {
-      const rows = await ReadAs(f.UIOnly, entity, onRecord('r2'));
+      const rows = await readAs(f.UIOnly, entity, onRecord('r2'));
       expect(rows.map((r) => [r.Source, UUIDsEqual(r.ID, human.ID)])).toEqual([['Human', true]]);
     }
   }, CASE_TIMEOUT_MS);
@@ -445,16 +465,16 @@ describe('M5b.10 harness', () => {
       fv.ValueNumeric = 0.1; fv.RecordProcessID = null; fv.MLModelScoringBindingID = f.Binding.ID; fv.EffectiveAsOf = new Date('2026-10-02T00:00:00Z');
     });
     const feature = `${onRecord('r3')} AND FeatureName = '${EscapeSQLString(f.Binding.FeatureName)}'`;
-    expect(await ReadAs(f.UIOnly, 'MJ: Latest Feature Values', feature)).toEqual([]);
-    const history = await ReadAs(f.UIOnly, 'MJ: Feature Values', feature);
+    expect(await readAs(f.UIOnly, 'MJ: Latest Feature Values', feature)).toEqual([]);
+    const history = await readAs(f.UIOnly, 'MJ: Feature Values', feature);
     expect(history.map((r) => [r.Source, UUIDsEqual(r.ID, human.ID)])).toEqual([['Human', true]]);
     // The Developer, who holds the authorization, reads the newer Model row as the latest value.
-    const latest = await ReadAs(f.Developer, 'MJ: Latest Feature Values', feature);
+    const latest = await readAs(f.Developer, 'MJ: Latest Feature Values', feature);
     expect(latest.map((r) => [r.Source, r.EffectiveAsOf?.toISOString()])).toEqual([['Model', DAY3.toISOString()]]);
   }, CASE_TIMEOUT_MS);
 
   it('binding backfill and retention sweep through the production store: only a binding without a view authorization is assigned, once; only expired Model rows go', async () => {
-    const ctx = PredictionRetention.ContextOf({ Provider: server.Provider, ContextUser: server.User });
+    const ctx = PredictionRetention.ContextOf({ Provider: server.Provider, ContextUser: server.User }, async () => undefined);
     const seeded = PredictionRetention.SeededAuthorizationID(server.Provider);
     if (seeded === null) throw new Error('the seeded view authorization is not in metadata: run mj sync push');
     // Adversary: a binding saved before the view authorization existed (the server entity now refuses a null one).
@@ -477,12 +497,12 @@ describe('M5b.10 harness', () => {
     });
     await writeModelRows(kept, run.ID, DAY1, [f.Records.r1], 0.2);
     await writeModelRows(kept, run.ID, DAY3, [f.Records.r1], 0.3);
-    const pipelineBefore = (await ReadAs(server.User, 'MJ: Feature Values', `${onRecord('r1')} AND Source = 'Pipeline'`)).length;
+    const pipelineBefore = (await readAs(server.User, 'MJ: Feature Values', `${onRecord('r1')} AND Source = 'Pipeline'`)).length;
     const swept = await PredictionRetention.SweepBinding({ ID: kept.ID, FeatureName: kept.FeatureName, Status: 'Active', RetentionDays: 30 }, new Date('2026-11-01T02:00:00Z'), ctx);
     expect([swept?.Cutoff, swept?.Deleted, swept?.Failures]).toEqual(['2026-10-02T00:00:00.000Z', 1, []]);
-    const left = await ReadAs(server.User, 'MJ: Feature Values', `MLModelScoringBindingID = '${EscapeSQLString(kept.ID)}'`);
+    const left = await readAs(server.User, 'MJ: Feature Values', `MLModelScoringBindingID = '${EscapeSQLString(kept.ID)}'`);
     expect(left.map((r) => r.EffectiveAsOf?.toISOString())).toEqual([DAY3.toISOString()]);
-    expect((await ReadAs(server.User, 'MJ: Feature Values', `${onRecord('r1')} AND Source = 'Pipeline'`)).length).toBe(pipelineBefore);
+    expect((await readAs(server.User, 'MJ: Feature Values', `${onRecord('r1')} AND Source = 'Pipeline'`)).length).toBe(pipelineBefore);
   }, CASE_TIMEOUT_MS);
 
   it('concurrent publish: a read during a same-key write returns one latest row per key', async () => {
@@ -492,10 +512,9 @@ describe('M5b.10 harness', () => {
       const asOf = new Date(Date.UTC(2026, 9, 10 + i));
       const [, read] = await Promise.all([
         writeModelRows(f.Binding, run.ID, asOf, Object.values(f.Records), 0.5 + i / 100),
-        ReadAs(f.Developer, 'MJ: Latest Feature Values', `EntityID = '${EscapeSQLString(f.TargetEntityID)}' AND FeatureName = '${EscapeSQLString(f.Binding.FeatureName)}'`),
+        readAs(f.Developer, 'MJ: Latest Feature Values', `EntityID = '${EscapeSQLString(f.TargetEntityID)}' AND FeatureName = '${EscapeSQLString(f.Binding.FeatureName)}'`),
       ]);
-      const keys = read.map((r) => r.RecordID.toLowerCase());
-      expect(new Set(keys).size).toBe(keys.length);
+      expect(new UUIDSet(read.map((r) => r.RecordID)).Size).toBe(read.length);
     }
   }, CASE_TIMEOUT_MS);
 
@@ -506,18 +525,18 @@ describe('M5b.10 harness', () => {
       .query(`INSERT INTO ${tableOf(server.Provider, 'MJ: Entity Permissions')} (EntityID, RoleID, Type, CanRead, CanCreate, CanUpdate, CanDelete) VALUES (@EntityID, @RoleID, 'Allow', 1, 0, 0, 0)`);
     await server.Provider.Refresh();
     try {
-      expect(await GrantsWithoutFilter(['MJ: Latest Feature Values'])).toEqual([]);   // the scratch role is excluded from the census by name
+      expect(await grantsWithoutFilter(['MJ: Latest Feature Values'])).toEqual([]);   // the scratch role is excluded from the census by name
       const unfilteredOnly = await scratchUser('unfiltered only', [role.ID]);
       const uiRole = await firstId('MJ: Roles', `Name = 'UI'`);
       const twoRoles = await scratchUser('ui and unfiltered', [uiRole, role.ID]);
       const latestEntity = server.Provider.EntityByName('MJ: Latest Feature Values');
       expect([latestEntity?.UserExemptFromRowLevelSecurity(twoRoles, EntityPermissionType.Read), latestEntity?.UserExemptFromRowLevelSecurity(f.UIOnly, EntityPermissionType.Read)]).toEqual([true, false]);
       for (const user of [unfilteredOnly, twoRoles]) {
-        const rows = await ReadAs(user, 'MJ: Latest Feature Values', onRecord('r1'));
+        const rows = await readAs(user, 'MJ: Latest Feature Values', onRecord('r1'));
         expect(ofBinding(rows, f.Binding.ID).map((r) => r.Source)).toEqual(['Model']);
       }
       // The same user on MJ: Feature Values, where no unfiltered grant exists, still reads no Model row.
-      expect((await ReadAs(twoRoles, 'MJ: Feature Values', onRecord('r1'))).filter((r) => r.Source === 'Model')).toEqual([]);
+      expect((await readAs(twoRoles, 'MJ: Feature Values', onRecord('r1'))).filter((r) => r.Source === 'Model')).toEqual([]);
     } finally {
       await pool.request().input('RoleID', sql.UniqueIdentifier, role.ID).query(`DELETE FROM ${tableOf(server.Provider, 'MJ: Entity Permissions')} WHERE RoleID = @RoleID`);
       await server.Provider.Refresh();

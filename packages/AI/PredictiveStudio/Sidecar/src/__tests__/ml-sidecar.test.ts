@@ -11,7 +11,7 @@ import {
 } from '@memberjunction/predictive-studio-core';
 import { TrainerRequestFixture } from './fixtures/trainer-request.fixture';
 // `vi.mock` below is hoisted above every import, so this module binds the mocked `node:http`.
-import { MLSidecar, SidecarError, TrainerResultMalformedError } from '../ml-sidecar.js';
+import { MLSidecar, MonitorDriftResponseMalformedError, SidecarError, TrainerResultMalformedError } from '../ml-sidecar.js';
 
 /**
  * Unit tests for {@link MLSidecar}. `node:http` is mocked so no live sidecar (and
@@ -273,6 +273,14 @@ describe('MLSidecar monitor procedure M (M6.1)', () => {
     expect(result).toEqual(expected);
     expect(requestLog[0]).toMatchObject({ method: 'POST', path: '/monitor/drift' });
     expect(JSON.parse(requestLog[0].body!)).toEqual(req);
+  });
+
+  it('refuses a 200 /monitor/drift answer that is not a MonitorDriftResponse with MonitorDriftResponseMalformedError naming the problem (never stored verbatim)', async () => {
+    const malformed = { input: 'EngagementZ', kind: 'median', z: '5.2', p: 0.001, pAdjusted: 0.001, q: 0.0171, look: 1, flagged: true };
+    queue(200, { look: 1, q: 0.0171, replays: 2000, results: [malformed], alarms: [] });
+    const err = await new MLSidecar({ url: URL_BASE }).MonitorDrift(buildDriftRequest()).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(MonitorDriftResponseMalformedError);
+    expect(err).toMatchObject({ Problems: expect.arrayContaining([expect.stringContaining('results.0.kind'), expect.stringContaining('results.0.z')]) });
   });
 
   it('MonitorCalibrate() POSTs the design to /monitor/calibrate and returns q(L)', async () => {

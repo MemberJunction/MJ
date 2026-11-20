@@ -4,9 +4,8 @@ import {
   Component,
   EventEmitter,
   Input,
-  OnChanges,
+  OnInit,
   Output,
-  SimpleChanges,
   inject,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -22,7 +21,7 @@ import { EscapeSQLString, UUIDsEqual, ValidationErrorInfo } from '@memberjunctio
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
-import { FindDefaultViewAuthorization } from '@memberjunction/predictive-studio-core';
+import { PredictionViewAuthorization } from '@memberjunction/predictive-studio-core';
 
 /** The `MJ: ML Training Pipelines` fields the editor reads. */
 type PipelineRow = Pick<MJMLTrainingPipelineEntity, 'ID' | 'Name' | 'TargetEntityID'>;
@@ -65,9 +64,27 @@ type FieldErrorSource = (typeof FIELD_ERROR_SOURCES)[number];
   imports: [CommonModule, FormsModule, MJButtonDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class PSScoringBindingEditorComponent extends BaseAngularComponent implements OnChanges {
-  /** The model whose training pipeline's bindings are edited. */
-  @Input() Model: MJMLModelEntity | null = null;
+export class PSScoringBindingEditorComponent extends BaseAngularComponent implements OnInit {
+  /**
+   * The model whose training pipeline's bindings are edited. A new model re-reads the bindings once the editor is
+   * initialized (the first read runs in `ngOnInit`, after every input — `Provider` included — is bound). The host binds
+   * `Provider` once for the editor's life: `BaseAngularComponent` declares it a plain input field, which a subclass
+   * cannot override with a setter (TS2610), so a later provider swap is not re-read.
+   */
+  @Input()
+  set Model(value: MJMLModelEntity | null) {
+    if (value === this._model) return;
+    this._model = value;
+    // The form, the pending withdrawal and the errors belonged to the previous model's bindings.
+    this.Draft = null;
+    this.PendingWithdrawal = null;
+    this.refreshCopyColumns();
+    this.clearErrors();
+    if (this.initialized) void this.load();
+  }
+  get Model(): MJMLModelEntity | null {
+    return this._model;
+  }
 
   /** Emitted after a binding is saved. */
   @Output() Saved = new EventEmitter<MJMLModelScoringBindingEntity>();
@@ -90,15 +107,33 @@ export class PSScoringBindingEditorComponent extends BaseAngularComponent implem
   /** The binding awaiting withdrawal confirmation. */
   public PendingWithdrawal: MJMLModelScoringBindingEntity | null = null;
 
+  /** True while the pipeline and its bindings are being read. */
   public Loading = false;
+
+  /** True while a save or a withdrawal is in flight; the form's controls are disabled. */
   public Busy = false;
+
+  /** Why the last read failed, shown in place of the list; null after a successful read. */
   public LoadError: string | null = null;
+
+  /** The draft target entity's fields a column copy can write (updatable, not a key, not read-only); kept in step with the draft. */
+  public CopyColumns: string[] = [];
+
+  private _model: MJMLModelEntity | null = null;
+
+  /** True once `ngOnInit` ran: a later {@link Model} change re-reads. */
+  private initialized = false;
+
+  /** Incremented by each read; a read whose token is no longer current drops its result (a newer model is shown). */
+  private loadToken = 0;
 
   /** The pipeline's target entity, the default target of a new binding. */
   private pipeline: PipelineRow | null = null;
 
-  public ngOnChanges(changes: SimpleChanges): void {
-    if (changes['Model'] || changes['Provider']) void this.load();
+  /** Reads the model's bindings once every input is bound. */
+  public ngOnInit(): void {
+    this.initialized = true;
+    void this.load();
   }
 
   /** The authorizations a binding can name, by name (read from the provider's metadata on load). */
@@ -107,10 +142,12 @@ export class PSScoringBindingEditorComponent extends BaseAngularComponent implem
   /** The entities a binding can target, by name (read from the provider's metadata on load). */
   public Entities: EntityInfo[] = [];
 
-  /** The draft target entity's fields a column copy can write: updatable, not a key, not read-only. */
-  public get CopyColumns(): string[] {
-    const entity = this.Draft?.TargetEntityID ? this.ProviderToUse.EntityByID(this.Draft.TargetEntityID) : undefined;
-    return entity ? entity.Fields.filter((f) => f.AllowUpdateAPI && !f.ReadOnly && !f.IsPrimaryKey).map((f) => f.Name) : [];
+  /** Sets the draft's target entity and the column-copy choices that follow from it. */
+  public SetTargetEntity(entityId: string | null): void {
+    if (!this.Draft) return;
+    this.Draft.TargetEntityID = entityId;
+    this.refreshCopyColumns();
+    this.cdr.markForCheck();
   }
 
   /** The default copy source for the model's output: the adverse probability of a classification, the value of a regression. */
@@ -142,7 +179,7 @@ export class PSScoringBindingEditorComponent extends BaseAngularComponent implem
 
   /** Opens the form for a new binding of the model's pipeline, with the seeded view authorization and no column copy. */
   public StartNew(): void {
-    const seeded = FindDefaultViewAuthorization(this.ProviderToUse.Authorizations);
+    const seeded = PredictionViewAuthorization.FindDefault(this.ProviderToUse.Authorizations);
     this.Draft = {
       Binding: null,
       FeatureName: '',
@@ -153,6 +190,7 @@ export class PSScoringBindingEditorComponent extends BaseAngularComponent implem
       TargetColumn: null,
       TargetColumnSource: this.DefaultCopySource,
     };
+    this.refreshCopyColumns();
     this.clearErrors();
     this.cdr.markForCheck();
   }
@@ -169,13 +207,16 @@ export class PSScoringBindingEditorComponent extends BaseAngularComponent implem
       TargetColumn: binding.TargetColumn,
       TargetColumnSource: binding.TargetColumnSource || this.DefaultCopySource,
     };
+    this.refreshCopyColumns();
     this.clearErrors();
     this.cdr.markForCheck();
   }
 
+  /** Closes the form without saving (ignored while a save is in flight). */
   public Cancel(): void {
     if (this.Busy) return;
     this.Draft = null;
+    this.refreshCopyColumns();
     this.clearErrors();
     this.cdr.markForCheck();
   }
@@ -194,14 +235,21 @@ export class PSScoringBindingEditorComponent extends BaseAngularComponent implem
    */
   public async Save(): Promise<void> {
     const draft = this.Draft;
-    if (!draft || this.Busy || !this.Model) return;
+    const model = this.Model;
+    if (!draft || this.Busy || !model) return;
     this.Busy = true;
     this.clearErrors();
     this.cdr.markForCheck();
     try {
       const binding = draft.Binding || (await this.newBinding());
       this.applyDraft(binding, draft);
-      if (await binding.Save()) {
+      const saved = await binding.Save();
+      if (this.Model !== model) {
+        // The model changed while the save ran: its outcome belongs to the previous model's draft, not this editor.
+        if (!saved && draft.Binding) draft.Binding.Revert();
+        return;
+      }
+      if (saved) {
         this.Draft = null;
         this.notifications.CreateSimpleNotification(`Saved the scoring binding "${binding.FeatureName}".`, 'success', 3500);
         this.Saved.emit(binding);
@@ -211,7 +259,7 @@ export class PSScoringBindingEditorComponent extends BaseAngularComponent implem
         if (draft.Binding) draft.Binding.Revert();
       }
     } catch (e) {
-      this.GeneralError = e instanceof Error ? e.message : String(e);
+      if (this.Model === model) this.GeneralError = e instanceof Error ? e.message : String(e);
       if (draft.Binding) draft.Binding.Revert();
     } finally {
       this.Busy = false;
@@ -225,6 +273,7 @@ export class PSScoringBindingEditorComponent extends BaseAngularComponent implem
     this.cdr.markForCheck();
   }
 
+  /** Dismisses the withdrawal confirmation (ignored while the withdrawal is in flight). */
   public CancelWithdraw(): void {
     if (this.Busy) return;
     this.PendingWithdrawal = null;
@@ -261,12 +310,18 @@ export class PSScoringBindingEditorComponent extends BaseAngularComponent implem
     }
   }
 
-  /** Reads the pipeline and its bindings in one batch. */
+  /**
+   * Reads the pipeline and its bindings in one batch. Each read takes a token; when the model changes while a read is in
+   * flight, the older read's result (or failure) is dropped, so the list always belongs to the current model.
+   */
   private async load(): Promise<void> {
+    const token = ++this.loadToken;
     const pipelineId = this.Model?.PipelineID;
     if (!pipelineId) {
       this.Bindings = [];
       this.pipeline = null;
+      this.Loading = false;
+      this.cdr.markForCheck();
       return;
     }
     this.Loading = true;
@@ -276,25 +331,41 @@ export class PSScoringBindingEditorComponent extends BaseAngularComponent implem
       this.Authorizations = [...this.ProviderToUse.Authorizations].sort((a, b) => a.Name.localeCompare(b.Name));
       this.Entities = [...this.ProviderToUse.Entities].sort((a, b) => a.Name.localeCompare(b.Name));
       const id = EscapeSQLString(pipelineId);
-      const [pipelineRes, bindingRes]: RunViewResult<PipelineRow | MJMLModelScoringBindingEntity>[] = await RunView.FromMetadataProvider(this.ProviderToUse).RunViews<PipelineRow | MJMLModelScoringBindingEntity>(
+      const results = await RunView.FromMetadataProvider(this.ProviderToUse).RunViews(
         [
           { EntityName: 'MJ: ML Training Pipelines', ExtraFilter: `ID='${id}'`, Fields: ['ID', 'Name', 'TargetEntityID'], MaxRows: 1, ResultType: 'simple' },
           { EntityName: 'MJ: ML Model Scoring Bindings', ExtraFilter: `MLTrainingPipelineID='${id}'`, OrderBy: '__mj_CreatedAt ASC', ResultType: 'entity_object' },
         ],
         this.ProviderToUse.CurrentUser,
       );
-      for (const r of [pipelineRes, bindingRes]) {
-        if (!r?.Success) throw new Error(r?.ErrorMessage || 'the read failed');
-      }
-      this.pipeline = pipelineRes.Results.filter(PSScoringBindingEditorComponent.isPipelineRow)[0] || null;
-      this.Bindings = bindingRes.Results.filter(PSScoringBindingEditorComponent.isBinding);
+      if (token !== this.loadToken) return;
+      // RunViews answers in request order: index 0 is the pipeline read, index 1 the bindings read.
+      const pipelineRes = PSScoringBindingEditorComponent.succeeded<PipelineRow>(results[0], 'the pipeline');
+      const bindingRes = PSScoringBindingEditorComponent.succeeded<MJMLModelScoringBindingEntity>(results[1], 'the bindings');
+      this.pipeline = pipelineRes.Results[0] || null;
+      this.Bindings = bindingRes.Results;
     } catch (e) {
+      if (token !== this.loadToken) return;
       this.LoadError = `Could not read the scoring bindings: ${e instanceof Error ? e.message : String(e)}`;
       LogError(`[PSScoringBindingEditor] ${this.LoadError}`);
     } finally {
-      this.Loading = false;
-      this.cdr.markForCheck();
+      if (token === this.loadToken) {
+        this.Loading = false;
+        this.cdr.markForCheck();
+      }
     }
+  }
+
+  /** `result` when it succeeded; throws naming `what` when it failed or is missing. */
+  private static succeeded<T>(result: RunViewResult<T> | undefined, what: string): RunViewResult<T> {
+    if (!result?.Success) throw new Error(`reading ${what} failed: ${result?.ErrorMessage || 'the view returned no result'}`);
+    return result;
+  }
+
+  /** Recomputes {@link CopyColumns} from the draft's target entity. */
+  private refreshCopyColumns(): void {
+    const entity = this.Draft?.TargetEntityID ? this.ProviderToUse.EntityByID(this.Draft.TargetEntityID) : undefined;
+    this.CopyColumns = entity ? entity.Fields.filter((f) => f.AllowUpdateAPI && !f.ReadOnly && !f.IsPrimaryKey).map((f) => f.Name) : [];
   }
 
   private async newBinding(): Promise<MJMLModelScoringBindingEntity> {
@@ -333,13 +404,5 @@ export class PSScoringBindingEditorComponent extends BaseAngularComponent implem
   private clearErrors(): void {
     this.FieldErrors = {};
     this.GeneralError = null;
-  }
-
-  private static isPipelineRow(r: PipelineRow | MJMLModelScoringBindingEntity): r is PipelineRow {
-    return 'Name' in r && !('FeatureName' in r);
-  }
-
-  private static isBinding(r: PipelineRow | MJMLModelScoringBindingEntity): r is MJMLModelScoringBindingEntity {
-    return 'FeatureName' in r;
   }
 }

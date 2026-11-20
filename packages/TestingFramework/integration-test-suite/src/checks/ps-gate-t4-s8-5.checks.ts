@@ -11,7 +11,6 @@
  */
 import { IntegrationCheckRegistry, type NamedCheck } from '@memberjunction/testing-integration';
 import type { RetrainTrigger, TaskType } from '@memberjunction/predictive-studio-core';
-import { StoredRuns } from '@memberjunction/predictive-studio';
 import { UnitFixtures } from '@memberjunction/predictive-studio-truth-suite';
 import { PsGate } from './ps-gates/ps-gate-fixture';
 import { MonitoringFixture, type PeriodCalendar } from './ps-gates/ps-gate-monitoring';
@@ -36,13 +35,9 @@ export const PsGateT4S85Checks: NamedCheck[] = [
       const dataset = await h.EnsureLoaded({ Kind: 'scenario', ID: SCENARIO, Seed: UnitFixtures.ScenarioBaseSeed(SCENARIO) });
       const model = await MonitoringFixture.PublishOnPeriods(h, dataset, PUBLISH_PERIODS, { Scenario: SCENARIO, Task: TASK, Calendar: CALENDAR, Challenger: true, Triggers: [ALWAYS_FIRES], Promotion: PROMOTION });
       const periods = await MonitoringFixture.RunPeriods(h, model, MONITOR_PERIODS);
-      const started = periods.find((p) => p.ChallengerRunID !== null);
-      const run = started && started.ChallengerRunID ? await StoredRuns.Read(started.ChallengerRunID, { ContextUser: h.User, Provider: h.Provider }) : null;
-      const gate = run === null ? null : run.Gate;
+      const { Started: started, SameRows: sameRows, Challenger: challenger, Replaced: replaced, Gate: gate } = await MonitoringFixture.ChallengerOutcome(h, model, periods);
       const diff = gate === null ? null : gate.incumbentDiff;
-      const reachedComparison = gate !== null && gate.decision.outcome === 'model' && diff !== null && diff.incumbentModelId.toLowerCase() === model.ModelID.toLowerCase();
-      const challenger = started && started.ChallengerRunID ? await MonitoringFixture.ChallengerModel(h, started.ChallengerRunID) : null;
-      const replaced = challenger !== null && challenger.Status === 'Published' && (await MonitoringFixture.StatusOf(h, model.ModelID)) === 'Archived';
+      const reachedComparison = gate !== null && gate.decision.outcome === 'model' && sameRows;
       PsGate.Assert({
         Passed: reachedComparison && !replaced && periods.every((p) => p.State === 'evaluated'),
         Measured: {

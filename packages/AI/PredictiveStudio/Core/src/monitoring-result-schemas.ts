@@ -9,14 +9,29 @@
  */
 import { z } from 'zod';
 
-import type { MetricWithInterval } from './evaluation-protocol';
-import { JsonParse, type ParseResult } from './json-value';
+import { RETRAIN_TRIGGER_KINDS, type MetricWithInterval } from './evaluation-protocol';
+import { JsonParse, type JsonValue, type ListsEveryMember, type ParseResult } from './json-value';
 import type { MonitoringTriggerFired } from './monitoring-contracts';
 import { MonitoringJobSpecs, type MonitoringJobReadSpec } from './monitoring-job-specs';
+import type { MonitorDriftLook, MonitorDriftResponse, MonitorInputKind } from './sidecar-contract';
 import type { CalibrationReport } from './trainer-contract';
 import { TrainerResultSchemas } from './trainer-result-schemas';
 
-const triggersFired = z.array(z.object({ kind: z.enum(['outcome-degradation', 'calibration-drift']), reason: z.string() }).strict());
+const triggersFired = z.array(z.object({ kind: z.enum(RETRAIN_TRIGGER_KINDS), reason: z.string() }).strict());
+
+/** Every procedure-M input kind; `satisfies` refuses a value that is not one. */
+const MONITOR_INPUT_KINDS = ['mean', 'proportion', 'series'] as const satisfies readonly MonitorInputKind[];
+/** Compile-time completeness: an input kind added without listing it in MONITOR_INPUT_KINDS breaks the build. */
+const monitorInputKindsComplete: ListsEveryMember<MonitorInputKind, (typeof MONITOR_INPUT_KINDS)[number]> = true;
+void monitorInputKindsComplete;
+
+const driftLook: z.ZodType<MonitorDriftLook> = z.object({
+  input: z.string(), kind: z.enum(MONITOR_INPUT_KINDS), z: z.number(), p: z.number(), pAdjusted: z.number(), q: z.number(), look: z.number(), flagged: z.boolean(),
+}).strict();
+
+const driftResponse: z.ZodType<MonitorDriftResponse> = z.object({
+  look: z.number(), q: z.number(), replays: z.number(), results: z.array(driftLook), alarms: z.array(driftLook),
+}).strict();
 
 /** The stored-column readers of the monitoring job. */
 export class MonitoringResultSchemas {
@@ -33,6 +48,16 @@ export class MonitoringResultSchemas {
   /** A stored `TriggersFired` (an array of `{ kind, reason }`). */
   public static ParseTriggersFired(text: string | null): ParseResult<MonitoringTriggerFired[]> {
     return MonitoringResultSchemas.parse(text, 'TriggersFired', triggersFired);
+  }
+
+  /**
+   * A sidecar's `POST /monitor/drift` answer checked against the contract: the typed response (stored verbatim in the
+   * period row's `DriftLook` / `DriftAlarms`), or one problem per mismatch (`<path>: <message>`). Unknown keys are refused.
+   */
+  public static ParseMonitorDriftResponse(value: JsonValue): ParseResult<MonitorDriftResponse> {
+    const parsed = driftResponse.safeParse(value);
+    if (parsed.success) return JsonParse.ParseOk(parsed.data);
+    return JsonParse.ParseFail<MonitorDriftResponse>(...parsed.error.issues.map((x) => `${x.path.join('.') || '(root)'}: ${x.message}`));
   }
 
   /**

@@ -38,6 +38,8 @@ class Store {
     'MJ: Action Params': [],
     'MJ: Action Categories': [],
   };
+  /** Entities whose `Save()` is refused (returns false with a message), the way a failed save surfaces. */
+  public readonly RefusedSaves = new Set<string>();
 }
 
 /** Minimal entity fake: field bag + Save()/Delete() that write through to the store. */
@@ -64,6 +66,10 @@ class FakeEntity {
   }
 
   public async Save(): Promise<boolean> {
+    if (this.store.RefusedSaves.has(this.entityName)) {
+      this.LatestResult = { CompleteMessage: 'the save was refused' };
+      return false;
+    }
     if (this.isNew) {
       if (this.row['ID'] === null || this.row['ID'] === undefined) {
         this.row['ID'] = newId();
@@ -344,14 +350,39 @@ describe('ModelScoringActionGenerator — DisableForModel', () => {
     expect(byModelID(store, model.ID)['Status']).toBe('Active');
   });
 
-  it('is a no-op when no generated Action exists', async () => {
+  it('is a no-op when no generated Action exists, and reports the model has no enabled Action', async () => {
     const store = new Store();
     seedParentAction(store);
     const provider = new FakeProvider(store);
 
     // Should not throw and should create nothing.
-    await new ModelScoringActionGenerator().DisableForModel(fakeModel(), USER, asProvider(provider));
+    expect(await new ModelScoringActionGenerator().DisableForModel(fakeModel(), USER, asProvider(provider))).toBe(true);
     expect(actions(store)).toHaveLength(0);
+  });
+
+  it('reports true once the Action is disabled, and again for one already disabled', async () => {
+    ConsoleCapture.Status();
+    const store = new Store();
+    seedParentAction(store);
+    const provider = asProvider(new FakeProvider(store));
+    const model = fakeModel();
+    const generator = new ModelScoringActionGenerator();
+    await generator.GenerateForModel(model, USER, provider);
+    expect([await generator.DisableForModel(model, USER, provider), await generator.DisableForModel(model, USER, provider)]).toEqual([true, true]);
+  });
+
+  it('reports false, logs the save message and leaves the Action enabled when the save is refused', async () => {
+    ConsoleCapture.Status();
+    const errors = ConsoleCapture.Errors();
+    const store = new Store();
+    seedParentAction(store);
+    const provider = asProvider(new FakeProvider(store));
+    const model = fakeModel();
+    const generator = new ModelScoringActionGenerator();
+    await generator.GenerateForModel(model, USER, provider);
+    store.RefusedSaves.add('MJ: Actions');
+    expect(await generator.DisableForModel(model, USER, provider)).toBe(false);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining('the save was refused')]);
   });
 });
 

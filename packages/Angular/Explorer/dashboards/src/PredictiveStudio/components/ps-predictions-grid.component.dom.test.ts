@@ -3,15 +3,16 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import type { ComponentFixture } from '@angular/core/testing';
 import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
-import type { CompositeKey, EntityInfo, RunViewParams } from '@memberjunction/core';
+import { RunView, type CompositeKey, type IMetadataProvider, type RunViewParams } from '@memberjunction/core';
 import type { ActionParam } from '@memberjunction/actions-base';
-import type { MJMLModelEntity, MJMLModelScoringBindingEntity, MJMLOutputBindingEntity, MJUserViewEntity } from '@memberjunction/core-entities';
+import { MJMLModelScoringBindingEntity, MJUserViewEntity, type MJMLModelEntity, type MJMLOutputBindingEntity } from '@memberjunction/core-entities';
 import type { SemanticsCheckBinding } from '@memberjunction/predictive-studio-core';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { renderComponentFixture, query, queryAll, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
 import { PredictiveStudioEngine, type PSRunDetailRow } from '../engine/predictive-studio.engine';
 import { PSPredictionsGridComponent, type PredictionGridRowsLoadedEvent } from './ps-predictions-grid.component';
 import type { LatestPredictionRow } from '../latest-prediction-rows';
+import { TestEntityRows } from '../../__tests__/fixtures/test-entity-rows';
 
 try {
   getTestBed().initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
@@ -108,6 +109,10 @@ async function RenderGrid(host: HTMLElement, options: RenderGridOptions): Promis
 const tierChips = (fixture: ComponentFixture<PSPredictionsGridComponent>): string[] =>
   queryAll(fixture, '.pg-tier-btn').map((b) => (b.textContent ?? '').replace(/\s+/g, ' ').trim());
 
+// The grid reads through the engine of its provider; a test spies the members of the one instance it gets.
+beforeEach(() => {
+  vi.spyOn(PredictiveStudioEngine, 'GetProviderInstance').mockReturnValue(PredictiveStudioEngine.Instance);
+});
 afterEach(() => vi.restoreAllMocks());
 
 describe('PSPredictionsGridComponent (DOM) — tiers', () => {
@@ -247,9 +252,12 @@ describe('PSPredictionsGridComponent (DOM) — the latest values of the model\'s
     EffectiveAsOf: new Date('2026-11-03T00:00:00Z'), ComputedAt: new Date('2026-11-03T01:00:00Z'),
   });
 
-  async function RenderLatest(latest: LatestPredictionRow[], reads: RunViewParams[]): Promise<PSPredictionsGridComponent> {
-    // the engine's cached binding: the double carries only the members the grid reads
-    vi.spyOn(PredictiveStudioEngine.Instance, 'ScoringBindingsForPipeline').mockReturnValue([scoringBinding as unknown as MJMLModelScoringBindingEntity]);
+  /** The provider of the last {@link RenderLatest}. */
+  let RenderedProvider: IMetadataProvider | null = null;
+
+  async function RenderLatest(latest: LatestPredictionRow[], reads: RunViewParams[], failRead?: (p: RunViewParams) => boolean): Promise<PSPredictionsGridComponent> {
+    // the engine's cached binding, a typed entity row
+    vi.spyOn(PredictiveStudioEngine.Instance, 'ScoringBindingsForPipeline').mockReturnValue([await TestEntityRows.Of(MJMLModelScoringBindingEntity, 'MJ: ML Model Scoring Bindings', scoringBinding)]);
     const runDetails = vi.spyOn(PredictiveStudioEngine.Instance, 'LoadRunDetails');
     const provider = createFakeProvider<ModelRow | LatestPredictionRow>({ runViewResults: (p: RunViewParams) => {
       reads.push(p);
@@ -257,6 +265,15 @@ describe('PSPredictionsGridComponent (DOM) — the latest values of the model\'s
       if (p.EntityName === 'MJ: Latest Feature Values') return latest;
       return [];
     } });
+    if (failRead) {
+      // the provider's own RunView, typed through the RunView seam the grid reads with
+      const runViews = RunView.FromMetadataProvider(provider).ProviderToUse;
+      const served = runViews.RunView.bind(runViews);
+      Object.assign(provider, {
+        RunView: async (p: RunViewParams) => (failRead(p) ? { Success: false, ErrorMessage: 'probe failed', Results: [], RowCount: 0, TotalRowCount: 0 } : served(p)),
+      });
+    }
+    RenderedProvider = provider;
     const fixture = renderComponentFixture(PSPredictionsGridComponent, {
       inputs: { ModelId: churn.ID, Provider: provider },
       providers: [{ provide: NavigationService, useValue: {} }],
@@ -266,6 +283,27 @@ describe('PSPredictionsGridComponent (DOM) — the latest values of the model\'s
     expect(runDetails).not.toHaveBeenCalled();
     return fixture.componentInstance;
   }
+
+  it('reads the scoring binding and the latest values through the engine of the grid\'s own provider', async () => {
+    const reads: RunViewParams[] = [];
+    const scoped = vi.spyOn(PredictiveStudioEngine, 'GetProviderInstance').mockReturnValue(PredictiveStudioEngine.Instance);
+    await RenderLatest([Latest('r1', 0.9)], reads);
+    expect(scoped.mock.calls.length).toBeGreaterThan(0);
+    expect(scoped.mock.calls.every(([provider, engineClass]) => provider === RenderedProvider && engineClass === PredictiveStudioEngine)).toBe(true);
+  });
+
+  it('a failed probe past the row cap fails the load instead of reporting the rows complete', async () => {
+    const cap = Object.getOwnPropertyDescriptor(PredictiveStudioEngine, 'MaxRunDetailRows');
+    Object.defineProperty(PredictiveStudioEngine, 'MaxRunDetailRows', { value: 2, configurable: true, writable: true });
+    try {
+      const reads: RunViewParams[] = [];
+      const page = Array.from({ length: 1000 }, (_, i) => Latest(`r${i}`, 0.5));
+      const grid = await RenderLatest(page, reads, (p) => p.EntityName === 'MJ: Latest Feature Values' && p.MaxRows === 1);
+      expect(grid.LoadError).toContain('probe failed');
+    } finally {
+      if (cap) Object.defineProperty(PredictiveStudioEngine, 'MaxRunDetailRows', cap);
+    }
+  });
 
   it('the predictions grid reads the binding feature from the latest-value entity', async () => {
     const reads: RunViewParams[] = [];
@@ -282,15 +320,15 @@ describe('PSPredictionsGridComponent (DOM) — the latest values of the model\'s
   });
 
   /** Two entities a pipeline's bindings can target. */
-  const entities = [{ ID: 'E-MEMBERS', Name: 'Members' }, { ID: 'E-OTHERS', Name: 'Others' }];
+  const entities = [TestEntityRows.Entity('Members', ['ID'], ['ID'], 'E-MEMBERS'), TestEntityRows.Entity('Others', ['ID'], ['ID'], 'E-OTHERS')];
   type BindingFields = Pick<MJMLModelScoringBindingEntity, 'ID' | 'MLTrainingPipelineID' | 'FeatureName' | 'TargetEntityID' | 'Status'>;
   const zeta: BindingFields = { ID: 'SB-Z', MLTrainingPipelineID: 'P1', FeatureName: 'Zeta risk', TargetEntityID: 'E-OTHERS', Status: 'Active' };
   const alpha: BindingFields = { ID: 'SB-A', MLTrainingPipelineID: 'P1', FeatureName: 'Alpha risk', TargetEntityID: 'E-MEMBERS', Status: 'Active' };
 
   /** Renders the churn model's grid over `bindings` (in that cache order), opened for `entityName`; returns the grid and its reads. */
   async function RenderBindings(bindings: BindingFields[], entityName: string | null): Promise<{ grid: PSPredictionsGridComponent; reads: RunViewParams[] }> {
-    // the engine's cached bindings: the doubles carry only the members the grid reads
-    vi.spyOn(PredictiveStudioEngine.Instance, 'ScoringBindingsForPipeline').mockReturnValue(bindings as unknown as MJMLModelScoringBindingEntity[]);
+    // the engine's cached bindings, typed entity rows
+    vi.spyOn(PredictiveStudioEngine.Instance, 'ScoringBindingsForPipeline').mockReturnValue(await TestEntityRows.Many(MJMLModelScoringBindingEntity, 'MJ: ML Model Scoring Bindings', bindings));
     vi.spyOn(PredictiveStudioEngine.Instance, 'LoadRunDetails').mockResolvedValue({ Rows: [], Capped: false });
     const reads: RunViewParams[] = [];
     const provider = createFakeProvider<ModelRow | LatestPredictionRow>({
@@ -301,8 +339,7 @@ describe('PSPredictionsGridComponent (DOM) — the latest values of the model\'s
         return [];
       },
       entities,
-      // the entity doubles carry only the members the grid reads
-      entityByName: (name: string) => entities.find((e) => e.Name === name) as unknown as EntityInfo | undefined,
+      entityByName: (name: string) => entities.find((e) => e.Name === name),
     });
     const fixture = renderComponentFixture(PSPredictionsGridComponent, {
       inputs: { ModelId: churn.ID, Provider: provider, EntityName: entityName },
@@ -344,33 +381,32 @@ describe('PSPredictionsGridComponent (DOM) — the latest values of the model\'s
 
 describe('PSPredictionsGridComponent (DOM) — the selection becomes a List through "Materialize List From View"', () => {
   const model: ModelRow & Pick<MJMLModelEntity, 'PipelineID'> = { ID: 'm-churn', PipelineID: 'P1', ProblemType: 'classification', TargetVariable: 'Churned', Lineage: null, OutputSemantics: null };
-  const members = { ID: 'E-MEMBERS', Name: 'Members', PrimaryKeys: [{ Name: 'ID' }], FirstPrimaryKey: { Name: 'ID' } };
+  const members = TestEntityRows.Entity('Members', ['ID'], ['ID'], 'E-MEMBERS');
 
-  /** A User View double: the fields the grid writes, the save it calls and the delete its failure path calls. */
-  class ViewDouble {
-    public ID = '';
-    public Name = '';
-    public EntityID = '';
-    public UserID = '';
-    public WhereClause: string | null = null;
-    public FilterState: string | null = null;
-    public CustomWhereClause = false;
-    public IsShared = true;
-    public IsSaved = false;
-    public LatestResult: { CompleteMessage: string } | null = null;
+  /**
+   * A User View double: the generated entity over an in-memory `EntityInfo` holding the fields the grid writes, with
+   * the save it calls and the delete its failure path calls replaced (no provider is reached).
+   */
+  class ViewDouble extends MJUserViewEntity {
     public Deletes = 0;
-    constructor(private readonly saves = true, private readonly deletes = true) {}
-    public NewRecord(): boolean { return true; }
-    public async Save(): Promise<boolean> {
+    private saved = false;
+    constructor(private readonly saves = true, private readonly deletes = true) {
+      super(TestEntityRows.Entity('MJ: User Views', ['ID', 'Name', 'EntityID', 'UserID', 'WhereClause', 'FilterState', 'CustomWhereClause', 'IsShared']));
+      this.CustomWhereClause = false;
+      this.IsShared = true;
+    }
+    public override get IsSaved(): boolean { return this.saved; }
+    public override NewRecord(): boolean { return true; }
+    public override async Save(): Promise<boolean> {
       if (!this.saves) return false;
       this.ID = 'VIEW-1';
-      this.IsSaved = true;
+      this.saved = true;
       return true;
     }
-    public async Delete(): Promise<boolean> {
+    public override async Delete(): Promise<boolean> {
       this.Deletes++;
       if (!this.deletes) throw new Error('delete refused');
-      this.IsSaved = false;
+      this.saved = false;
       return true;
     }
   }
@@ -382,17 +418,17 @@ describe('PSPredictionsGridComponent (DOM) — the selection becomes a List thro
   /** Renders the grid over three run rows, picks the high tier and clicks "Save as list"; resolves once the save settles. */
   async function SaveHighTier(view: ViewDouble, outcome: ActionOutcome, runs: Array<{ ActionID: string; Params: ActionParam[] }> = [], opened: string[] = []): Promise<PSPredictionsGridComponent> {
     vi.spyOn(PredictiveStudioEngine.Instance, 'LoadRunDetails').mockResolvedValue({ Rows: [detail('r1', 0.9), detail('r2', 0.8), detail('r3', 0.1)], Capped: false });
+    vi.spyOn(PSPredictionsGridComponent.prototype, 'ResolveMaterializeActionID').mockResolvedValue('ACT-MATERIALIZE');
     vi.spyOn(PSPredictionsGridComponent.prototype, 'RunListAction').mockImplementation(async (actionId: string, params: ActionParam[]) => {
       runs.push({ ActionID: actionId, Params: params });
       return outcome;
     });
     const fake = createFakeProvider<ModelRow | { ID: string }>({
-      runViewResults: (p: RunViewParams) => (p.EntityName === 'MJ: ML Models' ? [model] : p.EntityName === 'MJ: Actions' ? [{ ID: 'ACT-MATERIALIZE' }] : []),
-      // the entity double carries only the key members the record filter reads
-      entityByName: (name: string) => (name === 'Members' ? (members as unknown as EntityInfo) : undefined),
+      runViewResults: (p: RunViewParams) => (p.EntityName === 'MJ: ML Models' ? [model] : []),
+      entityByName: (name: string) => (name === 'Members' ? members : undefined),
     });
-    // the grid creates its User View through the provider; the double carries only the members the grid calls
-    const provider = Object.assign(fake, { GetEntityObject: async () => view as unknown as MJUserViewEntity });
+    // the grid creates its User View through the provider: a typed mock of GetEntityObject resolving to the view
+    const provider = Object.assign(fake, { GetEntityObject: vi.fn<IMetadataProvider['GetEntityObject']>().mockResolvedValue(view) });
     const fixture = renderComponentFixture(PSPredictionsGridComponent, {
       inputs: { ModelId: model.ID, RunId: 'run-1', EntityName: 'Members', Provider: provider },
       providers: [{ provide: NavigationService, useValue: { OpenEntityRecord: (entity: string, key: CompositeKey) => { opened.push(`${entity}:${key.ToURLSegment()}`); return 'tab'; } } }],
@@ -452,8 +488,16 @@ describe('PSPredictionsGridComponent (DOM) — the selection becomes a List thro
   });
 });
 
+describe('PSPredictionsGridComponent.ActionIDByName', () => {
+  it('finds the action by its trimmed, case-insensitive name, or null', () => {
+    const actions = [{ ID: 'A1', Name: 'Run Report' }, { ID: 'A2', Name: ' materialize list from view ' }];
+    expect(PSPredictionsGridComponent.ActionIDByName(actions, 'Materialize List From View')).toBe('A2');
+    expect(PSPredictionsGridComponent.ActionIDByName(actions, 'Missing')).toBeNull();
+  });
+});
+
 describe('PSPredictionsGridComponent.SelectionFilterState', () => {
-  const single = { PrimaryKeys: [{ Name: 'ID' }], FirstPrimaryKey: { Name: 'ID' } } as unknown as EntityInfo;
+  const single = TestEntityRows.Entity('Single', ['ID']);
 
   it('puts at most 500 IDs in one `in` rule (the filter compiler\'s limit) and ORs the chunks', () => {
     const ids = Array.from({ length: 1201 }, (_v, i) => `id-${i}`);
@@ -463,11 +507,7 @@ describe('PSPredictionsGridComponent.SelectionFilterState', () => {
   });
 
   it('expands a composite key to an AND of `eq` rules per record', () => {
-    const composite = {
-      PrimaryKeys: [{ Name: 'A' }, { Name: 'B' }],
-      FirstPrimaryKey: { Name: 'A' },
-      Fields: [{ Name: 'A' }, { Name: 'B' }],
-    } as unknown as EntityInfo;
+    const composite = TestEntityRows.Entity('Composite', ['A', 'B'], ['A', 'B']);
     const state = PSPredictionsGridComponent.SelectionFilterState(composite, ['A|1||B|x']);
     expect(state).toEqual({ logic: 'or', filters: [{ logic: 'and', filters: [{ field: 'A', operator: 'eq', value: '1' }, { field: 'B', operator: 'eq', value: 'x' }] }] });
   });

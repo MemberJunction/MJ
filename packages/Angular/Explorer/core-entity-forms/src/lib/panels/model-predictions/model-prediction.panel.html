@@ -127,7 +127,7 @@
 
             <div class="mpp-lineage" data-testid="ps-prediction-lineage">
               @if (card.Lineage.Source === 'Model') {
-                <span>Model v{{ card.Lineage.ModelVersion ?? '?' }}</span>
+                <span>Model v{{ card.Lineage.ModelVersion || '?' }}</span>
                 @if (card.Lineage.ScoringRunID) {
                   <span class="mpp-dot" aria-hidden="true">·</span>
                   <span>scoring run {{ card.Lineage.ScoringRunID }}</span>

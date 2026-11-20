@@ -2,7 +2,7 @@
  * Task M6.4 — the registry check (§5.7 R6, R7; D4-19, D4-20) over the real lifecycle gate and the `GateTestStore`
  * world: each finding is remediated through the gate and recorded with its action.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MJScheduledJobEntity, MJScheduledJobRunEntity } from '@memberjunction/core-entities';
 import type { Actor } from '@memberjunction/predictive-studio-core';
 import type { ScheduledJobExecutionContext } from '@memberjunction/scheduling-engine';
@@ -16,7 +16,7 @@ import { LifecycleGate } from '../../registry/lifecycle-gate';
 import { PreGateModelMigration } from '../../migration/pre-gate-model-migration';
 import { StorageProviderArtifactLoader } from '../../scoring/storage-provider-artifact-loader';
 import { SnapshotHash } from '../../snapshot/snapshot-hash';
-import { PredictiveStudioRegistryCheckJobDriver, VIEW_GATE_FILTER_NAME, type IRegistryScoringActions, type RegistryCheckConfiguration, type RegistryFinding } from '../registry-check-driver';
+import { PredictiveStudioRegistryCheckJobDriver, type IRegistryScoringActions, type RegistryCheckConfiguration, type RegistryFinding } from '../registry-check-driver';
 import { WorldNotifier, WorldPublisher } from './monitoring-world';
 
 const log: string[] = [];
@@ -26,6 +26,7 @@ const providerRow = ProviderRow(GateWorld.StorageProviderID, 'Registry Check Sto
 const JOB_RUN = '7A2B3C4D-0000-4000-8000-0000000000D1';
 const registryJob: Actor = { kind: 'scheduled-job', scheduledJobRunId: JOB_RUN };
 const agent: Actor = { kind: 'agent', agentRunId: '7A2B3C4D-0000-4000-8000-0000000000D2' };
+const VIEW_GATE_FILTER_NAME = PredictiveStudioRegistryCheckJobDriver.ViewGateFilterName;
 
 /** Scoring actions every model has, unless named missing. */
 class ScoringActionsDouble implements IRegistryScoringActions {
@@ -128,6 +129,10 @@ function LegacyServing(): { readonly ID: string; readonly PipelineID: string; re
   });
   return { ID: modelId, PipelineID: pipelineId, Bytes: bytes };
 }
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 const Run = (): Promise<RegistryFinding[]> => driver.RunChecks(PredictiveStudioRegistryCheckJobDriver.ReadConfiguration(null), registryJob, ctx);
 const rollbacks = (modelId: string) => store.PublishRecords(modelId).filter((r) => r['Kind'] === 'publish' && r['Purpose'] === 'rollback');
@@ -341,16 +346,55 @@ describe('PredictiveStudioRegistryCheckJobDriver', () => {
     it('a job owner that cannot be resolved fails the run before any step (fails closed)', async () => {
       const intruder = world.Model('Validated', 'model');
       store.SetStatus(intruder.ID, 'Published');
-      const host = globalThis as typeof globalThis & { ___SINGLETON__UserCache?: object };
-      const previous = host.___SINGLETON__UserCache;
-      host.___SINGLETON__UserCache = undefined;
-      try {
-        const result = await driver.Execute(await JobContext('{}', '7A2B3C4D-0000-4000-8000-0000000000F9'));
-        expect(result).toMatchObject({ Success: false, ErrorMessage: expect.stringContaining('7A2B3C4D-0000-4000-8000-0000000000F9') });
-        expect(store.Status(intruder.ID)).toBe('Published');
-      } finally {
-        host.___SINGLETON__UserCache = previous;
-      }
+      // `BaseScheduledJob.resolveScheduleOwnerUser` reads the process-wide UserCache; with none, no owner resolves.
+      vi.stubGlobal('___SINGLETON__UserCache', undefined);
+      const result = await driver.Execute(await JobContext('{}', '7A2B3C4D-0000-4000-8000-0000000000F9'));
+      expect(result).toMatchObject({ Success: false, ErrorMessage: expect.stringContaining('7A2B3C4D-0000-4000-8000-0000000000F9') });
+      expect(store.Status(intruder.ID)).toBe('Published');
+    });
+
+    it('each notification links its finding\'s subject as a record of the subject\'s own entity; a finding with no subject links none (M6-1)', async () => {
+      store.Insert('MJ: ML Scoring Runs', { ID: 'A1000000-0000-4000-8000-000000000011', Status: 'running', StartedAt: new Date(now.getTime() - 7 * 3_600_000) });
+      await driver.Execute(await JobContext('{}', GateWorld.User.ID));
+      expect(notifier.Sent).toEqual(expect.arrayContaining([
+        expect.objectContaining({ Title: expect.stringContaining('(e)'), Subject: { Entity: 'MJ: ML Scoring Runs', RecordID: 'A1000000-0000-4000-8000-000000000011' } }),
+        expect.objectContaining({ Title: expect.stringContaining('(i)'), Subject: null }),
+      ]));
+      expect(notifier.Sent.filter((n) => n.Subject !== null && n.Subject.Entity === 'MJ: ML Models')).toEqual([]);
+    });
+
+    it('a notification that does not save is listed under Unnotified; the run still succeeds with its remediations applied (M6-1)', async () => {
+      store.Insert('MJ: ML Scoring Runs', { ID: 'A1000000-0000-4000-8000-000000000012', Status: 'running', StartedAt: new Date(now.getTime() - 7 * 3_600_000) });
+      notifier.Failure = new Error('the notification store is down');
+      const result = await driver.Execute(await JobContext('{}', GateWorld.User.ID));
+      expect(result.Success).toBe(true);
+      expect(store.Row('MJ: ML Scoring Runs', 'A1000000-0000-4000-8000-000000000012')?.['Status']).toBe('failed');
+      expect(result.Details?.['Unnotified']).toEqual(expect.arrayContaining([
+        expect.objectContaining({ Finding: 'e', SubjectID: 'A1000000-0000-4000-8000-000000000012', Reason: expect.stringContaining('the notification store is down') }),
+      ]));
+    });
+  });
+
+  describe('failed reads fail conservatively', () => {
+    it('a stale scoring run whose read fails is a retry finding naming the run, never dropped (M6-4)', async () => {
+      store.Insert('MJ: ML Scoring Runs', { ID: 'A1000000-0000-4000-8000-000000000013', Status: 'running', StartedAt: new Date(now.getTime() - 7 * 3_600_000) });
+      store.ReadLog.FailNext('MJ: ML Scoring Runs');
+      const findings = await Run();
+      expect(findings).toEqual(expect.arrayContaining([expect.objectContaining({ Finding: 'e', SubjectID: 'A1000000-0000-4000-8000-000000000013', Outcome: 'retry', Action: expect.stringContaining('reading the run failed') })]));
+      expect(store.Row('MJ: ML Scoring Runs', 'A1000000-0000-4000-8000-000000000013')?.['Status']).toBe('running');
+    });
+
+    it('a pipeline whose protocol read fails after its artifact was lost is a retry finding, never a silently skipped retraining (M6-5)', async () => {
+      const previous = await Published();
+      const published = await Published({ IncumbentID: previous.ID });
+      storage.Objects.delete(`artifacts/${String(store.Row('MJ: ML Models', published.ID)?.['ArtifactFileID'])}`);
+      const pipeline = store.Row('MJ: ML Training Pipelines', GateWorld.PipelineID);
+      if (pipeline) pipeline['EvaluationProtocolID'] = 'protocol-bound';
+      store.ReadLog.FailNext('MJ: ML Training Pipelines');
+      const findings = await Run();
+      expect(store.Status(published.ID)).toBe('Archived');
+      expect(trainer.Trained).toEqual([]);
+      expect(findings).toEqual(expect.arrayContaining([expect.objectContaining({ Finding: 'c', SubjectID: GateWorld.PipelineID, Outcome: 'retry', Action: expect.stringContaining('reading ML Training Pipeline') })]));
     });
   });
 
@@ -358,7 +402,7 @@ describe('PredictiveStudioRegistryCheckJobDriver', () => {
     it('step (g) runs before (a) and its Details carry the migration\'s record', async () => {
       const legacy = LegacyServing();
       const ordered = new OrderRecordingDriver({ Gate: gate, Publisher: trainer, ArtifactLoader: new StorageProviderArtifactLoader(), ScoringActions: actions, Notifier: notifier, Clock: { Now: () => now }, Migration: { Gate: gate } });
-      const result = await ordered.Execute(await JobContext(JSON.stringify({ migration: { batchSize: 50, retrainPerRun: 3 } })));
+      const result = await ordered.Execute(await JobContext(JSON.stringify({ Migration: { BatchSize: 50, RetrainPerRun: 3 } })));
       expect(ordered.Order).toEqual(['g', 'a']);
       expect(store.Row('MJ: ML Models', legacy.ID)).toMatchObject({ Status: 'Unevaluated', ServingWhileUnevaluated: true, ArtifactStatus: 'verified', ArtifactSha256: SnapshotHash.Sha256Hex(legacy.Bytes) });
       expect(result.Details?.[PreGateModelMigration.DetailsKey]).toMatchObject({
@@ -374,9 +418,9 @@ describe('PredictiveStudioRegistryCheckJobDriver', () => {
       expect(result.Details).not.toHaveProperty(PreGateModelMigration.DetailsKey);
     });
 
-    it('reads Configuration.migration with the defaults of D4-22', () => {
+    it('reads Configuration.Migration with the defaults of D4-22', () => {
       const read = (text: string | null): RegistryCheckConfiguration['Migration'] => PredictiveStudioRegistryCheckJobDriver.ReadConfiguration(text).Migration;
-      expect([read(null), read(JSON.stringify({ migration: { batchSize: 10, retrainPerRun: 0 } })), read(JSON.stringify({ migration: { batchSize: -1 } }))]).toEqual([
+      expect([read(null), read(JSON.stringify({ Migration: { BatchSize: 10, RetrainPerRun: 0 } })), read(JSON.stringify({ Migration: { BatchSize: -1 } }))]).toEqual([
         { BatchSize: 50, RetrainPerRun: 3 }, { BatchSize: 10, RetrainPerRun: 0 }, { BatchSize: 50, RetrainPerRun: 3 },
       ]);
     });

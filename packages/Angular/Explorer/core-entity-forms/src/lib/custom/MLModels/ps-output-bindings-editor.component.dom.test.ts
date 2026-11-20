@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
-import { CreateFakeProvider, renderComponentFixture, query } from '@memberjunction/ng-test-utils';
-import type { MJMLModelEntity, MJMLOutputBindingEntity } from '@memberjunction/core-entities';
+import { CreateFakeProvider, renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
+import type { MJMLOutputBindingEntity } from '@memberjunction/core-entities';
 import { PSOutputBindingsEditorComponent } from './ps-output-bindings-editor.component';
+import { GatedReads, SettleReads } from './ps-gated-reads.dom-fixture';
 
 try {
   TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
@@ -37,7 +38,8 @@ async function RenderBindingsEditor(opts: { saveRefusal: string | null }) {
   const binding = AtRiskBinding(opts.saveRefusal);
   const provider = CreateFakeProvider({ runViewResults: (p) => (p.EntityName === 'MJ: ML Output Bindings' ? [binding] : []) });
   const f = renderComponentFixture(PSOutputBindingsEditorComponent, { inputs: { Provider: provider } });
-  f.componentInstance.Model = { ID: 'M-1' } as unknown as MJMLModelEntity;
+  // inputs are set untyped (setInput), so the model double is passed as is
+  f.componentRef.setInput('Model', { ID: 'M-1' });
   await f.componentInstance.Reload();
   f.detectChanges();
   await f.whenStable();
@@ -80,5 +82,23 @@ describe('PSOutputBindingsEditorComponent (DOM)', () => {
     const { f } = await RenderBindingsEditor({ saveRefusal: null });
     expect(Text(f, 'ps-output-binding')).toContain('most at risk first');
     expect(f.nativeElement.querySelectorAll('[data-testid="ps-output-binding"] input, [data-testid="ps-output-binding"] select').length).toBe(1);
+  });
+});
+
+describe('a model change while its rows load (M7-3)', () => {
+  it('shows the current model\'s output bindings when an earlier model\'s read finishes last', async () => {
+    const reads = new GatedReads((modelId, p) => (p.EntityName === 'MJ: ML Output Bindings' ? (modelId === 'M-A' ? [AtRiskBinding(null), { ...AtRiskBinding(null), ID: 'OB-2' }] : [AtRiskBinding(null)]) : []));
+    const f = renderComponentFixture(PSOutputBindingsEditorComponent, { inputs: { Provider: reads.Provider() } });
+    f.componentRef.setInput('Model', { ID: 'M-A' });
+    f.detectChanges();
+    f.componentRef.setInput('Model', { ID: 'M-B' });
+    f.detectChanges();
+    await SettleReads();
+    reads.Release('M-B');
+    await SettleReads();
+    reads.Release('M-A');
+    await SettleReads();
+    f.detectChanges();
+    expect(queryAll(f, '[data-testid="ps-output-binding"]').length).toBe(1);
   });
 });

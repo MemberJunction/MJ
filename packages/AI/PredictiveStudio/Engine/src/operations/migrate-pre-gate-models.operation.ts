@@ -32,9 +32,10 @@ export class PredictiveStudioMigratePreGateModelsServerOperation extends Predict
     user: UserInfo,
     _context: RemoteOpServerContext,
   ): Promise<PredictiveStudioMigratePreGateModelsOutput> {
+    // The operation's input is camelCase like every Remote Operation contract; the job's configuration is PascalCase.
     const config = PreGateModelMigration.ConfigFrom({
-      ...(input?.batchSize === undefined ? {} : { batchSize: input.batchSize }),
-      ...(input?.retrainPerRun === undefined ? {} : { retrainPerRun: input.retrainPerRun }),
+      ...(input?.batchSize === undefined ? {} : { BatchSize: input.batchSize }),
+      ...(input?.retrainPerRun === undefined ? {} : { RetrainPerRun: input.retrainPerRun }),
     });
     const pass = await PreGateModelMigration.RunPass(
       { DryRun: input?.dryRun !== false, ScheduledJobRunID: input?.scheduledJobRunId || null, Config: config },
