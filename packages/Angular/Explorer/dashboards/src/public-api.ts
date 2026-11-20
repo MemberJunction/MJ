@@ -133,6 +133,9 @@ export {
   CommunicationMonitorResourceComponent
 } from './Communication/communication-monitor-resource.component';
 export {
+  CommunicationComplianceAdminResourceComponent
+} from './Communications/communication-compliance-admin-resource.component';
+export {
   CommunicationLogsResourceComponent
 } from './Communication/communication-logs-resource.component';
 export {

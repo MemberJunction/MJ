@@ -39,22 +39,40 @@ vi.mock('@memberjunction/core', async () => {
           Success: true,
           Results: mocks.runViewResults,
         })),
+        RunViews: vi.fn(async (params: Array<{ EntityName: string }>) =>
+          params.map((p) => {
+            if (p.EntityName === 'MJ: Communication Senders') {
+              return {
+                Success: true,
+                Results: [{ ID: 'sender-1', Name: 'Default', CommunicationProviderID: 'prov-sg', EnforcementMode: 'Enforce', ParentSenderID: null }],
+              };
+            }
+            return { Success: true, Results: [] };
+          }),
+        ),
       }),
     },
   };
 });
 
-vi.mock('@memberjunction/communication-engine', () => ({
-  CommunicationEngine: {
-    Instance: {
-      Config: mocks.engineConfig,
-      GetProvider: mocks.getProvider,
-      get Providers() {
-        return mocks.providersList;
+vi.mock('@memberjunction/communication-engine', async () => {
+  const actual = await vi.importActual<typeof import('@memberjunction/communication-engine')>(
+    '@memberjunction/communication-engine',
+  );
+  return {
+    ...actual,
+    CommunicationEngine: {
+      Instance: {
+        Config: mocks.engineConfig,
+        GetProvider: mocks.getProvider,
+        BaseMessageTypes: [{ ID: 'chan-email', Type: 'Email' }],
+        get Providers() {
+          return mocks.providersList;
+        },
       },
     },
-  },
-}));
+  };
+});
 
 import { CommsAdminResolver } from '../resolvers/CommsAdminResolver.js';
 
@@ -204,5 +222,18 @@ describe('CommsAdminResolver', () => {
     expect(suppEntity.Status).toBe('Revoked');
     expect(auditSave).toHaveBeenCalledTimes(1);
     expect(removeSuppression).toHaveBeenCalledWith('bounced@example.com', 'bounces');
+  });
+
+  it('SimulateCommsComplianceGate evaluates real ComplianceGate on the server', async () => {
+    const resolver = new CommsAdminResolver();
+    const res = await resolver.SimulateCommsComplianceGate(
+      { SenderID: 'sender-1', MessageClass: 'Marketing' },
+      context,
+    );
+
+    expect(res.Success).toBe(true);
+    expect(res.Decision).toBe('Allowed');
+    const parsed = JSON.parse(res.ResultJSON!) as { Decision: string };
+    expect(parsed.Decision).toBe('Allowed');
   });
 });

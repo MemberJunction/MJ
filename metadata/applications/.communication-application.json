@@ -43,6 +43,12 @@
         "Icon": "fa-solid fa-play-circle",
         "ResourceType": "Custom",
         "DriverClass": "CommunicationRunsResource"
+      },
+      {
+        "Label": "Compliance & Admin",
+        "Icon": "fa-solid fa-shield-halved",
+        "ResourceType": "Custom",
+        "DriverClass": "CommunicationComplianceAdminResource"
       }
     ]
   },

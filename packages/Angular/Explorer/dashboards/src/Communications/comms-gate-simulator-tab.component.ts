@@ -1,16 +1,25 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import type { ComplianceGateResult, MessageClass } from '@memberjunction/communication-types';
-import type {
-  MJCommunicationPrincipalPreferenceEntity,
-  MJCommunicationSuppressionEntity,
-} from '@memberjunction/core-entities';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import type { CommsAdminLoadedMetadata } from './communications-admin.types';
-import { SimulateComplianceGate } from './compliance-simulator';
+
+interface GqlCapableProvider {
+  ExecuteGQL(query: string, variables?: Record<string, unknown>): Promise<Record<string, unknown>>;
+}
+
+function asGqlProvider(provider: unknown): GqlCapableProvider | null {
+  if (
+    provider &&
+    typeof provider === 'object' &&
+    'ExecuteGQL' in provider &&
+    typeof (provider as { ExecuteGQL?: unknown }).ExecuteGQL === 'function'
+  ) {
+    return provider as GqlCapableProvider;
+  }
+  return null;
+}
 
 @Component({
   selector: 'mj-comms-gate-simulator-tab',
@@ -146,58 +155,47 @@ export class CommsGateSimulatorTabComponent extends BaseAngularComponent {
 
   public async RunSimulation(): Promise<void> {
     if (!this._metadata || !this.SelectedSenderId) return;
-    const sender = this._metadata.Senders.find((s) => UUIDsEqual(s.ID, this.SelectedSenderId));
-    if (!sender) return;
 
     this.IsSimulating = true;
     this.ErrorMessage = '';
     this.cdr.markForCheck();
 
     try {
-      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const principal = this._metadata.Principals.find((p) => UUIDsEqual(p.ID, this.SelectedPrincipalId));
-      const preference = this._metadata.Preferences.find((p) => UUIDsEqual(p.ID, this.SelectedPreferenceId));
-
-      let suppressions: MJCommunicationSuppressionEntity[] = [];
-      let principalPref: MJCommunicationPrincipalPreferenceEntity | undefined;
-
-      if (principal && this.RecordId.trim()) {
-        const safeEntityId = EscapeSQLString(principal.EntityID);
-        const safeRecordId = EscapeSQLString(this.RecordId.trim());
-        const [suppRes, ppRes] = await Promise.all([
-          rv.RunView<MJCommunicationSuppressionEntity>({
-            EntityName: 'MJ: Communication Suppressions',
-            ExtraFilter: `EntityID='${safeEntityId}' AND RecordID='${safeRecordId}' AND Status='Active'`,
-            ResultType: 'entity_object',
-          }),
-          preference
-            ? rv.RunView<MJCommunicationPrincipalPreferenceEntity>({
-                EntityName: 'MJ: Communication Principal Preferences',
-                ExtraFilter: `EntityID='${safeEntityId}' AND RecordID='${safeRecordId}' AND CommunicationPreferenceID='${EscapeSQLString(preference.ID)}'`,
-                MaxRows: 1,
-                ResultType: 'entity_object',
-              })
-            : Promise.resolve(null),
-        ]);
-        if (suppRes.Success) suppressions = suppRes.Results;
-        if (ppRes?.Success && ppRes.Results.length > 0) principalPref = ppRes.Results[0];
+      const gql = asGqlProvider(this.ProviderToUse);
+      if (!gql) {
+        throw new Error('GraphQL provider is not available.');
       }
 
-      this.DecisionResult = SimulateComplianceGate({
-        Sender: sender,
-        AllSenders: this._metadata.Senders,
-        Preference: preference,
-        PrincipalPreference: principalPref,
-        MessageClass: this.MessageClass,
-        Suppressions: suppressions,
-        Regimes: this._metadata.Regimes,
-        RegimeJurisdictions: this._metadata.RegimeJurisdictions,
-        RegimeRules: this._metadata.RegimeRules,
-        RuleTypes: this._metadata.RuleTypes,
-        JurisdictionMembers: this._metadata.JurisdictionMembers,
-        RecipientJurisdictionID: this.RecipientJurisdictionId || null,
+      const query = `
+        query SimulateCommsComplianceGate($Input: CommsGateSimulationInput!) {
+          SimulateCommsComplianceGate(Input: $Input) {
+            Success
+            Decision
+            Reason
+            Detail
+            ResultJSON
+            ErrorMessage
+          }
+        }
+      `;
+      const res = await gql.ExecuteGQL(query, {
+        Input: {
+          SenderID: this.SelectedSenderId,
+          PrincipalID: this.SelectedPrincipalId || undefined,
+          RecordID: this.RecordId.trim() || undefined,
+          PreferenceID: this.SelectedPreferenceId || undefined,
+          MessageClass: this.MessageClass,
+          RecipientJurisdictionID: this.RecipientJurisdictionId || undefined,
+        },
       });
-      this.DecisionJson = JSON.stringify(this.DecisionResult, null, 2);
+      const payload = res['SimulateCommsComplianceGate'] as
+        | { Success: boolean; ResultJSON?: string; ErrorMessage?: string }
+        | undefined;
+      if (!payload?.Success || !payload.ResultJSON) {
+        throw new Error(payload?.ErrorMessage || 'Server gate simulation failed.');
+      }
+      this.DecisionResult = JSON.parse(payload.ResultJSON) as ComplianceGateResult;
+      this.DecisionJson = payload.ResultJSON;
     } catch (err: unknown) {
       this.ErrorMessage = err instanceof Error ? err.message : 'Simulation failed.';
     } finally {

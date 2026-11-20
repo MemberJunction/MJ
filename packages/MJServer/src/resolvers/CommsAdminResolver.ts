@@ -1,18 +1,35 @@
-import { Arg, Ctx, Field, Mutation, ObjectType, Resolver } from 'type-graphql';
+import { Arg, Ctx, Field, InputType, Mutation, ObjectType, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { GetReadWriteProvider } from '../util.js';
 import { IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
 import {
+  MJCommunicationComplianceRegimeEntity,
+  MJCommunicationComplianceRegimeJurisdictionEntity,
+  MJCommunicationComplianceRegimeRuleEntity,
+  MJCommunicationComplianceRuleTypeEntity,
   MJCommunicationConsentAuditLogEntity,
   MJCommunicationEndpointEntity,
+  MJCommunicationPreferenceEntity,
+  MJCommunicationPrincipalEntity,
+  MJCommunicationPrincipalPreferenceEntity,
   MJCommunicationProviderEntity,
   MJCommunicationSenderEntity,
   MJCommunicationSendingDomainEntity,
   MJCommunicationSuppressionEntity,
+  MJJurisdictionEntity,
+  MJJurisdictionMemberEntity,
 } from '@memberjunction/core-entities';
-import { CommunicationEngine } from '@memberjunction/communication-engine';
-import type { BaseMessageResult, ProviderCredentialsBase } from '@memberjunction/communication-types';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import {
+  CommunicationEngine,
+  ComplianceGate,
+  JurisdictionResolver,
+} from '@memberjunction/communication-engine';
+import type {
+  BaseMessageResult,
+  MessageClass,
+  ProviderCredentialsBase,
+} from '@memberjunction/communication-types';
+import { EscapeSQLString, IndexByUUID, UUIDsEqual } from '@memberjunction/global';
 
 @ObjectType()
 export class CommsSendingDomainAuthResult {
@@ -47,6 +64,48 @@ export class CommsAdminMutationResult {
   WarningMessage?: string;
 }
 
+@InputType()
+export class CommsGateSimulationInput {
+  @Field()
+  SenderID!: string;
+
+  @Field({ nullable: true })
+  PrincipalID?: string;
+
+  @Field({ nullable: true })
+  RecordID?: string;
+
+  @Field({ nullable: true })
+  PreferenceID?: string;
+
+  @Field()
+  MessageClass!: string;
+
+  @Field({ nullable: true })
+  RecipientJurisdictionID?: string;
+}
+
+@ObjectType()
+export class CommsGateSimulationResult {
+  @Field()
+  Success!: boolean;
+
+  @Field({ nullable: true })
+  Decision?: string;
+
+  @Field({ nullable: true })
+  Reason?: string;
+
+  @Field({ nullable: true })
+  Detail?: string;
+
+  @Field({ nullable: true })
+  ResultJSON?: string;
+
+  @Field({ nullable: true })
+  ErrorMessage?: string;
+}
+
 interface SuppressionRemovableProvider {
   RemoveSuppression(
     email: string,
@@ -79,6 +138,159 @@ function mapReasonToSuppressionType(reason: MJCommunicationSuppressionEntity['Re
 
 @Resolver()
 export class CommsAdminResolver {
+  @Query(() => CommsGateSimulationResult)
+  public async SimulateCommsComplianceGate(
+    @Arg('Input') input: CommsGateSimulationInput,
+    @Ctx() context: AppContext,
+  ): Promise<CommsGateSimulationResult> {
+    const user = context.userPayload?.userRecord;
+    if (!user) {
+      return { Success: false, ErrorMessage: 'Authentication required' };
+    }
+
+    const mdProvider = GetReadWriteProvider(context.providers) as IMetadataProvider;
+    await CommunicationEngine.Instance.Config(false, user, mdProvider);
+
+    const rv = RunView.FromMetadataProvider(mdProvider);
+    const [
+      sendersRes,
+      prefsRes,
+      principalsRes,
+      jurRes,
+      jmRes,
+      rtRes,
+      regRes,
+      rjRes,
+      rrRes,
+    ] = await rv.RunViews([
+      { EntityName: 'MJ: Communication Senders', ResultType: 'entity_object' },
+      { EntityName: 'MJ: Communication Preferences', ResultType: 'entity_object' },
+      { EntityName: 'MJ: Communication Principals', ResultType: 'entity_object' },
+      { EntityName: 'MJ: Jurisdictions', ResultType: 'entity_object' },
+      { EntityName: 'MJ: Jurisdiction Members', ResultType: 'entity_object' },
+      { EntityName: 'MJ: Communication Compliance Rule Types', ResultType: 'entity_object' },
+      { EntityName: 'MJ: Communication Compliance Regimes', ResultType: 'entity_object' },
+      { EntityName: 'MJ: Communication Compliance Regime Jurisdictions', ResultType: 'entity_object' },
+      { EntityName: 'MJ: Communication Compliance Regime Rules', ResultType: 'entity_object' },
+    ], user);
+
+    const senders = (sendersRes.Success ? sendersRes.Results : []) as MJCommunicationSenderEntity[];
+    const senderById = IndexByUUID(senders, (s) => s.ID);
+    const sender = senderById.Get(input.SenderID);
+    if (!sender) {
+      return { Success: false, ErrorMessage: `Sender '${input.SenderID}' not found` };
+    }
+
+    const senderAncestors: string[] = [];
+    const seenSenders = new Set<string>([sender.ID.toLowerCase()]);
+    let curParent = sender.ParentSenderID;
+    while (curParent && !seenSenders.has(curParent.toLowerCase())) {
+      seenSenders.add(curParent.toLowerCase());
+      const parent = senderById.Get(curParent);
+      if (!parent) break;
+      senderAncestors.push(parent.ID);
+      curParent = parent.ParentSenderID;
+    }
+
+    const preferences = (prefsRes.Success ? prefsRes.Results : []) as MJCommunicationPreferenceEntity[];
+    const preference = input.PreferenceID
+      ? preferences.find((p) => UUIDsEqual(p.ID, input.PreferenceID))
+      : undefined;
+
+    const principals = (principalsRes.Success ? principalsRes.Results : []) as MJCommunicationPrincipalEntity[];
+    const principal = input.PrincipalID
+      ? principals.find((p) => UUIDsEqual(p.ID, input.PrincipalID))
+      : undefined;
+
+    const jurisdictions = (jurRes.Success ? jurRes.Results : []) as MJJurisdictionEntity[];
+    const recipientJurisdictionCode = input.RecipientJurisdictionID
+      ? jurisdictions.find((j) => UUIDsEqual(j.ID, input.RecipientJurisdictionID))?.Code ?? null
+      : null;
+
+    let suppressions: MJCommunicationSuppressionEntity[] = [];
+    let principalPref: MJCommunicationPrincipalPreferenceEntity | undefined;
+    if (principal && input.RecordID?.trim()) {
+      const safeEntityId = EscapeSQLString(principal.EntityID);
+      const safeRecordId = EscapeSQLString(input.RecordID.trim());
+      const [suppRes, ppRes] = await rv.RunViews([
+        {
+          EntityName: 'MJ: Communication Suppressions',
+          ExtraFilter: `EntityID='${safeEntityId}' AND RecordID='${safeRecordId}' AND Status='Active'`,
+          ResultType: 'entity_object',
+        },
+        ...(preference
+          ? [{
+              EntityName: 'MJ: Communication Principal Preferences',
+              ExtraFilter: `EntityID='${safeEntityId}' AND RecordID='${safeRecordId}' AND CommunicationPreferenceID='${EscapeSQLString(preference.ID)}'`,
+              MaxRows: 1,
+              ResultType: 'entity_object' as const,
+            }]
+          : []),
+      ], user);
+      if (suppRes.Success) {
+        suppressions = suppRes.Results as MJCommunicationSuppressionEntity[];
+      }
+      if (ppRes?.Success && ppRes.Results.length > 0) {
+        principalPref = ppRes.Results[0] as MJCommunicationPrincipalPreferenceEntity;
+      }
+    }
+
+    const emailChannel = CommunicationEngine.Instance.BaseMessageTypes.find(
+      (b) => b.Type.toLowerCase() === 'email',
+    );
+    const channelId = emailChannel?.ID ?? sender.CommunicationProviderID;
+
+    const resolver = new JurisdictionResolver({
+      Jurisdictions: jurisdictions,
+      JurisdictionMembers: (jmRes.Success ? jmRes.Results : []) as MJJurisdictionMemberEntity[],
+      ComplianceRuleTypes: (rtRes.Success ? rtRes.Results : []) as MJCommunicationComplianceRuleTypeEntity[],
+      ComplianceRegimes: (regRes.Success ? regRes.Results : []) as MJCommunicationComplianceRegimeEntity[],
+      ComplianceRegimeJurisdictions: (rjRes.Success ? rjRes.Results : []) as MJCommunicationComplianceRegimeJurisdictionEntity[],
+      ComplianceRegimeRules: (rrRes.Success ? rrRes.Results : []) as MJCommunicationComplianceRegimeRuleEntity[],
+    });
+
+    const gate = new ComplianceGate(resolver);
+    const messageClass: MessageClass =
+      input.MessageClass === 'Operational' || input.MessageClass === 'Transactional'
+        ? input.MessageClass
+        : 'Marketing';
+
+    const mockEndpoint = {
+      ID: '00000000-0000-0000-0000-000000000000',
+      BaseMessageTypeID: channelId,
+      NormalizedValue: 'simulator@example.com',
+      Status: 'Active',
+    } as MJCommunicationEndpointEntity;
+
+    const gateResult = gate.Evaluate(
+      {
+        Sender: sender,
+        SenderAncestors: senderAncestors,
+        Principal: principal && input.RecordID?.trim()
+          ? { EntityID: principal.EntityID, RecordID: input.RecordID.trim() }
+          : undefined,
+        Endpoint: mockEndpoint,
+        Preference: preference,
+        PrincipalPreference: principalPref,
+        MessageClass: messageClass,
+        ChannelID: channelId,
+        Now: new Date(),
+      },
+      {
+        Suppressions: suppressions,
+        RecipientJurisdiction: recipientJurisdictionCode,
+      },
+    );
+
+    return {
+      Success: true,
+      Decision: gateResult.Decision,
+      Reason: gateResult.Reason,
+      Detail: gateResult.Detail,
+      ResultJSON: JSON.stringify(gateResult, null, 2),
+    };
+  }
+
   @Mutation(() => CommsSendingDomainAuthResult)
   public async CreateCommsSendingDomain(
     @Arg('DomainID') domainId: string,

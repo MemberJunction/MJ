@@ -16,6 +16,7 @@ import { CommunicationRunsResourceComponent } from './Communication/communicatio
 import { CommunicationTemplatesResourceComponent } from './Communication/communication-templates-resource.component';
 import { CommunicationsNewMessageResource } from './Communication/communication-new-message-resource.component';
 import { CommunicationsAdminDashboardComponent } from './Communications/communications-admin-dashboard.component';
+import { CommunicationComplianceAdminResourceComponent } from './Communications/communication-compliance-admin-resource.component';
 import { CommsGateSimulatorTabComponent } from './Communications/comms-gate-simulator-tab.component';
 import { CommsSendersPermissionsTabComponent } from './Communications/comms-senders-permissions-tab.component';
 import { CommsRegimesJurisdictionsTabComponent } from './Communications/comms-regimes-jurisdictions-tab.component';
@@ -36,7 +37,8 @@ import { CommsSendingDomainsTabComponent } from './Communications/comms-sending-
     CommunicationRunsResourceComponent,
     CommunicationTemplatesResourceComponent,
     CommunicationsNewMessageResource,
-    CommunicationsAdminDashboardComponent
+    CommunicationsAdminDashboardComponent,
+    CommunicationComplianceAdminResourceComponent
   ],
   imports: [
     CommonModule,
@@ -71,7 +73,8 @@ import { CommsSendingDomainsTabComponent } from './Communications/comms-sending-
     CommunicationRunsResourceComponent,
     CommunicationTemplatesResourceComponent,
     CommunicationsNewMessageResource,
-    CommunicationsAdminDashboardComponent
+    CommunicationsAdminDashboardComponent,
+    CommunicationComplianceAdminResourceComponent
   ]
 })
 export class CommunicationDashboardsModule { }
