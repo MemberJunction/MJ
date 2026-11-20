@@ -75,6 +75,11 @@ export class PSScoringBindingEditorComponent extends BaseAngularComponent implem
   set Model(value: MJMLModelEntity | null) {
     if (value === this._model) return;
     this._model = value;
+    // The form, the pending withdrawal and the errors belonged to the previous model's bindings.
+    this.Draft = null;
+    this.PendingWithdrawal = null;
+    this.refreshCopyColumns();
+    this.clearErrors();
     if (this.initialized) void this.load();
   }
   get Model(): MJMLModelEntity | null {
@@ -230,14 +235,21 @@ export class PSScoringBindingEditorComponent extends BaseAngularComponent implem
    */
   public async Save(): Promise<void> {
     const draft = this.Draft;
-    if (!draft || this.Busy || !this.Model) return;
+    const model = this.Model;
+    if (!draft || this.Busy || !model) return;
     this.Busy = true;
     this.clearErrors();
     this.cdr.markForCheck();
     try {
       const binding = draft.Binding || (await this.newBinding());
       this.applyDraft(binding, draft);
-      if (await binding.Save()) {
+      const saved = await binding.Save();
+      if (this.Model !== model) {
+        // The model changed while the save ran: its outcome belongs to the previous model's draft, not this editor.
+        if (!saved && draft.Binding) draft.Binding.Revert();
+        return;
+      }
+      if (saved) {
         this.Draft = null;
         this.notifications.CreateSimpleNotification(`Saved the scoring binding "${binding.FeatureName}".`, 'success', 3500);
         this.Saved.emit(binding);
@@ -247,7 +259,7 @@ export class PSScoringBindingEditorComponent extends BaseAngularComponent implem
         if (draft.Binding) draft.Binding.Revert();
       }
     } catch (e) {
-      this.GeneralError = e instanceof Error ? e.message : String(e);
+      if (this.Model === model) this.GeneralError = e instanceof Error ? e.message : String(e);
       if (draft.Binding) draft.Binding.Revert();
     } finally {
       this.Busy = false;

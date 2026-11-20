@@ -65,6 +65,7 @@ class BindingDouble {
   }
 
   public async Save(): Promise<boolean> {
+    if (this.world.HoldSave) await this.world.HoldSave;
     const refusal = this.world.SaveRefusal;
     if (refusal) {
       this.LatestResult = { Success: false, Errors: [new ValidationErrorInfo(refusal.Source, refusal.Message, null)], CompleteMessage: refusal.Message };
@@ -85,6 +86,8 @@ class BindingDouble {
 interface World {
   Saved: Array<Partial<BindingDouble>>;
   SaveRefusal: { Source: string; Message: string } | null;
+  /** When set, every save waits for it (a slow save). */
+  HoldSave?: Promise<void>;
 }
 
 const viewModelPredictions = new AuthorizationInfo({ ID: 'A-VIEW', Name: PredictionViewAuthorization.DefaultName, IsActive: true });
@@ -290,5 +293,22 @@ describe('PSScoringBindingEditorComponent (DOM)', () => {
     release();
     await settle(f);
     expect(f.componentInstance.Bindings.map((b) => b.FeatureName)).toEqual(['Current model feature']);
+  });
+
+  it('a save that settles after the model changed leaves the new model\'s editor untouched', async () => {
+    const { f, world } = await RenderEditor({ saveRefusal: { Source: 'FeatureName', Message: 'already used' } });
+    let release: () => void = () => undefined;
+    world.HoldSave = new Promise<void>((resolve) => { release = resolve; });
+    await Click(f, 'ps-binding-new');
+    Type(f, 'ps-binding-feature-name', 'Renewal risk');
+    el<HTMLElement>(f, 'ps-binding-save').click();
+    await settle(f);
+    f.componentRef.setInput('Model', { ...model, ID: 'M-OTHER' });
+    await settle(f);
+    release();
+    await settle(f);
+    // the refusal belongs to the previous model's draft: the new model's editor shows no form and no error
+    expect([f.componentInstance.Draft, f.componentInstance.GeneralError, f.componentInstance.ErrorsFor('FeatureName')]).toEqual([null, null, []]);
+    expect(Query(f, '[data-testid="ps-binding-form"]')).toBeNull();
   });
 });
