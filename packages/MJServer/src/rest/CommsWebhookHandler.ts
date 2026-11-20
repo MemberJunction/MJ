@@ -484,6 +484,10 @@ function resolveSecretAccessor(hmacSecret?: string | (() => string | undefined))
     return () => process.env.MJ_COMMS_HMAC_SECRET;
 }
 
+export async function ResolveSendGridWebhookVerificationKey(credentialId?: string): Promise<string | undefined> {
+    return defaultResolveWebhookKey(credentialId);
+}
+
 async function defaultResolveWebhookKey(credentialId?: string): Promise<string | undefined> {
     if (credentialId) {
         const systemUser = getSystemUser();

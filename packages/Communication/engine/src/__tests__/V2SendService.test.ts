@@ -31,7 +31,7 @@ describe('V2 Endpoint Normalization & Tracking Primitives', () => {
   it('rewrites HTTP/HTTPS links with valid HMAC-SHA256 signature and excludes unsubscribe URLs', () => {
     const token = 'tok-123';
     const secret = 'super-secret-key';
-    const unsubUrl = 'https://app.example.com/api/comms/unsubscribe/unsub-1';
+    const unsubUrl = 'https://app.example.com/comms/unsubscribe/unsub-1';
     const html = `<p><a href="https://example.com/offer?id=42">Offer</a> <a href="${unsubUrl}">Unsub</a> <a href="mailto:help@example.com">Mail</a></p>`;
 
     const rewritten = RewriteLinksForTracking(
@@ -42,7 +42,7 @@ describe('V2 Endpoint Normalization & Tracking Primitives', () => {
       [unsubUrl],
     );
 
-    expect(rewritten).toContain('https://app.example.com/api/comms/click/tok-123?u=');
+    expect(rewritten).toContain('https://app.example.com/comms/click/tok-123?u=');
     expect(rewritten).toContain(`href="${unsubUrl}"`);
     expect(rewritten).toContain('href="mailto:help@example.com"');
 
@@ -58,18 +58,21 @@ describe('V2 Endpoint Normalization & Tracking Primitives', () => {
   it('injects open pixel before </body> or appends when </body> is absent', () => {
     const withBody = InjectOpenPixel('<html><body><p>Hi</p></body></html>', 'tok-abc', 'https://app.example.com');
     expect(withBody).toBe(
-      '<html><body><p>Hi</p><img src="https://app.example.com/api/comms/open/tok-abc.gif" width="1" height="1" alt="" style="display:none;" /></body></html>',
+      '<html><body><p>Hi</p><img src="https://app.example.com/comms/open/tok-abc.gif" width="1" height="1" alt="" style="display:none;" /></body></html>',
     );
 
     const noBody = InjectOpenPixel('<p>Hi</p>', 'tok-abc');
-    expect(noBody).toContain('/api/comms/open/tok-abc.gif');
+    expect(noBody).toContain('/comms/open/tok-abc.gif');
+
+    const withApiPrefix = InjectOpenPixel('<p>Hi</p>', 'tok-abc', 'https://app.example.com/api/comms');
+    expect(withApiPrefix).toContain('https://app.example.com/api/comms/open/tok-abc.gif');
   });
 
   it('detects protected-element tampering via SHA-256 hash assertion', () => {
     const snapshot: ProtectedComplianceSnapshot = {
       From: 'news@example.com',
       To: 'user@example.com',
-      ListUnsubscribe: '<https://app.example.com/api/comms/unsubscribe/u1>',
+      ListUnsubscribe: '<https://app.example.com/comms/unsubscribe/u1>',
       ListUnsubscribePost: 'List-Unsubscribe=One-Click',
       FooterHTML: '<div>123 Main St | Unsubscribe</div>',
       LogID: 'log-1',

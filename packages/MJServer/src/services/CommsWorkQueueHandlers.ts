@@ -19,6 +19,7 @@ import {
 import type {
     MessagePayload,
     NormalizedActivityEvent,
+    ProviderCredentialsBase,
     RecipientSendTarget,
     SendingEnvelope,
 } from '@memberjunction/communication-types';
@@ -34,7 +35,10 @@ import {
     type WorkOutcome,
 } from '@memberjunction/work-queue-core';
 import { BaseWorkHandler, WorkQueueEngine } from '@memberjunction/work-queue-engine';
-import type { CommsActivityWorkPayload } from '../rest/CommsWebhookHandler.js';
+import {
+    ResolveSendGridWebhookVerificationKey,
+    type CommsActivityWorkPayload,
+} from '../rest/CommsWebhookHandler.js';
 
 export const COMMS_DISPATCH_HANDLER_KEY = 'comms.dispatch';
 export const COMMS_RENDER_HANDLER_KEY = 'comms.render';
@@ -140,11 +144,21 @@ export class CommsActivityWorkHandler extends BaseWorkHandler<CommsActivityWorkP
         if (payload.Source === 'sendgrid-webhook' && payload.RawBody) {
             const sgProvider = CommunicationEngine.Instance.GetProvider('SendGrid');
             if (sgProvider?.ParseNotification) {
-                const parsed = await sgProvider.ParseNotification({
-                    RawBody: payload.RawBody,
-                    Headers: payload.Headers ?? {},
-                    QueryParams: {},
-                });
+                const webhookKey = await ResolveSendGridWebhookVerificationKey(payload.CredentialID);
+                const credentials = webhookKey
+                    ? ({ webhookVerificationKey: webhookKey } as ProviderCredentialsBase)
+                    : undefined;
+                const parsed = await sgProvider.ParseNotification(
+                    {
+                        RawBody: payload.RawBody,
+                        Headers: payload.Headers ?? {},
+                        QueryParams: {},
+                    },
+                    credentials,
+                );
+                if (!parsed.Success) {
+                    throw new Error(parsed.ErrorMessage ?? 'SendGrid ParseNotification failed');
+                }
                 return (parsed.Notifications ?? []).flatMap((n) => n.ActivityEvents ?? []);
             }
             return [];

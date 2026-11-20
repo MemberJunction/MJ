@@ -92,6 +92,16 @@ export function VerifyTrackingSignature(
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+function buildCommsRouteUrl(baseUrl: string, subpath: string): string {
+  const cleanBase = baseUrl.replace(/\/+$/, '');
+  if (!cleanBase) {
+    return `/comms${subpath}`;
+  }
+  return cleanBase.endsWith('/comms')
+    ? `${cleanBase}${subpath}`
+    : `${cleanBase}/comms${subpath}`;
+}
+
 export function RewriteLinksForTracking(
   html: string,
   trackingToken: string,
@@ -100,7 +110,6 @@ export function RewriteLinksForTracking(
   excludedUrls: ReadonlyArray<string> = [],
 ): string {
   const excluded = new Set(excludedUrls.filter(Boolean));
-  const cleanBase = baseUrl.replace(/\/+$/, '');
   return html.replace(
     /(<a\b[^>]*?\bhref\s*=\s*)(["'])(https?:\/\/[^"']+)\2/gi,
     (fullMatch, prefix: string, quote: string, url: string) => {
@@ -109,7 +118,7 @@ export function RewriteLinksForTracking(
         return fullMatch;
       }
       const sig = ComputeTrackingSignature(trackingToken, decodedUrl, secret);
-      const tracked = `${cleanBase}/api/comms/click/${trackingToken}?u=${encodeURIComponent(decodedUrl)}&sig=${sig}`;
+      const tracked = `${buildCommsRouteUrl(baseUrl, `/click/${trackingToken}`)}?u=${encodeURIComponent(decodedUrl)}&sig=${sig}`;
       return `${prefix}${quote}${tracked}${quote}`;
     },
   );
@@ -120,8 +129,7 @@ export function InjectOpenPixel(
   trackingToken: string,
   baseUrl: string = '',
 ): string {
-  const cleanBase = baseUrl.replace(/\/+$/, '');
-  const pixel = `<img src="${cleanBase}/api/comms/open/${trackingToken}.gif" width="1" height="1" alt="" style="display:none;" />`;
+  const pixel = `<img src="${buildCommsRouteUrl(baseUrl, `/open/${trackingToken}.gif`)}" width="1" height="1" alt="" style="display:none;" />`;
   if (/<\/body>/i.test(html)) {
     return html.replace(/<\/body>/i, `${pixel}</body>`);
   }
@@ -725,9 +733,8 @@ export class V2SendService {
     baseUrl: string,
     unsubscribeToken: string,
   ): ComplianceObligations {
-    const cleanBase = baseUrl.replace(/\/+$/, '');
     const unsubUrl =
-      obligations.UnsubscribeURL ?? `${cleanBase}/api/comms/unsubscribe/${unsubscribeToken}`;
+      obligations.UnsubscribeURL ?? buildCommsRouteUrl(baseUrl, `/unsubscribe/${unsubscribeToken}`);
     return {
       ...obligations,
       UnsubscribeURL: unsubUrl,

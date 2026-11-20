@@ -2033,7 +2033,7 @@ const setupComplete$ = new ReplaySubject(1);
   // Not awaited: a slow engine load must not delay readiness, and a failure never stops the API.
   const workQueueProvider = Metadata.Provider; // global-provider-ok: server startup — the work-queue host runs on the server's own provider
   if (runBackgroundWorkers && configInfo.workQueue?.enabled && workQueueProvider instanceof DatabaseProviderBase) {
-    ConfigureCommsV2WorkQueue(configInfo.publicUrl);
+    ConfigureCommsV2WorkQueue(ApiRoute('/comms', { absolute: true }));
     const workQueuePool = dataSources[0]?.dataSource;
     const providerSource = new MJServerWorkQueueProviderSource(workQueuePool instanceof sql.ConnectionPool ? workQueuePool : null, workQueueProvider);
     StartWorkQueueHost(configInfo.workQueue, workQueueProvider, providerSource)
