@@ -95,6 +95,7 @@ describe('BuildRecordChangePayload — CloneContext & SyncContext (§10.3)', () 
         Name: 'TestEntity',
         BaseTable: 'TestEntity',
         FieldByName: (name: string) => ({ Name: name, CodeName: name }),
+        EncryptedFields: [],
     } as unknown as EntityInfo;
 
     const mockUser = {

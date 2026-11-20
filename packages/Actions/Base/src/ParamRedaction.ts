@@ -26,6 +26,10 @@ import { ActionParam } from "./ActionEngine-Base";
  * | 2 | `EntityActionParam.LogValue = 0` — per-binding suppression. `NULL` inherits rule 3. | rule 3 |
  * | 3 | `ActionParam.LogValue = 0` — the definition declares the parameter unloggable. Default `1`. | — |
  *
+ * Logs ({@link RedactParamsToJSON}) apply one more rule after these: a parameter whose name marks
+ * it as a secret is never logged, and secret-named top-level keys of an object value are masked
+ * (see {@link MaskSecretParams}).
+ *
  * When a value is suppressed the log still records **the shape** — name, type,
  * value type, byte length, key count and truncated top-level keys — so
  * *"it was called with the 41-column deal row, not the 3-field summary"* stays
@@ -42,7 +46,9 @@ export type ParamRedactionReason =
     /** Rule 2 — `EntityActionParam.LogValue = 0` on this specific binding. */
     | 'BindingLogValueFalse'
     /** Rule 3 — `ActionParam.LogValue = 0` on the parameter definition. */
-    | 'ParamLogValueFalse';
+    | 'ParamLogValueFalse'
+    /** Log rule — the parameter's name marks it as a secret (password, client secret, token, API key). */
+    | 'SecretParamName';
 
 /**
  * The record written in place of a parameter whose value is suppressed. Carries
@@ -142,12 +148,57 @@ export function RedactParamsToJSON(
     if (!params || params.length === 0) {
         return '[]';
     }
-    const hasBindings = !!entityActionParams && entityActionParams.length > 0;
-    const hasOptOutDefs = !!actionParams && actionParams.some(ap => ap.LogValue === false);
-    if (!hasBindings && !hasOptOutDefs) {
-        return JSON.stringify(params);
+    return JSON.stringify(MaskSecretParams(RedactParams(params, actionParams, entityActionParams)));
+}
+
+/** The marker written in place of a secret value inside an object parameter. */
+export const REDACTED_SECRET_VALUE = '[redacted]';
+
+/**
+ * Name endings that mark a value as a secret. Names are compared lower-case with every character
+ * that is not a letter or digit removed, so `X-API-Key`, `api_key` and `ApiKey` all match `apikey`.
+ * Names that only contain a token word (`NextPageToken`, `MaxTokens`) do not match.
+ */
+const SECRET_NAME_PATTERN = /(password|passwd|secret|apikey|privatekey|accesstoken|refreshtoken|idtoken|authtoken|bearertoken|sessiontoken|authorization)$/;
+
+/** True when a parameter or object key name marks its value as a secret. */
+export function IsSecretParamName(name: string | null | undefined): boolean {
+    if (!name) return false;
+    return SECRET_NAME_PATTERN.test(name.toLowerCase().replace(/[^a-z0-9]/g, ''));
+}
+
+/**
+ * The log form of already-redacted parameters: a secret-named parameter becomes a redaction
+ * record, and secret-named top-level keys of a plain object value are replaced with
+ * {@link REDACTED_SECRET_VALUE}. Used for logs only; payloads that are re-run keep their values.
+ */
+export function MaskSecretParams(params: LoggedParam[]): LoggedParam[] {
+    return params.map(p => {
+        if (IsRedactedParam(p)) {
+            return p;
+        }
+        if (IsSecretParamName(p.Name)) {
+            return buildRedactionRecord(p, undefined, 'SecretParamName');
+        }
+        const masked = maskSecretKeys(p.Value);
+        return masked === p.Value ? p : { ...p, Value: masked };
+    });
+}
+
+/** A copy of a plain object with its secret-named top-level keys masked, or `value` itself when nothing matches. */
+function maskSecretKeys(value: unknown): unknown {
+    if (value === null || typeof value !== 'object' || Array.isArray(value) || value instanceof BaseEntity) {
+        return value;
     }
-    return JSON.stringify(RedactParams(params, actionParams, entityActionParams));
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (!entries.some(([k]) => IsSecretParamName(k))) {
+        return value;
+    }
+    const masked: Record<string, unknown> = {};
+    for (const [k, v] of entries) {
+        masked[k] = IsSecretParamName(k) && v !== null && v !== undefined ? REDACTED_SECRET_VALUE : v;
+    }
+    return masked;
 }
 
 /**

@@ -2,6 +2,9 @@ import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, User
 import { UUIDsEqual } from "@memberjunction/global";
 import { MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationRunEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity } from "@memberjunction/core-entities";
 import { MJCommunicationProviderEntityExtended, ProcessedMessage } from "./BaseProvider";
+
+/** The body text a Communication Log keeps for a message that carries a secret. */
+export const SECRET_BODY_PLACEHOLDER = '[omitted: message contains a secret]';
  
 
 /**
@@ -155,12 +158,15 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
       log.CommunicationProviderMessageTypeID = processedMessage.MessageType.ID;
       log.MessageDate = new Date();
       log.Direction = 'Sending';
+      // A message that carries a secret is logged without its body.
+      const omitBody = processedMessage.ContainsSecrets === true;
       log.MessageContent = JSON.stringify({
             To: processedMessage.To,
             From: processedMessage.From,
             Subject: processedMessage.ProcessedSubject,
-            HTMLBody: processedMessage.ProcessedHTMLBody,
-            TextBody: processedMessage.ProcessedBody,
+            HTMLBody: omitBody ? SECRET_BODY_PLACEHOLDER : processedMessage.ProcessedHTMLBody,
+            TextBody: omitBody ? SECRET_BODY_PLACEHOLDER : processedMessage.ProcessedBody,
+            ...(omitBody ? { ContainsSecrets: true } : {}),
             // Dry-run sends are audited like real sends but explicitly marked so the log row can
             // never be mistaken for a real delivery (see Message.DryRun on the base contract).
             ...(processedMessage.DryRun ? { DryRun: true } : {}),

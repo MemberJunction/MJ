@@ -223,6 +223,22 @@ describe('MagicLinkService.CreateInvite identity mode and resource', () => {
         expect(CommunicationEngine.Instance.SendSingleMessage).toHaveBeenCalledTimes(1);
     });
 
+    it('marks the invite email as containing secrets, so its link is not logged', async () => {
+        const saved: SavedInvite[] = [];
+        const service = new MagicLinkService('https://api.example.com', makeConfig());
+        const send = vi.mocked(CommunicationEngine.Instance.SendSingleMessage);
+        send.mockClear();
+
+        await service.CreateInvite(
+            { IdentityMode: 'anonymous', email: 'recipient@example.com', ApplicationId: 'app-forms' },
+            owner,
+            makeFakeProvider(saved),
+        );
+
+        expect(send).toHaveBeenCalledTimes(1);
+        expect(send.mock.calls[0][2]).toMatchObject({ ContainsSecrets: true });
+    });
+
     it('refuses a resource-share invite with no resource', async () => {
         const saved: SavedInvite[] = [];
         const service = new MagicLinkService('https://api.example.com', makeConfig());
