@@ -65,6 +65,8 @@ Link previews (in chat apps and social sites) and search engines read a page's H
 
 `mj explorer postbuild --dir dist/MJExplorer/browser` (the host's `postbuild` script) writes these files after `ng build`. It reads the pages from `publicPages` in `mj.config.cjs`. An error page gets no file.
 
+The build also writes `public-pages/_fallback.html`, for a `/p/` address with no page file (an unknown slug, or `/p/` alone). It has the same policy, Explorer's title and `noindex`. An error page shows text from the address (`Context.Error().RequestedPath`), so it must run under the policy too.
+
 A public page shares its browser origin with Explorer, and Explorer keeps sign-in tokens in the browser's storage. The policy is what stops a script from another site from reading them. So:
 
 - A public page loads no script from another site: no tag manager, analytics script or chat widget.
@@ -73,22 +75,26 @@ A public page shares its browser origin with Explorer, and Explorer keeps sign-i
 
 ## Web host rules
 
-The web host serves `public-pages/<slug>.html` for `/p/<slug>` and for every address under it. Every other `/p/` address gets `index.html`, as every Explorer address does.
+The web host serves `public-pages/<slug>.html` for `/p/<slug>` and for every address under it. Every other `/p/` address gets `public-pages/_fallback.html`.
 
-Azure Static Web Apps: `mj explorer postbuild` adds the rules for each page to the `staticwebapp.config.json` in the build folder:
+Azure Static Web Apps: `mj explorer postbuild` adds the rules to the `staticwebapp.config.json` in the build folder:
 
 ```json
 "routes": [
   { "route": "/p/pricing", "rewrite": "/public-pages/pricing.html" },
-  { "route": "/p/pricing/*", "rewrite": "/public-pages/pricing.html" }
+  { "route": "/p/pricing/*", "rewrite": "/public-pages/pricing.html" },
+  { "route": "/p/*", "rewrite": "/public-pages/_fallback.html" }
 ]
 ```
 
-nginx (as in `docker/regression/nginx.conf`):
+nginx (as in `docker/regression/nginx.conf`). Put both rules before a rule for static files (`\.(js|css|png|…)$`), or a sub-path that ends in one of those extensions gets a 404:
 
 ```nginx
 location ~ ^/p/([a-z0-9-]+)(/|$) {
-    try_files /public-pages/$1.html /index.html;
+    try_files /public-pages/$1.html /public-pages/_fallback.html /index.html;
+}
+location ~ ^/p/ {
+    try_files /public-pages/_fallback.html /index.html;
 }
 ```
 

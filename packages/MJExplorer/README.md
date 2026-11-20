@@ -142,9 +142,9 @@ Open Apps can ship pages that visitors open before sign-in, at `/p/<slug>` (see 
 
 `prestart` and `prebuild` run `mj codegen manifest --open-app-client-bootstrap`, which also writes the page list (`src/app/generated/public-pages.generated.ts`) from `publicPages` in `mj.config.cjs`.
 
-After `ng build`, the `postbuild` script runs `mj explorer postbuild`. It checks the service worker's cache list and writes `public-pages/<slug>.html` into `dist/MJExplorer/browser/` for each page. Each file is a copy of `index.html` with the page's title and link preview tags (from `title` and `description` in the app's `mj-app.json`), a robots tag, and a Content Security Policy that allows only the site's own scripts. The map library tags are removed. It also adds a rewrite for each page to the copy of `staticwebapp.config.json` in `dist/` (Azure Static Web Apps).
+After `ng build`, the `postbuild` script runs `mj explorer postbuild`. It checks the service worker's cache list and writes `public-pages/<slug>.html` into `dist/MJExplorer/browser/` for each page. Each file is a copy of `index.html` with the page's title and link preview tags (from `title` and `description` in the app's `mj-app.json`), a robots tag, and a Content Security Policy that allows only the site's own scripts. The map library tags are removed. It also writes `public-pages/_fallback.html`, with the same policy and `noindex`, for the `/p/` addresses that have no page file. It also adds a rewrite for each page, and one for the fallback file, to the copy of `staticwebapp.config.json` in `dist/` (Azure Static Web Apps).
 
-The web host sends `/p/<slug>` to `/public-pages/<slug>.html`. `docker/regression/nginx.conf` has the nginx rule. A web host without the rule still shows the page: `index.html` answers, with Explorer's title, no link preview, no Content Security Policy and a `noindex` robots tag. Add the rule before a page is announced to the public.
+The web host sends `/p/<slug>` to `/public-pages/<slug>.html`, and every other `/p/` address to `/public-pages/_fallback.html`. `docker/regression/nginx.conf` has the nginx rules. A web host without the rules still shows the page: `index.html` answers, with Explorer's title, no link preview, no Content Security Policy and a `noindex` robots tag. Add the rule before a page is announced to the public.
 
 ## Class Registration Manifests
 

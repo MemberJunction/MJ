@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
     ApplyPublicPageRoutes,
+    BuildPublicFallbackHtml,
     BuildPublicPageHtml,
     WritePublicPageHtmlFiles,
     WriteStaticWebAppRoutes,
@@ -70,8 +71,9 @@ describe('BuildPublicPageHtml', () => {
     it('escapes HTML in the title and description', () => {
         const html = BuildPublicPageHtml(INDEX_HTML, { ...PRICING, Title: 'A & B <script>', Description: 'Say "hi" & \'bye\'' });
         expect(html).toContain('<title>A &amp; B &lt;script&gt;</title>');
-        expect(html).toContain('<meta name="description" content="Say &quot;hi&quot; &amp; &#39;bye&#39;">');
-        expect(html).not.toContain('<script>');
+        expect(html).toContain(`<meta name="description" content="Say &quot;hi&quot; &amp; 'bye'">`);
+        expect(html).toContain('<meta property="og:title" content="A &amp; B <script>">');
+        expect(html.match(/<\/script>/g)).toHaveLength(1);
     });
 
     it('keeps the default title when the page has only a description', () => {
@@ -189,6 +191,37 @@ describe('BuildPublicPageHtml with comments that name tags', () => {
     });
 });
 
+describe('BuildPublicPageHtml with inline scripts in other forms', () => {
+    const page = (script: string): string => `<html><head><title>T</title>${script}</head><body><script src="main.js" type="module"></script></body></html>`;
+
+    it('reads an end tag with a space, as a browser does', () => {
+        const html = BuildPublicPageHtml(page('<script>var a = 1;</script ><script>var b = 2;</script>'), PRICING);
+        expect(policyOf(html)).toContain(`script-src 'self' ${scriptHash('var a = 1;')} ${scriptHash('var b = 2;')};`);
+    });
+
+    it('hashes the text with the line ends that a browser reads', () => {
+        const html = BuildPublicPageHtml(page('<script>var a = 1;\r\nvar b = 2;</script>'), PRICING);
+        expect(policyOf(html)).toContain(scriptHash('var a = 1;\nvar b = 2;'));
+    });
+});
+
+describe('BuildPublicFallbackHtml', () => {
+    const html = BuildPublicFallbackHtml(BUILT_INDEX_HTML);
+
+    it('has the same policy as a page file, and no map library tags', () => {
+        expect(policyOf(html)).toContain(`script-src 'self' ${scriptHash(THEME_SCRIPT)} ${scriptHash(BRAND_SCRIPT)};`);
+        expect(html).not.toContain('unpkg.com');
+        expect(html).not.toContain('onload=');
+    });
+
+    it('tells search engines not to index it, and keeps the default title', () => {
+        expect(html).toContain('<meta name="robots" content="noindex">');
+        expect(html).not.toContain('index, follow');
+        expect(html).toContain('<title>MemberJunction Explorer</title>');
+        expect(html).not.toContain('og:');
+    });
+});
+
 const ERROR_PAGE: OpenAppPublicPageEntry = { AppName: 'acme-app', Role: 'error', Scope: 'pricing', PackageName: '@acme/app-public', ExportName: 'NotFoundPage', Enabled: true };
 
 describe('error pages', () => {
@@ -209,7 +242,7 @@ describe('error pages', () => {
     });
 
     it('get no route', () => {
-        expect(ApplyPublicPageRoutes([], [PRICING, ERROR_PAGE])).toHaveLength(2);
+        expect(ApplyPublicPageRoutes([], [PRICING, ERROR_PAGE]).map((r) => r.route)).toEqual(['/p/pricing', '/p/pricing/*', '/p/*']);
     });
 });
 
@@ -232,6 +265,14 @@ describe('WritePublicPageHtmlFiles', () => {
         expect(existsSync(join(dir, 'public-pages', 'old.html'))).toBe(false);
     });
 
+    it('writes public-pages/_fallback.html, also when there is no page', () => {
+        writeFileSync(join(dir, 'index.html'), INDEX_HTML);
+        expect(WritePublicPageHtmlFiles(dir, [])).toBe(0);
+        const fallback = readFileSync(join(dir, 'public-pages', '_fallback.html'), 'utf-8');
+        expect(fallback).toContain('http-equiv="Content-Security-Policy"');
+        expect(fallback).toContain('<meta name="robots" content="noindex">');
+    });
+
     it('fails on a slug that is not lowercase kebab-case, and writes nothing outside public-pages/', () => {
         writeFileSync(join(dir, 'index.html'), INDEX_HTML);
         expect(() => WritePublicPageHtmlFiles(dir, [{ ...PRICING, Slug: '../escape' }])).toThrow(/\.\.\/escape/);
@@ -246,11 +287,12 @@ describe('WritePublicPageHtmlFiles', () => {
 describe('ApplyPublicPageRoutes', () => {
     const OTHER_ROUTE: StaticWebAppRoute = { route: '/admin/*', allowedRoles: ['authenticated'] };
 
-    it('puts a rewrite for each enabled page before the other routes', () => {
+    it('puts a rewrite for each enabled page, then the fallback for other page addresses, before the other routes', () => {
         const routes = ApplyPublicPageRoutes([OTHER_ROUTE], [PRICING, { ...PRICING, Slug: 'old', Enabled: false }]);
         expect(routes).toEqual([
             { route: '/p/pricing', rewrite: '/public-pages/pricing.html' },
             { route: '/p/pricing/*', rewrite: '/public-pages/pricing.html' },
+            { route: '/p/*', rewrite: '/public-pages/_fallback.html' },
             OTHER_ROUTE,
         ]);
     });
@@ -258,7 +300,7 @@ describe('ApplyPublicPageRoutes', () => {
     it('replaces page routes from an earlier run', () => {
         const earlier = ApplyPublicPageRoutes([OTHER_ROUTE], [{ ...PRICING, Slug: 'gone' }]);
         const routes = ApplyPublicPageRoutes(earlier, [PRICING]);
-        expect(routes.map((r) => r.route)).toEqual(['/p/pricing', '/p/pricing/*', '/admin/*']);
+        expect(routes.map((r) => r.route)).toEqual(['/p/pricing', '/p/pricing/*', '/p/*', '/admin/*']);
     });
 });
 
@@ -283,16 +325,18 @@ describe('WriteStaticWebAppRoutes', () => {
         expect(config.routes).toEqual([
             { route: '/p/pricing', rewrite: '/public-pages/pricing.html' },
             { route: '/p/pricing/*', rewrite: '/public-pages/pricing.html' },
+            { route: '/p/*', rewrite: '/public-pages/_fallback.html' },
         ]);
         expect(config.navigationFallback).toEqual({ rewrite: 'index.html' });
     });
 
-    it('leaves the file as it is when there are no page routes', () => {
+    it('leaves the file as it is on a second run', () => {
         const configPath = join(site, 'staticwebapp.config.json');
-        const text = '{\n  "navigationFallback": { "rewrite": "index.html", "exclude": ["*.js"] }\n}\n';
-        writeFileSync(configPath, text);
+        writeFileSync(configPath, JSON.stringify({ navigationFallback: { rewrite: 'index.html' } }));
+        expect(WriteStaticWebAppRoutes(site, [PRICING])).toBe(true);
+        const text = readFileSync(configPath, 'utf-8');
 
-        expect(WriteStaticWebAppRoutes(site, [])).toBe(false);
+        expect(WriteStaticWebAppRoutes(site, [PRICING])).toBe(false);
         expect(readFileSync(configPath, 'utf-8')).toBe(text);
     });
 

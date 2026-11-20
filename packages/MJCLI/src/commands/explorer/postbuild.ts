@@ -11,9 +11,10 @@ It does every step that follows \`ng build\`, so a new step reaches a host with 
   1. Checks the service worker's cache list.
   2. Writes one HTML file per public page (public-pages/<slug>.html) from mj.config \`publicPages\`,
      with the page's title, link preview tags and Content Security Policy. The web host serves the
-     file for /p/<slug>.
+     file for /p/<slug>. Also writes public-pages/_fallback.html, with the same policy, for the
+     /p/ addresses that have no page file.
   3. When the folder has a staticwebapp.config.json (Azure Static Web Apps), adds a rewrite for
-     each page to it.`;
+     each page and for the fallback file to it.`;
 
     static examples = [
         {

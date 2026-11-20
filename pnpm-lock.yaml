@@ -13035,6 +13035,9 @@ importers:
       ora-classic:
         specifier: ^5.4.2
         version: 5.4.2
+      parse5:
+        specifier: ^8.0.0
+        version: 8.0.0
       pg:
         specifier: ^8.13.1
         version: 8.18.0
