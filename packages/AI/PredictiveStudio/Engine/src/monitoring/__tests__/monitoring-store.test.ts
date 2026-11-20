@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ResourceTypeEngine, type MJResourceTypeEntity } from '@memberjunction/core-entities';
 
 import { GateTestStore, GateWorld } from '../../__tests__/fakes/gate-test-store';
 import { GateContexts } from '../../registry/gate-seams';
@@ -9,6 +10,7 @@ import { RunViewMonitoringStore, UserNotificationMonitoringNotifier } from '../m
 const CURRENT = '6B000000-0000-4000-8000-0000000000A1';
 const PREDECESSOR = '6B000000-0000-4000-8000-0000000000A2';
 const OLDER = '6B000000-0000-4000-8000-0000000000A3';
+const RECORDS_RESOURCE_TYPE_ID = '6B000000-0000-4000-8000-0000000000C1';
 
 let store: GateTestStore;
 let ctx: RegistryContext;
@@ -63,10 +65,19 @@ describe('RunViewMonitoringStore rows', () => {
 });
 
 describe('UserNotificationMonitoringNotifier', () => {
+  // The record link goes through the Records resource type by name; no test loads the real engine.
+  beforeEach(async () => {
+    const recordsType = await store.Provider().GetEntityObject<MJResourceTypeEntity>('MJ: Resource Types', GateWorld.User);
+    recordsType.ID = RECORDS_RESOURCE_TYPE_ID;
+    vi.spyOn(ResourceTypeEngine.Instance, 'Config').mockResolvedValue(undefined);
+    vi.spyOn(ResourceTypeEngine.Instance, 'ByName').mockImplementation((name: string) => (name === 'Records' ? recordsType : undefined));
+  });
+  afterEach(() => vi.restoreAllMocks());
+
   it('links the notification to its subject as a record of the subject\'s own entity', async () => {
     await new UserNotificationMonitoringNotifier().Notify(GateWorld.User.ID, 'title', 'message', { Entity: 'MJ: ML Scoring Runs', RecordID: CURRENT }, ctx);
     const row = (store.Tables['MJ: User Notifications'] || [])[0];
-    expect(row).toMatchObject({ UserID: GateWorld.User.ID, Title: 'title', Message: 'message', Unread: true, ResourceRecordID: CURRENT });
+    expect(row).toMatchObject({ UserID: GateWorld.User.ID, Title: 'title', Message: 'message', Unread: true, ResourceTypeID: RECORDS_RESOURCE_TYPE_ID, ResourceRecordID: CURRENT });
     expect(JSON.parse(String(row?.['ResourceConfiguration']))).toEqual({ Entity: 'MJ: ML Scoring Runs', RecordID: CURRENT });
   });
 
