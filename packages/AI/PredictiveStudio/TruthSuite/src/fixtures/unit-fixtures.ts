@@ -78,6 +78,21 @@ const LATEST_TRAINING_RUN_FIELDS = ['ID', 'PipelineID', 'EvaluationProtocolID', 
 /** A pipeline's newest training run as `UnitFixtures.LatestRun` returns it: a plain read-only row. */
 export type LatestTrainingRun = Pick<MJMLTrainingRunEntity, (typeof LATEST_TRAINING_RUN_FIELDS)[number]>;
 
+/** What `UnitFixtures.provision` saves: the unit draft, the pipeline's features, algorithm and protocol. */
+interface ProvisionOptions {
+  readonly Draft: UnitDraft;
+  /** The feature columns (one select step over them unless `FeatureSteps` is given). */
+  readonly Features: readonly string[];
+  /** The `MJ: ML Algorithms` name. */
+  readonly Algorithm: string;
+  readonly Protocol: ProtocolChoice;
+  readonly Guard?: LeakageGuard;
+  /** The pipeline's step graph; default one select step over `Features`. */
+  readonly FeatureSteps?: FeatureStepGraph;
+  /** The protocol's retrain triggers; default none. */
+  readonly Triggers?: readonly RetrainTrigger[];
+}
+
 export interface ProvisionedUnitPipeline {
   readonly UnitRow: MJMLPredictionUnitEntity;
   readonly Unit: PredictionUnitSpec;
@@ -262,10 +277,13 @@ export class UnitFixtures {
   }
 
   /**
-   * `featureSteps`, when given, is saved as the pipeline's step graph; else one select step over `features`. The
-   * pipeline is bound to the protocol `protocol` chooses (none for `{ Kind: 'none' }`).
+   * `FeatureSteps`, when given, is saved as the pipeline's step graph; else one select step over `Features`. The
+   * pipeline is bound to the protocol `Protocol` chooses (none for `{ Kind: 'none' }`), with `Triggers` as its retrain
+   * triggers when given.
    */
-  private static async provision(h: TruthHarness, draft: UnitDraft, features: readonly string[], algorithm: string, protocol: ProtocolChoice, guard?: LeakageGuard, featureSteps?: FeatureStepGraph, triggers: readonly RetrainTrigger[] | null = null): Promise<ProvisionedUnitPipeline> {
+  private static async provision(h: TruthHarness, o: ProvisionOptions): Promise<ProvisionedUnitPipeline> {
+    const { Draft: draft, Features: features, Algorithm: algorithm, Protocol: protocol, Guard: guard, FeatureSteps: featureSteps } = o;
+    const triggers = o.Triggers || null;
     const factory = UnitFixtures.EntityFactory(h);
     const unitRow = await PredictionUnitVersioning.CreatePredictionUnitV1(draft, { kind: 'human', userId: h.User.ID }, factory, h.User);
     h.Created.RecordPredictionUnit(unitRow.ID);
@@ -286,20 +304,20 @@ export class UnitFixtures {
   }
 
   public static ProvisionC1RenewalPipeline(h: TruthHarness, protocol: ProtocolChoice = { Kind: 'year-cutoff' }): Promise<ProvisionedUnitPipeline> {
-    return UnitFixtures.provision(h, UnitFixtures.C1RenewalUnitDraft(h), ['PeriodIndex'], 'Logistic Regression', protocol);
+    return UnitFixtures.provision(h, { Draft: UnitFixtures.C1RenewalUnitDraft(h), Features: ['PeriodIndex'], Algorithm: 'Logistic Regression', Protocol: protocol });
   }
 
   /** The C1 renewal unit with the reference's as-of features (`C1AssemblySteps`). */
   public static ProvisionC1AssemblyPipeline(h: TruthHarness, protocol: ProtocolChoice = { Kind: 'year-cutoff' }): Promise<ProvisionedUnitPipeline> {
-    return UnitFixtures.provision(h, UnitFixtures.C1RenewalUnitDraft(h), [], 'Logistic Regression', protocol, undefined, UnitFixtures.C1AssemblySteps(h));
+    return UnitFixtures.provision(h, { Draft: UnitFixtures.C1RenewalUnitDraft(h), Features: [], Algorithm: 'Logistic Regression', Protocol: protocol, FeatureSteps: UnitFixtures.C1AssemblySteps(h) });
   }
 
   /** A world's renewal unit with the given features, algorithm and protocol (default the year cutoff). */
   public static ProvisionWorldRenewalPipeline(h: TruthHarness, world: string, o: WorldRenewalPipelineOptions): Promise<ProvisionedUnitPipeline> {
-    return UnitFixtures.provision(
-      h, UnitFixtures.WorldRenewalUnitDraft(h, world, o.OneClassVariant === true), o.Features, o.Algorithm || 'Logistic Regression', o.Protocol || { Kind: 'year-cutoff' },
-      o.LeakageGuard, UnitFixtures.worldRenewalSteps(h, world, o),
-    );
+    return UnitFixtures.provision(h, {
+      Draft: UnitFixtures.WorldRenewalUnitDraft(h, world, o.OneClassVariant === true), Features: o.Features, Algorithm: o.Algorithm || 'Logistic Regression',
+      Protocol: o.Protocol || { Kind: 'year-cutoff' }, Guard: o.LeakageGuard, FeatureSteps: UnitFixtures.worldRenewalSteps(h, world, o),
+    });
   }
 
   /**
@@ -315,13 +333,13 @@ export class UnitFixtures {
         ForeignKey: 'PersonID', OwnerKeyField: 'PersonID', DateField: 'StartDate', Aggregate: 'sum', ValueField: 'EventsAttended', WindowDays: 730,
       },
     ] };
-    return UnitFixtures.provision(h, UnitFixtures.WorldRenewalUnitDraft(h, 'W1-signal', false), features, 'Logistic Regression', protocol, undefined, steps);
+    return UnitFixtures.provision(h, { Draft: UnitFixtures.WorldRenewalUnitDraft(h, 'W1-signal', false), Features: features, Algorithm: 'Logistic Regression', Protocol: protocol, FeatureSteps: steps });
   }
 
   /** The T3 forecast unit with one select step over the given series columns and their period offsets. */
   public static ProvisionT3Pipeline(h: TruthHarness, o: T3PipelineOptions): Promise<ProvisionedUnitPipeline> {
     const steps: FeatureStepGraph = { Steps: [{ Id: 'select', Kind: 'select', Columns: [...o.Columns], PeriodOffsets: { ...o.PeriodOffsets } }] };
-    return UnitFixtures.provision(h, UnitFixtures.T3UnitDraft(h), o.Columns, 'Ridge Regression', o.Protocol || T3_ROLLING_ORIGIN, undefined, steps);
+    return UnitFixtures.provision(h, { Draft: UnitFixtures.T3UnitDraft(h), Features: o.Columns, Algorithm: 'Ridge Regression', Protocol: o.Protocol || T3_ROLLING_ORIGIN, FeatureSteps: steps });
   }
 
   /**
@@ -336,7 +354,7 @@ export class UnitFixtures {
 
   /** A planted scenario with one fixed decision date; its rows are held out by a seeded row hash by default. */
   public static ProvisionScenarioPipeline(h: TruthHarness, scenario: string, task: TaskType, protocol: ProtocolChoice = { Kind: 'seeded-random', Fraction: 0.25 }): Promise<ProvisionedUnitPipeline> {
-    return UnitFixtures.provision(h, UnitFixtures.ScenarioUnitDraft(h, scenario, task), ['PastEventsZ', 'Member', 'DistanceZ'], UnitFixtures.ScenarioAlgorithm(task), protocol);
+    return UnitFixtures.provision(h, { Draft: UnitFixtures.ScenarioUnitDraft(h, scenario, task), Features: ['PastEventsZ', 'Member', 'DistanceZ'], Algorithm: UnitFixtures.ScenarioAlgorithm(task), Protocol: protocol });
   }
 
   /** A planted scenario whose rows carry a date column: one row per scenario row, decided at that date. */
@@ -358,13 +376,12 @@ export class UnitFixtures {
 
   /** A scenario pipeline, dated (`DateColumn`) or with one fixed decision date, bound to `o.Protocol`. */
   public static ProvisionScenarioUnitPipeline(h: TruthHarness, scenario: string, task: TaskType, o: ScenarioUnitPipelineOptions): Promise<ProvisionedUnitPipeline> {
-    return UnitFixtures.provision(
-      h,
-      o.DateColumn === null ? UnitFixtures.ScenarioUnitDraft(h, scenario, task, o.GroupKey) : UnitFixtures.DatedScenarioUnitDraft(h, scenario, task, o.DateColumn, o.GroupKey),
-      UnitFixtures.ScenarioFeatureColumns(h, scenario, o.DateColumn),
-      UnitFixtures.ScenarioAlgorithm(task),
-      o.Protocol,
-    );
+    return UnitFixtures.provision(h, {
+      Draft: o.DateColumn === null ? UnitFixtures.ScenarioUnitDraft(h, scenario, task, o.GroupKey) : UnitFixtures.DatedScenarioUnitDraft(h, scenario, task, o.DateColumn, o.GroupKey),
+      Features: UnitFixtures.ScenarioFeatureColumns(h, scenario, o.DateColumn),
+      Algorithm: UnitFixtures.ScenarioAlgorithm(task),
+      Protocol: o.Protocol,
+    });
   }
 
   /**
@@ -374,7 +391,7 @@ export class UnitFixtures {
    */
   public static ProvisionMonitoredScenarioPipeline(h: TruthHarness, scenario: string, task: TaskType, trainThrough: string, triggers: readonly RetrainTrigger[], holdout: ProtocolChoice = { Kind: 'year-cutoff' }): Promise<ProvisionedUnitPipeline> {
     const draft = UnitFixtures.scenarioDraft(h, scenario, task, `${scenario} (${task.kind}, monitored through ${trainThrough})`, { kind: 'column', column: 'T' }, trainThrough, null);
-    return UnitFixtures.provision(h, draft, UnitFixtures.ScenarioFeatureColumns(h, scenario, 'T'), UnitFixtures.ScenarioAlgorithm(task), holdout, undefined, undefined, triggers);
+    return UnitFixtures.provision(h, { Draft: draft, Features: UnitFixtures.ScenarioFeatureColumns(h, scenario, 'T'), Algorithm: UnitFixtures.ScenarioAlgorithm(task), Protocol: holdout, Triggers: triggers });
   }
 
   /**
@@ -405,7 +422,7 @@ export class UnitFixtures {
   public static ProvisionMonitoredWorldPipeline(h: TruthHarness, world: string, features: readonly string[], trainThrough: string, triggers: readonly RetrainTrigger[]): Promise<ProvisionedUnitPipeline> {
     const base = UnitFixtures.WorldRenewalUnitDraft(h, world, false);
     const draft: UnitDraft = { ...base, Name: `${base.Name} — monitored through ${trainThrough}`, Censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: trainThrough } } };
-    return UnitFixtures.provision(h, draft, features, 'Logistic Regression', { Kind: 'year-cutoff' }, undefined, UnitFixtures.worldRenewalSteps(h, world, { Features: features }), triggers);
+    return UnitFixtures.provision(h, { Draft: draft, Features: features, Algorithm: 'Logistic Regression', Protocol: { Kind: 'year-cutoff' }, FeatureSteps: UnitFixtures.worldRenewalSteps(h, world, { Features: features }), Triggers: triggers });
   }
 
   /** The C3 task (W9-multiclass s42): the three attendance outcomes in the artifact's order, `NoShow` the adverse class. */
@@ -431,7 +448,7 @@ export class UnitFixtures {
 
   /** The C3 pipeline: the W9 multiclass unit, logistic regression over three registration columns, a seeded 25% holdout. */
   public static ProvisionW9MulticlassPipeline(h: TruthHarness): Promise<ProvisionedUnitPipeline> {
-    return UnitFixtures.provision(h, UnitFixtures.W9MulticlassUnitDraft(h), ['TicketTier', 'DaysRegisteredBefore', 'PriorAttendance'], 'Logistic Regression', { Kind: 'seeded-random', Fraction: 0.25 });
+    return UnitFixtures.provision(h, { Draft: UnitFixtures.W9MulticlassUnitDraft(h), Features: ['TicketTier', 'DaysRegisteredBefore', 'PriorAttendance'], Algorithm: 'Logistic Regression', Protocol: { Kind: 'seeded-random', Fraction: 0.25 } });
   }
 
   /** The newest training run of a pipeline, read-only: the fields the gate checks read. */
