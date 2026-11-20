@@ -8,7 +8,7 @@ import { CompositeKey, IMetadataProvider, LogError, RunView, UserInfo } from '@m
 import { NavigationService } from '@memberjunction/ng-shared';
 import { MJMLModelEntity, MJMLModelPublishRecordEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { LifecycleLabels, TransitionRefusalText } from '@memberjunction/predictive-studio-core';
-import { PSModelDetailComponent } from '@memberjunction/ng-core-entity-forms';
+import { PSModelDetailComponent, type PSOpenRecordRequest } from '@memberjunction/ng-core-entity-forms';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { PrimaryModelScore, FormatMetricValue } from '../predictive-studio.view-models';
 
@@ -277,7 +277,7 @@ export class PSRegistryComponent implements OnInit {
   }
 
   /** The model detail asks to open a record (an initiator, a publish record): the registry, an L3 surface, navigates. */
-  public OnOpenRecord(request: { EntityName: string; RecordID: string }): void {
+  public OnOpenRecord(request: PSOpenRecordRequest): void {
     this.navigation.OpenEntityRecord(request.EntityName, CompositeKey.FromID(request.RecordID)); // first-pk-ok: every record the detail links (users, agent runs, job runs, process runs, publish records) is an MJ core entity keyed on ID
   }
 
