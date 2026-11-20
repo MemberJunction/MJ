@@ -195,17 +195,22 @@ export class GraphQLActionClient {
      * which keys it by index (`{"0": {...}, "1": {...}}`), so an object's values are read as the array. Anything without
      * named parameters leaves the caller's parameters as they were.
      */
-    public static MergeOutputParams(params: ActionParam[], resultData: ActionParam[] | Record<string, ActionParam> | undefined): ActionParam[] {
+    public static MergeOutputParams(params: ActionParam[], resultData: unknown): ActionParam[] { // unknown: ResultData is JSON parsed off the wire; narrowed below by isOutputParam
         if (!resultData || typeof resultData !== 'object') return params;
-        const outputs: ActionParam[] = Array.isArray(resultData) ? resultData : Object.values(resultData);
+        const candidates: unknown[] = Array.isArray(resultData) ? resultData : Object.values(resultData);
         const merged = [...params];
-        for (const output of outputs) {
-            if (!output || typeof output.Name !== 'string') continue;
+        for (const output of candidates) {
+            if (!GraphQLActionClient.isOutputParam(output)) continue;
             const at = merged.findIndex((p) => p.Name.toLowerCase() === output.Name.toLowerCase());
             if (at >= 0) merged[at] = { ...merged[at], Value: output.Value, Type: output.Type };
             else merged.push(output);
         }
         return merged;
+    }
+
+    /** True when `value` (one element of the parsed `ResultData`) is a named action parameter. */
+    private static isOutputParam(value: unknown): value is ActionParam { // unknown: one element of parsed JSON; this guard is what narrows it
+        return typeof value === 'object' && value !== null && 'Name' in value && typeof value.Name === 'string';
     }
 
     /**
