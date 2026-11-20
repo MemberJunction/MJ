@@ -15,7 +15,7 @@ import { JsonParse, type Actor, type JsonObject } from '@memberjunction/predicti
 
 import { FakeClock, GATE_TASK, GateTestStore, GateWorld, type Row, type WorldModel } from '../../__tests__/fakes/gate-test-store';
 import { RecordingScoringActions } from '../../__tests__/fakes/scoring-action-fakes';
-import { Records, ScoringServiceWorld } from '../../__tests__/fakes/scoring-service-world';
+import { Records, ScoringServiceWorld, type WorldModelRef } from '../../__tests__/fakes/scoring-service-world';
 import { MemoryStorageAccount, ProviderRow, RegisterMemoryStorage, ServeStorageProviders } from '../../__tests__/fakes/storage-fakes';
 import { AutomatedPublisher } from '../../registry/automated-publisher';
 import { LifecycleGate } from '../../registry/lifecycle-gate';
@@ -394,7 +394,7 @@ describe('step 3: legacy artifacts', () => {
   });
 
   /** A pre-change model kept serving while Unevaluated, its artifact in storage and still `unverified`. */
-  async function LegacyServingWorld(): Promise<{ readonly World: ScoringServiceWorld; readonly Model: WorldModel; readonly Bytes: Uint8Array; readonly Binding: Awaited<ReturnType<ScoringServiceWorld['Binding']>> }> {
+  async function LegacyServingWorld(): Promise<{ readonly World: ScoringServiceWorld; readonly Model: WorldModelRef; readonly Bytes: Uint8Array; readonly Binding: Awaited<ReturnType<ScoringServiceWorld['Binding']>> }> {
     const scoringWorld = new ScoringServiceWorld();
     const legacyServing = scoringWorld.Model({ Status: 'Unevaluated', ServingWhileUnevaluated: true });
     const fileId = id();
