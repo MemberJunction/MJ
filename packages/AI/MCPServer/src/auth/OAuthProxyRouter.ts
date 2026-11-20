@@ -25,6 +25,8 @@ import {
   type AuthorizationStateManager,
 } from './AuthorizationStateManager.js';
 import { CreateJWTIssuer, type JWTIssuer } from './JWTIssuer.js';
+import { LoadMJServerModule } from './TokenValidator.js';
+import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import { LoadActiveScopes, GetDefaultScopes } from './ScopeService.js';
 import { RenderConsentPage, RenderConsentDeniedPage } from './ConsentPage.js';
 import { RenderLoginPage, RenderErrorPage } from './LoginPage.js';
@@ -877,18 +879,26 @@ interface UpstreamIdentityClaims extends jwt.JwtPayload {
 
 /**
  * Picks the email address of an upstream token with the same rule as MJServer sign-in.
- * A token whose `email_verified` claim is false is refused. When the upstream provider has
- * `requireVerifiedEmail` on, only a verified `email` claim is used; otherwise the address is
- * `email`, then `preferred_username`, `unique_name` or `upn`.
+ * A token whose `email_verified` claim is false is refused. The strict rule applies when the
+ * configured upstream provider (`upstream.providerName`) or the provider for the token's `iss`
+ * has `requireVerifiedEmail` on; then only a verified `email` claim is used. Otherwise the address
+ * is `email`, then `preferred_username`, `unique_name` or `upn`.
  */
-async function screenUpstreamEmail(decoded: UpstreamIdentityClaims): Promise<{ email?: string; error?: string }> {
-  // Dynamic import: @memberjunction/server reads process.env at module load (see TokenValidator.ts).
-  const { ScreenTokenEmailClaims, IssuerRequiresVerifiedEmail } = await import('@memberjunction/server');
+async function screenUpstreamEmail(
+  decoded: UpstreamIdentityClaims,
+  config: OAuthProxyConfig
+): Promise<{ email?: string; error?: string }> {
+  const { ScreenTokenEmailClaims, IssuerRequiresVerifiedEmail } = await LoadMJServerModule();
   const claims = {
     email: decoded.email,
     preferredUsername: decoded.preferred_username ?? decoded.unique_name ?? decoded.upn,
   };
-  const screened = ScreenTokenEmailClaims(decoded, claims, IssuerRequiresVerifiedEmail(decoded.iss));
+  const configuredProvider = config.upstream.providerName
+    ? AuthProviderFactory.Instance.GetByName(config.upstream.providerName)
+    : undefined;
+  const requireVerifiedEmail =
+    IssuerRequiresVerifiedEmail(configuredProvider?.issuer) || IssuerRequiresVerifiedEmail(decoded.iss);
+  const screened = ScreenTokenEmailClaims(decoded, claims, requireVerifiedEmail);
   if (!screened.Claims) {
     console.warn(`OAuth Proxy: Token refused: ${screened.Reason}`);
     return { error: 'The email address of this account is not verified' };
@@ -919,7 +929,7 @@ async function validateUpstreamUser(
       return { valid: false, error: 'Failed to decode upstream token' };
     }
 
-    const screened = await screenUpstreamEmail(decoded);
+    const screened = await screenUpstreamEmail(decoded, config);
     if (screened.error) {
       return { valid: false, error: screened.error };
     }
@@ -962,7 +972,7 @@ async function validateUpstreamUser(
 async function lookupMJUser(email: string): Promise<{ ID: string; Email: string } | null> {
   try {
     // Try to use the MJServer verifyUserRecord function
-    const { verifyUserRecord } = await import('@memberjunction/server');
+    const { verifyUserRecord } = await LoadMJServerModule();
     const user = await verifyUserRecord(email);
     if (user) {
       return { ID: user.ID, Email: user.Email };

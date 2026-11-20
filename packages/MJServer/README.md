@@ -575,7 +575,7 @@ Turn it on for providers that let people sign up with an address that is not ver
 
 The default rule gives no protection when the token has no `email_verified` claim: such a token is accepted. Only the strict rule refuses it.
 
-**Where to set it.** The value must be the boolean `true`. Any other value that is not `false` (for example the text `"true"`) also turns the strict rule on, and the server logs an error.
+**Where to set it.** In `mj.config.cjs` the value must be a boolean; any other value stops the server at startup. In `AdditionalConfiguration`, `true` turns the strict rule on; any other value except `false` (for example the text `"true"`) also turns it on and logs an error. A missing value leaves it off.
 
 - **`mj.config.cjs`:** add `requireVerifiedEmail: true` to the provider entry, as in the example above.
 - **Environment variables only:** providers that are configured only through environment variables (for example `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`) cannot turn the option on. To turn it on, declare the provider in the `authProviders` array of `mj.config.cjs`, or add a row to the `MJ: Authentication Providers` table. An `authProviders` array in the config file replaces the providers from environment variables.

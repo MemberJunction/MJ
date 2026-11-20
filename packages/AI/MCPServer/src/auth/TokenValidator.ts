@@ -174,15 +174,30 @@ let issuerRequiresVerifiedEmail: IssuerRequiresVerifiedEmailFn;
 
 let mjServerImported = false;
 
+type MJServerModule = typeof import('@memberjunction/server');
+let mjServerModule: Promise<MJServerModule> | undefined;
+
+/**
+ * Loads `@memberjunction/server` once and returns the same module on every call. This is the only
+ * place in the MCP server auth code that imports it.
+ *
+ * Dynamic import: this is not one of the reasons listed in `.claude/rules/typescript-style.md`. It is
+ * this package's existing load-order exception: `@memberjunction/server` reads `process.env` at
+ * module load, and a static import would run before dotenv (see config.ts). The package is still a
+ * declared dependency.
+ */
+export function LoadMJServerModule(): Promise<MJServerModule> {
+  mjServerModule ??= import('@memberjunction/server');
+  return mjServerModule;
+}
+
 /**
  * Ensures MJServer auth functions are imported.
- * Uses dynamic import to ensure proper initialization order (dotenv must run before
- * @memberjunction/server evaluates its module-level process.env reads).
  */
 async function ensureMJServerImported(): Promise<void> {
   if (mjServerImported) return;
 
-  const authModule = await import('@memberjunction/server');
+  const authModule = await LoadMJServerModule();
   getSigningKeys = authModule.getSigningKeys as GetSigningKeysFn;
   extractUserInfoFromPayload = authModule.extractUserInfoFromPayload as ExtractUserInfoFn;
   verifyUserRecord = authModule.verifyUserRecord as VerifyUserRecordFn;

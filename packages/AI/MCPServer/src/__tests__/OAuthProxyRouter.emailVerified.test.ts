@@ -30,6 +30,7 @@ vi.mock('../auth/ScopeService.js', () => ({
 }));
 
 import { AuthProviderFactory } from '@memberjunction/auth-providers';
+// Relative source path: importing '@memberjunction/server' loads its config, which needs database settings.
 import { RecordRequireVerifiedEmailSetting } from '../../../../MJServer/src/auth/tokenEmailScreen.js';
 import { CreateOAuthProxyRouter } from '../auth/OAuthProxyRouter.js';
 import { GetAuthorizationStateManager } from '../auth/AuthorizationStateManager.js';
@@ -52,6 +53,7 @@ const config: OAuthProxyConfig = {
     tokenEndpoint: 'https://idp.example.test/token',
     clientId: 'upstream-client',
     scopes: ['openid'],
+    providerName: 'test-idp',
   },
   enableDynamicRegistration: false,
   enableConsentScreen: false,
@@ -73,9 +75,9 @@ function registerProvider(requireVerifiedEmail?: boolean): void {
 }
 
 /** Makes the stubbed upstream token endpoint return an ID token with these claims. */
-function upstreamReturns(claims: Record<string, unknown>): void {
+function upstreamReturns(claims: Record<string, unknown>, issuer: string = ISSUER): void {
   const idToken = jwt.sign({ sub: 'idp-subject', ...claims }, keys.privateKey, {
-    algorithm: 'RS256', issuer: ISSUER, audience: 'upstream-client', expiresIn: '5m',
+    algorithm: 'RS256', issuer, audience: 'upstream-client', expiresIn: '5m',
   });
   vi.stubGlobal('fetch', vi.fn(async () => ({
     ok: true,
@@ -116,8 +118,8 @@ let router: Router;
 let warnSpy: ReturnType<typeof vi.spyOn>;
 
 /** Asserts that the callback is refused, the reason is logged and no user is looked up. */
-async function expectRefused(claims: Record<string, unknown>, reason: string): Promise<void> {
-  upstreamReturns(claims);
+async function expectRefused(claims: Record<string, unknown>, reason: string, issuer?: string): Promise<void> {
+  upstreamReturns(claims, issuer);
   const status = await dispatchCallback(router);
   expect(status).toBe(400);
   expect(mockVerifyUserRecord).not.toHaveBeenCalled();
@@ -161,6 +163,10 @@ describe('OAuth proxy upstream token email verification', () => {
 
     it('refuses an upstream token whose only address is the preferred_username claim', async () => {
       await expectRefused({ preferred_username: OWNER_EMAIL, email_verified: true }, 'requires a verified email claim');
+    });
+
+    it('refuses a token from the configured provider whose iss is a different issuer form', async () => {
+      await expectRefused({ email: OWNER_EMAIL }, 'requires email_verified to be true', 'https://sts.idp.example.test/tenant/');
     });
 
     it('refuses an upstream token whose only address is the upn claim', async () => {

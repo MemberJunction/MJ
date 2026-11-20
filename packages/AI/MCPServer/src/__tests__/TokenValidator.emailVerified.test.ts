@@ -40,6 +40,7 @@ vi.mock('@memberjunction/api-keys', () => ({
 }));
 
 import { AuthProviderFactory } from '@memberjunction/auth-providers';
+// Relative source path: importing '@memberjunction/server' loads its config, which needs database settings.
 import { RecordRequireVerifiedEmailSetting } from '../../../../MJServer/src/auth/tokenEmailScreen.js';
 import { AuthenticateRequest, type AuthGateConfig } from '../auth/AuthGate.js';
 
