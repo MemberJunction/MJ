@@ -27,7 +27,7 @@ interface PeriodOver {
 }
 
 /** A drift alarm on `input` as procedure M stores it. */
-const Alarm = (input: string): MJMLMonitoringResultEntity['DriftAlarmsObject'][number] => ({ input, kind: 'mean', z: 3.2, p: 0.001, pAdjusted: 0.004, q: 0.01, look: 2 });
+const Alarm = (input: string): MJMLMonitoringResultEntity['DriftAlarmsObject'][number] => ({ input, kind: 'mean', z: 3.2, p: 0.001, pAdjusted: 0.004, q: 0.01, look: 2, flagged: true });
 
 /** The period `i` months after January 2026, evaluated, with a score and its bounds. */
 function P(i: number, over: PeriodOver = {}): PeriodDouble {

@@ -41,8 +41,8 @@ class HeldAuthorization extends AuthorizationInfo {
     }
 }
 
-const developer = new UserInfo(null, { ID: 'u-dev', Name: 'Developer', Type: 'User' });
-const uiOnly = new UserInfo(null, { ID: 'u-ui', Name: 'UI user', Type: 'User' });
+const developer = new UserInfo(undefined, { ID: 'u-dev', Name: 'Developer', Type: 'User' });
+const uiOnly = new UserInfo(undefined, { ID: 'u-ui', Name: 'UI user', Type: 'User' });
 const viewModelPredictions = new HeldAuthorization('A-VIEW', [developer.ID]);
 
 const DAY1 = new Date('2026-11-01T00:00:00Z');

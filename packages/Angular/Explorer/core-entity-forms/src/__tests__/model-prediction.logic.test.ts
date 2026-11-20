@@ -20,7 +20,7 @@ class HeldAuthorization extends AuthorizationInfo {
     }
 }
 
-const user = (id: string, type = 'User'): UserInfo => new UserInfo(null, { ID: id, Name: id, Type: type });
+const user = (id: string, type = 'User'): UserInfo => new UserInfo(undefined, { ID: id, Name: id, Type: type });
 
 const binding = (over: Partial<PanelBindingRow> = {}): PanelBindingRow => ({
     ID: 'B1', FeatureName: 'Renewal risk', MLTrainingPipelineID: 'P1', MLTrainingPipeline: 'Renewal',
