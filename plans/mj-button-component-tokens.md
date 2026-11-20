@@ -1,6 +1,6 @@
 # Give `mjButton` Component Tokens, Fix Focus/Motion/Link-Disabled Bugs, and Add `[FullWidth]`: Implementation Plan
 
-**Status:** DRAFT 2026-11-19, for Matt and Colin's review before merge.
+**Status:** IMPLEMENTED on PR #6791 (2026-11-20), pending Colin's review on the two naming questions below before merge.
 **Related:** [UNIFIED_PLAN.md](ui-foundation/UNIFIED_PLAN.md), [NAMING.md](ui-foundation/NAMING.md), Issue #4845 ([4845-remove-legacy-mj-btn-block.md](4845-remove-legacy-mj-btn-block.md)).
 
 ## Goal
@@ -8,8 +8,8 @@
 Let any theme or Open App restyle `mjButton` end-to-end by setting `--mj-button-*` CSS custom properties instead of writing `.mj-btn` selector overrides (which `check:ui-buttons` forbids), while fixing four defects in `packages/Angular/Generic/ui-components/src/lib/button/`:
 
 1. Hover `box-shadow` at specificity `(0,7,0)` wiping out `:focus-visible` `(0,2,0)` when a keyboard-focused button is hovered (WCAG 2.4.7).
-2. Hover `-2px` lift running even under `prefers-reduced-motion: reduce` (WCAG 2.3.3).
-3. `a[mjButton]` lacking a disabled contract (`aria-disabled`, tab-order removal, click suppression, and `:not([aria-disabled="true"])` hover/active exclusions).
+2. Hover `-2px` lift running even when reduced motion is requested (WCAG 2.3.3).
+3. `a[mjButton]` lacking a disabled contract (`aria-disabled`, tab-order removal, click/keyboard suppression, and `:not(:disabled, [disabled], [aria-disabled="true"])` hover/active exclusions).
 4. Missing opt-in full-width modifier (`[FullWidth]="true"` -> `.mj-btn--full`) and hardcoded dimensions on `.mj-btn--circle` and `.mj-btn-group` that ignore custom button height and radius tokens.
 
 Zero intended visual change at rest in stock MJ light or dark themes.
@@ -20,21 +20,11 @@ Zero intended visual change at rest in stock MJ light or dark themes.
 
 - **Escape-hatch telemetry (`UNIFIED_PLAN.md` Principle 7):** Restyling `mjButton` in an Open App against a finished design took 10 token values and 16 `.mj-btn` rules. Those 16 rules had to jump to rung 3 of the escape-hatch ladder (host CSS) only because rung 1 (Tier 3 component tokens) was missing.
 - **Why this can ship ahead of the Phase 0 prototype gate:** `UNIFIED_PLAN.md` holds Phase 2 primitives behind the Phase 0 gate because that gate proves the new component architecture (`ViewEncapsulation.None` on `@Component`, `@layer primitives`, CDK `MJLayerService`, named parts, Custom Elements light DOM). `mjButton` is already an unencapsulated attribute directive with a global stylesheet and adds no parts or overlays. Wave 0/1 structural changes (`@layer primitives`, desktop `44px` -> `40px` height via `--mj-control-height-md`, open string `Variant` axis) stay out of scope here.
-- **Additive-within-an-era lock:** Every `--mj-button-*` custom property, `NAMING.md` property word, and `@Input()` shipped here becomes permanent 6.x API. All names below are checked against `origin/next`'s `plans/ui-foundation/NAMING.md` before code is written.
+- **Additive-within-an-era lock:** Every `--mj-button-*` custom property, `NAMING.md` property word, and `@Input()` shipped here becomes permanent 6.x API. All names below are checked against `plans/ui-foundation/NAMING.md` and pinned by `button.styles.dom.test.ts`.
 
 ---
 
-## Global Constraints
-
-- Cut branch from `origin/next` (where PRs `#6503`, `#6674`, and `#6609` are already merged, so `--mj-radius-control` and the updated `NAMING.md` property table are present).
-- Stage files explicitly (`git add <file>`). Never stage `mj.config.cjs` or local generated host files. Ask before `git commit`.
-- No `any` or weak typing in TypeScript (`button.directive.ts`, `button.directive.dom.test.ts`).
-- Run `packages/Angular/Generic/ui-components` Vitest suite and all UI CI gates (`check-mj-btn-override.sh`, `check-css-hex-tokens.sh`, `check-focus-ring.sh`, `check-ngc-scss.sh`) before considering work complete.
-- Changeset bump: `patch` on `@memberjunction/ng-ui-components` (additive inputs and unset CSS custom properties with identical fallbacks).
-
----
-
-## Decisions (Read Before Task 1)
+## Architecture Decisions
 
 ### D1. All 8 variants get the symmetric 9-token color matrix (`{bg, text, border} x {rest, hover, active}`)
 `NAMING.md`'s inferability test requires that if a developer or AI knows `--mj-button-outline-text-hover`, guessing `--mj-button-secondary-text-hover` or `--mj-button-danger-border` works without opening `button.scss`. Leaving `danger`, `success`, `warning`, or `icon` off the token surface also traps themes that use soft/tinted status buttons (`--mj-status-error-bg` + `--mj-status-error-text`) or neutral icon-button hover instead of MJ's stock brand-blue hover.
@@ -42,30 +32,30 @@ Zero intended visual change at rest in stock MJ light or dark themes.
 To avoid CSS Invalid-At-Computed-Value-Time (`IACVT`) wiping out resting variant colors when a hover, active, or disabled token is unset on `:root`, each variant assigns three private working variables (`--_mj-button-bg`, `--_mj-button-text`, `--_mj-button-border`), and `.mj-btn`, `:hover`, `:active`, and `:disabled` fall back through those private variables.
 
 ### D2. Add `transform` and `opacity` to `NAMING.md`'s Tier 3 property table in this PR
-`NAMING.md` (`origin/next` lines 155-171) defines a closed list of 14 Tier 3 property words (`bg`, `text`, `border`, `border-width`, `border-style`, `radius`, `shadow`, `height`/`min-height`, `width`/`max-width`, `padding`, `gap`, `font-size`, `font-weight`, `icon-size`). Phase 3's CI token gate builds its regex from that table. Exposing hover/active motion (`--mj-button-transform-hover`, `--mj-button-transform-active`) and disabled/active opacity (`--mj-button-opacity-disabled`, `--mj-button-{danger,success,warning}-opacity-active`) requires adding `transform` and `opacity` to `NAMING.md` in the same PR.
+`NAMING.md` defines a closed list of Tier 3 property words, from which Phase 3's CI token gate builds its regex. Exposing hover/active motion (`--mj-button-transform-hover`, `--mj-button-transform-active`) and disabled/active opacity (`--mj-button-opacity-disabled`, `--mj-button-{danger,success,warning}-opacity-active`) adds `transform` and `opacity` to `NAMING.md` in the same PR.
 
 ### D3. Keep `px` fallbacks where today's `button.scss` uses `px` (and `--mj-radius-control` where WS6b already matches)
-- **Height:** `--mj-button-height` falls back to `44px` (not `--mj-control-height-md`, which is `40px` on `origin/next`), so desktop buttons do not shrink ahead of the Wave 1/2 intentional height conversion. `--mj-button-sm-height` falls back to `var(--mj-control-height-sm, 32px)` (`32px` desktop, `44px` on `pointer: coarse` in `_tokens.scss`) and `--mj-button-lg-height` falls back to `var(--mj-control-height-lg, 52px)`, both of which match today's exact `px` values.
-- **Padding & gap:** Today `button.scss` uses `px` (`10px 20px`, `8px`, `6px 12px`, `14px 28px`) rather than `--mj-space-*` (`rem`). Because `ng-realtime-widget` compiles `button.scss` into third-party host pages that may set `html { font-size: 62.5% }`, switching fallbacks from `px` to `rem` would shrink embedded widget buttons on non-16px host pages. Keeping today's exact `px` literals as fallbacks preserves pixel parity everywhere; Wave 0/2's Element font-sizing spec can migrate them with `--mj-space-*` together.
-- **Radius:** WS6b (`#6609`, merged on `origin/next`) already defines `--mj-radius-control: var(--mj-radius-md)` (`8px`). `--mj-button-radius` falls back to `var(--mj-radius-control, var(--mj-radius-md))`, matching `NAMING.md` line 176 with zero visual change, and `.mj-btn-group` outer corners read `var(--mj-button-radius, var(--mj-radius-control, var(--mj-radius-md)))`.
+- **Height:** `--mj-button-height` falls back to `44px` (not `--mj-control-height-md`, which is `40px`), so desktop buttons do not shrink ahead of Wave 1's intentional height conversion. `--mj-button-sm-height` falls back to `var(--mj-control-height-sm, 32px)` (`32px` desktop, `44px` on `pointer: coarse` in `_tokens.scss`) and `--mj-button-lg-height` falls back to `var(--mj-control-height-lg, 52px)`.
+- **Padding & gap:** Today `button.scss` uses `px` (`10px 20px`, `8px`, `6px 12px`, `14px 28px`) rather than `--mj-space-*` (`rem`). Because `ng-realtime-widget` compiles both `_tokens.scss` and `button.scss` into third-party host pages that may set `html { font-size: 62.5% }`, switching fallbacks from `px` to `rem` (such as `--mj-space-2`) would shrink embedded widget spacing from `8px` to `5px`. Keeping today's exact `px` literals (`8px`, `6px`, `10px`, `10px 20px`, etc.) preserves pixel parity everywhere.
+- **Radius:** WS6b (`#6609`) defines `--mj-radius-control: var(--mj-radius-md)` (`8px`). `--mj-button-radius` falls back to `var(--mj-radius-control, var(--mj-radius-md))` with zero visual change, and `.mj-btn-group` outer corners read `var(--mj-button-radius, var(--mj-radius-control, var(--mj-radius-md)))`.
 
 ### D4. Private `--_mj-button-height` on `.mj-btn--circle` vs `.mj-btn--icon`
-`NAMING.md` (lines 215 and 344) specifies resolving button height into private `--_mj-button-height` so square controls read one height on both axes and forbids per-axis width tokens on square controls:
-- `.mj-btn--circle` already renders `44x44` (`md`), `32x32` (`sm`), `52x52` (`lg`), and `44x44` (`sm` on `pointer: coarse`). Driving `.mj-btn--circle`'s `width`, `height`, `min-width`, and `min-height` from `--_mj-button-height` has **zero pixel change** today and keeps circles round under any `--mj-button-height` override.
-- **Watch `.mj-btn--icon` + `Size="sm"`:** Today `.mj-btn--icon` sets `min-width: 44px; min-height: 44px` while `.mj-btn--sm` only overrides `min-height: 32px; padding: 6px 12px`, leaving ~30 `Variant="icon" Size="sm"` buttons in MJ at `44x32` instead of `32x32`. To keep this PR strictly zero-diff at rest across Explorer toolbars without publishing a forbidden `--mj-button-icon-width` token that would be locked in by additive-within-an-era, `.mj-btn--icon` sets `min-width: var(--mj-button-height, 44px)` while `min-height` follows `--_mj-button-height`. Switching `.mj-btn--icon`'s `min-width` to `var(--_mj-button-height)` (`44x32` -> `32x32`) waits for Wave 1 where intentional pixel changes are in scope.
+`NAMING.md` (lines 216 and 345) specifies resolving button height into private `--_mj-button-height` so square controls read one height on both axes and forbids per-axis width tokens on square controls:
+- `.mj-btn--circle` sizes `width`, `height`, `min-width`, and `min-height` from `--_mj-button-height` (`32x32` / `44x44` / `52x52`, `44x44` on `pointer: coarse`) with zero pixel change today.
+- `.mj-btn--icon` currently sets `min-width: 44px` on `next` while `.mj-btn--sm` only lowers `min-height: 32px`, leaving ~30 `Variant="icon" Size="sm"` buttons in MJ at `44x32`. To keep zero resting layout shift here without publishing a forbidden `--mj-button-icon-width` token, `.mj-btn--icon` sets `min-width: var(--mj-button-height, 44px)` while `min-height` follows `--_mj-button-height`. Switching `min-width` to `var(--_mj-button-height)` (`44x32` -> `32x32`) waits for Wave 1.
 
-### D5. PascalCase `[Disabled]` setter without hijacking native `<button [disabled]>`
+### D5. PascalCase `[Disabled]` setter + capture-phase event guards without hijacking native `<button [disabled]>`
 Across ~400 files in MJ, templates bind lowercase `<button mjButton [disabled]="isBusy">` directly to `HTMLButtonElement.disabled`.
-- If `MJButtonDirective` declared a lowercase `@Input() disabled`, Angular would route every `<button mjButton [disabled]="...">` in the monorepo through the directive instead of the DOM property.
-- If `MJButtonDirective` put `@HostBinding('attr.disabled')` on `Disabled = false`, Angular would clear native `[disabled]="true"` bindings back to enabled on change detection.
-- **Solution:** Declare only PascalCase `@Input() set Disabled(value: boolean)` (matching `AriaLabel`'s non-clobbering setter pattern in `button.directive.ts:127`):
-  - On `<button>`: when the `Disabled` setter is called, set `buttonEl.disabled = Boolean(value)`. Unbound `<button [disabled]="...">` elements never invoke the setter and keep working natively.
-  - On `<a>`: toggle `aria-disabled="true"` (removed when `false`) and manage `tabindex="-1"` (preserving and restoring any author-supplied `tabindex` when re-enabled).
-  - In `OnClick(event: MouseEvent)` and `@HostListener('keydown', ['$event'])`: check `isDisabledHost()` (`el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true'`). When disabled, call `event.preventDefault()` and `event.stopImmediatePropagation()` and skip `Toggleable` state toggling.
+- Declaring only PascalCase `@Input() set Disabled(value: boolean)` leaves unbound `<button [disabled]="...">` elements untouched on `<button>` while forwarding `disabled` when `[Disabled]` is explicitly bound.
+- On `<a>`: sets `aria-disabled="true"` and `tabindex="-1"` (saving and restoring any author-supplied `tabindex` on re-enable).
+- Capture-phase `click` and `keydown` (`Enter` / `Space`) listeners on `host.nativeElement` (`addEventListener(..., true)`, cleaned up in `ngOnDestroy`) run before bubble-phase handlers on the same element (including `RouterLink` and template `(click)` bindings) and block activation alongside `OnClick()`.
+
+### D6. `:where()` on base lift `(0,2,0)` vs `:not(:disabled, [disabled], [aria-disabled="true"])` on variants `(0,3,0)`
+Only the base `.mj-btn` hover/active lift rules carried `(0,7,0)` specificity and collided with `:focus-visible` `(0,2,0)` on `box-shadow`. Variant hover/active rules only set colors, and four components in `ng-mj-livekit-room` plus `dialog.service.ts` still carry inline `styles: [...]` `.mj-btn--*` rules under emulated encapsulation (`.mj-btn--primary[_ngcontent-...]`, `(0,2,0)` loaded after global styles). Using a single Selectors Level 4 `:not(:disabled, [disabled], [aria-disabled="true"])` list keeps variant hover/active at `next`'s `(0,3,0)` so those components keep their hover state until migrated to `mjButton`, while base lift drops to `(0,2,0)` via `:where()`.
 
 ---
 
-## Complete Token Surface (`NAMING.md` Verified)
+## Complete Token Surface (`NAMING.md` Verified: 106 Tokens)
 
 Grammar: `--mj-button[-<variant>]-<property>[-<state>]`
 All public `--mj-button-*` tokens are **unset** on `:root`.
@@ -76,7 +66,7 @@ All public `--mj-button-*` tokens are **unset** on `:root`.
 | --- | --- | --- | --- |
 | `--mj-button-height` | `min-height` (via `--_mj-button-height`) | `44px` | `44px` |
 | `--mj-button-padding` | `padding` | `10px 20px` | `10px 20px` |
-| `--mj-button-gap` | `gap` | `var(--mj-space-2, 8px)` | `8px` (`0.5rem`) |
+| `--mj-button-gap` | `gap` | `8px` | `8px` |
 | `--mj-button-border-width` | `border-width` | `1px` | `1px` |
 | `--mj-button-border-style` | `border-style` | `solid` | `solid` |
 | `--mj-button-radius` | `border-radius` | `var(--mj-radius-control, var(--mj-radius-md))` | `8px` |
@@ -84,9 +74,9 @@ All public `--mj-button-*` tokens are **unset** on `:root`.
 | `--mj-button-font-weight` | `font-weight` | `var(--mj-font-semibold)` | `600` |
 | `--mj-button-icon-size` | icon `font-size` | `var(--mj-text-base, 1rem)` | `1rem` (`16px`) |
 | `--mj-button-shadow-focus` | `:focus-visible` `box-shadow` | `var(--mj-focus-ring)` | focus ring |
-| `--mj-button-transform-hover` | lifted `:hover` `transform` | `translateY(-2px)` | `translateY(-2px)` |
+| `--mj-button-transform-hover` | lifted `:hover` `transform` (`no-preference`) | `translateY(-2px)` | `translateY(-2px)` |
 | `--mj-button-shadow-hover` | lifted `:hover` `box-shadow` | `0 4px 8px rgba(0, 0, 0, 0.1)` | `0 4px 8px rgba(0, 0, 0, 0.1)` |
-| `--mj-button-transform-active` | lifted `:active` `transform` | `translateY(0)` | `translateY(0)` |
+| `--mj-button-transform-active` | lifted `:active` `transform` (`no-preference`) | `translateY(0)` | `translateY(0)` |
 | `--mj-button-shadow-active` | lifted `:active` `box-shadow` | `none` | `none` |
 | `--mj-button-bg-disabled` | disabled `background` | `var(--_mj-button-bg, transparent)` | variant's rest `bg` |
 | `--mj-button-text-disabled` | disabled `color` | `var(--_mj-button-text, inherit)` | variant's rest `text` |
@@ -128,107 +118,16 @@ Every variant exposes the 9-token set `--mj-button-<variant>-{bg,text,border}[-{
 
 ### Known Grammar Gaps Flagged for Naming Review (Matt + Colin)
 
-1. **Orthogonal states (`selected` + `hover`):** `NAMING.md` restricts `state` to a single slot (`hover | active | focus | disabled | selected | checked | error`), so `.mj-btn--selected:hover` cannot expose `--mj-button-bg-selected-hover` and currently borrows `--mj-button-primary-bg-hover` / `--mj-button-primary-border-hover` to preserve stock MJ's exact `#006aa3` hover color. A theme that sets `--mj-button-bg-selected` to a non-brand hue (such as green) will still see the primary hover color until `NAMING.md` settles orthogonal states across controls (`selected` + `hover` on buttons, rows, and surfaces; `checked` + `hover` on switches), either via compound state tails (`-selected-hover`) or computed `color-mix()` on `--_mj-<component>-bg`.
+1. **Orthogonal states (`selected` + `hover`):** `NAMING.md` restricts `state` to a single slot (`hover | active | focus | disabled | selected | checked | error`), so `.mj-btn--selected:hover` cannot expose `--mj-button-bg-selected-hover` and currently borrows `--mj-button-primary-bg-hover` / `--mj-button-primary-border-hover` as an internal fallback to preserve stock MJ's exact `#006aa3` hover color. Because this is a fallback rather than a public token name, changing it once `NAMING.md` settles orthogonal states across controls (`selected` + `hover` on buttons, rows, and surfaces; `checked` + `hover` on switches) is non-breaking.
 2. **`icon-size` property vs `icon` variant and `icon` part:** In `NAMING.md`, `icon` appears as a `variant` (`Variant="icon"`), a named `part` (`icon` leading icon), and the prefix of the `icon-size` property. While `--mj-button-icon-size` parses unambiguously because `size` is not a property word, a per-variant or per-part override produces `--mj-button-icon-icon-size` or `--mj-card-icon-icon-size`, which fails the inferability test. Flagged for Matt and Colin to confirm whether `icon-size` stays or renames (for example `glyph-size`) before `--mj-button-icon-size` ships in a release.
 
 ---
 
-## Implementation Tasks
+## Completed Verification Checklist
 
-### Task 0: Worktree / Branch Setup (from `origin/next`)
-
-- [ ] Cut a fresh worktree or branch `feat/mj-button-component-tokens` from `origin/next` and verify upstream tracking with `git branch -vv`.
-
----
-
-### Task 1: Update `plans/ui-foundation/NAMING.md` Property Vocabulary
-
-**Files:**
-- Modify: `plans/ui-foundation/NAMING.md`
-
-- [ ] Add `opacity` and `transform` to the Tier 3 Property Vocabulary table:
-  - `opacity` | `opacity` | disabled controls (`--mj-button-opacity-disabled`) and state attenuation where a token color swap does not apply
-  - `transform` | `transform` | micro-interaction motion such as hover lift and press (`--mj-button-transform-hover`, `--mj-button-transform-active`); suppressed under `prefers-reduced-motion: reduce`
-
----
-
-### Task 2: Add `[FullWidth]` and `[Disabled]` to `MJButtonDirective` + Vitest DOM + Axe Tests
-
-**Files:**
-- Modify: `packages/Angular/Generic/ui-components/src/lib/button/button.directive.ts`
-- Modify: `packages/Angular/Generic/ui-components/src/lib/button/button.directive.dom.test.ts`
-
-- [ ] **Step 1: Write failing Vitest DOM + axe tests** in `button.directive.dom.test.ts` covering:
-  1. `[FullWidth]="true"` adds `mj-btn--full`; `[FullWidth]="false"` (default) omits it.
-  2. `<a mjButton href="/docs" [Disabled]="true">` sets `aria-disabled="true"` and `tabindex="-1"`, adds no invalid `disabled` attribute on `<a>`, prevents click default + stops propagation, and restores/removes `tabindex` and removes `aria-disabled` when flipped back to `[Disabled]="false"`.
-  3. `<a mjButton href="/docs" tabindex="0" [Disabled]="true">` restores `tabindex="0"` when `[Disabled]` returns to `false`.
-  4. `<button mjButton [disabled]="true">` (native lowercase binding, `[Disabled]` unbound) stays `disabled === true` across change detection cycles (non-clobbering regression test) and blocks `Toggleable` state flips on click.
-  5. `<button mjButton [Disabled]="true">` sets `button.disabled === true` and clears it when set back to `false`.
-  6. `ExpectNoAxeViolations` passes on enabled and disabled `<button mjButton>` and `<a mjButton>`.
-
-- [ ] **Step 2: Implement `[FullWidth]` and `[Disabled]` in `button.directive.ts`:**
-  - `@Input() FullWidth = false;` + `@HostBinding('class.mj-btn--full') get isFullWidth(): boolean { return this.FullWidth; }`
-  - `@Input() set Disabled(value: boolean)` / `get Disabled(): boolean` using explicit DOM mutation on `this.host.nativeElement` so unbound native `<button [disabled]>` is never touched.
-  - Guard `OnClick(event: MouseEvent)` and `@HostListener('keydown', ['$event'])` (Enter/Space on disabled `<a>`) via `isHostDisabled()`.
-
-- [ ] **Step 3: Run unit tests:**
-  ```bash
-  cd packages/Angular/Generic/ui-components && npm run test
-  ```
-
----
-
-### Task 3: Tokenize `button.scss`, Lower Hover Specificity via `:where()`, Add Reduced Motion & Link-Disabled Styles
-
-**Files:**
-- Modify: `packages/Angular/Generic/ui-components/src/lib/button/button.scss`
-
-- [ ] **Step 1: Update base `.mj-btn`:**
-  - Add `box-sizing: border-box` so `<a mjButton [FullWidth]="true">` with `width: 100%` + padding + border never overflows its container.
-  - Set `--_mj-button-height: var(--mj-button-height, 44px); min-height: var(--_mj-button-height);`.
-  - Split `border: 1px solid transparent` into `border-width: var(--mj-button-border-width, 1px)`, `border-style: var(--mj-button-border-style, solid)`, and `border-color: var(--_mj-button-border, transparent)`.
-  - Replace hover/active exclusion chains with `:where(:not(:disabled):not([disabled]):not([aria-disabled="true"]):not(.mj-btn--flat):not(.mj-btn--icon):not(.mj-btn--outline):not(.mj-btn--sm))` so specificity drops from `(0,7,0)` to `(0,2,0)`.
-  - Keep `&:focus-visible` `(0,2,0)` after hover/active, reading `box-shadow: var(--mj-button-shadow-focus, var(--mj-focus-ring))` so focus ring wins when hovered and focused simultaneously.
-  - Extend disabled selector to `&:disabled, &[disabled], &[aria-disabled="true"]` reading `--mj-button-{bg,text,border,opacity}-disabled`.
-  - Add `@media (prefers-reduced-motion: reduce)` inside `.mj-btn` setting `transition: var(--mj-transition-colors)` and suppressing hover/active `transform`.
-
-- [ ] **Step 2: Wire all 8 variants, sizes (`sm`, `lg`), `.mj-btn--circle`, `.mj-btn--full`, `.mj-btn--selected`, `.mj-btn-group`, and `@media (pointer: coarse)`:**
-  - All variant hover/active rules use `&:where(:not(:disabled):not([disabled]):not([aria-disabled="true"])):hover` and `:active`, keeping specificity at `(0,2,0)`.
-  - `.mj-btn--circle` sizes `width`, `height`, `min-width`, and `min-height` from `var(--_mj-button-height)` and keeps `padding: 0` after sizes and `@media (pointer: coarse)`.
-  - `.mj-btn--full { width: 100%; }`.
-  - `.mj-btn-group` `:first-child` / `:last-child` read `var(--mj-button-radius, var(--mj-radius-control, var(--mj-radius-md)))`.
-
-- [ ] **Step 3: Build `@memberjunction/ng-ui-components` and `@memberjunction/ng-realtime-widget` (to verify `build-global-styles.mjs` drift assertions) and run all UI gates:**
-  ```bash
-  ./.github/scripts/check-mj-btn-override.sh --file packages/Angular/Generic/ui-components/src/lib/button/button.scss
-  ./.github/scripts/check-css-hex-tokens.sh --file packages/Angular/Generic/ui-components/src/lib/button/button.scss
-  ./.github/scripts/check-focus-ring.sh --file packages/Angular/Generic/ui-components/src/lib/button/button.scss
-  ./.github/scripts/check-ngc-scss.sh --all
-  ```
-
----
-
-### Task 4: Visual & Computed-Style Verification Matrix (Playwright)
-
-Because jsdom does not evaluate `button.scss`, verify the compiled CSS in Chromium via Playwright against a standalone fixture page loading `_tokens.scss` + `button.scss` (before vs. after):
-
-- [ ] **Resting parity (0px diff):** All 8 variants x 3 sizes (`sm`, `md`, `lg`), `Shape="circle"` (`sm`, `md`, `lg`), `Toggleable` + `Selected`, `.mj-btn-group`, and disabled `<button>` in light mode, dark mode (`[data-theme="dark"]`), and `pointer: coarse`.
-- [ ] **Bugfix assertions:**
-  1. Hovered + `:focus-visible` primary button computes `box-shadow` equal to `--mj-focus-ring` (not `0 4px 8px rgba(0, 0, 0, 0.1)`).
-  2. Under `prefers-reduced-motion: reduce`, hovered primary button computes `transform: none`.
-  3. `<a mjButton [Disabled]="true">` matches disabled visual styling and blocks navigation on click.
-  4. `<button mjButton [FullWidth]="true">` and `<a mjButton [FullWidth]="true">` measure exact container width with zero horizontal overflow.
-  5. Open App restyle smoke test: setting only `--mj-button-*` variables on a wrapper container (pill radius, `36px` height, flat hover shadow/transform `none`, custom `outline`/`secondary`/`flat`/`disabled` colors) restyles every variant, circle button, and button group inside the container with **0** `.mj-btn` rules.
-
----
-
-### Task 5: Changeset & PR Handoff
-
-**Files:**
-- Create: `.changeset/mj-button-component-tokens.md`
-
-- [ ] Author a `patch` changeset for `@memberjunction/ng-ui-components` documenting:
-  - The `--mj-button-*` Tier 3 custom property surface.
-  - New `[FullWidth]` and `[Disabled]` inputs on `mjButton`.
-  - Specificity reduction on `.mj-btn` hover/active rules from `(0,7,0)` to `(0,2,0)` via `:where()` (noting that any downstream `.mj-btn:hover` override that previously lost to `(0,7,0)` will now apply).
-  - Focus ring, `prefers-reduced-motion`, and `a[mjButton]` disabled fixes.
+- [x] `plans/ui-foundation/NAMING.md` updated with `opacity` and `transform` properties plus temporary `44px` button-height notes.
+- [x] `MJButtonDirective` (`button.directive.ts`) updated with `[FullWidth]` and `[Disabled]` (capture-phase `click` and `Enter`/`Space` guards, `tabindex` save/restore on `<a>`, non-clobbering setter for native `<button [disabled]>`).
+- [x] `button.scss` tokenized across all 106 `--mj-button-*` variables; base hover/active lift gated behind `@media (prefers-reduced-motion: no-preference)` and lowered to `(0,2,0)` via `:where()`; `:focus-visible` paired with a `@media (forced-colors: active)` outline fallback; variant hover/active kept at `(0,3,0)` via `:not(:disabled, [disabled], [aria-disabled="true"])`.
+- [x] Vitest + DOM + axe + strict column-1 `NAMING.md` grammar and CSS mutation-pinning specs (`65/65` suites, `861/861` tests in `@memberjunction/ng-ui-components`).
+- [x] Playwright Chromium before/after computed-style matrix (`76` elements x `19` properties across `light-desktop`, `dark-desktop`, and `light-coarse` with `0` diffs, plus focus+hover, reduced-motion, `[FullWidth]`, and Open App token-only restyle assertions).
+- [x] Follow-up noted: migrate inline `styles: [...]` `.mj-btn` rules in `ng-mj-livekit-room` and `dialog.service.ts` to `mjButton`, and extend `check-mj-btn-override.sh` to scan inline TypeScript `styles`.

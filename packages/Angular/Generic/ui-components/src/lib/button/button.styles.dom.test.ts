@@ -41,12 +41,15 @@ function parseTier3PropertyWords(namingMd: string): Set<string> {
  * 1. Every `--mj-button-*` custom property conforms to the Tier 3 grammar in `plans/ui-foundation/NAMING.md`
  *    (component, optional variant/size, closed property vocabulary parsed strictly from the Tier 3 table,
  *    optional state), and square controls never expose a separate width axis (`--mj-button-icon-width`).
- * 2. Every private working variable uses the `--_mj-button-` prefix, and zero public `--mj-button-*`
- *    variables are declared on `:root` (preserving container-scoped resolution).
- * 3. Hover and active rules wrap their `:not(...)` exclusions in `:where()`, keeping specificity at `(0,2,0)`
- *    so `:focus-visible` wins when a button is both hovered and keyboard-focused.
- * 4. Spatial motion (`transform`) is gated behind `@media (prefers-reduced-motion: no-preference)`, and
- *    `[aria-disabled="true"]` is styled alongside `:disabled` and excluded from hover/active rules.
+ * 2. Every private working variable uses the `--_mj-button-` prefix, zero public `--mj-button-*`
+ *    variables are declared on `:root` (preserving container-scoped resolution), and base `gap` keeps a `px`
+ *    fallback (`8px`) so embedded hosts with non-16px root font sizes do not shrink button spacing.
+ * 3. Base `.mj-btn` hover/active lift rules wrap `:not(...)` exclusions in `:where()` (`(0,2,0)`) before
+ *    `:focus-visible` (`(0,2,0)`), while variant hover/active rules keep `(0,3,0)` via a single
+ *    `:not(:disabled, [disabled], [aria-disabled="true"])` list so emulated component overrides stay matched.
+ * 4. Both hover and active `transform` declarations sit inside `@media (prefers-reduced-motion: no-preference)`,
+ *    `:focus-visible` carries a `@media (forced-colors: active)` `outline` fallback, `.mj-btn--full` sets
+ *    `width: 100%`, and `[aria-disabled="true"]` is styled alongside `:disabled`.
  */
 describe('ui-components stylesheets: button.scss contract', () => {
   const buttonScss = readFileSync(join(__dirname, 'button.scss'), 'utf8');
@@ -82,8 +85,9 @@ describe('ui-components stylesheets: button.scss contract', () => {
     expect(referenced).not.toContain('--mj-button-icon-width');
   });
 
-  it('leaves public --mj-button-* tokens unset on :root and prefixes private vars with --_mj-button-', () => {
+  it('leaves public --mj-button-* tokens unset on :root, prefixes private vars with --_mj-button-, and keeps px gap fallback', () => {
     expect(uncommentedScss).not.toMatch(/:root\s*\{[^}]*--mj-button-/);
+    expect(uncommentedScss).toContain('gap: var(--mj-button-gap, 8px);');
 
     const privateVars = Array.from(
       new Set(Array.from(uncommentedScss.matchAll(/--_[a-zA-Z0-9-]+/g)).map((m) => m[0]))
@@ -94,22 +98,31 @@ describe('ui-components stylesheets: button.scss contract', () => {
     }
   });
 
-  it('wraps hover and active exclusions in :where() and places :focus-visible after hover/active', () => {
-    expect(uncommentedScss).not.toMatch(/&:hover:not\(/);
-    expect(uncommentedScss).not.toMatch(/&:active:not\(/);
+  it('lowers base lift hover/active via :where() before :focus-visible while keeping variant hover/active at (0,3,0)', () => {
+    expect(uncommentedScss).not.toMatch(/&:hover:not\(:disabled\):not\(/);
     expect(uncommentedScss).toContain(
       '&:where(:not(:disabled):not([disabled]):not([aria-disabled="true"]):not(.mj-btn--flat):not(.mj-btn--icon):not(.mj-btn--outline):not(.mj-btn--sm)):hover'
     );
+    expect(uncommentedScss).toContain('&:hover:not(:disabled, [disabled], [aria-disabled="true"])');
+    expect(uncommentedScss).toContain('&:active:not(:disabled, [disabled], [aria-disabled="true"])');
 
     const hoverIdx = uncommentedScss.indexOf('&:where(:not(:disabled)');
     const focusIdx = uncommentedScss.indexOf('&:focus-visible');
-    expect(hoverIdx).toBeGreaterThan(0);
+    expect(hoverIdx).toBeGreaterThanOrEqual(0);
     expect(focusIdx).toBeGreaterThan(hoverIdx);
   });
 
-  it('gates spatial transform behind prefers-reduced-motion: no-preference and styles aria-disabled', () => {
-    expect(uncommentedScss).toContain('@media (prefers-reduced-motion: no-preference)');
+  it('pins reduced-motion transform blocks, forced-colors focus outline, full-width 100%, and aria-disabled styles', () => {
+    expect(uncommentedScss).toMatch(
+      /@media\s*\(prefers-reduced-motion:\s*no-preference\)\s*\{\s*transform:\s*var\(--mj-button-transform-hover,\s*translateY\(-2px\)\);?\s*\}/
+    );
+    expect(uncommentedScss).toMatch(
+      /@media\s*\(prefers-reduced-motion:\s*no-preference\)\s*\{\s*transform:\s*var\(--mj-button-transform-active,\s*translateY\(0\)\);?\s*\}/
+    );
+    expect(uncommentedScss).toMatch(
+      /&:focus-visible\s*\{[\s\S]*?@media\s*\(forced-colors:\s*active\)\s*\{\s*outline:\s*var\(--mj-ring-width,\s*2px\)\s+solid\s+ButtonText;/
+    );
+    expect(uncommentedScss).toMatch(/\.mj-btn--full\s*\{\s*width:\s*100%;\s*\}/);
     expect(uncommentedScss).toContain('&[aria-disabled="true"]');
-    expect(uncommentedScss).toContain('.mj-btn--full');
   });
 });

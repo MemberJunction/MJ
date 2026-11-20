@@ -8,13 +8,14 @@
 
 /* ========== Base ========== */
 .mj-btn {
+  /* 44px literal until Wave 1's intentional 44px -> 40px (--mj-control-height-md) shift */
   --_mj-button-height: var(--mj-button-height, 44px);
 
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--mj-button-gap, var(--mj-space-2, 8px));
+  gap: var(--mj-button-gap, 8px);
   padding: var(--mj-button-padding, 10px 20px);
   background: var(--_mj-button-bg, transparent);
   color: var(--_mj-button-text, inherit);
@@ -98,13 +99,13 @@
   --_mj-button-text: var(--mj-button-primary-text, var(--mj-brand-on-primary));
   --_mj-button-border: var(--mj-button-primary-border, var(--mj-brand-primary));
 
-  &:where(:not(:disabled):not([disabled]):not([aria-disabled="true"])):hover {
+  &:hover:not(:disabled, [disabled], [aria-disabled="true"]) {
     background: var(--mj-button-primary-bg-hover, var(--mj-brand-primary-hover));
     color: var(--mj-button-primary-text-hover, var(--_mj-button-text));
     border-color: var(--mj-button-primary-border-hover, var(--mj-brand-primary-hover));
   }
 
-  &:where(:not(:disabled):not([disabled]):not([aria-disabled="true"])):active {
+  &:active:not(:disabled, [disabled], [aria-disabled="true"]) {
     background: var(--mj-button-primary-bg-active, var(--mj-brand-primary-active));
     color: var(--mj-button-primary-text-active, var(--mj-button-primary-text-hover, var(--_mj-button-text)));
     border-color: var(--mj-button-primary-border-active, var(--mj-brand-primary-active));
@@ -120,13 +121,13 @@
   --_mj-button-text: var(--mj-button-secondary-text, var(--mj-text-primary));
   --_mj-button-border: var(--mj-button-secondary-border, var(--mj-border-default));
 
-  &:where(:not(:disabled):not([disabled]):not([aria-disabled="true"])):hover {
+  &:hover:not(:disabled, [disabled], [aria-disabled="true"]) {
     background: var(--mj-button-secondary-bg-hover, var(--mj-bg-surface-active));
     color: var(--mj-button-secondary-text-hover, var(--_mj-button-text));
     border-color: var(--mj-button-secondary-border-hover, var(--mj-border-strong));
   }
 
-  &:where(:not(:disabled):not([disabled]):not([aria-disabled="true"])):active {
+  &:active:not(:disabled, [disabled], [aria-disabled="true"]) {
     background: var(
       --mj-button-secondary-bg-active,
       color-mix(in srgb, var(--mj-text-primary) 8%, var(--mj-bg-surface-active))
@@ -141,13 +142,13 @@
   --_mj-button-text: var(--mj-button-outline-text, var(--mj-brand-primary));
   --_mj-button-border: var(--mj-button-outline-border, var(--mj-brand-primary));
 
-  &:where(:not(:disabled):not([disabled]):not([aria-disabled="true"])):hover {
+  &:hover:not(:disabled, [disabled], [aria-disabled="true"]) {
     background: var(--mj-button-outline-bg-hover, var(--mj-brand-primary));
     color: var(--mj-button-outline-text-hover, var(--mj-brand-on-primary));
     border-color: var(--mj-button-outline-border-hover, var(--_mj-button-border));
   }
 
-  &:where(:not(:disabled):not([disabled]):not([aria-disabled="true"])):active {
+  &:active:not(:disabled, [disabled], [aria-disabled="true"]) {
     background: var(--mj-button-outline-bg-active, var(--mj-brand-primary-active));
     color: var(--mj-button-outline-text-active, var(--mj-brand-on-primary));
     border-color: var(--mj-button-outline-border-active, var(--mj-button-outline-border-hover, var(--_mj-button-border)));
@@ -160,13 +161,13 @@
   --_mj-button-border: var(--mj-button-flat-border, transparent);
   padding: var(--mj-button-flat-padding, 8px 12px);
 
-  &:where(:not(:disabled):not([disabled]):not([aria-disabled="true"])):hover {
+  &:hover:not(:disabled, [disabled], [aria-disabled="true"]) {
     background: var(--mj-button-flat-bg-hover, var(--mj-bg-surface-hover));
     color: var(--mj-button-flat-text-hover, var(--mj-text-primary));
     border-color: var(--mj-button-flat-border-hover, var(--_mj-button-border));
   }
 
-  &:where(:not(:disabled):not([disabled]):not([aria-disabled="true"])):active {
+  &:active:not(:disabled, [disabled], [aria-disabled="true"]) {
     background: var(--mj-button-flat-bg-active, var(--mj-bg-surface-active));
     color: var(--mj-button-flat-text-active, var(--mj-button-flat-text-hover, var(--mj-text-primary)));
     border-color: var(--mj-button-flat-border-active, var(--mj-button-flat-border-hover, var(--_mj-button-border)));
@@ -178,13 +179,13 @@
   --_mj-button-text: var(--mj-button-danger-text, var(--mj-text-inverse));
   --_mj-button-border: var(--mj-button-danger-border, var(--mj-status-error));
 
-  &:where(:not(:disabled):not([disabled]):not([aria-disabled="true"])):hover {
+  &:hover:not(:disabled, [disabled], [aria-disabled="true"]) {
     background: var(--mj-button-danger-bg-hover, var(--mj-status-error-text));
     color: var(--mj-button-danger-text-hover, var(--_mj-button-text));
     border-color: var(--mj-button-danger-border-hover, var(--mj-status-error-text));
   }
 
-  &:where(:not(:disabled):not([disabled]):not([aria-disabled="true"])):active {
+  &:active:not(:disabled, [disabled], [aria-disabled="true"]) {
     background: var(--mj-button-danger-bg-active, var(--mj-button-danger-bg-hover, var(--mj-status-error-text)));
     color: var(--mj-button-danger-text-active, var(--mj-button-danger-text-hover, var(--_mj-button-text)));
     border-color: var(--mj-button-danger-border-active, var(--mj-button-danger-border-hover, var(--mj-status-error-text)));
@@ -197,13 +198,13 @@
   --_mj-button-text: var(--mj-button-success-text, var(--mj-text-inverse));
   --_mj-button-border: var(--mj-button-success-border, var(--mj-status-success));
 
-  &:where(:not(:disabled):not([disabled]):not([aria-disabled="true"])):hover {
+  &:hover:not(:disabled, [disabled], [aria-disabled="true"]) {
     background: var(--mj-button-success-bg-hover, var(--mj-status-success-text));
     color: var(--mj-button-success-text-hover, var(--_mj-button-text));
     border-color: var(--mj-button-success-border-hover, var(--mj-status-success-text));
   }
 
-  &:where(:not(:disabled):not([disabled]):not([aria-disabled="true"])):active {
+  &:active:not(:disabled, [disabled], [aria-disabled="true"]) {
     background: var(--mj-button-success-bg-active, var(--mj-button-success-bg-hover, var(--mj-status-success-text)));
     color: var(--mj-button-success-text-active, var(--mj-button-success-text-hover, var(--_mj-button-text)));
     border-color: var(--mj-button-success-border-active, var(--mj-button-success-border-hover, var(--mj-status-success-text)));
@@ -216,13 +217,13 @@
   --_mj-button-text: var(--mj-button-warning-text, var(--mj-text-inverse));
   --_mj-button-border: var(--mj-button-warning-border, var(--mj-status-warning));
 
-  &:where(:not(:disabled):not([disabled]):not([aria-disabled="true"])):hover {
+  &:hover:not(:disabled, [disabled], [aria-disabled="true"]) {
     background: var(--mj-button-warning-bg-hover, var(--mj-status-warning-text));
     color: var(--mj-button-warning-text-hover, var(--_mj-button-text));
     border-color: var(--mj-button-warning-border-hover, var(--mj-status-warning-text));
   }
 
-  &:where(:not(:disabled):not([disabled]):not([aria-disabled="true"])):active {
+  &:active:not(:disabled, [disabled], [aria-disabled="true"]) {
     background: var(--mj-button-warning-bg-active, var(--mj-button-warning-bg-hover, var(--mj-status-warning-text)));
     color: var(--mj-button-warning-text-active, var(--mj-button-warning-text-hover, var(--_mj-button-text)));
     border-color: var(--mj-button-warning-border-active, var(--mj-button-warning-border-hover, var(--mj-status-warning-text)));
@@ -238,13 +239,13 @@
   min-width: var(--mj-button-height, 44px);
   min-height: var(--_mj-button-height);
 
-  &:where(:not(:disabled):not([disabled]):not([aria-disabled="true"])):hover {
+  &:hover:not(:disabled, [disabled], [aria-disabled="true"]) {
     background: var(--mj-button-icon-bg-hover, var(--mj-bg-surface-hover));
     color: var(--mj-button-icon-text-hover, var(--mj-brand-primary));
     border-color: var(--mj-button-icon-border-hover, var(--_mj-button-border));
   }
 
-  &:where(:not(:disabled):not([disabled]):not([aria-disabled="true"])):active {
+  &:active:not(:disabled, [disabled], [aria-disabled="true"]) {
     background: var(--mj-button-icon-bg-active, var(--mj-bg-surface-active));
     color: var(--mj-button-icon-text-active, var(--mj-button-icon-text-hover, var(--mj-brand-primary)));
     border-color: var(--mj-button-icon-border-active, var(--mj-button-icon-border-hover, var(--_mj-button-border)));
@@ -302,7 +303,7 @@
   --_mj-button-text: var(--mj-button-text-selected, var(--mj-brand-on-primary));
   --_mj-button-border: var(--mj-button-border-selected, var(--mj-brand-primary));
 
-  &:where(:not(:disabled):not([disabled]):not([aria-disabled="true"])):hover {
+  &:hover:not(:disabled, [disabled], [aria-disabled="true"]) {
     background: var(--mj-button-primary-bg-hover, var(--mj-brand-primary-hover));
     color: var(--mj-button-text-selected, var(--mj-brand-on-primary));
     border-color: var(--mj-button-primary-border-hover, var(--mj-brand-primary-hover));

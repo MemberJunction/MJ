@@ -179,7 +179,7 @@ Worked examples, with the default chain each one ships with:
 | `--mj-button-radius` | `--mj-radius-control` | `--mj-radius-md` |
 | `--mj-button-primary-bg` | `--mj-brand-primary` | palette |
 | `--mj-button-primary-bg-hover` | `--mj-brand-primary-hover` | palette |
-| `--mj-button-height` | `--mj-control-height-md` | 40px |
+| `--mj-button-height` | `--mj-control-height-md` | 40px (`44px` literal in `button.scss` until Wave 1's height shift) |
 | `--mj-button-sm-height` | `--mj-control-height-sm` | 32px |
 | `--mj-input-border-focus` | `--mj-border-focus` | palette |
 | `--mj-card-radius` | `--mj-radius-surface` | `--mj-radius-lg` |
@@ -189,7 +189,8 @@ Worked examples, with the default chain each one ships with:
 | `--mj-filter-chip-radius` | `--mj-radius-pill` | `--mj-radius-full` |
 
 ```css
-/* inside the primitive: every value exposed, defaulting to today */
+/* inside the primitive: every value exposed, defaulting to today
+   (button.scss temporarily uses 44px until Wave 1's 44 -> 40 shift) */
 .mj-btn {
   border-radius: var(--mj-button-radius, var(--mj-radius-control));
   min-height: var(--mj-button-height, var(--mj-control-height-md));
