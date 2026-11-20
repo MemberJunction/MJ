@@ -430,15 +430,18 @@ async function buildFixture(ctx: IntegrationCheckContext): Promise<void> {
 
 function installEmbeddingStub(): void {
     S.OrigRunEmbedding = AIEmbeddingRunner.prototype.RunEmbedding;
-    AIEmbeddingRunner.prototype.RunEmbedding = async (params: EmbeddingRunParams): Promise<EmbeddingRunResult> => ({
-        Success: true,
-        Vectors: params.Texts.map(() => [0.1, 0.2, 0.3]),
-        PromptRunID: null,
-        TokensUsed: 0,
-        Cost: 0,
-        ErrorMessage: null,
-        ExecutionTimeMs: 0,
-    });
+    AIEmbeddingRunner.prototype.RunEmbedding = async (params: EmbeddingRunParams): Promise<EmbeddingRunResult> => {
+        const count = params.Texts?.length ?? params.Contents?.length ?? 0;
+        return {
+            Success: true,
+            Vectors: Array.from({ length: count }, () => [0.1, 0.2, 0.3]),
+            PromptRunID: null,
+            TokensUsed: 0,
+            Cost: 0,
+            ErrorMessage: null,
+            ExecutionTimeMs: 0,
+        };
+    };
 }
 
 function resetStore(): void {
