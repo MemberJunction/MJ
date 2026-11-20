@@ -18,6 +18,7 @@ import {
   RunFixtures,
   UnitFixtures,
   type LoadedDataset,
+  type MonitoredPromotion,
   type ScenarioID,
   type TruthHarness,
 } from '@memberjunction/predictive-studio-truth-suite';
@@ -91,6 +92,8 @@ export interface PublishOnPeriodsOptions {
    * the challenger trains on the later periods and is compared with the incumbent on the newest one.
    */
   readonly Challenger?: boolean;
+  /** The protocol's promotion margin and simple baselines beyond the defaults (D4-238). */
+  readonly Promotion?: MonitoredPromotion;
 }
 
 /** The monitoring gates' fixture steps. */
@@ -115,7 +118,7 @@ export class MonitoringFixture {
   public static async PublishOnPeriods(h: TruthHarness, dataset: LoadedDataset, periods: readonly number[], o: PublishOnPeriodsOptions): Promise<MonitoredGateModel> {
     const trainThrough = MonitoringFixture.PeriodStart(o.Calendar, Math.max(...periods) + 1);
     const triggers = o.Triggers || [MonitoringFixture.DEGRADATION];
-    const { Pipeline: pipeline } = await UnitFixtures.ProvisionMonitoredScenarioPipeline(h, o.Scenario, o.Task, trainThrough, triggers);
+    const { Pipeline: pipeline } = await UnitFixtures.ProvisionMonitoredScenarioPipeline(h, o.Scenario, o.Task, trainThrough, triggers, undefined, o.Promotion);
     const trained = await h.Train(pipeline);
     if (!trained.ModelID) {
       const run = trained.Ok ? await UnitFixtures.LatestRun(h, pipeline.ID) : null;

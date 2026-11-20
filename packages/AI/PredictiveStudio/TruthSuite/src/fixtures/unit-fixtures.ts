@@ -10,7 +10,7 @@ import { RunView } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 import type { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
 import {
-  EvaluationProtocolRules, PredictionUnit, UtcDay,
+  EvaluationProtocol, EvaluationProtocolRules, PredictionUnit, UtcDay,
   type ColumnEncodingKind, type DecisionDateRule, type EvaluationProtocolDraft, type FeatureStep, type FeatureStepGraph, type HoldoutSplit, type InnerValidation, type LeakageGuard,
   type PredictionUnitSpec, type RetrainTrigger, type SliceSpec, type TaskType, type UnitDraft,
 } from '@memberjunction/predictive-studio-core';
@@ -35,6 +35,16 @@ export type ProtocolChoice =
   | { readonly Kind: 'explicit'; readonly Holdout: HoldoutSplit; readonly InnerValidation?: InnerValidation; readonly Slices?: SliceSpec }
   /** No protocol: the pipeline is refused before training. */
   | { readonly Kind: 'none' };
+
+/**
+ * A monitored scenario pipeline's promotion settings beyond the defaults (D4-238): the promotion margin, and whether the
+ * base rate is the only simple baseline (so a fitted model is judged against the dummy alone and its gate outcome is
+ * `model` when it carries signal).
+ */
+export interface MonitoredPromotion {
+  readonly Margin?: number;
+  readonly DummyBaselineOnly?: boolean;
+}
 
 /** The T3 pipeline's default protocol: five one-month rolling origins after at least 24 training months, expanding window. */
 const T3_ROLLING_ORIGIN: ProtocolChoice = { Kind: 'explicit', Holdout: { kind: 'rolling-origin', origins: 5, horizonPeriods: 1, gapPeriods: 0, minTrainPeriods: 24, window: 'expanding' } };
@@ -240,12 +250,14 @@ export class UnitFixtures {
    * validation and slices when given). The snapshot refuses an incumbent expression naming a column the pipeline does
    * not assemble, so the incumbent-heuristic comparator is kept only when every column it names is one of `features`.
    */
-  private static async protocolDraft(h: TruthHarness, unit: PredictionUnitSpec, features: readonly string[], choice: Exclude<ProtocolChoice, { Kind: 'none' }>, name: string, triggers: readonly RetrainTrigger[] | null = null): Promise<EvaluationProtocolDraft> {
+  private static async protocolDraft(h: TruthHarness, unit: PredictionUnitSpec, features: readonly string[], choice: Exclude<ProtocolChoice, { Kind: 'none' }>, name: string, triggers: readonly RetrainTrigger[] | null = null, promotion: MonitoredPromotion = {}): Promise<EvaluationProtocolDraft> {
     const base = EvaluationProtocolRules.DefaultEvaluationProtocolDraft({ Unit: unit, Holdout: await UnitFixtures.holdoutOf(h, unit, choice), Candidates: 1, Seed: ProtocolDefaults.DEFAULT_SEED, Name: name });
     const usable = unit.incumbent.kind === 'rule' && UnitFixtures.expressionColumns(unit.incumbent.scoreExpression).every((c) => features.includes(c));
-    const baselines = usable ? base.baselines : base.baselines.filter((b) => b.kind !== 'incumbent-heuristic');
+    const kept = usable ? base.baselines : base.baselines.filter((b) => b.kind !== 'incumbent-heuristic');
+    const baselines = promotion.DummyBaselineOnly === true ? kept.filter((b) => b.kind === 'dummy') : kept;
+    const margin = promotion.Margin === undefined ? base.promotion.margin : EvaluationProtocol.ToNonNegative(promotion.Margin);
     return {
-      ...base, baselines, promotion: { ...base.promotion, comparators: baselines },
+      ...base, baselines, promotion: { ...base.promotion, comparators: baselines, margin },
       ...(triggers !== null ? { retrainTriggers: triggers } : {}),
       ...(choice.Kind === 'explicit' && choice.InnerValidation ? { innerValidation: choice.InnerValidation } : {}),
       ...(choice.Kind === 'explicit' && choice.Slices ? { slices: choice.Slices } : {}),
@@ -253,9 +265,9 @@ export class UnitFixtures {
   }
 
   /** Saves the chosen protocol (version 1, authored by the harness user) and records it for teardown; null for `none`. */
-  private static async bindProtocol(h: TruthHarness, unit: PredictionUnitSpec, features: readonly string[], choice: ProtocolChoice, name: string, triggers: readonly RetrainTrigger[] | null = null): Promise<string | null> {
+  private static async bindProtocol(h: TruthHarness, unit: PredictionUnitSpec, features: readonly string[], choice: ProtocolChoice, name: string, triggers: readonly RetrainTrigger[] | null = null, promotion: MonitoredPromotion = {}): Promise<string | null> {
     if (choice.Kind === 'none') return null;
-    const draft = await UnitFixtures.protocolDraft(h, unit, features, choice, name, triggers);
+    const draft = await UnitFixtures.protocolDraft(h, unit, features, choice, name, triggers, promotion);
     const row = await EvaluationProtocolVersioning.CreateEvaluationProtocolV1(draft, { kind: 'human', userId: h.User.ID }, UnitFixtures.EntityFactory(h), h.User);
     h.Created.RecordEvaluationProtocol(row.ID);
     return row.ID;
@@ -265,7 +277,7 @@ export class UnitFixtures {
    * `featureSteps`, when given, is saved as the pipeline's step graph; else one select step over `features`. The
    * pipeline is bound to the protocol `protocol` chooses (none for `{ Kind: 'none' }`).
    */
-  private static async provision(h: TruthHarness, draft: UnitDraft, features: readonly string[], algorithm: string, protocol: ProtocolChoice, guard?: LeakageGuard, featureSteps?: FeatureStepGraph, triggers: readonly RetrainTrigger[] | null = null): Promise<ProvisionedUnitPipeline> {
+  private static async provision(h: TruthHarness, draft: UnitDraft, features: readonly string[], algorithm: string, protocol: ProtocolChoice, guard?: LeakageGuard, featureSteps?: FeatureStepGraph, triggers: readonly RetrainTrigger[] | null = null, promotion: MonitoredPromotion = {}): Promise<ProvisionedUnitPipeline> {
     const factory = UnitFixtures.EntityFactory(h);
     const unitRow = await PredictionUnitVersioning.CreatePredictionUnitV1(draft, { kind: 'human', userId: h.User.ID }, factory, h.User);
     h.Created.RecordPredictionUnit(unitRow.ID);
@@ -279,7 +291,7 @@ export class UnitFixtures {
     pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2 });
     if (guard) pipeline.LeakageGuard = JSON.stringify(guard);
     RunViewPredictionUnitStore.ApplyUnitToPipeline(pipeline, unitRow.ID, parsed.Value, new ProviderAssemblyMetadata(h.Provider));
-    pipeline.EvaluationProtocolID = await UnitFixtures.bindProtocol(h, parsed.Value, UnitFixtures.stepFeatureNames(steps), protocol, `${draft.Name} — protocol`, triggers);
+    pipeline.EvaluationProtocolID = await UnitFixtures.bindProtocol(h, parsed.Value, UnitFixtures.stepFeatureNames(steps), protocol, `${draft.Name} — protocol`, triggers, promotion);
     if (!(await pipeline.Save())) throw new Error(`Saving pipeline failed: ${pipeline.LatestResult?.CompleteMessage}`);
     h.Created.RecordPipeline(pipeline.ID);
     return { UnitRow: unitRow, Unit: parsed.Value, Pipeline: pipeline };
@@ -372,9 +384,9 @@ export class UnitFixtures {
    * snapshot holds only the periods before it; monitoring reads every label known by now), bound to `holdout` (default
    * the year cutoff) with `triggers` as its retrain triggers.
    */
-  public static ProvisionMonitoredScenarioPipeline(h: TruthHarness, scenario: string, task: TaskType, trainThrough: string, triggers: readonly RetrainTrigger[], holdout: ProtocolChoice = { Kind: 'year-cutoff' }): Promise<ProvisionedUnitPipeline> {
+  public static ProvisionMonitoredScenarioPipeline(h: TruthHarness, scenario: string, task: TaskType, trainThrough: string, triggers: readonly RetrainTrigger[], holdout: ProtocolChoice = { Kind: 'year-cutoff' }, promotion: MonitoredPromotion = {}): Promise<ProvisionedUnitPipeline> {
     const draft = UnitFixtures.scenarioDraft(h, scenario, task, `${scenario} (${task.kind}, monitored through ${trainThrough})`, { kind: 'column', column: 'T' }, trainThrough, null);
-    return UnitFixtures.provision(h, draft, UnitFixtures.ScenarioFeatureColumns(h, scenario, 'T'), UnitFixtures.ScenarioAlgorithm(task), holdout, undefined, undefined, triggers);
+    return UnitFixtures.provision(h, draft, UnitFixtures.ScenarioFeatureColumns(h, scenario, 'T'), UnitFixtures.ScenarioAlgorithm(task), holdout, undefined, undefined, triggers, promotion);
   }
 
   /**
