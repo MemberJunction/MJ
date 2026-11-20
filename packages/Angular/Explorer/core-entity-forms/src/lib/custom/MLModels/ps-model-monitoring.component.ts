@@ -421,7 +421,7 @@ export class PSModelMonitoringComponent extends BaseAngularComponent implements 
     return {
       Outcome: c.outcome,
       Reason: c.reason,
-      Comparison: mirror ? `live mirror: ${mirror.paired} paired rows, ${(mirror.agreement * 100).toFixed(1)}% agreement, mean score difference ${mirror.meanScoreDelta.toFixed(3)}` : null,
+      Comparison: mirror ? `live mirror: ${mirror.paired} paired rows, ${mirror.agreement === null ? 'no decision agreement (not a classifier)' : `${(mirror.agreement * 100).toFixed(1)}% agreement`}, mean score difference ${mirror.meanScoreDelta.toFixed(3)}` : null,
       PublishRecordID: c.recordId,
     };
   }

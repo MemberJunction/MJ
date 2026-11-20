@@ -325,7 +325,8 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
 
   /**
    * Step 7: the live mirror's divergence over the period — the binding's challenger `Challenger` rows against the
-   * champion rows of the records in the challenger's sample; null without a binding or a named challenger.
+   * champion rows of the records in the challenger's sample (agreement for a classifier only, M7); null without a
+   * binding or a named challenger.
    */
   protected async MeasureDivergence(plan: PeriodPlan, join: OutcomeJoinResult, period: MonitoringPeriod, ctx: MonitoringContext): Promise<MonitoringMirror | null> {
     if (join.Binding === null) return null;
@@ -333,7 +334,7 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
     if (selection === null) return null;
     const champion = (await ctx.Seams.Store.ModelRows(plan.Model.ID, join.Binding.ID, 'Champion', period, ctx)).filter((p) => selection.Sampled(p.RecordID));
     const challenger = await ctx.Seams.Store.ModelRows(selection.ModelID, join.Binding.ID, 'Challenger', period, ctx);
-    const d = MonitoringRules.Divergence(champion.map((p) => ({ RecordID: p.RecordID, Score: p.Score })), challenger.map((p) => ({ RecordID: p.RecordID, Score: p.Score })));
+    const d = MonitoringRules.Divergence(champion.map((p) => ({ RecordID: p.RecordID, Score: p.Score })), challenger.map((p) => ({ RecordID: p.RecordID, Score: p.Score })), plan.Task);
     return { challengerModelId: selection.ModelID, paired: d.Paired, agreement: d.Agreement, meanScoreDelta: d.MeanScoreDelta, failures: d.Failures };
   }
 
