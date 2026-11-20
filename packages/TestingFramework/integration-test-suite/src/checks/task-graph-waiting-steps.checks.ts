@@ -13,13 +13,16 @@
  * @module @memberjunction/integration-test-suite
  */
 import { RunView } from '@memberjunction/core';
-import { type TaskGraphSpec, type TaskGraphSpecNode } from '@memberjunction/ai-core-plus';
 import {
     BaseHumanTaskProvider,
-    TaskGraphWaitingSteps,
-    WAITING_STEP_MARKER,
     type HumanTaskRaiseContext,
     type HumanTaskRaiseResult,
+    type TaskGraphSpec,
+    type TaskGraphSpecNode,
+} from '@memberjunction/ai-core-plus';
+import {
+    TaskGraphWaitingSteps,
+    WAITING_STEP_MARKER,
     type TaskAgentRunner,
     type TaskAgentRunParams,
     type TaskAgentRunResult,
@@ -69,11 +72,13 @@ const RUNNER = new EchoAgentRunner();
  */
 const TEST_PROVIDER_KEY = 'IntegrationTestHumanProvider';
 const RAISED: HumanTaskRaiseContext[] = [];
+/** The workflow step a raise was for; empty for any other subject. */
+const stepIDOf = (context: HumanTaskRaiseContext): string => (context.Subject.Kind === 'WorkflowStep' ? context.Subject.TaskID : '');
 @RegisterClass(BaseHumanTaskProvider, TEST_PROVIDER_KEY)
 export class IntegrationTestHumanTaskProvider extends BaseHumanTaskProvider {
     public async RaiseTask(context: HumanTaskRaiseContext): Promise<HumanTaskRaiseResult> {
         RAISED.push(context);
-        return { Outcome: 'raised', ExternalReference: `it-${context.TaskID}` };
+        return { Outcome: 'raised', ExternalReference: `it-${stepIDOf(context)}` };
     }
 }
 
@@ -243,9 +248,9 @@ export const TaskGraphWaitingStepChecks: NamedCheck[] = [
             const human = await childNamed(ctx, parentID, 'WS5 Approve');
 
             const parent = await withDispatcher(ctx, 'it-ws5', async () => {
-                await waitFor(async () => RAISED.filter((r) => UUIDsEqual(r.TaskID, human.ID)).length, (n) => n >= 1, 'the provider was never asked');
+                await waitFor(async () => RAISED.filter((r) => UUIDsEqual(stepIDOf(r), human.ID)).length, (n) => n >= 1, 'the provider was never asked');
                 await settle(1500);   // several polls: the provider must not be asked again
-                const raises = RAISED.filter((r) => UUIDsEqual(r.TaskID, human.ID));
+                const raises = RAISED.filter((r) => UUIDsEqual(stepIDOf(r), human.ID));
                 AssertEqual(raises.length, 1, 'the provider is asked exactly once, however many polls pass');
                 AssertEqual(raises[0].Instructions, 'Approve the draft', 'the provider gets the step instructions');
                 AssertEqual(raises[0].ProviderConfiguration['queue'], 'it', 'the provider gets its configuration untouched');
