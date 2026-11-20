@@ -1588,7 +1588,7 @@ import {
     TimelineRelatedEntityGenerator,
 } from '@memberjunction/codegen-lib';
 
-// @memberjunction/predictive-studio (23 classes)
+// @memberjunction/predictive-studio (24 classes)
 import {
     MLModelInferenceProcessor,
     MLModelScoreEnricher,
@@ -1596,6 +1596,7 @@ import {
     PredictiveStudioCreateScoringProcessServerOperation,
     PredictiveStudioGetModelEvidenceServerOperation,
     PredictiveStudioMigratePipelinesAction,
+    PredictiveStudioMigratePreGateModelsServerOperation,
     PredictiveStudioModelDevAgent,
     PredictiveStudioModelMonitoringJobDriver,
     PredictiveStudioPipelineBuilderAgent,
@@ -3086,6 +3087,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PredictiveStudioCreateScoringProcessServerOperation,
     PredictiveStudioGetModelEvidenceServerOperation,
     PredictiveStudioMigratePipelinesAction,
+    PredictiveStudioMigratePreGateModelsServerOperation,
     PredictiveStudioModelDevAgent,
     PredictiveStudioModelMonitoringJobDriver,
     PredictiveStudioPipelineBuilderAgent,
@@ -3170,11 +3172,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     CreateListFromQueryAction,
     CreateMermaidDiagramAction,
     CreateRecordAction,
-    CreateRuntimeActionAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    CreateRuntimeActionAction,
     CreateSVGChartAction,
     CreateSVGDiagramAction,
     CreateSVGInfographicAction,
@@ -3374,11 +3376,11 @@ const CLASS_REGISTRATIONS_6: any[] = [
     DiagnosticsServerMiddleware,
     DiagnosticsStartSessionServerOperation,
     DiagnosticsStopSessionServerOperation,
-    DiagnosticsUploadClientCaptureServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_7: any[] = [
+    DiagnosticsUploadClientCaptureServerOperation,
     MJDiagnosticSenderRegistrationEntityServer,
     HelloWorldHandler,
     WorkQueueServerExtension,
@@ -3400,7 +3402,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1403;
+export const CLASS_REGISTRATIONS_COUNT = 1404;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

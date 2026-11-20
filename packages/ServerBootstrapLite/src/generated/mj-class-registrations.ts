@@ -1493,7 +1493,7 @@ import {
     XMLParserAction,
 } from '@memberjunction/core-actions';
 
-// @memberjunction/predictive-studio (23 classes)
+// @memberjunction/predictive-studio (24 classes)
 import {
     MLModelInferenceProcessor,
     MLModelScoreEnricher,
@@ -1501,6 +1501,7 @@ import {
     PredictiveStudioCreateScoringProcessServerOperation,
     PredictiveStudioGetModelEvidenceServerOperation,
     PredictiveStudioMigratePipelinesAction,
+    PredictiveStudioMigratePreGateModelsServerOperation,
     PredictiveStudioModelDevAgent,
     PredictiveStudioModelMonitoringJobDriver,
     PredictiveStudioPipelineBuilderAgent,
@@ -2793,6 +2794,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PredictiveStudioCreateScoringProcessServerOperation,
     PredictiveStudioGetModelEvidenceServerOperation,
     PredictiveStudioMigratePipelinesAction,
+    PredictiveStudioMigratePreGateModelsServerOperation,
     PredictiveStudioModelDevAgent,
     PredictiveStudioModelMonitoringJobDriver,
     PredictiveStudioPipelineBuilderAgent,
@@ -2812,11 +2814,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PredictiveStudioWithdrawScoringBindingServerOperation,
     CreateScheduledJobAction,
     DeleteScheduledJobAction,
-    ExecuteScheduledJobNowAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    ExecuteScheduledJobNowAction,
     GetScheduledJobStatisticsAction,
     QueryScheduledJobsAction,
     UpdateScheduledJobAction,
@@ -2871,7 +2873,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1237;
+export const CLASS_REGISTRATIONS_COUNT = 1238;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
