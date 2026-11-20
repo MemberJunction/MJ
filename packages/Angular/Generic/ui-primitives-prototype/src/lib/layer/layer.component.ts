@@ -28,7 +28,9 @@ import {
 let nextLayerId = 0;
 let nextLayerTitleId = 0;
 
-function optionalModalBoolean(value: unknown): boolean | undefined {
+type BooleanInputValue = boolean | string | null | undefined;
+
+function optionalModalBoolean(value: BooleanInputValue): boolean | undefined {
   if (value === null || value === undefined) {
     return undefined;
   }
@@ -107,7 +109,7 @@ export class MJLayerComponent implements OnDestroy {
 
   public readonly Kind = input<string>('dialog');
   public readonly Placement = input<string>('center');
-  public readonly Modal = input<boolean | undefined, unknown>(undefined, {
+  public readonly Modal = input<boolean | undefined, BooleanInputValue>(undefined, {
     transform: optionalModalBoolean,
   });
   public readonly Closeable = input(true, { transform: booleanAttribute });
@@ -118,6 +120,7 @@ export class MJLayerComponent implements OnDestroy {
   public readonly Label = input<string>('');
   public readonly AnnounceOnOpen = input<string>('');
 
+  public readonly BeforeOpen = output<MJBeforeEvent<'open'>>();
   public readonly BeforeClose = output<MJBeforeEvent<'escape' | 'backdrop' | 'programmatic'>>();
   public readonly AfterOpen = output<MJAfterEvent<'open'>>();
   public readonly AfterClose = output<MJAfterEvent<'escape' | 'backdrop' | 'programmatic'>>();
@@ -198,8 +201,17 @@ export class MJLayerComponent implements OnDestroy {
       const panelEl = this.layerPanel()?.nativeElement;
 
       if (shouldBeOpen && panelEl && !this.isCurrentlyOpen) {
-        this.isCurrentlyOpen = true;
         untracked(() => {
+          const before: MJBeforeEvent<'open'> = { Cancel: false, Reason: 'open' };
+          this.BeforeOpen.emit(before);
+          DispatchMJElementEvent(this.hostEl.nativeElement, 'mj-before-open', before);
+          if (before.Cancel) {
+            this.isCurrentlyOpen = false;
+            this.isOpenState.set(false);
+            return;
+          }
+
+          this.isCurrentlyOpen = true;
           this.syncLightDomTitleId(panelEl);
           this.layerService.Open({
             Id: this.layerId,
@@ -254,7 +266,9 @@ export class MJLayerComponent implements OnDestroy {
   }
 
   private syncLightDomTitleId(panelEl: HTMLElement): void {
-    const titleEl = panelEl.querySelector<HTMLElement>('.mj-layer-title');
+    const titleEl = panelEl.querySelector<HTMLElement>(
+      '.mj-layer-title, [mj-layer-title], [mjlayertitle]'
+    );
     if (titleEl) {
       if (!titleEl.id) {
         titleEl.id = `${this.layerId}-title`;

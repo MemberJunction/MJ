@@ -29,6 +29,8 @@ export class MJSurfaceBodyDirective {}
 })
 export class MJSurfaceFooterDirective {}
 
+const BUILTIN_SURFACE_LEVELS = new Set(['sunken', 'base', 'elevated', 'overlay']);
+
 /**
  * Wave 0 surface primitive. Uses standard MJ PascalCase inputs (`[Level]`, `[Tone]`, `[VisualRole]`);
  * the Angular Elements entry maps kebab-case HTML attributes onto these properties automatically.
@@ -43,6 +45,9 @@ export class MJSurfaceFooterDirective {}
     '[class]': 'hostClasses()',
     '[class.mj-surface-interactive]': 'Interactive() && safeLevel() !== "sunken"',
     '[class.is-selected]': 'Selected() && safeLevel() !== "sunken"',
+    '[style.--_mj-surface-level-bg]': 'customLevelBgVar()',
+    '[style.--_mj-surface-level-border]': 'customLevelBorderVar()',
+    '[style.--_mj-surface-level-shadow]': 'customLevelShadowVar()',
     '[style.--_mj-surface-elevation-shadow]': 'elevationShadowVar()',
     '[style.--_mj-surface-explicit-padding]': 'explicitPaddingVar()',
     '[style.--_mj-surface-explicit-radius]': 'explicitRadiusVar()',
@@ -72,6 +77,27 @@ export class MJSurfaceComponent {
   protected readonly hostClasses = computed(
     () => `mj-surface mj-surface-${this.safeLevel()}`
   );
+
+  protected readonly customLevelBgVar = computed(() => {
+    const level = this.safeLevel();
+    return BUILTIN_SURFACE_LEVELS.has(level)
+      ? null
+      : `var(--mj-surface-${level}-bg, var(--mj-bg-surface))`;
+  });
+
+  protected readonly customLevelBorderVar = computed(() => {
+    const level = this.safeLevel();
+    return BUILTIN_SURFACE_LEVELS.has(level)
+      ? null
+      : `var(--mj-surface-${level}-border, var(--mj-border-default))`;
+  });
+
+  protected readonly customLevelShadowVar = computed(() => {
+    const level = this.safeLevel();
+    return BUILTIN_SURFACE_LEVELS.has(level)
+      ? null
+      : `var(--mj-surface-${level}-shadow, 0 0 transparent)`;
+  });
 
   protected readonly elevationShadowVar = computed(() => {
     const elevation = SanitizeAxisSlug(this.Elevation(), 'none');

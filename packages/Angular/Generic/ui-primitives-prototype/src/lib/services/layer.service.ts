@@ -136,6 +136,7 @@ export class MJLayerService {
       return;
     }
 
+    const wasTopmost = index === this.stack.length - 1;
     const [removed] = this.stack.splice(index, 1);
     this.syncModalScrollLock();
     removed.Subscriptions.unsubscribe();
@@ -151,9 +152,9 @@ export class MJLayerService {
     removed.OverlayRef.dispose();
 
     if (
+      wasTopmost &&
       removed.PreviousFocus &&
-      removed.PreviousFocus.isConnected &&
-      this.stack.length === 0
+      removed.PreviousFocus.isConnected
     ) {
       removed.PreviousFocus.focus();
     }

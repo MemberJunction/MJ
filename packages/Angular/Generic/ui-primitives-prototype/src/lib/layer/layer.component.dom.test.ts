@@ -42,14 +42,16 @@ import {
       [Open]="layerOpen()"
       [Kind]="'dialog'"
       [Closeable]="true"
+      (BeforeOpen)="onBeforeOpen($event)"
       (BeforeClose)="onBeforeClose($event)"
+      (AfterOpen)="afterOpenCount = afterOpenCount + 1"
       (AfterClose)="layerOpen.set(false); afterCloseCount = afterCloseCount + 1"
     >
       <div mjLayerHeader>
         <h2 mjLayerTitle>Dialog Title</h2>
       </div>
       <div mjLayerBody>
-        <button type="button" data-autofocus>Primary Action</button>
+        <button type="button" id="dialog-nested-trigger" data-autofocus>Primary Action</button>
       </div>
       <div mjLayerFooter>
         <button type="button">Close</button>
@@ -59,7 +61,7 @@ import {
     <mj-layer
       [Open]="popoverOpen()"
       [Kind]="'popover'"
-      [Anchor]="'#popover-trigger'"
+      [Anchor]="popoverAnchor()"
       [Label]="'Quick Popover'"
       (AfterClose)="popoverOpen.set(false)"
     >
@@ -73,8 +75,17 @@ class LayerHostComponent {
   public readonly parentModalOpen = signal(false);
   public readonly layerOpen = signal(false);
   public readonly popoverOpen = signal(false);
+  public readonly popoverAnchor = signal('#popover-trigger');
+  public cancelNextOpen = false;
   public cancelNextClose = false;
+  public afterOpenCount = 0;
   public afterCloseCount = 0;
+
+  public onBeforeOpen(ev: MJBeforeEvent<'open'>): void {
+    if (this.cancelNextOpen) {
+      ev.Cancel = true;
+    }
+  }
 
   public onBeforeClose(ev: MJBeforeEvent<'escape' | 'backdrop' | 'programmatic'>): void {
     if (this.cancelNextClose) {
@@ -148,6 +159,58 @@ describe('MJLayerComponent', () => {
     expect(layerService.ActiveCount).toBe(1);
 
     fixture.componentInstance.cancelNextClose = false;
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    fixture.detectChanges();
+    expect(layerService.ActiveCount).toBe(0);
+    expect(fixture.componentInstance.layerOpen()).toBe(false);
+  });
+
+  it('honors cancelable BeforeOpen and restores focus to a trigger inside an open modal when a nested popover closes', async () => {
+    const fixture = TestBed.createComponent(LayerHostComponent);
+    const layerService = TestBed.inject(MJLayerService);
+    fixture.detectChanges();
+
+    // Cancelable BeforeOpen prevents opening
+    fixture.componentInstance.cancelNextOpen = true;
+    fixture.componentInstance.layerOpen.set(true);
+    fixture.detectChanges();
+    expect(layerService.ActiveCount).toBe(0);
+    expect(fixture.componentInstance.afterOpenCount).toBe(0);
+
+    // Allow opening modal dialog
+    fixture.componentInstance.cancelNextOpen = false;
+    fixture.componentInstance.layerOpen.set(false);
+    fixture.detectChanges();
+    fixture.componentInstance.layerOpen.set(true);
+    fixture.detectChanges();
+    await Promise.resolve();
+
+    expect(layerService.ActiveCount).toBe(1);
+    expect(fixture.componentInstance.afterOpenCount).toBe(1);
+
+    const nestedTrigger = document.body.querySelector(
+      '#dialog-nested-trigger'
+    ) as HTMLButtonElement;
+    expect(nestedTrigger).toBeTruthy();
+    nestedTrigger.focus();
+    expect(document.activeElement).toBe(nestedTrigger);
+
+    // Open popover anchored to button inside open modal dialog (stack length = 2)
+    fixture.componentInstance.popoverAnchor.set('#dialog-nested-trigger');
+    fixture.componentInstance.popoverOpen.set(true);
+    fixture.detectChanges();
+    await Promise.resolve();
+    expect(layerService.ActiveCount).toBe(2);
+
+    // Escape closes topmost popover only and restores focus back to the trigger inside the still-open modal
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    fixture.detectChanges();
+    expect(fixture.componentInstance.popoverOpen()).toBe(false);
+    expect(fixture.componentInstance.layerOpen()).toBe(true);
+    expect(layerService.ActiveCount).toBe(1);
+    expect(document.activeElement).toBe(nestedTrigger);
+
+    // Second Escape closes the modal dialog
     document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     fixture.detectChanges();
     expect(layerService.ActiveCount).toBe(0);

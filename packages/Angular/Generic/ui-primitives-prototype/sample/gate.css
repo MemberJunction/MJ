@@ -289,13 +289,11 @@ body {
 /* Open-axis custom tone and role defaults (declared before [data-look] overrides so equal-specificity looks win) */
 :root {
   --mj-tone-plum-text: #701a75;
-  --mj-tone-plum-bg-selected: #fae8ff;
   --mj-visual-role-nav-item-padding-inline: var(--mj-space-4);
 }
 
 [data-theme='dark'] {
   --mj-tone-plum-text: #f0abfc;
-  --mj-tone-plum-bg-selected: #4a044e;
 }
 
 /* Look 1: MJ Default — enterprise slate SaaS, 8px/12px radii, crisp 1px borders */
@@ -326,6 +324,12 @@ body {
   --mj-text-secondary: #5c554c;
   --mj-text-inverse: #ffffff;
 
+  --mj-surface-base-text-secondary: #5c554c;
+  --mj-surface-sunken-text-secondary: #524b42;
+  --mj-surface-elevated-text-secondary: #5c554c;
+  --mj-surface-overlay-text-secondary: #5c554c;
+  --mj-surface-text-muted-selected: #524b42;
+
   --mj-border-default: #e4dac7;
   --mj-border-subtle: #ede5d5;
   --mj-border-strong: #c8bba3;
@@ -338,7 +342,6 @@ body {
   --mj-shadow-md: 0 14px 34px -10px rgba(45, 42, 38, 0.14), 0 4px 10px -4px rgba(45, 42, 38, 0.06);
   --mj-shadow-xl: 0 24px 48px -12px rgba(45, 42, 38, 0.22);
 
-  --mj-surface-padding: var(--mj-space-6);
   --mj-surface-gap: var(--mj-space-5);
   --mj-row-min-height: var(--mj-control-height-lg);
   --mj-row-padding-inline: var(--mj-space-5);
@@ -353,7 +356,10 @@ body {
   --mj-surface-sunken-border: transparent;
 
   --mj-tone-plum-text: #8c3b1f;
-  --mj-tone-plum-bg-selected: #fbeae2;
+}
+
+[data-look='lxp'] .host-grid > mj-surface {
+  --mj-surface-padding: var(--mj-space-6);
 }
 
 [data-theme='dark'][data-look='lxp'] {
@@ -369,6 +375,11 @@ body {
   --mj-text-secondary: #cfc6b8;
   --mj-text-inverse: #1c1a17;
 
+  --mj-surface-base-text-secondary: #cfc6b8;
+  --mj-surface-sunken-text-secondary: #cfc6b8;
+  --mj-surface-elevated-text-secondary: #ded6c9;
+  --mj-surface-overlay-text-secondary: #ded6c9;
+
   --mj-border-default: #463f38;
   --mj-border-subtle: #38322c;
   --mj-border-strong: #63594f;
@@ -380,7 +391,6 @@ body {
   --mj-surface-sunken-bg: #211e1a;
 
   --mj-tone-plum-text: #f6b297;
-  --mj-tone-plum-bg-selected: #4d2618;
 }
 
 /* Look 3: Editorial — stark black-ink Georgia serif print monograph, 0px corners, zero shadows */
@@ -408,7 +418,6 @@ body {
   --mj-surface-elevated-shadow: 0 0 transparent;
   --mj-surface-overlay-shadow: 0 0 transparent;
 
-  --mj-surface-padding: var(--mj-space-3);
   --mj-surface-gap: var(--mj-space-3);
   --mj-row-min-height: var(--mj-control-height-sm);
   --mj-brand-primary: #111827;
@@ -419,6 +428,10 @@ body {
   --mj-surface-elevated-border: #111827;
   --mj-surface-sunken-bg: #f4f4f0;
   --mj-surface-sunken-border: #111827;
+}
+
+[data-look='editorial'] .host-grid > mj-surface {
+  --mj-surface-padding: var(--mj-space-3);
 }
 
 [data-theme='dark'][data-look='editorial'] {

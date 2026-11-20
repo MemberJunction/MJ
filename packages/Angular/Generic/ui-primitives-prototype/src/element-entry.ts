@@ -20,7 +20,8 @@ function readCspNonce(): string | null {
     return null;
   }
   const nonceMeta = document.querySelector<HTMLMetaElement>('meta[name="csp-nonce"]');
-  const scriptNonce = document.currentScript?.getAttribute('nonce');
+  const scriptEl = document.currentScript as HTMLScriptElement | null;
+  const scriptNonce = scriptEl?.nonce || scriptEl?.getAttribute('nonce');
   return nonceMeta?.content || scriptNonce || null;
 }
 
@@ -34,6 +35,7 @@ function ensureStylesLoaded(nonce: string | null): void {
   const style = document.createElement('style');
   style.id = STYLE_ELEMENT_ID;
   if (nonce) {
+    style.nonce = nonce;
     style.setAttribute('nonce', nonce);
   }
   style.textContent = PROTOTYPE_CSS;

@@ -49,8 +49,12 @@ import {
       <span mjRowContent>Standalone Button Row</span>
     </mj-row>
 
-    <mj-row class="toggle-interactive-row" [Interactive]="true" [Pressed]="toggled()">
+    <mj-row class="toggle-interactive-row" [Interactive]="true" [Pressed]="toggled()" (AfterSelect)="toggled.set(!toggled())">
       <span mjRowContent>Toggle Row</span>
+    </mj-row>
+
+    <mj-row class="invalid-role-row" [Interactive]="true" [ItemRole]="'invalid-role'">
+      <span mjRowContent>Fallback Role Row</span>
     </mj-row>
 
     <mj-row class="layout-only-row">
@@ -101,6 +105,22 @@ describe('MJRowComponent', () => {
     expect(toggleRow.classList.contains('is-selected')).toBe(true);
     expect(toggleRow.hasAttribute('data-selected')).toBe(false);
 
+    const invalidRoleRow = fixture.nativeElement.querySelector(
+      'mj-row.invalid-role-row'
+    ) as HTMLElement;
+    expect(invalidRoleRow.getAttribute('role')).toBe('button');
+
+    // Spacebar prevents scroll on keydown and activates on keyup (native <button> behavior)
+    fixture.componentInstance.toggled.set(false);
+    fixture.detectChanges();
+    const spaceDown = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
+    toggleRow.dispatchEvent(spaceDown);
+    expect(spaceDown.defaultPrevented).toBe(true);
+    expect(fixture.componentInstance.toggled()).toBe(false);
+    toggleRow.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true, cancelable: true }));
+    fixture.detectChanges();
+    expect(fixture.componentInstance.toggled()).toBe(true);
+
     const layoutRow = fixture.nativeElement.querySelector(
       'mj-row.layout-only-row'
     ) as HTMLElement;
@@ -112,6 +132,8 @@ describe('MJRowComponent', () => {
     expect(opt1.style.getPropertyValue('--_mj-visual-role-padding-inline')).toContain(
       '--mj-visual-role-nav-item-padding-inline'
     );
+    // NAMING.md: tones do not define a -selected background token
+    expect(opt1.style.getPropertyValue('--_mj-tone-bg-selected')).toBe('');
     expect(opt1.getAttribute('tabindex')).toBe('0');
     expect(opt2.getAttribute('tabindex')).toBe('-1');
 
@@ -122,6 +144,21 @@ describe('MJRowComponent', () => {
     expect(opt1.getAttribute('tabindex')).toBe('-1');
     expect(opt2.getAttribute('tabindex')).toBe('0');
     expect(opt2.classList.contains('is-selected')).toBe(true);
+
+    // Clearing selection dynamically restores fallback tabindex="0" on the first enabled option
+    fixture.componentInstance.selectedIdx.set(-1);
+    fixture.detectChanges();
+    await Promise.resolve();
+    fixture.detectChanges();
+    expect(opt1.getAttribute('tabindex')).toBe('0');
+    expect(opt2.getAttribute('tabindex')).toBe('-1');
+
+    fixture.componentInstance.selectedIdx.set(1);
+    fixture.detectChanges();
+    await Promise.resolve();
+    fixture.detectChanges();
+    expect(opt1.getAttribute('tabindex')).toBe('-1');
+    expect(opt2.getAttribute('tabindex')).toBe('0');
 
     fixture.componentInstance.cancelNextSelect = true;
     opt2.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));

@@ -16,6 +16,17 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     await page.goto('/');
     await page.waitForSelector('mj-surface.mj-surface');
 
+    // Element entry dynamically injected <style id="mj-wave0-prototype-styles" nonce="..."> under strict CSP
+    // (Browsers clear getAttribute('nonce') on insertion per HTML nonce-hiding; IDL .nonce and parsed cssRules prove acceptance)
+    const injectedStyleCheck = await page
+      .locator('style#mj-wave0-prototype-styles')
+      .evaluate((el) => ({
+        nonce: (el as HTMLStyleElement).nonce,
+        ruleCount: (el as HTMLStyleElement).sheet?.cssRules.length ?? 0,
+      }));
+    expect(injectedStyleCheck.nonce).toBeTruthy();
+    expect(injectedStyleCheck.ruleCount).toBeGreaterThan(0);
+
     // Closed <mj-layer> elements must have zero rendered box
     const closedLayerBox = await page.locator('#proto-dialog').boundingBox();
     expect(closedLayerBox).toBeNull();
@@ -71,17 +82,42 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     await expect(overrideSurface).toHaveCSS('border-top-style', 'dashed');
     await expect(overrideSurface).toHaveCSS('border-top-width', '2px');
 
-    // Tier 3 --mj-surface-bg override on an outer surface must not bleed into a nested <mj-surface>
+    // Tier 3 --mj-surface-{bg,padding,radius} overrides on an outer surface must not bleed into a nested <mj-surface>
     const sunkenSurface = overrideSurface.locator('mj-surface[level="sunken"]');
     const defaultSunkenBg = await sunkenSurface.evaluate((el) => getComputedStyle(el).backgroundColor);
-    await overrideSurface.evaluate((el) => el.style.setProperty('--mj-surface-bg', 'rgb(254, 242, 242)'));
+    const defaultSunkenPadding = await sunkenSurface.evaluate((el) => getComputedStyle(el).paddingTop);
+    const defaultSunkenRadius = await sunkenSurface.evaluate((el) => getComputedStyle(el).borderTopLeftRadius);
+    await overrideSurface.evaluate((el) => {
+      el.style.setProperty('--mj-surface-bg', 'rgb(254, 242, 242)');
+      el.style.setProperty('--mj-surface-padding', '40px');
+      el.style.setProperty('--mj-surface-radius', '32px');
+    });
     await expect(overrideSurface).toHaveCSS('background-color', 'rgb(254, 242, 242)');
+    await expect(overrideSurface).toHaveCSS('padding-top', '40px');
+    await expect(overrideSurface).toHaveCSS('border-top-left-radius', '32px');
     await expect(sunkenSurface).toHaveCSS('background-color', defaultSunkenBg);
-    await overrideSurface.evaluate((el) => el.style.removeProperty('--mj-surface-bg'));
+    await expect(sunkenSurface).toHaveCSS('padding-top', defaultSunkenPadding);
+    await expect(sunkenSurface).toHaveCSS('border-top-left-radius', defaultSunkenRadius);
+    await overrideSurface.evaluate((el) => {
+      el.style.removeProperty('--mj-surface-bg');
+      el.style.removeProperty('--mj-surface-padding');
+      el.style.removeProperty('--mj-surface-radius');
+    });
 
-    // Part reorder: footer rendered before body in second surface
+    // Elevated surface secondary text must resolve --mj-surface-elevated-text-secondary (never collapse via var() cycle to primary text)
+    const elevatedPrimaryColor = await overrideSurface.locator('.gate-row-title').first().evaluate((el) => getComputedStyle(el).color);
+    const elevatedSecondaryColor = await overrideSurface.locator('.gate-row-meta').first().evaluate((el) => getComputedStyle(el).color);
+    expect(elevatedSecondaryColor).not.toBe(elevatedPrimaryColor);
+
+    // Part reorder: declarative [mj-surface-footer] rendered before [mj-surface-body] in second surface
     const reorderedChildren = await overrideSurface.locator('> div').evaluateAll((els) =>
-      els.map((el) => el.className)
+      els.map((el) =>
+        el.hasAttribute('mj-surface-footer')
+          ? 'mj-surface-footer'
+          : el.hasAttribute('mj-surface-body')
+            ? 'mj-surface-body'
+            : el.className
+      )
     );
     expect(reorderedChildren).toEqual(['mj-surface-footer', 'mj-surface-body']);
 
@@ -148,8 +184,10 @@ test.describe('Project Lego Wave 0 Prototype Gate', () => {
     await expect(dialog).toBeVisible();
     await expect(page.locator('html')).toHaveClass(/cdk-global-scrollblock/);
 
-    // Dialog auto-wires aria-labelledby to .mj-layer-title without requiring a duplicate label attribute
-    const titleId = await dialog.locator('.mj-layer-title').getAttribute('id');
+    // Dialog auto-wires aria-labelledby to [mj-layer-title] / .mj-layer-title without requiring a duplicate label attribute
+    const titleId = await dialog
+      .locator('.mj-layer-title, [mj-layer-title]')
+      .getAttribute('id');
     expect(titleId).toBeTruthy();
     await expect(dialog).toHaveAttribute('aria-labelledby', titleId!);
 

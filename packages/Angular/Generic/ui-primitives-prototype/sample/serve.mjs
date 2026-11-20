@@ -45,7 +45,7 @@ const server = createServer((req, res) => {
     res.writeHead(200, {
       'Content-Type': MIME['.html'],
       'Content-Security-Policy':
-        `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'nonce-${nonce}' 'unsafe-hashes'; style-src-attr 'unsafe-inline';`,
+        `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'nonce-${nonce}';`,
     });
     res.end(html);
     return;

@@ -2,10 +2,12 @@ import {
   Component,
   Directive,
   ElementRef,
+  OnDestroy,
   ViewEncapsulation,
   afterNextRender,
   booleanAttribute,
   computed,
+  effect,
   inject,
   input,
   output,
@@ -20,7 +22,36 @@ import {
 
 export type MJRowItemRole = 'button' | 'option' | 'menuitem' | 'menuitemradio';
 
-function optionalBooleanAttribute(value: unknown): boolean | null {
+type BooleanInputValue = boolean | string | null | undefined;
+
+const VALID_ITEM_ROLES = new Set<MJRowItemRole>([
+  'button',
+  'option',
+  'menuitem',
+  'menuitemradio',
+]);
+
+const CONTAINER_SYNC_CALLBACKS = new WeakMap<HTMLElement, Set<() => void>>();
+const PENDING_SYNC_CONTAINERS = new WeakSet<HTMLElement>();
+
+function scheduleContainerRovingSync(container: HTMLElement): void {
+  if (PENDING_SYNC_CONTAINERS.has(container)) {
+    return;
+  }
+  PENDING_SYNC_CONTAINERS.add(container);
+  queueMicrotask(() => {
+    PENDING_SYNC_CONTAINERS.delete(container);
+    const callbacks = CONTAINER_SYNC_CALLBACKS.get(container);
+    if (!callbacks) {
+      return;
+    }
+    for (const cb of callbacks) {
+      cb();
+    }
+  });
+}
+
+function optionalBooleanAttribute(value: BooleanInputValue): boolean | null {
   if (value === null || value === undefined) {
     return null;
   }
@@ -72,7 +103,6 @@ export class MJRowTrailingDirective {}
     '[style.--_mj-tone-text]': 'toneTextVar()',
     '[style.--_mj-tone-border]': 'toneBorderVar()',
     '[style.--_mj-tone-bg]': 'toneBgVar()',
-    '[style.--_mj-tone-bg-selected]': 'toneBgSelectedVar()',
     '[style.--_mj-visual-role-bg]': 'visualRoleBgVar()',
     '[style.--_mj-visual-role-border]': 'visualRoleBorderVar()',
     '[style.--_mj-visual-role-radius]': 'visualRoleRadiusVar()',
@@ -86,23 +116,25 @@ export class MJRowTrailingDirective {}
     '[attr.aria-disabled]': 'Interactive() && Disabled() ? true : null',
     '(click)': 'onActivate($event)',
     '(keydown)': 'onKeyDown($event)',
-    '(focusout)': 'onFocusOut()',
+    '(keyup)': 'onKeyUp($event)',
   },
 })
-export class MJRowComponent {
+export class MJRowComponent implements OnDestroy {
   private readonly hostEl = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly fallbackTabStop = signal(false);
+  private registeredContainer: HTMLElement | null = null;
+  private readonly syncSelfCallback = (): void => this.recomputeFallbackTabStop();
 
   public readonly Density = input<string>('md');
   public readonly Interactive = input(false, { transform: booleanAttribute });
   public readonly Selected = input(false, { transform: booleanAttribute });
-  public readonly Pressed = input<boolean | null, unknown>(null, {
+  public readonly Pressed = input<boolean | null, BooleanInputValue>(null, {
     transform: optionalBooleanAttribute,
   });
   public readonly Disabled = input(false, { transform: booleanAttribute });
   public readonly Tone = input<string>('neutral');
   public readonly VisualRole = input<string>('row');
-  public readonly ItemRole = input<MJRowItemRole>('button');
+  public readonly ItemRole = input<MJRowItemRole | string>('button');
 
   public readonly BeforeSelect = output<MJBeforeEvent<'user'>>();
   public readonly AfterSelect = output<MJAfterEvent<'user'>>();
@@ -110,6 +142,10 @@ export class MJRowComponent {
   protected readonly safeDensity = computed(() => SanitizeAxisSlug(this.Density(), 'md'));
   protected readonly safeTone = computed(() => SanitizeAxisSlug(this.Tone(), 'neutral'));
   protected readonly safeRole = computed(() => SanitizeAxisSlug(this.VisualRole(), 'row'));
+  protected readonly safeItemRole = computed<MJRowItemRole>(() => {
+    const candidate = this.ItemRole().trim() as MJRowItemRole;
+    return VALID_ITEM_ROLES.has(candidate) ? candidate : 'button';
+  });
   protected readonly isHighlighted = computed(
     () => this.Selected() || this.Pressed() === true
   );
@@ -145,14 +181,14 @@ export class MJRowComponent {
   });
 
   protected readonly ariaRole = computed(() =>
-    this.Interactive() ? this.ItemRole() : null
+    this.Interactive() ? this.safeItemRole() : null
   );
 
   protected readonly rovingTabIndex = computed(() => {
     if (!this.Interactive() || this.Disabled()) {
       return null;
     }
-    const role = this.ItemRole();
+    const role = this.safeItemRole();
     if (role === 'option' || role === 'menuitemradio' || role === 'menuitem') {
       return this.Selected() || this.fallbackTabStop() ? 0 : -1;
     }
@@ -160,15 +196,17 @@ export class MJRowComponent {
   });
 
   protected readonly ariaSelected = computed(() =>
-    this.Interactive() && this.ItemRole() === 'option' ? String(this.Selected()) : null
+    this.Interactive() && this.safeItemRole() === 'option' ? String(this.Selected()) : null
   );
 
   protected readonly ariaChecked = computed(() =>
-    this.Interactive() && this.ItemRole() === 'menuitemradio' ? String(this.Selected()) : null
+    this.Interactive() && this.safeItemRole() === 'menuitemradio'
+      ? String(this.Selected())
+      : null
   );
 
   protected readonly ariaPressed = computed(() => {
-    if (!this.Interactive() || this.ItemRole() !== 'button') {
+    if (!this.Interactive() || this.safeItemRole() !== 'button') {
       return null;
     }
     const pressed = this.Pressed();
@@ -189,11 +227,6 @@ export class MJRowComponent {
     this.safeTone() === 'neutral'
       ? null
       : `var(--mj-tone-${this.safeTone()}-bg, var(--mj-row-bg, transparent))`
-  );
-  protected readonly toneBgSelectedVar = computed(() =>
-    this.safeTone() === 'neutral'
-      ? null
-      : `var(--mj-tone-${this.safeTone()}-bg-selected, var(--mj-row-bg-selected, var(--mj-surface-base-bg-selected)))`
   );
 
   protected readonly visualRoleBgVar = computed(() =>
@@ -224,70 +257,45 @@ export class MJRowComponent {
 
   constructor() {
     afterNextRender(() => {
-      if (!this.Interactive()) {
-        return;
-      }
-      const el = this.hostEl.nativeElement;
-      const nestedControl = el.querySelector('button, a[href], input, select, textarea');
-      if (nestedControl) {
-        console.error(
-          '[mj-row] WCAG 4.1.2 violation: interactive mj-row must not contain nested interactive controls.'
-        );
-      }
-      const role = this.ItemRole();
-      if (role === 'option') {
-        const listbox = el.closest<HTMLElement>('[role="listbox"]');
-        if (!listbox) {
-          console.error(
-            '[mj-row] WCAG 4.1.2 violation: ItemRole="option" requires an ancestor [role="listbox"].'
-          );
-        } else if (!listbox.querySelector('[role="option"].is-selected, [role="option"][aria-selected="true"]')) {
-          const firstOption = listbox.querySelector<HTMLElement>(
-            '[role="option"]:not([aria-disabled="true"])'
-          );
-          if (firstOption === el) {
-            this.fallbackTabStop.set(true);
-          }
-        }
-      } else if (role === 'menuitem' || role === 'menuitemradio') {
-        const menu = el.closest<HTMLElement>('[role="menu"], [role="menubar"]');
-        if (menu && !menu.querySelector('.mj-row.is-selected, [aria-checked="true"]')) {
-          const firstItem = menu.querySelector<HTMLElement>(
-            '[role="menuitem"]:not([aria-disabled="true"]), [role="menuitemradio"]:not([aria-disabled="true"])'
-          );
-          if (firstItem === el) {
-            this.fallbackTabStop.set(true);
-          }
-        }
+      this.auditRowSemantics();
+      this.registerAndSyncContainer();
+    });
+
+    effect(() => {
+      // Track state signals so sibling roving tabindex stays valid when selection clears or items disable
+      this.Interactive();
+      this.Selected();
+      this.Disabled();
+      this.safeItemRole();
+
+      if (this.registeredContainer) {
+        scheduleContainerRovingSync(this.registeredContainer);
+      } else {
+        this.registerAndSyncContainer();
       }
     });
   }
 
-  protected onFocusOut(): void {
-    if (!this.fallbackTabStop()) {
-      return;
-    }
-    const el = this.hostEl.nativeElement;
-    const container = el.closest<HTMLElement>('[role="listbox"], [role="menu"], [role="menubar"]');
-    const selectedSibling = container?.querySelector<HTMLElement>(
-      '.mj-row.is-selected, [aria-selected="true"], [aria-checked="true"]'
-    );
-    if (selectedSibling && selectedSibling !== el) {
-      this.fallbackTabStop.set(false);
-    }
+  ngOnDestroy(): void {
+    this.unregisterContainer();
   }
 
   protected onKeyDown(event: KeyboardEvent): void {
     if (!this.Interactive() || this.Disabled()) {
       return;
     }
-    if (event.key === 'Enter' || event.key === ' ') {
+    if (event.key === 'Enter') {
       event.preventDefault();
       this.onActivate(event);
       return;
     }
+    if (event.key === ' ') {
+      // Prevent page scrolling on Spacebar press; activation fires on keyup per native <button> behavior
+      event.preventDefault();
+      return;
+    }
     if (
-      this.ItemRole() === 'option' &&
+      this.safeItemRole() === 'option' &&
       ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)
     ) {
       const listbox = this.hostEl.nativeElement.closest<HTMLElement>('[role="listbox"]');
@@ -318,6 +326,16 @@ export class MJRowComponent {
     }
   }
 
+  protected onKeyUp(event: KeyboardEvent): void {
+    if (!this.Interactive() || this.Disabled()) {
+      return;
+    }
+    if (event.key === ' ') {
+      event.preventDefault();
+      this.onActivate(event);
+    }
+  }
+
   protected onActivate(event?: Event): void {
     if (!this.Interactive() || this.Disabled()) {
       return;
@@ -336,5 +354,111 @@ export class MJRowComponent {
     const after: MJAfterEvent<'user'> = { Reason: 'user' };
     this.AfterSelect.emit(after);
     DispatchMJElementEvent(this.hostEl.nativeElement, 'mj-after-select', after);
+  }
+
+  private auditRowSemantics(): void {
+    if (!this.Interactive()) {
+      return;
+    }
+    const el = this.hostEl.nativeElement;
+    const nestedControl = el.querySelector('button, a[href], input, select, textarea');
+    if (nestedControl) {
+      console.error(
+        '[mj-row] WCAG 4.1.2 violation: interactive mj-row must not contain nested interactive controls.'
+      );
+    }
+    if (this.safeItemRole() === 'option' && !el.closest('[role="listbox"]')) {
+      console.error(
+        '[mj-row] WCAG 4.1.2 violation: ItemRole="option" requires an ancestor [role="listbox"].'
+      );
+    }
+  }
+
+  private registerAndSyncContainer(): void {
+    const el = this.hostEl.nativeElement;
+    if (!el.isConnected) {
+      return;
+    }
+    const role = this.safeItemRole();
+    const selector =
+      role === 'option'
+        ? '[role="listbox"]'
+        : role === 'menuitem' || role === 'menuitemradio'
+          ? '[role="menu"], [role="menubar"]'
+          : null;
+    const nextContainer =
+      this.Interactive() && selector ? el.closest<HTMLElement>(selector) : null;
+
+    if (nextContainer !== this.registeredContainer) {
+      this.unregisterContainer();
+      if (nextContainer) {
+        let callbacks = CONTAINER_SYNC_CALLBACKS.get(nextContainer);
+        if (!callbacks) {
+          callbacks = new Set();
+          CONTAINER_SYNC_CALLBACKS.set(nextContainer, callbacks);
+        }
+        callbacks.add(this.syncSelfCallback);
+        this.registeredContainer = nextContainer;
+      }
+    }
+
+    if (this.registeredContainer) {
+      scheduleContainerRovingSync(this.registeredContainer);
+    } else {
+      this.fallbackTabStop.set(false);
+    }
+  }
+
+  private unregisterContainer(): void {
+    if (!this.registeredContainer) {
+      return;
+    }
+    const prev = this.registeredContainer;
+    this.registeredContainer = null;
+    const callbacks = CONTAINER_SYNC_CALLBACKS.get(prev);
+    callbacks?.delete(this.syncSelfCallback);
+    scheduleContainerRovingSync(prev);
+  }
+
+  private recomputeFallbackTabStop(): void {
+    if (!this.Interactive() || this.Disabled() || !this.registeredContainer) {
+      this.fallbackTabStop.set(false);
+      return;
+    }
+    const el = this.hostEl.nativeElement;
+    const role = this.safeItemRole();
+    if (role === 'option') {
+      const hasSelected = Boolean(
+        this.registeredContainer.querySelector(
+          '[role="option"].is-selected, [role="option"][aria-selected="true"]'
+        )
+      );
+      if (hasSelected) {
+        this.fallbackTabStop.set(false);
+        return;
+      }
+      const firstOption = this.registeredContainer.querySelector<HTMLElement>(
+        '[role="option"]:not([aria-disabled="true"])'
+      );
+      this.fallbackTabStop.set(firstOption === el);
+      return;
+    }
+
+    if (role === 'menuitem' || role === 'menuitemradio') {
+      const hasSelected = Boolean(
+        this.registeredContainer.querySelector('.mj-row.is-selected, [aria-checked="true"]')
+      );
+      if (hasSelected) {
+        this.fallbackTabStop.set(false);
+        return;
+      }
+      const firstItem = this.registeredContainer.querySelector<HTMLElement>(
+        '[role="menuitem"]:not([aria-disabled="true"]), [role="menuitemradio"]:not([aria-disabled="true"])'
+      );
+      this.fallbackTabStop.set(firstItem === el);
+      return;
+    }
+
+    this.fallbackTabStop.set(false);
   }
 }

@@ -77,6 +77,14 @@ describe('MJSurfaceComponent', () => {
     expect(surface.classList.contains('is-selected')).toBe(false);
     expect(surface.classList.contains('mj-surface-interactive')).toBe(false);
 
+    // Custom open-axis Level maps to --mj-surface-<level>-*
+    fixture.componentInstance.level.set('glass');
+    fixture.detectChanges();
+    expect(surface.classList.contains('mj-surface-glass')).toBe(true);
+    expect(surface.style.getPropertyValue('--_mj-surface-level-bg')).toContain(
+      '--mj-surface-glass-bg'
+    );
+
     // Malformed axis names fall back cleanly to defaults instead of emitting invalid CSS var() syntax
     fixture.componentInstance.tone.set('bad value!');
     fixture.detectChanges();
