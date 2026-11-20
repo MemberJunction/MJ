@@ -15,7 +15,7 @@ import { SaveErrorMessageForUser } from "./constraintErrorRedaction";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
 import { CanonicalPrimaryKeyValue } from "./util";
-import { FormatBinaryChangeValue, ScanSQLForScreening, SQLExpressionValidator, uuidv4, ValidationResult, EscapeSQLString, ENCRYPTED_SENTINEL } from "@memberjunction/global";
+import { FormatBinaryChangeValue, ScanSQLForScreening, SQLExpressionValidator, uuidv4, ValidationResult, EscapeSQLString, ENCRYPTED_SENTINEL, ENCRYPTION_MARKER, IsEncryptedSentinel } from "@memberjunction/global";
 import { GetDialect, SQLDialect } from "@memberjunction/sql-dialect";
 import { EntityLifecyclePolicyEngine } from "./entityLifecyclePolicy";
 import { DocumentNumberingEngine } from "./documentNumberingEngine";
@@ -856,17 +856,23 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
-     * A copy of a record snapshot with every encrypted field's value replaced by the sentinel, or
-     * `data` itself when the entity has no encrypted fields.
+     * A copy of a record snapshot in which every encrypted field holds either its stored
+     * ciphertext or the sentinel, or `data` itself when the entity has no encrypted fields.
+     * Ciphertext stays so that a restore from the snapshot gives the value back.
      */
     protected MaskEncryptedFieldsInSnapshot(data: Record<string, unknown> | null, entityInfo: EntityInfo): Record<string, unknown> | null {
         const encrypted = entityInfo.EncryptedFields;
         if (!data || encrypted.length === 0) return data;
         const masked = { ...data };
         for (const f of encrypted) {
-            if (f.Name in masked) masked[f.Name] = this.maskEncryptedValue(masked[f.Name]);
+            if (f.Name in masked && !this.isCiphertext(masked[f.Name])) masked[f.Name] = this.maskEncryptedValue(masked[f.Name]);
         }
         return masked;
+    }
+
+    /** True for a value in the stored encrypted format (the sentinel is not ciphertext). */
+    private isCiphertext(value: unknown): boolean {
+        return typeof value === 'string' && value.startsWith(ENCRYPTION_MARKER) && !IsEncryptedSentinel(value);
     }
 
     /** The diff entry for a binary field: its size, never its base64 (null and undefined pass through). */

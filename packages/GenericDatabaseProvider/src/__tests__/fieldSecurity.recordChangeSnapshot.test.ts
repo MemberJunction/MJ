@@ -40,15 +40,19 @@ vi.mock('sql-formatter', () => ({
     format: (sql: string) => sql,
 }));
 
+/** Encrypts to `$ENC$<key>$<value>`; treats the marker prefix and the masked placeholder as encrypted. */
+const encryptionStub = vi.hoisted(() => ({
+    Config: async (): Promise<void> => undefined,
+    Encrypt: async (value: string, keyId: string): Promise<string> => `$ENC$${keyId}$${value}`,
+    IsEncrypted: (value: unknown, marker?: string): boolean =>
+        typeof value === 'string' && (value === '[!ENCRYPTED$]' || value.startsWith(marker ?? '$ENC$')),
+    GetKeyByID: (): { Marker: string } => ({ Marker: '$ENC$' }),
+}));
+
 vi.mock('@memberjunction/encryption', () => ({
     EncryptionEngine: {
         get Instance() {
-            return {
-                Config: vi.fn(),
-                Encrypt: vi.fn(),
-                IsEncrypted: vi.fn().mockReturnValue(false),
-                GetKeyByID: vi.fn().mockReturnValue({ Marker: '$ENC$' }),
-            };
+            return encryptionStub;
         },
     },
 }));
@@ -185,7 +189,8 @@ const BOTH = [HR_ROLE, STAFF_ROLE];
 /** Staff may write Salary without reading it. */
 const staffMayWriteSalaryBlind = { ID: 'p-salary-staff', EntityFieldID: 'f-salary', RoleID: STAFF_ROLE, ReadAccess: 'Deny', UpdateAccess: 'Allow', CreateAccess: 'Allow' };
 
-function employeesInit(trackRecordChanges: boolean): Record<string, unknown> {
+function employeesInit(trackRecordChanges: boolean, encryptNotes = false): Record<string, unknown> {
+    const notesEncryption = encryptNotes ? { Encrypt: true, EncryptionKeyID: 'key-1' } : {};
     return {
         ID: ENTITY_ID,
         Name: 'Employees',
@@ -200,7 +205,7 @@ function employeesInit(trackRecordChanges: boolean): Record<string, unknown> {
         Fields: [
             { ID: 'f-id', EntityID: ENTITY_ID, Sequence: 1, Name: 'ID', Entity: 'Employees', Type: 'uniqueidentifier', IsPrimaryKey: true, AllowUpdateAPI: false, EntityFieldPermissions: openTo('f-id', BOTH) },
             { ID: 'f-name', EntityID: ENTITY_ID, Sequence: 2, Name: 'Name', Entity: 'Employees', Type: 'nvarchar', Length: 200, AllowsNull: false, AllowUpdateAPI: true, EntityFieldPermissions: openTo('f-name', BOTH) },
-            { ID: 'f-notes', EntityID: ENTITY_ID, Sequence: 3, Name: 'Notes', Entity: 'Employees', Type: 'nvarchar', Length: 400, AllowsNull: true, AllowUpdateAPI: true, EntityFieldPermissions: openTo('f-notes', BOTH) },
+            { ID: 'f-notes', EntityID: ENTITY_ID, Sequence: 3, Name: 'Notes', Entity: 'Employees', Type: 'nvarchar', Length: 400, AllowsNull: true, AllowUpdateAPI: true, EntityFieldPermissions: openTo('f-notes', BOTH), ...notesEncryption },
             { ID: 'f-salary', EntityID: ENTITY_ID, Sequence: 4, Name: 'Salary', Entity: 'Employees', Type: 'money', AllowsNull: true, AllowUpdateAPI: true, EntityFieldPermissions: [...openTo('f-salary', [HR_ROLE]), staffMayWriteSalaryBlind] },
         ],
     };
@@ -218,8 +223,8 @@ function userWithRole(roleId: string): UserInfo {
  * The saving user defaults to staff, who may not read Salary: a staff object never holds it, so
  * it is the field a snapshot must widen. Pass `HR_ROLE` for a user denied nothing.
  */
-function setup(trackRecordChanges = true, roleId: string = STAFF_ROLE): { provider: SnapshotTestProvider; entity: MJTestEntity; user: UserInfo } {
-    const entityInfo = new EntityInfo(employeesInit(trackRecordChanges));
+function setup(trackRecordChanges = true, roleId: string = STAFF_ROLE, encryptNotes = false): { provider: SnapshotTestProvider; entity: MJTestEntity; user: UserInfo } {
+    const entityInfo = new EntityInfo(employeesInit(trackRecordChanges, encryptNotes));
     const provider = new SnapshotTestProvider();
     provider.storedRow = { ...STORED_ROW };
     const user = userWithRole(roleId);
@@ -453,5 +458,17 @@ describe('Delete — Record Change snapshot of a narrowed (restricted) object', 
         await provider.deleteSnapshot(entity, user, { SkipRecordChanges: true } as EntityDeleteOptions);
 
         expect(provider.executed).toHaveLength(0);
+    });
+});
+
+describe('Delete snapshot of an encrypted field', () => {
+    it('holds the encrypted form of the value, so a restore gives the value back', async () => {
+        const { provider, entity, user } = setup(true, HR_ROLE, true);
+        entity.Hydrate({ ID: PK, Name: 'Ada', Notes: 'notes-marker', Salary: 1 });
+
+        const snapshot = await provider.deleteSnapshot(entity, user);
+
+        expect(snapshot.Notes).toBe('$ENC$key-1$notes-marker');
+        expect(snapshot.Name).toBe('Ada');
     });
 });

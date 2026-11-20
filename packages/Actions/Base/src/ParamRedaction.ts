@@ -159,12 +159,16 @@ export const REDACTED_SECRET_VALUE = '[redacted]';
  * that is not a letter or digit removed, so `X-API-Key`, `api_key` and `ApiKey` all match `apikey`.
  * Names that only contain a token word (`NextPageToken`, `MaxTokens`) do not match.
  */
-const SECRET_NAME_PATTERN = /(password|passwd|secret|apikey|privatekey|accesstoken|refreshtoken|idtoken|authtoken|bearertoken|sessiontoken|authorization)$/;
+const SECRET_NAME_PATTERN = /(password|passwd|passphrase|secret|apikey|privatekey|accesstoken|refreshtoken|idtoken|authtoken|bearertoken|sessiontoken|authorization|authentication|webhookurl|cookie)$/;
+
+/** Whole names that mark a value as a secret, such as the keys of an authentication object. */
+const SECRET_EXACT_NAMES: ReadonlySet<string> = new Set(['token', 'bearer']);
 
 /** True when a parameter or object key name marks its value as a secret. */
 export function IsSecretParamName(name: string | null | undefined): boolean {
     if (!name) return false;
-    return SECRET_NAME_PATTERN.test(name.toLowerCase().replace(/[^a-z0-9]/g, ''));
+    const normalized = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return SECRET_EXACT_NAMES.has(normalized) || SECRET_NAME_PATTERN.test(normalized);
 }
 
 /**

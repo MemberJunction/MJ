@@ -89,6 +89,7 @@ describe('BuildSiblingRecordChangeSQL — IS-A sibling read uses the real key co
                 { Name: 'ID', IsPrimaryKey: true, NeedsQuotes: true },
                 { Name: 'Name', IsPrimaryKey: false, NeedsQuotes: true },
             ],
+            EncryptedFields: [],
         } as unknown as EntityInfo;
 
         const syncCtx: SyncContext = {

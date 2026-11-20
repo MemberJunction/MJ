@@ -39,4 +39,31 @@ describe('RedactParamsToJSON and secret-named parameters', () => {
         expect(json).not.toContain(MARKER);
         expect(json).toContain('application/json');
     });
+
+    it('does not log an authentication object, a webhook URL or a passphrase, and keeps paging and limit values', () => {
+        const params = [
+            param('Authentication', { type: 'bearer', token: MARKER }),
+            param('WebhookURL', `https://hooks.example.test/${MARKER}`),
+            param('Passphrase', MARKER),
+            param('NextPageToken', 'page-cursor-1'),
+            param('MaxTokens', 512),
+            param('CredentialID', 'credential-id-1'),
+        ];
+        const json = RedactParamsToJSON(params, definitions('Authentication', 'WebhookURL', 'Passphrase', 'NextPageToken', 'MaxTokens', 'CredentialID'));
+        expect(json).not.toContain(MARKER);
+        expect(json).toContain('page-cursor-1');
+        expect(json).toContain('512');
+        expect(json).toContain('credential-id-1');
+    });
+
+    it('does not log a cookie header or token and bearer keys inside an object parameter', () => {
+        const params = [
+            param('Headers', { Cookie: `session=${MARKER}`, Accept: 'text/html' }),
+            param('Options', { token: MARKER, bearer: MARKER, NextPageToken: 'page-cursor-2' }),
+        ];
+        const json = RedactParamsToJSON(params, definitions('Headers', 'Options'));
+        expect(json).not.toContain(MARKER);
+        expect(json).toContain('text/html');
+        expect(json).toContain('page-cursor-2');
+    });
 });
