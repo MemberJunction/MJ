@@ -406,9 +406,9 @@ export class TransactionResolver extends ResolverBase {
      * have run, so every other shape is refused before any item is saved:
      *
      * - each `Define` reads a primary key field of an item the group creates;
-     * - each `Use` writes an item the group creates, has a `Define` of the same name, and writes a
-     *   foreign key field of a different item, and that foreign key relates to the entity of the
-     *   `Define` item (and to its key field).
+     * - each `Use` has a `Define` of the same name;
+     * - each `Use` writes a foreign key field of a different item that the group creates, and that
+     *   key relates to the entity of the `Define` item (and to its key field).
      */
     protected AssertNetworkVariablesLinkNewRecords(group: TransactionInputType, entityObjects: BaseEntity[]): void {
         const variables = group.Variables ?? [];

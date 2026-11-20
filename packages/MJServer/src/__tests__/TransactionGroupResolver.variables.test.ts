@@ -132,9 +132,16 @@ const use = (itemIndex: number, fieldName: string): TransactionVariableInputType
 const newProject = (): ItemSpec => ({ Entity: new FakeEntity(ProjectsEntity()), Operation: TransactionOperationType.Create, Values: { Name: 'p' } });
 const newTask = (): ItemSpec => ({ Entity: new FakeEntity(TasksEntity()), Operation: TransactionOperationType.Create, Values: { Notes: 't' } });
 
-async function expectRefused(items: ItemSpec[], variables: TransactionVariableInputType[]): Promise<void> {
+/** Asserts that the run is refused for variable "v" with `reason`. */
+async function expectVariableRefusal(run: Promise<unknown>, reason: string): Promise<void> {
+    const error = await run.then(() => null, (e: Error) => e);
+    expect(error?.message).toMatch(/transaction variable "v"/i);
+    expect(error?.message).toContain(reason);
+}
+
+async function expectRefused(items: ItemSpec[], variables: TransactionVariableInputType[], reason: string): Promise<void> {
     const run = new TransactionResolver().ExecuteTransactionGroup(groupOf(items, variables), buildContext(items.map((i) => i.Entity), BuildUser([])));
-    await expect(run).rejects.toThrow(/transaction variable "v"/i);
+    await expectVariableRefusal(run, reason);
     for (const item of items) {
         expect(item.Entity.SaveCalls).toBe(0);
     }
@@ -142,28 +149,28 @@ async function expectRefused(items: ItemSpec[], variables: TransactionVariableIn
 
 describe('ExecuteTransactionGroup: transaction variables from a network caller', () => {
     it('refuses a Use on a field that is not a foreign key', async () => {
-        await expectRefused([newProject(), newTask()], [define(0, 'ID'), use(1, 'Notes')]);
+        await expectRefused([newProject(), newTask()], [define(0, 'ID'), use(1, 'Notes')], "a Use must write a foreign key field that relates to 'Projects'");
     });
 
     it('refuses a Define on a field that is not the primary key', async () => {
-        await expectRefused([newProject(), newTask()], [define(0, 'Name'), use(1, 'ProjectID')]);
+        await expectRefused([newProject(), newTask()], [define(0, 'Name'), use(1, 'ProjectID')], 'a Define must read a primary key field');
     });
 
     it('refuses a Define on the primary key of an item the group does not create', async () => {
         const existing: ItemSpec = { Entity: new FakeEntity(ProjectsEntity()), Operation: TransactionOperationType.Update, Values: { ID: 'p-1', Name: 'p' } };
-        await expectRefused([existing, newTask()], [define(0, 'ID'), use(1, 'ProjectID')]);
+        await expectRefused([existing, newTask()], [define(0, 'ID'), use(1, 'ProjectID')], 'a Define must read an item that the group creates');
     });
 
     it('refuses a Use on a foreign key that relates to a different entity than the Define item', async () => {
-        await expectRefused([newProject(), newTask()], [define(0, 'ID'), use(1, 'AssigneeID')]);
+        await expectRefused([newProject(), newTask()], [define(0, 'ID'), use(1, 'AssigneeID')], "a Use must write a foreign key field that relates to 'Projects'");
     });
 
     it('refuses a Use on the same item as its Define', async () => {
-        await expectRefused([newTask()], [define(0, 'ID'), use(0, 'ParentTaskID')]);
+        await expectRefused([newTask()], [define(0, 'ID'), use(0, 'ParentTaskID')], 'a Use must write a different item than its Define');
     });
 
     it('refuses a Use that has no Define', async () => {
-        await expectRefused([newProject(), newTask()], [use(1, 'ProjectID')]);
+        await expectRefused([newProject(), newTask()], [use(1, 'ProjectID')], 'it has no Define');
     });
 
     it.each([
@@ -171,7 +178,7 @@ describe('ExecuteTransactionGroup: transaction variables from a network caller',
         ['a Delete', TransactionOperationType.Delete],
     ])('refuses a Use on %s item, also on a writable key to the Define entity', async (_label, operation) => {
         const existingTask: ItemSpec = { Entity: new FakeEntity(TasksEntity()), Operation: operation, Values: { ID: 't-1', Notes: 'edited' } };
-        await expectRefused([newTask(), existingTask], [define(0, 'ID'), use(1, 'ParentTaskID')]);
+        await expectRefused([newTask(), existingTask], [define(0, 'ID'), use(1, 'ParentTaskID')], 'a Use must write an item that the group creates');
     });
 
     it('registers each variable with the entity field name, whatever case and spaces the caller sent', async () => {
@@ -224,9 +231,9 @@ function RestrictedTasksEntity(projectUpdate: string, projectCreate: string): En
 describe('ExecuteTransactionGroup: a Use on a foreign key the caller may not write', () => {
     const editor = (): UserInfo => BuildUser([EDITOR_ROLE_ID], 'editor-1');
 
-    async function expectRefusedFor(user: UserInfo, items: ItemSpec[], variables: TransactionVariableInputType[]): Promise<void> {
+    async function expectRefusedFor(user: UserInfo, items: ItemSpec[], variables: TransactionVariableInputType[], reason: string): Promise<void> {
         const run = new TransactionResolver().ExecuteTransactionGroup(groupOf(items, variables), buildContext(items.map((i) => i.Entity), user));
-        await expect(run).rejects.toThrow(/transaction variable "v"/i);
+        await expectVariableRefusal(run, reason);
         for (const item of items) {
             expect(item.Entity.SaveCalls).toBe(0);
         }
@@ -238,6 +245,6 @@ describe('ExecuteTransactionGroup: a Use on a foreign key the caller may not wri
             Operation: TransactionOperationType.Create,
             Values: { Notes: 't' },
         };
-        await expectRefusedFor(editor(), [newProject(), task], [define(0, 'ID'), use(1, 'ProjectID')]);
+        await expectRefusedFor(editor(), [newProject(), task], [define(0, 'ID'), use(1, 'ProjectID')], 'the caller may not set this field on create');
     });
 });
