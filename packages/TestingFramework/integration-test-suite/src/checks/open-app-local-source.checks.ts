@@ -1,5 +1,5 @@
 /**
- * open-app-local-source.checks.ts — the 'open-app-local-source' bundle (OLS1–OLS10): live checks for
+ * open-app-local-source.checks.ts — the 'open-app-local-source' bundle (OLS1–OLS11): live checks for
  * Open Apps installed from a folder in the consumer repository (a `file:` locator).
  *
  * The lifecycle builds a throwaway consumer repository in the OS temp directory: a pnpm workspace with
@@ -8,11 +8,11 @@
  *   - OLS1–OLS5, one app in order: install with migrations in subfolders, upgrade when the folder
  *     version changes, the same-version no-op and Reapply, remove while the folder is at another
  *     version, and remove.
- *   - OLS6–OLS10, one app each: a requested version the folder does not have, an app package that is
+ *   - OLS6–OLS11, one app each: a requested version the folder does not have, an app package that is
  *     not in the workspace, workspace package versions, a `file:` dependency, a folder outside the
- *     repository.
+ *     repository, and an upgrade that moves a package from `shared` to `server` (#6789).
  *
- * OLS1–OLS5 and OLS9 create and drop schemas; on a login that cannot, they skip. Server transport only.
+ * OLS1–OLS5, OLS9 and OLS11 create and drop schemas; on a login that cannot, they skip. Server transport only.
  * Deterministic: no model calls and no network. Teardown removes every app, schema, row and folder
  * the bundle created.
  */
@@ -264,13 +264,39 @@ function writeDependencyApps(fixture: OpenAppLocalSourceFixture): void {
     }));
 }
 
+/**
+ * `moved` v1.0.0 declares its library under `shared`, so it is pinned in both workspaces; v1.1.0
+ * (written by OLS11) moves it to `server`. The real bizapps-forms 0.14.0 → 1.0.0 shape (#6789).
+ */
+function movedManifest(fixture: OpenAppLocalSourceFixture, version: string): Record<string, unknown> {
+    const server = { name: packageName(fixture, 'moved-server'), role: 'library' };
+    const lib = { name: packageName(fixture, 'moved-lib'), role: 'library' };
+    return manifest(appName(fixture, 'moved'), version, {
+        schema: { name: schemaName(fixture, 'moved') },
+        packages: version === '1.0.0' ? { server: [server], shared: [lib] } : { server: [server, lib] },
+    });
+}
+
+function writeMovedApp(fixture: OpenAppLocalSourceFixture): void {
+    const folder = appFolder(fixture, 'moved');
+    writeManifest(folder, movedManifest(fixture, '1.0.0'));
+    for (const role of ['moved-server', 'moved-lib']) {
+        writeJson(join(folder, 'packages', role, 'package.json'), { name: packageName(fixture, role), version: '1.0.0', main: 'index.js' });
+        writeText(join(folder, 'packages', role, 'index.js'), 'module.exports = {};\n');
+    }
+}
+
 function serverPackageJsonPath(fixture: OpenAppLocalSourceFixture): string {
     return join(fixture.RepoRoot, SERVER_WORKSPACE, 'package.json');
 }
 
-function serverDependency(fixture: OpenAppLocalSourceFixture, name: string): string | undefined {
-    const pkg: { dependencies?: Record<string, string> } = JSON.parse(readFileSync(serverPackageJsonPath(fixture), 'utf-8'));
+function workspaceDependency(fixture: OpenAppLocalSourceFixture, workspace: string, name: string): string | undefined {
+    const pkg: { dependencies?: Record<string, string> } = JSON.parse(readFileSync(join(fixture.RepoRoot, workspace, 'package.json'), 'utf-8'));
     return pkg.dependencies?.[name];
+}
+
+function workspaceLink(fixture: OpenAppLocalSourceFixture, workspace: string, name: string): string {
+    return join(fixture.RepoRoot, workspace, 'node_modules', ...name.split('/'));
 }
 
 // ─── Database reads ──────────────────────────────────────────────────────────
@@ -478,19 +504,40 @@ async function checkWorkspacePackages(ctx: IntegrationCheckContext): Promise<voi
     const fixture = fx(ctx);
     const name = appName(fixture, 'linked');
     const pkg = packageName(fixture, 'server');
-    const link = join(fixture.RepoRoot, SERVER_WORKSPACE, 'node_modules', ...pkg.split('/'));
+    const link = workspaceLink(fixture, SERVER_WORKSPACE, pkg);
     track(fixture, name);
     const install = engineRun(ctx);
     assertSucceeded(await InstallApp({ Source: 'file:openapps/linked' }, install.Context), install, 'install with workspace packages');
 
-    AssertEqual(serverDependency(fixture, pkg), 'workspace:*', 'the server workspace depends on the app package as workspace:*');
+    AssertEqual(workspaceDependency(fixture, SERVER_WORKSPACE, pkg), 'workspace:*', 'the server workspace depends on the app package as workspace:*');
     Assert(existsSync(link), `pnpm linked the app package into the server workspace (${link})`);
     AssertEqual(realpathSync(link), realpathSync(join(appFolder(fixture, 'linked'), 'packages', 'server')), 'the link points at the app folder package');
     AssertEqual((await requireApp(ctx, name)).Status, 'Active', 'the app is active, so its packages installed');
 
     const remove = engineRun(ctx);
     assertSucceeded(await RemoveApp({ AppName: name }, remove.Context), remove, 'remove with workspace packages');
-    AssertEqual(serverDependency(fixture, pkg), undefined, 'remove takes the app package out of the server workspace');
+    AssertEqual(workspaceDependency(fixture, SERVER_WORKSPACE, pkg), undefined, 'remove takes the app package out of the server workspace');
+}
+
+async function checkUpgradeDropsMovedPackagePin(ctx: IntegrationCheckContext): Promise<void> {
+    const fixture = fx(ctx);
+    requireSchemaRights(fixture);
+    const name = appName(fixture, 'moved');
+    const lib = packageName(fixture, 'moved-lib');
+    track(fixture, name, schemaName(fixture, 'moved'));
+    const install = engineRun(ctx);
+    assertSucceeded(await InstallApp({ Source: 'file:openapps/moved' }, install.Context), install, 'install with a shared package');
+    AssertEqual(workspaceDependency(fixture, CLIENT_WORKSPACE, lib), 'workspace:*', 'a shared package is pinned in the client workspace');
+    Assert(existsSync(workspaceLink(fixture, CLIENT_WORKSPACE, lib)), 'pnpm linked the shared package into the client workspace');
+
+    writeManifest(appFolder(fixture, 'moved'), movedManifest(fixture, '1.1.0'));
+    const upgrade = engineRun(ctx);
+    assertSucceeded(await UpgradeApp({ AppName: name }, upgrade.Context), upgrade, 'upgrade that moves the package to server');
+
+    AssertEqual(workspaceDependency(fixture, CLIENT_WORKSPACE, lib), undefined, 'the upgrade removes the client pin the new version no longer lists');
+    Assert(!existsSync(workspaceLink(fixture, CLIENT_WORKSPACE, lib)), 'the install unlinked the package from the client workspace');
+    AssertEqual(workspaceDependency(fixture, SERVER_WORKSPACE, lib), 'workspace:*', 'the server workspace keeps the package');
+    AssertEqual((await requireApp(ctx, name)).Version, '1.1.0', 'the app records the new folder version');
 }
 
 async function checkFileDependency(ctx: IntegrationCheckContext): Promise<void> {
@@ -540,6 +587,7 @@ export const OpenAppLocalSourceChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.OLS8`, Name: 'OLS8: app packages are written as workspace:* and linked by pnpm', Fn: checkWorkspacePackages },
     { Id: `${BUNDLE}.OLS9`, Name: 'OLS9: a file: dependency installs from its folder first', Fn: checkFileDependency },
     { Id: `${BUNDLE}.OLS10`, Name: 'OLS10: a folder outside the repository is refused', Fn: checkFolderOutsideRepository },
+    { Id: `${BUNDLE}.OLS11`, Name: 'OLS11: an upgrade that moves a package from shared to server removes its client pin', Fn: checkUpgradeDropsMovedPackagePin },
 ];
 
 for (const check of OpenAppLocalSourceChecks) {
@@ -643,6 +691,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
         writeRefusedApps(fixture);
         writePackageApp(fixture);
         writeDependencyApps(fixture);
+        writeMovedApp(fixture);
     },
     Teardown: async (ctx: IntegrationCheckContext) => {
         const fixture = ctx.OpenAppLocalSourceFixture;
