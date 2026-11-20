@@ -125,6 +125,9 @@ A **Canon member adapter** per kind maps the native columns onto one read-only s
 - Fingerprinted kinds (queries, views, dashboards, components) use `ApprovalStateOf`, so an edited query drops out of Canon the moment its definition changes and comes back when it is re-approved or restored. This fixes F2.
 - `GraphEngine` asks the adapter for a node's state during the same batched label-and-permission step it already runs, so the cost is a field or two on a read that already happens.
 - Default traversal admits `Approved` nodes and derived structural edges. A `Stale` node is reported as stale, never silently used.
+- **Stale policy.** Whether agents see `Stale` members is a setting, not a fixed rule. The graph sets a default and a ceiling; an agent may be stricter than its graph, never looser, so a graph serving members or the public can forbid stale content whatever an agent asks for. Where stale members are shown, the resolver serves the **last approved version** from Record Changes, marked as having an update pending review, never the edited, unratified text. (Open question 1.)
+- **Adapters only map.** An adapter turns native columns into a `CanonState` and does nothing else: no permission checks, no writes. That keeps them safe to run in the browser as well as on the server; enforcement stays in the server entity subclasses and in Rule 3. (Open question 3.)
+- **Open Apps ship adapters for their own entities only.** `@RegisterClass` keys by entity name and the last registration wins, so an Open App could otherwise replace the core adapter for a core entity and change what counts as approved. A test fails if a core entity's adapter is replaced from outside core. (Open question 6.)
 
 New derived providers bring the missing kinds in (F9): `ComponentMetadataEdgeProvider` (component → entity and query `Reads`, component → component `Composes`, from the approved spec), and providers for dashboards, approved action code, active skills and saved flow agents. Each is a class and one `MJ: Graph Edge Providers` row on `MJ Canon`.
 
@@ -226,11 +229,15 @@ Each phase is small enough to be one or two `canon` issues. Phases U0 to U2 have
 ## Open questions
 
 1. Should `Stale` members be shown to agents at all, with a warning, or hidden until re-approved? Hidden is safer; shown is more useful while a reviewer catches up.
+   - *Input (`topherHunnewell`, 2026-11-20):* make it configurable per graph or per agent; Betty would show them. *Proposed:* configurable, graph default and ceiling, agent may only be stricter, and the last approved version is what is shown. See Rule 1.
 2. Do user views and dashboards belong in Canon, or only components and queries? A dashboard is ratified presentation, not a definition.
 3. Should adapters live in `@memberjunction/core-entities` (both tiers, like edge providers) or server-only? Client-side Graph Explorer wants the state, which argues for both tiers.
+   - *Input (`topherHunnewell`):* both. *Proposed:* both tiers, on the condition that adapters only map state. See Rule 1.
 4. Does the resolver's single budget replace per-scope `MaxResults`, or sit above it?
 5. Are tags Canon? The governed taxonomy has its own review queue and is used by the pipeline as seed structure. It may be better as a provider (`Tagged` edges) than as a member.
+   - *Input (`topherHunnewell`):* a provider, with `Tagged` edges; and let a tag be passed with a question to steer traversal toward nuance the graph did not capture when it was defined. *Proposed:* `Tagged` edges are derived, never stored, and tags are never members. A tag passed with a question may narrow or re-rank what the reader can already see, never widen it, so steering runs after Rule 3. Tag steering is new behaviour and becomes its own `canon` issue.
 6. Open Apps ship their own graphs and providers. Should an Open App be able to ship a `BaseCanonMemberAdapter` for its own approvable entities? (Proposed: yes, same pattern.)
+   - *Input (`topherHunnewell`):* yes; without it the framework's extensibility is limited. *Proposed:* yes, for the app's own entities only, guarded by a test. See Rule 1.
 
 ## Files likely touched
 
@@ -267,3 +274,4 @@ Indicative only; each issue names its own.
 | Date | Change |
 |---|---|
 | 2026-11-19 | Plan created. |
+| 2026-11-20 | Recorded `topherHunnewell`'s input on open questions 1, 3, 5 and 6 and proposed answers. Rule 1 gains the stale policy, the adapter boundary and the Open App guard. Questions 2 and 4 remain open. |
