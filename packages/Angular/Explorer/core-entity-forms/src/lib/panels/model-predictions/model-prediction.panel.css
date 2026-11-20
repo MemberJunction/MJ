@@ -8,9 +8,10 @@
     align-items: center;
     gap: 8px;
     padding: 10px 12px;
-    border: 1px solid var(--mj-status-danger);
+    border: 1px solid var(--mj-status-error-border);
     border-radius: var(--mj-radius-md, 8px);
-    color: var(--mj-status-danger);
+    background: var(--mj-status-error-bg);
+    color: var(--mj-status-error-text);
     font-size: 0.85rem;
 }
 
@@ -86,8 +87,8 @@
 }
 
 .mpp-badge-red {
-    background: color-mix(in srgb, var(--mj-status-danger) 15%, transparent);
-    color: var(--mj-status-danger);
+    background: color-mix(in srgb, var(--mj-status-error) 15%, transparent);
+    color: var(--mj-status-error);
 }
 
 .mpp-badge-amber {
@@ -138,7 +139,7 @@
     background: var(--mj-status-success);
 }
 .mpp-gauge-fill.mpp-color-red {
-    background: var(--mj-status-danger);
+    background: var(--mj-status-error);
 }
 .mpp-gauge-fill.mpp-color-amber {
     background: var(--mj-status-warning);
@@ -230,7 +231,7 @@
 }
 
 .mpp-up {
-    color: var(--mj-status-danger);
+    color: var(--mj-status-error);
 }
 
 .mpp-down {

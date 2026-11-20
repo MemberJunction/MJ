@@ -150,5 +150,5 @@
 
 .psbe-error {
   font-size: 0.78rem;
-  color: var(--mj-status-danger);
+  color: var(--mj-status-error-text);
 }
