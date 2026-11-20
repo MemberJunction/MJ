@@ -83,7 +83,7 @@ export class PSLifecycleChipComponent {
   }
 
   /** The chip's colour family. */
-  public get Variant(): string {
+  public get Variant(): (typeof CHIP_VARIANT)[MJMLModelEntity['Status']] {
     return CHIP_VARIANT[this.Status];
   }
 }
