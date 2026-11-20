@@ -68,6 +68,8 @@ vi.mock('../install/config-manager.js', () => ({
     AddClientDynamicPackages: vi.fn(),
     RemoveServerDynamicPackages: vi.fn(),
     PruneDynamicPackagesNotInManifest: vi.fn(() => ({ Success: true })),
+    AddPublicPages: vi.fn(() => ({ Success: true })),
+    CheckPublicPageSlugConflicts: vi.fn(() => ({ Success: true })),
     ToggleServerDynamicPackages: vi.fn(),
     AddEntityPackageMapping: vi.fn(),
     RemoveEntityPackageMapping: vi.fn(),
@@ -92,7 +94,7 @@ import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitH
 import { CheckCanMigrateAppSchema, CreateAppSchema, SchemaExists, DropAppSchema } from '../install/schema-manager.js';
 import { RunAppMigrations } from '../install/migration-runner.js';
 import { AddAppPackages, RunPackageInstallAsync, BumpPrefixedDependencies, PreflightAppPackages } from '../install/package-manager.js';
-import { AddServerDynamicPackages, AddClientDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, PruneDynamicPackagesNotInManifest, AddExcludeSchema } from '../install/config-manager.js';
+import { AddServerDynamicPackages, AddClientDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, PruneDynamicPackagesNotInManifest, AddExcludeSchema, AddPublicPages, CheckPublicPageSlugConflicts } from '../install/config-manager.js';
 import {
     RecordAppInstallation,
     RecordInstallHistoryEntry,
@@ -1707,5 +1709,28 @@ describe('npm registry preflight runs before any database or file change (#3796,
         expect(vi.mocked(SetAppStatus)).not.toHaveBeenCalled();
         expect(vi.mocked(RunAppMigrations)).not.toHaveBeenCalled();
         expect(vi.mocked(AddAppPackages)).not.toHaveBeenCalled();
+    });
+});
+
+describe('InstallApp — public page slug owned by another app', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        installSequence.length = 0;
+        vi.mocked(FindInstalledApp).mockResolvedValue(undefined);
+        vi.mocked(ListInstalledApps).mockResolvedValue([]);
+    });
+
+    it('fails with the conflict message before any database or config change', async () => {
+        const message = "Public page slug 'lumen' is already used by installed app 'other-app', so app 'schema-app' cannot use it.";
+        vi.mocked(CheckPublicPageSlugConflicts).mockReturnValueOnce({ Success: false, ErrorMessage: message });
+        serveManifests({ 'https://github.com/test/schema-app': manifestJSON('schema-app', {}) });
+
+        const result = await InstallApp({ Source: 'https://github.com/test/schema-app' }, context);
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain(message);
+        expect(vi.mocked(CreateAppSchema)).not.toHaveBeenCalled();
+        expect(vi.mocked(RecordAppInstallation)).not.toHaveBeenCalled();
+        expect(vi.mocked(AddPublicPages)).not.toHaveBeenCalled();
     });
 });
