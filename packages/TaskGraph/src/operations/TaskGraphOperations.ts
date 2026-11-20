@@ -18,7 +18,7 @@
  *
  * @module @memberjunction/task-graph
  */
-import { RegisterClass } from '@memberjunction/global';
+import { EscapeSQLString, IsValidUUID, RegisterClass } from '@memberjunction/global';
 import { BaseRemotableOperation, IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import {
@@ -215,6 +215,16 @@ async function settleWorkflowStatus(
     }
 }
 
+/**
+ * Why the caller may not act on the workflow run, or null when it may. The ID must be a UUID, and the
+ * caller must be the run's owner or an Owner-type user.
+ */
+async function authorizeGraphRequest(parentTaskID: string | undefined, provider: IMetadataProvider, user: UserInfo): Promise<string | null> {
+    if (!parentTaskID) throw new Error('parentTaskID is required');
+    if (!IsValidUUID(parentTaskID)) return 'parentTaskID must be a valid UUID.';
+    return AuthorizeGraphControl(parentTaskID, provider, user);
+}
+
 /** `TaskGraph.Cancel` — cancel a graph and every task in it that has not already settled. */
 @RegisterClass(BaseRemotableOperation, 'TaskGraph.Cancel')
 export class TaskGraphCancelServerOperation extends TaskGraphCancelOperation {
@@ -223,7 +233,8 @@ export class TaskGraphCancelServerOperation extends TaskGraphCancelOperation {
         provider: IMetadataProvider,
         user: UserInfo,
     ): Promise<TaskGraphControlOutput> {
-        if (!input?.parentTaskID) throw new Error('parentTaskID is required');
+        const denied = await authorizeGraphRequest(input?.parentTaskID, provider, user);
+        if (denied) return { success: false, errorMessage: denied };
 
         // EnvironmentID is unused on the cancel path — the graph already exists, so nothing new is
         // created that would need one.
@@ -294,21 +305,23 @@ export class TaskGraphGetStatusServerOperation extends TaskGraphGetStatusOperati
         provider: IMetadataProvider,
         user: UserInfo,
     ): Promise<TaskGraphStatusOutput> {
-        if (!input?.parentTaskID) throw new Error('parentTaskID is required');
+        const denied = await authorizeGraphRequest(input?.parentTaskID, provider, user);
+        if (denied) return { success: false, errorMessage: denied };
 
         // Read-only snapshot, so `simple` + a narrow field list — no reason to pay for entity
         // objects here. Scoped to the operation's own provider rather than the global default.
         const children = await RunView.FromMetadataProvider(provider).RunView<TaskStatusRow>(
             {
                 EntityName: 'MJ: Tasks',
-                ExtraFilter: `ParentID='${input.parentTaskID}'`,
+                ExtraFilter: `ParentID='${EscapeSQLString(input.parentTaskID)}'`,
                 Fields: ['ID', 'Name', 'Status', 'AgentRunID', 'ErrorMessage'],
                 ResultType: 'simple',
             },
             user,
         );
         if (!children.Success) {
-            return { success: false, errorMessage: children.ErrorMessage ?? 'Could not load the graph.' };
+            LogError(`TaskGraph.GetStatus: could not load graph ${input.parentTaskID}: ${children.ErrorMessage ?? 'unknown error'}`);
+            return { success: false, errorMessage: 'Could not load the graph.' };
         }
 
         const rows = children.Results ?? [];

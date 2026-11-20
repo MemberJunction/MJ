@@ -55,6 +55,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { EscapeSQLString, IsValidUUID, MJGlobal, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { BaseHumanTaskProvider } from './HumanTaskProvider';
+import { CheckActionRunAuthorization } from '@memberjunction/actions-base';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentDecisionService } from '@memberjunction/ai-agents';
@@ -904,6 +905,11 @@ export class TaskGraphService {
                 LogError(`[TaskGraphService] ${compensationCheck.ErrorMessage}`);
                 return { Success: false, ErrorMessage: compensationCheck.ErrorMessage };
             }
+            const authorizationCheck = await this.authorizeActions(spec, actionIDsByName.Map!, context);
+            if (!authorizationCheck.Success) {
+                LogError(`[TaskGraphService] ${authorizationCheck.ErrorMessage}`);
+                return { Success: false, ErrorMessage: authorizationCheck.ErrorMessage };
+            }
 
             const taskTypeID = await this.ensureTaskType(context);
 
@@ -987,6 +993,9 @@ export class TaskGraphService {
      * graph stays active, so retrying is meaningful rather than cosmetic.
      */
     public async Cancel(parentTaskID: string, context: TaskGraphSubmitContext): Promise<TaskGraphCancelResult> {
+        if (!IsValidUUID(parentTaskID)) {
+            return { Success: false, Cancelled: false, UncancelledTaskNames: [], ErrorMessage: 'The workflow run ID is not a valid UUID.' };
+        }
         return this.cancelWithDepth(parentTaskID, context, 0, new Set());
     }
 
@@ -1841,6 +1850,25 @@ export class TaskGraphService {
         return { Success: true };
     }
 
+    /**
+     * Refuses a graph that names an action, by name or as a compensation action, that the submitter
+     * may not run. See `CheckActionRunAuthorization`.
+     */
+    private async authorizeActions(
+        spec: TaskGraphSpec,
+        actionIDsByName: Map<string, string>,
+        context: TaskGraphSubmitContext,
+    ): Promise<{ Success: boolean; ErrorMessage?: string }> {
+        const compensationIDs = spec.tasks.map((node) => ConfigOf(node, 'Action')?.compensation?.compensationActionId?.trim() ?? '');
+        const ids = uniqueIDs([...actionIDsByName.values(), ...compensationIDs]);
+        const refusal = await CheckActionRunAuthorization(ids, context.ContextUser, context.Provider);
+        if (!refusal) return { Success: true };
+        return {
+            Success: false,
+            ErrorMessage: `Task graph "${spec.workflowName}" was not started: you are not authorized to run action ${refusal.ActionID}. ${refusal.Reason}`,
+        };
+    }
+
     private async resolveActions(
         spec: TaskGraphSpec,
         context: TaskGraphSubmitContext,
@@ -2253,6 +2281,9 @@ export class TaskGraphService {
     }
 
     private async loadChildren(parentTaskID: string, context: TaskGraphSubmitContext): Promise<MJTaskEntity[]> {
+        if (!IsValidUUID(parentTaskID)) {
+            throw new Error('The workflow run ID is not a valid UUID.');
+        }
         // `BypassCache` for the reason the dispatcher documents at every one of its reads (C4): task
         // status is written by the claim protocol's direct SQL, which fires no cache invalidation.
         // A cached read here returns PRE-EXECUTION state, and both callers act on status — Cancel's
@@ -2266,7 +2297,7 @@ export class TaskGraphService {
         const result = await RunView.FromMetadataProvider(context.Provider).RunView<MJTaskEntity>(
             {
                 EntityName: 'MJ: Tasks',
-                ExtraFilter: `${ofType}ParentID='${parentTaskID}'`,
+                ExtraFilter: `${ofType}ParentID='${EscapeSQLString(parentTaskID)}'`,
                 ResultType: 'entity_object',
                 BypassCache: true,
             },

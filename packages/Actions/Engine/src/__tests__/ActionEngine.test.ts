@@ -179,6 +179,7 @@ vi.mock('@memberjunction/actions-base', async (importOriginal) => {
         // The real schema and builder token: RunRuntimeAction validates the configuration before building handlers.
         RuntimeActionConfigurationSchema: actual.RuntimeActionConfigurationSchema,
         RuntimeActionBridgeBuilder: actual.RuntimeActionBridgeBuilder,
+        ActionClassAuthorizesCaller: actual.ActionClassAuthorizesCaller,
         MJActionEntityExtended: class {
             Params: Array<Record<string, unknown>> = [];
             Name = '';

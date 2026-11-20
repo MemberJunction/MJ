@@ -1,5 +1,6 @@
-import { AuthorizationInfo, AuthorizationRoleInfo, AuthorizationRoleType, IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { FilterByUUIDs, IndexByUUID, NormalizeUUID, UUIDMap, UUIDsEqual } from '@memberjunction/global';
+import { AuthorizationInfo, AuthorizationRoleInfo, AuthorizationRoleType, IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
+import type { MJActionEntity } from '@memberjunction/core-entities';
+import { EscapeSQLString, FilterByUUIDs, GroupByUUID, IndexByUUID, IsValidUUID, MJGlobal, NormalizeUUID, UUIDMap, UUIDsEqual } from '@memberjunction/global';
 
 /** The outcome of {@link EvaluateActionRunAuthorization}. */
 export interface ActionRunAuthorization {
@@ -113,4 +114,107 @@ function holdsDirectly(auth: AuthorizationInfo, userGrants: readonly Authorizati
 /** Allow or Deny, for each of the user's role grants on the authorization. */
 function grantTypes(auth: AuthorizationInfo, userGrants: readonly AuthorizationRoleInfo[]): AuthorizationRoleType[] {
     return userGrants.filter((grant) => UUIDsEqual(grant.AuthorizationID, auth.ID)).map((grant) => grant.AuthorizationType());
+}
+
+/** The fields of an action that decide whether its class authorizes its caller. */
+export type ActionClassIdentity = Pick<MJActionEntity, 'Name' | 'Type' | 'DriverClass'>;
+
+/** Stands for `BaseAction` when the caller cannot import it: the ClassFactory keys registrations by class name. */
+const BASE_ACTION_BY_NAME = { name: 'BaseAction' };
+
+/**
+ * True when the class that runs the action declares `static AuthorizesCaller = true` on itself. A
+ * subclass does not inherit the marker. A `Runtime` action never qualifies: its code is not a class.
+ *
+ * @param action the action
+ * @param baseActionClass the `BaseAction` class; by default it is found by name
+ */
+export function ActionClassAuthorizesCaller(action: ActionClassIdentity, baseActionClass: unknown = BASE_ACTION_BY_NAME): boolean {
+    if (action.Type === 'Runtime') {
+        return false;
+    }
+    const registration = MJGlobal.Instance.ClassFactory.GetRegistration(baseActionClass, action.DriverClass || action.Name);
+    const actionClass = registration?.SubClass;
+    return typeof actionClass === 'function' && Object.getOwnPropertyDescriptor(actionClass, 'AuthorizesCaller')?.value === true;
+}
+
+/** An action the user may not run, and why. */
+export interface ActionRunRefusal {
+    ActionID: string;
+    Reason: string;
+}
+
+type ActionRow = ActionClassIdentity & { ID: string };
+type ActionAuthorizationRow = { ActionID: string; AuthorizationID: string };
+
+/**
+ * Checks that the user may run each action, with {@link EvaluateActionRunAuthorization}. The
+ * actions and their `MJ: Action Authorizations` rows are read through `provider` as `user`, and the
+ * authorizations and role grants come from the same provider. It fails closed: an ID that is not a
+ * UUID, an action that is not found, or a failed read refuses.
+ *
+ * @returns the first refusal, or null when the user may run every action
+ */
+export async function CheckActionRunAuthorization(
+    actionIDs: readonly string[],
+    user: UserInfo,
+    provider: IMetadataProvider
+): Promise<ActionRunRefusal | null> {
+    if (IsOwner(user) || actionIDs.length === 0) {
+        return null;
+    }
+    const notUUID = actionIDs.find((id) => !IsValidUUID(id));
+    if (notUUID !== undefined) {
+        return { ActionID: notUUID, Reason: 'The action ID is not a valid UUID.' };
+    }
+    const loaded = await loadActionsAndAuthorizations(actionIDs, user, provider);
+    if (!loaded) {
+        return { ActionID: actionIDs[0], Reason: 'The action authorizations could not be read.' };
+    }
+    return firstRefusal(actionIDs, loaded.Actions, loaded.Grants, user, provider);
+}
+
+/** The decision for each action, in order; the first refusal or null. */
+function firstRefusal(
+    actionIDs: readonly string[],
+    actions: UUIDMap<ActionRow>,
+    grants: UUIDMap<ActionAuthorizationRow[]>,
+    user: UserInfo,
+    metadata: AuthorizationMetadata
+): ActionRunRefusal | null {
+    for (const actionID of actionIDs) {
+        const action = actions.Get(actionID);
+        if (!action) {
+            return { ActionID: actionID, Reason: 'The action was not found.' };
+        }
+        const authorizationIDs = (grants.Get(actionID) ?? []).map((row) => row.AuthorizationID);
+        const decision = EvaluateActionRunAuthorization(user, authorizationIDs, metadata, ActionClassAuthorizesCaller(action));
+        if (!decision.Allowed) {
+            return { ActionID: actionID, Reason: decision.Reason };
+        }
+    }
+    return null;
+}
+
+/** Reads the actions and their `MJ: Action Authorizations` rows in one batch, or null when a read fails. */
+async function loadActionsAndAuthorizations(
+    actionIDs: readonly string[],
+    user: UserInfo,
+    provider: IMetadataProvider
+): Promise<{ Actions: UUIDMap<ActionRow>; Grants: UUIDMap<ActionAuthorizationRow[]> } | null> {
+    const idList = actionIDs.map((id) => `'${EscapeSQLString(id)}'`).join(', ');
+    const [actions, authorizations] = await RunView.FromMetadataProvider(provider).RunViews(
+        [
+            { EntityName: 'MJ: Actions', ExtraFilter: `ID IN (${idList})`, Fields: ['ID', 'Name', 'Type', 'DriverClass'], ResultType: 'simple' },
+            { EntityName: 'MJ: Action Authorizations', ExtraFilter: `ActionID IN (${idList})`, Fields: ['ActionID', 'AuthorizationID'], ResultType: 'simple' },
+        ],
+        user
+    );
+    if (!actions?.Success || !authorizations?.Success) {
+        return null;
+    }
+    return {
+        Actions: IndexByUUID((actions.Results ?? []) as ActionRow[]),
+        Grants: GroupByUUID((authorizations.Results ?? []) as ActionAuthorizationRow[], (row) => row.ActionID),
+    };
 }

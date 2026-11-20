@@ -63,6 +63,7 @@ import {
 import { DatabaseProviderBase, IMetadataProvider, IRunQueryProvider, LogError, LogStatus, LogWarning, RunView, ServerOperationScopeManager, UserInfo } from '@memberjunction/core';
 import { EscapeSQLString, GroupByUUID, IShutdownable, IndexByUUID, IsValidUUID, ShutdownRegistry, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity, MJAIAgentRequestEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
+import { CheckActionRunAuthorization } from '@memberjunction/actions-base';
 import type { MJActionExecutionLogEntity, MJRecordChangeEntity } from '@memberjunction/core-entities';
 import type { MJTaskEntity_ITaskStepConfiguration, MJTaskEntity_ITaskLoopIteration } from '@memberjunction/core-entities';
 import { TaskClaimStore, TERMINAL_PARENT_STATUSES, TERMINAL_PARENT_STATUS_SQL } from './TaskClaimStore';
@@ -4363,6 +4364,12 @@ export class TaskGraphDispatcher implements IShutdownable {
         onProgress?: TaskRunProgressCallback,
         effectiveEnvelope?: TaskSecurityEnvelope,
     ): Promise<TaskActionRunResult> {
+        const refusal = await CheckActionRunAuthorization([task.ActionID!], executionUser, provider);
+        if (refusal) {
+            const message = `Action ${refusal.ActionID} was not run: ${refusal.Reason}`;
+            LogError(`[TaskGraphDispatcher] Task ${task.ID}: ${message}`);
+            return { Success: false, ErrorMessage: message };
+        }
         return this.actionRunner!.RunActionForTask({
             TaskID: task.ID,
             ActionID: task.ActionID!,

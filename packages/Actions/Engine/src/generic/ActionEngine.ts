@@ -18,7 +18,8 @@ import {
     DidFieldChange,
     DidFieldChangeToValue,
     ActionAudienceReaders,
-    AUDIENCE_UNSUPPORTED_RESULT_CODE
+    AUDIENCE_UNSUPPORTED_RESULT_CODE,
+    ActionClassAuthorizesCaller
 } from "@memberjunction/actions-base";
 import { RuntimeActionExecutor } from "@memberjunction/action-runtime";
 import type { BridgeHandlerMap } from "@memberjunction/code-execution";
@@ -121,15 +122,6 @@ export interface AdhocSQLAuthorizer {
 
    /** The timeout, in seconds, to run with when the caller asks for `requestedSeconds`. */
    ClampTimeoutSeconds(requestedSeconds: number | undefined): number;
-}
-
-/**
- * True when `actionClass` declares `AuthorizesCaller = true` as its own static field. A subclass does
- * not inherit the marker from its parent. The field is read by name, so a class built on another
- * loaded copy of {@link BaseAction} qualifies too.
- */
-function declaresAuthorizesCaller(actionClass: unknown): boolean {
-   return typeof actionClass === 'function' && Object.getOwnPropertyDescriptor(actionClass, 'AuthorizesCaller')?.value === true;
 }
 
 /**
@@ -236,11 +228,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * does not authorize its caller.
     */
    public ActionAuthorizesCaller(action: MJActionEntity): boolean {
-      if (action.Type === 'Runtime') {
-         return false;
-      }
-      const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseAction, action.DriverClass || action.Name);
-      return declaresAuthorizesCaller(registration?.SubClass);
+      return ActionClassAuthorizesCaller(action, BaseAction);
    }
 
    // ── Proxied cached collections (single source of truth: ActionEngineBase.Instance) ──

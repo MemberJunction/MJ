@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const { runActionMock, configMock, actions } = vi.hoisted(() => ({
     runActionMock: vi.fn(),
     configMock: vi.fn(),
-    actions: [] as Array<{ ID: string; Name: string }>,
+    actions: [] as Array<{ ID: string; Name: string; Type: string }>,
 }));
 
 vi.mock('@memberjunction/global', async (importOriginal) => ({
@@ -28,6 +28,8 @@ vi.mock('@memberjunction/actions', () => ({
 }));
 vi.mock('@memberjunction/actions-base', () => ({
     ActionParam: class ActionParam { Name = ''; Type = ''; Value: unknown = null; },
+    CheckActionRunAuthorization: async () => null,
+    IsOwner: () => true,
 }));
 
 import { TestRuntimeActionAction } from '../custom/ai/test-runtime-action.action';
@@ -49,7 +51,7 @@ describe('TestRuntimeActionAction nested RunAction scope', () => {
         runActionMock.mockResolvedValue({ Success: true, Params: [] });
         configMock.mockReset();
         actions.length = 0;
-        actions.push({ ID: 'ACT-1', Name: 'Runtime Under Test' });
+        actions.push({ ID: 'ACT-1', Name: 'Runtime Under Test', Type: 'Runtime' });
     });
 
     it("passes the calling run's RunScope and Audience to the action under test", async () => {
