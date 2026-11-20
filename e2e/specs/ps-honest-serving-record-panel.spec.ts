@@ -20,13 +20,8 @@
  *   npx playwright test --config e2e/playwright.config.ts e2e/specs/ps-honest-serving-record-panel.spec.ts
  */
 import { execFileSync } from 'child_process';
-import { test, expect, EXPLORER_BASE_URL, RedeemSignInLink, RequiredEnv } from '../fixtures';
+import { test, expect, EXPLORER_BASE_URL, RedeemSignInLink, RequiredEnv, SqlTextLiteral } from '../fixtures';
 import type { Page } from '@playwright/test';
-
-/** A SQL string literal of `value` (quotes doubled). */
-function sqlText(value: string): string {
-  return `N'${value.replace(/'/g, "''")}'`;
-}
 
 /** The rows of `query` through PS_SQLCMD, each row's columns split on its `|` separator. */
 function sqlRows(query: string): string[][] {
@@ -51,7 +46,7 @@ function storedPrediction(): StoredPrediction {
   const rows = sqlRows(
     `SELECT l.ValueNumeric, r.ModelVersion, l.MLScoringRunID, l.MLModelScoringBindingID FROM __mj.vwLatestFeatureValues l ` +
     `JOIN __mj.MLScoringRun r ON r.ID = l.MLScoringRunID ` +
-    `WHERE l.RecordID = ${sqlText(RequiredEnv('PS_SCORED_PERSON_ID'))} AND l.FeatureName = ${sqlText(RequiredEnv('PS_BINDING_FEATURE_NAME'))} AND l.Source = N'Model'`,
+    `WHERE l.RecordID = ${SqlTextLiteral(RequiredEnv('PS_SCORED_PERSON_ID'))} AND l.FeatureName = ${SqlTextLiteral(RequiredEnv('PS_BINDING_FEATURE_NAME'))} AND l.Source = N'Model'`,
   );
   if (rows.length !== 1) throw new Error(`expected one latest Model value of the scored record, found ${rows.length}`);
   const [value, version, run, binding] = rows[0];
@@ -89,7 +84,7 @@ test.describe('Predictive Studio — the record panel reads predictions from Fea
     // the prediction is stored: its absence from the page is the view gate, not a missing score
     expect(storedPrediction().ScoringRunID.length).toBeGreaterThan(0);
     const pipelineValues = sqlRows(
-      `SELECT COUNT(*) FROM __mj.vwFeatureValues WHERE RecordID = ${sqlText(RequiredEnv('PS_SCORED_PERSON_ID'))} AND RecordProcessID IS NOT NULL AND Role = N'Champion'`,
+      `SELECT COUNT(*) FROM __mj.vwFeatureValues WHERE RecordID = ${SqlTextLiteral(RequiredEnv('PS_SCORED_PERSON_ID'))} AND RecordProcessID IS NOT NULL AND Role = N'Champion'`,
     );
     expect(Number(pipelineValues[0][0])).toBeGreaterThan(0);
     await openScoredRecord(page, RequiredEnv('PS_RESTRICTED_SIGN_IN_URL'));

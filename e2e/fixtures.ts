@@ -53,6 +53,16 @@ export function RequiredEnv(name: string): string {
 }
 
 /**
+ * `value` as a T-SQL N'…' literal for the specs' sqlcmd checks, escaped exactly as `EscapeSQLString`
+ * (`@memberjunction/global`) escapes it: NULs dropped, quotes doubled. The e2e folder sits outside the pnpm package
+ * graph (the repository root declares no `@memberjunction/*` dependency), so it cannot import that helper; this is the
+ * one copy every spec shares.
+ */
+export function SqlTextLiteral(value: string): string {
+  return `N'${value.replace(/\0/g, '').replace(/'/g, "''")}'`;
+}
+
+/**
  * Redeems a one-time magic-link sign-in URL in this tab and waits until Explorer has kept the session token (it strips
  * `#token=` from the URL once stored). The session lives in the tab's sessionStorage, so each test redeems its own link.
  */
