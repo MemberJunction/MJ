@@ -282,7 +282,7 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
    */
   protected async LookForDrift(plan: PeriodPlan, join: OutcomeJoinResult, period: MonitoringPeriod, history: readonly StoredPeriodRow[], ctx: MonitoringContext): Promise<DriftLook> {
     const inputs = (await ctx.Seams.Store.DriftInputs(plan.Model, plan.Unit, join.Rows.map((r) => r.RecordID), ctx))
-      .map((i) => ({ name: i.Name, kind: PredictiveStudioModelMonitoringJobDriver.inputKind(i.Reference, i.Current), reference: [...i.Reference], current: [...i.Current] }))
+      .map((i) => ({ name: i.Name, kind: PredictiveStudioModelMonitoringJobDriver.inputKind(i.Reference, i.Current, plan.Unit.Spec.temporal !== null), reference: [...i.Reference], current: [...i.Current] }))
       .filter((i): i is typeof i & { kind: MonitorInputKind } => i.kind !== null);
     if (inputs.length === 0) return { Look: null, Alarms: [] };
     const look = Math.min(PredictiveStudioModelMonitoringJobDriver.MAX_LOOK, history.filter((h) => h.State === 'evaluated').length + 1);
@@ -391,14 +391,20 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
     if (owner) await ctx.Seams.Notifier.Notify(owner, title, message, plan.Model.ID, ctx);
   }
 
-  /** The procedure-M input kind of a column, or null when the column cannot be tested (no variation, too short). Pure. */
-  private static inputKind(reference: readonly number[], current: readonly number[]): MonitorInputKind | null {
+  /**
+   * The procedure-M input kind of a column (D4-196), or null when the column cannot be tested (no variation, too
+   * short): `proportion` for 0/1 columns; `series` for the one value of a single series, which only a forecast unit is
+   * by design (a unit with a `TemporalSpec`; a multi-series forecast is refused at bind, D4-181), so its one-row period
+   * is the series' next value under the AR(1) null; else `mean`, including a non-forecast unit's period that happens to
+   * hold one row (a look mean of n = 1 under the independent-rows null). Pure.
+   */
+  private static inputKind(reference: readonly number[], current: readonly number[], singleSeries: boolean): MonitorInputKind | null {
     if (current.length === 0 || reference.length < 3) return null;
     const mean = reference.reduce((s, v) => s + v, 0) / reference.length;
     if (!reference.some((v) => v !== mean)) return null;
     const binary = (xs: readonly number[]): boolean => xs.every((v) => v === 0 || v === 1);
     if (binary(reference) && binary(current)) return 'proportion';
-    return current.length === 1 ? 'series' : 'mean';
+    return singleSeries && current.length === 1 ? 'series' : 'mean';
   }
 
   /** A row with nothing measured yet. */

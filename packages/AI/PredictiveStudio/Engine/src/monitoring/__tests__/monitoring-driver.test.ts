@@ -197,6 +197,23 @@ describe('PredictiveStudioModelMonitoringJobDriver.Execute', () => {
     expect(world.Notifier.Sent[0].UserID).toBe(OWNER);
   });
 
+  it('a one-row period of a non-forecast unit is tested as a mean, never as a series (M5, D4-196)', async () => {
+    PeriodRows(JUNE, 1, 0.3, 1);
+    world.Store.Reference = null;
+    world.Store.Inputs = [{ Name: 'TenureZ', Reference: [0, 1, 2, 3, 4], Current: [2.5] }];
+    await driver.Execute(await Context(NOW));
+    expect(world.Drift.Requests[0].inputs).toEqual([expect.objectContaining({ name: 'TenureZ', kind: 'mean' })]);
+  });
+
+  it('a one-row period of a forecast unit (a single series by design) is tested as a series', async () => {
+    PeriodRows(JUNE, 1, 0.3, 1);
+    world.Store.Reference = null;
+    world.Store.Unit = { ...world.Store.Unit, Spec: { ...world.Store.Unit.Spec, temporal: { timeColumn: 'PeriodStart', horizonPeriods: 1, lags: [1], rollingWindows: [], period: 'month', seasonality: null } } };
+    world.Store.Inputs = [{ Name: 'LagTarget', Reference: [0, 1, 2, 3, 4], Current: [2.5] }];
+    await driver.Execute(await Context(NOW));
+    expect(world.Drift.Requests[0].inputs).toEqual([expect.objectContaining({ name: 'LagTarget', kind: 'series' })]);
+  });
+
   it('a parity failure is re-sampled once; a confirmed failure starts a training run, a passing re-sample does not', async () => {
     PeriodRows(JUNE, 200, 0.3, 60);
     world.Store.Reference = null;
