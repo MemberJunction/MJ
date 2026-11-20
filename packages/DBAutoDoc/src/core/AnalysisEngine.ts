@@ -31,6 +31,8 @@ import { IterationTracker } from '../state/IterationTracker.js';
 import { BackpropagationEngine } from './BackpropagationEngine.js';
 import { ConvergenceDetector } from './ConvergenceDetector.js';
 import { GuardrailsManager } from './GuardrailsManager.js';
+import { IncrementalAnalysisTracker } from '../incremental/IncrementalAnalysisTracker.js';
+import { IsCatalogForeignKeyRef } from '../incremental/SchemaDiffer.js';
 
 export class AnalysisEngine {
   private backpropagationEngine: BackpropagationEngine;
@@ -39,6 +41,8 @@ export class AnalysisEngine {
   private enumCandidateGate: EnumCandidateGate;
   private startTime: number = 0;
   private currentRun?: AnalysisRun;
+  private incrementalTracker: IncrementalAnalysisTracker | null = null;
+  private graphNodes: Map<string, TableNode> | null = null;
 
   private onProgress: (message: string, data?: Record<string, unknown>) => void;
 
@@ -57,6 +61,15 @@ export class AnalysisEngine {
    */
   public SetKeyVerifier(verifier: KeyVerifier | null): void {
     this.keyVerifier = verifier;
+  }
+
+  /** Attach an incremental subgraph tracker so unchanged tables skip LLM calls. */
+  public SetIncrementalTracker(
+    tracker: IncrementalAnalysisTracker | null,
+    nodes?: Map<string, TableNode>,
+  ): void {
+    this.incrementalTracker = tracker;
+    this.graphNodes = nodes ?? null;
   }
 
   constructor(
@@ -187,11 +200,13 @@ export class AnalysisEngine {
    */
   public async PrunePrimaryKeys(
     state: DatabaseDocumentation,
-    run: AnalysisRun
+    run: AnalysisRun,
+    onlyTables?: ReadonlySet<string>
   ): Promise<{ removed: number; kept: number }> {
     const discoveryPhase = state.phases.keyDetection;
     if (!discoveryPhase) return { removed: 0, kept: 0 };
 
+    const onlyLower = onlyTables ? new Set(Array.from(onlyTables).map(t => t.toLowerCase())) : null;
     const override = this.config.ai.modelOverrides?.['pkPruning'] ?? this.config.ai.modelOverrides?.['fkPruning'];
     const effectiveModel = override?.model ?? this.config.ai.model;
 
@@ -218,6 +233,7 @@ export class AnalysisEngine {
     const allProposals: PKProposedRemoval[] = [];
 
     for (const [tableKey, tablePKs] of pksByTable.entries()) {
+      if (onlyLower && !onlyLower.has(tableKey.toLowerCase())) continue;
       const hasUnlocked = tablePKs.some(pk => pk.status !== 'confirmed');
       if (!hasUnlocked) continue;
 
@@ -286,9 +302,10 @@ export class AnalysisEngine {
   /** @deprecated Use {@link PrunePrimaryKeys}. */
   public async prunePrimaryKeys(
     state: DatabaseDocumentation,
-    run: AnalysisRun
+    run: AnalysisRun,
+    onlyTables?: ReadonlySet<string>
   ): Promise<{ removed: number; kept: number }> {
-    return this.PrunePrimaryKeys(state, run);
+    return this.PrunePrimaryKeys(state, run, onlyTables);
   }
 
     /**
@@ -299,11 +316,13 @@ export class AnalysisEngine {
    */
   public async PruneForeignKeys(
     state: DatabaseDocumentation,
-    run: AnalysisRun
+    run: AnalysisRun,
+    onlyTables?: ReadonlySet<string>
   ): Promise<{ removed: number; kept: number }> {
     const discoveryPhase = state.phases.keyDetection;
     if (!discoveryPhase) return { removed: 0, kept: 0 };
 
+    const onlyLower = onlyTables ? new Set(Array.from(onlyTables).map(t => t.toLowerCase())) : null;
     const override = this.config.ai.modelOverrides?.['fkPruning'];
     const effectiveModel = override?.model ?? this.config.ai.model;
 
@@ -350,6 +369,7 @@ export class AnalysisEngine {
 
     for (const [tableKey, tableFKs] of fksByTable.entries()) {
       tableIdx++;
+      if (onlyLower && !onlyLower.has(tableKey.toLowerCase())) continue;
       // Skip tables where ALL FKs are locked
       const hasUnlocked = tableFKs.some(fk => fk.status !== 'confirmed');
       if (!hasUnlocked) continue;
@@ -482,6 +502,9 @@ export class AnalysisEngine {
     }
 
     const kept = allFKs.length - removed;
+    if (removed > 0) {
+      this.unflagRejectedForeignKeys(state, discoveryPhase.discovered.foreignKeys);
+    }
     console.log(`[AnalysisEngine] FK pruning complete: ${removed} removed, ${kept} kept (model: ${effectiveModel})`);
     this.onProgress('FK pruning complete', { removed, kept, model: effectiveModel });
 
@@ -495,9 +518,68 @@ export class AnalysisEngine {
   /** @deprecated Use {@link PruneForeignKeys}. */
   public async pruneForeignKeys(
     state: DatabaseDocumentation,
-    run: AnalysisRun
+    run: AnalysisRun,
+    onlyTables?: ReadonlySet<string>
   ): Promise<{ removed: number; kept: number }> {
-    return this.PruneForeignKeys(state, run);
+    return this.PruneForeignKeys(state, run, onlyTables);
+  }
+
+  private unflagRejectedForeignKeys(
+    state: DatabaseDocumentation,
+    foreignKeys: import('../types/discovery.js').FKCandidate[]
+  ): void {
+    const bare = (name: string): string => (name.includes('.') ? (name.split('.').pop() ?? name) : name);
+    const rejected = foreignKeys.filter(fk => fk.status === 'rejected');
+    for (const fk of rejected) {
+      const stillActiveOnColumn = foreignKeys.some(
+        other =>
+          other.status !== 'rejected' &&
+          other.schemaName === fk.schemaName &&
+          other.sourceTable === fk.sourceTable &&
+          other.sourceColumn === fk.sourceColumn
+      );
+      const srcTable = this.stateManager.findTable(state, fk.schemaName, fk.sourceTable);
+      if (srcTable) {
+        srcTable.dependsOn = srcTable.dependsOn.filter(
+          dep =>
+            IsCatalogForeignKeyRef(state, fk.schemaName, fk.sourceTable, dep) ||
+            !(
+              dep.column === fk.sourceColumn &&
+              dep.schema === fk.targetSchema &&
+              bare(dep.table) === fk.targetTable &&
+              (dep.referencedColumn || dep.column) === fk.targetColumn
+            )
+        );
+        const stillHasCatalogDep = srcTable.dependsOn.some(dep => dep.column === fk.sourceColumn);
+        const col = srcTable.columns.find(c => c.name === fk.sourceColumn);
+        if (col && !col.isCatalogForeignKey && !stillActiveOnColumn && !stillHasCatalogDep) {
+          col.isForeignKey = false;
+          col.foreignKeyReferences = undefined;
+        }
+      }
+      const tgtTable = this.stateManager.findTable(state, fk.targetSchema, fk.targetTable);
+      if (tgtTable) {
+        const remainingEdgesToTarget = (srcTable?.dependsOn ?? []).filter(
+          dep => dep.schema === fk.targetSchema && bare(dep.table) === fk.targetTable
+        );
+        if (remainingEdgesToTarget.length === 0) {
+          tgtTable.dependents = tgtTable.dependents.filter(
+            dep => !(dep.schema === fk.schemaName && bare(dep.table) === fk.sourceTable)
+          );
+        } else {
+          tgtTable.dependents = tgtTable.dependents.filter(dep => {
+            if (dep.schema !== fk.schemaName || bare(dep.table) !== fk.sourceTable) return true;
+            // Discovered/proposed dependents store `{ column: sourceColumn, referencedColumn: targetColumn }`;
+            // introspected catalog dependents store `{ column: targetColumn, referencedColumn: sourceColumn }`.
+            return remainingEdgesToTarget.some(
+              edge =>
+                (dep.column === edge.column && dep.referencedColumn === (edge.referencedColumn || edge.column)) ||
+                (dep.column === (edge.referencedColumn || edge.column) && dep.referencedColumn === edge.column)
+            );
+          });
+        }
+      }
+    }
   }
 
   /**
@@ -514,6 +596,9 @@ export class AnalysisEngine {
 
     for (let i = 0; i < tables.length; i++) {
       const tableNode = tables[i];
+      if (this.incrementalTracker && !this.incrementalTracker.ShouldAnalyzeTable(tableNode.fullName, run.iterationsPerformed)) {
+        continue;
+      }
 
       if (i % 5 === 0 || i === total - 1) {
         this.onProgress(`Level ${level}: analyzing table ${i + 1}/${total} (${tableNode.schema}.${tableNode.table})`);
@@ -616,6 +701,7 @@ export class AnalysisEngine {
           result.promptInput,
           result.promptOutput
         );
+        this.incrementalTracker?.RecordTableFailure(tableNode.fullName);
 
         return {};
       }
@@ -660,6 +746,8 @@ export class AnalysisEngine {
       // Persist enum/value-list verdicts from LLM response
       this.persistEnumVerdicts(table, result.result.columnDescriptions, run.modelUsed);
 
+      const dependsOnCountBefore = table.dependsOn.length;
+
       // Process structured FK insights from LLM and feed back to discovery phase
       if (state.phases.keyDetection && result.result.foreignKeys) {
         await this.processFKInsightsFromLLM(
@@ -678,6 +766,18 @@ export class AnalysisEngine {
           tableNode.table,
           result.result.primaryKey
         );
+      }
+
+      if (this.incrementalTracker) {
+        this.incrementalTracker.RecordTableOutcome({
+          TableKey: tableNode.fullName,
+          CurrentLevel: level,
+          HadPreviousDescription: previousDescription !== undefined && previousDescription.length > 0,
+          MateriallyChanged: descriptionChanged,
+          Confidence: result.result.confidence,
+          NewRelationshipProposed: table.dependsOn.length > dependsOnCountBefore,
+          Node: tableNode,
+        });
       }
 
       // Update inferred business domain
@@ -726,6 +826,7 @@ export class AnalysisEngine {
         result: 'error',
         message: (error as Error).message
       });
+      this.incrementalTracker?.RecordTableFailure(tableNode.fullName);
 
       return {};
     }
@@ -892,11 +993,13 @@ export class AnalysisEngine {
   /**
    * Sanitize LLM-returned enum values: trim whitespace, drop empties and null sentinels.
    */
-  private sanitizeEnumValues(values: string[]): string[] {
+  private sanitizeEnumValues(values: string[] | undefined): string[] {
+    if (!Array.isArray(values)) return [];
     const sentinels = new Set(['', 'NULL', 'null', 'N/A', 'n/a', '-', '--']);
     const seen = new Set<string>();
     const result: string[] = [];
     for (const raw of values) {
+      if (typeof raw !== 'string') continue;
       const trimmed = raw.trim();
       if (sentinels.has(trimmed)) continue;
       if (seen.has(trimmed)) continue;
@@ -1344,7 +1447,10 @@ export class AnalysisEngine {
       return;
     }
 
-    await this.backpropagationEngine.execute(state, run, triggers);
+    const backpropResult = await this.backpropagationEngine.execute(state, run, triggers);
+    if (this.incrementalTracker && this.graphNodes && backpropResult.updatedTableKeys.length > 0) {
+      this.incrementalTracker.RecordBackpropagationRevisions(backpropResult.updatedTableKeys, this.graphNodes);
+    }
   }
 
   /** @deprecated Use {@link ExecuteBackpropagation}. */
@@ -1483,6 +1589,7 @@ export class AnalysisEngine {
 
     discoveryPhase.discovered.primaryKeys.push(newPK);
     this.applyTablePrimaryKey(state, discoveryPhase, schemaName, tableName);
+    this.incrementalTracker?.RecordLLMPKChange(`${schemaName}.${tableName}`);
 
     console.log(`[AnalysisEngine] Created PK from LLM: ${schemaName}.${tableName} (${pkColumns.join(', ')}) confidence: ${confidence}`);
   }
@@ -1571,11 +1678,14 @@ export class AnalysisEngine {
         }
       };
 
-      // Check if this column is already a detected PK
+      // Check if this column is already a detected single-column PK (1:1 / is-a).
+      // Composite PK members (junction/history tables) routinely double as FKs.
       const existingPK = discoveryPhase.discovered.primaryKeys.find(pk =>
+        pk.status !== 'rejected' &&
         pk.schemaName === schemaName &&
         pk.tableName === tableName &&
-        pk.columnNames.includes(columnName)
+        pk.columnNames.length === 1 &&
+        pk.columnNames[0] === columnName
       );
 
       if (existingPK && existingPK.status === 'confirmed') {
@@ -1633,16 +1743,31 @@ export class AnalysisEngine {
         // that the PK detection was wrong. Reject the PK.
         existingPK.status = 'rejected';
         feedback.affectedCandidates.push(`PK:${schemaName}.${tableName}.${columnName}`);
-        const column = this.findColumnInState(state, schemaName, tableName, columnName);
-        if (column) column.isPrimaryKey = false;
+        for (const pkColName of existingPK.columnNames) {
+          const coveredElsewhere = discoveryPhase.discovered.primaryKeys.some(
+            other =>
+              other !== existingPK &&
+              other.status !== 'rejected' &&
+              other.schemaName === schemaName &&
+              other.tableName === tableName &&
+              other.columnNames.includes(pkColName)
+          );
+          if (!coveredElsewhere) {
+            const pkCol = this.findColumnInState(state, schemaName, tableName, pkColName);
+            if (pkCol && !pkCol.isCatalogPrimaryKey) pkCol.isPrimaryKey = false;
+          }
+        }
         console.log(`[AnalysisEngine] FK from LLM: ${schemaName}.${tableName}.${columnName} -> ${referencesSchema}.${referencesTable}, rejecting unconfirmed PK`);
       }
 
-      // Check if we already have this FK - boost confidence
+      // Check if we already have this exact FK candidate - boost confidence
       const existingFK = discoveryPhase.discovered.foreignKeys.find(fk =>
         fk.schemaName === schemaName &&
         fk.sourceTable === tableName &&
-        fk.sourceColumn === columnName
+        fk.sourceColumn === columnName &&
+        fk.targetSchema === referencesSchema &&
+        fk.targetTable === referencesTable &&
+        fk.targetColumn === referencesColumn
       );
 
       if (existingFK && existingFK.status === 'candidate') {
@@ -1704,6 +1829,7 @@ export class AnalysisEngine {
         };
 
         discoveryPhase.discovered.foreignKeys.push(newFK);
+        this.incrementalTracker?.RecordLLMFKChange(`${schemaName}.${tableName}`);
         feedback.newConfidence = newFK.confidence;
         feedback.affectedCandidates.push(`FK:${schemaName}.${tableName}.${columnName}`);
 

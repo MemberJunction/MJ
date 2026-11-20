@@ -25,6 +25,7 @@
 ## CLI Commands
 ```bash
 db-auto-doc analyze --config ./config.json
+db-auto-doc analyze --incremental ./output/run-1/state.json --config ./config.json
 db-auto-doc analyze --resume ./output/run-1/state.json
 db-auto-doc analyze --resume ./output/run-1/state.json --pruning-only
 db-auto-doc prune --state ./output/run-1/state.json --config ./config.json

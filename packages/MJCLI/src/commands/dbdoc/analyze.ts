@@ -15,6 +15,11 @@ export default class DbDocAnalyze extends Command {
       description: 'Resume from an existing state file',
       required: false
     }),
+    incremental: Flags.string({
+      char: 'i',
+      description: 'Run incremental analysis from a prior completed state.json after schema changes',
+      required: false
+    }),
     config: Flags.string({
       char: 'c',
       description: 'Path to config file',
@@ -36,6 +41,9 @@ export default class DbDocAnalyze extends Command {
     const args: string[] = [];
     if (flags.resume) {
       args.push('--resume', flags.resume);
+    }
+    if (flags.incremental) {
+      args.push('--incremental', flags.incremental);
     }
     if (flags.config) {
       args.push('--config', flags.config);

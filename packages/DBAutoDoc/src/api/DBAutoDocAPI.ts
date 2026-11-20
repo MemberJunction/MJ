@@ -376,6 +376,71 @@ export class DBAutoDocAPI {
   }
 
   /**
+   * Run incremental database analysis against a prior state.json baseline.
+   *
+   * Introspects the live database, computes structural schema diffs against `baseStateFile`,
+   * reuses statistics/keys/descriptions/normalizations for unchanged tables, and runs
+   * bidirectional PK/FK discovery + affected-subgraph analysis on changed and newly
+   * related tables.
+   */
+  public async AnalyzeIncremental(
+    baseStateFile: string,
+    config: DBAutoDocAPIConfig & { onProgress?: ProgressCallback }
+  ): Promise<AnalysisExecutionResult> {
+    try {
+      const onProgress = config.onProgress || (() => {});
+      const stateManager = new StateManager(baseStateFile);
+      const priorState = await stateManager.load();
+      if (!priorState) {
+        return this.failedIncrementalResult(baseStateFile, `Baseline state file not found: ${baseStateFile}`);
+      }
+
+      const fullConfig = this.buildFullConfig(config);
+      const orchestrator = new AnalysisOrchestrator({
+        config: fullConfig,
+        incrementalFromState: baseStateFile,
+        incrementalBaselineState: priorState,
+        onProgress
+      });
+
+      onProgress('Starting incremental analysis', { baseStateFile });
+      const result = await orchestrator.Execute();
+      return {
+        success: result.success,
+        outputFolder: result.outputFolder,
+        stateFile: result.outputFolder ? path.join(result.outputFolder, 'state.json') : '',
+        summary: result.state.summary,
+        message: result.message
+      };
+    } catch (error) {
+      return this.failedIncrementalResult(baseStateFile, (error as Error).message);
+    }
+  }
+
+  private failedIncrementalResult(baseStateFile: string, message: string): AnalysisExecutionResult {
+    const now = new Date().toISOString();
+    return {
+      success: false,
+      outputFolder: path.dirname(baseStateFile),
+      stateFile: baseStateFile,
+      summary: {
+        createdAt: now,
+        lastModified: now,
+        totalIterations: 0,
+        totalPromptsRun: 0,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalTokens: 0,
+        estimatedCost: 0,
+        totalSchemas: 0,
+        totalTables: 0,
+        totalColumns: 0
+      },
+      message
+    };
+  }
+
+  /**
    * Export analysis results as SQL and/or Markdown
    *
    * Generates SQL extended properties script and/or Markdown documentation
