@@ -400,8 +400,8 @@ ALTER TABLE ${flyway:defaultSchema}.CommunicationLog ADD
     MessageClass NVARCHAR(20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     ScheduledAt DATETIMEOFFSET(7) NULL,
     ProviderMessageID NVARCHAR(200) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-    UnsubscribeToken UNIQUEIDENTIFIER NULL CONSTRAINT DF_CommunicationLog_UnsubscribeToken DEFAULT NEWID(),
-    TrackingToken UNIQUEIDENTIFIER NULL CONSTRAINT DF_CommunicationLog_TrackingToken DEFAULT NEWID(),
+    UnsubscribeToken UNIQUEIDENTIFIER NULL,
+    TrackingToken UNIQUEIDENTIFIER NULL,
     CorrelationData NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     ComplianceDecision NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL;
 GO
@@ -63159,8 +63159,8 @@ BEGIN
                 CASE WHEN @MessageClass_Clear = 1 THEN NULL ELSE ISNULL(@MessageClass, NULL) END,
                 CASE WHEN @ScheduledAt_Clear = 1 THEN NULL ELSE ISNULL(@ScheduledAt, NULL) END,
                 CASE WHEN @ProviderMessageID_Clear = 1 THEN NULL ELSE ISNULL(@ProviderMessageID, NULL) END,
-                CASE WHEN @UnsubscribeToken_Clear = 1 THEN NULL ELSE ISNULL(@UnsubscribeToken, newid()) END,
-                CASE WHEN @TrackingToken_Clear = 1 THEN NULL ELSE ISNULL(@TrackingToken, newid()) END,
+                CASE WHEN @UnsubscribeToken_Clear = 1 THEN NULL ELSE ISNULL(@UnsubscribeToken, NULL) END,
+                CASE WHEN @TrackingToken_Clear = 1 THEN NULL ELSE ISNULL(@TrackingToken, NULL) END,
                 CASE WHEN @CorrelationData_Clear = 1 THEN NULL ELSE ISNULL(@CorrelationData, NULL) END,
                 CASE WHEN @ComplianceDecision_Clear = 1 THEN NULL ELSE ISNULL(@ComplianceDecision, NULL) END
             )
@@ -63212,8 +63212,8 @@ BEGIN
                 CASE WHEN @MessageClass_Clear = 1 THEN NULL ELSE ISNULL(@MessageClass, NULL) END,
                 CASE WHEN @ScheduledAt_Clear = 1 THEN NULL ELSE ISNULL(@ScheduledAt, NULL) END,
                 CASE WHEN @ProviderMessageID_Clear = 1 THEN NULL ELSE ISNULL(@ProviderMessageID, NULL) END,
-                CASE WHEN @UnsubscribeToken_Clear = 1 THEN NULL ELSE ISNULL(@UnsubscribeToken, newid()) END,
-                CASE WHEN @TrackingToken_Clear = 1 THEN NULL ELSE ISNULL(@TrackingToken, newid()) END,
+                CASE WHEN @UnsubscribeToken_Clear = 1 THEN NULL ELSE ISNULL(@UnsubscribeToken, NULL) END,
+                CASE WHEN @TrackingToken_Clear = 1 THEN NULL ELSE ISNULL(@TrackingToken, NULL) END,
                 CASE WHEN @CorrelationData_Clear = 1 THEN NULL ELSE ISNULL(@CorrelationData, NULL) END,
                 CASE WHEN @ComplianceDecision_Clear = 1 THEN NULL ELSE ISNULL(@ComplianceDecision, NULL) END
             )
@@ -193713,8 +193713,8 @@ BEGIN
                 CASE WHEN @MessageClass_Clear = 1 THEN NULL ELSE ISNULL(@MessageClass, NULL) END,
                 CASE WHEN @ScheduledAt_Clear = 1 THEN NULL ELSE ISNULL(@ScheduledAt, NULL) END,
                 CASE WHEN @ProviderMessageID_Clear = 1 THEN NULL ELSE ISNULL(@ProviderMessageID, NULL) END,
-                CASE WHEN @UnsubscribeToken_Clear = 1 THEN NULL ELSE ISNULL(@UnsubscribeToken, newid()) END,
-                CASE WHEN @TrackingToken_Clear = 1 THEN NULL ELSE ISNULL(@TrackingToken, newid()) END,
+                CASE WHEN @UnsubscribeToken_Clear = 1 THEN NULL ELSE ISNULL(@UnsubscribeToken, NULL) END,
+                CASE WHEN @TrackingToken_Clear = 1 THEN NULL ELSE ISNULL(@TrackingToken, NULL) END,
                 CASE WHEN @CorrelationData_Clear = 1 THEN NULL ELSE ISNULL(@CorrelationData, NULL) END,
                 CASE WHEN @ComplianceDecision_Clear = 1 THEN NULL ELSE ISNULL(@ComplianceDecision, NULL) END
             )
@@ -193766,8 +193766,8 @@ BEGIN
                 CASE WHEN @MessageClass_Clear = 1 THEN NULL ELSE ISNULL(@MessageClass, NULL) END,
                 CASE WHEN @ScheduledAt_Clear = 1 THEN NULL ELSE ISNULL(@ScheduledAt, NULL) END,
                 CASE WHEN @ProviderMessageID_Clear = 1 THEN NULL ELSE ISNULL(@ProviderMessageID, NULL) END,
-                CASE WHEN @UnsubscribeToken_Clear = 1 THEN NULL ELSE ISNULL(@UnsubscribeToken, newid()) END,
-                CASE WHEN @TrackingToken_Clear = 1 THEN NULL ELSE ISNULL(@TrackingToken, newid()) END,
+                CASE WHEN @UnsubscribeToken_Clear = 1 THEN NULL ELSE ISNULL(@UnsubscribeToken, NULL) END,
+                CASE WHEN @TrackingToken_Clear = 1 THEN NULL ELSE ISNULL(@TrackingToken, NULL) END,
                 CASE WHEN @CorrelationData_Clear = 1 THEN NULL ELSE ISNULL(@CorrelationData, NULL) END,
                 CASE WHEN @ComplianceDecision_Clear = 1 THEN NULL ELSE ISNULL(@ComplianceDecision, NULL) END
             )
