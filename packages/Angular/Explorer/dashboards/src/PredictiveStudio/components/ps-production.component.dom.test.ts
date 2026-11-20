@@ -6,7 +6,7 @@ import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-
 import { renderComponentFixture, query, queryAll, createFakeProvider } from '@memberjunction/ng-test-utils';
 import type { CompositeKey, RunViewParams, RunViewResult } from '@memberjunction/core';
 import { NavigationService } from '@memberjunction/ng-shared';
-import type { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
+import type { MJMLModelEntity, MJMLModelScoringBindingEntity, MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { PSProductionComponent } from './ps-production.component';
 
 try {
@@ -24,8 +24,18 @@ try {
  * strip + a master-list row + detail). Standalone.
  */
 
-const makeEngine = (publishedModels: unknown[], processes: unknown[] = [], bindings: unknown[] = []) => {
-  const subject = new BehaviorSubject<unknown[]>(publishedModels);
+/** The model fields the production view reads. */
+type ModelDouble = Pick<MJMLModelEntity, 'ID' | 'AlgorithmID' | 'ProblemType' | 'Version' | 'Metrics' | 'HoldoutMetrics' | 'PipelineID' | 'ArtifactFileID' | 'ArtifactStatus' | 'Status'>;
+
+/** The scoring binding fields the production view reads. */
+type BindingDouble = Pick<MJMLModelScoringBindingEntity, 'ID' | 'MLTrainingPipelineID' | 'FeatureName' | 'TargetEntityID' | 'TargetEntity' | 'TargetColumn' | 'Mode' | 'Status' | 'RecordProcessID'>;
+
+/** The record process fields the production view reads. */
+type ProcessDouble = Pick<MJRecordProcessEntity, 'ID' | 'ScheduleEnabled'>;
+
+/** The engine members the production view reads; the `Engine` input takes it as is (inputs are untyped). */
+const makeEngine = (publishedModels: ModelDouble[], processes: ProcessDouble[] = [], bindings: BindingDouble[] = []) => {
+  const subject = new BehaviorSubject<ModelDouble[]>(publishedModels);
   return {
     ObserveProperty: () => subject.asObservable(),
     PublishedModels: publishedModels,
@@ -37,10 +47,10 @@ const makeEngine = (publishedModels: unknown[], processes: unknown[] = [], bindi
     ModelDisplayName: () => 'Renewal Model',
     AlgorithmName: () => 'XGBoost',
     LoadRecentRunsForModel: async () => [],
-  } as unknown as PredictiveStudioEngine;
+  };
 };
 
-const makeModel = (over: Record<string, unknown> = {}) =>
+const makeModel = (over: Partial<ModelDouble> = {}): ModelDouble =>
   ({
     ID: 'm1',
     AlgorithmID: 'a1',
@@ -59,7 +69,7 @@ const makeModel = (over: Record<string, unknown> = {}) =>
 const opened: Array<{ EntityName: string; Key: string }> = [];
 const navigation = { OpenEntityRecord: (entityName: string, key: CompositeKey) => { opened.push({ EntityName: entityName, Key: key.ToURLSegment() }); return 'tab-1'; } };
 
-const render = (publishedModels: unknown[], bindings: unknown[] = []) =>
+const render = (publishedModels: ModelDouble[], bindings: BindingDouble[] = []) =>
   renderComponentFixture(PSProductionComponent, {
     inputs: { Engine: makeEngine(publishedModels, [], bindings), Provider: createFakeProvider({ runViewResults: [] }) },
     providers: [{ provide: NavigationService, useValue: navigation }],
@@ -83,7 +93,7 @@ const Refusal = (over: Partial<PublishRecordDouble>): PublishRecordDouble => ({
 const KeepBaselineNotAutoPublished = (): PublishRecordDouble['RefusalObject'] => ({ kind: 'keep-baseline-not-auto-published' });
 
 /** Renders the view over `models` with an auto-train process and, when given, its last auto-train outcome record. */
-async function RenderProduction(opts: { models: unknown[]; autoTrainOutcome?: PublishRecordDouble; failReads?: string }) {
+async function RenderProduction(opts: { models: ModelDouble[]; autoTrainOutcome?: PublishRecordDouble; failReads?: string }) {
   const records = opts.autoTrainOutcome ? [opts.autoTrainOutcome] : [];
   const provider = createFakeProvider({ runViewResults: (p) => (p.EntityName === 'MJ: ML Model Publish Records' ? records : []) });
   const failure = opts.failReads;
@@ -107,7 +117,7 @@ const Button = (f: Awaited<ReturnType<typeof RenderProduction>>, testId: string)
 describe('PSProductionComponent (DOM)', () => {
   it("a scoring binding row names its feature and opens the model's record, whose detail hosts the Bindings section", () => {
     opened.length = 0;
-    const binding = { ID: 'b1', MLTrainingPipelineID: 'p1', FeatureName: 'Renewal risk', TargetEntityID: null, TargetEntity: 'Members', TargetColumn: null, Mode: 'OnDemand', Status: 'Active', RecordProcessID: null };
+    const binding: BindingDouble = { ID: 'b1', MLTrainingPipelineID: 'p1', FeatureName: 'Renewal risk', TargetEntityID: null, TargetEntity: 'Members', TargetColumn: null, Mode: 'OnDemand', Status: 'Active', RecordProcessID: null };
     const fixture = render([makeModel()], [binding]);
     expect(query(fixture, '[data-testid="ps-production-binding"]')?.textContent).toContain('Renewal risk');
     (query(fixture, '[data-testid="ps-production-binding-open"]') as HTMLButtonElement).click();

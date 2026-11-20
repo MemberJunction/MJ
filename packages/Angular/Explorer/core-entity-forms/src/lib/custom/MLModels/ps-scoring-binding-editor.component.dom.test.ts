@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
-import { AuthorizationInfo, type EntityFieldInfo, type EntityInfo, type IMetadataProvider, type RemoteOpResult, type RunViewParams, type UserInfo } from '@memberjunction/core';
+import { AuthorizationInfo, EntityInfo, RunView, type IMetadataProvider, type RemoteOpResult, type RunViewParams, type UserInfo } from '@memberjunction/core';
 import { ValidationErrorInfo } from '@memberjunction/global';
 import {
   PredictiveStudioWithdrawScoringBindingOperation,
@@ -90,15 +90,16 @@ interface World {
 const viewModelPredictions = new AuthorizationInfo({ ID: 'A-VIEW', Name: PredictionViewAuthorization.DefaultName, IsActive: true });
 const otherAuthorization = new AuthorizationInfo({ ID: 'A-OTHER', Name: 'Run Reports', IsActive: true });
 
-const persons: Pick<EntityInfo, 'ID' | 'Name'> & { Fields: Array<Pick<EntityFieldInfo, 'Name' | 'ReadOnly' | 'IsPrimaryKey' | 'AllowUpdateAPI'>> } = {
+/** A real entity: its fields' ReadOnly derives from AllowUpdateAPI and the key, as in production. */
+const persons = new EntityInfo({
   ID: 'E-PERSONS',
   Name: 'Persons',
-  Fields: [
-    { Name: 'ID', ReadOnly: false, IsPrimaryKey: true, AllowUpdateAPI: false },
-    { Name: 'RenewalRisk', ReadOnly: false, IsPrimaryKey: false, AllowUpdateAPI: true },
-    { Name: 'CreatedAt', ReadOnly: true, IsPrimaryKey: false, AllowUpdateAPI: false },
+  EntityFields: [
+    { Name: 'ID', IsPrimaryKey: true, AllowUpdateAPI: false },
+    { Name: 'RenewalRisk', IsPrimaryKey: false, AllowUpdateAPI: true },
+    { Name: 'CreatedAt', IsPrimaryKey: false, AllowUpdateAPI: false },
   ],
-};
+});
 
 const pipeline = { ID: 'P1', Name: 'Renewal', TargetEntityID: persons.ID };
 const model: ModelDouble = { ID: 'M1', PipelineID: pipeline.ID, Pipeline: pipeline.Name, ProblemType: 'classification', Version: 3 };
@@ -118,10 +119,11 @@ async function RenderEditor(o: RenderOptions = {}): Promise<{ f: ComponentFixtur
   const world: World = { Saved: [], SaveRefusal: o.saveRefusal || null };
   const fake = CreateFakeProvider<BindingDouble | typeof pipeline>({
     runViewResults: (p: RunViewParams) => (p.EntityName === 'MJ: ML Training Pipelines' ? [pipeline] : p.EntityName === 'MJ: ML Model Scoring Bindings' ? bindingsFor(p, o) : []),
-    // the entity double carries only the members the editor reads (its fields' updatability)
-    entities: [persons as unknown as Partial<EntityInfo>],
+    entities: [persons],
   });
-  const fakeRunViews = fake.RunViews.bind(fake);
+  // the provider's own RunViews, typed through the RunView seam the editor reads with
+  const runViews = RunView.FromMetadataProvider(fake).ProviderToUse;
+  const fakeRunViews = runViews.RunViews.bind(runViews);
   const provider: IMetadataProvider = Object.assign(fake, {
     RunViews: async (params: RunViewParams[], user?: UserInfo) => {
       if (o.holdRead) await o.holdRead(params);
@@ -132,16 +134,21 @@ async function RenderEditor(o: RenderOptions = {}): Promise<{ f: ComponentFixtur
     GetEntityObject: async () => new BindingDouble(world) as unknown as MJMLModelScoringBindingEntity,
   });
   vi.spyOn(MJNotificationService.prototype, 'CreateSimpleNotification').mockImplementation(() => undefined);
-  // The component's input is the generated entity class; the double carries only the members it reads.
-  const f = RenderComponentFixture(PSScoringBindingEditorComponent, { inputs: { Model: (o.model || model) as unknown as MJMLModelEntity, Provider: provider } });
+  // Inputs are set untyped (setInput), so the double carrying only the members the editor reads is passed as is.
+  const f = RenderComponentFixture(PSScoringBindingEditorComponent, { inputs: { Model: o.model || model, Provider: provider } });
   await settle(f);
   return { f, world };
+}
+
+/** True when the read's filter names `id` (quoted). */
+function filterNames(p: RunViewParams, id: string): boolean {
+  return typeof p.ExtraFilter === 'string' && p.ExtraFilter.includes(`'${id}'`);
 }
 
 /** The bindings a binding read returns: its pipeline's, from `bindingsByPipeline`, else `existing`. */
 function bindingsFor(p: RunViewParams, o: RenderOptions): BindingDouble[] {
   for (const [pipelineId, rows] of Object.entries(o.bindingsByPipeline || {})) {
-    if (p.ExtraFilter?.includes(`'${pipelineId}'`)) return rows;
+    if (filterNames(p, pipelineId)) return rows;
   }
   return o.existing || [];
 }
@@ -275,7 +282,7 @@ describe('PSScoringBindingEditorComponent (DOM)', () => {
         [slowPipeline]: [Object.assign(new BindingDouble(world), { ID: 'B-OLD', FeatureName: 'Old model feature', MLTrainingPipelineID: slowPipeline })],
         [pipeline.ID]: [Object.assign(new BindingDouble(world), { ID: 'B-NEW', FeatureName: 'Current model feature', MLTrainingPipelineID: pipeline.ID })],
       },
-      holdRead: (params) => (params.some((p) => p.ExtraFilter?.includes(slowPipeline)) ? slowRead : Promise.resolve()),
+      holdRead: (params) => (params.some((p) => filterNames(p, slowPipeline)) ? slowRead : Promise.resolve()),
       model: { ...model, ID: 'M-OLD', PipelineID: slowPipeline },
     });
     f.componentRef.setInput('Model', model);
