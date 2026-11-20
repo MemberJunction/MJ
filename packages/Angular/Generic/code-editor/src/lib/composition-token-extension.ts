@@ -379,6 +379,7 @@ function appendIconAndText(target: HTMLElement, iconClass: string, label: string
 
 /**
  * Builds the hover tooltip DOM for a resolved query.
+ * @internal Exported for tests only. Not part of the supported public API.
  */
 export function BuildCompositionTooltipDOM(
     info: CompositionTokenInfo | null,

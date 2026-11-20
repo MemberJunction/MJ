@@ -3,7 +3,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { FormsModule } from '@angular/forms';
 import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
-import { type IMetadataProvider } from '@memberjunction/core';
+import { EntityInfo, type BaseEntity, type IMetadataProvider } from '@memberjunction/core';
 import { AngularAdapterService } from '@memberjunction/ng-react';
 import { renderComponentFixture, query, text } from '@memberjunction/ng-test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -102,6 +102,45 @@ describe('ComponentArtifactViewerComponent code written by a different user', ()
 
     expect(query(fixture, '.stub-react-component')).toBeNull();
     expect(query(fixture, '.run-consent')).not.toBeNull();
+  });
+  it('does not mount a form spec without top-level code until the viewer agrees', async () => {
+    const entity = new EntityInfo({
+      ID: 'E0000009-0000-0000-0000-0000000000F1',
+      Name: 'MJ: Test Forms',
+      Status: 'Active',
+      BaseTable: 'TestForm',
+      BaseView: 'vwTestForms',
+      Fields: [{ ID: 'FF1', Name: 'ID', Type: 'uniqueidentifier', AllowsNull: false, IsPrimaryKey: true }],
+    });
+    const fixtureRecord = { NewRecord: () => true } as unknown as BaseEntity;
+    const provider = {
+      CurrentUser: { ID: CURRENT_USER_ID, Name: 'Viewer', Email: 'viewer@example.com' },
+      EntityByName: () => entity,
+      RunView: async () => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0 }),
+      GetEntityObject: async () => fixtureRecord,
+    } as unknown as IMetadataProvider;
+    const spec = JSON.stringify({
+      name: 'SharedForm',
+      componentRole: 'form',
+      entityName: 'MJ: Test Forms',
+      location: 'registry',
+      dependencies: [{ name: 'SharedFormPart', location: 'embedded', code: 'function SharedFormPart() { return null; }' }],
+    });
+    const fixture = renderComponentFixture(ComponentArtifactViewerComponent, {
+      imports: [CommonModule, FormsModule],
+      declarations: VIEWER_DECLARATIONS,
+      providers: [{ provide: AngularAdapterService, useValue: { initialize: vi.fn(async () => undefined), isInitialized: vi.fn(() => false) } }],
+      inputs: {
+        Provider: provider,
+        artifactVersion: makeComponentArtifactVersion(spec, { UserID: OTHER_USER_ID, User: 'Alice Author' }),
+      },
+    });
+    fixture.detectChanges();
+    await new Promise((r) => setTimeout(r, 0));
+    fixture.detectChanges();
+
+    expect(query(fixture, '.stub-interactive-form')).toBeNull();
+    expect(text(fixture, '.run-consent')).toContain('Alice Author');
   });
 });
 

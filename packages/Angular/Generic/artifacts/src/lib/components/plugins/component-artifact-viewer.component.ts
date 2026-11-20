@@ -320,11 +320,12 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
   public RunApproved = false;
 
   /**
-   * True when the component has code to run and the current user did not write this version.
+   * True when a spec is loaded and the current user did not write this version. A spec can run
+   * code through its dependencies or the registry even with no top-level code, so every spec counts.
    * A version with no known author, or a viewer with no known user, also needs consent.
    */
   public get IsRunConsentRequired(): boolean {
-    if (this.RunApproved || !this.hasDisplayContent) return false;
+    if (this.RunApproved || !this.Component) return false;
     return !IsArtifactVersionWrittenByUser(this.artifactVersion, this.ProviderToUse?.CurrentUser);
   }
 
