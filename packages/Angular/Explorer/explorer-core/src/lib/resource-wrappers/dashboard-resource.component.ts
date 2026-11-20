@@ -1077,8 +1077,15 @@ export class DashboardResource extends BaseResourceComponent {
         SafeDetectChanges(this.cdr);
     }
 
-    /** Opens the app page that an artifact in the chat asks for. An app the metadata does not name opens the page in the current app. */
+    /**
+     * Opens the artifact or app page that an artifact in the chat asks for. An app the metadata does not
+     * name opens the page in the current app.
+     */
     public OnChatNavigationRequest(request: NavigationRequest): void {
+        if (request.ArtifactID) {
+            this.navigationService.OpenArtifact(request.ArtifactID, request.ArtifactName);
+            return;
+        }
         const appId = request.appName ? this.applicationIdByName(request.appName) : undefined;
         void this.navigationService.OpenNavItemByName(request.navItemName, undefined, appId, { queryParams: request.queryParams })
             .catch((error: unknown) => LogError(`Dashboard tab: could not open ${request.navItemName}: ${errorMessage(error)}`));
