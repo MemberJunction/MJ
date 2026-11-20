@@ -608,7 +608,6 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
     this.cdrLocal.detectChanges();
   }
 
-
   /**
    * P1 #3 — resolve the raw record ids in the at-risk list to human labels (member name/email) from the
    * model's target entity, so the list reads like a call sheet instead of a column of UUIDs. Resolves the
