@@ -16599,6 +16599,9 @@ importers:
       '@memberjunction/geo-core':
         specifier: 6.3.0-edge.1
         version: link:../geo/geo-core
+      '@memberjunction/integration-engine':
+        specifier: 6.3.0-edge.1
+        version: link:../Integration/engine
       '@memberjunction/predictive-studio':
         specifier: 6.3.0-edge.1
         version: link:../AI/PredictiveStudio/Engine
