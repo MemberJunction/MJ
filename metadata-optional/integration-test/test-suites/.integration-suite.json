@@ -250,6 +250,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT179 - List From Query",
+            "Sequence": 14,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "AC5EA8D1-270C-4C0E-8B2B-6693566F18C4"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT21 - Open-App Metadata Teardown",
             "Sequence": 15,
             "Status": "Active"
@@ -710,6 +721,28 @@
           "sync": {
             "lastModified": "2026-11-19T17:38:25.490Z",
             "checksum": "dbd8bb4a3f7408912ede120409e8807ddb23212f65c0ad10bad4374f98f67d3f"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT180 - Task Graph Waiting Steps",
+            "Sequence": 40,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D7751D35-421F-4F49-B2E4-42AC69FAA51B"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT181 - Task Graph Durable Retry",
+            "Sequence": 40,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "DBBEF0C4-628A-4310-AFDF-EE86D80AF6D1"
           }
         },
         {
@@ -2420,6 +2453,17 @@
           "sync": {
             "lastModified": "2026-11-19T17:38:27.109Z",
             "checksum": "8a127e2999eda38a3d27b9dd496978115dad605a662d6455ad09de0d4ad9c146"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT182 - Archive Runs Page Through Every Eligible Row",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5941BA01-ECFA-40CF-8B53-4D817EBAC6C2"
           }
         }
       ]

@@ -313,6 +313,19 @@ export interface ListRefreshFixture {
 }
 
 /**
+ * Shared fixture for the `list-from-query` bundle: the query saved from SQL (and a second one saved
+ * under the same name), the list made from it, and whether the user's User Lists category already
+ * existed, so teardown deletes only what the run created.
+ */
+export interface ListFromQueryFixture {
+    QueryIDs: string[];
+    ListID: string | null;
+    /** The user's subcategory of User Lists, and whether this run created it. */
+    CategoryID: string | null;
+    CreatedCategory: boolean;
+}
+
+/**
  * Shared fixture for the `entity-writes` bundle: the resolved entity IDs the write-side checks need
  * plus the FK-safe teardown accumulators. Nothing is created in Setup — each mutating check creates
  * exactly the throwaway rows it needs and appends their IDs here, so teardown can delete them in
@@ -745,6 +758,8 @@ export interface IntegrationCheckContext {
     ListsFixture?: ListsFixture;
     /** Shared fixture for the `list-refresh` bundle. */
     ListRefreshFixture?: ListRefreshFixture;
+    /** Shared fixture for the `list-from-query` bundle. */
+    ListFromQueryFixture?: ListFromQueryFixture;
     /** Shared fixture for the `open-app-teardown` bundle. */
     OpenAppTeardownFixture?: OpenAppTeardownFixture;
     /** Shared fixture for the `open-app-local-source` bundle. */

@@ -2112,6 +2112,16 @@ export const MJAIAgentRequestSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)
         * * Description: The workflow step (MJ: Tasks row) waiting on this request, when it came from a task graph rather than from a running agent. Distinct from OriginatingAgentRunStepID: a task graph outlives the agent run that submitted it, so the task — not the run — is what resumes when a person answers. NULL for requests raised by a run directly.`),
+    HumanTaskProvider: z.string().nullable().describe(`
+        * * Field Name: HumanTaskProvider
+        * * Display Name: Human Task Provider
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The registration key of the human-task provider that also put this request in front of a person, when the install routes agent requests to one (humanTasks.defaultProvider). NULL when only the built-in inbox holds the request. Only that provider may answer the request through the provider path, and an answer given elsewhere asks it to withdraw its own ask.`),
+    HumanTaskExternalReference: z.string().nullable().describe(`
+        * * Field Name: HumanTaskExternalReference
+        * * Display Name: Human Task External Reference
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The reference the human-task provider returned for its own record of this request (for example a task ID in another app), handed back to the provider when it is asked to withdraw. NULL when no provider took the request or it returned none.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent Name
@@ -3764,7 +3774,7 @@ export const MJAIAgentStepSchema = z.object({
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    StepType: z.union([z.literal('Action'), z.literal('Decision'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('Sub-Agent'), z.literal('While')]).describe(`
+    StepType: z.union([z.literal('Action'), z.literal('Decision'), z.literal('External'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('Sub-Agent'), z.literal('Wait'), z.literal('While')]).describe(`
         * * Field Name: StepType
         * * Display Name: Step Type
         * * SQL Data Type: nvarchar(20)
@@ -3772,10 +3782,12 @@ export const MJAIAgentStepSchema = z.object({
     * * Possible Values 
     *   * Action
     *   * Decision
+    *   * External
     *   * ForEach
     *   * Human
     *   * Prompt
     *   * Sub-Agent
+    *   * Wait
     *   * While
         * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), Prompt (run an AI prompt), Decision (one typed decision call whose answers the outgoing paths route on), Human (ask a person), or ForEach / While (a loop).`),
     StartingStep: z.boolean().describe(`
@@ -34849,7 +34861,7 @@ export const MJRecordChangeSchema = z.object({
     *   * Snapshot
     *   * Update
         * * Description: Create, Update, or Delete`),
-    Source: z.union([z.literal('Clone'), z.literal('External'), z.literal('Internal'), z.literal('Restore')]).describe(`
+    Source: z.union([z.literal('Clone'), z.literal('External'), z.literal('Internal'), z.literal('Restore'), z.literal('Sync')]).describe(`
         * * Field Name: Source
         * * Display Name: Source
         * * SQL Data Type: nvarchar(20)
@@ -34860,6 +34872,7 @@ export const MJRecordChangeSchema = z.object({
     *   * External
     *   * Internal
     *   * Restore
+    *   * Sync
         * * Description: Internal or External`),
     ChangedAt: z.date().describe(`
         * * Field Name: ChangedAt
@@ -40553,7 +40566,7 @@ export const MJTaskSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)
         * * Description: The Action this task executes, when the node is action-assigned rather than agent-assigned or awaiting a person. Mutually exclusive with UserID and AgentID (CK_Task_Assignment). Set by durable entity-action dispatch, where a single-node graph carries one action to run with restart recovery.`),
-    StepType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('Decision'), z.literal('External'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('While')]).nullable().describe(`
+    StepType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('Decision'), z.literal('External'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('Wait'), z.literal('While')]).nullable().describe(`
         * * Field Name: StepType
         * * Display Name: Step Type
         * * SQL Data Type: nvarchar(20)
@@ -40566,6 +40579,7 @@ export const MJTaskSchema = z.object({
     *   * ForEach
     *   * Human
     *   * Prompt
+    *   * Wait
     *   * While
         * * Description: Which kind of workflow step this task represents. NULL for a task that is not part of a workflow, such as a hand-authored to-do. Determines which of AgentID/ActionID/PromptID/UserID is meaningful and how Configuration is read. This is the executable vocabulary and is deliberately not the same value list as AIAgentStep.StepType, which describes a step at design time.`),
     PromptID: z.string().nullable().describe(`
@@ -40590,6 +40604,22 @@ export const MJTaskSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)
         * * Description: For a saga compensation task, the forward task it undoes. Unique, so a forward task is compensated at most once.`),
+    CorrelationKey: z.string().nullable().describe(`
+        * * Field Name: CorrelationKey
+        * * Display Name: Correlation Key
+        * * SQL Data Type: nvarchar(400)
+        * * Description: For an External workflow step: the key an outside caller signals it by when it does not hold the task ID, resolved from the step's configuration when the step is reached. Not unique: one signal completes every reached step waiting on the same key, which is how a single event (a sprint closing, a payment settling) releases many workflows at once. NULL for every other step.`),
+    AttemptCount: z.number().describe(`
+        * * Field Name: AttemptCount
+        * * Display Name: Attempt Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: For a workflow step: how many of its runs ended in a scheduled retry. 0 for a step that has not been retried. The dispatcher compares it with the step's retry policy to decide whether a failure is retried or final; a person retrying the step resets it.`),
+    NextAttemptAt: z.date().nullable().describe(`
+        * * Field Name: NextAttemptAt
+        * * Display Name: Next Attempt At
+        * * SQL Data Type: datetimeoffset
+        * * Description: For a workflow step waiting to be retried: the earliest moment it may be claimed again, on the database clock. NULL when no retry is scheduled. Claiming skips the step until this moment has passed, so a retry survives a restart and runs on whichever instance is free.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent

@@ -304,7 +304,10 @@ describe('ArchiveEngine', () => {
         mockEntityByNameHandler = (name: string) => mockEntityInfo(name);
         mockResolveArchiveDriver.mockReturnValue({ SupportsPurge: true });
 
-        mockProcessEntity.mockResolvedValue({
+        // clearAllMocks keeps implementations, so a test's rejection would leak into the next
+        // test; reset these two to their defaults.
+        mockStorageInitialize.mockReset().mockResolvedValue(undefined);
+        mockProcessEntity.mockReset().mockResolvedValue({
             Archived: 0,
             Failed: 0,
             Skipped: 0,

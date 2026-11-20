@@ -48,18 +48,18 @@ describe('convertMigration — reconciliation (issue #3252 Phase 3)', () => {
     expect(r.reconciliation.emittedStatements).toBeGreaterThan(0);
   });
 
-  it('does NOT flag a legitimate reseed/regen marker (classifier found nothing translatable)', async () => {
-    // A pure mj-sync metadata file legitimately produces an empty marker — trust the
-    // classifier, do not second-guess it at the reconciliation layer.
+  it('converts a pure mj-sync file inline and does not flag it (issue #5543)', async () => {
+    // An mj-sync log is no longer an empty "re-seeded" marker: it converts inline through the
+    // legacy EXEC/DML block conversion, and the reconciliation layer does not flag it.
     const sql = [
       '-- MetadataSync push operation',
       "DECLARE @Name_da319a9d NVARCHAR(100) = N'X';",
       "INSERT INTO [__mj].[AIModel] ([ID],[Name]) VALUES ('aaaa', @Name_da319a9d);",
     ].join('\n');
     const r = await ConvertMigration(sql, 'V_Metadata_Sync.sql', { transpiler: passthrough });
-    expect(r.status).toBe('reseed-or-regen-only');
+    expect(r.status).toBe('converted');
     expect(r.reconciliation.suspiciousEmptyOutput).toBe(false);
-    expect(r.reconciliation.emittedStatements).toBe(0);
+    expect(r.pgSQL).toContain('INSERT INTO __mj."AIModel"');
   });
 
   it('promotes a FULLY GAPPED conversion to needs-hand-authoring (issue #3840)', async () => {
@@ -405,7 +405,7 @@ describe('convertMigration', () => {
     expect(r.pgSQL).toContain('CREATE TABLE');
   });
 
-  it('treats a pure mj-sync Metadata_Sync file as reseed-or-regen-only (no DDL emitted)', async () => {
+  it('reports an mj-sync save the inline conversion cannot read, never a reseed marker (issue #5543)', async () => {
     const sql = [
       '-- SQL Logging Session',
       '-- Description: MetadataSync push operation',
@@ -414,16 +414,17 @@ describe('convertMigration', () => {
       'EXEC __mj.spCreateAIModel @Name = @Name_da319a9d;',
     ].join('\n');
     const r = await ConvertMigration(sql, 'V_Metadata_Sync.sql', { transpiler: passthrough });
-    expect(r.status).toBe('reseed-or-regen-only');
-    expect(r.pgSQL).toContain('mj sync push');
-    // No spCreate call carried into the PG output — it is re-seeded, not transpiled.
-    expect(r.pgSQL).not.toContain('spCreateAIModel');
+    // A one-line SET + unbracketed EXEC is not the shape mj-sync writes; the legacy rule skips it
+    // and the skip is a reported gap rather than a silent marker.
+    expect(r.status).toBe('needs-hand-authoring');
+    expect(r.pgSQL).not.toContain('mj sync push');
+    expect(r.unhandled.length).toBeGreaterThan(0);
   });
 
-  it('keeps an mj-sync file as reseed even when it contains incidental data DML (not schema DDL)', async () => {
-    // Regression: a 964k-line Metadata_Sync file was mis-routed to "converted"
-    // because an INSERT/UPDATE matched the DDL regex. Data DML in an mj-sync file
-    // is the metadata seed itself — reproduced by `mj sync push`, never transpiled.
+  it('never sends an mj-sync file with incidental data DML to the AST transpiler', async () => {
+    // Regression: a 964k-line Metadata_Sync file was mis-routed to the transpiler because an
+    // INSERT/UPDATE matched the DDL regex. Data DML in an mj-sync file is the metadata seed itself;
+    // it converts inline (issue #5543) or is reported, never transpiled as DDL.
     const sql = [
       '-- SQL Logging Session',
       '-- Description: MetadataSync push operation',
@@ -431,12 +432,14 @@ describe('convertMigration', () => {
       'UPDATE __mj.AIModel SET Name = @Name_da319a9d WHERE ID = 1;',
       'EXEC __mj.spCreateAIModel @Name = @Name_da319a9d;',
     ].join('\n');
-    const r = await ConvertMigration(sql, 'V202604271430__Metadata_Sync.sql', { transpiler: passthrough });
-    expect(r.status).toBe('reseed-or-regen-only');
-    expect(r.pgSQL).not.toContain('spCreateAIModel');
+    const transpiled: string[] = [];
+    const recording: TSQLToPGTranspiler = { async transpile(tsql: string) { transpiled.push(tsql); return { sql: [tsql], unhandled: [] }; } };
+    const r = await ConvertMigration(sql, 'V202604271430__Metadata_Sync.sql', { transpiler: recording });
+    expect(transpiled).toEqual([]);
+    expect(r.status).not.toBe('reseed-or-regen-only');
   });
 
-  it('keeps an mj-sync file as reseed when a multi-line string literal contains DDL-looking text', async () => {
+  it('never transpiles an mj-sync file whose multi-line string literal contains DDL-looking text', async () => {
     // Regression: stripCommentsPreservingLines reset its in-string state per line, so a
     // prompt-template literal spanning lines whose content mentions "ALTER TABLE" was
     // scanned as code → schema-ddl finding → the whole metadata seed was mis-routed to
@@ -449,9 +452,13 @@ describe('convertMigration', () => {
       "End of template';",
       'EXEC __mj.spUpdateAIPrompt @Description = @Description_da319a9d;',
     ].join('\n');
-    const r = await ConvertMigration(sql, 'V202605021448__Metadata_Sync.sql', { transpiler: passthrough });
-    expect(r.status).toBe('reseed-or-regen-only');
-    expect(r.pgSQL).not.toContain('spUpdateAIPrompt');
+    const transpiled: string[] = [];
+    const recording: TSQLToPGTranspiler = { async transpile(tsql: string) { transpiled.push(tsql); return { sql: [tsql], unhandled: [] }; } };
+    const r = await ConvertMigration(sql, 'V202605021448__Metadata_Sync.sql', { transpiler: recording });
+    expect(transpiled).toEqual([]);
+    // The fragment is not a save block, so it is reported instead of passed through as converted.
+    expect(r.status).toBe('needs-hand-authoring');
+    expect(r.unhandled.some((u) => u.kind.startsWith('SYNC-LOG'))).toBe(true);
   });
 
   it('transpiles a Backfill_* data migration (data DML, no mj-sync fingerprints)', async () => {
