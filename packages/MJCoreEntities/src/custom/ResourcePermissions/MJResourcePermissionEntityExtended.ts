@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, EntityDeleteOptions, EntityPermissionType, EntitySaveOptions, IMetadataProvider, LogError } from "@memberjunction/core";
+import { BaseEntity, BaseEntityResult, CompositeKey, EntityDeleteOptions, EntityPermissionType, EntitySaveOptions, IMetadataProvider, LogError } from "@memberjunction/core";
 import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { MJResourcePermissionEntity, MJUserEntity } from "../../generated/entity_subclasses";
 import { ResourcePermissionEngine } from "./ResourcePermissionEngine";
@@ -11,6 +11,20 @@ const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
 
 /** `MJ: Resource Types.ID` for Projects (Conversation Folders). */
 const PROJECTS_RESOURCE_TYPE_ID = '88D0DF27-AF8F-43AC-9EC4-2AC314F49355';
+
+/** Fields that decide who holds which access. A change to one of them needs grant rights. */
+const GRANT_FIELDS = [
+    'Status',
+    'PermissionLevel',
+    'UserID',
+    'RoleID',
+    'Type',
+    'ResourceTypeID',
+    'ResourceRecordID',
+    'SharedByUserID',
+    'StartSharingAt',
+    'EndSharingAt',
+] as const;
 
 /**
  * Subclass for the Resource Permissiosn entity that implements some workflow logic
@@ -112,24 +126,29 @@ export class MJResourcePermissionEntityExtended extends MJResourcePermissionEnti
     }
 
     /**
-     * Async wrapper that runs the full authorization check (including the
-     * async resource-owner lookup) before delegating to the base delete. Sets
-     * `_authorizedByOwnerOverride` so the sync `CheckPermissions` called by
-     * the base class will bypass the role-based gate.
+     * Server-side delete gate. The caller must be able to manage the share
+     * ({@link callerMayManageShare}), be the grantee of the row (to withdraw a
+     * request or leave a share), or be an Owner-type user. Sets
+     * `_authorizedByOwnerOverride` for a manager so the sync `CheckPermissions`
+     * called by the base class bypasses the role-based gate.
      */
     override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         const provider = this.ProviderToUse as unknown as IMetadataProvider;
-        if (provider?.ProviderType === 'Database') {
-            if (await this.callerMayManageShare()) {
-                this._authorizedByOwnerOverride = true;
-                try {
-                    return await super.Delete(options);
-                } finally {
-                    this._authorizedByOwnerOverride = false;
-                }
+        if (provider?.ProviderType !== 'Database') {
+            return super.Delete(options);
+        }
+        if (await this.callerMayManageShare()) {
+            this._authorizedByOwnerOverride = true;
+            try {
+                return await super.Delete(options);
+            } finally {
+                this._authorizedByOwnerOverride = false;
             }
         }
-        return super.Delete(options);
+        if (this.callerIsOwnerType() || this.callerIsStoredGrantee()) {
+            return super.Delete(options);
+        }
+        return this.refuseWrite('delete', 'Only the owner can remove this share.');
     }
 
     /**
@@ -218,24 +237,8 @@ export class MJResourcePermissionEntityExtended extends MJResourcePermissionEnti
                 const recordName = resourceRecord.Get(resourceTypeFields.NameFieldName);
                 const recordOwnerID = resourceRecord.Get(resourceTypeFields.OwnerIDFieldName);
 
-                // Authorization gate for *granting* a share: only the resource's
-                // owner (or an existing Owner-level grantee) may create an Approved
-                // permission row. Access-request creates (Status='Requested') are
-                // allowed because the owner still approves them downstream.
-                if (!this.IsSaved && this.Status !== 'Requested') {
-                    const authorized = this.callerMayGrantShare(engine, recordOwnerID);
-                    if (!authorized) {
-                        LogError(
-                            `User ${this.ContextCurrentUser?.ID ?? '(none)'} attempted to create a ${this.ResourceType} ` +
-                            `share on record ${this.ResourceRecordID} without Owner rights.`
-                        );
-                        const result = this.LatestResult as unknown as { Success: boolean; Message?: string } | undefined;
-                        if (result) {
-                            result.Success = false;
-                            result.Message = 'Only the owner can share this resource.';
-                        }
-                        return false;
-                    }
+                if (!this.callerMaySaveGrant(engine, recordOwnerID)) {
+                    return this.refuseWrite(this.IsSaved ? 'update' : 'create', 'Only the owner can share this resource.');
                 }
 
                 // we now have our cached state values of newRequest and statusChanged and can proceed with the logic below
@@ -322,6 +325,61 @@ export class MJResourcePermissionEntityExtended extends MJResourcePermissionEnti
             // call the super class to do the actual save
             return super.Save(options);
         }
+    }
+
+    /**
+     * Authorization gate for writing a grant row.
+     *  - Create: an access request (`Status = 'Requested'`) is open to anyone; any other
+     *    create needs grant rights ({@link callerMayGrantShare}).
+     *  - Update: a change to a grant field ({@link GRANT_FIELDS}) needs grant rights.
+     *    Owner-type users are exempt. Without grant rights, the grantee or the grantor may
+     *    only revoke the row. The resource of a saved row can not change.
+     */
+    private callerMaySaveGrant(engine: ResourcePermissionEngine, recordOwnerID: string | null | undefined): boolean {
+        if (!this.IsSaved) {
+            return this.Status === 'Requested' || this.callerMayGrantShare(engine, recordOwnerID);
+        }
+        const changed = GRANT_FIELDS.filter((name) => this.GetFieldByName(name)?.Dirty === true);
+        if (changed.length === 0 || this.callerIsOwnerType()) return true;
+        if (changed.includes('ResourceTypeID') || changed.includes('ResourceRecordID')) return false;
+        if (this.callerMayGrantShare(engine, recordOwnerID)) return true;
+        const revokeOnly = changed.length === 1 && changed[0] === 'Status' && this.Status === 'Revoked';
+        return revokeOnly && (this.callerIsStoredGrantee() || this.callerIsStoredGrantor());
+    }
+
+    /** `true` when the context user is an Owner-type (administrator or system) user. */
+    private callerIsOwnerType(): boolean {
+        return this.ContextCurrentUser?.Type?.trim().toLowerCase() === 'owner';
+    }
+
+    /** Stored (pre-save) value of a field. */
+    private storedValue(fieldName: string): string | null {
+        const field = this.GetFieldByName(fieldName);
+        return (field ? field.OldValue : null) as string | null;
+    }
+
+    /** `true` when the stored row is a user grant to the context user. */
+    private callerIsStoredGrantee(): boolean {
+        const user = this.ContextCurrentUser;
+        const granteeId = this.storedValue('UserID');
+        return !!user && this.storedValue('Type') === 'User' && !!granteeId && UUIDsEqual(granteeId, user.ID);
+    }
+
+    /** `true` when the stored row was granted by the context user. */
+    private callerIsStoredGrantor(): boolean {
+        const user = this.ContextCurrentUser;
+        const grantorId = this.storedValue('SharedByUserID');
+        return !!user && !!grantorId && UUIDsEqual(grantorId, user.ID);
+    }
+
+    /** Logs and records a refused write. Always returns `false`. */
+    private refuseWrite(action: 'create' | 'update' | 'delete', reason: string): false {
+        LogError(
+            `User ${this.ContextCurrentUser?.ID ?? '(none)'} was refused a ${action} of a ${this.ResourceType} ` +
+            `permission on record ${this.ResourceRecordID}.`
+        );
+        this.RegisterResultHistoryEntry(new BaseEntityResult(false, reason, action));
+        return false;
     }
 
     /**

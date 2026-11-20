@@ -173,6 +173,29 @@ describe('MJUserRoutineEntityServer.Validate', () => {
             expect(result.Errors.some(err => err.Source === 'UserID')).toBe(true);
         });
 
+        it('refuses a non-Owner-type user moving their own routine to a different user', () => {
+            const e = makeEntity();
+            e.IsSaved = true;
+            e.UserID = 'AAAAAAAA-0000-0000-0000-00000000000A'; // new owner: someone else
+            e.SetFieldState('UserID', { Dirty: true, OldValue: 'BBBBBBBB-0000-0000-0000-00000000000B' });
+            e.ContextCurrentUser = { ID: 'BBBBBBBB-0000-0000-0000-00000000000B', Type: 'User' };
+            const result = e.Validate();
+            expect(result.Success).toBe(false);
+            expect(result.Errors.some(err => err.Source === 'UserID')).toBe(true);
+        });
+
+        it('refuses a non-Owner-type user creating a routine owned by a different user', () => {
+            const e = makeEntity();
+            e.IsSaved = false;
+            // After NewRecord() the first write becomes OldValue; a later write changes UserID.
+            e.UserID = 'AAAAAAAA-0000-0000-0000-00000000000A';
+            e.SetFieldState('UserID', { Dirty: true, OldValue: 'BBBBBBBB-0000-0000-0000-00000000000B' });
+            e.ContextCurrentUser = { ID: 'BBBBBBBB-0000-0000-0000-00000000000B', Type: 'User' };
+            const result = e.Validate();
+            expect(result.Success).toBe(false);
+            expect(result.Errors.some(err => err.Source === 'UserID')).toBe(true);
+        });
+
         it('allows the owner to save their own routine (case-insensitive UUID comparison)', () => {
             const e = makeEntity();
             e.UserID = 'aaaaaaaa-0000-0000-0000-00000000000a';

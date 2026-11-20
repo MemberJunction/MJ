@@ -174,8 +174,9 @@ export class MJUserRoutineEntityServer extends MJUserRoutineEntity {
 
     /**
      * Defense-in-depth ownership gate: a non-Owner-type context user may only save routines
-     * they own (compared against the PRE-save owner, so reassigning UserID cannot bypass it).
-     * Owner-type users — admins and the scheduler's system user — are exempt.
+     * they own, and only with themselves as the owner. Both the PRE-save owner and the new
+     * UserID must be the caller. Owner-type users — admins and the scheduler's system user —
+     * are exempt.
      */
     private validateOwnership(result: ValidationResult): void {
         const user = this.ContextCurrentUser;
@@ -183,7 +184,8 @@ export class MJUserRoutineEntityServer extends MJUserRoutineEntity {
             return;
         }
         const preSaveOwnerId = (this.GetFieldByName('UserID')?.OldValue as string | null | undefined) ?? this.UserID;
-        if (preSaveOwnerId && !UUIDsEqual(preSaveOwnerId, user.ID)) {
+        const ownerIds = [preSaveOwnerId, this.UserID];
+        if (ownerIds.some(ownerId => ownerId && !UUIDsEqual(ownerId, user.ID))) {
             result.Errors.push(new ValidationErrorInfo(
                 'UserID',
                 'Routines are private to their owner — you can only modify routines you own.',
