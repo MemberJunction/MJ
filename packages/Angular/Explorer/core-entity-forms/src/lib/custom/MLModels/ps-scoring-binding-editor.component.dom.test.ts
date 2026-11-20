@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
-import { AuthorizationInfo, type EntityFieldInfo, type EntityInfo, type IMetadataProvider, type RemoteOpResult, type RunViewParams } from '@memberjunction/core';
+import { AuthorizationInfo, type EntityFieldInfo, type EntityInfo, type IMetadataProvider, type RemoteOpResult, type RunViewParams, type UserInfo } from '@memberjunction/core';
 import { ValidationErrorInfo } from '@memberjunction/global';
 import {
   PredictiveStudioWithdrawScoringBindingOperation,
@@ -106,25 +106,44 @@ const model: ModelDouble = { ID: 'M1', PipelineID: pipeline.ID, Pipeline: pipeli
 interface RenderOptions {
   saveRefusal?: { Source: string; Message: string };
   existing?: BindingDouble[];
+  /** Holds each batched read until the returned promise settles (a slow read). */
+  holdRead?: (params: RunViewParams[]) => Promise<void>;
+  /** The bindings each pipeline's read returns, by pipeline ID; `existing` when absent. */
+  bindingsByPipeline?: Record<string, BindingDouble[]>;
+  /** The model the editor opens on; the Renewal model when absent. */
+  model?: ModelDouble;
 }
 
 async function RenderEditor(o: RenderOptions = {}): Promise<{ f: ComponentFixture<PSScoringBindingEditorComponent>; world: World }> {
   const world: World = { Saved: [], SaveRefusal: o.saveRefusal || null };
   const fake = CreateFakeProvider<BindingDouble | typeof pipeline>({
-    runViewResults: (p: RunViewParams) => (p.EntityName === 'MJ: ML Training Pipelines' ? [pipeline] : p.EntityName === 'MJ: ML Model Scoring Bindings' ? o.existing || [] : []),
+    runViewResults: (p: RunViewParams) => (p.EntityName === 'MJ: ML Training Pipelines' ? [pipeline] : p.EntityName === 'MJ: ML Model Scoring Bindings' ? bindingsFor(p, o) : []),
     // the entity double carries only the members the editor reads (its fields' updatability)
     entities: [persons as unknown as Partial<EntityInfo>],
   });
+  const fakeRunViews = fake.RunViews.bind(fake);
   const provider: IMetadataProvider = Object.assign(fake, {
+    RunViews: async (params: RunViewParams[], user?: UserInfo) => {
+      if (o.holdRead) await o.holdRead(params);
+      return fakeRunViews(params, user);
+    },
     Authorizations: [otherAuthorization, viewModelPredictions],
     // the editor creates its entity through the provider; the double carries only the members the editor calls
     GetEntityObject: async () => new BindingDouble(world) as unknown as MJMLModelScoringBindingEntity,
   });
   vi.spyOn(MJNotificationService.prototype, 'CreateSimpleNotification').mockImplementation(() => undefined);
   // The component's input is the generated entity class; the double carries only the members it reads.
-  const f = RenderComponentFixture(PSScoringBindingEditorComponent, { inputs: { Model: model as unknown as MJMLModelEntity, Provider: provider } });
+  const f = RenderComponentFixture(PSScoringBindingEditorComponent, { inputs: { Model: (o.model || model) as unknown as MJMLModelEntity, Provider: provider } });
   await settle(f);
   return { f, world };
+}
+
+/** The bindings a binding read returns: its pipeline's, from `bindingsByPipeline`, else `existing`. */
+function bindingsFor(p: RunViewParams, o: RenderOptions): BindingDouble[] {
+  for (const [pipelineId, rows] of Object.entries(o.bindingsByPipeline || {})) {
+    if (p.ExtraFilter?.includes(`'${pipelineId}'`)) return rows;
+  }
+  return o.existing || [];
 }
 
 const settle = async (f: ComponentFixture<PSScoringBindingEditorComponent>): Promise<void> => {
@@ -244,5 +263,25 @@ describe('PSScoringBindingEditorComponent (DOM)', () => {
     await Click(f, 'ps-binding-edit');
     expect(el<HTMLInputElement>(f, 'ps-binding-retention').value).toBe('30');
     expect(f.componentInstance.Draft?.ViewAuthorizationID).toBe(viewModelPredictions.ID);
+  });
+
+  it('a slow read of the previous model never replaces the current model\'s bindings', async () => {
+    const world: World = { Saved: [], SaveRefusal: null };
+    const slowPipeline = 'P-SLOW';
+    let release: () => void = () => undefined;
+    const slowRead = new Promise<void>((resolve) => { release = resolve; });
+    const { f } = await RenderEditor({
+      bindingsByPipeline: {
+        [slowPipeline]: [Object.assign(new BindingDouble(world), { ID: 'B-OLD', FeatureName: 'Old model feature', MLTrainingPipelineID: slowPipeline })],
+        [pipeline.ID]: [Object.assign(new BindingDouble(world), { ID: 'B-NEW', FeatureName: 'Current model feature', MLTrainingPipelineID: pipeline.ID })],
+      },
+      holdRead: (params) => (params.some((p) => p.ExtraFilter?.includes(slowPipeline)) ? slowRead : Promise.resolve()),
+      model: { ...model, ID: 'M-OLD', PipelineID: slowPipeline },
+    });
+    f.componentRef.setInput('Model', model);
+    await settle(f);
+    release();
+    await settle(f);
+    expect(f.componentInstance.Bindings.map((b) => b.FeatureName)).toEqual(['Current model feature']);
   });
 });
