@@ -14,7 +14,7 @@
 import { LogError, RunView, type BaseEntity, type EntityFieldInfo, type EntityInfo, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJFeatureValueEntity, MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, ResolveMappingRef } from '@memberjunction/global';
-import { JsonParse, type JsonValue } from '@memberjunction/predictive-studio-core';
+import { DEFAULT_VIEW_AUTHORIZATION_NAME, FindDefaultViewAuthorization, JsonParse, type JsonValue } from '@memberjunction/predictive-studio-core';
 import type { IEntityFactory } from '../training';
 import { ProviderTransactions } from '../registry/provider-transactions';
 import type { RegistryContext } from '../registry/registry-context';
@@ -69,9 +69,6 @@ export interface ScoredValueObject {
   readonly Probabilities: JsonValue | null;
   readonly Drivers: JsonValue | null;
 }
-
-/** The authorization a binding's predictions are seen through when its creator names none (the binding editor's default). */
-export const DEFAULT_VIEW_AUTHORIZATION_NAME = 'View Model Predictions';
 
 /**
  * Thrown when a binding is created without a view authorization and the default one is not in the provider's
@@ -156,8 +153,7 @@ export class ScoringBindings {
    */
   public static ResolveViewAuthorizationID(given: string | null | undefined, provider: IMetadataProvider): string {
     if (given && given.trim().length > 0) return given.trim();
-    const wanted = DEFAULT_VIEW_AUTHORIZATION_NAME.toLowerCase();
-    const seeded = provider.Authorizations.find((a) => a.Name.trim().toLowerCase() === wanted);
+    const seeded = FindDefaultViewAuthorization(provider.Authorizations);
     if (!seeded) throw new ViewAuthorizationNotLoadedError(DEFAULT_VIEW_AUTHORIZATION_NAME);
     return seeded.ID;
   }

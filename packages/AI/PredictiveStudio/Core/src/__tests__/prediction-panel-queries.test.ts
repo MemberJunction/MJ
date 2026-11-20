@@ -4,7 +4,7 @@
  * history, and the record's pipeline values.
  */
 import { describe, it, expect } from 'vitest';
-import { PredictionPanelQueries } from '../prediction-panel-queries';
+import { DEFAULT_VIEW_AUTHORIZATION_NAME, FindDefaultViewAuthorization, PredictionPanelQueries } from '../prediction-panel-queries';
 
 const ENTITY = 'E1';
 const RECORD = "r'1";
@@ -42,5 +42,20 @@ describe('PredictionPanelQueries.For', () => {
   it('with no bound feature the value reads drop the feature filter', () => {
     const none = PredictionPanelQueries.For(ENTITY, 'r1', []);
     expect(none[PredictionPanelQueries.Index.Latest].ExtraFilter).toBe("EntityID='E1' AND RecordID='r1' AND MLModelScoringBindingID IS NOT NULL");
+  });
+});
+
+describe('FindDefaultViewAuthorization', () => {
+  it('is the seeded "View Model Predictions" authorization', () => {
+    expect(DEFAULT_VIEW_AUTHORIZATION_NAME).toBe('View Model Predictions');
+  });
+
+  it('matches the name trimmed and case-insensitive, the one rule the editor and the engine share', () => {
+    const found = FindDefaultViewAuthorization([{ ID: 'A1', Name: 'Run Reports' }, { ID: 'A2', Name: ' view model PREDICTIONS ' }]);
+    expect(found?.ID).toBe('A2');
+  });
+
+  it('is undefined when the authorization is not loaded', () => {
+    expect(FindDefaultViewAuthorization([{ ID: 'A1', Name: 'Run Reports' }])).toBeUndefined();
   });
 });

@@ -12,7 +12,8 @@ import {
 } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CreateFakeProvider, Query, QueryAll, RenderComponentFixture } from '@memberjunction/ng-test-utils';
-import { PSScoringBindingEditorComponent, VIEW_MODEL_PREDICTIONS } from './ps-scoring-binding-editor.component';
+import { DEFAULT_VIEW_AUTHORIZATION_NAME } from '@memberjunction/predictive-studio-core';
+import { PSScoringBindingEditorComponent } from './ps-scoring-binding-editor.component';
 
 try {
   TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
@@ -86,7 +87,7 @@ interface World {
   SaveRefusal: { Source: string; Message: string } | null;
 }
 
-const viewModelPredictions = new AuthorizationInfo({ ID: 'A-VIEW', Name: VIEW_MODEL_PREDICTIONS, IsActive: true });
+const viewModelPredictions = new AuthorizationInfo({ ID: 'A-VIEW', Name: DEFAULT_VIEW_AUTHORIZATION_NAME, IsActive: true });
 const otherAuthorization = new AuthorizationInfo({ ID: 'A-OTHER', Name: 'Run Reports', IsActive: true });
 
 const persons: Pick<EntityInfo, 'ID' | 'Name'> & { Fields: Array<Pick<EntityFieldInfo, 'Name' | 'ReadOnly' | 'IsPrimaryKey' | 'AllowUpdateAPI'>> } = {
