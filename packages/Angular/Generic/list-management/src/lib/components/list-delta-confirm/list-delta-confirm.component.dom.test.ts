@@ -248,13 +248,41 @@ describe('ListDeltaConfirmComponent (DOM)', () => {
       expect(rowTexts(fixture, 'add').map((r) => r.name)).toEqual([null, null, null]);
     });
 
-    it('drops names from an earlier delta', async () => {
-      const { provider } = fakeNameProvider({ a1: 'Ada Lovelace', b1: 'Barbara Liskov' });
-      const fixture = render({ Visible: true, Provider: provider, Delta: makeDelta({ ToAdd: ['a1'] }) });
+    it('ignores a slower, older lookup and clears names when the delta changes', async () => {
+      // Each lookup waits until the test resolves it, so the order of answers is controlled.
+      const pending: Array<(names: Record<string, string>) => void> = [];
+      const provider = {
+        EntityByName: (name: string) => (name === 'Contacts' ? ({ Name: 'Contacts' } as unknown as EntityInfo) : undefined),
+        GetEntityRecordNames: (info: EntityRecordNameInput[]) =>
+          new Promise<EntityRecordNameResult[]>((resolve) => {
+            pending.push((names) =>
+              resolve(info.map((i) => {
+                const id = String(i.CompositeKey.KeyValuePairs[0].Value);
+                return { EntityName: i.EntityName, CompositeKey: i.CompositeKey, Success: id in names, Status: '', RecordName: names[id] };
+              })),
+            );
+          }),
+      } as unknown as IMetadataProvider;
+
+      const fixture = render({ Visible: true, Provider: provider, Delta: makeDelta({ ToAdd: ['a1', 'a2'] }) });
+      fixture.componentRef.setInput('Delta', makeDelta({ ToAdd: ['a1', 'b1'] }));
+      fixture.detectChanges();
+      expect(pending.length).toBe(2);
+
+      // The newer lookup answers first, then the older one arrives late with different names.
+      pending[1]({ a1: 'Ada (new)', b1: 'Barbara Liskov' });
       await settle(fixture);
-      fixture.componentRef.setInput('Delta', makeDelta({ ToAdd: ['b1'] }));
+      pending[0]({ a1: 'Ada (old)', a2: 'Grace Hopper' });
       await settle(fixture);
-      expect(rowTexts(fixture, 'add')).toEqual([{ name: 'Barbara Liskov', id: 'b1' }]);
+      expect(rowTexts(fixture, 'add')).toEqual([
+        { name: 'Ada (new)', id: 'a1' },
+        { name: 'Barbara Liskov', id: 'b1' },
+      ]);
+
+      // A third delta clears the names straight away, before its own lookup answers.
+      fixture.componentRef.setInput('Delta', makeDelta({ ToAdd: ['a1', 'b1'] }));
+      fixture.detectChanges();
+      expect(rowTexts(fixture, 'add').map((r) => r.name)).toEqual([null, null]);
     });
   });
 
