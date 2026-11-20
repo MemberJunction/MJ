@@ -83,6 +83,23 @@ export interface RunOutcomeRecord {
 /** The publish ledger's writes and reads. */
 export class PublishRecords {
   /**
+   * The purposes of an applied `publish` record that backs a Published model: a publish, a rollback, or an adoption of
+   * a pre-change model as Published (D4-61). The registry check's queries (`metadata/queries/SQL/predictive-studio-*`,
+   * pinned to this list by test) and the publish-record audit read exactly these (D-m6-3).
+   */
+  public static readonly BACKING_PURPOSES = ['publish', 'rollback', 'adopt'] as const satisfies readonly MJMLModelPublishRecordEntity['Purpose'][];
+
+  /** True when `record` is an applied `publish` record of a {@link BACKING_PURPOSES} purpose. Pure. */
+  public static BacksPublishedModel(record: { readonly Kind: string; readonly Purpose: string }): boolean {
+    return record.Kind === 'publish' && PublishRecords.BACKING_PURPOSES.some((p) => p === record.Purpose);
+  }
+
+  /** The `ExtraFilter` clause selecting the records that back a Published model ({@link BACKING_PURPOSES}). */
+  public static BackingRecordFilter(): string {
+    return `Kind='publish' AND Purpose IN (${PublishRecords.BACKING_PURPOSES.map((p) => `'${p}'`).join(',')})`;
+  }
+
+  /**
    * Writes the `publish` row of an applied publish and returns its ID.
    *
    * @throws Error naming the save's message when the row is not saved
@@ -160,6 +177,24 @@ export class PublishRecords {
     );
     if (!r.Success) throw new Error(`Reading the ${purpose} records of ML Model ${modelId} failed: ${r.ErrorMessage || 'unknown error'}`);
     return r.Results[0] || null;
+  }
+
+  /**
+   * The model the newest applied `publish` row of `modelId` (any purpose) replaced, its `ReplacesModelID`; null when
+   * the model has no applied record or its newest one replaced none (D4-17's predecessor).
+   *
+   * @throws Error when the read fails
+   */
+  public static async FindLatestReplaced(modelId: string, ctx: RegistryContext): Promise<string | null> {
+    const r = await StoredRowReads.Run<Pick<MJMLModelPublishRecordEntity, 'ID' | 'ReplacesModelID'>>(
+      {
+        EntityName: ENTITY, ExtraFilter: `ModelID='${EscapeSQLString(modelId)}' AND Kind='publish'`,
+        OrderBy: 'RecordedAt DESC', Fields: ['ID', 'ReplacesModelID'], MaxRows: 1, ResultType: 'simple',
+      },
+      ctx,
+    );
+    if (!r.Success) throw new Error(`Reading the publish records of ML Model ${modelId} failed: ${r.ErrorMessage || 'unknown error'}`);
+    return r.Results[0]?.ReplacesModelID || null;
   }
 
   /**

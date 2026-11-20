@@ -345,14 +345,14 @@ describe('LifecycleGate.WriteRefusalRecord', () => {
 });
 
 describe('LifecycleGate.CreateMonitoringJob', () => {
-  it('creates one Pending job of the monitoring type, owned by the context user, configured by the protocol spec', async () => {
+  it('creates one Active job of the monitoring type (D4-179), owned by the context user, configured by the protocol spec', async () => {
     const model = await Model(candidate.ID);
     const id = await gate.Job(model, ctx);
     const protocol = await StoredRuns.ReadProtocol(String(model.EvaluationProtocolID), ctx);
     if (protocol === null) throw new Error('no protocol');
     const spec = MonitoringJobSpecs.FromProtocol(protocol.Spec, { ModelID: candidate.ID, PredictionUnitID: GateWorld.UnitID, FeatureCount: 2 });
     expect(store.Row('MJ: Scheduled Jobs', id)).toMatchObject({
-      Status: 'Pending', JobTypeID: GateWorld.JobTypeID, OwnerUserID: GateWorld.User.ID, CronExpression: '0 3 1 * *', Timezone: 'UTC', Configuration: JSON.stringify(spec),
+      Status: 'Active', JobTypeID: GateWorld.JobTypeID, OwnerUserID: GateWorld.User.ID, CronExpression: '0 3 1 * *', Timezone: 'UTC', Configuration: JSON.stringify(spec),
     });
   });
 });

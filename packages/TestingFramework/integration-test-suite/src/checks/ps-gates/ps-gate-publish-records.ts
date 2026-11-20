@@ -8,6 +8,7 @@ import { RunView } from '@memberjunction/core';
 import type { MJMLModelEntity, MJMLModelPublishRecordEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
 import { JsonParse, TrainerResultSchemas, type JsonObject, type JsonValue } from '@memberjunction/predictive-studio-core';
+import { PublishRecords } from '@memberjunction/predictive-studio';
 import type { TruthHarness } from '@memberjunction/predictive-studio-truth-suite';
 
 /** The publish-record columns the audit reads. */
@@ -56,11 +57,11 @@ export class PublishRecordAudit {
     return lacks;
   }
 
-  /** The model's newest `publish` record of purpose `publish` or `rollback`; null when it has none. */
+  /** The model's newest record that backs it as Published (`PublishRecords.BACKING_PURPOSES`: publish, rollback, adopt); null when it has none. */
   private static async latestApplied(h: TruthHarness, modelId: string): Promise<AuditedRecord | null> {
     const r = await RunView.FromMetadataProvider(h.Provider).RunView<AuditedRecord>({
       EntityName: 'MJ: ML Model Publish Records',
-      ExtraFilter: `ModelID='${EscapeSQLString(modelId)}' AND Kind='publish' AND Purpose IN ('publish','rollback')`,
+      ExtraFilter: `ModelID='${EscapeSQLString(modelId)}' AND ${PublishRecords.BackingRecordFilter()}`,
       OrderBy: 'RecordedAt DESC', MaxRows: 1, Fields: ['ID', 'ApproverKind', 'UserID', 'RecordedAt', 'GateDecision', 'Evidence'], ResultType: 'simple', BypassCache: true,
     }, h.User);
     if (!r.Success) throw new Error(`reading the publish records of ML Model ${modelId} failed: ${r.ErrorMessage}`);

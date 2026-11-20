@@ -144,9 +144,13 @@ export class ScenarioGenerator {
     return k - 1;
   }
 
-  /** D1: planted intercept shift. Periods p >= shiftFrom get +deltaIntercept on the linear predictor. */
+  /**
+   * D1: planted intercept shift. Periods p >= shiftFrom get +deltaIntercept on the linear predictor; with `revertFrom`
+   * (the D1c-revert variant, M6.6) periods p >= revertFrom get none again.
+   */
   private static shiftOffset(spec: ScenarioSpec, p: number): number {
-    return (spec.shiftFrom !== undefined && p >= spec.shiftFrom) ? ScenarioGenerator.required(spec, 'deltaIntercept') : 0;
+    const shifted = spec.shiftFrom !== undefined && p >= spec.shiftFrom && (spec.revertFrom === undefined || p < spec.revertFrom);
+    return shifted ? ScenarioGenerator.required(spec, 'deltaIntercept') : 0;
   }
 
   /** C4 leakage traps. rows/truth are entity-major, period-ordered; hidden rows (period == periodsPerEntity) are dropped. */

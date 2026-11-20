@@ -14,6 +14,7 @@ import { z } from 'zod';
 import type { BaselineSpec, Budgets, CalibrationMethod, Interval, MetricKey, MetricWithInterval } from './evaluation-protocol';
 import type { GateDecision, PairedComparison } from './gate';
 import type {
+  CalibrationReport,
   CandidateSpec,
   CodeVersion,
   LeakageFlag,
@@ -230,6 +231,8 @@ export class TrainerResultSchemas {
   public static readonly Interval: z.ZodType<Interval> = interval;
   /** One score with its interval. */
   public static readonly MetricWithInterval: z.ZodType<MetricWithInterval> = metricWithInterval;
+  /** A calibration report (the trainer's holdout calibration, or a monitored period's). */
+  public static readonly CalibrationReport: z.ZodType<CalibrationReport> = calibrationReport;
   /** One baseline specification. */
   public static readonly BaselineSpec: z.ZodType<BaselineSpec> = baselineSpec;
   /** A protocol's budgets, as a run's cost reports them. */

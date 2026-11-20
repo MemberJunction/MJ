@@ -7,16 +7,19 @@
  * trigger; the members the protocol does not hold (the schedule, the period, the drift test and the parity sample) take
  * the defaults below.
  *
- * **The defaults are M3's and M6 revises them before it activates any job.** The gate creates the job `Pending` and the
- * scheduler runs only `Active` jobs, so nothing reads these values until M6's monitoring driver exists: a monthly
+ * **The defaults are M3's, as M6 runs them.** The gate creates the job `Active` (D4-179) and M6's monitoring driver
+ * reads these values on every run: a monthly
  * schedule and period; drift by monitor procedure M (`z-mean`, Benjamini–Hochberg) at q(12) = 0.0095 over 12 monthly
  * looks (gate G6.6's design), with 4,000,000 null replays and the documented false-alarm rate 0.05; and parity on 100
  * sampled scored rows at the fixed tolerance 1e-9.
  */
 import { z } from 'zod';
-import type { EvaluationProtocolSpec } from './evaluation-protocol';
-import { JsonParse, type ParseResult } from './json-value';
+import { EvaluationProtocol, type EvaluationProtocolSpec } from './evaluation-protocol';
+import { JsonParse, type JsonValue, type ParseResult } from './json-value';
 import type { MonitoringJobSpec } from './monitoring-contracts';
+
+/** What the monitoring job reads back of its stored spec: all of it but the challenger's promotion rule (the gate reads the protocol's). */
+export type MonitoringJobReadSpec = Omit<MonitoringJobSpec, 'challenger'> & { readonly challenger: Omit<MonitoringJobSpec['challenger'], 'rule'> };
 
 /** What the spec reads of the model it monitors. */
 export interface MonitoredModel {
@@ -147,5 +150,29 @@ export class MonitoringJobSpecs {
     const parsed = monitoringJobSpec.safeParse(spec);
     if (parsed.success) return JsonParse.ParseOk(spec);
     return JsonParse.ParseFail<MonitoringJobSpec>(...parsed.error.issues.map((x) => `${x.path.join('.') || '(root)'}: ${x.message}`));
+  }
+
+  /**
+   * Checks a parsed JSON value (a stored `Configuration`) against the same strict schema and returns what the monitoring
+   * job reads of it: everything but the challenger's promotion rule, which the lifecycle gate reads from the protocol
+   * row itself when it judges the challenger. The margins come back as `NonNegative` (the schema checked them).
+   */
+  public static ValidateJson(value: JsonValue): ParseResult<MonitoringJobReadSpec> {
+    const parsed = monitoringJobSpec.safeParse(value);
+    if (!parsed.success) return JsonParse.ParseFail<MonitoringJobReadSpec>(...parsed.error.issues.map((x) => `${x.path.join('.') || '(root)'}: ${x.message}`));
+    const d = parsed.data;
+    const nn = EvaluationProtocol.ToNonNegative;
+    return JsonParse.ParseOk<MonitoringJobReadSpec>({
+      modelId: d.modelId,
+      evaluationProtocolId: d.evaluationProtocolId,
+      schedule: d.schedule,
+      outcomeJoin: d.outcomeJoin,
+      performance: d.performance,
+      drift: d.drift,
+      challenger: { comparison: d.challenger.comparison, score: d.challenger.score, onPass: d.challenger.onPass },
+      retrainTriggers: d.retrainTriggers.map((t) => (t.kind === 'outcome-degradation' ? { ...t, margin: nn(t.margin) } : t)),
+      rollback: d.rollback === null ? null : { ...d.rollback, margin: nn(d.rollback.margin) },
+      parity: d.parity,
+    });
   }
 }

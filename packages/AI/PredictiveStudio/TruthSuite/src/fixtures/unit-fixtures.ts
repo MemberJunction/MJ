@@ -12,7 +12,7 @@ import type { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEn
 import {
   EvaluationProtocolRules, PredictionUnit, UtcDay,
   type ColumnEncodingKind, type DecisionDateRule, type EvaluationProtocolDraft, type FeatureStep, type FeatureStepGraph, type HoldoutSplit, type InnerValidation, type LeakageGuard,
-  type PredictionUnitSpec, type SliceSpec, type TaskType, type UnitDraft,
+  type PredictionUnitSpec, type RetrainTrigger, type SliceSpec, type TaskType, type UnitDraft,
 } from '@memberjunction/predictive-studio-core';
 import {
   EvaluationProtocolVersioning, ProtocolDefaults, RunViewDataAccess, RunViewPredictionUnitStore, PredictionUnitVersioning, MetadataEntityFactory, ProviderAssemblyMetadata,
@@ -240,21 +240,22 @@ export class UnitFixtures {
    * validation and slices when given). The snapshot refuses an incumbent expression naming a column the pipeline does
    * not assemble, so the incumbent-heuristic comparator is kept only when every column it names is one of `features`.
    */
-  private static async protocolDraft(h: TruthHarness, unit: PredictionUnitSpec, features: readonly string[], choice: Exclude<ProtocolChoice, { Kind: 'none' }>, name: string): Promise<EvaluationProtocolDraft> {
+  private static async protocolDraft(h: TruthHarness, unit: PredictionUnitSpec, features: readonly string[], choice: Exclude<ProtocolChoice, { Kind: 'none' }>, name: string, triggers: readonly RetrainTrigger[] | null = null): Promise<EvaluationProtocolDraft> {
     const base = EvaluationProtocolRules.DefaultEvaluationProtocolDraft({ Unit: unit, Holdout: await UnitFixtures.holdoutOf(h, unit, choice), Candidates: 1, Seed: ProtocolDefaults.DEFAULT_SEED, Name: name });
     const usable = unit.incumbent.kind === 'rule' && UnitFixtures.expressionColumns(unit.incumbent.scoreExpression).every((c) => features.includes(c));
     const baselines = usable ? base.baselines : base.baselines.filter((b) => b.kind !== 'incumbent-heuristic');
     return {
       ...base, baselines, promotion: { ...base.promotion, comparators: baselines },
+      ...(triggers !== null ? { retrainTriggers: triggers } : {}),
       ...(choice.Kind === 'explicit' && choice.InnerValidation ? { innerValidation: choice.InnerValidation } : {}),
       ...(choice.Kind === 'explicit' && choice.Slices ? { slices: choice.Slices } : {}),
     };
   }
 
   /** Saves the chosen protocol (version 1, authored by the harness user) and records it for teardown; null for `none`. */
-  private static async bindProtocol(h: TruthHarness, unit: PredictionUnitSpec, features: readonly string[], choice: ProtocolChoice, name: string): Promise<string | null> {
+  private static async bindProtocol(h: TruthHarness, unit: PredictionUnitSpec, features: readonly string[], choice: ProtocolChoice, name: string, triggers: readonly RetrainTrigger[] | null = null): Promise<string | null> {
     if (choice.Kind === 'none') return null;
-    const draft = await UnitFixtures.protocolDraft(h, unit, features, choice, name);
+    const draft = await UnitFixtures.protocolDraft(h, unit, features, choice, name, triggers);
     const row = await EvaluationProtocolVersioning.CreateEvaluationProtocolV1(draft, { kind: 'human', userId: h.User.ID }, UnitFixtures.EntityFactory(h), h.User);
     h.Created.RecordEvaluationProtocol(row.ID);
     return row.ID;
@@ -264,7 +265,7 @@ export class UnitFixtures {
    * `featureSteps`, when given, is saved as the pipeline's step graph; else one select step over `features`. The
    * pipeline is bound to the protocol `protocol` chooses (none for `{ Kind: 'none' }`).
    */
-  private static async provision(h: TruthHarness, draft: UnitDraft, features: readonly string[], algorithm: string, protocol: ProtocolChoice, guard?: LeakageGuard, featureSteps?: FeatureStepGraph): Promise<ProvisionedUnitPipeline> {
+  private static async provision(h: TruthHarness, draft: UnitDraft, features: readonly string[], algorithm: string, protocol: ProtocolChoice, guard?: LeakageGuard, featureSteps?: FeatureStepGraph, triggers: readonly RetrainTrigger[] | null = null): Promise<ProvisionedUnitPipeline> {
     const factory = UnitFixtures.EntityFactory(h);
     const unitRow = await PredictionUnitVersioning.CreatePredictionUnitV1(draft, { kind: 'human', userId: h.User.ID }, factory, h.User);
     h.Created.RecordPredictionUnit(unitRow.ID);
@@ -278,7 +279,7 @@ export class UnitFixtures {
     pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2 });
     if (guard) pipeline.LeakageGuard = JSON.stringify(guard);
     RunViewPredictionUnitStore.ApplyUnitToPipeline(pipeline, unitRow.ID, parsed.Value, new ProviderAssemblyMetadata(h.Provider));
-    pipeline.EvaluationProtocolID = await UnitFixtures.bindProtocol(h, parsed.Value, UnitFixtures.stepFeatureNames(steps), protocol, `${draft.Name} — protocol`);
+    pipeline.EvaluationProtocolID = await UnitFixtures.bindProtocol(h, parsed.Value, UnitFixtures.stepFeatureNames(steps), protocol, `${draft.Name} — protocol`, triggers);
     if (!(await pipeline.Save())) throw new Error(`Saving pipeline failed: ${pipeline.LatestResult?.CompleteMessage}`);
     h.Created.RecordPipeline(pipeline.ID);
     return { UnitRow: unitRow, Unit: parsed.Value, Pipeline: pipeline };
@@ -364,6 +365,47 @@ export class UnitFixtures {
       UnitFixtures.ScenarioAlgorithm(task),
       o.Protocol,
     );
+  }
+
+  /**
+   * A monitored scenario pipeline (M6.6): the scenario's rows dated by `T` and censored at `trainThrough` (the training
+   * snapshot holds only the periods before it; monitoring reads every label known by now), bound to `holdout` (default
+   * the year cutoff) with `triggers` as its retrain triggers.
+   */
+  public static ProvisionMonitoredScenarioPipeline(h: TruthHarness, scenario: string, task: TaskType, trainThrough: string, triggers: readonly RetrainTrigger[], holdout: ProtocolChoice = { Kind: 'year-cutoff' }): Promise<ProvisionedUnitPipeline> {
+    const draft = UnitFixtures.scenarioDraft(h, scenario, task, `${scenario} (${task.kind}, monitored through ${trainThrough})`, { kind: 'column', column: 'T' }, trainThrough, null);
+    return UnitFixtures.provision(h, draft, UnitFixtures.ScenarioFeatureColumns(h, scenario, 'T'), UnitFixtures.ScenarioAlgorithm(task), holdout, undefined, undefined, triggers);
+  }
+
+  /**
+   * Moves a pipeline's unit censoring cutoff to `through` (a fixture's clock advancing: the periods before it have
+   * arrived): the unit's next version with the fixed cutoff `through`, recorded, and the pipeline pointed at it, so the
+   * pipeline's next training (a monitoring challenger) snapshots them.
+   */
+  public static async AdvanceCensoring(h: TruthHarness, pipelineId: string, through: string): Promise<void> {
+    const factory = UnitFixtures.EntityFactory(h);
+    const pipeline = await factory.getEntityObject<MJMLTrainingPipelineEntity>('MJ: ML Training Pipelines', h.User);
+    if (!(await pipeline.Load(pipelineId))) throw new Error(`ML Training Pipeline ${pipelineId} not found`);
+    if (!pipeline.PredictionUnitID) throw new Error(`ML Training Pipeline ${pipelineId} has no Prediction Unit`);
+    const latest = await factory.getEntityObject<MJMLPredictionUnitEntity>('MJ: ML Prediction Units', h.User);
+    if (!(await latest.Load(pipeline.PredictionUnitID))) throw new Error(`Prediction Unit ${pipeline.PredictionUnitID} not found`);
+    const next = await PredictionUnitVersioning.CreateNextPredictionUnitVersion(
+      latest, { Censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: through } } }, { kind: 'human', userId: h.User.ID }, factory, h.User);
+    h.Created.RecordPredictionUnit(next.ID);
+    const parsed = PredictionUnit.ParsePredictionUnitRow(next);
+    if (parsed.Ok === false) throw new Error(parsed.Errors.join('; '));
+    RunViewPredictionUnitStore.ApplyUnitToPipeline(pipeline, next.ID, parsed.Value, new ProviderAssemblyMetadata(h.Provider));
+    if (!(await pipeline.Save())) throw new Error(`Pointing pipeline ${pipelineId} at unit v${next.Version} failed: ${pipeline.LatestResult?.CompleteMessage}`);
+  }
+
+  /**
+   * A monitored world renewal pipeline (M6.6, G6.5): the world's renewal unit censored at `trainThrough`, the given
+   * features, the year-cutoff protocol with `triggers`.
+   */
+  public static ProvisionMonitoredWorldPipeline(h: TruthHarness, world: string, features: readonly string[], trainThrough: string, triggers: readonly RetrainTrigger[]): Promise<ProvisionedUnitPipeline> {
+    const base = UnitFixtures.WorldRenewalUnitDraft(h, world, false);
+    const draft: UnitDraft = { ...base, Name: `${base.Name} — monitored through ${trainThrough}`, Censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: trainThrough } } };
+    return UnitFixtures.provision(h, draft, features, 'Logistic Regression', { Kind: 'year-cutoff' }, undefined, UnitFixtures.worldRenewalSteps(h, world, { Features: features }), triggers);
   }
 
   /** The C3 task (W9-multiclass s42): the three attendance outcomes in the artifact's order, `NoShow` the adverse class. */

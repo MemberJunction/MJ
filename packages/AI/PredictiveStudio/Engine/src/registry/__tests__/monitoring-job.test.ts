@@ -1,4 +1,4 @@
-/** `MonitoringJobs` (Task M3.2): one Pending job per published model; archiving disables only that model's jobs. */
+/** `MonitoringJobs` (Task M3.2, D4-179): one Active job per published model; archiving disables only that model's jobs. */
 import { describe, expect, it } from 'vitest';
 
 import { GateTestStore, GateWorld } from '../../__tests__/fakes/gate-test-store';

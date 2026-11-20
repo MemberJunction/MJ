@@ -49,3 +49,15 @@ describe('Hanley–McNeil interval', () => {
     expect(() => ConfidenceInterval.HanleyMcNeil(Number.NaN, 10, 10)).toThrow(RangeError);
   });
 });
+
+describe('SeedRule — monitor procedure M at n = 400 (M6.7)', () => {
+  it('false-alarm-400 accepts at most 28 alarming replays of 400 (G6.6)', () => {
+    expect(SeedRule.AcceptanceRange('false-alarm-400', 400)).toEqual({ Min: 0, Max: 28 });
+    expect([SeedRule.Passes('false-alarm-400', 28, 400), SeedRule.Passes('false-alarm-400', 29, 400)]).toEqual([true, false]);
+  });
+
+  it('detection-400 accepts at least 372 detecting seeds of 400 (G6.8)', () => {
+    expect(SeedRule.AcceptanceRange('detection-400', 400)).toEqual({ Min: 372, Max: 400 });
+    expect([SeedRule.Passes('detection-400', 371, 400), SeedRule.Passes('detection-400', 372, 400)]).toEqual([false, true]);
+  });
+});

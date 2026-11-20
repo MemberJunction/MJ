@@ -68,6 +68,8 @@ interface FakeStoreOptions {
   readonly ThrowObjects?: ReadonlySet<string>;
   /** The store holds what the lifecycle gate writes for M1: a publish record, a monitoring job and a scoring Action with one param. */
   readonly GateRows?: boolean;
+  /** The model rows are gone (deleted by SQL, as the delete procedure's model step does); their gate rows remain. */
+  readonly ModelsGone?: boolean;
   /**
    * The store holds what a full gate run writes, with the database's foreign keys: M1's sign-off, the publish record
    * that consumed it (`SignOffID`), a run-level refusal naming only RUN-1, and M1's `Pending` monitoring job with one job
@@ -104,6 +106,7 @@ const RUN_REFUSAL = 'RECORD-RUN-REFUSAL';
 const PENDING_JOB = 'JOB-PENDING-M1';
 const JOB_RUN = 'JOB-RUN-1';
 const OUTPUT_BINDING = 'OUTPUT-BINDING-1';
+const MONITORING_RESULT = 'MONITORING-RESULT-1';
 
 /** A fake store: answers from fixed rows, records each filter and every delete in order. */
 class FakeStore implements CleanupStore {
@@ -186,6 +189,7 @@ class FakeStore implements CleanupStore {
   }
   public async Models(filter: string): Promise<CleanupModelRow[]> {
     this.Filters.push(`MJ: ML Models | ${filter}`);
+    if (this.options.ModelsGone) return [];
     return [this.row('MJ: ML Models', M1, AGENT_P, F1), this.row('MJ: ML Models', M2, P1)];
   }
   public async PredictionUnits(filter: string): Promise<CleanupPredictionUnitRow[]> {
@@ -194,9 +198,12 @@ class FakeStore implements CleanupStore {
   }
   public async EvaluationProtocols(filter: string): Promise<CleanupEvaluationProtocolRow[]> {
     this.Filters.push(`MJ: ML Evaluation Protocols | ${filter}`);
-    const ids = [...filter.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+    const ids = [...new Set([...filter.matchAll(/'([^']+)'/g)].map((m) => m[1]))];
     const versionOf: Record<string, number> = { [EP1]: 1, [EP2]: 2 };
-    return ids.map((id) => ({ ...this.row('MJ: ML Evaluation Protocols', id), Version: versionOf[id] || 1 }));
+    // EP2 is EP1's version 2: a lineage filter on EP1 finds it even when it was never recorded (a monitoring challenger's re-carve).
+    const lineage = /LineageRootID IN \([^)]*'([^']+)'/.exec(filter);
+    const withLineage = lineage !== null && lineage[1] === EP1 && !ids.includes(EP2) ? [...ids, EP2] : ids;
+    return withLineage.map((id) => ({ ...this.row('MJ: ML Evaluation Protocols', id), Version: versionOf[id] || 1 }));
   }
   /** The bindings withdrawn so far: a read after the withdrawal says `Withdrawn`, a copy read before still says `Active`. */
   private readonly withdrawn = new Set<string>();
@@ -280,6 +287,7 @@ class FakeStore implements CleanupStore {
     if (entityName === 'MJ: Scheduled Job Runs') return this.options.FullGateRun ? [this.row(entityName, JOB_RUN)] : [];
     if (entityName === 'MJ: Actions') return this.options.GateRows ? [this.row(entityName, 'ACT-1')] : [];
     if (entityName === 'MJ: ML Output Bindings') return this.options.FullGateRun || this.options.GateRows ? [this.row(entityName, OUTPUT_BINDING)] : [];
+    if (entityName === 'MJ: ML Monitoring Results') return this.options.FullGateRun || this.options.GateRows ? [this.row(entityName, MONITORING_RESULT)] : [];
     if (entityName === 'MJ: ML Training Pipelines') return [this.row(entityName, P1), this.row(entityName, AGENT_P)];
     if (entityName === 'MJ: Process Runs') return [this.row(entityName, PR1)];
     if (entityName === 'MJ: Process Run Details') return this.options.Details ? [...this.options.Details] : [this.row(entityName, 'DETAIL-1')];
@@ -338,6 +346,7 @@ describe('HarnessCleanup.DeleteRecorded', () => {
       `MJ: Action Params | Name = 'ModelID' AND Type = 'Input' AND (DefaultValue IN ('${M1}','${M2}'))`,
       `MJ: ML Model Publish Records | ModelID IN ('${M1}','${M2}') OR ReplacesModelID IN ('${M1}','${M2}') OR TrainingRunID IN ('RUN-1')`,
       `MJ: ML Output Bindings | ModelID IN ('${M1}','${M2}')`,
+      `MJ: ML Monitoring Results | ModelID IN ('${M1}','${M2}')`,
       // read again after the withdrawal: a row read before it still says Active and its Delete() is refused
       `MJ: ML Model Scoring Bindings | ID IN ('BINDING-1','BINDING-WITHDRAWN')`,
     ]);
@@ -371,13 +380,23 @@ describe('HarnessCleanup.DeleteRecorded', () => {
     const store = new FakeStore(new Set(), { GateRows: true });
     expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
     const at = (entry: string): number => store.Deleted.indexOf(entry);
-    for (const gateRow of ['MJ: ML Model Publish Records:RECORD-1', 'MJ: Scheduled Jobs:JOB-M1', 'MJ: Action Params:PARAM-MODELID', 'MJ: Action Params:PARAM-SCOPE', 'MJ: Actions:ACT-1', `MJ: ML Output Bindings:${OUTPUT_BINDING}`]) {
+    for (const gateRow of ['MJ: ML Model Publish Records:RECORD-1', 'MJ: Scheduled Jobs:JOB-M1', 'MJ: Action Params:PARAM-MODELID', 'MJ: Action Params:PARAM-SCOPE', 'MJ: Actions:ACT-1', `MJ: ML Output Bindings:${OUTPUT_BINDING}`, `MJ: ML Monitoring Results:${MONITORING_RESULT}`]) {
       expect(at(gateRow)).toBeGreaterThanOrEqual(0);
       expect(at(gateRow)).toBeLessThan(at(`MJ: ML Models:${M1}`));
     }
     expect(at('MJ: Action Params:PARAM-SCOPE')).toBeLessThan(at('MJ: Actions:ACT-1'));
+    expect(at(`MJ: ML Monitoring Results:${MONITORING_RESULT}`)).toBeLessThan(at('MJ: Scheduled Jobs:JOB-M1'));
     expect(store.Deleted).not.toContain('MJ: Scheduled Jobs:JOB-OTHER');
     expect(store.Filters).toContain(`MJ: Actions | ParentID IS NOT NULL AND (ID IN ('ACT-1'))`);
+  });
+
+  it('deletes a recorded model\'s monitoring job when the model row is already gone (deleted by SQL)', async () => {
+    const records = new RunRecords();
+    records.RecordModel(M1);
+    const store = new FakeStore(new Set(), { GateRows: true, ModelsGone: true });
+    expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
+    expect(store.Deleted).toContain('MJ: Scheduled Jobs:JOB-M1');
+    expect(store.Deleted).not.toContain('MJ: Scheduled Jobs:JOB-OTHER');
   });
 
   it('a full gate run leaves 0 PSTruth rows in the publish, monitoring-job and model tables', async () => {
@@ -545,7 +564,7 @@ describe('HarnessCleanup.DeleteRecorded', () => {
     records.RecordEvaluationProtocol(EP1);
     const store = new FakeStore();
     expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
-    expect(store.Filters).toContain(`MJ: ML Evaluation Protocols | ID IN ('${EP1}')`);
+    expect(store.Filters).toContain(`MJ: ML Evaluation Protocols | ID IN ('${EP1}') OR LineageRootID IN ('${EP1}')`);
     const at = (entry: string): number => store.Deleted.indexOf(entry);
     expect(at(`MJ: ML Training Pipelines:${P1}`)).toBeLessThan(at(`MJ: ML Evaluation Protocols:${EP1}`));
     expect(at(`MJ: ML Evaluation Protocols:${EP1}`)).toBeLessThan(at(`MJ: ML Prediction Units:${U1}`));
@@ -560,6 +579,14 @@ describe('HarnessCleanup.DeleteRecorded', () => {
     expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
     expect(store.Deleted.filter((d) => d.startsWith('MJ: ML Evaluation Protocols'))).toEqual([`MJ: ML Evaluation Protocols:${EP2}`, `MJ: ML Evaluation Protocols:${EP1}`]);
     expect(records.EvaluationProtocolIDs.Size).toBe(0);
+  });
+
+  it('deletes every version of a recorded protocol lineage, including a later version it never recorded (P-F2 re-carve)', async () => {
+    const records = new RunRecords();
+    records.RecordEvaluationProtocol(EP1);
+    const store = new FakeStore();
+    expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
+    expect(store.Deleted.filter((d) => d.startsWith('MJ: ML Evaluation Protocols'))).toEqual([`MJ: ML Evaluation Protocols:${EP2}`, `MJ: ML Evaluation Protocols:${EP1}`]);
   });
 
   it('reports every failed delete and keeps its ID recorded', async () => {

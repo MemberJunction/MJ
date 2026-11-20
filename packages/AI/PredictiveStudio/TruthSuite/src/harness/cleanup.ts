@@ -286,6 +286,8 @@ interface GateRows {
   readonly ScoringActionParams: CleanupRow[];
   readonly ScoringActions: CleanupRow[];
   readonly OutputBindings: CleanupRow[];
+  /** The models' `MJ: ML Monitoring Results` rows (they reference the model, its monitoring job's run and a challenger run). */
+  readonly MonitoringResults: CleanupRow[];
 }
 
 /** Every row `HarnessCleanup.DeleteRecorded` deletes before the recorded protocol and unit versions. */
@@ -354,7 +356,7 @@ export class HarnessCleanup {
    * Delete the recorded models (and every model trained from a recorded pipeline) and the recorded pipelines (and the
    * pipelines of recorded models), children first: the pipelines' scoring bindings (an active one withdrawn first, then
    * the Feature Values and scoring runs that name a binding, then the bindings); the models' scoring Record Processes with their
-   * runs, run details and watermarks; what the lifecycle gate wrote for the models and runs (publish records — those
+   * runs, run details and watermarks; the models' monitoring period rows; what the lifecycle gate wrote for the models and runs (publish records — those
    * naming a sign-off before the rest, run-level refusals included —, the monitoring jobs' runs, the jobs, the generated
    * scoring Actions and their params, the models' output bindings); then the run/model cycle (a run names the model it produced in `ResultingModelID`,
    * and the model names the run in `TrainingRunID`): each run's `ResultingModelID` that names a model being deleted is
@@ -376,6 +378,7 @@ export class HarnessCleanup {
       ...(await HarnessCleanup.deleteAll('MJ: Process Runs', r.ProcessRuns)),
       ...(await HarnessCleanup.deleteAll('MJ: Record Process Watermarks', r.Watermarks)),
       ...(await HarnessCleanup.deleteAll('MJ: Record Processes', r.Processes)),
+      ...(await HarnessCleanup.deleteAll('MJ: ML Monitoring Results', r.MonitoringResults)),
       ...(await HarnessCleanup.deleteAll('MJ: ML Model Publish Records', r.SignOffConsumers)),
       ...(await HarnessCleanup.deleteAll('MJ: ML Model Publish Records', r.OtherPublishRecords)),
       ...(await HarnessCleanup.deleteAll('MJ: Scheduled Job Runs', r.MonitoringJobRuns)),
@@ -522,7 +525,8 @@ export class HarnessCleanup {
   private static async readRecorded(store: CleanupStore, records: RunRecords): Promise<RecordedRows> {
     const modelFilter = HarnessCleanup.anyIn([['ID', records.ModelIDs], ['PipelineID', records.PipelineIDs]]);
     const models = modelFilter ? await store.Models(modelFilter) : [];
-    const modelIds = new RecordIDSet(models.map((m) => m.ID));
+    // The recorded model IDs too: a model deleted by SQL (the delete procedure's model step) leaves its monitoring job.
+    const modelIds = new RecordIDSet([...models.map((m) => m.ID), ...records.ModelIDs]);
     const pipelineIds = new RecordIDSet([...records.PipelineIDs, ...models.map((m) => m.PipelineID)]);
     const scoring = await HarnessCleanup.readScoring(store, modelIds, pipelineIds);
     const runFilter = HarnessCleanup.anyIn([['PipelineID', pipelineIds], ['ResultingModelID', modelIds]]);
@@ -567,6 +571,7 @@ export class HarnessCleanup {
       ScoringActionParams: paramFilter ? await store.ActionParams(paramFilter) : [],
       ScoringActions: actionFilter ? await store.Rows('MJ: Actions', `ParentID IS NOT NULL AND (${actionFilter})`) : [],
       OutputBindings: bindingFilter ? await store.Rows('MJ: ML Output Bindings', bindingFilter) : [],
+      MonitoringResults: bindingFilter ? await store.Rows('MJ: ML Monitoring Results', bindingFilter) : [],
     };
   }
 
@@ -686,9 +691,12 @@ export class HarnessCleanup {
     return HarnessCleanup.deleteNewestVersionFirst('MJ: ML Prediction Units', units, (id) => records.PredictionUnitIDs.Delete(id));
   }
 
-  /** The recorded Evaluation Protocol versions, newest first: every later version references its lineage root (version 1). */
+  /**
+   * The recorded Evaluation Protocol versions and every later version of their lineages (a monitoring challenger saves
+   * one, P-F2), newest first: every later version references its lineage root (version 1).
+   */
   private static async deleteEvaluationProtocols(store: CleanupStore, records: RunRecords): Promise<string[]> {
-    const filter = HarnessCleanup.anyIn([['ID', records.EvaluationProtocolIDs]]);
+    const filter = HarnessCleanup.anyIn([['ID', records.EvaluationProtocolIDs], ['LineageRootID', records.EvaluationProtocolIDs]]);
     const protocols = filter ? await store.EvaluationProtocols(filter) : [];
     return HarnessCleanup.deleteNewestVersionFirst('MJ: ML Evaluation Protocols', protocols, (id) => records.EvaluationProtocolIDs.Delete(id));
   }

@@ -2,7 +2,7 @@
 
 > The **server-side engine** of **MemberJunction Predictive Studio** — assemble features, train models, score records, run experiment searches, keep models honest over time, and expose all of it through Actions + Remote Operations.
 
-**What** — the engine that turns a client's own data into a trained, scored predictive model. Its core is four service classes — `FeatureAssemblyExecutor`, `TrainingEngine`, `MLModelInferenceProcessor`, `ExperimentOrchestrator` — surrounded by feature-pipeline discovery, ongoing maintenance, and two thin invocation surfaces (Actions and Remote Operations) so agents, UI, and workflows can drive it.
+**What** — the engine that turns a client's own data into a trained, scored predictive model. Its core is four service classes — `FeatureAssemblyExecutor`, `TrainingEngine`, `MLModelInferenceProcessor`, `ExperimentOrchestrator` — surrounded by feature-pipeline discovery, outcome monitoring, and two thin invocation surfaces (Actions and Remote Operations) so agents, UI, and workflows can drive it.
 
 **Why** — predictive modeling needs feature assembly, anti-skew correctness, honest validation, batch scoring, and a budgeted search. Each of those already has a home in MJ's substrate; this engine **composes onto** them (Record Set Processing, entities/`RunView`, Remote Operations, Agents, vectors) plus the Python ML sidecar — rather than re-implementing batching, audit, or inference. The cardinal correctness rule: **one feature-assembly code path per generation of model, used identically for training and scoring**, so there is no train/serve skew by construction.
 
@@ -45,10 +45,10 @@ Beyond the four core engines, the package's `src/` is organized into focused fol
 | `scoring/` | `MLModelInferenceProcessor`, `LoadMLModelInferenceProcessor`, the `'ML Model'` work-type `register`, `artifact-loader`, `scoring-binding` | Batch + single-record inference as a Record Set Processing **work type**, registered without forking the substrate | §10 |
 | `experiment/` | `ExperimentOrchestrator` + `leaderboard` / `concurrency` / `wave-strategist` / `seams` | Deterministic, wave-based execution of an approved `ModelingPlanSpec` with leaderboard, pruning, and a budget gate | §8 / §9 |
 | `feature-pipelines/` | `FeaturePipelineEngine` (a `BaseEngine` cache) + projection types | Discover/monitor Feature Pipelines (categorized `MJ: Record Processes` rows) — "what pipelines exist, what each writes to, when each last ran" | §5.4 / SP6 |
-| `maintenance/` | `MaintenanceEngine`, `RetrainingPolicy` + defaults, the honest `RowCountProxyDriftDetector`, seams | Staleness detection, scheduled re-scoring, retraining triggers, and challenger-vs-incumbent promotion recommendation (built, not wired — see Guide §14) | §12 / SP10 |
+| `monitoring/` | `PredictiveStudioModelMonitoringJobDriver` (the one monitoring job per Published model), `PredictiveStudioRegistryCheckJobDriver` (the hourly registry check), `OutcomeJoin`, `PeriodEvaluation`, `ChallengerStep`, `RollbackStep`, their production seams | Outcome monitoring on realised labels (the period's primary score and tracked metrics with intervals, drift by procedure M through the sidecar, retrain triggers that start a challenger through `AutomatedPublisher`, the evidence-based rollback through the lifecycle gate, the live mirror's divergence, parity), one `MJ: ML Monitoring Results` row per period; registry findings remediated through the gate | §5.7 / C7 |
 | `scheduling/` | `CreateScheduledModelScoring` (the Phase 2 north-star helper) | One call binds a model to write its prediction into a target column on a recurring cron (auto-creates the owned Scheduled Job) | §15 / PS2-6 |
 | `actions/` | `PredictiveStudio{TrainModel,ScoreRecordSet,RunExperiment,PromoteModel,ScheduleModelScoring,MigratePipelines}Action` + `LoadPredictiveStudioActions` | **Invocation surface A** — thin MJ Actions over the engines (see below) | §12 |
-| `operations/` | `PredictiveStudio{TrainModel,ScoreRecordSet,RunFeaturePipeline,StartExperimentSession,ControlExperimentSession,PromoteModel,CreateScoringProcess}ServerOperation` + `LoadPredictiveStudioOperations` | **Invocation surface B** — typed Remote Operations over the engines (see below) | §12 |
+| `operations/` | `PredictiveStudio{TrainModel,ScoreRecordSet,RunFeaturePipeline,StartExperimentSession,ControlExperimentSession,PromoteModel,CreateScoringProcess,RunModelMonitoring}ServerOperation` + `LoadPredictiveStudioOperations` | **Invocation surface B** — typed Remote Operations over the engines (see below) | §12 |
 
 ## Phase 2 reach — one scorer, many surfaces
 
@@ -108,7 +108,7 @@ record-set-processor / -base (substrate)  ─┤
                                             ▼
                  @memberjunction/predictive-studio  (this package)
    feature-assembly · prediction-unit · snapshot · protocol · training · migration · scoring ·
-          experiment · feature-pipelines · maintenance · actions · operations
+          experiment · feature-pipelines · monitoring · actions · operations
                                             │ exposed to / consumed by
         ┌───────────────────────┬───────────┴───────────┬────────────────────┐
    Actions (agents/         Remote Operations      Studio dashboard      (planned) Model

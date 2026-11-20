@@ -6,6 +6,10 @@ import { fileURLToPath } from 'node:url';
 import {
   TrainerContract,
   type JsonValue,
+  type MonitorCalibrateRequest,
+  type MonitorCalibrateResponse,
+  type MonitorDriftRequest,
+  type MonitorDriftResponse,
   type PredictRequest,
   type PredictResponse,
   type TrainerRequest,
@@ -395,6 +399,27 @@ export class MLSidecar {
   async Predict(req: PredictRequest, signal?: AbortSignal): Promise<PredictResponse> {
     this.assertRunning();
     return this.httpPost<PredictRequest, PredictResponse>('/predict', req, undefined, signal);
+  }
+
+  /**
+   * Run one look of monitor procedure M by POSTing a {@link MonitorDriftRequest} to `/monitor/drift`: each input's z
+   * against its training window, its empirical p against seeded no-drift replays at the look, and Benjamini–Hochberg
+   * across the look's inputs at q(L) (D4-11: the sidecar computes every statistic).
+   * @throws {SidecarError} when the sidecar refuses the request (422: outside the contract) or fails (5xx)
+   */
+  async MonitorDrift(req: MonitorDriftRequest, signal?: AbortSignal): Promise<MonitorDriftResponse> {
+    this.assertRunning();
+    return this.httpPost<MonitorDriftRequest, MonitorDriftResponse>('/monitor/drift', req, undefined, signal);
+  }
+
+  /**
+   * Find q(L) for a monitoring design by POSTing a {@link MonitorCalibrateRequest} to `/monitor/calibrate`: the
+   * largest level whose any-alarm rate over L looks on seeded no-drift replays is at most the target, by bisection.
+   * @throws {SidecarError} when the sidecar refuses the request (422: outside the contract) or fails (5xx)
+   */
+  async MonitorCalibrate(req: MonitorCalibrateRequest): Promise<MonitorCalibrateResponse> {
+    this.assertRunning();
+    return this.httpPost<MonitorCalibrateRequest, MonitorCalibrateResponse>('/monitor/calibrate', req);
   }
 
   /**

@@ -84,10 +84,10 @@ export * from './migration';
 // delegation path), invocable by stable key from client or server (§12).
 export * from './operations';
 
-// Maintenance — MaintenanceEngine (staleness detection / scheduled re-scoring /
-// retraining triggers + challenger-vs-incumbent promotion recommendation), the
-// RetrainingPolicy model, its DI seams, and the default honest drift detector (§12 / SP10).
-export * from './maintenance';
+// Monitoring — PredictiveStudioModelMonitoringJobDriver (the one monitoring job per Published model: outcome join,
+// period scores with intervals, drift by procedure M, retrain triggers, challenger, rollback, mirror divergence,
+// parity) and its steps and production seams. Importing the module registers the driver with the class factory.
+export * from './monitoring';
 
 // Agent builder — the Predictive Studio Agent's DETERMINISTIC builder: the pure
 // ModelingPlanSpec→pipeline-config mapper + PredictiveStudioPipelineBuilder (create

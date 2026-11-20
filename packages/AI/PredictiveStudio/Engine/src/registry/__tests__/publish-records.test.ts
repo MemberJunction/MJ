@@ -1,4 +1,5 @@
 /** `PublishRecords` (Task M3.2): the evidence hash is over `Canonicalize`'s canonical JSON, and the finders read only the rows their index guards. */
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { Canonicalize } from '@memberjunction/global';
 import type { EvidenceSnapshot } from '@memberjunction/predictive-studio-core';
@@ -60,5 +61,22 @@ describe('PublishRecords.FindPublishForRun and FindRunOutcome', () => {
     expect(await PublishRecords.FindRunOutcome('RUN', ctx)).toBeNull();
     store.Insert('MJ: ML Model Publish Records', { ID: 'R4', TrainingRunID: 'RUN', ModelID: null, Kind: 'refusal', Purpose: 'evaluate', Refusal: JSON.stringify({ kind: 'kept-existing-rule', rule: 'r' }) });
     expect(await PublishRecords.FindRunOutcome('RUN', ctx)).toEqual({ ID: 'R4', Refusal: { kind: 'kept-existing-rule', rule: 'r' } });
+  });
+});
+
+describe('PublishRecords.BACKING_PURPOSES (D-m6-3)', () => {
+  it('an applied publish, rollback or adopt record backs a Published model; a refusal or an evaluate record does not', () => {
+    expect(PublishRecords.BACKING_PURPOSES).toEqual(['publish', 'rollback', 'adopt']);
+    expect(['publish', 'rollback', 'adopt'].map((Purpose) => PublishRecords.BacksPublishedModel({ Kind: 'publish', Purpose }))).toEqual([true, true, true]);
+    expect(PublishRecords.BacksPublishedModel({ Kind: 'refusal', Purpose: 'publish' })).toBe(false);
+    expect(PublishRecords.BacksPublishedModel({ Kind: 'publish', Purpose: 'evaluate' })).toBe(false);
+  });
+  it('the registry check queries that read backing records name exactly those purposes', () => {
+    const sql = (name: string) => readFileSync(new URL(`../../../../../../../metadata/queries/SQL/${name}.sql`, import.meta.url), 'utf8');
+    for (const name of ['predictive-studio-published-models-without-a-publish-record', 'predictive-studio-publish-records-without-a-status-change']) {
+      const lists = [...sql(name).matchAll(/Purpose IN \(([^)]*)\)/g)].map((m) => m[1].split(',').map((x) => x.trim().replace(/'/g, '')));
+      expect(lists.length).toBeGreaterThan(0);
+      for (const list of lists) expect(list).toEqual([...PublishRecords.BACKING_PURPOSES]);
+    }
   });
 });

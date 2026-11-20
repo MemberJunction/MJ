@@ -357,3 +357,38 @@ describe('ScoringService.Predict', () => {
     expect(ConsoleCapture.Lines(errors)).toEqual([]);
   });
 });
+
+describe('ScoringService.Predict — the monitoring path (M6.3, D4-17, D4-67)', () => {
+  /** A `publish` record of `current` that replaced `predecessor`. */
+  const Replaced = (current: WorldModelRef, predecessor: WorldModelRef): void => {
+    world.Store.Insert('MJ: ML Model Publish Records', {
+      ID: `B0000000-0000-4000-8000-${String(world.Runs().length).padStart(12, '0')}7`, ModelID: current.ID, TrainingRunID: null, Kind: 'publish', Purpose: 'publish',
+      ApproverKind: 'automated-gate', UserID: null, Initiator: JSON.stringify({ kind: 'system', component: 'test' }), ReplacesModelID: predecessor.ID,
+      OverridesFlags: '[]', Transient: false, RecordedAt: new Date('2026-02-01T00:00:00Z'),
+    });
+  };
+  const monitoring = (successor: string | null) => new ScoringService({ ...ctx(), Path: 'monitoring', MonitoredSuccessorID: successor });
+
+  it('assembles every unit model as of each row\'s decision date (the unit rule) on the monitoring path', async () => {
+    await monitoring(null).Predict({ ...world.RequestFor(published.ID, Records('r1')), DryRun: true });
+    expect(world.Runtime.AsOfArguments()).toEqual(['unit-rule']);
+    expect(runs.Last()).toMatchObject({ Path: 'monitoring', DryRun: true, Status: 'completed', Written: 0 });
+  });
+
+  it('admits the Archived predecessor the successor\'s publish record replaced, and only on the monitoring path', async () => {
+    const predecessor = world.Model({ Status: 'Archived' }, published.PipelineID);
+    Replaced(published, predecessor);
+    const admitted = await monitoring(published.ID).Predict({ ...world.RequestFor(predecessor.ID, Records('r1')), DryRun: true });
+    expect(admitted.Result).toMatchObject({ Status: 'completed', ModelID: predecessor.ID });
+    const otherPath = await new ScoringService({ ...ctx(), Path: 'predict', MonitoredSuccessorID: published.ID }).Predict(world.RequestFor(predecessor.ID, Records('r1')));
+    expect(otherPath.Result).toMatchObject({ Status: 'refused', Reason: { kind: 'model-not-published', status: 'Archived' } });
+  });
+
+  it('refuses an Archived model the successor did not replace, and any archived model without a successor', async () => {
+    const stranger = world.Model({ Status: 'Archived' }, published.PipelineID);
+    const notReplaced = await monitoring(published.ID).Predict({ ...world.RequestFor(stranger.ID, Records('r1')), DryRun: true });
+    expect(notReplaced.Result).toMatchObject({ Status: 'refused', Reason: { kind: 'model-not-published', status: 'Archived' } });
+    const noSuccessor = await monitoring(null).Predict({ ...world.RequestFor(stranger.ID, Records('r1')), DryRun: true });
+    expect(noSuccessor.Result).toMatchObject({ Status: 'refused', Reason: { kind: 'model-not-published', status: 'Archived' } });
+  });
+});

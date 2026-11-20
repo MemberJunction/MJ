@@ -29290,10 +29290,11 @@ export const MJMLMonitoringResultSchema = z.object({
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Joined predictions left out because the record was in the model's training snapshot.`),
-    PrimaryScore: z.string().nullable().describe(`
+    PrimaryScore: z.any().nullable().describe(`
         * * Field Name: PrimaryScore
         * * Display Name: Primary Score
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJMLMonitoringResultEntity_MetricWithInterval
         * * Description: JSON MetricWithInterval: the protocol's primary metric over the joined rows.`),
     PrimaryValue: z.number().nullable().describe(`
         * * Field Name: PrimaryValue
@@ -29310,37 +29311,43 @@ export const MJMLMonitoringResultSchema = z.object({
         * * Display Name: Primary Upper Bound
         * * SQL Data Type: float(53)
         * * Description: The primary metric's interval upper bound, copied from PrimaryScore.`),
-    TrackedMetrics: z.string().nullable().describe(`
+    TrackedMetrics: z.any().nullable().describe(`
         * * Field Name: TrackedMetrics
         * * Display Name: Tracked Metrics
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJMLMonitoringResultEntity_TrackedMetric>
         * * Description: JSON array of MetricWithInterval: the other tracked metrics (positive rate, log loss, RMSE and so on).`),
-    Calibration: z.string().nullable().describe(`
+    Calibration: z.any().nullable().describe(`
         * * Field Name: Calibration
         * * Display Name: Calibration
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJMLMonitoringResultEntity_CalibrationReport
         * * Description: JSON CalibrationReport over the joined rows.`),
-    DriftLook: z.string().nullable().describe(`
+    DriftLook: z.any().nullable().describe(`
         * * Field Name: DriftLook
         * * Display Name: Drift Look
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJMLMonitoringResultEntity_DriftLookEntry>
         * * Description: JSON per-input drift statistics of the period's look: z, empirical p, adjusted p, the look's threshold and index.`),
-    DriftAlarms: z.string().describe(`
+    DriftAlarms: z.any().describe(`
         * * Field Name: DriftAlarms
         * * Display Name: Drift Alarms
         * * SQL Data Type: nvarchar(MAX)
         * * Default Value: []
+        * * JSON Type: Array<MJMLMonitoringResultEntity_DriftLookEntry>
         * * Description: JSON array of the inputs whose drift alarm fired.`),
-    Parity: z.string().nullable().describe(`
+    Parity: z.any().nullable().describe(`
         * * Field Name: Parity
         * * Display Name: Parity
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJMLMonitoringResultEntity_MonitoringParity
         * * Description: JSON {sampled, maxAbsDifference, passed}: the period's scoring parity check.`),
-    TriggersFired: z.string().describe(`
+    TriggersFired: z.any().describe(`
         * * Field Name: TriggersFired
         * * Display Name: Triggers Fired
         * * SQL Data Type: nvarchar(MAX)
         * * Default Value: []
+        * * JSON Type: Array<MJMLMonitoringResultEntity_MonitoringTriggerFired>
         * * Description: JSON array of {kind, reason}: the retrain and rollback triggers that fired.`),
     ChallengerRunID: z.string().nullable().describe(`
         * * Field Name: ChallengerRunID
@@ -29348,15 +29355,17 @@ export const MJMLMonitoringResultSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: ML Training Runs (vwMLTrainingRuns.ID)
         * * Description: The challenger training run a fired trigger started.`),
-    ChallengerResult: z.string().nullable().describe(`
+    ChallengerResult: z.any().nullable().describe(`
         * * Field Name: ChallengerResult
         * * Display Name: Challenger Result
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJMLMonitoringResultEntity_MonitoringChallengerResult
         * * Description: JSON {sharedRowIds, comparison, outcome, publishRecordId}: how the challenger compared and whether it was published or withheld.`),
-    RollbackCheck: z.string().nullable().describe(`
+    RollbackCheck: z.any().nullable().describe(`
         * * Field Name: RollbackCheck
         * * Display Name: Rollback Check
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJMLMonitoringResultEntity_MonitoringRollbackCheck
         * * Description: JSON {previousModelId, sharedRowIds, comparison, consecutive, fired or not-eligible with the reason}: the automated rollback check.`),
     ErrorMessage: z.string().nullable().describe(`
         * * Field Name: ErrorMessage

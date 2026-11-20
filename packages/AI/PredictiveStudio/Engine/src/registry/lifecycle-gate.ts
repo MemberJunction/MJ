@@ -174,7 +174,7 @@ export class LifecycleGate {
    * Validated / KeepBaseline → Published (`purpose: 'publish'`) or Archived → Published (`purpose: 'rollback'`), under
    * the pipeline and model locks in one transaction: who started it first ({@link CheckInitiator}, before the locks),
    * then idempotency (a retry of an applied run is `already-published`), then the persisted status, the stored inputs, the leakage flags and the publish checks; then
-   * the status change with the archive of the replaced model, the `publish` record and the `Pending` monitoring job. A
+   * the status change with the archive of the replaced model, the `publish` record and the `Active` monitoring job. A
    * refusal rolls the transaction back, and the refusal record and the model's `StatusReason` are written in a second one.
    * After an applied publish commits, the published model's scoring Action is generated and the replaced model's disabled.
    *
@@ -462,14 +462,14 @@ export class LifecycleGate {
   }
 
   /**
-   * Creates the published model's `Pending` monitoring job from the protocol version row it was evaluated under.
+   * Creates the published model's `Active` monitoring job (D4-179) from the protocol version row it was evaluated under.
    *
    * @throws Error when the model names no protocol or the protocol row is gone
    */
   protected async CreateMonitoringJob(model: MJMLModelEntity, ctx: GateContext): Promise<string> {
     const protocol = model.EvaluationProtocolID ? await StoredRuns.ReadProtocol(model.EvaluationProtocolID, ctx) : null;
     if (protocol === null) throw new Error(`Predictive Studio lifecycle gate: ML Model ${model.ID} names no Evaluation Protocol row to build its monitoring job from`);
-    return MonitoringJobs.CreatePending(model, protocol.Spec, ctx);
+    return MonitoringJobs.CreateActive(model, protocol.Spec, ctx);
   }
 
   /**
@@ -597,7 +597,7 @@ export class LifecycleGate {
    *   archived incumbent it replaces;
    * - `MJ: ML Output Bindings` `CanCreate`: {@link CheckPublishable} fills the missing bindings ({@link CreateOutputBindings}, D4-112);
    * - `MJ: ML Model Publish Records` `CanCreate`: {@link WritePublishRecord} (a publish or rollback; a restore writes none);
-   * - `MJ: Scheduled Jobs` `CanCreate`: {@link CreateMonitoringJob} (the published model's `Pending` monitoring job);
+   * - `MJ: Scheduled Jobs` `CanCreate`: {@link CreateMonitoringJob} (the published model's `Active` monitoring job);
    * - `MJ: Scheduled Jobs` `CanUpdate`: `MonitoringJobs.DisableForModel`, the replaced incumbent's job ({@link ApplyTransition}).
    *
    * Not listed: the scoring Action sync ({@link SyncScoringAction}) runs after the commit, logs a failure and never
