@@ -155,6 +155,17 @@ describe('PredictiveStudioRegistryCheckJobDriver', () => {
     expect(findings.filter((f) => f.SubjectID === adopted.ID && (f.Finding === 'a' || f.Finding === 'h' || f.Finding === 'b'))).toEqual([]);
   });
 
+  it('the rollback rule takes an archived model backed by an adopt record (D4-204, M2)', async () => {
+    const adopted = await Published();
+    await gate.Archive(adopted.ID, 'retired', agent, ctx);
+    for (const r of store.PublishRecords(adopted.ID)) if (r['Kind'] === 'publish') r['Purpose'] = 'adopt';
+    const intruder = world.Model('Validated', 'model');
+    store.SetStatus(intruder.ID, 'Published');
+    const findings = await Run();
+    expect([store.Status(intruder.ID), store.Status(adopted.ID)]).toEqual(['Archived', 'Published']);
+    expect(findings).toEqual(expect.arrayContaining([expect.objectContaining({ Finding: 'a', SubjectID: adopted.ID, Outcome: 'remediated', Action: expect.stringContaining('rolled back') })]));
+  });
+
   it('two Published models with publish records: the newest stays', async () => {
     const older = await Published();
     const newer = await Published({ IncumbentID: older.ID });

@@ -21,8 +21,9 @@
  * | {@link ReattachViewGate} (i) | a read permission on the prediction entities without the view gate | the filter attached |
  *
  * The rollback rule ((a), §5.7 R7): when the pipeline is left with no Published model, the newest `Archived` model with
- * a publish record, a `Delivery` and a verified artifact is published back (`purpose: 'rollback'`); with none, the
- * pipeline serves nothing and scoring refuses `model-not-published`. Pre-change models (`Delivery IS NULL`) are step
+ * an applied backing record (`publish`, `rollback` or `adopt`, D4-204), a `Delivery` and a verified artifact is
+ * published back (`purpose: 'rollback'`); with none, the pipeline serves nothing and scoring refuses
+ * `model-not-published`. Pre-change models (`Delivery IS NULL`) are step
  * (g)'s and are not findings of (a)–(c); (g) runs first, so a model it back-fills is seen by (a)–(c) as migrated.
  */
 import { ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
@@ -440,15 +441,16 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
   }
 
   /**
-   * The rollback rule: when the pipeline has no Published model left, the newest `Archived` model with a publish
-   * record, a `Delivery` and a verified artifact is published back through the gate (`purpose: 'rollback'`).
+   * The rollback rule: when the pipeline has no Published model left, the newest `Archived` model with an applied
+   * backing record (`publish`, `rollback` or `adopt`: {@link PublishRecords.BACKING_PURPOSES}, D4-204), a `Delivery` and
+   * a verified artifact is published back through the gate (`purpose: 'rollback'`).
    */
   protected async RollBackPipeline(pipelineId: string, finding: RegistryFinding['Finding'], initiator: Actor, ctx: GateContext): Promise<RegistryFinding[]> {
     if ((await this.modelsOf(pipelineId, 'Published', ctx)).length > 0) return [];
     const registry = ArtifactRegistry.ForContext(ctx, this.resolved.ArtifactLoader);
     const archived = (await this.modelsOf(pipelineId, 'Archived', ctx)).filter((m) => m.Delivery !== null).sort((a, b) => b.Version - a.Version);
     for (const candidate of archived) {
-      if ((await PublishRecords.FindLatestApplied(candidate.ID, 'publish', ctx)) === null && (await PublishRecords.FindLatestApplied(candidate.ID, 'rollback', ctx)) === null) continue;
+      if (!(await this.hasBackingRecord(candidate.ID, ctx))) continue;
       if ((await registry.Load(candidate, ctx)).Status !== 'verified') continue;
       const request: PublishRequest = { modelId: candidate.ID, purpose: 'rollback', initiator, signOffId: null, reason: `registry check (${finding}): pipeline ${pipelineId} was left with no Published model` };
       return [PredictiveStudioRegistryCheckJobDriver.rollbackFinding(finding, candidate.ID, await this.resolved.Gate.Publish(request, ctx))];
@@ -497,7 +499,20 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
       const record = await this.latestApplied(m.ID, ctx);
       at.set(m.ID, record === null ? -1 : new Date(record.RecordedAt).getTime());
     }
-    return [...models].sort((a, b) => (at.get(b.ID) || -1) - (at.get(a.ID) || -1));
+    const recordedAt = (id: string): number => {
+      const t = at.get(id);
+      return t === undefined ? -1 : t;
+    };
+    return [...models].sort((a, b) => recordedAt(b.ID) - recordedAt(a.ID));
+  }
+
+  /** Whether the model holds an applied record that backs a Published model ({@link PublishRecords.BackingRecordFilter}). */
+  private async hasBackingRecord(modelId: string, ctx: GateContext): Promise<boolean> {
+    const r = await StoredRowReads.Run<Pick<MJMLModelPublishRecordEntity, 'ID'>>({
+      EntityName: 'MJ: ML Model Publish Records', ExtraFilter: `ModelID='${EscapeSQLString(modelId)}' AND ${PublishRecords.BackingRecordFilter()}`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1,
+    }, ctx);
+    if (!r.Success) throw new Error(`reading the backing records of ML Model ${modelId} failed: ${r.ErrorMessage}`);
+    return r.Results.length > 0;
   }
 
   private async latestApplied(modelId: string, ctx: GateContext): Promise<Pick<MJMLModelPublishRecordEntity, 'ID' | 'RecordedAt'> | null> {
