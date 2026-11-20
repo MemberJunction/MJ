@@ -3117,7 +3117,7 @@ A-6180-DELETE-PROC (§8.2) checks PR 4's body ⊇ `V202611101901`'s wherever a m
 **The run/model cycle (M2.3).** From M2 every trainer-path model names its run (`MLModel.TrainingRunID`) and its run
 names the model (`MLTrainingRun.ResultingModelID`). The procedure breaks the cycle on both sides before either
 `DELETE`: it nulls `MLTrainingRun.ResultingModelID` for the doomed models
-(`V202611182101__v6.3.x__PS_Honest_Serving_Schema.sql:664`) and `MLModel.TrainingRunID` for the doomed runs (`:742`),
+(`V202611192101__v6.3.x__PS_Honest_Serving_Schema.sql:664`) and `MLModel.TrainingRunID` for the doomed runs (`:742`),
 then deletes the runs (`:754`) and the models (`:755`). The TruthSuite `HarnessCleanup` mirrors that order through the
 entity layer (`harness/cleanup.ts:225`: clear and save each run's `ResultingModelID` that names a model being deleted,
 then delete the models, then the runs), pinned by its two cleanup-order tests.
@@ -6981,7 +6981,7 @@ MJ's authorization rule over a grant matrix (A-FV-AUTHZ); `ModelPredictionPanel`
 `MJ: Feature Values`, the lineage view, the "Derived values" section, nothing rendered without an authorized binding;
 the scoring binding editor ships in the model detail and the PS predictions grid and At-Risk list read
 `MJ: Latest Feature Values` for a binding's feature through their M4 output-binding rows; the daily retention sweep and
-its binding backfill (§5.8.7, D4-25, D4-28) run; the bundle "IT182 - PS Prediction Serving — Zero Schema Change" is a
+its binding backfill (§5.8.7, D4-25, D4-28) run; the bundle "IT183 - PS Prediction Serving — Zero Schema Change" is a
 member of `Integration Tests — Deterministic` (D4-47) and G5.6 is green. No materialization, no refresh and no
 CodeGenLib change exist anywhere in the milestone (D-078).
 
@@ -7282,10 +7282,10 @@ Changes records each); counts per binding in the job run's `Details`
   `SELECT COUNT(*) FROM __mj.MLModelScoringBinding WHERE ViewAuthorizationID IS NULL` → 0 (§7) and its `Details` holding
   the per-binding counts.
 
-#### Task M5b.6: The bundle "IT182 - PS Prediction Serving — Zero Schema Change" in the deterministic tier (D4-47)
+#### Task M5b.6: The bundle "IT183 - PS Prediction Serving — Zero Schema Change" in the deterministic tier (D4-47)
 
-**Files:** Create `metadata-optional/integration-test/tests/integration/.IT182-ps-prediction-serving.json` (`Name`
-"IT182 - PS Prediction Serving — Zero Schema Change", `Configuration` `{tier: "deterministic", transport: "server",
+**Files:** Create `metadata-optional/integration-test/tests/integration/.IT183-ps-prediction-serving.json` (`Name`
+"IT183 - PS Prediction Serving — Zero Schema Change", `Configuration` `{tier: "deterministic", transport: "server",
 checks: [{type: "ps-prediction-serving"}]}`, `uuidgen` key; server transport, D4-170),
 `packages/TestingFramework/integration-test-suite/src/checks/ps-prediction-serving.checks.ts`
 (`PsPredictionServingChecks: NamedCheck[]`, ids `ps-prediction-serving.Z1` … `Z8`, with a lifecycle that mints the two
@@ -7326,7 +7326,7 @@ write and the teardown removes every tagged row even when Setup failed (D4-230)
     AssertEqual(authorized.LatestFeatureValues, f.ScoredRecords, 'Z6: the authorized user reads every scored record');
   },
   ```
-- [x] Step 2: `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 pnpm mj test run "IT182 - PS Prediction Serving — Zero Schema Change"`
+- [x] Step 2: `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 pnpm mj test run "IT183 - PS Prediction Serving — Zero Schema Change"`
   with the filter's attachment to the UI role removed on a scratch copy (MJAPI restarted on it) → Z6 fails; with M5's
   `UQ_FeatureValue_ModelRow` dropped → `scoring-service.adversarial.db.test.ts › refuses a second Model row …` fails (Z7's
   same-as-of re-run is replaced by the writer's keyed upsert, not by the index, D4-186).
@@ -7387,7 +7387,7 @@ the prediction with its lineage to the authorized identity, 1 of 1, and nothing 
   `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` → exit 0 (the entity-permission `@lookup`s resolve).
 - [x] Step 4: The fresh-install proof is Step 3's outputs, taken before any CodeGen step; only then does the rest of
   the skill's sequence (its CodeGen, build and the deterministic tier) run on the fresh database →
-  `Integration Tests — Deterministic` 0 failed, IT182 among its members passing.
+  `Integration Tests — Deterministic` 0 failed, IT183 among its members passing.
 - [x] Step 5: The four outputs pasted into §11; the fresh database dropped after the milestone's checkpoint. The clean rebuild of `MJ_PS_PR4_claude` is the fresh database (no separate `_FRESH` copy, D4-232).
 
 #### Task M5b.9: The browser walk of the record panel (D-076)
@@ -7459,7 +7459,7 @@ M5b.1's file)
 - [x] Step 3: The reviewer flips the M5b guards one at a time — the filter's `Source <> 'Model'` clause; the filter on
   one role's read permission; the view's `Deny` rule and its ancestor walk; the panel's authorized-binding filter; the
   retention cutoff (off by one day); the backfill's `ViewAuthorizationID IS NULL` predicate — and names the failing case
-  of Step 2, of the Engine or forms tests or of IT182/G5.6 for each.
+  of Step 2, of the Engine or forms tests or of IT183/G5.6 for each.
 - [x] Step 4: A broken claim is fixed at the invariant and the harness re-run → 0 broken (the exemption case is the
   documented residual M6 remediates, §9.2).
 - [x] Step 5: Counts, cells, claims and each mutation's failing case written to §11.
@@ -7473,7 +7473,7 @@ M5b.1's file)
   0 failed.
 - The TruthSuite DB lanes `pnpm run test:db -- view-gate held-authorizations` → 0 failed (counts measured at M5b).
 - `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Integration Tests — Deterministic"`
-  → 0 failed, IT182 a passing member, measured in two forms: CI's PR lane form (no flag; `MJ_REST_API_ENABLED=true MJ_DISABLE_TASK_GRAPH_DISPATCHER=1`)
+  → 0 failed, IT183 a passing member, measured in two forms: CI's PR lane form (no flag; `MJ_REST_API_ENABLED=true MJ_DISABLE_TASK_GRAPH_DISPATCHER=1`)
   → 0 failed, skip gate PASSED; with RUN_MUTATION_TESTS=1 → every failure root-caused and named in §11, and 0 failures
   attributable to PR 4's changes (D4-79); `… "Predictive Studio Gates — Scoring"` → 7 passed; the §4.2 keep-list suites
   (PR 1's Feature Pipelines gates, read as the UI user's identity too) → 0 failed.
@@ -8713,7 +8713,7 @@ env loaded
   `Predictive Studio Gates — Registry and Gate` → 9, `— Scoring` → 7, `— Monitoring` → 10, `— Monitoring (statistical)`
   → 3, `— Containment` → 12, each 0 failed (31 owned gates, G0.2 in the nightly lane's suite run here on the final head);
   the keep-list suites of §4.2 (PR 1's, PR 2's and PR 3's gates by name, including `Predictive Studio Gates — Pending`'s
-  remaining member) → 0 failed; `Integration Tests — Deterministic` (D4-79's two forms) → 0 failed (IT182 a member).
+  remaining member) → 0 failed; `Integration Tests — Deterministic` (D4-79's two forms) → 0 failed (IT183 a member).
 - [ ] Step 4: §7's unit tests (`cd <pkg> && pnpm test` for Core, Engine, Sidecar, TruthSuite, MJCore, dashboards,
   core-entity-forms, FeaturePipelines, CodeGenLib, RecordSetProcessor/engine, MJCoreEntitiesServer,
   integration-test-suite; `pnpm run test:python` for the sidecar and the truth suite) → each `N passed / 0 failed / K
@@ -8849,8 +8849,8 @@ merge-readiness check → `0` commits behind `next`, every check `SUCCESS`, four
   measured in two forms: CI's PR lane form (no flag; `MJ_REST_API_ENABLED=true MJ_DISABLE_TASK_GRAPH_DISPATCHER=1`)
   → 0 failed, skip gate PASSED; with RUN_MUTATION_TESTS=1 → every failure root-caused and named in §11, and 0 failures
   attributable to PR 4's changes (D4-79),
-  which includes this PR's new bundle "IT182 - PS Prediction Serving — Zero Schema Change" (M5b, D4-47; single run:
-  `pnpm mj test run "IT182 - PS Prediction Serving — Zero Schema Change"`).
+  which includes this PR's new bundle "IT183 - PS Prediction Serving — Zero Schema Change" (M5b, D4-47; single run:
+  `pnpm mj test run "IT183 - PS Prediction Serving — Zero Schema Change"`).
 - **Gates:** the 31 named tests of §4.1 (G5.6 `C1 → S7.4 #2` is D-058's acceptance gate: trained model → prediction visible on a Person, zero schema change) (G0.2 in the nightly lane) as the `MJ: Tests` rows of §4.1a, run per suite with
   `"$PLANS/tools/ps-env.sh" pnpm mj test suite "Predictive Studio Gates — <suite>"` (`MJ_INTEGRATION_TEST=1
   RUN_MUTATION_TESTS=1`), plus the keep-list gates.
@@ -9437,8 +9437,8 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   for the then-refused `predictive-studio-grid-record-names.test.ts` (OF4-4); OF4-4 is removed, M4.3 deletes every alias
   of the grid and moves that test to the current members.
 - **D4-47 · The prediction-serving bundle's file, name and number** (decided at the M5–M8 tier upgrade, 2026-11-10). The
-  bundle is `metadata-optional/integration-test/tests/integration/.IT182-ps-prediction-serving.json`, `MJ: Tests` row
-  "IT182 - PS Prediction Serving — Zero Schema Change", check type `ps-prediction-serving`, a member of
+  bundle is `metadata-optional/integration-test/tests/integration/.IT183-ps-prediction-serving.json`, `MJ: Tests` row
+  "IT183 - PS Prediction Serving — Zero Schema Change", check type `ps-prediction-serving`, a member of
   `Integration Tests — Deterministic` (client transport, sequenced after the suite's last member). Why 167: the highest
   bundle on `599c288dee` is `IT163` and #6180's head `f40161febb` adds `IT164`–`IT166` (unchanged at `0b37229bd7`)
   (`git ls-tree --name-only pr6180-live metadata-optional/integration-test/tests/integration/`), so 167 collides with
@@ -10856,6 +10856,20 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   unchanged. (b) `pnpm run test:db -- serving-end-to-end` passes the filter after `--`, which vitest ignores, so the
   command runs every DB-lane file; it is kept as the plan's Step 2 command (it re-runs every DB harness on the head) and
   the single file runs as `pnpm exec vitest run --config vitest.db.config.ts serving-end-to-end`.
+- **D4-261 · M8 pushes before its exit with `--no-verify`, once the only pre-push failures are M8's own** (controller,
+  M8 final pass). The pre-push hook (`milestone-exit.mjs --mode pre-push`) demands every M8 step ticked and the M8 §11
+  entry, but Task M8.4 Step 4 needs a CI rollup on the pushed head, so the hook cannot pass before CI has run. Each such
+  push first runs `milestone-exit.mjs --mode pre-push --skip-commands` and confirms its only failures are `tasks M8` and
+  `handoff M8`, `check:guards` and `check:standards` exit 0 and the branch tracks `origin/ps/pr-4-honest-serving`; the
+  final push after the M8 exit goes through the hook.
+- **D4-262 · The prediction-serving bundle is IT183** (M8 start, the merge of next `0d1950895c`; D4-47's rule as
+  D4-169). `next` added "IT182 - Archive Runs Page Through Every Eligible Row" (Sequence 49 of the deterministic
+  suite), so ours is renamed `.IT183-ps-prediction-serving.json`, "IT183 - PS Prediction Serving — Zero Schema Change",
+  Sequence 49 (the server-transport block; the client bundles start at 50, #3251), its suite-member row keeping its ID; the check's tags, comments and the schema-fingerprint query's
+  description follow. §7, §10 and the task texts read IT183; rulings and §11 entries before this merge keep IT182.
+- **D4-263 · M8 lists two open deferrals, not four** (M8 final pass). Task M8.5's exit-test line "four deferrals
+  listed with their expiries" predates D4-69, which removed OF4-1, OF4-2 and OF4-4 from D4-50's list; §10 lists OF4-5
+  (expiry PR 6) and OF4-3 (out of scope, no deferred work), and Task M8.4 Step 4's `grep -c "expiry"` → 1 holds.
 - **D-086 · Program process ruling (owner, 2026-11-16).** Fix rounds are capped at two per task, Minor/Nit findings are
   parked and fixed in one batch at the milestone exit self-audit (Important at once); no scoped re-review for nit-only
   rounds; reviewers verify by reading and targeted runs (the DB-lane case, the mutation, the runtime proof) and do not
@@ -11244,7 +11258,7 @@ are monitored on real outcomes.
   automatically, and migrates their artifacts to durable storage or marks them unscorable.
 
 **Generated facts** (regenerated before every checkpoint commit by `tools/pr-body.mjs`; do not edit by hand):
-- Migration: <!-- gen:migration -->migrations/v6/V202611182101__v6.3.x__PS_Honest_Serving_Schema.sql<!-- /gen:migration -->
+- Migration: <!-- gen:migration -->migrations/v6/V202611192101__v6.3.x__PS_Honest_Serving_Schema.sql<!-- /gen:migration -->
 - Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, PS_SEED_LIMIT, PS_SIGN_IN_URL, PS_STORAGE_PROVIDER, PW_BASE_URL, STORAGE_LOCAL_ROOT<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->29<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->29<!-- /gen:checks -->
@@ -11270,7 +11284,7 @@ no longer publish it (M4b routes automatic publishing through the gate); Score R
 failed runs; direct status writes are refused; `MJ: ML Model Scoring Bindings` loses `MLModelID`,
 `MaterializedResultID` and the `'Materialized'` mode (a binding names `MLTrainingPipelineID`), and `ModeBadgeClass`
 loses its `'Materialized'` case; Score Record Set writes predictions only when called with a `BindingID`; every
-`@deprecated` alias of a file this PR modifies is removed (M8.2 writes the full list here). M4.3: `PSPredictionsGridComponent` (`ps-predictions-grid.component.ts`) loses its 95 `@deprecated` members, 70 names: `activeView`, `allRows`, `chartGridOptions`, `classBreakdown`, `clearDecileFilter`, `clearSearch`, `closeDetail`, `columnDefs`, `defaultColDef`, `detailOpen`, `drawerWidthPx`, `drillThrough`, `entityDisplayName`, `exportCSV`, `filteredRows`, `getBadgeColorVar`, `getOutcomeBadgeClass`, `highAvg`, `highAvgRisk`, `highCount`, `highPct`, `histogramBins`, `historyLoading`, `historyPoints`, `isRegression`, `isRenewalModel`, `lowAvg`, `lowAvgRisk`, `lowCount`, `lowPct`, `meanScoreFormatted`, `meanScorePct`, `mediumAvg`, `mediumAvgRisk`, `mediumCount`, `mediumPct`, `onCellClicked`, `onChartGridReady`, `onDrawerWidthChanged`, `onGridReady`, `onRowClicked`, `onSearchInput`, `onViewToggle`, `openDetail`, `openSubjectRecord`, `outcomeConfig`, `problemType`, `readOnly`, `reload`, `resolvedEntityId`, `resolvedEntityName`, `runId`, `scheduleVisibleRowsLookup`, `searchText`, `selectDecile`, `selectedDecileIndex`, `selectedDecileLabel`, `selectedRow`, `selectedTier`, `setTier`, `setTierAndGrid`, `setupColumnDefs`, `subjectEntityName`, `subjectRecordId`, `subjectRecordName`, `trendlineAreaPoints`, `trendlineLinePoints`, `trendlinePlotPoints`, `viewOptions`, `visibleBands` (their PascalCase members stay; the inputs `runId`, `problemType`, `readOnly` are `RunId`, `ProblemType`, `ReadOnly`, and `modelId`, `title`, `height` are now `ModelId`, `Title`, `Height`); `PSProductionComponent` (`ps-production.component.ts`) loses its 50, 35 names: `boundModelCount`, `closeRun`, `deployBadge`, `deployIcon`, `deployLabel`, `detailSizePct`, `idleModelCount`, `isDeploymentCollapsed`, `isHeaderCollapsed`, `isListCollapsed`, `isRunFocused`, `listSizePct`, `loadingDetails`, `loadingRuns`, `modeBadge`, `models`, `onOperateClose`, `onSplitDragEnd`, `openRun`, `operateOpen`, `runBadge`, `runDetails`, `runGridHeight`, `runs`, `scheduledModelCount`, `select`, `selected`, `selectedBindings`, `selectedModelId`, `selectedRunId`, `selectedTargetEntityName`, `toggleDeploymentCollapse`, `toggleHeaderCollapse`, `toggleList`, `toggleRunFocus`; `AtRiskRules.BuildAtRiskOptions(model, binding)` takes the surface's `MJ: ML Output Bindings` row (`null` keeps the outcome-config rule). No compatibility shim keeps an old form
+`@deprecated` alias of a file this PR modifies is removed — 217 `@deprecated` members in 14 files (`git diff origin/next...HEAD -- packages | grep -c "^-.*@deprecated"` → 217), each with its PascalCase replacement kept: `ps-predictions-grid.component.ts` 95 and `ps-production.component.ts` 50 (named below); `ps-operate-dialog.component.ts` 29 (`modelLabel`, `currentUser`, `state`, `views`, `lists`, `entityFields`, `isClassification`, `busy`, `busyLabel`, `scheduleOpen`, `jobTypeId`, `schedConfig` as getter/setter pairs; `setScope`, `summary`, `onRunNow`, `onSchedule`, `onScheduleClose`); `model-prediction.logic.ts` 13 (`toNumber`, `valueKind`, `bandFor`, `gaugePct`, `formatValue`, `resolveLabel`, `parseDrivers`, `formatLastScored`, `formatHistoryTimestamp`, `parsePayloadDrivers`, `parseHistoryItem`, `filterHistoryByModel`, `getDistinctModelsFromHistory`); Engine `scoring-process-shared.ts` 8 (`createScoringBinding`, `applyScope`, `countScopeSelectors`, `isNonEmpty`, `modelConfiguration`, `outputRef`, `resolveTargetEntityID`, `writeBackOutputMapping`); `production-distribution.ts` 6 (`buildDistribution`, `humanizeCron`, `modeBadgeClass`, `modelLabel`, `runStatusVariant`, `summarizeRun`); `leakage-guard.ts` 4 (`isFieldAllowed`, `isSourceAllowed`, `partitionColumns`, `detectSingleFeatureDominance`); `ps-operate-dialog.mapping.ts` 2 (`describeOperateMappingError`, `mapStateToCreateScoringInput`); `model-prediction.panel.ts` 2 (`modelsById` getter/setter); `scoring-binding.ts` 2 (`recordScoringRun`, `upsertScoringBinding`); `scheduled-model-scoring.ts` 2 (`createScheduledModelScoring`, `cadenceToCron`); `model-scoring-action-generator.ts` 2 (`generateForModel`, `disableForModel`); `predictive-studio.engine.ts` 1 (`computeBestLevels`); `scoring-process.ts` 1 (`createScoringProcess`). M4.3: `PSPredictionsGridComponent` (`ps-predictions-grid.component.ts`) loses its 95 `@deprecated` members, 70 names: `activeView`, `allRows`, `chartGridOptions`, `classBreakdown`, `clearDecileFilter`, `clearSearch`, `closeDetail`, `columnDefs`, `defaultColDef`, `detailOpen`, `drawerWidthPx`, `drillThrough`, `entityDisplayName`, `exportCSV`, `filteredRows`, `getBadgeColorVar`, `getOutcomeBadgeClass`, `highAvg`, `highAvgRisk`, `highCount`, `highPct`, `histogramBins`, `historyLoading`, `historyPoints`, `isRegression`, `isRenewalModel`, `lowAvg`, `lowAvgRisk`, `lowCount`, `lowPct`, `meanScoreFormatted`, `meanScorePct`, `mediumAvg`, `mediumAvgRisk`, `mediumCount`, `mediumPct`, `onCellClicked`, `onChartGridReady`, `onDrawerWidthChanged`, `onGridReady`, `onRowClicked`, `onSearchInput`, `onViewToggle`, `openDetail`, `openSubjectRecord`, `outcomeConfig`, `problemType`, `readOnly`, `reload`, `resolvedEntityId`, `resolvedEntityName`, `runId`, `scheduleVisibleRowsLookup`, `searchText`, `selectDecile`, `selectedDecileIndex`, `selectedDecileLabel`, `selectedRow`, `selectedTier`, `setTier`, `setTierAndGrid`, `setupColumnDefs`, `subjectEntityName`, `subjectRecordId`, `subjectRecordName`, `trendlineAreaPoints`, `trendlineLinePoints`, `trendlinePlotPoints`, `viewOptions`, `visibleBands` (their PascalCase members stay; the inputs `runId`, `problemType`, `readOnly` are `RunId`, `ProblemType`, `ReadOnly`, and `modelId`, `title`, `height` are now `ModelId`, `Title`, `Height`); `PSProductionComponent` (`ps-production.component.ts`) loses its 50, 35 names: `boundModelCount`, `closeRun`, `deployBadge`, `deployIcon`, `deployLabel`, `detailSizePct`, `idleModelCount`, `isDeploymentCollapsed`, `isHeaderCollapsed`, `isListCollapsed`, `isRunFocused`, `listSizePct`, `loadingDetails`, `loadingRuns`, `modeBadge`, `models`, `onOperateClose`, `onSplitDragEnd`, `openRun`, `operateOpen`, `runBadge`, `runDetails`, `runGridHeight`, `runs`, `scheduledModelCount`, `select`, `selected`, `selectedBindings`, `selectedModelId`, `selectedRunId`, `selectedTargetEntityName`, `toggleDeploymentCollapse`, `toggleHeaderCollapse`, `toggleList`, `toggleRunFocus`; `AtRiskRules.BuildAtRiskOptions(model, binding)` takes the surface's `MJ: ML Output Bindings` row (`null` keeps the outcome-config rule). No compatibility shim keeps an old form
 working (program D-042, D-053).
 
 **Coordination with #6180 (merged `fa33e94dbe`).** #6180 merged into `next` on 2026-11-10 (`fa33e94dbe`); its
@@ -11295,6 +11309,23 @@ the tail regenerated at the merge of next carries neither.) The tail's hand edit
 entity and the `MJ: Entities → MJ: Latest Feature Values` relationship CodeGen derived from that FK (D4-80). The
 `EntityUniqueKey` gap is reported to the owners of `V202611101200`; when `next` fixes it, the regenerated tail drops
 those rows and their guards go with them.
+
+**Changes outside Predictive Studio.** Each is a caller fix or an additive member another package needed:
+- `GraphQLDataProvider` — `GraphQLActionClient.RunAction` returns the action's output parameters in `Params`
+  (`MergeOutputParams` applies MJAPI's `ResultData`, also when it arrives index-keyed), as the server-side ActionEngine
+  does, so a client reads an output such as `CreatedListID` by name.
+- `CoreActions` — "Materialize List From View" declares `AuthorizesCaller` (it resolves the view and creates the list as
+  the caller, so the caller's own view, entity and List permissions decide), so a user without the action's explicit
+  grant can send a selection to a list.
+- `ServerBootstrapLite` declares `@memberjunction/integration-engine`: `next`'s Peer Sync work registers a class there,
+  so the regenerated Lite class manifest imports it.
+- `AI CorePlus` / `AI Agents` / `MJServer` — `RESERVED_AGENT_RUN_DATA_KEYS` gains the two Predictive Studio publishing
+  keys; the agent-run data guard's comments and one `base-agent.ts` log line follow.
+- `FeaturePipelines` — `FeatureValueCacheService` writes the `Model` rows of a binding (keyed upsert; a person's value
+  is never overwritten). `RecordSetProcessor` base/engine — `MaxConcurrentBatches` on the batch path. `React runtime` —
+  the ML scoring utility reads the scoring service's result. `MJCoreEntitiesServer` — server entities for publish
+  records, scoring bindings, output bindings and prediction units. `SQLParser` — the shipped-corpus goldens of one
+  Predictive Studio query regenerated.
 
 **Naming (program D-039).** Persisted JSON and wire property names ported from `reference/contracts/contracts.ts`
 (`Delivery`, publish-record JSON, `ScoredRow`, `MonitoringJobSpec`, …) keep the contract's camelCase and `Id` because
@@ -11340,12 +11371,55 @@ recorded mutation check (table below).
 **Verification disclosure (ruling S1).** Every test, mutation check and adversarial review in this PR was run by an
 AI agent; no person ran or reviewed them. The mutation table lists each guard, the flip and the test that went red.
 
+**Mutation table** (one row per guard; every mutation restored byte-identical and the gate green again after it; the full
+failing lines are in the plan's §11):
+
+| Gate | Guard flipped | Test that went red | Its failing assertion |
+|---|---|---|---|
+| G0.2 | `LifecycleGate.WriteRefusalRecord` returns without saving | `ps-gate-w2-c1-1` | 0 of 60 runs consistent with their stored gate outcome |
+| G0.3 | the `unacknowledged-leakage-flags` refusal removed from `CheckLeakageFlags` | `ps-gate-w3-c1-1` | 2 of 2 runs Published; 0 of 2 refused |
+| G0.10 | random forest trained without its estimator seed (sidecar) | `ps-gate-w1-s5-4` | 3 of 4 algorithms reproduce every candidate |
+| G3.1 | the artifact registry's `Load` reports `verified` for an absent object | `ps-gate-w1-s7-1` | run fails loudly, 0 of 1 |
+| G3.2 | the SHA-256 comparison in `Load` skipped | `ps-gate-r1-s7-1` | refused by SHA-256 mismatch, 0 of 1 (the swap scored 6000 rows) |
+| G3.3 | `StatusWriteRules.DecideStatusWrite` allows `Draft → Published` unauthorised | `ps-gate-w3-s7-2` | 0 of 5 out-of-gate Status writes refused |
+| G3.4 | negative outcomes stored without their reason | `ps-gate-w2-s6-5-2` | 100% of the rest with its reason: 0 of 40 |
+| G3.5 | `PublishRules.checkIncumbent` passes a challenger below the margin | `ps-gate-c1-s4-2-2` | incumbent kept on unchanged data, 0 of 1 |
+| G3.6 | `WritePublishRecord` skipped for the automated-gate approver | `ps-gate-c1-s9-1` | 1 of 2 Published models have a publish record |
+| G3.7 | `score × 0.98` restored as the story's CV figure | `ps-gate-c1-s9-2` | 9 of 10 sampled numbers recompute |
+| G3.8 | the canned "honest holdout" line re-added to the agent report | `ps-gate-w1-s9-2` | 1 fixed sentence (expected 0) |
+| G3.9 | probability vector indexed in reverse-sorted class order (the plan's plain sort is a no-op on W9, D4-162) | `ps-gate-w9-s9-5` | 2 of 20 sampled rows match |
+| G3.10 | the adverse-class comparison removed from `SemanticsRules.CheckRow` | `ps-gate-c3-s9-5` | swapped-class binding saved, 0 of 1 refused |
+| G3.11 | the agent-actor refusal for `margin` dropped | `ps-gate-w1-c1-2` | 3 of 4 agent-authored writes refused |
+| G5.1 | check 3's `scope-entity-mismatch` refusal skipped | `ps-gate-r1-s7-3` | refused naming the scope entity, 0 of 1 |
+| G5.2 | `/predict` falls back to `output_columns` | `ps-gate-w1-s7-3-2` | refused 1 of 2 |
+| G5.3 | `MLScoringRun.ArtifactSha256` written null on Score Record Set | `ps-gate-r1-s7-4` | 0 of 500 written scores join to their run's hash |
+| G5.4 | `EffectiveAsOf` written as the write time | `ps-gate-c1-s7-4` | 0 of 6673 rows carry the run's as-of |
+| G5.5 | the empty-column refusal removed | `ps-gate-w1-s7-5-3` | the run ended completed |
+| G5.6 | the view-gate filter removed from one role's Latest Feature Values read | `ps-gate-c1-s7-4-2` | shows nothing to a user without it, 0 of 1 |
+| G6.1 | outcomes joined to the latest Model row, not the row as of the period | `ps-gate-d1c-s8-1` | 36000 of 36000 joined (per-period counts wrong) |
+| G6.2 | RMSE stored without its bounds | `ps-gate-d1r-s8-2` | 0 of 3 periods carry RMSE with 95% bounds |
+| G6.3 | each period compared with the previous one, not the reference | `ps-gate-d1c-s8-4` | the trigger did not fire within 1 period |
+| G6.4 | the minimum scored-rows rule dropped | `ps-gate-t4-s8-4` | 4 fires (expected 0) |
+| G6.5 | the performance trigger fed row-count growth only | `ps-gate-w6-s8-4` | 0 of 1 retrain flags |
+| G6.6 | 0.05 in place of q(12) | `ps-gate-t4-s8-3` | 87 of 400 replays alarm (at most 28) |
+| G6.7 | positive rate from scores instead of labels | `ps-gate-d1c-s8-2` | period-3 rate 0.4619 vs bound 0.4663 |
+| G6.8 | BH's step-up minimum in the wrong direction (sidecar) | `ps-gate-d2-s8-3` | mean FDP 0.6628 (at most 0.05) |
+| G6.9 | challenger scored on its own holdout rows | `ps-gate-d1c-s8-5` | replaced false |
+| G6.10 | the paired difference's sign reversed (regression) | `ps-gate-d1r-s8-5` | replaced false |
+| G6.11 | point improvement compared with 0, not the lower bound with the margin | `ps-gate-t4-s8-5` | replaced true (expected false) |
+| G6.12 | parity tolerance widened 1e-9 → 1e-3 | `ps-gate-r1-s7-6` | 0 alerts on a planted 1e-6 skew |
+
 **Disclosed residual (F-TR-10).** A leakage-flag sign-off cannot be made with an API key, as the system user or from an
 agent run, and each one names its user, evidence hash and reason in the immutable publish ledger; a script that holds
 an interactive user's session token can still sign off as that user, because MJServer offers no re-authentication
 (the UI's confirmation is client-side). Closing that needs a server-side proof-of-presence capability in MJServer.
 
-**Test plan:** unit (Core, Engine, Sidecar pytest, dashboards, forms), deterministic integration tier (including the new "IT182 - PS Prediction Serving — Zero Schema Change" bundle), the 31 gate tests
+**Open deferrals** (D-077; D4-50 as amended by D4-69):
+- OF4-5 — a kept incumbent-heuristic rule (PR 3 Q3-5) is recorded per run as `kept-existing-rule` and not delivered (its pipeline keeps its incumbent or has no model); expiry: PR 6.
+- OF4-3 — the Record Process form's sections are unchanged: out of scope by layering (D-062); no work is deferred, so it carries no date.
+- No compatibility shim or deprecated alias is kept (D-042, D-053), so none is listed.
+
+**Test plan:** unit (Core, Engine, Sidecar pytest, dashboards, forms), deterministic integration tier (including the new "IT183 - PS Prediction Serving — Zero Schema Change" bundle), the 31 gate tests
 plus the keep-list, runtime verification against MJAPI and the database (§7 of the plan).
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
@@ -13301,6 +13375,17 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   exit 0 each. M8.1 Steps 1–5 ticked (done on the M8 branch; re-verified here: the stale-term grep 0 hits, the four
   `d058-guide-*` anchors `ok`).
 - **Rulings:** D4-258…D4-260. **Flags:** OF4-53 resolved.
+
+### 2026-11-20 — Claude (Opus 5.5) — M8 start: merge of next and retime
+
+- `git fetch origin next` → `0d1950895c` (90 ahead). merged next @0d1950895c (`0e3d2b208f`), migration retimed
+  `V202611182101` → `V202611192101` (D-075; flyway rows on claude and review updated by `retime-migration.mjs`). Next's
+  `V202611192100__v6.3.x__Agent_Request_Human_Task_Provider.sql` creates or re-creates only AIAgentRequest objects and
+  `spDeleteAIAgent`/`…Run`/`…RunStep`/`…Request`: no object in common with ours.
+- Conflicts: the deterministic suite (next's IT182 "Archive Runs Page Through Every Eligible Row"; ours renamed IT183,
+  D4-262), `check-registry.test.ts` (251 → next 252, ours 281 → 282), both server class manifests (`--theirs`,
+  regenerated by the root build). Rulings D4-261 (push before CI), D4-262 (IT183), D4-263 (two deferrals).
+- `pnpm install` EXIT=0; root build 352/352 + 322/322, EXIT=0.
 
 ## 12. Refresh log (append-only)
 

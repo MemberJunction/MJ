@@ -330,7 +330,7 @@ export class GateTestStore {
   /**
    * Why SQL Server would refuse to store `values` as a row of `entityName`, worded as SQL Server words it; null when it
    * would not, or when the store emulates no constraint of the entity. For `MJ: ML Model Publish Records` it emulates
-   * the constraints of `migrations/v6/V202611182101__v6.3.x__PS_Honest_Serving_Schema.sql` that decide which refusal
+   * the constraints of `migrations/v6/V202611192101__v6.3.x__PS_Honest_Serving_Schema.sql` that decide which refusal
    * records the gate may write:
    * - `CK_MLModelPublishRecord_RunLevel` (`:57-58`): `([ModelID] IS NOT NULL AND [Purpose] <> 'evaluate')
    *   OR ([ModelID] IS NULL AND [Kind] = 'refusal' AND [Purpose] = 'evaluate')`;
