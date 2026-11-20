@@ -867,6 +867,35 @@ interface UserValidationResult {
   };
 }
 
+/** Identity claims read from the upstream ID or access token. */
+interface UpstreamIdentityClaims extends jwt.JwtPayload {
+  email?: string;
+  preferred_username?: string;
+  unique_name?: string;
+  upn?: string;
+}
+
+/**
+ * Picks the email address of an upstream token with the same rule as MJServer sign-in.
+ * A token whose `email_verified` claim is false is refused. When the upstream provider has
+ * `requireVerifiedEmail` on, only a verified `email` claim is used; otherwise the address is
+ * `email`, then `preferred_username`, `unique_name` or `upn`.
+ */
+async function screenUpstreamEmail(decoded: UpstreamIdentityClaims): Promise<{ email?: string; error?: string }> {
+  // Dynamic import: @memberjunction/server reads process.env at module load (see TokenValidator.ts).
+  const { ScreenTokenEmailClaims, IssuerRequiresVerifiedEmail } = await import('@memberjunction/server');
+  const claims = {
+    email: decoded.email,
+    preferredUsername: decoded.preferred_username ?? decoded.unique_name ?? decoded.upn,
+  };
+  const screened = ScreenTokenEmailClaims(decoded, claims, IssuerRequiresVerifiedEmail(decoded.iss));
+  if (!screened.Claims) {
+    console.warn(`OAuth Proxy: Token refused: ${screened.Reason}`);
+    return { error: 'The email address of this account is not verified' };
+  }
+  return { email: screened.Claims.email ?? screened.Claims.preferredUsername };
+}
+
 /**
  * Validates user from upstream tokens by extracting email and looking up MJ user.
  * This is only called when JWT signing is enabled.
@@ -884,23 +913,17 @@ async function validateUpstreamUser(
     }
 
     // Decode without verification - we already exchanged with upstream provider
-    const decoded = jwt.decode(tokenToDecode) as {
-      sub?: string;
-      email?: string;
-      preferred_username?: string;
-      unique_name?: string;
-      upn?: string;
-    } | null;
+    const decoded = jwt.decode(tokenToDecode) as UpstreamIdentityClaims | null;
 
     if (!decoded) {
       return { valid: false, error: 'Failed to decode upstream token' };
     }
 
-    // Extract email from various claim locations
-    const email = decoded.email
-      ?? decoded.preferred_username
-      ?? decoded.unique_name
-      ?? decoded.upn;
+    const screened = await screenUpstreamEmail(decoded);
+    if (screened.error) {
+      return { valid: false, error: screened.error };
+    }
+    const email = screened.email;
 
     if (!email) {
       console.error('OAuth Proxy: Token claims:', JSON.stringify(decoded, null, 2));

@@ -7,7 +7,7 @@
  *   fallbacks are not email claims and the provider does not verify them.
  */
 import type { JwtPayload } from 'jsonwebtoken';
-import type { AuthProviderConfig } from '@memberjunction/core';
+import { LogError, type AuthProviderConfig } from '@memberjunction/core';
 import { AuthProviderFactory, type IAuthProvider } from '@memberjunction/auth-providers';
 import { EmailsMatch, type LoginIdentityClaims } from './loginEmailResolution.js';
 
@@ -20,13 +20,24 @@ export interface TokenEmailScreenResult {
   Reason?: string;
 }
 
-/** Stores the `requireVerifiedEmail` setting of a provider when it is registered. */
+/**
+ * Stores the `requireVerifiedEmail` setting of a provider when it is registered.
+ * Only a missing value or the boolean `false` turns the rule off. Any other value that is not the
+ * boolean `true` (for example the text "true" from a JSON column) turns it on and logs an error.
+ */
 export function RecordRequireVerifiedEmailSetting(provider: IAuthProvider, config: AuthProviderConfig): void {
-  if (config.requireVerifiedEmail === true) {
-    providersRequiringVerifiedEmail.add(provider);
-  } else {
+  const raw: unknown = config.requireVerifiedEmail;
+  if (raw === undefined || raw === null || raw === false) {
     providersRequiringVerifiedEmail.delete(provider);
+    return;
   }
+  if (raw !== true) {
+    LogError(
+      `[Auth] Provider '${config.name}': requireVerifiedEmail must be true or false, but it is a ${typeof raw}. ` +
+        `The provider requires verified email addresses until the setting is corrected.`
+    );
+  }
+  providersRequiringVerifiedEmail.add(provider);
 }
 
 /** True when any registered provider for this issuer has `requireVerifiedEmail: true`. */

@@ -109,6 +109,25 @@ function signToken(claims: Record<string, unknown>): string {
 }
 
 const OWNER_EMAIL = 'owner@corp.example';
+const REASON_MARKED_UNVERIFIED = 'marks the email address as not verified';
+const REASON_CLAIM_NOT_TRUE = 'requires email_verified to be true';
+const REASON_NO_EMAIL_CLAIM = 'requires a verified email claim';
+
+let warnSpy: ReturnType<typeof vi.spyOn>;
+
+/** True when a "Token refused" warning with the given reason was written. */
+function refusalLogged(reason: string): boolean {
+  return warnSpy.mock.calls.some((call) => {
+    const line = call.map(String).join(' ');
+    return line.includes('Token refused') && line.includes(reason);
+  });
+}
+
+/** Asserts that GetUserPayload refuses the token and logs the given reason. */
+async function expectRefused(token: string, reason: string): Promise<void> {
+  await expect(GetUserPayload(`Bearer ${token}`, 's1', [])).rejects.toThrow('Unable to authenticate user');
+  expect(refusalLogged(reason)).toBe(true);
+}
 
 describe('GetUserPayload email verification', () => {
   beforeEach(() => {
@@ -116,7 +135,7 @@ describe('GetUserPayload email verification', () => {
     cachedUsers.push({ ID: 'OWNER-ID', Email: OWNER_EMAIL, IsActive: true, UserRoles: [] });
     mockConfig.userHandling.autoCreateNewUsers = false;
     vi.spyOn(console, 'log').mockImplementation(() => {});
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
     registerTestProvider();
   });
@@ -126,22 +145,18 @@ describe('GetUserPayload email verification', () => {
   });
 
   it('refuses a token whose email_verified claim is false', async () => {
-    const token = signToken({ email: OWNER_EMAIL, email_verified: false });
-    await expect(GetUserPayload(`Bearer ${token}`, 's1', [])).rejects.toThrow('Unable to authenticate user');
+    await expectRefused(signToken({ email: OWNER_EMAIL, email_verified: false }), REASON_MARKED_UNVERIFIED);
   });
 
   it('refuses a token whose email_verified claim is the text "false"', async () => {
-    const token = signToken({ email: OWNER_EMAIL, email_verified: 'false' });
-    await expect(GetUserPayload(`Bearer ${token}`, 's1', [])).rejects.toThrow('Unable to authenticate user');
+    await expectRefused(signToken({ email: OWNER_EMAIL, email_verified: 'false' }), REASON_MARKED_UNVERIFIED);
   });
 
   it('does not create a new user from a token whose email_verified claim is false', async () => {
     cachedUsers.length = 0;
     mockConfig.userHandling.autoCreateNewUsers = true;
     const createSpy = vi.spyOn(NewUserBase.prototype, 'createNewUser').mockResolvedValue(null);
-    const token = signToken({ email: 'newcomer@corp.example', email_verified: false });
-
-    await expect(GetUserPayload(`Bearer ${token}`, 's1', [])).rejects.toThrow('Unable to authenticate user');
+    await expectRefused(signToken({ email: 'newcomer@corp.example', email_verified: false }), REASON_MARKED_UNVERIFIED);
     expect(createSpy).not.toHaveBeenCalled();
   });
 
@@ -151,13 +166,16 @@ describe('GetUserPayload email verification', () => {
     });
 
     it('refuses a token that has no email_verified claim', async () => {
-      const token = signToken({ email: OWNER_EMAIL });
-      await expect(GetUserPayload(`Bearer ${token}`, 's1', [])).rejects.toThrow('Unable to authenticate user');
+      await expectRefused(signToken({ email: OWNER_EMAIL }), REASON_CLAIM_NOT_TRUE);
     });
 
     it('refuses a token whose only address is the preferred_username claim', async () => {
-      const token = signToken({ preferred_username: OWNER_EMAIL, email_verified: true });
-      await expect(GetUserPayload(`Bearer ${token}`, 's1', [])).rejects.toThrow('Unable to authenticate user');
+      await expectRefused(signToken({ preferred_username: OWNER_EMAIL, email_verified: true }), REASON_NO_EMAIL_CLAIM);
     });
+  });
+
+  it('applies the strict rule when requireVerifiedEmail is the text "true"', async () => {
+    registerTestProvider({ requireVerifiedEmail: 'true' });
+    await expectRefused(signToken({ email: OWNER_EMAIL }), REASON_CLAIM_NOT_TRUE);
   });
 });

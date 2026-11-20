@@ -158,11 +158,19 @@ type VerifyUserRecordFn = (
   dataSource?: unknown,
   attemptCacheUpdateIfNeeded?: boolean
 ) => Promise<UserInfo | undefined>;
+type ScreenTokenEmailClaimsFn = (
+  payload: JwtPayload,
+  claims: { email?: string; preferredUsername?: string },
+  requireVerifiedEmail: boolean
+) => { Claims: { email?: string; preferredUsername?: string } | null; Reason?: string };
+type IssuerRequiresVerifiedEmailFn = (issuer: string | undefined) => boolean;
 
 // Dynamic imports to avoid initialization order issues with dotenv
 let getSigningKeys: GetSigningKeysFn;
 let extractUserInfoFromPayload: ExtractUserInfoFn;
 let verifyUserRecord: VerifyUserRecordFn;
+let screenTokenEmailClaims: ScreenTokenEmailClaimsFn;
+let issuerRequiresVerifiedEmail: IssuerRequiresVerifiedEmailFn;
 
 let mjServerImported = false;
 
@@ -178,6 +186,8 @@ async function ensureMJServerImported(): Promise<void> {
   getSigningKeys = authModule.getSigningKeys as GetSigningKeysFn;
   extractUserInfoFromPayload = authModule.extractUserInfoFromPayload as ExtractUserInfoFn;
   verifyUserRecord = authModule.verifyUserRecord as VerifyUserRecordFn;
+  screenTokenEmailClaims = authModule.ScreenTokenEmailClaims as ScreenTokenEmailClaimsFn;
+  issuerRequiresVerifiedEmail = authModule.IssuerRequiresVerifiedEmail as IssuerRequiresVerifiedEmailFn;
   mjServerImported = true;
 }
 
@@ -426,13 +436,18 @@ export async function ValidateBearerToken(token: string): Promise<OAuthValidatio
     return createError('invalid_token', error instanceof Error ? error.message : 'Token validation failed');
   }
 
-  // 5. Extract user info from claims
+  // 5. Extract user info from claims, keeping only an email address the provider accepts as verified
   const userInfo = extractUserInfoFromPayload(verifiedPayload);
+  const screened = screenTokenEmailClaims(verifiedPayload, userInfo, issuerRequiresVerifiedEmail(provider.issuer));
+  if (!screened.Claims) {
+    console.warn(`[TokenValidator] Token refused: ${screened.Reason}`);
+    return createError('invalid_token', 'Email address not verified');
+  }
 
   return {
     valid: true,
     payload: verifiedPayload,
-    userInfo,
+    userInfo: { ...userInfo, email: screened.Claims.email },
   };
 }
 
