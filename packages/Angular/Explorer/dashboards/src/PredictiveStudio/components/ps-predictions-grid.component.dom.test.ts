@@ -292,28 +292,45 @@ describe('PSPredictionsGridComponent (DOM) — the selection becomes a List thro
   const model: ModelRow & Pick<MJMLModelEntity, 'PipelineID'> = { ID: 'm-churn', PipelineID: 'P1', ProblemType: 'classification', TargetVariable: 'Churned', Lineage: null, OutputSemantics: null };
   const members = { ID: 'E-MEMBERS', Name: 'Members', PrimaryKeys: [{ Name: 'ID' }], FirstPrimaryKey: { Name: 'ID' } };
 
-  /** A User View double: the fields the grid writes and the save it calls. */
+  /** A User View double: the fields the grid writes, the save it calls and the delete its failure path calls. */
   class ViewDouble {
     public ID = '';
     public Name = '';
     public EntityID = '';
     public UserID = '';
     public WhereClause: string | null = null;
+    public FilterState: string | null = null;
     public CustomWhereClause = false;
     public IsShared = true;
+    public IsSaved = false;
     public LatestResult: { CompleteMessage: string } | null = null;
+    public Deletes = 0;
+    constructor(private readonly saves = true, private readonly deletes = true) {}
     public NewRecord(): boolean { return true; }
-    public async Save(): Promise<boolean> { this.ID = 'VIEW-1'; return true; }
+    public async Save(): Promise<boolean> {
+      if (!this.saves) return false;
+      this.ID = 'VIEW-1';
+      this.IsSaved = true;
+      return true;
+    }
+    public async Delete(): Promise<boolean> {
+      this.Deletes++;
+      if (!this.deletes) throw new Error('delete refused');
+      this.IsSaved = false;
+      return true;
+    }
   }
 
-  it('saves the filtered rows as a User View of the target entity and runs the action with its ID', async () => {
-    const view = new ViewDouble();
-    const opened: string[] = [];
-    const runs: Array<{ ActionID: string; Params: ActionParam[] }> = [];
+  /** What the action double returns: a created list, a refusal, or success without a list ID. */
+  type ActionOutcome = { Success: boolean; Message: string; Params: ActionParam[] };
+  const created: ActionOutcome = { Success: true, Message: 'ok', Params: [{ Name: 'CreatedListID', Value: 'LIST-1', Type: 'Output' }] };
+
+  /** Renders the grid over three run rows, picks the high tier and clicks "Save as list"; resolves once the save settles. */
+  async function SaveHighTier(view: ViewDouble, outcome: ActionOutcome, runs: Array<{ ActionID: string; Params: ActionParam[] }> = [], opened: string[] = []): Promise<PSPredictionsGridComponent> {
     vi.spyOn(PredictiveStudioEngine.Instance, 'LoadRunDetails').mockResolvedValue({ Rows: [detail('r1', 0.9), detail('r2', 0.8), detail('r3', 0.1)], Capped: false });
     vi.spyOn(PSPredictionsGridComponent.prototype, 'RunListAction').mockImplementation(async (actionId: string, params: ActionParam[]) => {
       runs.push({ ActionID: actionId, Params: params });
-      return { Success: true, Message: 'ok', Params: [{ Name: 'CreatedListID', Value: 'LIST-1', Type: 'Output' }] };
+      return outcome;
     });
     const fake = createFakeProvider<ModelRow | { ID: string }>({
       runViewResults: (p: RunViewParams) => (p.EntityName === 'MJ: ML Models' ? [model] : p.EntityName === 'MJ: Actions' ? [{ ID: 'ACT-MATERIALIZE' }] : []),
@@ -332,6 +349,14 @@ describe('PSPredictionsGridComponent (DOM) — the selection becomes a List thro
     fixture.detectChanges();
     (query(fixture, '[data-testid="ps-predictions-save-list"]') as HTMLButtonElement).click();
     for (let i = 0; i < 5; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+    return fixture.componentInstance;
+  }
+
+  it('saves the filtered rows as a User View of the target entity and runs the action with its ID', async () => {
+    const view = new ViewDouble();
+    const opened: string[] = [];
+    const runs: Array<{ ActionID: string; Params: ActionParam[] }> = [];
+    await SaveHighTier(view, created, runs, opened);
     // not a custom clause: MJ refuses CustomWhereClause from a non-Owner user; a plain view keeps a WhereClause set before its first save
     expect([view.EntityID, view.UserID, view.WhereClause, view.CustomWhereClause, view.IsShared]).toEqual(['E-MEMBERS', 'test-user-id', "ID IN ('r1','r2')", false, false]);
     // every value is a string: the GraphQL action input types Value as String, so a boolean is refused on the wire
@@ -339,5 +364,30 @@ describe('PSPredictionsGridComponent (DOM) — the selection becomes a List thro
       ['ACT-MATERIALIZE', [['ViewID', 'VIEW-1'], ['ListName', view.Name], ['RememberLineage', 'true']]],
     ]);
     expect(opened).toEqual(['MJ: Lists:ID|LIST-1']);
+    expect(view.Deletes).toBe(0);
+  });
+
+  it.each([
+    ['the action is refused', { Success: false, Message: 'refused', Params: [] }, 'refused'],
+    ['the action creates no list', { Success: true, Message: '', Params: [] }, 'the action created no list'],
+  ])('deletes the private User View it created when %s', async (_case: string, outcome: ActionOutcome, reason: string) => {
+    const view = new ViewDouble();
+    const grid = await SaveHighTier(view, outcome);
+    expect([view.Deletes, view.IsSaved]).toEqual([1, false]);
+    expect(grid.ListMessage).toBe(`Could not save the list: ${reason}`);
+  });
+
+  it('keeps the action\'s failure as the message when the cleanup delete fails too', async () => {
+    const view = new ViewDouble(true, false);
+    const grid = await SaveHighTier(view, { Success: false, Message: 'refused', Params: [] });
+    expect(view.Deletes).toBe(1);
+    expect(grid.ListMessage).toBe('Could not save the list: refused');
+  });
+
+  it('deletes nothing when the view itself was not saved', async () => {
+    const view = new ViewDouble(false);
+    const grid = await SaveHighTier(view, created);
+    expect(view.Deletes).toBe(0);
+    expect(grid.ListMessage).toContain('the selection\'s view was not saved');
   });
 });

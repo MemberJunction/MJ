@@ -1683,7 +1683,8 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   /**
    * Saves the grid's selection — the rows its tier and decile filters show — as a new List (§5.4): a private User View
    * of the target entity naming the selected records, materialized through the existing "Materialize List From View"
-   * action (with lineage to the view), then opens the List. No new action and no direct List Detail writes.
+   * action (with lineage to the view), then opens the List. No new action and no direct List Detail writes. When the
+   * action fails after the view was saved, the view is deleted again, so a failed save leaves nothing behind.
    */
   public async SaveSelectionAsList(): Promise<void> {
     const entity = this.ResolvedEntityName ? this.ProviderToUse.EntityByName(this.ResolvedEntityName) : undefined;
@@ -1691,10 +1692,12 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     this.SavingList = true;
     this.ListMessage = null;
     this.cdr.markForCheck();
+    let view: MJUserViewEntity | null = null;
+    let listCreated = false;
     try {
       const user = this.ProviderToUse.CurrentUser;
       const name = this.selectionListName();
-      const view = await this.ProviderToUse.GetEntityObject<MJUserViewEntity>('MJ: User Views', user);
+      view = await this.ProviderToUse.GetEntityObject<MJUserViewEntity>('MJ: User Views', user);
       view.NewRecord();
       view.Name = name;
       view.EntityID = entity.ID;
@@ -1712,14 +1715,28 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       ]);
       const listId = result.Params?.find((p) => p.Name === 'CreatedListID')?.Value;
       if (!result.Success || typeof listId !== 'string' || !listId) throw new Error(result.Message || 'the action created no list');
+      listCreated = true;
       this.ListMessage = `Saved ${this.FilteredRows.length} record(s) as the list "${name}".`;
       this.navigationService.OpenEntityRecord('MJ: Lists', CompositeKey.FromID(listId));
     } catch (e) {
       this.ListMessage = `Could not save the list: ${e instanceof Error ? e.message : String(e)}`;
       LogError(`PSPredictionsGridComponent.SaveSelectionAsList: ${this.ListMessage}`);
     } finally {
+      if (!listCreated && view?.IsSaved) await this.deleteSelectionView(view);
       this.SavingList = false;
       this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * Deletes the private view a failed "Save as list" created. Its own failure is logged and does not replace the
+   * message the user sees, which names why the list was not created.
+   */
+  private async deleteSelectionView(view: MJUserViewEntity): Promise<void> {
+    try {
+      if (!(await view.Delete())) LogError(`PSPredictionsGridComponent.SaveSelectionAsList: the selection's view ${view.ID} was not deleted: ${view.LatestResult?.CompleteMessage || 'unknown error'}`);
+    } catch (e) {
+      LogError(`PSPredictionsGridComponent.SaveSelectionAsList: the selection's view ${view.ID} was not deleted: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
