@@ -1766,6 +1766,17 @@
           "primaryKey": {
             "ID": "260A41E9-9367-4D7D-AABE-754921CBF6E3"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT182 - Archive Runs Page Through Every Eligible Row",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5941BA01-ECFA-40CF-8B53-4D817EBAC6C2"
+          }
         }
       ]
     },
