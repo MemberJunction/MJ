@@ -10877,6 +10877,12 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
 - **D4-265 · M8's self-audit fixes are type-only and re-run only their package** (M8 final pass, D4-87/D-084). The two
   findings change no emitted code (a removed cast, a narrowed return type in a test file), so the self-audit's "a fix
   re-runs this list" is met by TruthSuite's unit tier and its type-check; the DB lane and the harness run after them.
+- **D4-266 · The T4 series-lag generator test runs in the regeneration lane** (M8, CI run 44833693378, shard 2).
+  `make-scenario-series-lag.test.ts` (D4-181) runs `make_scenario.ts`, which loads the pinned Loom checkout; the unit
+  lane on CI has none (`Loom engine not built …`), so the file failed CI deterministically (red locally with
+  `TRUTH_LOOM_DIR=/nonexistent-loom`). It becomes `make-scenario-series-lag.regeneration.test.ts`, beside
+  `golden.regeneration.test.ts`, the lane whose config already assumes Loom (`vitest.regeneration.config.ts`): unit
+  lane 27/189 without Loom, regeneration lane 1/1 with it.
 - **D-086 · Program process ruling (owner, 2026-11-16).** Fix rounds are capped at two per task, Minor/Nit findings are
   parked and fixed in one batch at the milestone exit self-audit (Important at once); no scoped re-review for nit-only
   rounds; reviewers verify by reading and targeted runs (the DB-lane case, the mutation, the runtime proof) and do not
@@ -10979,7 +10985,7 @@ All resolved; the defaults are implemented and the kickoff only confirms the fac
 The owner's ruling of 2026-11-10 (D4-69) removed OF4-1, OF4-2, OF4-4 and OF4-6: CI gains the sidecar pytest job at M1
 (Task M1.6), M5.4 drops `'Materialized'` from `ModeBadgeClass`, M4.3 deletes the grid's `@deprecated` aliases, and M3.4
 deletes `ProductionModelPromotionGate` and rewrites RD9 and the `ps-live-*` rigs, each with the test or rig it breaks
-updated as caller maintenance (§2.6). Fifty flags are listed (OF4-12…OF4-15 added at M3, OF4-17 at M4's start, OF4-16 and OF4-18…OF4-26 at M4, OF4-27…OF4-33 at M4b, OF4-34…OF4-36 at M5's start, OF4-37…OF4-41 at M5's exit, OF4-42…OF4-47 at the M5b/M6/M7 integration, OF4-48…OF4-52 at the M5b–M7 final verification, OF4-53…OF4-54 at the post-audit verification); OF4-30 is closed and OF4-48…OF4-51 and OF4-53 are resolved, so forty-four remain, each decided out of scope with its
+updated as caller maintenance (§2.6). Fifty-one flags are listed (OF4-12…OF4-15 added at M3, OF4-17 at M4's start, OF4-16 and OF4-18…OF4-26 at M4, OF4-27…OF4-33 at M4b, OF4-34…OF4-36 at M5's start, OF4-37…OF4-41 at M5's exit, OF4-42…OF4-47 at the M5b/M6/M7 integration, OF4-48…OF4-52 at the M5b–M7 final verification, OF4-53…OF4-54 at the post-audit verification, OF4-55 at M8); OF4-30 is closed and OF4-48…OF4-51 and OF4-53 are resolved, so forty-five remain, each decided out of scope with its
 default implemented:
 
 - **OF4-3 · `packages/Angular/Explorer/core-entity-forms/src/lib/custom/RecordProcesses/**` stays out of scope**
@@ -11218,6 +11224,13 @@ default implemented:
   the reload landed between ABV3's second and third RunView, replaced the `EntityInfo` objects and dropped the synthetic
   alternate base view ABV3 had registered in memory (`'TestMirrorView' is not registered … (none)`). `IT132 - Alternate
   Base Views` alone: 6/6. Neither file is PR 4's. **Default:** recorded; not PR 4's check.
+- **OF4-55 · next's `spCreateRecordChangeContract.test.ts` can exceed its 30 s budget on a loaded CI shard** (M8, CI run
+  44833693378, shard 3: `Test timed out in 30000ms`). The test reads all 803 versioned migrations and tests each with
+  `/CREATE\s+(?:OR\s+ALTER\s+)?PROCEDURE[\s\S]*?spCreateRecordChange_Internal/i`, whose lazy scan restarts at every
+  `CREATE PROCEDURE` of a file without the name: 4.7 s of regex over next's own regenerate-everything migrations (the
+  slowest `V202611062330` 1.5 s; PR 4's migration 5 ms); the whole file 6.2 s locally at load 20. Green on next's CI at
+  the same base. The test is next's file, outside the allowlist (D-062). **Default:** recorded; an `includes()` pre-filter
+  before the regex would make it linear — for next's owners.
 
 ## 10. PR description draft
 
@@ -13422,6 +13435,10 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   results checked, no `any`. Two findings, both fixed (D4-265): `score-attempt.test.ts` cast its fixture
   `as RemoteOpResult<…>` (every member is optional; the cast is dropped) and the end-to-end harness's `statusOf` widened
   `MJ: ML Models.Status` to `string` (now `MJMLModelEntity['Status']`). TruthSuite 28/190; the harness type-checks.
+- CI on `a63fec9d2e`: unit shard 2 red — TruthSuite `make-scenario-series-lag.test.ts` needs the Loom checkout CI lacks
+  (reproduced locally with no Loom: 1 failed / 27) → moved to the regeneration lane (D4-266): unit lane 27/189 without
+  Loom, regeneration lane 1/1. Shard 3 red — next's `spCreateRecordChangeContract.test.ts` timed out at 30 s (OF4-55;
+  6.2 s locally, green on next).
 
 ## 12. Refresh log (append-only)
 
