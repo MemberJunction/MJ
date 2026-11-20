@@ -30,6 +30,12 @@
  *  13. MLModel               models registered before the lifecycle gate: re-checked from their stored gate record,
  *                              or Unevaluated (the newest formerly Published one of a pipeline still serving it); then
  *                              at most one Published model per pipeline
+ *
+ * Documented exception (D4-13): section 13 rewrites MLModel business state (Status, StatusReason, ArtifactStatus,
+ * ServingWhileUnevaluated, TrainingRunID) with raw UPDATEs, which writes no Record Changes rows. It is the one-time data
+ * fix of the pre-change statuses that UX_MLModel_OnePublishedPerPipeline and the lifecycle gate need before they can hold;
+ * the engine's step (g) (PreGateModelMigration, run by the Predictive Studio Registry Check job) does every later change
+ * through the gate, with its publish records and Record Changes.
  **************************************************************************************************/
 
 -- ============================================================================
@@ -1082,6 +1088,8 @@ GO
 -- ============================================================================
 -- 13. MLModel: models trained before the lifecycle gate, then one Published model per pipeline
 -- ============================================================================
+-- Documented exception (D4-13): this section's raw UPDATEs of MLModel business state write no Record Changes rows; it
+-- is the one-time data fix of the pre-change statuses (see the header). Every later change goes through the gate.
 -- A model with no Delivery was registered before the lifecycle gate. One whose training run stored the gate record
 -- (ValidationResults.gate.decision.outcome, the newest such run whose ResultingModelID is the model) carries its own
 -- evidence: it takes that run as its TrainingRunID, its artifact is re-checked (ArtifactStatus 'unverified'), a
