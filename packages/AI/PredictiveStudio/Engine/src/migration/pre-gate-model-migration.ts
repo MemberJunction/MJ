@@ -82,7 +82,13 @@ export interface PreGateMigrationSeams {
 export interface PreGateMigrationContext extends GateContext {
   /** The Registry Check job run the steps run as (every gate call's initiator). */
   readonly ScheduledJobRunID: string;
+  /** The collaborators the steps run through. */
   readonly Seams: PreGateMigrationSeams;
+  /**
+   * Renews the job run's lease (the scheduler's `context.heartbeat`), called before each step and for each model and
+   * pipeline a step visits, so a run that retrains is not taken for a dead one; absent outside a scheduled run.
+   */
+  readonly Heartbeat?: () => Promise<void>;
 }
 
 /** The job's `Configuration.migration` (camelCase like the job's other configuration keys). */
@@ -208,13 +214,16 @@ type ReEvaluatedPipeline = Pick<MJMLTrainingPipelineEntity, 'ID' | 'PredictionUn
 export class PreGateMigrationContexts {
   /**
    * The production context for one Registry Check job run: the gate's production seams, and the migration's production
-   * seams with any of `seams` replaced.
+   * seams with any of `seams` replaced; `heartbeat` is the scheduler's lease renewal ({@link PreGateMigrationContext.Heartbeat}).
    */
-  public static ForJobRun(ctx: RegistryContext, scheduledJobRunId: string, seams: Partial<PreGateMigrationSeams> = {}): PreGateMigrationContext {
+  public static ForJobRun(
+    ctx: RegistryContext, scheduledJobRunId: string, seams: Partial<PreGateMigrationSeams> = {}, heartbeat?: () => Promise<void>,
+  ): PreGateMigrationContext {
     const gate = seams.Gate || new LifecycleGate();
     return {
       ...GateContexts.ForRequest(ctx),
       ScheduledJobRunID: scheduledJobRunId,
+      ...(heartbeat ? { Heartbeat: heartbeat } : {}),
       Seams: {
         Gate: gate,
         Publisher: seams.Publisher || new AutomatedPublisher(gate),
@@ -251,9 +260,13 @@ export class PreGateModelMigration {
    */
   public static async RunRegistryStep(config: PreChangeMigrationConfig, ctx: PreGateMigrationContext): Promise<PreChangeStepDetails | null> {
     if (!(await PreGateModelMigration.HasPendingWork(ctx))) return null;
+    await PreGateModelMigration.beat(ctx);
     const reverified = await PreGateModelMigration.ReverifyEvidenceBearing(config.BatchSize, ctx);
+    await PreGateModelMigration.beat(ctx);
     const artifacts = await PreGateModelMigration.MigrateArtifacts(config.BatchSize, ctx);
+    await PreGateModelMigration.beat(ctx);
     const schedules = await PreGateModelMigration.DisableDemotedSchedules(config.BatchSize, ctx);
+    await PreGateModelMigration.beat(ctx);
     const reEvaluation = await PreGateModelMigration.ReEvaluate(config.RetrainPerRun, ctx, schedules.Disabled);
     return { Reverified: reverified, Artifacts: artifacts, Schedules: schedules, ReEvaluation: reEvaluation, DisabledProcessIDs: schedules.Disabled };
   }
@@ -270,6 +283,7 @@ export class PreGateModelMigration {
     const rows = await PreGateModelMigration.ReadEvidenceBearing(batch, ctx);
     const result: ReverifyResult = { Visited: rows.length, Adopted: [], Demoted: [], Evaluated: [], Retry: [] };
     for (const row of rows) {
+      await PreGateModelMigration.beat(ctx);
       try {
         if (row.Status === 'Published') await PreGateModelMigration.AdoptOne(row.ID, result, ctx);
         else await PreGateModelMigration.EvaluateOne(row.ID, result, ctx);
@@ -292,6 +306,7 @@ export class PreGateModelMigration {
     const lists: Omit<ArtifactMigrationResult, 'Visited' | 'Changed'> = { Verified: [], LegacyLocal: [], Missing: [], HashMismatch: [], Retry: [] };
     let changed = 0;
     for (const model of models) {
+      await PreGateModelMigration.beat(ctx);
       let outcome: PreChangeArtifactOutcome;
       try {
         outcome = await PreChangeArtifacts.Migrate(model, ctx, ctx.Seams.ArtifactLoader);
@@ -331,6 +346,7 @@ export class PreGateModelMigration {
     const handled = (await PreGateModelMigration.EarlierRunRecords(ctx)).flatMap((r) => r.ScoringActionsDisabled);
     const actions: string[] = [];
     for (const model of ExcludeByUUIDs(demoted, handled, (m) => m.ID).slice(0, batch)) {
+      await PreGateModelMigration.beat(ctx);
       // Recorded only when the Action is disabled: a refused save leaves the model for the next run to retry.
       if (await ctx.Seams.ScoringActions.DisableForModel(model, ctx.ContextUser, ctx.Provider)) actions.push(model.ID);
     }
@@ -342,6 +358,7 @@ export class PreGateModelMigration {
     });
     const disabled: string[] = [];
     for (const rp of due.slice(0, batch)) {
+      await PreGateModelMigration.beat(ctx);
       rp.ScheduleEnabled = false;
       if (!(await rp.Save())) throw new Error(`Disabling the schedule of Record Process ${rp.ID} failed: ${rp.LatestResult?.CompleteMessage || 'unknown error'}`);
       disabled.push(rp.ID);
@@ -365,6 +382,7 @@ export class PreGateModelMigration {
     const findings: ReEvaluationFinding[] = [];
     let trained = 0;
     for (const pipeline of pipelines) {
+      await PreGateModelMigration.beat(ctx);
       if (!pipeline.PredictionUnitID) {
         findings.push({ PipelineID: pipeline.ID, Kind: 'no-prediction-unit' });
         continue;
@@ -941,6 +959,11 @@ export class PreGateModelMigration {
   }
 
   // ================================================================================================ private ==
+
+  /** Renews the job run's lease when the context carries a heartbeat ({@link PreGateMigrationContext.Heartbeat}). */
+  private static async beat(ctx: PreGateMigrationContext): Promise<void> {
+    if (ctx.Heartbeat) await ctx.Heartbeat();
+  }
 
   /** The job run as the initiator of every gate call. */
   private static initiatorOf(ctx: PreGateMigrationContext): Actor {

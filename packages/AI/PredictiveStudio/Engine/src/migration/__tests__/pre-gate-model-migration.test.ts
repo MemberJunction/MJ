@@ -637,6 +637,15 @@ describe('the registry step (g)', () => {
     expect(PreGateModelMigration.DisabledProcessIDsOf(JSON.stringify({ [PreGateModelMigration.DetailsKey]: details }))).toEqual([plain.ID]);
   });
 
+  it('heartbeats the job run before each step and for every model and pipeline it visits (M7-5)', async () => {
+    Legacy(Pipeline(), 'Unevaluated', 'none');
+    let beats = 0;
+    const beating: PreGateMigrationContext = { ...ctx, Heartbeat: async () => { beats++; } };
+    await PreGateModelMigration.RunRegistryStep(PreGateModelMigration.DefaultConfig, beating);
+    // 4 steps; step 3 checks the model's artifact, step 4 disables its scoring Action, step 5 visits its pipeline.
+    expect(beats).toBe(4 + 3);
+  });
+
   it('reads its configuration with the defaults of D4-22', () => {
     expect([PreGateModelMigration.ConfigFrom(null), PreGateModelMigration.ConfigFrom({ batchSize: 10, retrainPerRun: 1 }), PreGateModelMigration.ConfigFrom({ batchSize: -1 })])
       .toEqual([{ BatchSize: 50, RetrainPerRun: 3 }, { BatchSize: 10, RetrainPerRun: 1 }, { BatchSize: 50, RetrainPerRun: 3 }]);

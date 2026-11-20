@@ -190,7 +190,7 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
     }
     const ctx = GateContexts.ForRequest({ ContextUser: runAs, Provider: context.Provider });
     const initiator: Actor = { kind: 'scheduled-job', scheduledJobRunId: context.Run.ID };
-    const migration = await this.MigratePreChangeModels(config, context.Run.ID, ctx);
+    const migration = await this.MigratePreChangeModels(config, context.Run.ID, ctx, context.heartbeat);
     const findings = [...migration.Findings, ...(await this.RunChecks(config, initiator, ctx))];
     const unnotified = await this.notify(context.Schedule.OwnerUserID, findings, ctx);
     const skipped = PredictiveStudioRegistryCheckJobDriver.SkippedSteps(config);
@@ -303,10 +303,11 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
    * (g) The pre-change model migration (§5.6 steps 2–5, D4-22): nothing once no pre-change work remains; otherwise one
    * bounded pass as this job run ({@link PreGateModelMigration.RunRegistryStep}), whose record the run's `Details`
    * carries. It runs before (a)–(c), which skip `Delivery IS NULL` rows. A pass that throws is one `retry` finding.
+   * `heartbeat` (the scheduler's lease renewal) is called through the pass, which can retrain.
    */
-  protected async MigratePreChangeModels(config: RegistryCheckConfiguration, scheduledJobRunId: string, ctx: GateContext): Promise<PreChangeStepOutcome> {
+  protected async MigratePreChangeModels(config: RegistryCheckConfiguration, scheduledJobRunId: string, ctx: GateContext, heartbeat?: () => Promise<void>): Promise<PreChangeStepOutcome> {
     try {
-      const migrationCtx = PreGateMigrationContexts.ForJobRun({ ContextUser: ctx.ContextUser, Provider: ctx.Provider }, scheduledJobRunId, this.resolved.Migration);
+      const migrationCtx = PreGateMigrationContexts.ForJobRun({ ContextUser: ctx.ContextUser, Provider: ctx.Provider }, scheduledJobRunId, this.resolved.Migration, heartbeat);
       return { Details: await PreGateModelMigration.RunRegistryStep(config.Migration, migrationCtx), Findings: [] };
     } catch (e) {
       return { Details: null, Findings: [{ Finding: 'g', SubjectID: null, Detail: `step (g): ${e instanceof Error ? e.message : String(e)}`, Action: 'the step failed; it runs again next hour', Outcome: 'retry' }] };
