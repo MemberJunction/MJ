@@ -1,5 +1,6 @@
 import { Component, ViewChild, AfterViewInit, OnInit, Output, EventEmitter, ChangeDetectorRef, Type } from '@angular/core';
-import { RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
+import { ArtifactVersionAuthorName, IsArtifactVersionWrittenByUser } from '../../utils/component-run-consent.util';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab, IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
 import { ComponentVersionDiffComponent } from '../version-diff/component-version-diff.component';
 import { MJReactComponent, AngularAdapterService, PdfOrientation } from '@memberjunction/ng-react';
@@ -324,23 +325,17 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    */
   public get IsRunConsentRequired(): boolean {
     if (this.RunApproved || !this.hasDisplayContent) return false;
-    return !this.isVersionAuthoredByCurrentUser();
+    return !IsArtifactVersionWrittenByUser(this.artifactVersion, this.ProviderToUse?.CurrentUser);
   }
 
   /** Display name of the user who wrote this version, for the run prompt. */
   public get CodeAuthorName(): string {
-    return this.artifactVersion?.User?.trim() || 'an unknown user';
+    return ArtifactVersionAuthorName(this.artifactVersion);
   }
 
   /** Runs the component after the viewer agrees in the run prompt. */
   public ApproveRun(): void {
     this.RunApproved = true;
-  }
-
-  private isVersionAuthoredByCurrentUser(): boolean {
-    const authorId = this.artifactVersion?.UserID;
-    const currentUserId = this.ProviderToUse?.CurrentUser?.ID;
-    return !!authorId && !!currentUserId && UUIDsEqual(authorId, currentUserId);
   }
 
   protected override onArtifactVersionChanged(

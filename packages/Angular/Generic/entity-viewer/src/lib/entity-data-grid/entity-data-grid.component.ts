@@ -159,16 +159,6 @@ function safeCssColor(value: string | null | undefined): string | null {
   return IsValidCssColor(v) ? v : null;
 }
 
-/** Escapes a value for use inside a double-quoted HTML attribute. */
-function escapeHtmlAttribute(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
 /**
  * A modern, flexible data grid component for displaying and managing entity data.
  * Built on AG Grid Community edition with a rich Before/After cancelable event system.
@@ -3759,7 +3749,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         const escapedRelatedEntityName = relatedEntityName ? HighlightUtil.escapeHtml(relatedEntityName) : '';
 
         // Build data attributes for the click handler
-        const dataAttrs = `data-related-entity-id="${escapedRelatedEntityId}" data-record-id="${fkValue}" data-field-name="${escapedFieldName}"${relatedEntityName ? ` data-related-entity-name="${escapedRelatedEntityName}"` : ''}`;
+        const dataAttrs = `data-related-entity-id="${escapedRelatedEntityId}" data-record-id="${HighlightUtil.escapeHtml(fkValue)}" data-field-name="${escapedFieldName}"${relatedEntityName ? ` data-related-entity-name="${escapedRelatedEntityName}"` : ''}`;
 
         // Apply highlighting if filter text is set
         const displayText = this._filterText
@@ -3870,10 +3860,10 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         // URL formatting
         else if (isUrl && vc.clickableUrls) {
           let url = String(params.value);
-          if (url && !url.startsWith('http')) {
+          if (url && !/^https?:\/\//i.test(url)) {
             url = 'https://' + url;
           }
-          const displayUrl = url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+          const displayUrl = url.replace(/^https?:\/\//i, '').replace(/\/$/, '');
           const escapedDisplay = HighlightUtil.escapeHtml(displayUrl);
           if (this._filterText) {
             const highlighted = HighlightUtil.highlight(displayUrl, this._filterText, true);
@@ -3893,7 +3883,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       }
 
       // Build the span with optional style and class
-      const styleAttr = inlineStyle ? ` style="${escapeHtmlAttribute(inlineStyle)}"` : '';
+      const styleAttr = inlineStyle ? ` style="${HighlightUtil.EscapeHtml(inlineStyle)}"` : '';
       const classAttr = extraClass ? ` class="${extraClass}"` : '';
 
       // Handle content that's already HTML (icons, etc.)
@@ -3918,7 +3908,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
    */
   private wrapWithStyle(content: string, style: string): string {
     if (!style) return content;
-    return `<span style="${escapeHtmlAttribute(style)}">${content}</span>`;
+    return `<span style="${HighlightUtil.EscapeHtml(style)}">${content}</span>`;
   }
 
 
