@@ -178,13 +178,11 @@ type MJServerModule = typeof import('@memberjunction/server');
 let mjServerModule: Promise<MJServerModule> | undefined;
 
 /**
- * Loads `@memberjunction/server` once and returns the same module on every call. This is the only
- * place in the MCP server auth code that imports it.
+ * Loads `@memberjunction/server` once and returns the same module on every call.
  *
- * Dynamic import: this is not one of the reasons listed in `.claude/rules/typescript-style.md`. It is
- * this package's existing load-order exception: `@memberjunction/server` reads `process.env` at
- * module load, and a static import would run before dotenv (see config.ts). The package is still a
- * declared dependency.
+ * The import is dynamic for load order: `@memberjunction/server` reads `process.env` when the
+ * module loads, so it must load after dotenv has run (see config.ts). The package is a declared
+ * dependency.
  */
 export function LoadMJServerModule(): Promise<MJServerModule> {
   mjServerModule ??= import('@memberjunction/server');
