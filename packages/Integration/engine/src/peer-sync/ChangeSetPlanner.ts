@@ -1,4 +1,4 @@
-import { EntityInfo, IMetadataProvider, Metadata } from '@memberjunction/core';
+import { EntityInfo, IMetadataProvider, Metadata, UserInfo, UserReadsEveryRecord, WellKnownUserSource } from '@memberjunction/core';
 import { EscapeSQLString, IndexByUUID, NormalizeUUID, UUIDSet } from '@memberjunction/global';
 import type {
     CoalescedRecordChange,
@@ -58,6 +58,21 @@ export function CompareCompositeCursor(a: PeerChangeCursor, b: PeerChangeCursor)
         return a.ChangedAt.localeCompare(b.ChangedAt);
     }
     return NormalizeUUID(a.ChangeID).localeCompare(NormalizeUUID(b.ChangeID));
+}
+
+/**
+ * Throws unless `user` sees every change row of `entity`. Change rows a user may not see are
+ * removed after the database pages them, so a cursor walk by such a user would stop early.
+ * The system user, and a user who reads every record of the entity, see every row.
+ */
+export function AssertSyncUserSeesEveryChange(entity: EntityInfo, user: UserInfo): void {
+    if (WellKnownUserSource.Instance.IsSystemUser(user) || UserReadsEveryRecord(entity, user)) {
+        return;
+    }
+    throw new Error(
+        `Peer sync of '${entity.Name}' needs a sync user who can read every record of that entity; ` +
+        `user '${user.Name}' cannot, so its change history cannot be paged.`
+    );
 }
 
 /**

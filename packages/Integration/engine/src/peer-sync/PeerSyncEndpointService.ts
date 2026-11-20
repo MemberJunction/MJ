@@ -1,6 +1,7 @@
 import { IMetadataProvider, IRunViewProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { NormalizeUUID } from '@memberjunction/global';
 import {
+    AssertSyncUserSeesEveryChange,
     BuildCompositeWatermarkWhereClause,
     CoalesceRecordChanges,
     PlanPeerEntityOrder,
@@ -194,6 +195,7 @@ export class PeerSyncEndpointService {
         if (!entityInfo) {
             throw new Error(`Entity '${request.EntityName}' not found on peer '${this.config.InstanceName}'.`);
         }
+        AssertSyncUserSeesEveryChange(entityInfo, contextUser);
 
         const whereClause = BuildCompositeWatermarkWhereClause(
             entityInfo.ID,

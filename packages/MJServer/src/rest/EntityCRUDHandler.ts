@@ -1,6 +1,6 @@
 import { 
     AssertClientInputWritableForUser, BaseEntity, CompositeKey, EntityDeleteOptions, EntityPermissionType, 
-    EntitySaveOptions, LogError, Metadata, ServerOperationScopeManager, UserInfo 
+    EntitySaveOptions, LogError, LoadRecordPassingReadHooks, Metadata, ServerOperationScopeManager, UserInfo 
 } from '@memberjunction/core';
 import { ProjectValuesForCaller } from '../generic/fieldSecurityTransport.js';
 
@@ -112,7 +112,7 @@ export class EntityCRUDHandler {
             const compositeKey = this.createCompositeKeyFromId(entity, id);
             
             // Load entity
-            const loadSuccess = await entity.InnerLoad(compositeKey, relatedEntities);
+            const loadSuccess = await LoadRecordPassingReadHooks(entity, compositeKey, user, relatedEntities);
             
             if (!loadSuccess) {
                 return { 
@@ -157,7 +157,7 @@ export class EntityCRUDHandler {
             const compositeKey = this.createCompositeKeyFromId(entity, id);
             
             // Load entity
-            const loadSuccess = await entity.InnerLoad(compositeKey);
+            const loadSuccess = await LoadRecordPassingReadHooks(entity, compositeKey, user);
             
             if (!loadSuccess) {
                 return { 
@@ -256,7 +256,7 @@ export class EntityCRUDHandler {
             const compositeKey = this.createCompositeKeyFromId(entity, id);
             
             // Load entity
-            const loadSuccess = await entity.InnerLoad(compositeKey);
+            const loadSuccess = await LoadRecordPassingReadHooks(entity, compositeKey, user);
             
             if (!loadSuccess) {
                 return { 

@@ -9,12 +9,13 @@ import {
   EnsureCollectionArtifactReadHookRegistered,
   EnsureCollectionPermissionReadHookRegistered,
   EnsureCollectionReadHookRegistered,
+  EnsureRecordChangeReadHookRegistered,
   RegisterArtifactPostRunViewProtectedEntityRegistry,
 } from '@memberjunction/core-entities-server';
 
 /**
  * Registers all `PostRunView` ACL hooks and marks the 9 artifact/collection security entities as
- * protected in `ClientClauseScreen` (so generic `RunView` cannot bypass `PostRunView` filtering).
+ * protected in `ClientClauseScreen`, and does the same for `MJ: Record Changes` (so generic `RunView` cannot bypass `PostRunView` filtering).
  */
 export function RegisterArtifactPostRunViewProtectedEntities(): void {
   EnsureAnchoredConversationReadHookRegistered();
@@ -27,5 +28,6 @@ export function RegisterArtifactPostRunViewProtectedEntities(): void {
   EnsureCollectionReadHookRegistered();
   EnsureCollectionPermissionReadHookRegistered();
   EnsureCollectionArtifactReadHookRegistered();
+  EnsureRecordChangeReadHookRegistered();
   RegisterArtifactPostRunViewProtectedEntityRegistry();
 }

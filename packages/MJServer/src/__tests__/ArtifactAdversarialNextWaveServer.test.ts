@@ -317,6 +317,13 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
         vi.spyOn(ArtifactPermissionEngine.Instance, 'CheckPermission').mockImplementation(
             async (_p, _aid, user) => UUIDsEqual(user.ID, ownerUser.ID)
         );
+        // The read hooks the single-record mapper also runs resolve artifact permissions directly.
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockImplementation(
+            async (_p, aid, user) => {
+                const owner = Boolean(user && UUIDsEqual(user.ID, ownerUser.ID));
+                return { ArtifactID: aid ?? '', CanRead: owner, CanEdit: owner, CanDelete: owner, CanShare: owner, Source: owner ? 'Owner' : 'None', Reason: 'test' };
+            }
+        );
         vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolveCollectionAncestryPermissions').mockImplementation(
             async (_p, _cid, user) => ({
                 CanRead: UUIDsEqual(user.ID, ownerUser.ID),
@@ -1390,7 +1397,8 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
         } as EntityInfo;
         const mappingProvider: IMetadataProvider & IRunViewProvider = {
             Entities: [guestLinkEntityInfo],
-            EntityByName: () => guestLinkEntityInfo,
+            EntityByName: (name: string) =>
+                name.trim().toLowerCase() === 'mj: artifact guest share links' ? guestLinkEntityInfo : undefined,
             RunView: vi.fn(async () => ({ Success: true, Results: [], TotalRowCount: 0 })),
             RunViews: vi.fn(async () => []),
             GetEntityObject: vi.fn(async () => ({})),
