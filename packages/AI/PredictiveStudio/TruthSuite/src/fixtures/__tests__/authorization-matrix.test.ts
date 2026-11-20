@@ -4,7 +4,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
-import { AuthorizationMatrix, type AuthorizationMatrixWriter } from '../authorization-matrix';
+import { AuthorizationMatrix, type AuthorizationMatrixWriter, type MatrixGrantType, type MatrixUserType } from '../authorization-matrix';
 
 const mirrored = readFileSync(new URL(`../../../../../../../${AuthorizationMatrix.MirroredTestFile}`, import.meta.url), 'utf8').replace(/\\'/g, "'");
 
@@ -19,9 +19,9 @@ class RecordingWriter implements AuthorizationMatrixWriter {
   }
   public async CreateAuthorization(name: string, parentId: string | null, isActive: boolean): Promise<string> { return this.id('auth', `${name} parent=${parentId} active=${isActive}`); }
   public async CreateRole(name: string): Promise<string> { return this.id('role', name); }
-  public async CreateUser(name: string, email: string, type: 'User' | 'Owner'): Promise<string> { return this.id('user', `${email} ${type}`); }
+  public async CreateUser(name: string, email: string, type: MatrixUserType): Promise<string> { return this.id('user', `${email} ${type}`); }
   public async AddUserRole(userId: string, roleId: string): Promise<string> { return this.id('userrole', `${userId}->${roleId}`); }
-  public async Grant(authorizationId: string, roleId: string, type: 'Allow' | 'Deny'): Promise<string> { return this.id('grant', `${authorizationId} ${roleId} ${type}`); }
+  public async Grant(authorizationId: string, roleId: string, type: MatrixGrantType): Promise<string> { return this.id('grant', `${authorizationId} ${roleId} ${type}`); }
 }
 
 describe('AuthorizationMatrix', () => {
