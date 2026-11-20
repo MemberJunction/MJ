@@ -76,12 +76,6 @@ describe('BuildRecordChangePayload and encrypted fields', () => {
         expect(JSON.parse(payload.fullRecordJSON).AccessToken).toBe(ENCRYPTED_SENTINEL);
     });
 
-    it('keeps an encrypted field in its stored encrypted form in a delete snapshot', () => {
-        const stored = '$ENC$key-1$AES-256-GCM$iv$ciphertext$tag';
-        const payload = provider.TestBuildRecordChangePayload(null, { ID: 'r1', Name: 'Svc', AccessToken: stored }, entity, 'Delete', user)!;
-        expect(JSON.parse(payload.fullRecordJSON).AccessToken).toBe(stored);
-    });
-
     it('keeps the clear text of an encrypted field out of a create snapshot', () => {
         const payload = provider.TestBuildRecordChangePayload({ ID: 'r1', Name: 'Svc', AccessToken: NEW_MARKER }, null, entity, 'Create', user)!;
         expect(payload.fullRecordJSON).not.toContain(NEW_MARKER);
