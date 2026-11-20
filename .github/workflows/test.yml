@@ -74,11 +74,14 @@ jobs:
     outputs:
       relevant: ${{ steps.filter.outputs.relevant }}
     steps:
+      # The diff below reads commit and tree data only, so the job checks out .github/ and
+      # the root files and downloads no other file content.
       - name: Checkout repo
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
           filter: blob:none
+          sparse-checkout: .github
           persist-credentials: false
       - name: Check changed paths
         id: filter
@@ -218,7 +221,9 @@ jobs:
             -e 's/\*\*/@@GLOBSTAR@@/g' -e 's/\*/[^\/]*/g' -e 's/@@GLOBSTAR@@/.*/g' \
             -e 's/^/^/' -e 's/$/$/' "$RUNNER_TEMP/unit-test-paths.txt" | paste -sd'|' -)"
           git fetch --no-tags origin "$PR_BASE_REF"
-          CHANGED="$(git diff --name-only "origin/$PR_BASE_REF...HEAD")"
+          # --no-renames: rename detection reads file content, which this clone does not have.
+          # A rename then lists both its old and its new path.
+          CHANGED="$(git diff --name-only --no-renames "origin/$PR_BASE_REF...HEAD")"
           if echo "$CHANGED" | grep -qE "$RE"; then
             echo "relevant=true" >> "$GITHUB_OUTPUT"
           else
@@ -594,8 +599,8 @@ jobs:
 
       # Turbo's cache is the single biggest lever on this workflow's runtime. Runners are
       # ephemeral, so without this every run reported `0 cached` and rebuilt all ~300 packages
-      # from scratch. (`cache: 'pnpm'` in mj-setup caches only the pnpm STORE, which is why
-      # installs are a fast ~17s; it does nothing for build outputs.)
+      # from scratch. (mj-setup caches only the pnpm STORE, which keeps installs fast; it does
+      # nothing for build outputs.)
       #
       # Restore-only here; the matching save runs after the build, and ONLY on the backstop
       # events. See the save step for why PRs deliberately don't write their own entry.
@@ -888,12 +893,13 @@ jobs:
       REDIS_URL: redis://127.0.0.1:6379
     steps:
       # fetch-depth 1: a shard runs tests against the working tree and never diffs a base ref.
+      # No blobless filter: a shard needs every file of the commit, and one download of the
+      # full commit is faster than a filtered fetch plus a second download during checkout.
       - name: Checkout repo
         uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 1
-          filter: blob:none
 
       - uses: ./.github/actions/mj-setup
 
@@ -1146,6 +1152,8 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
           filter: blob:none
+          # The alarm script is the only file this job reads.
+          sparse-checkout: .github
 
       - name: Alert on backstop failure
         if: failure() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
@@ -1283,7 +1291,6 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: false
-          filter: blob:none
 
       - uses: ./.github/actions/mj-setup
 
