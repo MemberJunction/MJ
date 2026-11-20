@@ -705,21 +705,29 @@ export class PreGateModelMigration {
 
   /**
    * The newest publish-ledger row (a `publish` or a `refusal`, run-level included) of the pipeline's training runs: the
-   * pipeline's last attempt under the gate; null when it has none.
+   * pipeline's last attempt under the gate; null when it has none. The run IDs are read first, so no SQL names the
+   * database schema or a view, and the ledger read returns one row.
    *
-   * @throws Error when the read fails
+   * @throws Error when a read fails
    */
   protected static async LastAttempt(pipelineId: string, ctx: RegistryContext): Promise<PipelineAttempt | null> {
-    const r = await StoredRowReads.Run<Pick<MJMLModelPublishRecordEntity, 'ID' | 'TrainingRunID' | 'Kind' | 'RecordedAt'>>(
+    const runs = await StoredRowReads.Run<Pick<MJMLTrainingRunEntity, 'ID'>>(
+      { EntityName: 'MJ: ML Training Runs', ExtraFilter: `PipelineID='${EscapeSQLString(pipelineId)}'`, Fields: ['ID'], ResultType: 'simple' },
+      ctx,
+    );
+    if (!runs.Success) throw new Error(`Reading the training runs of pipeline ${pipelineId} failed: ${runs.ErrorMessage || 'unknown error'}`);
+    if (runs.Results.length === 0) return null;
+    const runIds = runs.Results.map((run) => `'${EscapeSQLString(run.ID)}'`).join(', ');
+    const r = await StoredRowReads.Run<Pick<MJMLModelPublishRecordEntity, 'ID' | 'TrainingRunID' | 'RecordedAt'>>(
       {
         EntityName: 'MJ: ML Model Publish Records',
-        ExtraFilter: `TrainingRunID IN (SELECT ID FROM [__mj].[vwMLTrainingRuns] WHERE PipelineID='${EscapeSQLString(pipelineId)}')`,
-        OrderBy: 'RecordedAt DESC', Fields: ['ID', 'TrainingRunID', 'Kind', 'RecordedAt'], ResultType: 'simple',
+        ExtraFilter: `TrainingRunID IN (${runIds}) AND Kind IN ('publish', 'refusal')`,
+        OrderBy: 'RecordedAt DESC', Fields: ['ID', 'TrainingRunID', 'RecordedAt'], MaxRows: 1, ResultType: 'simple',
       },
       ctx,
     );
     if (!r.Success) throw new Error(`Reading the publish records of pipeline ${pipelineId} failed: ${r.ErrorMessage || 'unknown error'}`);
-    const newest = r.Results.find((x) => (x.Kind === 'publish' || x.Kind === 'refusal') && x.TrainingRunID !== null);
+    const newest = r.Results[0];
     return newest && newest.TrainingRunID ? { TrainingRunID: newest.TrainingRunID, RecordedAt: new Date(newest.RecordedAt) } : null;
   }
 

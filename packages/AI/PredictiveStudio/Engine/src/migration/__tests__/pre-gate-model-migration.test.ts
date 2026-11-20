@@ -515,6 +515,15 @@ describe('step 5: automated re-evaluation', () => {
     expect(second.Findings).toContainEqual(expect.objectContaining({ PipelineID: noisy, Kind: 'unchanged-since-last-attempt' }));
   });
 
+  it('reads the last attempt without naming a database schema (M7-2)', async () => {
+    const noisy = Pipeline();
+    Legacy(noisy, 'Unevaluated', 'none');
+    await PreGateModelMigration.ReEvaluate(3, ctx);
+    const reads = store.Reads.length;
+    expect((await PreGateModelMigration.ReEvaluate(3, ctx)).Findings).toContainEqual(expect.objectContaining({ PipelineID: noisy, Kind: 'unchanged-since-last-attempt' }));
+    expect(store.Reads.slice(reads).filter((r) => r.includes('__mj'))).toEqual([]);
+  });
+
   it('a withheld pipeline whose row changed after its last attempt is retrained', async () => {
     const noisy = Pipeline();
     Legacy(noisy, 'Unevaluated', 'none');
