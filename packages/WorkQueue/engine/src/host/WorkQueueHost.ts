@@ -328,7 +328,7 @@ export class WorkQueueHost implements IShutdownable {
         return this.reconciling;
     }
 
-    /** Never throws: a failed pass is logged and reported as {}. */
+    /** Never throws: a pass that threw is logged and reported as { Pass: -1 }; a held lock is {}. */
     public RunSweeperOnce(): Promise<Record<string, number>> {
         if (!this.sweeping) {
             this.sweeping = this.sweepNow().finally(() => {
@@ -380,7 +380,7 @@ export class WorkQueueHost implements IShutdownable {
             return await this.sweeper.RunOnce();
         } catch (error) {
             this.log.Error('Sweeper pass failed', AsError(error));
-            return {};
+            return { Pass: -1 };
         }
     }
 
