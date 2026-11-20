@@ -197,8 +197,14 @@ export class WorldDrift implements IMonitoringDrift {
   public NextDrift(alarms: readonly string[]): void {
     this.next = alarms;
   }
+  /** How many of the next calls fail as an unreachable sidecar would. */
+  public FailNext = 0;
   public async MonitorDrift(request: MonitorDriftRequest): Promise<MonitorDriftResponse> {
     this.Requests.push(request);
+    if (this.FailNext > 0) {
+      this.FailNext--;
+      throw new Error('the ML sidecar is unreachable (ECONNREFUSED)');
+    }
     const flagged = new Set(this.next || []);
     this.next = null;
     const results: MonitorDriftLook[] = request.inputs.map((i) => ({ input: i.name, kind: i.kind, z: flagged.has(i.name) ? 5 : 0, p: flagged.has(i.name) ? 1e-4 : 0.9, pAdjusted: flagged.has(i.name) ? 1e-4 : 0.9, q: request.q, look: request.look, flagged: flagged.has(i.name) }));

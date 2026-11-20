@@ -109,6 +109,19 @@ describe('PredictiveStudioModelMonitoringJobDriver.Execute', () => {
     expect(world.Store.Rows).toHaveLength(0);
   });
 
+  it('a step error (a sidecar outage) fails only its period, with the reason on its row; the other periods still run (M1)', async () => {
+    PeriodRows(JUNE, 200, 0.3, 60);
+    PeriodRows(D('2026-07-10'), 200, 0.3, 60, 'j');
+    world.Store.Inputs = [{ Name: 'EngagementZ', Reference: [0, 1, 2, 3, 4], Current: [1, 2, 3] }];
+    await driver.Execute(await Context(NOW_INSIDE_WINDOW));
+    world.Drift.FailNext = 1;
+    const r = await driver.Execute(await Context(D('2026-08-31')));
+    const byMonth = (iso: string) => world.Store.Rows.find((row) => row.Period.Start.getTime() === D(iso).getTime());
+    expect(byMonth('2026-06-01')).toMatchObject({ State: 'failed', ErrorMessage: expect.stringContaining('the drift look could not run: the ML sidecar is unreachable') });
+    expect(byMonth('2026-07-01')).toMatchObject({ State: 'evaluated' });
+    expect(r).toMatchObject({ Success: false, ErrorMessage: expect.stringContaining('2026-06-01: the drift look could not run') });
+  });
+
   it('a period whose label window is open is stored window-open with 0 joined rows', async () => {
     PeriodRows(JUNE, 50, 0.3, 15);
     await driver.Execute(await Context(NOW_INSIDE_WINDOW));

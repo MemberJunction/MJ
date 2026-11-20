@@ -50,7 +50,7 @@ import { MonitoringPeriods } from './monitoring-periods';
 import { MonitoringSeamDefaults } from './monitoring-store';
 import { OutcomeJoin, OutcomeJoinFailedError, type OutcomeJoinResult } from './outcome-join';
 import { PeriodEvaluation, type PeriodScores, type PeriodScoringSpec } from './period-evaluation';
-import { RollbackComparisonError, RollbackStep } from './rollback-step';
+import { RollbackStep } from './rollback-step';
 
 /** What one monitored period came to, for the job run's `Details` and the operation's output. */
 export interface MonitoredPeriodOutcome {
@@ -73,6 +73,14 @@ export interface MonitoringRunOutcome {
   /** Why nothing was monitored (the model is gone or no longer Published); null when the periods ran. */
   readonly Skipped: string | null;
   readonly Periods: readonly MonitoredPeriodOutcome[];
+}
+
+/** A step of a period that threw: its message names the step and the error's own message. */
+class PeriodStepError extends Error {
+  constructor(step: string, reason: string) {
+    super(`${step} could not run: ${reason}`);
+    this.name = 'PeriodStepError';
+  }
 }
 
 /** The period's evaluated numbers, with the degradation the triggers read. */
@@ -197,7 +205,11 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
 
   // ----- one period ------------------------------------------------------------------------------------------------
 
-  /** One period through every step; a failure of the join or a step is recorded on the period's row. */
+  /**
+   * One period through every step. A failure of the join or of any step (an unreachable sidecar, an artifact that no
+   * longer loads verified, a publisher, parity or notifier error) is recorded on the period's row as `failed` with the
+   * step and its reason, and the next period still runs. Only a failure to write the period's row itself propagates.
+   */
   protected async MonitorPeriod(plan: PeriodPlan, period: MonitoringPeriod, ctx: MonitoringContext): Promise<MonitoredPeriodOutcome> {
     const base = PredictiveStudioModelMonitoringJobDriver.emptyRow(plan.Model.ID, ctx.ScheduledJobRunID, period);
     if (!MonitoringRules.LabelWindowClosed(plan.Unit, MonitoringPeriods.LastDay(period), ctx.Seams.Clock.Now())) {
@@ -207,38 +219,49 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
     try {
       join = await this.JoinOutcomes(plan, period, ctx);
     } catch (e) {
-      if (!(e instanceof OutcomeJoinFailedError)) throw e;
-      return this.WritePeriod({ ...base, State: 'failed', ErrorMessage: e.message }, ctx);
+      const reason = e instanceof OutcomeJoinFailedError ? e.message : `the outcome join could not run: ${e instanceof Error ? e.message : String(e)}`;
+      return this.WritePeriod({ ...base, State: 'failed', ErrorMessage: reason }, ctx);
     }
     const counted = { ...base, ScoredRows: join.ScoredRows, JoinedRows: join.Rows.filter((r) => r.Outcome !== null).length, ExcludedInTrainingRows: join.ExcludedInTrainingRows };
     if (!join.Rows.some((r) => r.Outcome !== null)) {
       return this.WritePeriod({ ...counted, State: 'failed', ErrorMessage: `no realised outcome among the period's ${join.Rows.length} joined prediction(s)` }, ctx);
     }
+    let write: PeriodRowWrite;
     try {
-      return await this.evaluateAndAct(plan, period, join, counted, ctx);
+      write = await this.evaluateAndAct(plan, period, join, counted, ctx);
     } catch (e) {
-      if (!(e instanceof RollbackComparisonError)) throw e;
-      return this.WritePeriod({ ...counted, State: 'failed', ErrorMessage: `the rollback check could not run: ${e.message}` }, ctx);
+      return this.WritePeriod({ ...counted, State: 'failed', ErrorMessage: e instanceof Error ? e.message : String(e) }, ctx);
     }
+    return this.WritePeriod(write, ctx);
   }
 
-  /** Steps 2–8 of a joined period, then its row. */
-  private async evaluateAndAct(plan: PeriodPlan, period: MonitoringPeriod, join: OutcomeJoinResult, counted: PeriodRowWrite, ctx: MonitoringContext): Promise<MonitoredPeriodOutcome> {
-    const history = await ctx.Seams.Store.EarlierPeriods(plan.Model.ID, period.Grain, period.Start, ctx);
-    const evaluated = await this.EvaluatePeriod(plan, join.Rows, period, ctx);
-    const drift = await this.LookForDrift(plan, join, period, history, ctx);
+  /** Steps 2–8 of a joined period, each named in the error that stops it; the period's row to write. */
+  private async evaluateAndAct(plan: PeriodPlan, period: MonitoringPeriod, join: OutcomeJoinResult, counted: PeriodRowWrite, ctx: MonitoringContext): Promise<PeriodRowWrite> {
+    const step = PredictiveStudioModelMonitoringJobDriver.step;
+    const history = await step('the period history read', () => ctx.Seams.Store.EarlierPeriods(plan.Model.ID, period.Grain, period.Start, ctx));
+    const evaluated = await step('the evaluation', () => this.EvaluatePeriod(plan, join.Rows, period, ctx));
+    const drift = await step('the drift look', () => this.LookForDrift(plan, join, period, history, ctx));
     const current = PredictiveStudioModelMonitoringJobDriver.periodResult(plan.Model.ID, period, join.Rows.length, evaluated.Scores, evaluated.Degradation);
-    const fired = await this.FireTriggers(plan, history, current, ctx);
+    const fired = await step('the retrain triggers', () => this.FireTriggers(plan, history, current, ctx));
     const previousFired = history.filter((h) => h.State === 'evaluated').slice(-1).flatMap((h) => h.TriggersFired);
-    const mirror = await this.MeasureDivergence(plan, join, period, ctx);
-    const challenger = await this.RunChallenger(plan, fired, previousFired, mirror, ctx);
-    const rollback = await this.CheckRollback(plan, history, period, ctx);
-    const parity = await this.CheckParity(plan, join.Binding, period, ctx);
-    return this.WritePeriod({
+    const mirror = await step('the live mirror', () => this.MeasureDivergence(plan, join, period, ctx));
+    const challenger = await step('the challenger', () => this.RunChallenger(plan, fired, previousFired, mirror, ctx));
+    const rollback = await step('the rollback check', () => this.CheckRollback(plan, history, period, ctx));
+    const parity = await step('the parity check', () => this.CheckParity(plan, join.Binding, period, ctx));
+    return {
       ...counted, State: 'evaluated', Primary: evaluated.Scores.Primary, Tracked: evaluated.Scores.Tracked, Calibration: evaluated.Scores.Calibration,
       DriftLook: drift.Look, DriftAlarms: drift.Alarms, Parity: parity, TriggersFired: fired, ChallengerRunID: challenger.ChallengerRunID,
       Challenger: challenger.Result, Rollback: rollback,
-    }, ctx);
+    };
+  }
+
+  /** Runs one named step; an error it throws is rethrown as a {@link PeriodStepError} naming the step. */
+  private static async step<T>(name: string, run: () => Promise<T>): Promise<T> {
+    try {
+      return await run();
+    } catch (e) {
+      throw new PeriodStepError(name, e instanceof Error ? e.message : String(e));
+    }
   }
 
   /** Step 1: the period's predictions joined to their realised outcomes ({@link OutcomeJoin.Join}). */
