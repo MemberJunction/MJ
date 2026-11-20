@@ -52,6 +52,7 @@
   "shipped/SQL/predictive-studio-lock-pipeline.sql": {"orderByClause":null,"sqlWithoutOrder":{"$slice":[0,844]}},
   "shipped/SQL/predictive-studio-next-model-version.sql": {"orderByClause":null,"sqlWithoutOrder":{"$slice":[0,722]}},
   "shipped/SQL/predictive-studio-running-training-run.sql": {"orderByClause":"StartedAt DESC","sqlWithoutOrder":{"$slice":[0,840]}},
+  "shipped/SQL/predictive-studio-schema-fingerprint.sql": {"orderByClause":null,"sqlWithoutOrder":{"$slice":[0,1075]}},
   "shipped/SQL/rubric-drift-period-means.pg.sql": {"orderByClause":null,"sqlWithoutOrder":{"$slice":[0,2096]}},
   "shipped/SQL/rubric-drift-period-means.sql": {"orderByClause":null,"sqlWithoutOrder":{"$slice":[0,1669]}},
   "shipped/SQL/server-installed-version-history.pg.sql": {"orderByClause":"installed_on DESC","sqlWithoutOrder":{"$slice":[0,339]}},

@@ -92,6 +92,7 @@
     "entity-form-contributions",
     "entity-settings",
     "roles",
+    "row-level-security-filters",
     "entity-permissions",
     "widget-instances",
     "remote-operation-categories",

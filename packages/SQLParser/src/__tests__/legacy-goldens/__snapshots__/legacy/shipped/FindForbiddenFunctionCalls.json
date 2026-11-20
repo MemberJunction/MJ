@@ -52,6 +52,7 @@
   "shipped/SQL/predictive-studio-lock-pipeline.sql": [],
   "shipped/SQL/predictive-studio-next-model-version.sql": [],
   "shipped/SQL/predictive-studio-running-training-run.sql": [],
+  "shipped/SQL/predictive-studio-schema-fingerprint.sql": [],
   "shipped/SQL/rubric-drift-period-means.pg.sql": [],
   "shipped/SQL/rubric-drift-period-means.sql": [],
   "shipped/SQL/server-installed-version-history.pg.sql": [],

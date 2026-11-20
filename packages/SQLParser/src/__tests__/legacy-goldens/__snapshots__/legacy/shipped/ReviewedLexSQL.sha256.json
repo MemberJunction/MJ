@@ -52,6 +52,7 @@
   "shipped/SQL/predictive-studio-lock-pipeline.sql": "c51b93ac4c70df5052e4f2b4cb86cdefadc3f868d53fa86c97129352ac4668d6",
   "shipped/SQL/predictive-studio-next-model-version.sql": "f79ae4f771215f2f2ec1b99f19a98f968a5408230f0ffdee2de3fb3e86cfb258",
   "shipped/SQL/predictive-studio-running-training-run.sql": "d25b134e1f35ad32fc863e2ac8ab34775fba624653d325f86c9ee4bab4256136",
+  "shipped/SQL/predictive-studio-schema-fingerprint.sql": "089addfa4e6fac45b93f22c36a3c51d7745a3042d731ed17d55dbf680c350489",
   "shipped/SQL/rubric-drift-period-means.pg.sql": "2f5a218cf8068deab924e97d3aa8c830d17b06de08f6b2202f475b40a2da4ab7",
   "shipped/SQL/rubric-drift-period-means.sql": "73fa45b8c24d38d5cc42f83d7e16c079edbef41c95f3ec05c9df9696bfd23771",
   "shipped/SQL/server-installed-version-history.pg.sql": "2ec18e77fba69aec55a3bd8fe8b2bc23b84ccdf66e64674472864fbe49e16d17",

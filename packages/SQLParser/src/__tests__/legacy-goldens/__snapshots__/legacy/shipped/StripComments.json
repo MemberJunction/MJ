@@ -52,6 +52,7 @@
   "shipped/SQL/predictive-studio-lock-pipeline.sql": {"$patch":{"keep":[0,115],"text":"\n\n\n\n\n\n\n\n"}},
   "shipped/SQL/predictive-studio-next-model-version.sql": {"$patch":{"keep":[0,146],"text":"\n\n\n\n\n\n"}},
   "shipped/SQL/predictive-studio-running-training-run.sql": {"$patch":{"keep":[0,200],"text":"\n\n\n\n\n\n\n"}},
+  "shipped/SQL/predictive-studio-schema-fingerprint.sql": {"$patch":{"keep":[0,333],"text":"\n\n\n\n\n\n\n"}},
   "shipped/SQL/rubric-drift-period-means.pg.sql": {"$patch":{"keep":[0,1406],"text":"\n\n\n\n\n\n\n"}},
   "shipped/SQL/rubric-drift-period-means.sql": {"$patch":{"keep":[0,1416],"text":"\n\n"}},
   "shipped/SQL/server-installed-version-history.pg.sql": {"$patch":{"keep":[0,69],"text":"\n\n\n"}},

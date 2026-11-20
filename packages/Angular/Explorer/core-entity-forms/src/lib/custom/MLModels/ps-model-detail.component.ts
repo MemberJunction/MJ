@@ -18,6 +18,7 @@ import {
   PredictiveStudioModelTransition,
 } from '@memberjunction/core-entities';
 import { ImportanceDisplay, StatusWriteRules, TransitionRefusalText } from '@memberjunction/predictive-studio-core';
+import { PSScoringBindingEditorComponent } from './ps-scoring-binding-editor.component';
 
 import {
   PSFeatureBar,
@@ -98,6 +99,8 @@ const TRANSITION_ORDER: readonly DetailTransition[] = ['evaluate', 'rollback', '
  *   - The lifecycle transitions the §5.1 table allows from the model's status (evaluate, archive, rollback), each
  *     applied by the lifecycle gate through the `PredictiveStudio.PromoteModel` Remote Operation; a publish goes through
  *     the optional publish and sign-off flow ({@link PSSignOffPanelComponent}) on the stored evidence
+ *   - A Bindings section in the overview hosting `<ps-scoring-binding-editor>` for the model's training pipeline (when a
+ *     provider is bound)
  *   - Tabs for the publish history, the scoring runs, the monitoring periods and the output-bindings label editor
  *
  * Never routes: a record a tab links to is the {@link OpenRecord} request, which the host turns into navigation.
@@ -117,6 +120,7 @@ const TRANSITION_ORDER: readonly DetailTransition[] = ['evaluate', 'rollback', '
     PSScoringRunsComponent,
     PSModelMonitoringComponent,
     PSOutputBindingsEditorComponent,
+    PSScoringBindingEditorComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

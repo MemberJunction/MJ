@@ -4,6 +4,8 @@ import { BehaviorSubject } from 'rxjs';
 import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { renderComponentFixture, query, queryAll, createFakeProvider } from '@memberjunction/ng-test-utils';
+import type { CompositeKey } from '@memberjunction/core';
+import { NavigationService } from '@memberjunction/ng-shared';
 import type { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { PSProductionComponent } from './ps-production.component';
 
@@ -22,13 +24,13 @@ try {
  * strip + a master-list row + detail). Standalone.
  */
 
-const makeEngine = (publishedModels: unknown[], processes: unknown[] = []) => {
+const makeEngine = (publishedModels: unknown[], processes: unknown[] = [], bindings: unknown[] = []) => {
   const subject = new BehaviorSubject<unknown[]>(publishedModels);
   return {
     ObserveProperty: () => subject.asObservable(),
     PublishedModels: publishedModels,
-    ScoringBindings: [],
-    ScoringBindingsForPipeline: () => [],
+    ScoringBindings: bindings,
+    ScoringBindingsForPipeline: () => bindings,
     RecordProcessesForModel: () => processes,
     Models: publishedModels,
     RecordProcessByID: () => undefined,
@@ -53,9 +55,14 @@ const makeModel = (over: Record<string, unknown> = {}) =>
     ...over,
   });
 
-const render = (publishedModels: unknown[]) =>
+/** The record opens the component asked the navigation service for. */
+const opened: Array<{ EntityName: string; Key: string }> = [];
+const navigation = { OpenEntityRecord: (entityName: string, key: CompositeKey) => { opened.push({ EntityName: entityName, Key: key.ToURLSegment() }); return 'tab-1'; } };
+
+const render = (publishedModels: unknown[], bindings: unknown[] = []) =>
   renderComponentFixture(PSProductionComponent, {
-    inputs: { Engine: makeEngine(publishedModels), Provider: createFakeProvider({ runViewResults: [] }) },
+    inputs: { Engine: makeEngine(publishedModels, [], bindings), Provider: createFakeProvider({ runViewResults: [] }) },
+    providers: [{ provide: NavigationService, useValue: navigation }],
   });
 
 /** One `MJ: ML Model Publish Records` row the production view reads for the last auto-train outcome. */
@@ -83,6 +90,7 @@ async function RenderProduction(opts: { models: unknown[]; autoTrainOutcome?: Pu
       Engine: makeEngine(opts.models, [{ ID: 'RP-1', ScheduleEnabled: true }]),
       Provider: createFakeProvider({ runViewResults: (p) => (p.EntityName === 'MJ: ML Model Publish Records' ? records : []) }),
     },
+    providers: [{ provide: NavigationService, useValue: navigation }],
   });
   for (let i = 0; i < 5; i++) await new Promise<void>((resolve) => setTimeout(resolve, 0));
   fixture.detectChanges();
@@ -92,6 +100,15 @@ const Text = (f: Awaited<ReturnType<typeof RenderProduction>>, testId: string): 
 const Button = (f: Awaited<ReturnType<typeof RenderProduction>>, testId: string): HTMLButtonElement => query(f, `[data-testid="${testId}"]`) as HTMLButtonElement;
 
 describe('PSProductionComponent (DOM)', () => {
+  it("a scoring binding row names its feature and opens the model's record, whose detail hosts the Bindings section", () => {
+    opened.length = 0;
+    const binding = { ID: 'b1', MLTrainingPipelineID: 'p1', FeatureName: 'Renewal risk', TargetEntityID: null, TargetEntity: 'Members', TargetColumn: null, Mode: 'OnDemand', Status: 'Active', RecordProcessID: null };
+    const fixture = render([makeModel()], [binding]);
+    expect(query(fixture, '[data-testid="ps-production-binding"]')?.textContent).toContain('Renewal risk');
+    (query(fixture, '[data-testid="ps-production-binding-open"]') as HTMLButtonElement).click();
+    expect(opened).toEqual([{ EntityName: 'MJ: ML Models', Key: 'ID|m1' }]);
+  });
+
   it('shows the empty state when there are no published models', () => {
     const fixture = render([]);
     expect(query(fixture, '[data-testid="ps-production-empty"]')).not.toBeNull();

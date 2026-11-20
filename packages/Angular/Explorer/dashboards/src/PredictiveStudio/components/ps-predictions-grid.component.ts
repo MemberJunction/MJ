@@ -21,9 +21,12 @@ import {
   MjSlidePanelComponent,
 } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { CompositeKey, LogError, RunView, type RunViewParams, EntityRecordNameInput, EntityRecordNameResult } from '@memberjunction/core';
+import { CompositeKey, LogError, RunView, type IMetadataProvider, type RunViewParams, type UserInfo, EntityRecordNameInput, EntityRecordNameResult } from '@memberjunction/core';
 import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import { MJMLModelEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJMLModelEntity, UserInfoEngine, type MJMLModelScoringBindingEntity, type MJUserViewEntity } from '@memberjunction/core-entities';
+import type { ActionParam, ActionResult } from '@memberjunction/actions-base';
+import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { BuildRecordIdFilter } from '../../shared/record-id-filter';
 import { AgGridModule } from 'ag-grid-angular';
 import {
   AllCommunityModule,
@@ -60,7 +63,8 @@ import {
   PredictiveStudioScoreHistoryService,
   type ModelScoreHistoryPoint,
 } from '../predictive-studio-score-history.service';
-import { PredictiveStudioEngine, type PSRunDetailRow } from '../engine/predictive-studio.engine';
+import { PredictiveStudioEngine, type PSRunDetailRow, type PSRunDetails } from '../engine/predictive-studio.engine';
+import { LatestPredictionRows, type LatestPredictionBinding, type LatestPredictionRow } from '../latest-prediction-rows';
 import { PSRowDriversComponent } from './ps-row-drivers.component';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -166,6 +170,9 @@ export interface PredictionGridRowsLoadedEvent {
  *   1. **Predictions tab** (`PSPredictionsResourceComponent`) — business view of all at-risk records.
  *   2. **Models tab** (`PSProductionComponent`) — analyst run drill-in view.
  *
+ * Reads, with no run bound, the latest values of the model pipeline's scoring binding from `MJ: Latest Feature Values`
+ * (§5.8.4); with a run bound, that run's process run details.
+ *
  * Supports:
  *   - Virtualized AG Grid scrolling for thousands of rows (no artificial 50/200 cap).
  *   - Automatic target entity record display name resolution (e.g. member/customer names).
@@ -193,7 +200,7 @@ export interface PredictionGridRowsLoadedEvent {
 export class PSPredictionsGridComponent extends BaseAngularComponent implements OnInit, OnChanges, OnDestroy {
   /** The `MJ: ML Models` row whose predictions the grid shows. */
   @Input() ModelId: string | null = null;
-  /** The run to show; null shows the model's latest run. */
+  /** The run to show; null shows the latest values of the model pipeline's scoring binding (or, without one, the latest run). */
   @Input() RunId: string | null = null;
   /**
    * The surface the grid renders as, whose `MJ: ML Output Bindings` row it reads: `at-risk-list` in the business
@@ -608,17 +615,12 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       const user = provider.CurrentUser || undefined;
       const read0 = await this.loadModelAndBindings();
       const model = read0.Model;
-      const effectiveRunId = this.RunId === null || this.RunId === undefined ? await this.resolveLatestRunId() : this.RunId;
-      if (!effectiveRunId) {
+      const read = await this.loadScoredRows(model, provider, user);
+      if (!read) {
         this.applyFilter();
         this.RowsLoaded.emit({ Rows: [], Capped: false, Binding: read0.Binding });
         return;
       }
-
-      await this.resolveTargetEntity(model);
-
-      // The run's process run details by keyset paging, read-only and only the columns the grid uses; throws on failure.
-      const read = await PredictiveStudioEngine.Instance.LoadRunDetails(effectiveRunId, provider, user);
       const atRiskOptions = this.applyModelOptions(read0);
       const parsedAtRisk = AtRiskRules.ParseAtRiskRows(
         read.Rows.map((d) => ({ RecordID: d.RecordID, ResultPayload: d.ResultPayload })),
@@ -647,6 +649,78 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       this.cdr.markForCheck();
     }
   }
+
+  /**
+   * The rows the grid shows. With no run bound and an `Active` scoring binding on the model's pipeline: the binding's
+   * latest values from `MJ: Latest Feature Values` (§5.8.4). With a run bound (an analyst's drill-in to a past run), or a
+   * model whose pipeline has no binding: that run's — or the latest run's — process run details, the per-run audit.
+   * Null when there is nothing to show (no binding and no run). Throws when a read fails.
+   */
+  private async loadScoredRows(model: PredictionGridModelFields | null, provider: IMetadataProvider, user: UserInfo | undefined): Promise<PSRunDetails | null> {
+    const binding = this.RunId ? null : this.activeScoringBinding(model);
+    if (binding) {
+      await this.resolveTargetEntity(model);
+      const latest = await this.LoadLatestValues(binding);
+      return { Rows: latest.Rows.map((r) => LatestPredictionRows.ToRunDetail(r)).filter((r): r is PSRunDetailRow => r !== null), Capped: latest.Capped };
+    }
+    const runId = this.RunId || (await this.resolveLatestRunId());
+    if (!runId) return null;
+    await this.resolveTargetEntity(model);
+    // The run's process run details by keyset paging, read-only and only the columns the grid uses; throws on failure.
+    return PredictiveStudioEngine.Instance.LoadRunDetails(runId, provider, user);
+  }
+
+  /** The model pipeline's `Active` scoring binding with a target entity (one per pipeline and entity), from the engine's cache. */
+  private activeScoringBinding(model: PredictionGridModelFields | null): MJMLModelScoringBindingEntity | null {
+    if (!model?.PipelineID) return null;
+    return PredictiveStudioEngine.Instance.ScoringBindingsForPipeline(model.PipelineID).find((b) => b.Status === 'Active' && !!b.TargetEntityID) || null;
+  }
+
+  /**
+   * The binding's latest scored values (`Source = 'Model'`) from `MJ: Latest Feature Values`, one keyset page at a time,
+   * up to {@link PredictiveStudioEngine.MaxRunDetailRows}; `Capped` when more exist. Read past MJAPI's RunView cache: the
+   * view entity has no save event to invalidate a cached read. The row-level security filter returns no row to a user
+   * who does not hold the binding's view authorization.
+   *
+   * @throws Error when a page fails to load
+   */
+  protected async LoadLatestValues(binding: LatestPredictionBinding): Promise<{ Rows: LatestPredictionRow[]; Capped: boolean }> {
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const user = this.ProviderToUse.CurrentUser || undefined;
+    const rows: LatestPredictionRow[] = [];
+    let afterKey: CompositeKey | undefined;
+    while (true) {
+      const page = await rv.RunView<LatestPredictionRow>(
+        {
+          EntityName: 'MJ: Latest Feature Values',
+          ExtraFilter: LatestPredictionRows.Filter(binding),
+          Fields: [...LatestPredictionRows.Fields],
+          MaxRows: PSPredictionsGridComponent.latestPageSize,
+          AfterKey: afterKey,
+          ResultType: 'simple',
+          BypassCache: true,
+        },
+        user,
+      );
+      if (!page.Success || !page.Results) {
+        throw new Error(`Could not read the latest values of "${binding.FeatureName}": ${page.ErrorMessage || 'the request failed'}`);
+      }
+      rows.push(...page.Results);
+      if (page.Results.length < PSPredictionsGridComponent.latestPageSize) return { Rows: rows, Capped: false };
+      afterKey = CompositeKey.FromID(page.Results[page.Results.length - 1].ID); // first-pk-ok: keyset AfterKey over MJ: Latest Feature Values (single ID key)
+      if (rows.length >= PredictiveStudioEngine.MaxRunDetailRows) {
+        // Capped only when more really exist: exactly the cap is complete.
+        const probe = await rv.RunView<Pick<LatestPredictionRow, 'ID'>>(
+          { EntityName: 'MJ: Latest Feature Values', ExtraFilter: LatestPredictionRows.Filter(binding), Fields: ['ID'], MaxRows: 1, SkipTotalRowCount: true, AfterKey: afterKey, ResultType: 'simple', BypassCache: true },
+          user,
+        );
+        return { Rows: rows, Capped: probe.Success && probe.Results.length > 0 };
+      }
+    }
+  }
+
+  /** The page size of {@link LoadLatestValues}. */
+  private static readonly latestPageSize = 1000;
 
   /** Clears everything derived from the previous run, so a model or run switch never shows the old run's rows or notices. */
   private resetRunState(): void {
@@ -1589,6 +1663,98 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   // ── CSV Export ──
 
   /** Downloads the filtered rows as a CSV. */
+  /** True while the selection is being saved as a List. */
+  public SavingList = false;
+
+  /** The outcome of the last "Save as list", for the toolbar; null before any. */
+  public ListMessage: string | null = null;
+
+  /** The most records a selection saved as a List may hold (its User View names each record). */
+  public static readonly MaxListSelection = 5000;
+
+  /** {@link MaxListSelection}, for the template. */
+  public readonly ListSelectionLimit = PSPredictionsGridComponent.MaxListSelection;
+
+  /** True when the shown rows can be saved as a List: a resolved target entity and 1..{@link MaxListSelection} rows. */
+  public get CanSaveAsList(): boolean {
+    return !this.SavingList && !!this.ResolvedEntityName && this.FilteredRows.length > 0 && this.FilteredRows.length <= PSPredictionsGridComponent.MaxListSelection;
+  }
+
+  /**
+   * Saves the grid's selection — the rows its tier and decile filters show — as a new List (§5.4): a private User View
+   * of the target entity naming the selected records, materialized through the existing "Materialize List From View"
+   * action (with lineage to the view), then opens the List. No new action and no direct List Detail writes.
+   */
+  public async SaveSelectionAsList(): Promise<void> {
+    const entity = this.ResolvedEntityName ? this.ProviderToUse.EntityByName(this.ResolvedEntityName) : undefined;
+    if (!this.CanSaveAsList || !entity) return;
+    this.SavingList = true;
+    this.ListMessage = null;
+    this.cdr.markForCheck();
+    try {
+      const user = this.ProviderToUse.CurrentUser;
+      const name = this.selectionListName();
+      const view = await this.ProviderToUse.GetEntityObject<MJUserViewEntity>('MJ: User Views', user);
+      view.NewRecord();
+      view.Name = name;
+      view.EntityID = entity.ID;
+      view.UserID = user.ID;
+      view.IsShared = false;
+      // A plain view (not CustomWhereClause, which MJ allows only an Owner): the clause set before the first save is
+      // kept, and the provider screens it when the view runs.
+      view.WhereClause = BuildRecordIdFilter(entity, this.FilteredRows.map((r) => r.recordId));
+      if (!(await view.Save())) throw new Error(`the selection's view was not saved: ${view.LatestResult?.CompleteMessage || 'unknown error'}`);
+      const actionId = await this.materializeActionID();
+      const result = await this.RunListAction(actionId, [
+        { Name: 'ViewID', Value: view.ID, Type: 'Input' },
+        { Name: 'ListName', Value: name, Type: 'Input' },
+        { Name: 'RememberLineage', Value: 'true', Type: 'Input' },
+      ]);
+      const listId = result.Params?.find((p) => p.Name === 'CreatedListID')?.Value;
+      if (!result.Success || typeof listId !== 'string' || !listId) throw new Error(result.Message || 'the action created no list');
+      this.ListMessage = `Saved ${this.FilteredRows.length} record(s) as the list "${name}".`;
+      this.navigationService.OpenEntityRecord('MJ: Lists', CompositeKey.FromID(listId));
+    } catch (e) {
+      this.ListMessage = `Could not save the list: ${e instanceof Error ? e.message : String(e)}`;
+      LogError(`PSPredictionsGridComponent.SaveSelectionAsList: ${this.ListMessage}`);
+    } finally {
+      this.SavingList = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * Runs an action through the GraphQL action client of the grid's provider (the way Explorer surfaces run actions).
+   *
+   * @throws Error when the provider is not a GraphQL data provider
+   */
+  public async RunListAction(actionId: string, params: ActionParam[]): Promise<Pick<ActionResult, 'Success' | 'Message' | 'Params'>> {
+    const provider = this.ProviderToUse;
+    if (!(provider instanceof GraphQLDataProvider)) throw new Error('running an action needs a GraphQL data provider');
+    return new GraphQLActionClient(provider).RunAction(actionId, params);
+  }
+
+  /** The ID of the "Materialize List From View" action, by name. */
+  private async materializeActionID(): Promise<string> {
+    const r = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<{ ID: string }>(
+      { EntityName: 'MJ: Actions', ExtraFilter: `Name='${EscapeSQLString(PSPredictionsGridComponent.materializeActionName)}'`, Fields: ['ID'], MaxRows: 1, ResultType: 'simple' },
+      this.ProviderToUse.CurrentUser,
+    );
+    const id = r.Success ? r.Results[0]?.ID : undefined;
+    if (!id) throw new Error(`the "${PSPredictionsGridComponent.materializeActionName}" action is not available${r.ErrorMessage ? `: ${r.ErrorMessage}` : ''}`);
+    return id;
+  }
+
+  private static readonly materializeActionName = 'Materialize List From View';
+
+  /** "<title>: <tier> (<date>)", within the 100 characters of `MJ: Lists.Name`. */
+  private selectionListName(): string {
+    const title = this.Title || this.ResolvedEntityName || 'Predictions';
+    const parts = [this.SelectedTierLabel, this.SelectedDecileLabel].filter((p) => p).join(', ') || 'all';
+    const name = `${title}: ${parts} (${new Date().toISOString().slice(0, 10)})`;
+    return name.length > 100 ? `${name.slice(0, 99)}…` : name;
+  }
+
   public ExportCSV(): void {
     if (this.AllRows.length === 0) return;
 

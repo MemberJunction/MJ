@@ -25,6 +25,7 @@ import { ApiKeysChecks } from '../checks/api-keys.checks';
 import { DiagnosticsChecks } from '../checks/diagnostics.checks';
 import { PredictiveStudioChecks } from '../checks/predictive-studio.checks';
 import { PredictiveShadowDriftChecks } from '../checks/predictive-shadow-drift.checks';
+import { PsPredictionServingChecks } from '../checks/ps-prediction-serving.checks';
 import { RemoteOpWireProgressChecks } from '../checks/remote-op-wire-progress.checks';
 import { PromptRunnerChecks } from '../checks/prompt-runner.checks';
 import { AiVendorEffortChecks } from '../checks/ai-vendor-effort.checks';
@@ -211,6 +212,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['diagnostics', DiagnosticsChecks, 4], // DIAG1-DIAG4 session capture, bundle assembly, encrypted intake (IT163)
         ['predictive-studio', PredictiveStudioChecks, 5],
         ['predictive-shadow-drift', PredictiveShadowDriftChecks, 2], // PSD1-PSD2 the live challenger's Model rows and its divergence on the monitoring period row (IT166, M6.8)
+        ['ps-prediction-serving', PsPredictionServingChecks, 8], // Z1-Z8 predictions served as Feature Values with zero schema change, gated by the binding's view authorization (IT180)
         ['remote-op-wire-progress', RemoteOpWireProgressChecks, 1],
         ['prompt-runner', PromptRunnerChecks, 1],
         ['ai-vendor-effort', AiVendorEffortChecks, 2],
@@ -495,6 +497,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ps-gate-c1-s6-1': 1,
         'ps-gate-c1-s6-4': 1,
         'ps-gate-c1-s7-4': 1,
+        'ps-gate-c1-s7-4-2': 1,
         'ps-gate-c1-s9-1': 1,
         'ps-gate-c1-s9-2': 1,
         'ps-gate-c2-s1-2': 1,
@@ -577,6 +580,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ps-gate-w8-s9-4': 1,
         'ps-gate-w9-s6-3': 1,
         'ps-gate-w9-s9-5': 1,
+        'ps-prediction-serving': 8,
         'ps-truth-datasets': 68,
         'query-api-lifecycle': 12,
         'query-approvals': 5,
@@ -673,7 +677,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(277);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(279);
     });
 });
 
@@ -945,6 +949,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'ps-gate-c1-s4-2.G2.7',
         'ps-gate-c1-s6-1.G2.6',
         'ps-gate-c1-s6-4.G2.36',
+        'ps-gate-c1-s7-4-2.G5.6',
         'ps-gate-c1-s7-4.G5.4',
         'ps-gate-c1-s9-1.G3.6',
         'ps-gate-c1-s9-2.G3.7',

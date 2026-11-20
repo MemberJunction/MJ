@@ -52,6 +52,7 @@
   "shipped/SQL/predictive-studio-lock-pipeline.sql": {"IsReadOnly":true,"Reason":null},
   "shipped/SQL/predictive-studio-next-model-version.sql": {"IsReadOnly":true,"Reason":null},
   "shipped/SQL/predictive-studio-running-training-run.sql": {"IsReadOnly":true,"Reason":null},
+  "shipped/SQL/predictive-studio-schema-fingerprint.sql": {"IsReadOnly":true,"Reason":null},
   "shipped/SQL/rubric-drift-period-means.pg.sql": {"IsReadOnly":true,"Reason":null},
   "shipped/SQL/rubric-drift-period-means.sql": {"IsReadOnly":true,"Reason":null},
   "shipped/SQL/server-installed-version-history.pg.sql": {"IsReadOnly":true,"Reason":null},

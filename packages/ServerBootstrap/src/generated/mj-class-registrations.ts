@@ -1588,24 +1588,22 @@ import {
     TimelineRelatedEntityGenerator,
 } from '@memberjunction/codegen-lib';
 
-// @memberjunction/predictive-studio (24 classes)
+// @memberjunction/predictive-studio (22 classes)
 import {
+    EvaluateFeatureAndPredictionDriftAction,
     MLModelInferenceProcessor,
     MLModelScoreEnricher,
     PredictiveStudioControlExperimentSessionServerOperation,
     PredictiveStudioCreateScoringProcessServerOperation,
     PredictiveStudioGetModelEvidenceServerOperation,
     PredictiveStudioMigratePipelinesAction,
-    PredictiveStudioMigratePreGateModelsServerOperation,
     PredictiveStudioModelDevAgent,
-    PredictiveStudioModelMonitoringJobDriver,
     PredictiveStudioPipelineBuilderAgent,
+    PredictiveStudioPredictionRetentionJobDriver,
     PredictiveStudioPromoteModelAction,
     PredictiveStudioPromoteModelServerOperation,
-    PredictiveStudioRegistryCheckJobDriver,
     PredictiveStudioRunExperimentAction,
     PredictiveStudioRunFeaturePipelineServerOperation,
-    PredictiveStudioRunModelMonitoringServerOperation,
     PredictiveStudioScheduleModelScoringAction,
     PredictiveStudioScoreRecordSetAction,
     PredictiveStudioScoreRecordSetServerOperation,
@@ -3081,22 +3079,20 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PostgreSQLCodeGenProvider,
     SQLServerCodeGenProvider,
     TimelineRelatedEntityGenerator,
+    EvaluateFeatureAndPredictionDriftAction,
     MLModelInferenceProcessor,
     MLModelScoreEnricher,
     PredictiveStudioControlExperimentSessionServerOperation,
     PredictiveStudioCreateScoringProcessServerOperation,
     PredictiveStudioGetModelEvidenceServerOperation,
     PredictiveStudioMigratePipelinesAction,
-    PredictiveStudioMigratePreGateModelsServerOperation,
     PredictiveStudioModelDevAgent,
-    PredictiveStudioModelMonitoringJobDriver,
     PredictiveStudioPipelineBuilderAgent,
+    PredictiveStudioPredictionRetentionJobDriver,
     PredictiveStudioPromoteModelAction,
     PredictiveStudioPromoteModelServerOperation,
-    PredictiveStudioRegistryCheckJobDriver,
     PredictiveStudioRunExperimentAction,
     PredictiveStudioRunFeaturePipelineServerOperation,
-    PredictiveStudioRunModelMonitoringServerOperation,
     PredictiveStudioScheduleModelScoringAction,
     PredictiveStudioScoreRecordSetAction,
     PredictiveStudioScoreRecordSetServerOperation,
@@ -3172,12 +3168,12 @@ const CLASS_REGISTRATIONS_5: any[] = [
     CreateListFromQueryAction,
     CreateMermaidDiagramAction,
     CreateRecordAction,
+    CreateRuntimeActionAction,
+    CreateSVGChartAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
-    CreateRuntimeActionAction,
-    CreateSVGChartAction,
     CreateSVGDiagramAction,
     CreateSVGInfographicAction,
     CreateSVGNetworkAction,
@@ -3376,12 +3372,12 @@ const CLASS_REGISTRATIONS_6: any[] = [
     DiagnosticsServerMiddleware,
     DiagnosticsStartSessionServerOperation,
     DiagnosticsStopSessionServerOperation,
+    DiagnosticsUploadClientCaptureServerOperation,
+    MJDiagnosticSenderRegistrationEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_7: any[] = [
-    DiagnosticsUploadClientCaptureServerOperation,
-    MJDiagnosticSenderRegistrationEntityServer,
     HelloWorldHandler,
     WorkQueueServerExtension,
 ];
@@ -3402,7 +3398,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1404;
+export const CLASS_REGISTRATIONS_COUNT = 1402;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

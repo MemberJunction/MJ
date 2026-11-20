@@ -52,6 +52,7 @@
   "shipped/SQL/predictive-studio-lock-pipeline.sql": {"Instance":null,"Static":null},
   "shipped/SQL/predictive-studio-next-model-version.sql": {"Instance":null,"Static":null},
   "shipped/SQL/predictive-studio-running-training-run.sql": {"Instance":null,"Static":null},
+  "shipped/SQL/predictive-studio-schema-fingerprint.sql": {"Instance":null,"Static":null},
   "shipped/SQL/rubric-drift-period-means.pg.sql": {"Instance":null,"Static":null},
   "shipped/SQL/rubric-drift-period-means.sql": {"Instance":null,"Static":null},
   "shipped/SQL/server-installed-version-history.pg.sql": {"Instance":null,"Static":null},

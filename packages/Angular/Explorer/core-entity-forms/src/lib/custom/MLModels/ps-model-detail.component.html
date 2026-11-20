@@ -210,6 +210,15 @@
       </div>
     }
 
+    <!-- 7b. Scoring bindings: the pipeline's scoring bindings (D4-48), in the overview; needs a provider to read and write them through -->
+    @if (Provider) {
+      <div class="ps-card" data-testid="ps-model-bindings" id="ps-model-bindings">
+        <div class="ps-card-body">
+          <ps-scoring-binding-editor [Model]="Model" [Provider]="Provider"></ps-scoring-binding-editor>
+        </div>
+      </div>
+    }
+
       }
     }
 
