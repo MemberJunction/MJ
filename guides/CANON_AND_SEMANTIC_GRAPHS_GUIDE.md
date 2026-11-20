@@ -18,18 +18,21 @@
 
 In MemberJunction, **Canon** is the governed, machine-readable representation of how an organization defines its concepts, computes its metrics, enforces its policies, and executes its recurring processes.
 
-Rather than building a separate, siloed schema just for Canon, MemberJunction provides a **general-purpose Semantic Graph substrate** (`MJ:Graph Types` + `MJ: Graphs` + `MJ: Graph Concept Types` + `MJ: Graph Concepts` + `MJ: Graph Edges`) where **Canon is governed by `MJ: Graph Types` (`IsCanon = 1`)**:
+Rather than building a separate, siloed schema just for Canon, MemberJunction provides a **general-purpose Semantic Graph substrate** (`MJ:Graph Types` + `MJ: Graphs` + `MJ: Graph Concept Types` + `MJ: Graph Concepts` + `MJ: Graph Edges`) where **Canon graph types are marked by `MJ: Graph Types` (`IsCanon = 1`)**. How `GraphStage` treats a source's concepts comes from that source's `GraphOverlay` configuration (see the note below the table):
 
 ### Seeded `MJ: Graph Types` (`/metadata/graph-types/.graph-types.json`)
 
-Organizations can add custom graph types via metadata or UI and toggle `IsCanon = 1` on any graph type that should feed organizational Canon:
+Organizations can add custom graph types via metadata or UI and toggle `IsCanon = 1` on any graph type that should feed organizational Canon. The flag classifies the graph type; a content source gets Canon behaviour from its own `GraphOverlay` settings (see the note below):
 
 | `GraphType.Name` | `IsCanon` | `Rank` | Primary Purpose | Default `ConceptTaxonomyMode` | Default `GroundingMode` | Default `AuthorityTier` |
 |---|---|---|---|---|---|---|
 | `'Canon'` | `true` | `10` | Governed organizational definitions, bylaws, policies, metrics, and processes anchored to live MJ schema, queries, actions, and workflows | `'propose-only'` (creates `Status = 'Proposed'` for human/steward approval) | `'full-canon'` (grounds concepts to `Entities`, `Alternate Base Views`, `Queries`, `Actions`, and `AI Skills`) | `'ExecutiveSOP'` |
 | `'Knowledge'` | `false` | `20` | Document / RAG topic & concept overlay across one or more `MJ: Content Sources` (GraphRAG) | `'auto-grow'` (creates `Status = 'Approved'` automatically) | `'none'` (or `'schema-and-queries'` when opted in) | `'Reference'` |
-| `'Network'` | `false` | `30` | Entity-to-entity relationship networks (e.g., people, organizations, chapters, committees) | `'constrained'` | `'none'` | `'Reference'` |
-| `'Custom'` | `false` | `40` | Application-specific semantic graphs (or custom canonical graphs when `IsCanon = true`) | Configurable per graph/source | Configurable | Configurable |
+| `'Network'` | `false` | `30` | Entity-to-entity relationship networks (e.g., people, organizations, chapters, committees) | `'auto-grow'` | `'none'` | `'Reference'` |
+| `'Custom'` | `false` | `100` | Application-specific semantic graphs (or custom canonical graphs when `IsCanon = true`) | `'auto-grow'` unless overridden per source | `'none'` unless overridden | `'Reference'` unless overridden |
+
+> [!NOTE]
+> `GraphStage` does not read the target graph's `MJ: Graph Types` row. `ResolveGraphOverlayConfig` takes `TargetGraphType` (default `'Knowledge'`) and `IsCanon` from the `GraphOverlay` configuration (the Content Source's `Configuration`, overridden by the run's), and `IsCanon` defaults to `true` only when `TargetGraphType` is `'Canon'`. Every non-Canon type therefore gets the Knowledge defaults above (`'auto-grow'`, `'none'`, `'Reference'`). To get propose-only Canon behaviour, set `TargetGraphType: "Canon"` or `IsCanon: true` in the source's `GraphOverlay`, or set `ConceptTaxonomyMode` explicitly.
 
 ### Seeded `MJ: Graph Concept Types` (`/metadata/graph-concept-types/.graph-concept-types.json`)
 
@@ -110,7 +113,7 @@ A cornerstone of the Canon-First methodology is **using `GraphConcept`s for dura
 |---|---|---|
 | **Scope & Lifespan** | Durable domain definitions, policies, business rules, metrics, and multi-step procedures owned by a `Graph` | Tactical user/company preferences, episodic takeaways, or single-agent reminders |
 | **Structure** | Typed (`Domain`, `Term`, `Policy`, `Metric`, `Process`), hierarchical (`ParentID`), authority-ranked (`AuthorityTier`), with a structured `Specification` and explicit `GraphEdge` links | Short unstructured text note scoped to an agent, user, or company |
-| **Provenance & Conflict Resolution** | Linked to source document chunks via `SourcedFrom` edges; cross-document conflicts are surfaced via `Contradicts` edges and resolved by `AuthorityTier` (`Bylaws` > `BoardPolicy` > `ExecutiveSOP` > `DepartmentPractice`) | Consolidated periodically by `MemoryManagerAgent` |
+| **Provenance & Conflict Resolution** | Linked to source document chunks via `SourcedFrom` edges; conflicting thresholds between chunks of the same content item are surfaced via `Contradicts` edges (saved as `Proposed`), and concepts are ranked by `AuthorityTier` (`Bylaws` > `BoardPolicy` > `ExecutiveSOP` > `DepartmentPractice`) | Consolidated periodically by `MemoryManagerAgent` |
 | **Grounding** | Explicitly linked via `GraphEdge`s to `MJ: Entities` (`Describes`), `Alternate Base Views` (`Defines`), `MJ: Queries` (`Measures`), and `Actions`/`Skills` (`Implements`) | Unlinked prose |
 
 > [!IMPORTANT]
@@ -127,20 +130,20 @@ A cornerstone of the Canon-First methodology is **using `GraphConcept`s for dura
 1. **Standard RAG First**: `ExtractStage`, `TagStage`, `SegmentStage`, and `EmbedStage` parse the document, classify governed tags (`MJ: Content Item Tags`), split structural chunks (`MJ: Content Item Chunks` with heading breadcrumbs in `Decorator`), and embed vectors into the vector index.
 2. **Deterministic Pre-Clustering (`ClusterContentIntoConceptSeeds`)**:
    - Why not call an LLM chunk-by-chunk? Running an LLM over 5,000 chunks individually invents thousands of fragmented, near-duplicate concepts.
-   - Instead, `ClusterContentIntoConceptSeeds` (`@memberjunction/content-pipeline-base`) deterministically groups chunks across one or more `Content Sources` by:
+   - Instead, `ClusterContentIntoConceptSeeds` (`@memberjunction/content-pipeline-base`) deterministically groups the chunks of the content item being processed (`GraphStage` runs once per `MJ: Content Item`) by:
      - Normalized leaf section headings (`ExtractLeafTopicFromHeading`, stripping section numbers like `Article IV > §4.2.1` and boilerplate headers like `Overview` or `Introduction`).
      - Governed `TagStage` tags (`MJ: Content Item Tags`).
      - Stemmed lexical + synonym similarity (`ScoreConceptNameSimilarity`) against existing `MJ: Graph Concepts` in the target `GraphID`.
-   - Within each `ConceptSeedCluster`, chunks are sorted by **`AuthorityTierPrecedence`** (`Bylaws` [100] > `BoardPolicy` [80] > `ExecutiveSOP` [60] > `DepartmentPractice` [40] > `Reference` [20] > `Inferred` [10]) and scanned for numeric/threshold conflicts (`detectPotentialChunkConflicts`, e.g., `"60 days"` in Bylaws vs. `"90 days"` in a staff desk manual, or `"$500"` vs. `"$1,000"`).
-3. **Concept & Edge Synthesis (`BaseConceptSynthesizer` / `ManagedPromptConceptSynthesizer`)**:
+   - Within each `ConceptSeedCluster`, chunks are sorted by **`AuthorityTierPrecedence`** (`Bylaws` [100] > `BoardPolicy` [80] > `ExecutiveSOP` [60] > `DepartmentPractice` [40] > `Reference` [20] > `Inferred` [10]) and scanned for numeric/threshold conflicts (`detectPotentialChunkConflicts`, e.g., `"60 days"` in one section vs. `"90 days"` in another, or `"$500"` vs. `"$1,000"`). Pairs of chunks under the same heading are skipped, and because each run clusters a single content item, conflicts between two different documents or sources are not detected. When `GraphStage` reads already-persisted `MJ: Content Item Chunks` (rather than the in-memory chunks from a chained `SegmentStage`), every chunk carries the item's own decorator as its heading, so no conflicts are found.
+3. **Concept & Edge Synthesis (`BaseConceptSynthesizer` / `DeterministicConceptSynthesizer`)**:
    - Synthesizes one `SynthesizedGraphConcept` per cluster (preserving existing `Description`/`Specification` when enriching an existing concept, and extracting `ParentConceptName` from multi-level heading breadcrumbs).
-   - Emits provenance edges (`SourcedFrom` to `MJ: Content Item Chunks`, `Mentions` from `MJ: Content Items`), hierarchy edges (`Broader Than` from parent concept), schema/operational grounding edges (`Describes`, `Defines`, `Measures`, `Implements`), and `Contradicts` edges between conflicting chunks.
+   - Emits provenance edges (`SourcedFrom` to `MJ: Content Item Chunks`, `Mentions` from `MJ: Content Items`), hierarchy edges (`Broader Than` from parent concept), schema/operational grounding edges (`Describes`, `Defines`, `Measures`, `Implements`), and `Contradicts` edges between conflicting chunks of the same content item.
 
 ### Single-Source vs. Multi-Source Shared Graphs
 
 `MJ: Content Sources` includes a nullable `GraphID` foreign key (`FK_ContentSource_Graph`) alongside `Configuration.GraphOverlay`:
 - **Dedicated Graph per Content Source**: Point a single `ContentSource.GraphID` to its own `MJ: Graphs` row (e.g., an isolated industry benchmark report).
-- **Shared Graph across Multiple Content Sources**: Point multiple `ContentSource` rows (e.g., *Association Bylaws*, *Board Policy Manual*, *Finance SOPs*, and *Member Services Handbook*) to the **same** `GraphID`, while assigning each source its own `AuthorityTier` in `Configuration.GraphOverlay`. Chunks from all sources merge into the same `GraphConcept`s, with higher-authority sources taking precedence and `Contradicts` edges flagging where lower-tier manuals have drifted from the Bylaws or Board Policy.
+- **Shared Graph across Multiple Content Sources**: Point multiple `ContentSource` rows (e.g., *Association Bylaws*, *Board Policy Manual*, *Finance SOPs*, and *Member Services Handbook*) to the **same** `GraphID`, while assigning each source its own `AuthorityTier` in `Configuration.GraphOverlay`. Each source's chunks are matched against the concepts already in that graph, so all sources enrich the same `GraphConcept`s. `Contradicts` edges are only created between chunks of a single content item; `GraphStage` currently does not detect where a lower-tier manual disagrees with the Bylaws or Board Policy in another source.
 
 ### Configuring `GraphOverlay` on `MJ: Content Sources`
 
@@ -155,7 +158,7 @@ A cornerstone of the Canon-First methodology is **using `GraphConcept`s for dura
     "GroundingMode": "full-canon",
     "ConceptMatchThreshold": 0.82,
     "MaxNewConceptsPerRun": 50,
-    "SynthesizerKey": "ManagedPrompt"
+    "SynthesizerKey": "Deterministic"
   }
 }
 ```

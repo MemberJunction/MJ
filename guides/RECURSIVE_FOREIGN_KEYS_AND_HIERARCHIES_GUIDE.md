@@ -293,14 +293,14 @@ const childrenResult = await rv.RunView<CategoryEntity>({
 
 ## 5. UI Layer: Angular `<mj-hierarchy-tree>` Component
 
-MemberJunction includes a specialized Angular component (`packages/Angular/Explorer/explorer-core/src/lib/hierarchy-tree/`) designed for embedding into entity record forms, dashboards, and custom viewers.
+MemberJunction includes a specialized standalone Angular component, `HierarchyTreeComponent` in [`@memberjunction/ng-hierarchy-tree`](../packages/Angular/Generic/hierarchy-tree/README.md) (`packages/Angular/Generic/hierarchy-tree/`, also exported through `HierarchyTreeModule`), designed for embedding into entity record forms, dashboards, and custom viewers.
 
 ```mermaid
 graph TD
     A[Form Record: Category] --> B["<mj-hierarchy-tree>"]
-    B --> C[Fetch Root Record via RootParentID]
-    C --> D[Fetch All Descendants via Single RunView]
-    D --> E[Construct Client Tree Graph]
+    B --> C["Load Rows via Single RunView<br/>(Config.ExtraFilter) or use [Data]"]
+    C --> D[Link Rows by ParentField]
+    D --> E["Construct Client Tree Graph<br/>(optional FocusRecordID subtree)"]
     E --> F[Render Interactive SVG/Canvas Tree]
     F --> G[Highlight Current Node & Ancestor Path]
     F --> H[Toolbar: Zoom to Fit, Center, Navigation]
@@ -312,21 +312,25 @@ graph TD
 <!-- Custom Form HTML: e.g. category.form.component.html -->
 <div class="category-hierarchy-container">
     <mj-hierarchy-tree
-        [entityName]="'Categories'"
-        [recordId]="record.ID"
-        [parentFieldName]="'ParentID'"
-        [displayFieldName]="'Name'"
-        (nodeSelected)="onCategoryNodeSelected($event)"
+        [Config]="{ EntityName: 'Categories', ParentField: 'ParentID', NameField: 'Name' }"
+        [ActiveRecordID]="record.ID"
+        (NodeSelect)="onCategoryNodeSelected($event)"
+        (Navigate)="onNavigate($event)"
     ></mj-hierarchy-tree>
 </div>
 ```
+
+- `[Config]` (`HierarchyTreeConfig`) names the entity (`EntityName`) and, optionally, the self-referencing `ParentField` and label `NameField` (both resolved from entity metadata when omitted), plus display options such as `SubtitleField`, `IconField`, `ExtraFilter`, `OrderBy` and `MaxRows`.
+- `[Data]` supplies pre-loaded rows and skips the `RunView` query.
+- `[ActiveRecordID]` highlights a record and expands its ancestors; `[FocusRecordID]` renders only that record and its descendants.
+- Outputs include `NodeClick`, `NodeSelect` and `NodeDoubleClick` (`HierarchyNodeEvent`), expand/collapse and reparent events, `NodeAction`, and `Navigate` (`FormNavigationEvent`) when the user opens a record.
 
 ### 5.2. Component Features
 
 - **Full-Height Container Fill**: The tree fluidly stretches to utilize 100% of available height within form sections and card panels.
 - **Smart Zoom-to-Fit & Center**: The dedicated toolbar button recalculates bounding boxes and scales the visual graph to fit the visible viewport cleanly.
 - **Active Node Highlighting**: The currently loaded record is visually accented with an active ring and glowing connector line trace back to root.
-- **Instant Node Navigation**: Clicking any node in the tree emits navigation events or opens the corresponding record seamlessly.
+- **Instant Node Navigation**: Clicking a node emits `NodeClick` / `NodeSelect`; opening a record from a node emits `Navigate` for the host to handle.
 
 ---
 
