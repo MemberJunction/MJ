@@ -1,7 +1,7 @@
 import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, registerEnumType } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { AssertClientInputWritableForUser, BaseEntityResult, CompositeKey, EntityInfo, EntitySaveOptions, IMetadataProvider, KeyValuePair, LogError, Metadata, RecordChangeMetadataSource, ServerOperationScopeManager, TransactionVariable, TransactionGroupBase, BaseEntity, UserInfo } from '@memberjunction/core';
-import { SafeJSONParse, ValuesEqual } from '@memberjunction/global';
+import { AssertClientInputWritableForUser, BaseEntityResult, CompositeKey, EntityFieldInfo, EntityInfo, EntitySaveOptions, IMetadataProvider, KeyValuePair, LogError, Metadata, RecordChangeMetadataSource, ServerOperationScopeManager, TransactionVariable, TransactionGroupBase, BaseEntity, UserInfo } from '@memberjunction/core';
+import { SafeJSONParse, UUIDsEqual, ValuesEqual } from '@memberjunction/global';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { GraphQLError } from 'graphql';
 import { FindEntityFieldByCodeNameOrName } from '@memberjunction/generic-database-provider';
@@ -168,6 +168,7 @@ export class TransactionResolver extends ResolverBase {
                 entityObjects.push(await md.GetEntityObject(item.EntityName, user));
             }
             this.AssertNetworkInputWritable(group, entityObjects, user);
+            this.AssertNetworkVariablesLinkNewRecords(group, entityObjects);
             this.AddNetworkVariables(group, entityObjects, tg);
 
             for (const [index, item] of group.Items.entries()) {
@@ -396,6 +397,77 @@ export class TransactionResolver extends ResolverBase {
                 AssertClientInputWritableForUser(target.EntityInfo, { [networkVar.FieldName]: null }, user);
             }
         }
+    }
+
+    /**
+     * Accepts a network caller's transaction variables only when they link a new record to the
+     * records that refer to it. A `Use` value is written at `Submit()`, after each item's save checks
+     * have run, so every other shape is refused before any item is saved:
+     *
+     * - each `Define` reads a primary key field of an item the group creates;
+     * - each `Use` has a `Define` of the same name, and writes a foreign key field of a different
+     *   item, and that foreign key relates to the entity of the `Define` item (and to its key field).
+     */
+    protected AssertNetworkVariablesLinkNewRecords(group: TransactionInputType, entityObjects: BaseEntity[]): void {
+        const variables = group.Variables ?? [];
+        const defines = variables.filter((v) => v.Type === TransactionVariableType.Define);
+        for (const def of defines) {
+            this.assertDefineReadsNewPrimaryKey(def, group, entityObjects);
+        }
+        for (const useVar of variables.filter((v) => v.Type === TransactionVariableType.Use)) {
+            const matches = defines.filter((d) => this.sameVariableName(d.Name, useVar.Name));
+            if (matches.length === 0) {
+                this.refuseVariable(useVar, 'it has no Define');
+            }
+            for (const def of matches) {
+                this.assertUseWritesForeignKeyTo(useVar, def, entityObjects);
+            }
+        }
+    }
+
+    /** Refuses a `Define` that does not read a primary key field of an item the group creates. */
+    private assertDefineReadsNewPrimaryKey(def: TransactionVariableInputType, group: TransactionInputType, entityObjects: BaseEntity[]): void {
+        const item = group.Items[def.ItemIndex];
+        if (!item || item.OperationType !== TransactionOperationType.Create) {
+            this.refuseVariable(def, 'a Define must read an item that the group creates');
+        }
+        const field = this.findVariableField(entityObjects[def.ItemIndex], def);
+        if (!field?.IsPrimaryKey) {
+            this.refuseVariable(def, 'a Define must read a primary key field');
+        }
+    }
+
+    /** Refuses a `Use` that does not write a foreign key of another item to the `Define` item's entity. */
+    private assertUseWritesForeignKeyTo(useVar: TransactionVariableInputType, def: TransactionVariableInputType, entityObjects: BaseEntity[]): void {
+        if (useVar.ItemIndex === def.ItemIndex) {
+            this.refuseVariable(useVar, 'a Use must write a different item than its Define');
+        }
+        const field = this.findVariableField(entityObjects[useVar.ItemIndex], useVar);
+        const defineEntity = entityObjects[def.ItemIndex]?.EntityInfo;
+        const defineField = this.findVariableField(entityObjects[def.ItemIndex], def);
+        if (!field?.RelatedEntityID || !defineEntity || !UUIDsEqual(field.RelatedEntityID, defineEntity.ID)) {
+            this.refuseVariable(useVar, `a Use must write a foreign key field that relates to '${defineEntity?.Name ?? 'the Define item'}'`);
+        }
+        if (field.RelatedEntityFieldName && defineField && field.RelatedEntityFieldName.trim().toLowerCase() !== defineField.Name.trim().toLowerCase()) {
+            this.refuseVariable(useVar, 'a Use must write a foreign key field that relates to the field its Define reads');
+        }
+    }
+
+    /** The entity field a variable names, by name or code name. */
+    private findVariableField(entity: BaseEntity | undefined, variable: TransactionVariableInputType): EntityFieldInfo | undefined {
+        if (!entity?.EntityInfo || !variable.FieldName) {
+            return undefined;
+        }
+        return FindEntityFieldByCodeNameOrName(entity.EntityInfo, variable.FieldName);
+    }
+
+    /** Variable names match the way the transaction group matches them: trimmed, any case. */
+    private sameVariableName(a: string, b: string): boolean {
+        return (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase();
+    }
+
+    private refuseVariable(variable: TransactionVariableInputType, reason: string): never {
+        throw new Error(`Transaction variable "${variable.Name}" (${variable.Type} on item ${variable.ItemIndex}, field '${variable.FieldName}') was refused: ${reason}.`);
     }
 
     /**

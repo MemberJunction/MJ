@@ -28,7 +28,7 @@
  */
 import 'reflect-metadata';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BaseEntityResult } from '@memberjunction/core';
+import { BaseEntityResult, EntityInfo } from '@memberjunction/core';
 
 const logErrorCalls: string[] = [];
 vi.mock('@memberjunction/core', async (importOriginal) => {
@@ -298,14 +298,28 @@ describe('ExecuteTransactionGroup — rows refused server-side (issue #4309)', (
         // row only if the variable is already on the group when its Save() runs.
         const variablesAtSave: number[] = [];
         class RecordingEntity extends FakeEntity {
+            constructor(entityName: string, public readonly EntityInfo: EntityInfo) {
+                super(entityName, { accepts: true });
+            }
             public override async Save(): Promise<boolean> {
                 variablesAtSave.push(this.TransactionGroup?.Variables.length ?? -1);
                 return super.Save();
             }
         }
+        const users = new EntityInfo({
+            ID: 'entity-users', Name: 'MJ: Users',
+            Fields: [{ ID: 'u-id', EntityID: 'entity-users', Name: 'ID', Sequence: 1, Type: 'uniqueidentifier', IsPrimaryKey: true }],
+        });
+        const userRoles = new EntityInfo({
+            ID: 'entity-user-roles', Name: 'MJ: User Roles',
+            Fields: [
+                { ID: 'ur-id', EntityID: 'entity-user-roles', Name: 'ID', Sequence: 1, Type: 'uniqueidentifier', IsPrimaryKey: true },
+                { ID: 'ur-user', EntityID: 'entity-user-roles', Name: 'UserID', Sequence: 2, Type: 'uniqueidentifier', RelatedEntityID: 'entity-users', RelatedEntityFieldName: 'ID' },
+            ],
+        });
         const entities = [
-            new RecordingEntity('MJ: User Roles', { accepts: true }),
-            new RecordingEntity('MJ: User Roles', { accepts: true }),
+            new RecordingEntity('MJ: Users', users),
+            new RecordingEntity('MJ: User Roles', userRoles),
         ];
         const { context } = buildContext(entities);
         const input = buildGroupInput(2);
