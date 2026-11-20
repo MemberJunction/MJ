@@ -11262,7 +11262,7 @@ are monitored on real outcomes.
 - Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, PS_SEED_LIMIT, PS_SIGN_IN_URL, PS_STORAGE_PROVIDER, PW_BASE_URL, STORAGE_LOCAL_ROOT<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->29<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->29<!-- /gen:checks -->
-- Head: <!-- gen:head -->87d983984b<!-- /gen:head -->
+- Head: <!-- gen:head -->8ac973c228<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,
@@ -13396,6 +13396,14 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   the first client-transport bundles → IT183 at 49, the server block (D4-262 amended); SQLParser's five frozen hash
   goldens moved with the IT183 rename in `predictive-studio-schema-fingerprint.sql`'s comment → regenerated for that
   entry only (`vitest run -u legacy-goldens/`, as D4-257).
+- Pushed `8ac973c228` with `--no-verify` under D4-261 (pre-push `--skip-commands`: only `tasks M8` and `handoff M8`
+  failed; `check:guards`, `check:standards` exit 0; tracking `origin/ps/pr-4-honest-serving`); PR #6517 `MERGEABLE`.
+- **Task M8.2:** the changeset body is §10's deploy-impact list (`grep -c "Predictive Studio honest serving."` → 0, was
+  1); §10 carries the 32-row mutation table, the 217-member removed-alias list (`git diff origin/next...HEAD -- packages |
+  grep -c "^-.*@deprecated"` → 217), the changes outside Predictive Studio and the open deferrals. `pr-body.mjs --edit-pr`
+  → PR body edited, `gen:head` `8ac973c228`; `npm run check:changeset` → exit 0 (minor, 1 changeset); `changeset-file`
+  ok in milestone-exit; `gen:gates` **29**, `gen:checks` **29**; the PR body's `Mutation` count 1, `expiry` count 1, and
+  its five generated values equal §10's.
 
 ## 12. Refresh log (append-only)
 
