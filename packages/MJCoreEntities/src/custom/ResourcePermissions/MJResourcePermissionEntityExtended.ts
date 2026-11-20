@@ -22,6 +22,8 @@ const GRANT_FIELDS = [
     'ResourceTypeID',
     'ResourceRecordID',
     'SharedByUserID',
+    'StartSharingAt',
+    'EndSharingAt',
 ] as const;
 
 /**

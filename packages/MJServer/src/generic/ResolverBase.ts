@@ -98,6 +98,13 @@ import { Subscription } from 'rxjs';
  * `mj: graph edges` gates approval on the stored `Status`, on `Dirty` identity and content columns, and on the
  * stored review stamp in `Attributes` (`MJGraphEdgeEntityServer`), so it must hold even if a host stops
  * tracking the entity's changes.
+ *
+ * `mj: resource permissions` is refused a change to its grant fields (status, level, grantee, resource, grantor,
+ * time window) without grant rights, a rule that decides on `Dirty` and reads the stored grantee and grantor, so
+ * the baseline must be the stored row.
+ *
+ * `mj: user routines` is refused a save by anyone but an Owner-type user unless both the stored and the new
+ * `UserID` are the caller, a rule that reads the stored owner, so the baseline must be the stored row.
  */
 const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
   'mj: record changes',
@@ -118,6 +125,8 @@ const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
   'mj: collection artifacts',
   'mj: artifact working states',
   'mj: artifact guest share links',
+  'mj: resource permissions',
+  'mj: user routines',
 ]);
 
 interface ActiveEntitySessionListener {

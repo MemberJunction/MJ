@@ -38,7 +38,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     };
 });
 
-type FieldValue = string | null;
+type FieldValue = string | Date | null;
 
 interface FakeUser {
     ID: string;
@@ -54,7 +54,7 @@ interface FakeField {
 vi.mock('../generated/entity_subclasses', () => {
     const fieldNames = [
         'ID', 'ResourceTypeID', 'ResourceRecordID', 'Type', 'UserID', 'RoleID',
-        'PermissionLevel', 'Status', 'SharedByUserID',
+        'PermissionLevel', 'Status', 'SharedByUserID', 'StartSharingAt', 'EndSharingAt',
     ] as const;
     type FieldName = typeof fieldNames[number];
 
@@ -68,6 +68,8 @@ vi.mock('../generated/entity_subclasses', () => {
         PermissionLevel: FieldValue = 'View';
         Status: FieldValue = 'Approved';
         SharedByUserID: FieldValue = null;
+        StartSharingAt: FieldValue = null;
+        EndSharingAt: FieldValue = null;
         ResourceType = 'Projects';
         IsSaved = false;
         ContextCurrentUser: FakeUser | null = null;
@@ -210,5 +212,25 @@ describe('MJResourcePermissionEntityExtended update and delete authorization', (
 
         expect(deleted).toBe(false);
         expect(mocks.superDelete).not.toHaveBeenCalled();
+    });
+
+    it('refuses a user who is not the owner changing the time window of another user\'s grant', async () => {
+        const entity = storedGrant(UUID_GRANTEE, 'Approved', regularCaller);
+        entity.EndSharingAt = new Date('2099-01-01T00:00:00Z');
+
+        const saved = await entity.Save();
+
+        expect(saved).toBe(false);
+        expect(mocks.superSave).not.toHaveBeenCalled();
+    });
+
+    it('refuses a grantee extending the time window of their own grant', async () => {
+        const entity = storedGrant(UUID_CALLER, 'Approved', regularCaller);
+        entity.EndSharingAt = new Date('2099-01-01T00:00:00Z');
+
+        const saved = await entity.Save();
+
+        expect(saved).toBe(false);
+        expect(mocks.superSave).not.toHaveBeenCalled();
     });
 });
