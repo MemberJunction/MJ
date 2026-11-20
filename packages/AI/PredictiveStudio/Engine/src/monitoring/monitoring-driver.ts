@@ -58,7 +58,7 @@ export interface MonitoredPeriodOutcome {
   readonly Period: string;
   /** The period's `MJ: ML Monitoring Results` row (a re-run updates it). */
   readonly MonitoringResultID: string;
-  /** The row's `State`: `window-open`, `evaluated` or `failed`. */
+  /** The row's `State`: `window-open`, `evaluated`, `insufficient-rows` or `failed`. */
   readonly State: PeriodRowWrite['State'];
   /** Predictions joined to a realised outcome. */
   readonly JoinedRows: number;

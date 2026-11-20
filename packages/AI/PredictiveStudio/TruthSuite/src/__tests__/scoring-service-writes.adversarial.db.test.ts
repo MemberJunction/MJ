@@ -236,7 +236,8 @@ describe('ScoringService on the database', () => {
       MLModelScoringBindingID: fixtures.Binding.ID, EntityID: fixtures.Binding.TargetEntityID || '', FeatureName: TAG, Role: 'Champion' as const, MLModelID: fixtures.ModelID,
       MLScoringRunID: runId, EffectiveAsOf: asOf, ProcessRunID: null, Rows: rows, ContextUser: server.User, Provider: server.Provider,
     });
-    const views = vi.spyOn(server.Provider, 'RunView');
+    // The provider's own RunView, typed as the IRunViewProvider it is (the same object the service reads through).
+    const views = vi.spyOn(RunView.FromMetadataProvider(server.Provider).ProviderToUse, 'RunView');
     const asOf = new Date('2026-09-15T00:00:00Z');
     expect(await FeatureValueCacheService.Instance.RecordModelValues(params(asOf))).toEqual({ Inserted: SCORING_BATCH_SIZE_DEFAULT, Replaced: 0 });
     // The same instant written with another offset: the ISO filter still finds every row.
