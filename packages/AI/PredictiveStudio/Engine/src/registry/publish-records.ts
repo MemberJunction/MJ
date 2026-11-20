@@ -85,7 +85,7 @@ export class PublishRecords {
   /**
    * The purposes of an applied `publish` record that backs a Published model: a publish, a rollback, or an adoption of
    * a pre-change model as Published (D4-61). The registry check's queries (`metadata/queries/SQL/predictive-studio-*`,
-   * pinned to this list by test) and the publish-record audit read exactly these (D-m6-3).
+   * pinned to this list by test) and the publish-record audit read exactly these (D4-204).
    */
   public static readonly BACKING_PURPOSES = ['publish', 'rollback', 'adopt'] as const satisfies readonly MJMLModelPublishRecordEntity['Purpose'][];
 

@@ -132,7 +132,7 @@ describe('PredictiveStudioRegistryCheckJobDriver', () => {
     ]));
   });
 
-  it('a Published model backed by an applied adopt record is not archived (D-m6-3: adopt backs it as publish does)', async () => {
+  it('a Published model backed by an applied adopt record is not archived (D4-204: adopt backs it as publish does)', async () => {
     const adopted = await Published();
     for (const r of store.PublishRecords(adopted.ID)) if (r['Kind'] === 'publish') r['Purpose'] = 'adopt';
     const findings = await Run();

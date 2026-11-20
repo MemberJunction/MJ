@@ -221,7 +221,7 @@ export interface IMonitoringDrift {
 /** A challenger's training and its unattended publish through `AutomatedPublisher` (D-029). */
 export interface IMonitoringPublisher {
   /**
-   * Prepares the pipeline's protocol for a challenger (`ChallengerProtocol.Prepare`, P-F2): its date-carved holdout
+   * Prepares the pipeline's protocol for a challenger (`ChallengerProtocol.Prepare`, D4-180): its date-carved holdout
    * re-carved over the unit's current rows as of `now`. Returns null when the challenger may train, else the reason it
    * may not.
    */

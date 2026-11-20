@@ -1,7 +1,7 @@
 /**
  * @module monitoring/challenger-protocol
  *
- * `ChallengerProtocol` — the protocol a monitoring challenger trains under (P-F2). A dated unit's protocol holds a
+ * `ChallengerProtocol` — the protocol a monitoring challenger trains under (D4-180). A dated unit's protocol holds a
  * date-carved holdout with an absolute cutoff (rows on or after it are the holdout), so every later training of the
  * pipeline would train on the same rows as the incumbent and could never learn a later period. Before a fired
  * trigger's challenger trains, the cutoff is re-derived by the protocol's own default rule

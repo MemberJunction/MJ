@@ -1,5 +1,5 @@
 -- Predictive Studio registry check, finding (a) (§5.7 R6, R7): a Published model with a Delivery and no applied
--- `publish` record (a publish, a rollback or an adoption, D-m6-3) was set Published outside the lifecycle gate. Pre-change models
+-- `publish` record (a publish, a rollback or an adoption, D4-204) was set Published outside the lifecycle gate. Pre-change models
 -- (Delivery IS NULL) are the pre-change migration's (D4-61) and are left out. SQL Server only (D-057).
 SELECT m.ID AS ModelID, m.PipelineID
 FROM [__mj].MLModel m

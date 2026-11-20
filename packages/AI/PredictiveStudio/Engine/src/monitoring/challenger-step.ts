@@ -2,7 +2,7 @@
  * @module monitoring/challenger-step
  *
  * `ChallengerStep` — what a fired retrain trigger does (D-029, D4-20, architecture C7): the pipeline's protocol
- * prepared for it (`ChallengerProtocol`, P-F2: a date-carved holdout re-carved over the current rows), then one
+ * prepared for it (`ChallengerProtocol`, D4-180: a date-carved holdout re-carved over the current rows), then one
  * challenger training run on a fresh snapshot of the pipeline, published unattended through `AutomatedPublisher.EvaluateAndPublish` with the
  * scheduled-job initiator. The trainer compares the challenger with the incumbent on the incumbent's holdout rows and
  * the gate publishes it only when its paired lower bound beats the margin; monitoring writes no status. A trigger that

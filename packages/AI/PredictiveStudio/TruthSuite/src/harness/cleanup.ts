@@ -693,7 +693,7 @@ export class HarnessCleanup {
 
   /**
    * The recorded Evaluation Protocol versions and every later version of their lineages (a monitoring challenger saves
-   * one, P-F2), newest first: every later version references its lineage root (version 1).
+   * one, D4-180), newest first: every later version references its lineage root (version 1).
    */
   private static async deleteEvaluationProtocols(store: CleanupStore, records: RunRecords): Promise<string[]> {
     const filter = HarnessCleanup.anyIn([['ID', records.EvaluationProtocolIDs], ['LineageRootID', records.EvaluationProtocolIDs]]);

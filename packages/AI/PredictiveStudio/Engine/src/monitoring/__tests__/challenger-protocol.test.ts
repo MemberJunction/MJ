@@ -3,7 +3,7 @@ import type { HoldoutSplit } from '@memberjunction/predictive-studio-core';
 
 import { ChallengerProtocol } from '../challenger-protocol';
 
-/** P-F2: a monitoring challenger's date-carved holdout moves to the protocol's own default over the unit's current rows. */
+/** D4-180: a monitoring challenger's date-carved holdout moves to the protocol's own default over the unit's current rows. */
 const carved = (cutoff: string, holdoutEnd: string | null = null): HoldoutSplit => ({ kind: 'date-carved', dateColumn: 'DecisionDate', cutoff, holdoutEnd, newEntityReport: null });
 
 describe('ChallengerProtocol.Recarved', () => {

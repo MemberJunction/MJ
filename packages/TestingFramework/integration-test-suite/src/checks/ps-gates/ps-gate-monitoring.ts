@@ -86,7 +86,7 @@ export interface PublishOnPeriodsOptions {
   /**
    * A challenger gate: before `RunPeriods` the monitored periods arrive (the unit's fixed censoring cutoff — the
    * fixture's clock — moves past them, `UnitFixtures.AdvanceCensoring`), so a fired trigger's challenger snapshots
-   * them; the monitoring job re-carves the protocol's date-carved holdout over them (`ChallengerProtocol`, P-F2), so
+   * them; the monitoring job re-carves the protocol's date-carved holdout over them (`ChallengerProtocol`, D4-180), so
    * the challenger trains on the later periods and is compared with the incumbent on the newest one.
    */
   readonly Challenger?: boolean;

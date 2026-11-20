@@ -581,7 +581,7 @@ describe('HarnessCleanup.DeleteRecorded', () => {
     expect(records.EvaluationProtocolIDs.Size).toBe(0);
   });
 
-  it('deletes every version of a recorded protocol lineage, including a later version it never recorded (P-F2 re-carve)', async () => {
+  it('deletes every version of a recorded protocol lineage, including a later version it never recorded (D4-180 re-carve)', async () => {
     const records = new RunRecords();
     records.RecordEvaluationProtocol(EP1);
     const store = new FakeStore();
