@@ -11,14 +11,18 @@ export interface ScoringActionCall {
 
 /**
  * A {@link ScoringActionSync} that records each call (method and model) and touches no Action metadata. `FailNext`
- * makes the next call throw that message once, the way a refused Action save surfaces through the generator.
+ * makes the next call throw that message once, the way a failed read surfaces through the generator; `DisableRefused`
+ * makes every `DisableForModel` report false, the way a refused Action save does.
  */
 export class RecordingScoringActions implements ScoringActionSync {
   public readonly Log: ScoringActionCall[] = [];
+  /** True: every `DisableForModel` reports that the Action's save was refused (false). */
+  public DisableRefused: boolean;
   private failNext: string | null;
 
-  constructor(options: { readonly FailNext?: string } = {}) {
+  constructor(options: { readonly FailNext?: string; readonly DisableRefused?: boolean } = {}) {
     this.failNext = options.FailNext || null;
+    this.DisableRefused = options.DisableRefused === true;
   }
 
   /** The method names called, in order. */
@@ -30,8 +34,9 @@ export class RecordingScoringActions implements ScoringActionSync {
     this.record('GenerateForModel', model);
   }
 
-  public async DisableForModel(model: MJMLModelEntity, _contextUser: UserInfo, _provider: IMetadataProvider): Promise<void> {
+  public async DisableForModel(model: MJMLModelEntity, _contextUser: UserInfo, _provider: IMetadataProvider): Promise<boolean> {
     this.record('DisableForModel', model);
+    return !this.DisableRefused;
   }
 
   private record(method: keyof ScoringActionSync, model: MJMLModelEntity): void {

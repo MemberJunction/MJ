@@ -123,7 +123,10 @@ export interface ArtifactMigrationResult {
 export interface ScheduleResult {
   /** Record Processes whose schedule was disabled (the list step 5 re-enables). */
   readonly Disabled: string[];
-  /** Non-serving `Unevaluated` models whose scoring Action was disabled (a no-op for one already disabled). */
+  /**
+   * Non-serving `Unevaluated` models left with no enabled scoring Action (disabled now, or already); a model whose
+   * Action's save was refused is not listed, so the next run retries it.
+   */
   readonly ScoringActionsDisabled: string[];
 }
 
@@ -328,8 +331,8 @@ export class PreGateModelMigration {
     const handled = (await PreGateModelMigration.EarlierRunRecords(ctx)).flatMap((r) => r.ScoringActionsDisabled);
     const actions: string[] = [];
     for (const model of ExcludeByUUIDs(demoted, handled, (m) => m.ID).slice(0, batch)) {
-      await ctx.Seams.ScoringActions.DisableForModel(model, ctx.ContextUser, ctx.Provider);
-      actions.push(model.ID);
+      // Recorded only when the Action is disabled: a refused save leaves the model for the next run to retry.
+      if (await ctx.Seams.ScoringActions.DisableForModel(model, ctx.ContextUser, ctx.Provider)) actions.push(model.ID);
     }
     const demotedIds = new UUIDSet(demoted.map((m) => m.ID));
     const due = (await PreGateModelMigration.ReadScoringProcesses(`ScheduleEnabled=1`, ctx)).filter((rp) => {

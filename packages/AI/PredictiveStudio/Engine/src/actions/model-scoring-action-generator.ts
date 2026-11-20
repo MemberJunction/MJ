@@ -113,20 +113,20 @@ export class ModelScoringActionGenerator {
 
   /**
    * Disable the generated scoring Action for `model` (when it leaves `Published`) by flipping its Status to `Disabled`.
-   * The Action is found by its `ModelID` param, so a pipeline renamed since the publish still finds it. A no-op when no
-   * generated action exists.
+   * The Action is found by its `ModelID` param, so a pipeline renamed since the publish still finds it.
+   *
+   * @returns true when the model has no enabled generated Action afterwards (none exists, it was already disabled, or
+   *   this call disabled it); false when the save was refused (logged with the save's message, the Action left enabled)
+   * @throws Error when a read fails ({@link FindActionForModel})
    */
   public async DisableForModel(
     model: MJMLModelEntity,
     contextUser: UserInfo,
     provider: IMetadataProvider,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const existing = await this.FindActionForModel(model.ID, provider, contextUser);
-    if (!existing) {
-      return;
-    }
-    if (existing.Status === 'Disabled') {
-      return; // already disabled — nothing to do
+    if (!existing || existing.Status === 'Disabled') {
+      return true;
     }
     existing.Status = 'Disabled';
     if (!(await existing.Save())) {
@@ -134,9 +134,10 @@ export class ModelScoringActionGenerator {
         `ModelScoringActionGenerator: failed to disable action '${existing.Name}': ` +
           `${existing.LatestResult?.CompleteMessage || 'unknown error'}`,
       );
-      return;
+      return false;
     }
     LogStatus(`ModelScoringActionGenerator: disabled scoring action '${existing.Name}' for archived model '${model.ID}'.`);
+    return true;
   }
 
   /**
@@ -145,7 +146,7 @@ export class ModelScoringActionGenerator {
    *
    * @throws Error when a read fails (a failed read is not "no Action": generating would then create a duplicate)
    */
-  protected async FindActionForModel(modelId: string, provider: IMetadataProvider, contextUser: UserInfo): Promise<MJActionEntity | null> {
+  public async FindActionForModel(modelId: string, provider: IMetadataProvider, contextUser: UserInfo): Promise<MJActionEntity | null> {
     const rv = RunView.FromMetadataProvider(provider);
     const params = await rv.RunView<Pick<MJActionParamEntity, 'ActionID' | 'DefaultValue'>>(
       {

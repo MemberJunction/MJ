@@ -463,6 +463,18 @@ describe('step 4: bounded and idempotent', () => {
     ]);
   });
 
+  it('a model whose scoring Action was not disabled is not recorded as handled, so a later run retries it (M7-1)', async () => {
+    const demoted = Legacy(Pipeline(), 'Unevaluated', 'none');
+    scoringActions.DisableRefused = true;
+    const first = await PreGateModelMigration.DisableDemotedSchedules(50, ctx);
+    expect(first.ScoringActionsDisabled).toEqual([]);
+    store.Insert('MJ: Scheduled Job Runs', {
+      ID: id(), ScheduledJobID: registryRun.ScheduledJobID, Status: 'Completed', Details: JSON.stringify({ [PreGateModelMigration.DetailsKey]: { Schedules: first, DisabledProcessIDs: first.Disabled } }),
+    });
+    scoringActions.DisableRefused = false;
+    expect((await PreGateModelMigration.DisableDemotedSchedules(50, ctx)).ScoringActionsDisabled).toEqual([demoted.ID]);
+  });
+
   it('a run after every demoted model was handled disables nothing and calls no scoring Action again', async () => {
     const pipelineId = Pipeline();
     const demoted = Legacy(pipelineId, 'Unevaluated', 'none');
