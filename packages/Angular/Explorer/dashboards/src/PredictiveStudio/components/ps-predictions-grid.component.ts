@@ -1678,7 +1678,6 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
   // ── CSV Export ──
 
-  /** Downloads the filtered rows as a CSV. */
   /** True while the selection is being saved as a List. */
   public SavingList = false;
 
@@ -1813,6 +1812,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     return name.length > 100 ? `${name.slice(0, 99)}…` : name;
   }
 
+  /** Downloads the filtered rows as a CSV. */
   public ExportCSV(): void {
     if (this.AllRows.length === 0) return;
 
