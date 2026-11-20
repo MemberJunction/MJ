@@ -61,6 +61,14 @@ describe('ScoringService.Score — refusals', () => {
     expect([runs.Statuses(), world.Values.Calls()]).toEqual([['refused'], []]);
   });
 
+  it('refuses a binding withdrawn after the caller loaded it: the stored status decides, not the caller\'s object (M8.5 M5 × M5b)', async () => {
+    await Withdrawn(binding); // the stored row is Withdrawn; `binding` is the caller's earlier, Active load
+    expect(binding.Status).toBe('Active');
+    const r = await new ScoringService(ctx()).Score(binding, scope, asOf, false);
+    expect(r).toMatchObject({ Status: 'refused', ModelID: null, Reason: { kind: 'binding-withdrawn', bindingId: binding.ID } });
+    expect([runs.Statuses(), world.Values.Calls(), world.Target.Writes]).toEqual([['refused'], [], 0]);
+  });
+
   it('refuses a caller who does not hold the binding\'s view authorization before any read, with a refused run row', async () => {
     const r = await new ScoringService({ ...ctx(), ContextUser: ScoringServiceWorld.WithoutAuthorization() }).Score(binding, scope, asOf, false);
     expect(r).toMatchObject({ Status: 'refused', Reason: { kind: 'binding-not-authorized', bindingId: binding.ID } });

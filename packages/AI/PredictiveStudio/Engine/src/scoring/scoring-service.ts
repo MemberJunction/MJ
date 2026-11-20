@@ -592,7 +592,9 @@ export class ScoringService {
   /**
    * Refusals that need no model: a caller without the binding's authorization (it reads only the held
    * authorizations), then a writing run's caller who may not create Feature Values (no read), then a withdrawn binding.
-   * All come before any record or Feature Value is read.
+   * All come before any record or Feature Value is read. Withdrawal is judged on the binding's stored row, not on the
+   * caller's object: a caller holding a binding loaded before a withdrawal (a scheduled run in flight, a request racing
+   * the withdrawal) must not write after the withdrawal cleared the binding's copies.
    */
   private async refusalBeforeModel(binding: MJMLModelScoringBindingEntity, dryRun: boolean): Promise<ScoringRefusal | null> {
     if (!binding.TargetEntityID || !binding.TargetEntity) throw new Error(`ScoringService: binding '${binding.ID}' has no target entity`);
@@ -600,7 +602,22 @@ export class ScoringService {
     if (authorization !== null) return authorization;
     const writable = dryRun ? null : this.CheckCallerWritesFeatureValues();
     if (writable !== null) return writable;
-    return binding.Status === 'Withdrawn' ? { kind: 'binding-withdrawn', bindingId: binding.ID } : null;
+    return (await this.storedBindingStatus(binding.ID)) === 'Withdrawn' ? { kind: 'binding-withdrawn', bindingId: binding.ID } : null;
+  }
+
+  /**
+   * The binding's stored `Status`, read past the cache.
+   *
+   * @throws Error when the read fails or the binding row is gone (a failed read is not an absent row)
+   */
+  private async storedBindingStatus(bindingId: string): Promise<MJMLModelScoringBindingEntity['Status']> {
+    const read = await StoredRowReads.Run<Pick<MJMLModelScoringBindingEntity, 'ID' | 'Status'>>({
+      EntityName: 'MJ: ML Model Scoring Bindings', ExtraFilter: `ID='${EscapeSQLString(bindingId)}'`, Fields: ['ID', 'Status'], ResultType: 'simple', MaxRows: 1, // pk-filter-ok: MJ core entity keyed by ID
+    }, this.ctx);
+    if (!read.Success) throw new Error(`ScoringService: reading the status of binding '${bindingId}' failed: ${read.ErrorMessage}`);
+    const row = read.Results[0];
+    if (!row) throw new Error(`ScoringService: binding '${bindingId}' no longer exists`);
+    return row.Status;
   }
 
   /** A refusal before a model was resolved: one refused run row with no model. */
