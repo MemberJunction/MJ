@@ -1,8 +1,8 @@
 import { BaseAgent, PayloadManager } from '@memberjunction/ai-agents';
 import { ExecuteAgentParams, BaseAgentNextStep, AgentSpec, AgentStep, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJActionEntity } from "@memberjunction/core-entities";
-import { RunView } from '@memberjunction/core';
-import { RegisterClass, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { LogError, RunView } from '@memberjunction/core';
+import { RegisterClass, UUIDsEqual, UUIDSet, IsValidUUID } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ValidateLoopStep, ValidateFlowGraph } from '../flow-step-validation';
 
@@ -240,20 +240,24 @@ export class AgentArchitectAgent extends BaseAgent {
                 return { errors };
             }
 
-            // Query database for these action IDs
-            const filter = actionIds.map(id => `ID='${id}'`).join(' OR ');
-            const result = await rv.RunView<MJActionEntity>({
-                EntityName: 'MJ: Actions',
-                ExtraFilter: filter,
-                ResultType: 'entity_object'
-            }, params.contextUser);
+            // Only UUIDs go into the filter; other values are reported below
+            const uuidActionIds = actionIds.filter(id => IsValidUUID(id));
+            let foundIds = new UUIDSet();
+            if (uuidActionIds.length > 0) {
+                const filter = uuidActionIds.map(id => `ID='${id}'`).join(' OR ');
+                const result = await rv.RunView<MJActionEntity>({
+                    EntityName: 'MJ: Actions',
+                    ExtraFilter: filter,
+                    ResultType: 'entity_object'
+                }, params.contextUser);
 
-            if (!result.Success) {
-                errors.push(`❌ Failed to validate actions: ${result.ErrorMessage}`);
-                return { errors };
+                if (!result.Success) {
+                    LogError(`Agent Architect: failed to validate actions: ${result.ErrorMessage}`);
+                    errors.push('❌ Failed to validate actions. Please try again.');
+                    return { errors };
+                }
+                foundIds = new UUIDSet(result.Results.map(a => a.ID));
             }
-
-            const foundIds = new Set(result.Results.map(a => NormalizeUUID(a.ID)));
 
             // Check which actions weren't found
             for (const action of actions) {
@@ -262,7 +266,12 @@ export class AgentArchitectAgent extends BaseAgent {
                     continue;
                 }
 
-                if (!foundIds.has(NormalizeUUID(action.ActionID))) {
+                if (!IsValidUUID(action.ActionID)) {
+                    errors.push(`❌ Action ID "${action.ActionID}" is not a valid UUID. Please use "Find Candidate Actions" or "List Actions" to get valid action IDs.`);
+                    continue;
+                }
+
+                if (!foundIds.Has(action.ActionID)) {
                     errors.push(`❌ Action with ID "${action.ActionID}" not found in database. Please use "Find Candidate Actions" or "List Actions" to get valid action IDs.`);
                 }
             }

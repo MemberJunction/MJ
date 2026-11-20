@@ -87,8 +87,8 @@ afterEach(() => {
 async function boundDataFor(invocation: 'View' | 'List', caller: UserInfo): Promise<Record<string, unknown>[]> {
     const params = {
         InvocationType: { Name: invocation },
-        ViewID: 'view-1',
-        ListID: 'list-1',
+        ViewID: 'aaaaaaaa-0000-0000-0000-000000000002',
+        ListID: 'aaaaaaaa-0000-0000-0000-000000000001',
         EntityAction: { EntityID: EMPLOYEE_ENTITY_ID },
         ContextUser: caller,
     } as unknown as EntityActionInvocationParams;

@@ -52,7 +52,7 @@ import {
     type PostgreSQLDescribeCatalogRow,
 } from './statementDescription.js';
 import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
-import { BytesToBase64, EscapeSQLString, IsByteArray, TryBase64ToBytes } from '@memberjunction/global';
+import { BytesToBase64, EscapeSQLString, IsByteArray, ScanSQLForScreening, SQLScreeningToken, TryBase64ToBytes } from '@memberjunction/global';
 import { PostgreSQLDialect, AutoQuotePostgreSQLIdentifiers } from '@memberjunction/sql-dialect';
 import { PGConnectionManager } from './pgConnectionManager.js';
 import { PGQueryParameterProcessor } from './queryParameterProcessor.js';
@@ -1221,7 +1221,70 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         // Translate SQL Server date/time functions AFTER identifier quoting so the
         // injected PG idioms (`AT TIME ZONE`, `INTERVAL`) are not re-quoted.
         const dialectFns = this.TranslateTSQLDateFunctions(quoted);
-        return this.coerceBooleanLiteralsInSQL(dialectFns, entityInfo);
+        const result = this.coerceBooleanLiteralsInSQL(dialectFns, entityInfo);
+        this.assertTransformAddsNoCode(clause, result);
+        return result;
+    }
+
+    /** Words the clause rewrites can add to the code of a clause. */
+    private static readonly REWRITE_WORDS: ReadonlySet<string> = new Set([
+        'NOW', 'AT', 'TIME', 'ZONE', 'CURRENT_TIMESTAMP', 'INTERVAL', 'TRUE', 'FALSE',
+    ]);
+
+    /**
+     * Throws when the code words of `after`, in order and without the words the rewrites add,
+     * are not a subsequence of the code words of `before`, or when either text cannot be read as
+     * PostgreSQL SQL. The rewrites only drop words (a quoted field name, `DATEADD`, a date part)
+     * or add the known words; they never move text out of a string literal, quoted identifier or
+     * comment.
+     */
+    private assertTransformAddsNoCode(before: string, after: string): void {
+        const had = this.codeWordSequence(before);
+        const has = this.codeWordSequence(after);
+        if (!had || !has) {
+            throw new Error('Invalid SQL clause: the text cannot be read as PostgreSQL SQL');
+        }
+        let next = 0;
+        for (const word of has) {
+            if (PostgreSQLDataProvider.REWRITE_WORDS.has(word)) continue;
+            while (next < had.length && had[next] !== word) next++;
+            if (next === had.length) {
+                throw new Error('Invalid SQL clause: the PostgreSQL rewrite changed which text is code');
+            }
+            next++;
+        }
+    }
+
+    /** Each unquoted word (upper case) PostgreSQL reads as code, in order, or null when the text cannot be read. */
+    private codeWordSequence(sql: string): string[] | null {
+        const scan = ScanSQLForScreening(sql, 'postgresql');
+        if (!scan.Classified) return null;
+        return scan.Tokens.filter((t) => t.Kind === 'word').map((t) => t.Text.toUpperCase());
+    }
+
+    /**
+     * Applies `rewrite` to each run of code between string literals, quoted identifiers and
+     * comments. Literal text is kept as written. Text PostgreSQL cannot read is returned unchanged.
+     */
+    private rewriteCodeOnly(sql: string, rewrite: (code: string) => string): string {
+        const scan = ScanSQLForScreening(sql, 'postgresql');
+        if (!scan.Classified) return sql;
+        let out = '';
+        let cursor = 0;
+        for (const span of scan.Spans) {
+            out = this.joinWithoutMerging(out, rewrite(sql.slice(cursor, span.Start)));
+            out = this.joinWithoutMerging(out, sql.slice(span.Start, span.End));
+            cursor = span.End;
+        }
+        return this.joinWithoutMerging(out, rewrite(sql.slice(cursor)));
+    }
+
+    /**
+     * Joins two pieces of SQL. When the first ends with `"` and the second starts with one, a
+     * space goes between them, so two quoted identifiers never read as one with a `""` escape.
+     */
+    private joinWithoutMerging(left: string, right: string): string {
+        return left.endsWith('"') && right.startsWith('"') ? `${left} ${right}` : left + right;
     }
 
     /**
@@ -1243,14 +1306,13 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      */
     public TranslateTSQLDateFunctions(sql: string): string {
         if (!sql || sql.length === 0) return sql;
-        let out = sql;
         // Zero-arg "now" variants first, so a DATEADD's inner expression is
         // already PG-native before the DATEADD rewrite walks it.
-        out = out.replace(/\bGETUTCDATE\s*\(\s*\)/gi, "(NOW() AT TIME ZONE 'UTC')");
-        out = out.replace(/\bSYSDATETIMEOFFSET\s*\(\s*\)/gi, 'NOW()');
-        out = out.replace(/\bGETDATE\s*\(\s*\)/gi, 'CURRENT_TIMESTAMP');
-        out = this.translateDateAdd(out);
-        return out;
+        const out = this.rewriteCodeOnly(sql, (code) => code
+            .replace(/\bGETUTCDATE\s*\(\s*\)/gi, "(NOW() AT TIME ZONE 'UTC')")
+            .replace(/\bSYSDATETIMEOFFSET\s*\(\s*\)/gi, 'NOW()')
+            .replace(/\bGETDATE\s*\(\s*\)/gi, 'CURRENT_TIMESTAMP'));
+        return this.translateDateAdd(out);
     }
 
     /** @deprecated Use {@link TranslateTSQLDateFunctions}. */
@@ -1262,16 +1324,27 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      * Rewrites every `DATEADD(unit, n, expr)` occurrence using balanced-paren
      * argument parsing (the 3rd argument can itself contain parentheses and even
      * a nested `DATEADD`). Unknown date-parts or unparseable calls are left
-     * verbatim rather than guessed.
+     * verbatim rather than guessed. Only calls in code are rewritten; string
+     * literals, quoted identifiers and comments stay whole. Text PostgreSQL
+     * cannot read is returned unchanged.
      */
     private translateDateAdd(sql: string): string {
+        const scan = ScanSQLForScreening(sql, 'postgresql');
+        if (!scan.Classified) return sql;
+        const spanEnds = new Map<number, number>(scan.Spans.map((s) => [s.Start, s.End]));
         const re = /\bDATEADD\s*\(/gi;
         let result = '';
         let cursor = 0;
         let m: RegExpExecArray | null;
         while ((m = re.exec(sql)) !== null) {
+            const at = m.index;
+            const inside = scan.Spans.find((s) => at >= s.Start && at < s.End);
+            if (inside) {
+                re.lastIndex = inside.End; // text inside a literal is not code
+                continue;
+            }
             const openParen = m.index + m[0].length - 1; // index of '('
-            const parsed = this.splitBalancedArgs(sql, openParen);
+            const parsed = this.splitBalancedArgs(sql, openParen, spanEnds);
             if (!parsed || parsed.args.length !== 3) {
                 continue; // can't parse — leave this occurrence verbatim
             }
@@ -1279,8 +1352,9 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             if (!pgUnit) {
                 continue; // unknown unit — leave verbatim
             }
-            const n = parsed.args[1].trim();
-            const expr = this.translateDateAdd(parsed.args[2].trim()); // recurse for nesting
+            // Trim only spaces and tabs: a line break can end a `--` comment.
+            const n = this.trimSpacesAndTabs(parsed.args[1]);
+            const expr = this.translateDateAdd(this.trimSpacesAndTabs(parsed.args[2])); // recurse for nesting
             const replacement = `(${expr} + (${n}) * INTERVAL '1 ${pgUnit}')`;
             result += sql.slice(cursor, m.index) + replacement;
             cursor = parsed.end + 1;
@@ -1292,26 +1366,27 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
 
     /**
      * Splits the comma-separated arguments of a function call starting at the
-     * given open-paren index, respecting nested parentheses and single-quoted
-     * string literals (with `''` escaping). Returns the trimmed-by-caller arg
-     * strings and the index of the matching close paren, or null if unbalanced.
+     * given open-paren index, respecting nested parentheses. Each literal span
+     * (string, quoted identifier or comment; `spanEnds` maps its start to its
+     * end) is copied whole. Returns the trimmed-by-caller arg strings and the
+     * index of the matching close paren, or null if unbalanced.
      */
-    private splitBalancedArgs(sql: string, openParenIndex: number): { args: string[]; end: number } | null {
+    private splitBalancedArgs(
+        sql: string,
+        openParenIndex: number,
+        spanEnds: ReadonlyMap<number, number>,
+    ): { args: string[]; end: number } | null {
         let depth = 0;
-        let inString = false;
         const args: string[] = [];
         let current = '';
         for (let i = openParenIndex; i < sql.length; i++) {
             const ch = sql[i];
-            if (inString) {
-                current += ch;
-                if (ch === "'") {
-                    if (sql[i + 1] === "'") { current += sql[i + 1]; i++; } // escaped quote
-                    else { inString = false; }
-                }
+            const spanEnd = spanEnds.get(i);
+            if (spanEnd !== undefined) {
+                current += sql.slice(i, spanEnd);
+                i = spanEnd - 1;
                 continue;
             }
-            if (ch === "'") { inString = true; current += ch; continue; }
             if (ch === '(') {
                 depth++;
                 if (depth === 1) { continue; } // skip the outer open paren
@@ -1328,6 +1403,16 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             current += ch;
         }
         return null; // unbalanced
+    }
+
+    /** `text` without leading and trailing spaces and tabs. */
+    private trimSpacesAndTabs(text: string): string {
+        const isSpaceOrTab = (ch: string) => ch === ' ' || ch === '\t';
+        let start = 0;
+        let end = text.length;
+        while (start < end && isSpaceOrTab(text[start])) start++;
+        while (end > start && isSpaceOrTab(text[end - 1])) end--;
+        return text.slice(start, end);
     }
 
     /**
@@ -1354,26 +1439,66 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      * type-check on PostgreSQL. For each boolean column on the entity, finds
      * `"Col" {= | != | <>} {0|1|'0'|'1'}` (any whitespace, case-insensitive
      * operator) and substitutes `TRUE` / `FALSE`. Operates on the already-
-     * identifier-quoted output of `quoteIdentifiersInSQL` so the column-name
-     * regex anchor is unambiguous.
+     * identifier-quoted output of `quoteIdentifiersInSQL`. Works on tokens, so
+     * only a whole `1`, `0`, `'1'` or `'0'` literal is replaced, and text inside
+     * a literal is never touched. Text PostgreSQL cannot read is returned unchanged.
      */
     private coerceBooleanLiteralsInSQL(sql: string, entityInfo: EntityInfo): string {
-        const boolFields = entityInfo.Fields.filter(f => f.TSType === EntityFieldTSType.Boolean);
-        if (boolFields.length === 0) return sql;
+        const boolNames = new Set(entityInfo.Fields.filter(f => f.TSType === EntityFieldTSType.Boolean).map(f => f.Name));
+        if (boolNames.size === 0) return sql;
+        const scan = ScanSQLForScreening(sql, 'postgresql');
+        if (!scan.Classified) return sql;
 
         let out = sql;
-        for (const field of boolFields) {
-            // Match `"FieldName" <op> <int-or-quoted-int>`. We only rewrite when
-            // the literal is a bare 0/1 (or '0'/'1') — anything else (NULL,
-            // another column, parameter) is left alone so we don't accidentally
-            // mangle TRUE/FALSE the caller already wrote.
-            const ident = pgDialect.QuoteIdentifier(field.Name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const re = new RegExp(`(${ident})\\s*(=|!=|<>)\\s*'?([01])'?(?=\\s|$|\\)|,)`, 'g');
-            out = out.replace(re, (_m, col: string, op: string, val: string) =>
-                `${col} ${op} ${val === '1' ? 'TRUE' : 'FALSE'}`
-            );
+        for (const edit of this.findBooleanComparisons(sql, scan.Tokens, boolNames).reverse()) {
+            out = out.slice(0, edit.Start) + edit.Text + out.slice(edit.End);
         }
         return out;
+    }
+
+    /**
+     * Finds each `"BoolCol" {= | != | <>} {0|1|'0'|'1'}` comparison in the tokens of `sql`, in order,
+     * with the text that replaces it. Anything else (NULL, another column, a parameter, TRUE/FALSE)
+     * is left alone.
+     */
+    private findBooleanComparisons(
+        sql: string,
+        tokens: SQLScreeningToken[],
+        boolNames: ReadonlySet<string>,
+    ): Array<{ Start: number; End: number; Text: string }> {
+        const edits: Array<{ Start: number; End: number; Text: string }> = [];
+        for (let i = 0; i < tokens.length; i++) {
+            const col = tokens[i];
+            if (col.Kind !== 'identifier' || sql[col.Start] !== '"' || !boolNames.has(col.Text)) continue;
+            const op = this.readComparisonOperator(tokens, i + 1);
+            const value = op ? tokens[i + 1 + op.length] : undefined;
+            const bit = value ? this.bitLiteralValue(value) : null;
+            if (!op || !value || bit === null || !/^(\s|\)|,|$)/.test(sql.slice(value.End, value.End + 1))) continue;
+            // Only whitespace may lie between the column, the operator and the value; a comment there stays.
+            const gaps = sql.slice(col.End, tokens[i + 1].Start) + sql.slice(tokens[i + op.length].End, value.Start);
+            if (gaps.trim().length > 0) continue;
+            edits.push({ Start: col.Start, End: value.End, Text: `${sql.slice(col.Start, col.End)} ${op} ${bit ? 'TRUE' : 'FALSE'}` });
+            i += op.length + 1;
+        }
+        return edits;
+    }
+
+    /** The `=`, `!=` or `<>` operator that starts at `tokens[index]`, or null. */
+    private readComparisonOperator(tokens: SQLScreeningToken[], index: number): '=' | '!=' | '<>' | null {
+        const first = tokens[index];
+        if (!first || first.Kind !== 'symbol') return null;
+        const second = tokens[index + 1];
+        const pair = second && second.Kind === 'symbol' && second.Start === first.End ? first.Text + second.Text : '';
+        if (pair === '!=' || pair === '<>') return pair;
+        return first.Text === '=' ? '=' : null;
+    }
+
+    /** True for a `1` or `'1'` token, false for `0` or `'0'`, null for anything else. */
+    private bitLiteralValue(token: SQLScreeningToken): boolean | null {
+        const text = token.Kind === 'number' || token.Kind === 'string' ? token.Text : '';
+        if (text === '1' || text === "'1'") return true;
+        if (text === '0' || text === "'0'") return false;
+        return null;
     }
 
     // ─── Entity Record Names ─────────────────────────────────────────
@@ -1811,82 +1936,15 @@ SELECT * FROM delete_result`;
         // Convert SQL Server [bracket] notation to PostgreSQL "double-quote" notation.
         // Core MJ code (entityInfo.ts) generates relationship filters like [ColumnName]
         // and [schema].[viewName] which need to become "ColumnName" and "schema"."viewName".
-        sql = sql.replace(/\[(\w[\w\s]*)\]/g, '"$1"');
+        // Only brackets in code change. Two brackets written together (`[a][b]`) stay as
+        // written, so the conversion cannot make one identifier of them.
+        const bracketsConverted = this.rewriteCodeOnly(sql, (code) => code.replace(/(?<!\])\[(\w[\w\s]*)\](?!\[)/g, '"$1"'));
 
-        // Build a set of field names for this entity
+        // Quote bare field names in code only. String literals, quoted identifiers,
+        // dollar-quoted strings, E'' strings and comments stay as written, so a field
+        // name inside `LOWER('Loop Agent Type: System Prompt')` is not quoted.
         const fieldNames = new Set(entityInfo.Fields.map(f => f.Name));
-
-        // Walk the SQL with a tiny state machine so string literals and
-        // already-quoted identifiers are preserved as opaque ranges.
-        //
-        // Why not the previous `match(/'[^']*'|"[^"]*"|\S+/g)` token approach?
-        // It split the string on whitespace BEFORE the alternation could see
-        // an opening single-quote that lives inside a non-whitespace prefix —
-        // e.g. `LOWER('Loop Agent Type: System Prompt')` tokenized into
-        // `LOWER('Loop`, `Agent`, `Type:`, `System`, `Prompt')`. The middle
-        // tokens were treated as bare-identifier code, so `Type` (a real
-        // entity field) got quoted INSIDE the string literal, producing
-        // `LOWER('Loop Agent "Type": System Prompt')`. PG then matched on
-        // the corrupted text and `mj sync push` saw `rows=0` for a row that
-        // plainly existed in the DB. The state machine below tracks `'…'`
-        // (with `''` escape) and `"…"` ranges across whitespace, so any
-        // `'…'` literal stays intact regardless of its surroundings.
-        let out = '';
-        let i = 0;
-        const n = sql.length;
-        let codeBuf = '';
-
-        const flushCode = () => {
-            if (codeBuf.length === 0) return;
-            out += this.quoteFieldNamesInToken(codeBuf, fieldNames);
-            codeBuf = '';
-        };
-
-        while (i < n) {
-            const ch = sql[i];
-            if (ch === "'") {
-                // Flush any pending code before opening the literal.
-                flushCode();
-                let j = i + 1;
-                let lit = "'";
-                while (j < n) {
-                    if (sql[j] === "'") {
-                        // SQL-style escaped quote: '' inside a literal stays inside.
-                        if (j + 1 < n && sql[j + 1] === "'") {
-                            lit += "''";
-                            j += 2;
-                            continue;
-                        }
-                        lit += "'";
-                        j++;
-                        break;
-                    }
-                    lit += sql[j];
-                    j++;
-                }
-                out += lit;
-                i = j;
-                continue;
-            }
-            if (ch === '"') {
-                // Already-quoted identifier — pass through untouched.
-                flushCode();
-                let j = i + 1;
-                let id = '"';
-                while (j < n && sql[j] !== '"') {
-                    id += sql[j];
-                    j++;
-                }
-                if (j < n) { id += '"'; j++; }
-                out += id;
-                i = j;
-                continue;
-            }
-            codeBuf += ch;
-            i++;
-        }
-        flushCode();
-        return out;
+        return this.rewriteCodeOnly(bracketsConverted, (code) => this.quoteFieldNamesInToken(code, fieldNames));
     }
 
     /**
@@ -1920,7 +1978,7 @@ SELECT * FROM delete_result`;
             // raw built a pattern that either matched nothing — a `$` became an
             // end-anchor, so `a$$b` was never quoted at all — or matched the wrong
             // text. Discovered alongside issue #3171.
-            const re = new RegExp(`(?<!\\$)\\b${escapeRegExp(fieldName)}\\b(?!\\s*\\()`, 'gi');
+            const re = new RegExp(`(?<!\\$)\\b${escapeRegExp(fieldName)}\\b(?![\\w$])(?!\\s*\\()`, 'gi');
             // Function replacement, for the same reason on the other side: a quoted
             // identifier containing `$` would be expanded by a string replacement.
             const quoted = pgDialect.QuoteIdentifier(fieldName);

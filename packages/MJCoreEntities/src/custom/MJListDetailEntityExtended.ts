@@ -1,5 +1,5 @@
-import { BaseEntity, BaseEntityResult, CompositeKey, EntityInfo, IMetadataProvider } from "@memberjunction/core";
-import { RegisterClass } from "@memberjunction/global";
+import { BaseEntity, BaseEntityResult, CompositeKey, EntityInfo, IMetadataProvider, LogError } from "@memberjunction/core";
+import { EscapeSQLString, IsValidUUID, RegisterClass } from "@memberjunction/global";
 import { MJListDetailEntity } from "../generated/entity_subclasses";
 
 @RegisterClass(BaseEntity, 'MJ: List Details')
@@ -115,6 +115,10 @@ export class MJListDetailEntityExtended extends MJListDetailEntity  {
                 throw new Error('ListID cannot be null');
             }
 
+            if(!IsValidUUID(this.ListID)){
+                throw new Error('ListID must be a valid UUID');
+            }
+
             if(!this.RecordID){
                 throw new Error('RecordID cannot be null');
             }
@@ -131,11 +135,12 @@ export class MJListDetailEntityExtended extends MJListDetailEntity  {
             if (!this.IsSaved) {
                 const rvResult = await rv.RunView({
                     EntityName: 'MJ: List Details',
-                    ExtraFilter: `ListID = '${this.ListID}' AND RecordID = '${this.RecordID}'`
+                    ExtraFilter: `ListID = '${EscapeSQLString(this.ListID)}' AND RecordID = '${EscapeSQLString(this.RecordID)}'`
                 }, this.ContextCurrentUser);
 
                 if(!rvResult.Success){
-                    throw new Error(rvResult.ErrorMessage);
+                    LogError(`List Detail duplicate check failed: ${rvResult.ErrorMessage}`);
+                    throw new Error('Could not check whether the record is already in the list');
                 }
 
                 if(rvResult.Results.length > 0){

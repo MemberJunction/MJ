@@ -429,6 +429,9 @@ export class AgentSpecSync {
      * @throws {Error} If agent is not found
      */
     private async loadFromEntities(agentId: string, includeSubAgents: boolean): Promise<void> {
+        if (!isPersistedUUID(agentId)) {
+            throw new Error('Agent ID must be a UUID');
+        }
         const md = this.providerToUse;
         const rv = RunView.FromMetadataProvider(this._provider);
 
@@ -1998,6 +2001,9 @@ export class AgentSpecSync {
      * @throws {Error} If any query fails
      */
     private async loadCurrentDatabaseState(agentId: string): Promise<DatabaseState> {
+        if (!isPersistedUUID(agentId)) {
+            throw new Error('Agent ID must be a UUID');
+        }
         const rv = RunView.FromMetadataProvider(this._provider);
 
         // Batch load all related records for this agent

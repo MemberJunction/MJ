@@ -73,6 +73,7 @@ function entity(fields: FakeField[]) {
 function key(id: string | null) {
     return {
         HasValue: id !== null,
+        KeyValuePairs: [{ FieldName: 'ID', Value: id }],
         ToWhereClause: () => `ID='${id}'`,
         GetValueByFieldName: (fieldName: string) => (fieldName === 'ID' ? id : null),
         Values: () => (id === null ? '' : `ID|${id}`),
@@ -135,6 +136,24 @@ describe('RecordComparisonEngine', () => {
             );
             expect(result.Success).toBe(false);
             expect(result.ErrorMessage).toContain('No keys');
+            expect(mockRunViewFn).not.toHaveBeenCalled();
+        });
+
+        it('refuses a key whose field is not a primary key of the entity, before any query runs', async () => {
+            const notAKey = {
+                HasValue: true,
+                KeyValuePairs: [{ FieldName: 'ID IS NOT NULL AND 1=1 AND ID', Value: 'x' }],
+                ToWhereClause: () => `ID IS NOT NULL AND 1=1 AND ID='x'`,
+                GetValueByFieldName: () => null,
+                Values: () => 'x',
+            };
+            runOk([]);
+            const result = await engine.CompareRecords(
+                { EntityName: 'Accounts', Keys: [notAKey] } as unknown as RecordComparisonInput,
+                CONTEXT_USER as never,
+                providerFor(entity(STANDARD_FIELDS)) as never
+            );
+            expect(result.Success).toBe(false);
             expect(mockRunViewFn).not.toHaveBeenCalled();
         });
 

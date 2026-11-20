@@ -48,7 +48,7 @@ import {
 import { EscapeSQLString } from '@memberjunction/global';
 import { CloneAuthorizer } from './CloneAuthorization';
 import { ComputeClonePlanHash } from './ClonePlanHash';
-import { DeriveTargetKey, IsUuidColumn, KeyStrategyFor, ToRecordKeyString } from './CloneKeys';
+import { DeriveTargetKey, IsUuidColumn, KeyStrategyFor, PrimaryKeyWhereClause, ToRecordKeyString, ValidatedPrimaryKey } from './CloneKeys';
 
 export interface ClonePlannerOptions {
     Provider?: IMetadataProvider;
@@ -260,9 +260,9 @@ export class ClonePlanner {
         });
         if (planBlocked) return refusedPlan();
 
-        const key = new CompositeKey();
+        const requestedKey = new CompositeKey();
         if (sourceRecordKey instanceof CompositeKey) {
-            key.KeyValuePairs = sourceRecordKey.KeyValuePairs.map((kvp) => ({
+            requestedKey.KeyValuePairs = sourceRecordKey.KeyValuePairs.map((kvp) => ({
                 FieldName: kvp.FieldName,
                 Value: kvp.Value,
             }));
@@ -272,21 +272,23 @@ export class ClonePlanner {
             'KeyValuePairs' in sourceRecordKey &&
             Array.isArray((sourceRecordKey as CompositeKeyLike).KeyValuePairs)
         ) {
-            key.KeyValuePairs = (sourceRecordKey as CompositeKeyLike).KeyValuePairs.map((kvp) => ({
+            requestedKey.KeyValuePairs = (sourceRecordKey as CompositeKeyLike).KeyValuePairs.map((kvp) => ({
                 FieldName: kvp.FieldName,
                 Value: kvp.Value,
             }));
         } else if (typeof sourceRecordKey === 'string') {
-            key.LoadFromURLSegment(rootEntityInfo, sourceRecordKey);
+            requestedKey.LoadFromURLSegment(rootEntityInfo, sourceRecordKey);
         } else {
-            key.LoadFromEntityInfoAndRecord(rootEntityInfo, sourceRecordKey);
+            requestedKey.LoadFromEntityInfoAndRecord(rootEntityInfo, sourceRecordKey);
         }
+        // The root key holds only primary key fields of the entity, named as in the metadata.
+        const key = ValidatedPrimaryKey(rootEntityInfo, requestedKey);
 
         // A template preset applies only to a record flagged as a template (plan §5.5): it may copy
         // rows the configuration otherwise keeps private, so the flag is checked before anything is walked.
         let templateMode = false;
         if (preset?.TemplateSourceField) {
-            const flagged = await this.isTemplateSource(entityName, key, preset.TemplateSourceField, contextUser);
+            const flagged = await this.isTemplateSource(rootEntityInfo, key, preset.TemplateSourceField, contextUser);
             if (!flagged) {
                 warnings.push({
                     Code: 'TEMPLATE_SOURCE_REQUIRED',
@@ -919,9 +921,9 @@ export class ClonePlanner {
      * Whether the source record has its template flag (a template preset's `TemplateSourceField`) set.
      * Read straight from the row, as the cloning user sees it: a row they can't read is not a template.
      */
-    private async isTemplateSource(entityName: string, key: CompositeKey, field: string, contextUser: UserInfo): Promise<boolean> {
+    private async isTemplateSource(entity: EntityInfo, key: CompositeKey, field: string, contextUser: UserInfo): Promise<boolean> {
         const res = await RunView.FromMetadataProvider(this.Provider).RunView<Record<string, unknown>>(
-            { EntityName: entityName, Fields: [field], ExtraFilter: key.ToWhereClause(), ResultType: 'simple', MaxRows: 1, SkipTotalRowCount: true },
+            { EntityName: entity.Name, Fields: [field], ExtraFilter: PrimaryKeyWhereClause(entity, key), ResultType: 'simple', MaxRows: 1, SkipTotalRowCount: true },
             contextUser
         );
         const value = res?.Success ? res.Results?.[0]?.[field] : undefined;

@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
-import { RegisterClass } from "@memberjunction/global";
+import { EscapeSQLString, IsValidUUID, RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import { RunView } from "@memberjunction/core";
+import { LogError, RunView } from "@memberjunction/core";
 import { MJListEntity, MJListDetailEntity } from "@memberjunction/core-entities";
 
 /**
@@ -46,6 +46,12 @@ export class GetRecordListMembershipAction extends BaseAction {
           Message: 'Either EntityName or EntityID is required'
         };
       }
+      if (entityId && !IsValidUUID(entityId)) {
+        return { Success: false, ResultCode: 'INVALID_PARAMETER', Message: 'EntityID must be a UUID' };
+      }
+      if (userId && !IsValidUUID(userId)) {
+        return { Success: false, ResultCode: 'INVALID_PARAMETER', Message: 'UserID must be a UUID' };
+      }
 
       const rv = new RunView();
 
@@ -54,7 +60,7 @@ export class GetRecordListMembershipAction extends BaseAction {
       if (entityName && !entityId) {
         const entityResult = await rv.RunView({
           EntityName: 'MJ: Entities',
-          ExtraFilter: `Name = '${entityName}'`,
+          ExtraFilter: `Name = '${EscapeSQLString(entityName)}'`,
           ResultType: 'entity_object'
         }, params.ContextUser);
 
@@ -72,15 +78,16 @@ export class GetRecordListMembershipAction extends BaseAction {
       // Get list details for this record
       const detailsResult = await rv.RunView<MJListDetailEntity>({
         EntityName: 'MJ: List Details',
-        ExtraFilter: `RecordID = '${recordId}'`,
+        ExtraFilter: `RecordID = '${EscapeSQLString(recordId)}'`,
         ResultType: 'entity_object'
       }, params.ContextUser);
 
       if (!detailsResult.Success) {
+        LogError(`Get Record List Membership: failed to query list membership: ${detailsResult.ErrorMessage}`);
         return {
           Success: false,
           ResultCode: 'QUERY_FAILED',
-          Message: `Failed to query list membership: ${detailsResult.ErrorMessage}`
+          Message: 'Failed to query list membership'
         };
       }
 
@@ -115,10 +122,11 @@ export class GetRecordListMembershipAction extends BaseAction {
       }, params.ContextUser);
 
       if (!listsResult.Success) {
+        LogError(`Get Record List Membership: failed to query lists: ${listsResult.ErrorMessage}`);
         return {
           Success: false,
           ResultCode: 'QUERY_FAILED',
-          Message: `Failed to query lists: ${listsResult.ErrorMessage}`
+          Message: 'Failed to query lists'
         };
       }
 

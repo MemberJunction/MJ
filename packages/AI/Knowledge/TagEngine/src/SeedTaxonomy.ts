@@ -1,5 +1,5 @@
 import { UserInfo, IMetadataProvider, RunView, LogError, LogStatus } from '@memberjunction/core';
-import { NormalizeUUID } from '@memberjunction/global';
+import { IsValidUUID, NormalizeUUID } from '@memberjunction/global';
 import { MJContentItemEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIEmbeddingRunner, AIPromptRunner } from '@memberjunction/ai-prompts';
@@ -127,6 +127,9 @@ async function fetchSourceContentItems(
     sampleSize: number,
     contextUser?: UserInfo,
 ): Promise<MJContentItemEntity[]> {
+    if (!IsValidUUID(sourceID)) {
+        throw new Error('generateSeedTaxonomy: sourceID must be a UUID');
+    }
     const rv = new RunView();
     const result = await rv.RunView<MJContentItemEntity>(
         {

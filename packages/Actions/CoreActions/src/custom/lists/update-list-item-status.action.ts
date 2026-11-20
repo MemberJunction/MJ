@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
-import { RegisterClass } from "@memberjunction/global";
+import { EscapeSQLString, IsValidUUID, RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import { DatabaseProviderBase, Metadata, RunView } from "@memberjunction/core";
+import { DatabaseProviderBase, LogError, Metadata, RunView } from "@memberjunction/core";
 import { MJListDetailEntity } from "@memberjunction/core-entities";
 
 type ListItemStatus = 'Active' | 'Complete' | 'Disabled' | 'Error' | 'Other' | 'Pending' | 'Rejected';
@@ -53,6 +53,9 @@ export class UpdateListItemStatusAction extends BaseAction {
           Message: 'ListID is required'
         };
       }
+      if (!IsValidUUID(listId)) {
+        return { Success: false, ResultCode: 'INVALID_PARAMETER', Message: 'ListID must be a UUID' };
+      }
 
       if (!newStatus) {
         return {
@@ -94,12 +97,12 @@ export class UpdateListItemStatusAction extends BaseAction {
       let filter = `ListID = '${listId}'`;
 
       if (recordIds && recordIds.length > 0) {
-        const recordIdFilter = recordIds.map((id: string) => `'${id}'`).join(',');
+        const recordIdFilter = recordIds.map((id: string) => `'${EscapeSQLString(String(id))}'`).join(',');
         filter += ` AND RecordID IN (${recordIdFilter})`;
       }
 
       if (currentStatus) {
-        filter += ` AND Status = '${currentStatus}'`;
+        filter += ` AND Status = '${EscapeSQLString(currentStatus)}'`;
       }
 
       // Find records to update
@@ -110,10 +113,11 @@ export class UpdateListItemStatusAction extends BaseAction {
       }, params.ContextUser);
 
       if (!detailsResult.Success) {
+        LogError(`Update List Item Status: failed to query list details: ${detailsResult.ErrorMessage}`);
         return {
           Success: false,
           ResultCode: 'QUERY_FAILED',
-          Message: `Failed to query list details: ${detailsResult.ErrorMessage}`
+          Message: 'Failed to query list details'
         };
       }
 

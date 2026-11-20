@@ -245,3 +245,47 @@ describe('RunView', () => {
         });
     });
 });
+
+describe('RunView.GetEntityNameFromRunViewParams', () => {
+    function viewLookupProvider() {
+        const filters: string[] = [];
+        const provider = {
+            RunView: vi.fn().mockImplementation(async (p: RunViewParams) => {
+                filters.push(String(p.ExtraFilter ?? ''));
+                return { Success: true, Results: [{ Entity: 'MJ: Users' }], TotalRowCount: 1, RowCount: 1 };
+            }),
+            RunViews: vi.fn(),
+            Entities: [],
+        };
+        return { provider, filters };
+    }
+
+    it('refuses a ViewID that is not a UUID before any filter is built', async () => {
+        const { provider, filters } = viewLookupProvider();
+        const marker = "' OR '1'='1";
+
+        const refused = await RunView.GetEntityNameFromRunViewParams({ ViewID: `11111111-2222-3333-4444-555555555555${marker}` }, provider as never)
+            .then(() => false, () => true);
+
+        expect(filters.filter((f) => f.includes(marker))).toEqual([]);
+        expect(refused).toBe(true);
+    });
+
+    it('keeps a single quote in a ViewName inside the string literal', async () => {
+        const { provider, filters } = viewLookupProvider();
+
+        const entityName = await RunView.GetEntityNameFromRunViewParams({ ViewName: "Bob's view" }, provider as never);
+
+        expect(filters).toEqual(["Name = 'Bob''s view'"]);
+        expect(entityName).toBe('MJ: Users');
+    });
+
+    it('refuses a ViewID that is not a UUID with a fixed message', async () => {
+        const { provider } = viewLookupProvider();
+
+        const message = await RunView.GetEntityNameFromRunViewParams({ ViewID: 'not-a-uuid-marker' }, provider as never)
+            .then(() => '', (e: Error) => e.message);
+
+        expect(message).toBe('RunView: ViewID must be a UUID');
+    });
+});

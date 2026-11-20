@@ -8613,10 +8613,27 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     /**
      * A primary key value as a SQL literal: quoted with embedded quotes escaped, or a plain number
      * for a key that takes no quotes. These statements are built as text, and a key value can come
-     * from the client, so an unquoted value that isn't a number throws.
+     * from the client, so an unquoted value that isn't a number throws, and a value for a UUID key
+     * that isn't a well-formed UUID throws.
      */
     protected RenderPrimaryKeyLiteral(field: EntityFieldInfo | undefined, value: unknown, entityName: string): string {
+        if (field?.IsUniqueIdentifier) {
+            return this.RenderKeyLiteral(this.ValidatedUUIDKeyValue(value, field.Name, entityName), true, field.Name, entityName);
+        }
         return this.RenderKeyLiteral(value, field?.NeedsQuotes ?? false, field?.Name, entityName);
+    }
+
+    /**
+     * The UUID text of a UUID key value, trimmed and without surrounding braces. Throws when the
+     * value is not a well-formed UUID, so no SQL is built from it.
+     */
+    protected ValidatedUUIDKeyValue(value: unknown, fieldName: string, entityName: string): string {
+        const text = typeof value === 'string' ? value.trim() : '';
+        const unbraced = text.startsWith('{') && text.endsWith('}') ? text.slice(1, -1) : text;
+        if (!IsValidUUID(unbraced) || unbraced !== unbraced.trim()) {
+            throw new Error(`Invalid UUID value provided for key field ${fieldName} on entity ${entityName}`);
+        }
+        return unbraced;
     }
 
     /**

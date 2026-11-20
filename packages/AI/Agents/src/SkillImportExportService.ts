@@ -8,7 +8,7 @@
  */
 
 import { IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { MJAISkillEntity, MJAISkillActionEntity, MJAISkillSubAgentEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
@@ -66,16 +66,17 @@ export class SkillImportExportService {
             throw new Error(`Skill ${skillId} not found`);
         }
 
+        const skillFilter = `SkillID='${EscapeSQLString(skill.ID)}'`;
         const rv = new RunView();
         const [actionRows, subAgentRows] = await rv.RunViews<MJAISkillActionEntity | MJAISkillSubAgentEntity>([
             {
                 EntityName: 'MJ: AI Skill Actions',
-                ExtraFilter: `SkillID='${skillId}'`,
+                ExtraFilter: skillFilter,
                 ResultType: 'simple'
             },
             {
                 EntityName: 'MJ: AI Skill Sub Agents',
-                ExtraFilter: `SkillID='${skillId}'`,
+                ExtraFilter: skillFilter,
                 ResultType: 'simple'
             }
         ], contextUser);
@@ -250,7 +251,7 @@ export class SkillImportExportService {
         const rv = new RunView();
         const existing = await rv.RunView<MJAISkillActionEntity | MJAISkillSubAgentEntity>({
             EntityName: entityName,
-            ExtraFilter: `SkillID='${skillId}'`,
+            ExtraFilter: `SkillID='${EscapeSQLString(skillId)}'`,
             ResultType: 'entity_object'
         }, contextUser);
 

@@ -1,4 +1,4 @@
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IsValidUUID, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, IRunViewProvider, RunViewResult } from '../generic/interfaces';
 import { UserInfo } from '../generic/securityInfo';
 import { BaseEntity } from '../generic/baseEntity';
@@ -1073,10 +1073,13 @@ export class RunView  {
             //      cause. It now throws a descriptive error at the point of knowledge. (This is
             //      not a semantic change: the undefined already produced a throw downstream —
             //      just an unreadable one.)
+            if (params.ViewID && !IsValidUUID(params.ViewID)) {
+                throw new Error('RunView: ViewID must be a UUID');
+            }
             const rv = RunView.FromMetadataProvider(p);
             const result = await rv.RunView({
                 EntityName: "MJ: User Views",
-                ExtraFilter: params.ViewID ? `ID = '${params.ViewID}'` : `Name = '${params.ViewName}'`,
+                ExtraFilter: params.ViewID ? `ID = '${params.ViewID}'` : `Name = '${EscapeSQLString(params.ViewName)}'`,
                 ResultType: 'entity_object'
             }, contextUser);
             if (result && result.Success && result.Results.length > 0) {

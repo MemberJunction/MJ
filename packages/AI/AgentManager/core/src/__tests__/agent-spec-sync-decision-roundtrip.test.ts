@@ -168,7 +168,7 @@ describe('AgentSpecSync Decision step round-trip', () => {
 
         const mockAgentEntity = {
             Load: vi.fn().mockResolvedValue(true),
-            ID: 'agent-3',
+            ID: 'aaaaaaaa-0000-0000-0000-000000000003',
             Name: 'Loaded Decision Agent',
             TypeID: '4F6A189B-C068-4736-9F23-3FF540B40FDD',
             Status: 'Active',
@@ -177,7 +177,7 @@ describe('AgentSpecSync Decision step round-trip', () => {
 
         const mockStepEntity = {
             ID: 'step-3',
-            AgentID: 'agent-3',
+            AgentID: 'aaaaaaaa-0000-0000-0000-000000000003',
             Name: 'Rate Priority',
             StepType: 'Decision',
             StartingStep: true,
@@ -204,7 +204,7 @@ describe('AgentSpecSync Decision step round-trip', () => {
         // mockRunView for paths
         mockRunView.mockResolvedValueOnce(empty);
 
-        const loadedSync = await AgentSpecSync.LoadFromDatabase('agent-3', mockUser);
+        const loadedSync = await AgentSpecSync.LoadFromDatabase('aaaaaaaa-0000-0000-0000-000000000003', mockUser);
 
         expect(loadedSync.Spec.Steps).toBeDefined();
         expect(loadedSync.Spec.Steps).toHaveLength(1);
@@ -219,7 +219,7 @@ describe('AgentSpecSync Decision step round-trip', () => {
     it('loads step geometry (PositionX, PositionY, Width, Height), resilience (TimeoutSeconds, RetryCount, OnErrorBehavior), and path PathPoints from database', async () => {
         const mockAgentEntity = {
             Load: vi.fn().mockResolvedValue(true),
-            ID: 'agent-4',
+            ID: 'aaaaaaaa-0000-0000-0000-000000000004',
             Name: 'Geometry & Resilience Agent',
             TypeID: '4F6A189B-C068-4736-9F23-3FF540B40FDD',
             Status: 'Active',
@@ -228,7 +228,7 @@ describe('AgentSpecSync Decision step round-trip', () => {
 
         const mockStepA = {
             ID: 'step-a',
-            AgentID: 'agent-4',
+            AgentID: 'aaaaaaaa-0000-0000-0000-000000000004',
             Name: 'Step A at Origin',
             StepType: 'Action',
             StartingStep: true,
@@ -245,7 +245,7 @@ describe('AgentSpecSync Decision step round-trip', () => {
 
         const mockStepB = {
             ID: 'step-b',
-            AgentID: 'agent-4',
+            AgentID: 'aaaaaaaa-0000-0000-0000-000000000004',
             Name: 'Step B Positioned',
             StepType: 'Prompt',
             StartingStep: false,
@@ -288,7 +288,7 @@ describe('AgentSpecSync Decision step round-trip', () => {
         mockRunViews.mockResolvedValueOnce([empty, empty, empty, empty, stepsResult]);
         mockRunView.mockResolvedValueOnce(pathsResult);
 
-        const loadedSync = await AgentSpecSync.LoadFromDatabase('agent-4', mockUser);
+        const loadedSync = await AgentSpecSync.LoadFromDatabase('aaaaaaaa-0000-0000-0000-000000000004', mockUser);
 
         expect(loadedSync.Spec.Steps).toHaveLength(2);
         const [stepA, stepB] = loadedSync.Spec.Steps!;

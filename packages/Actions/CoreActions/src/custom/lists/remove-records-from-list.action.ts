@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
-import { RegisterClass } from "@memberjunction/global";
+import { EscapeSQLString, IsValidUUID, RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import { DatabaseProviderBase, Metadata, RunView } from "@memberjunction/core";
+import { DatabaseProviderBase, LogError, Metadata, RunView } from "@memberjunction/core";
 import { MJListDetailEntity } from "@memberjunction/core-entities";
 
 /**
@@ -56,6 +56,9 @@ export class RemoveRecordsFromListAction extends BaseAction {
           Message: 'ListID is required'
         };
       }
+      if (!IsValidUUID(listId)) {
+        return { Success: false, ResultCode: 'INVALID_PARAMETER', Message: 'ListID must be a UUID' };
+      }
 
       // Must specify recordIds, filterByStatus, or removeAll
       if (!recordIds?.length && !filterByStatus && !removeAll) {
@@ -72,12 +75,12 @@ export class RemoveRecordsFromListAction extends BaseAction {
       let filter = `ListID = '${listId}'`;
 
       if (recordIds && recordIds.length > 0) {
-        const recordIdFilter = recordIds.map((id: string) => `'${id}'`).join(',');
+        const recordIdFilter = recordIds.map((id: string) => `'${EscapeSQLString(String(id))}'`).join(',');
         filter += ` AND RecordID IN (${recordIdFilter})`;
       }
 
       if (filterByStatus) {
-        filter += ` AND Status = '${filterByStatus}'`;
+        filter += ` AND Status = '${EscapeSQLString(filterByStatus)}'`;
       }
 
       // Find records to delete
@@ -88,10 +91,11 @@ export class RemoveRecordsFromListAction extends BaseAction {
       }, params.ContextUser);
 
       if (!detailsResult.Success) {
+        LogError(`Remove Records from List: failed to query list details: ${detailsResult.ErrorMessage}`);
         return {
           Success: false,
           ResultCode: 'QUERY_FAILED',
-          Message: `Failed to query list details: ${detailsResult.ErrorMessage}`
+          Message: 'Failed to query list details'
         };
       }
 

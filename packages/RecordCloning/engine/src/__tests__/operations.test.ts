@@ -151,6 +151,24 @@ describe('RecordCloneOperationsHandler', () => {
             expect(desc.Relationships.map((r) => [r.Name, r.DefaultPolicy])).toEqual([['Children', 'Deep'], ['Lines', 'Deep']]);
         });
 
+        it('builds the template flag check from primary key fields only', async () => {
+            const templated = { ...cloneable, CloneConfig: { Enabled: true, Presets: [{ Key: 'template', TemplateSourceField: 'IsTemplate' }] } } as unknown as EntityInfo;
+            const provider = { ...providerWith(true), EntityByName: () => templated } as unknown as IMetadataProvider;
+            const filters: string[] = [];
+            vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+                RunView: async (params: { ExtraFilter?: string }) => {
+                    filters.push(params.ExtraFilter ?? '');
+                    return { Success: true, Results: [] };
+                },
+            } as unknown as RunView);
+
+            await new RecordCloneOperationsHandler(provider)
+                .Describe({ EntityName: 'ParentEntity', Key: { KeyValuePairs: [{ FieldName: 'ID IS NOT NULL AND 1=1 AND ID', Value: 'x' }] } }, mockUser)
+                .catch(() => undefined);
+
+            expect(filters.filter((f) => f.includes('1=1'))).toEqual([]);
+        });
+
         it('lists presets written in the legacy keyed-object form instead of throwing', async () => {
             const legacy = { ...cloneable, CloneConfig: { Enabled: true, Presets: { 'deep-prompts': { Description: 'd' } } } } as unknown as EntityInfo;
             const provider = { ...providerWith(true), EntityByName: () => legacy } as unknown as IMetadataProvider;
@@ -200,12 +218,22 @@ describe('RecordCloneOperationsHandler', () => {
 
         it('passes every key column to the planner (composite keys)', async () => {
             const spy = vi.spyOn(ClonePlanner.prototype, 'Plan').mockResolvedValue(enginePlan() as never);
-            await handler.Plan(
+            const composite = { ...cloneable, PrimaryKeys: [{ Name: 'A' }, { Name: 'B' }] } as unknown as EntityInfo;
+            const provider = { ...providerWith(true), EntityByName: () => composite } as unknown as IMetadataProvider;
+            await new RecordCloneOperationsHandler(provider).Plan(
                 { EntityName: 'ParentEntity', SourceRecordKey: { KeyValuePairs: [{ FieldName: 'A', Value: '1' }, { FieldName: 'B', Value: '2' }] } },
                 mockUser
             );
             const sent = spy.mock.calls[0][0].SourceRecordKey as { KeyValuePairs: Array<{ FieldName: string; Value: unknown }> };
             expect(sent.KeyValuePairs.map((p) => [p.FieldName, p.Value])).toEqual([['A', '1'], ['B', '2']]);
+        });
+
+        it('refuses a key whose field is not a primary key field, before the planner runs', async () => {
+            const spy = vi.spyOn(ClonePlanner.prototype, 'Plan').mockResolvedValue(enginePlan() as never);
+            await expect(
+                handler.Plan({ EntityName: 'ParentEntity', SourceRecordKey: { KeyValuePairs: [{ FieldName: 'Name', Value: 'x' }] } }, mockUser)
+            ).rejects.toThrow("Key fields must be the primary key fields of entity 'ParentEntity'.");
+            expect(spy).not.toHaveBeenCalled();
         });
 
         it('rejects a request without a key', async () => {

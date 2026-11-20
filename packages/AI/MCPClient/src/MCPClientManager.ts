@@ -19,7 +19,7 @@ import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
 
 import { Metadata, RunView, UserInfo, LogError, LogStatus, IMetadataProvider } from '@memberjunction/core';
-import { UUIDsEqual, BaseSingleton } from '@memberjunction/global';
+import { UUIDsEqual, BaseSingleton, IsValidUUID, EscapeSQLString } from '@memberjunction/global';
 import { CredentialEngine } from '@memberjunction/credentials';
 import {
     MJMCPServerEntity,
@@ -243,6 +243,9 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
         options: MCPConnectOptions
     ): Promise<MCPActiveConnection> {
         const { contextUser, forceReconnect = false, skipAutoSync = false } = options;
+        if (!IsValidUUID(connectionId)) {
+            throw new Error('Connection ID must be a UUID');
+        }
 
         // Check for existing connection
         if (this.connections.has(connectionId) && !forceReconnect) {
@@ -1696,6 +1699,9 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
      * Loads connection configuration from database
      */
     private async loadConnectionConfig(connectionId: string, contextUser: UserInfo): Promise<MCPConnectionConfig | null> {
+        if (!IsValidUUID(connectionId)) {
+            return null;
+        }
         try {
             const rv = new RunView();
             const result = await rv.RunView<MCPConnectionConfig>({
@@ -1769,7 +1775,7 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
             const rv = new RunView();
             const result = await rv.RunView<{ ID: string }>({
                 EntityName: MCPClientManager.ENTITY_MCP_TOOLS,
-                ExtraFilter: `MCPServerID = '${serverId}' AND ToolName = '${toolName}'`,
+                ExtraFilter: `MCPServerID = '${serverId}' AND ToolName = '${EscapeSQLString(toolName)}'`,
                 ResultType: 'simple',
                 Fields: ['ID']
             }, contextUser);
@@ -2326,6 +2332,9 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
         permission: 'execute' | 'modify' | 'viewCredentials',
         provider?: IMetadataProvider
     ): Promise<boolean> {
+        if (!IsValidUUID(connectionId)) {
+            return false;
+        }
         try {
             // Admins always have access
             const hasAdminRole = contextUser.UserRoles?.some(

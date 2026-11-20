@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
-import { GroupByUUID, RegisterClass } from '@memberjunction/global';
+import { GroupByUUID, IsValidUUID, RegisterClass } from '@memberjunction/global';
 import { BaseAction } from '@memberjunction/actions';
-import { RunView } from '@memberjunction/core';
+import { LogError, RunView } from '@memberjunction/core';
 import { MJScheduledJobRunEntity } from '@memberjunction/core-entities';
 import { BaseJobAction } from './BaseJobAction';
 
@@ -54,6 +54,13 @@ export class GetScheduledJobStatisticsAction extends BaseJobAction {
         try {
             const jobId = this.getParamValue(params, 'JobID');
             const daysBack = this.getNumericParam(params, 'DaysBack', 30);
+            if (jobId && !IsValidUUID(jobId)) {
+                return {
+                    Success: false,
+                    ResultCode: 'VALIDATION_ERROR',
+                    Message: 'JobID must be a UUID'
+                };
+            }
 
             // Calculate date threshold
             const dateThreshold = new Date();
@@ -80,10 +87,11 @@ export class GetScheduledJobStatisticsAction extends BaseJobAction {
             }, params.ContextUser);
 
             if (!result.Success) {
+                LogError(`Get Scheduled Job Statistics: failed to load job runs: ${result.ErrorMessage}`);
                 return {
                     Success: false,
                     ResultCode: 'FAILED',
-                    Message: `Failed to load job runs: ${result.ErrorMessage}`
+                    Message: 'Failed to load job runs'
                 };
             }
 

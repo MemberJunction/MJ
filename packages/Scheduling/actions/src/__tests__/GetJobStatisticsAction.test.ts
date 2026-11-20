@@ -83,4 +83,25 @@ describe('Get Scheduled Job Statistics', () => {
             { JobID: NIGHTLY.toUpperCase(), JobName: 'Nightly', TotalRuns: 1, SuccessfulRuns: 1, FailedRuns: 0, SuccessRate: 100, AverageDurationSeconds: 90, LastRunAt: new Date(Date.UTC(2026, 9, 1, 0, 10)), LastRunStatus: 'Completed' },
         ]);
     });
+
+    it('refuses a JobID that is not a UUID before any filter is built', async () => {
+        runViewResult.mockResolvedValue({ Success: true, Results: [] });
+        const marker = "' OR '1'='1";
+        const p = { Params: [{ Name: 'JobID', Value: `${NIGHTLY}${marker}` }], ContextUser: { ID: 'user-1' } } as unknown as RunActionParams;
+
+        const result = await new TestableAction().Run(p);
+
+        const filters = runViewResult.mock.calls.map((c) => String((c[0] as { ExtraFilter?: string }).ExtraFilter ?? ''));
+        expect(filters.filter((f) => f.includes(marker))).toEqual([]);
+        expect(result.Success).toBe(false);
+    });
+
+    it('does not return the data provider error text when job runs fail to load', async () => {
+        runViewResult.mockResolvedValue({ Success: false, ErrorMessage: 'provider-detail-marker' });
+
+        const result = await new TestableAction().Run(params());
+
+        expect(result.Success).toBe(false);
+        expect(result.Message).not.toContain('provider-detail-marker');
+    });
 });

@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
-import { RegisterClass } from "@memberjunction/global";
+import { EscapeSQLString, IsValidUUID, RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import { Metadata, RunView, CompositeKey, EntityInfo } from "@memberjunction/core";
+import { LogError, Metadata, RunView, CompositeKey, EntityInfo } from "@memberjunction/core";
 import { MJListEntity, MJListDetailEntity } from "@memberjunction/core-entities";
 
 /**
@@ -49,6 +49,9 @@ export class GetListRecordsAction extends BaseAction {
           Message: 'ListID is required'
         };
       }
+      if (!IsValidUUID(listId)) {
+        return { Success: false, ResultCode: 'INVALID_PARAMETER', Message: 'ListID must be a UUID' };
+      }
 
       const rv = new RunView();
 
@@ -72,7 +75,7 @@ export class GetListRecordsAction extends BaseAction {
       // Build filter
       let filter = `ListID = '${listId}'`;
       if (filterByStatus) {
-        filter += ` AND Status = '${filterByStatus}'`;
+        filter += ` AND Status = '${EscapeSQLString(filterByStatus)}'`;
       }
 
       // Get list details
@@ -85,10 +88,11 @@ export class GetListRecordsAction extends BaseAction {
       }, params.ContextUser);
 
       if (!detailsResult.Success) {
+        LogError(`Get List Records: failed to query list records: ${detailsResult.ErrorMessage}`);
         return {
           Success: false,
           ResultCode: 'QUERY_FAILED',
-          Message: `Failed to query list records: ${detailsResult.ErrorMessage}`
+          Message: 'Failed to query list records'
         };
       }
 
