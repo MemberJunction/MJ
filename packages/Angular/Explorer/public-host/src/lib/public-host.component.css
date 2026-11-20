@@ -1,0 +1,41 @@
+/* Explorer's global styles stop html and body from scrolling. A public page scrolls like a normal web page. */
+html.mj-public-host-active,
+html.mj-public-host-active body {
+  height: auto;
+  min-height: 100%;
+  overflow: auto;
+}
+
+mj-public-host {
+  display: block;
+  min-height: 100vh;
+  background: var(--mj-bg-page);
+  color: var(--mj-text-primary);
+}
+
+.mj-public-host-status {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--mj-text-secondary);
+}
+
+.mj-public-host-missing {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 96px 24px;
+  text-align: center;
+}
+
+.mj-public-host-missing h1 {
+  margin: 0 0 8px;
+  font-size: 28px;
+}
+
+.mj-public-host-missing p {
+  margin: 0 0 24px;
+  color: var(--mj-text-secondary);
+}
+
+.mj-public-host-missing a {
+  color: var(--mj-text-link);
+}

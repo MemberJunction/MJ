@@ -1,8 +1,21 @@
 import { Component, Input } from '@angular/core';
 import { DataSnapshot } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
+import { BaseArtifactViewerPluginComponent, FILE_EXPORT_KEY, type ArtifactExportOption } from '../base-artifact-viewer.component';
 import { CreateCodeSnapshot } from '../../snapshot-helpers';
+
+/** File extension for each editor language. */
+const LANGUAGE_FILE_EXTENSIONS: Record<string, string> = {
+  python: 'py',
+  csharp: 'cs',
+  java: 'java',
+  typescript: 'ts',
+  javascript: 'js',
+  sql: 'sql',
+  css: 'css',
+  xml: 'xml',
+  plaintext: 'txt',
+};
 
 /**
  * Viewer component for code artifacts (Python, C#, Java, TypeScript, JavaScript, SQL, CSS, XML)
@@ -144,15 +157,15 @@ export class CodeArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     } else if (ct.includes('csharp') || ct.includes('c#')) {
       this.Language = 'csharp';
       this.LanguageLabel = 'C#';
+    } else if (ct.includes('javascript')) {
+      this.Language = 'javascript';
+      this.LanguageLabel = 'JavaScript';
     } else if (ct.includes('java')) {
       this.Language = 'java';
       this.LanguageLabel = 'Java';
     } else if (ct.includes('typescript')) {
       this.Language = 'typescript';
       this.LanguageLabel = 'TypeScript';
-    } else if (ct.includes('javascript')) {
-      this.Language = 'javascript';
-      this.LanguageLabel = 'JavaScript';
     } else if (ct.includes('sql')) {
       this.Language = 'sql';
       this.LanguageLabel = 'SQL';
@@ -166,6 +179,25 @@ export class CodeArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       this.Language = 'plaintext';
       this.LanguageLabel = 'Code';
     }
+  }
+
+  /** The source code, once loaded, with the extension for its language. */
+  public override GetExportOptions(): ArtifactExportOption[] {
+    if (!this.CodeContent) {
+      return [];
+    }
+    return [this.FileExportOption(`${this.LanguageLabel} (.${this.fileExtension})`, 'fa-solid fa-file-code', 'The source code')];
+  }
+
+  public override async RunExport(key: string): Promise<void> {
+    if (key !== FILE_EXPORT_KEY) {
+      return super.RunExport(key);
+    }
+    this.DownloadTextFile(this.CodeContent, this.ExportFileName(this.fileExtension), this.ContentType || 'text/plain');
+  }
+
+  private get fileExtension(): string {
+    return LANGUAGE_FILE_EXTENSIONS[this.Language] ?? 'txt';
   }
 
   public override GetCurrentStateSnapshot(): DataSnapshot | null {

@@ -6273,6 +6273,32 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
     }
 
     /**
+    * * Field Name: HumanTaskProvider
+    * * Display Name: Human Task Provider
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The registration key of the human-task provider that also put this request in front of a person, when the install routes agent requests to one (humanTasks.defaultProvider). NULL when only the built-in inbox holds the request. Only that provider may answer the request through the provider path, and an answer given elsewhere asks it to withdraw its own ask.
+    */
+    get HumanTaskProvider(): string | null {
+        return this.Get('HumanTaskProvider');
+    }
+    set HumanTaskProvider(value: string | null) {
+        this.Set('HumanTaskProvider', value);
+    }
+
+    /**
+    * * Field Name: HumanTaskExternalReference
+    * * Display Name: Human Task External Reference
+    * * SQL Data Type: nvarchar(500)
+    * * Description: The reference the human-task provider returned for its own record of this request (for example a task ID in another app), handed back to the provider when it is asked to withdraw. NULL when no provider took the request or it returned none.
+    */
+    get HumanTaskExternalReference(): string | null {
+        return this.Get('HumanTaskExternalReference');
+    }
+    set HumanTaskExternalReference(value: string | null) {
+        this.Set('HumanTaskExternalReference', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent Name
     * * SQL Data Type: nvarchar(255)

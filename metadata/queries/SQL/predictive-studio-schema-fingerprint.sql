@@ -1,6 +1,6 @@
 -- Predictive Studio: the schema's column fingerprint, the applied-migration count and the newest entity-metadata change.
 --
--- Read before and after a publish, binding and scoring run by the zero-schema-change checks (IT182, gate G5.6): a
+-- Read before and after a publish, binding and scoring run by the zero-schema-change checks (IT183, gate G5.6): a
 -- prediction must reach a record with no column added, no migration applied and no CodeGen run (D-058, D-078), so all
 -- three values must be unchanged. CHECKSUM_AGG over every sys.columns row's object, name, ordinal and type changes when
 -- any column of any table or view is added, dropped, renamed or retyped; flyway_schema_history gains a row per applied

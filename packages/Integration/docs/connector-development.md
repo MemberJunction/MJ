@@ -20,9 +20,12 @@ How to build a new integration connector for MemberJunction.
 > | `"ImportPath": "@memberjunction/integration-connectors"` | `"ImportPath": "@memberjunction/connector-mysystem"` |
 > | tests under `src/__tests__/` in the shared package | tests under `<Category>/MySystem/src/__tests__/` |
 >
-> That repo enforces a **four-way identity invariant** — registration key ≡ `Integration.ClassName` ≡
-> `Integration.ImportPath` ≡ `package.json` name, all equal to `@memberjunction/connector-<vendor>` —
-> checked in CI by `scripts/validate-invariants.mjs`. Start from an existing Open App as a template and
+> By convention, a connector's registration key, `Integration.ClassName`, `Integration.ImportPath` and
+> `package.json` name are all `@memberjunction/connector-<vendor>`. CI (`scripts/validate-invariants.mjs`)
+> checks a three-way invariant: the Open App's server package name equals the seeded Integration's
+> `ImportPath`, and that Integration's `ClassName` is a `@RegisterClass` key the package's own source
+> exports. `ConnectorFactory` resolves the connector by `ClassName`, so `ClassName` must equal a
+> registration key; it need not be the package name (Impexium registers `ImpexiumConnector`). Start from an existing Open App as a template and
 > read that repo's contributing docs before you begin.
 >
 > **This package still hosts** the three External Data Source connector base classes

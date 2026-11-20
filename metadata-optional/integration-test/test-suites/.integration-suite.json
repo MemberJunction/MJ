@@ -1770,8 +1770,19 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT182 - PS Prediction Serving — Zero Schema Change",
+            "TestID": "@lookup:MJ: Tests.Name=IT182 - Archive Runs Page Through Every Eligible Row",
             "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5941BA01-ECFA-40CF-8B53-4D817EBAC6C2"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT183 - PS Prediction Serving — Zero Schema Change",
+            "Sequence": 50,
             "Status": "Active"
           },
           "primaryKey": {
