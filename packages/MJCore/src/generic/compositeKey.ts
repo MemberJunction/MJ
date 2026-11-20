@@ -28,9 +28,13 @@ export class KeyValuePair {
     }
 }
 
-/** A character a `[bracketed]` or `"quoted"` key field name part may hold: not a bracket, a quote mark, a backtick or a control character. */
-const KEY_FIELD_NAME_DELIMITED_CHAR = String.raw`[^\[\]"'\x60\p{Cc}]`;
-/** One part of a key field name: a plain identifier, a `[bracketed]` name, or a `"quoted"` name. */
+/** A character a `[bracketed]` or `"quoted"` key field name part may hold: a letter, mark or decimal digit, a space, or ASCII punctuation other than `[`, `]`, `"`, `'`, a backtick and a backslash. */
+const KEY_FIELD_NAME_DELIMITED_CHAR = String.raw`[\p{Lu}\p{Ll}\p{Lt}\p{Lo}\p{M}\p{Nd} !#$%&()*+,./:;<=>?@^_{|}~-]`;
+/**
+ * One part of a key field name. A plain part starts with a letter (`Lu`, `Ll`, `Lt`, `Lo`) or `_` and then holds
+ * letters, marks, decimal digits, `_`, `@`, `#` or `$`. A `[bracketed]` or `"quoted"` part holds one or more
+ * {@link KEY_FIELD_NAME_DELIMITED_CHAR} characters.
+ */
 const KEY_FIELD_NAME_PART = String.raw`(?:[\p{Lu}\p{Ll}\p{Lt}\p{Lo}_][\p{Lu}\p{Ll}\p{Lt}\p{Lo}\p{M}\p{Nd}_@#$]*|\[` + KEY_FIELD_NAME_DELIMITED_CHAR + String.raw`+\]|"` + KEY_FIELD_NAME_DELIMITED_CHAR + String.raw`+")`;
 const KEY_FIELD_NAME = new RegExp(`^${KEY_FIELD_NAME_PART}(?:\\.${KEY_FIELD_NAME_PART})*$`, 'u');
 
@@ -41,9 +45,9 @@ function assertKeyFieldName(fieldName: unknown): void {
     }
 }
 
-/** Throws when a key value is not a string, Date, finite number, bigint, boolean, null or undefined. */
+/** Throws when a key value is not a string without a NUL character, a Date, a finite number, a bigint, a boolean, null or undefined. */
 function assertKeyValue(value: unknown): void {
-    const valid = value === null || value === undefined || typeof value === 'string' || typeof value === 'bigint'
+    const valid = value === null || value === undefined || (typeof value === 'string' && !value.includes('\0')) || typeof value === 'bigint'
         || typeof value === 'boolean' || value instanceof Date || (typeof value === 'number' && Number.isFinite(value));
     if (!valid) {
         throw new Error('Invalid value in key');
@@ -150,8 +154,9 @@ export class FieldValueCollection {
      * Each field name must be one or more parts joined by `.`. A part is a plain name that starts
      * with a letter or `_` and then holds letters, combining marks, decimal digits, `_`, `@`, `#` or `$`
      * (a letter is Unicode `Lu`, `Ll`, `Lt` or `Lo`, so modifier letters and non-decimal number
-     * characters are refused); or a `[bracketed]`
-     * or `"quoted"` name that holds none of `[`, `]`, `"`, `'`, a backtick, or a control character. Each value must be a string or Date (quoted and escaped),
+     * characters are refused); or a `[bracketed]` or `"quoted"` name that holds only letters, marks,
+     * decimal digits, spaces and ASCII punctuation other than `[`, `]`, `"`, `'`, a backtick and a
+     * backslash. Each value must be a string without a NUL character or a Date (quoted and escaped),
      * a finite number, a bigint, a boolean, null or undefined. Any other field name or value throws
      * before any text is built.
      * @param useIsNull if true, will return "FieldName IS NULL" for any key value pair that has a null or undefined value, if false, will return "FieldName=Value"

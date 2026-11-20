@@ -777,10 +777,24 @@ describe('ToWhereClause field names and values', () => {
     ["\"a'b\""],
     ['[a`b]'],
     ['[a\u0001b]'],
-    ['ʼX'],
-    ['aʼb'],
-    ['aˆb'],
-    ['a²'],
+    ['\u02BCX'],
+    ['a\u02BCb'],
+    ['a\u02C6b'],
+    ['a\u00B2'],
+    ['[a\uFF3Bb]'],
+    ['[a\uFF3Db]'],
+    ['"a\uFF02b"'],
+    ['"a\uFF07b"'],
+    ['[a\u2018b]'],
+    ['[a\u2019b]'],
+    ['[a\u02BCb]'],
+    ['[a\u2028b]'],
+    ['[a\u2029b]'],
+    ['[a\u00A0b]'],
+    ['[a\u200Bb]'],
+    ['[a\u202Eb]'],
+    ['[a\uFEFFb]'],
+    ['[a\\b]'],
   ])('refuses the field name %s before any text is built', (fieldName) => {
     const key = new CompositeKey();
     key.KeyValuePairs = [{ FieldName: fieldName, Value: 'x' }];
@@ -792,6 +806,7 @@ describe('ToWhereClause field names and values', () => {
     ['an object', { a: 1 }],
     ['NaN', Number.NaN],
     ['Infinity', Number.POSITIVE_INFINITY],
+    ['a string with a NUL character', 'a\u0000b'],
   ])('refuses %s as a key value', (_label, value) => {
     const key = new CompositeKey();
     key.KeyValuePairs = [{ FieldName: 'ID', Value: value }];
