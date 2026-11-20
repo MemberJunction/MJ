@@ -51,7 +51,7 @@
   "shipped/SQL/predictive-studio-lock-model.sql": "b714ff0a1a139de24da89f106c63de798fa3dc04c1e0b2351bbd9f6606bfd553",
   "shipped/SQL/predictive-studio-lock-pipeline.sql": "3a40cfd6bb277c00347a1077d4e41a5dc5d134c1d33c8c6dbcf7b579c214c0f6",
   "shipped/SQL/predictive-studio-next-model-version.sql": "7336bb8381f47c883fa3330504ffa690d695f258108d9182e78d7a9edee51657",
-  "shipped/SQL/predictive-studio-pipelines-with-more-than-one-published-model.sql": "6f1b61a17b081320453126a33a6230bd4c8ff8a72821e6207c528720bdc9e5d9",
+  "shipped/SQL/predictive-studio-pipelines-with-more-than-one-published-model.sql": "1da0a03c610af04be47b936f9fe474625499494c626c98287a75b103549f6463",
   "shipped/SQL/predictive-studio-publish-records-without-a-status-change.sql": "8de5918ee216fda87ca27a6a6d76e6f9257a5497bab2162db68f969a832c03bb",
   "shipped/SQL/predictive-studio-published-models-without-a-publish-record.sql": "c7c64bfc577be3e4195e8a598a2d22752a4c085de91d02a82ef4ac7f73669bce",
   "shipped/SQL/predictive-studio-running-training-run.sql": "92eea366fcc8a0d4e4ce2888e76378c27ba254d6985aa7e3cb13106d2041a1ca",

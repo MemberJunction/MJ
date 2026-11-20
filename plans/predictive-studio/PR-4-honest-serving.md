@@ -474,6 +474,12 @@ packages/TestingFramework/integration-test-suite/src/checks/fls-client.checks.ts
 packages/TestingFramework/integration-test-suite/src/__tests__/ps-prediction-serving.test.ts
 # D4-239: ServerBootstrapLite declares integration-engine, which next's Peer Sync class needs in the Lite manifest (e7e409f515)
 packages/ServerBootstrapLite/package.json
+# D4-255: the M5b–M7 self-audit fixes' new files outside the globs (M5b-24, M5b-32/M7-33, M5b-2, M6-43, M5b round 2)
+packages/GraphQLDataProvider/src/__tests__/graphQLActionClient.mergeOutputParams.test.ts
+e2e/fixtures.ts
+packages/TestingFramework/integration-test-suite/src/__tests__/mjapi-affinity.test.ts
+packages/TestingFramework/integration-test-suite/src/__tests__/ps-gate-monitoring.test.ts
+packages/Angular/Explorer/dashboards/src/__tests__/fixtures/test-entity-rows.ts
 ```
 
 ### 2.7 Milestone start and end mechanics (program/conventions.md §3; kickoff design §6.5)
@@ -1601,6 +1607,7 @@ Python assets as shipped. Exit counts are measured on the agent's database at ea
 **Mutation check G5.3:** write `MLScoringRun.ArtifactSha256` as null on the Score Record Set path → `ps-gate-r1-s7-4`'s lineage join finds 0% of rows with the run's hash equal to the model's.
 **Mutation check G5.4:** write `EffectiveAsOf` as the write time instead of the run's normalised as-of instant → `ps-gate-c1-s7-4` finds `MLScoringRun.AsOfDate` ≠ `EffectiveAsOf` on every row.
 **Mutation check G5.5:** remove the empty-column refusal (C6 check 6) → `ps-gate-w1-s7-5-3` sees the run `completed` with 200 predictions.
+**Mutation check G0.10:** train random forest without its estimator seed in the sidecar (`random_state=None` for `RandomForestClassifier`) → `ps-gate-w1-s5-4` finds random forest's two trainings' predictions apart (3 of 4 algorithms reproduce, expected 4). The row changed only its `MaxExecutionTimeMS` (D4-256); PR 4 records the mutation because it touched the row.
 **Mutation check G5.6:** remove the view-gate filter from one role's read permission on `MJ: Latest Feature Values` → `ps-gate-c1-s7-4-2` fails "shows nothing to a user without it, 1 of 1".
 **Mutation check G6.1:** join outcomes to the latest `Model` row per record instead of the row as of each period → `ps-gate-d1c-s8-1` finds closed-window predictions without a joined outcome (below 100%), or a period scoring rows other than its own (the check also asserts `scoredForPeriod` equals each period's own rows: phase 1's check passed the mutation, 36000 of 36000).
 **Mutation check G6.2:** store the point RMSE with `PrimaryLower`/`PrimaryUpper` null → `ps-gate-d1r-s8-2` fails "a row with RMSE and its 95% bounds for 100% of labelled periods".
@@ -6964,7 +6971,11 @@ lineage columns by M5 — exists on a fresh install after `mj migrate` with no C
 `FilterText` subqueries `vwUserHeldAuthorizations` (§5.8.4), the "View Model Predictions" authorization with `Allow`
 grants to Developer and Integration, and the filter attached through `metadata/entity-permissions/` to every role's read
 permission on both `MJ: Feature Values` and `MJ: Latest Feature Values`, so a user without the binding's authorization
-sees no `Source = 'Model'` row in either entity while `Pipeline` and `Human` rows stay visible; the view's rule equals
+sees no `Source = 'Model'` row in either entity. Every `Pipeline` and `Human` row stays visible in
+`MJ: Feature Values`. In `MJ: Latest Feature Values`, such a row is visible only when it is the key's newest Champion
+row: the view ranks a key's rows before the row-level security filter applies, so for a key whose newest row is a gated
+Model row, a user without the authorization sees no latest value, even when an older Human row exists. This fails
+closed and leaks nothing; the Human row stays readable in `MJ: Feature Values`; the view's rule equals
 MJ's authorization rule over a grant matrix (A-FV-AUTHZ); `ModelPredictionPanel` is re-pointed (§5.8.5): the entity's
 `Active` bindings the user holds, the latest value from `MJ: Latest Feature Values`, `Champion` history from
 `MJ: Feature Values`, the lineage view, the "Derived values" section, nothing rendered without an authorized binding;
@@ -7404,6 +7415,7 @@ and the matching database row (the spec's `sqlcmd` reads through `PS_SQLCMD` or 
 | Input class | Cell | Test or refusal test |
 |---|---|---|
 | unauthorized user | a UI-role user reads either entity: no Model row, every Pipeline and Human row | `view-gate.adversarial.db.test.ts › a user without the authorization reads no Model row from either entity and every Pipeline and Human row` |
+| unauthorized user | an older Human value under a newer gated Model row: no latest value for the key, the Human row in `MJ: Feature Values` | `view-gate.adversarial.db.test.ts › view-gate order: an older Human value under a newer gated Model row is hidden from the latest-value entity for a user without the authorization` |
 | unauthorized user | a read grant without the filter (a role added later) | `view-gate.adversarial.db.test.ts › every read grant of both entities carries the view gate` |
 | unauthorized user | a writer without the binding's authorization, with the view gate attached: a same-`asOf` re-run, a column copy, a withdrawal | `view-gate.adversarial.db.test.ts › a writer without the binding's authorization is refused before reading: no duplicate rows, no column write, no withdrawal (D4-60)` |
 | unauthorized user | Deny on the authorization or an ancestor; an inactive authorization; an Owner | `held-authorizations.db.test.ts › $Name: the view holds exactly what MJ's rule grants ($Mirrors)` |
@@ -7475,13 +7487,13 @@ M5b.1's file)
   exit-pass fix round re-runs only the suites whose inputs it changed (package suites of touched packages; integration
   suites only for runtime-code changes; a gate's suite for a change to its check); §11 names what was re-run
 - [x] Task M5b.10's harness run by the reviewer (D-071), its counts, cells and claims in §11
-- [ ] self-audit of every added and changed line against `reference/coding-standards.md`, findings fixed
+- [x] self-audit of every added and changed line against `reference/coding-standards.md`, findings fixed *(M5b–M7 self-audit `self-audit-M5b-M7.md`, 108 findings; fixed on `ps/pr-4-honest-serving--audit` per `audit-fixes-M5b-report.md`, `audit-fixes-M6-report.md`, `audit-fixes-M7-report.md`; rulings D4-240…D4-252; merged and re-verified in the post-audit pass, D4-253…D4-256)*
 - [x] tasks ticked
 - [x] §11 entry `### <date> — <agent> — M5b` with the counts, the `**Mutation output G5.6:**` line, A-FV-AUTHZ,
   A-FV-SYSUSER and the fresh-install outputs
 - [x] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
-- [ ] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M5b` → exit 0, summary in the commit body
+- [x] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M5b` → exit 0, summary in the commit body
 - [x] one checkpoint commit, each path staged by name (the plan and `.changeset/ps-honest-serving.md` among them)
 - [ ] `git push` through the pre-push hook (D-072)
 - [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --edit-pr` → the open PR's body from §10 (the only file it changes is
@@ -8016,12 +8028,12 @@ milestone; counts, cells and claims go to §11.
   exit-pass fix round re-runs only the suites whose inputs it changed (package suites of touched packages; integration
   suites only for runtime-code changes; a gate's suite for a change to its check); §11 names what was re-run
 - [x] Task M6.9's harness run by the reviewer (D-071), its counts, cells and claims in §11
-- [ ] self-audit of every added and changed line against `reference/coding-standards.md`, findings fixed
+- [x] self-audit of every added and changed line against `reference/coding-standards.md`, findings fixed *(M5b–M7 self-audit `self-audit-M5b-M7.md`, 108 findings; fixed on `ps/pr-4-honest-serving--audit` per `audit-fixes-M5b-report.md`, `audit-fixes-M6-report.md`, `audit-fixes-M7-report.md`; rulings D4-240…D4-252; merged and re-verified in the post-audit pass, D4-253…D4-256)*
 - [x] tasks ticked (Task M6.8 ticked `not applicable` with the merge state when the condition is false)
 - [x] §11 entry `### <date> — <agent> — M6` with the counts, the twelve `**Mutation output G6.<n>:**` lines
 - [x] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
-- [ ] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M6` → exit 0, summary in the commit body
+- [x] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M6` → exit 0, summary in the commit body
 - [x] one checkpoint commit, each path staged by name (the plan and `.changeset/ps-honest-serving.md` among them)
 - [ ] `git push` through the pre-push hook (D-072)
 - [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --edit-pr` → the open PR's body from §10 (the only file it changes is
@@ -8574,12 +8586,12 @@ milestone; counts, cells and claims go to §11.
   exit-pass fix round re-runs only the suites whose inputs it changed (package suites of touched packages; integration
   suites only for runtime-code changes; a gate's suite for a change to its check); §11 names what was re-run
 - [x] Task M7.8's harness run by the reviewer (D-071), its counts, cells and claims in §11
-- [ ] self-audit of every added and changed line against `reference/coding-standards.md`, findings fixed
+- [x] self-audit of every added and changed line against `reference/coding-standards.md`, findings fixed *(M5b–M7 self-audit `self-audit-M5b-M7.md`, 108 findings; fixed on `ps/pr-4-honest-serving--audit` per `audit-fixes-M5b-report.md`, `audit-fixes-M6-report.md`, `audit-fixes-M7-report.md`; rulings D4-240…D4-252; merged and re-verified in the post-audit pass, D4-253…D4-256)*
 - [x] tasks ticked
 - [x] §11 entry `### <date> — <agent> — M7` with the counts, §5.6 step 5's outputs, the G3.6, G0.2 and G0.3 lines
 - [x] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
-- [ ] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M7` → exit 0, summary in the commit body
+- [x] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M7` → exit 0, summary in the commit body
 - [x] one checkpoint commit, each path staged by name (the plan and `.changeset/ps-honest-serving.md` among them)
 - [ ] `git push` through the pre-push hook (D-072)
 - [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --edit-pr` → the open PR's body from §10 (the only file it changes is
@@ -10515,7 +10527,11 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   every action param as a string; `Materialize List From View` declares `AuthorizesCaller` (ListOperations reads the
   view and writes the list as the caller, BaseAction's stated condition), and `GraphQLActionClient.RunAction` returns
   the action's outputs in `Params` (`MergeOutputParams`, MJAPI's index-keyed `ResultData`) so `CreatedListID` is
-  readable by name. Both fixes are outside Predictive Studio and are named in the PR description.
+  readable by name. Both fixes are outside Predictive Studio and are named in the PR description. The selection view also stores the selection as its `FilterState` (`in` rules of
+  at most 500 IDs ORed, or one AND of `eq` rules per composite-key record), which compiles to the same records: a later
+  save of the view recompiles `WhereClause` from `FilterState` (`MJUserViewEntityExtended.UpdateWhereClause`), so the
+  ID list survives and a refresh of the lineage-linked List adds no other record. What remains: the view is the user's
+  own, and if they edit its filter, its record set changes, as it would for any view they own.
 - **D4-185 · IT182's wire identities are written through MJAPI** (M5b.6, amends D4-170/D4-171). Users, roles, keys and
   scope rules go over a system-key connection (`BuildSystemKeyProvider`), so MJAPI's own caches see them at once;
   minting that fails releases what it created. The fixture model (no Prediction Unit) scores on a clock reading its
@@ -10613,11 +10629,18 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
 - **D4-210 · The scoring fallback calls `PreChangeArtifacts.Migrate`** (M7.2), not `PreGateModelMigration`, so the
   scoring service does not import the migration's training and publishing dependencies; a check that cannot finish is
   logged and the stored row re-read.
-- **D4-211 · The re-evaluation's change detection** (M7.2). The "last attempt" is the newest `publish`/`refusal`
-  record of the pipeline's training runs; a pipeline with none is eligible; otherwise it retrains only when the
-  pipeline row, its bound protocol version, or the newest `__mj_UpdatedAt` of its target entity's rows or of that
-  entity's `MJ: Feature Values` is newer than the record. A pipeline an auto-train process declares is left to it
-  (`covered-by-auto-train`); one past `retrainPerRun` is `deferred`.
+- **D4-211 · The re-evaluation's change detection** (M7.2; amended by the M7 review's I-1). The "last attempt" is the
+  newest `publish`/`refusal` record of the pipeline's training runs; a pipeline with none is eligible; otherwise it
+  retrains only when an INPUT moved after the record: the pipeline row; its bound protocol version; the newest
+  `__mj_UpdatedAt` of its target entity's input `MJ: Feature Values` (`Source` `Pipeline` or `Human` — a `Model` row is
+  scoring's own prediction and never counts); or its target entity's rows. Scoring writes back into target rows only
+  through a scoring binding's `TargetColumn`, so for an entity with such a column (any binding status) a row counts
+  only when it was created after the record, or a complete `MJ: Record Changes` row after the record is a `Create`, a
+  `Delete`, or an `Update` listing a field that is not a copied column (a malformed `ChangesJSON` counts; a `Snapshot`
+  does not), read in keyset pages of 500 stopping at the first; an entity with no such column counts its rows' newest
+  `__mj_UpdatedAt`. An entity that does not track record changes and has a copied column therefore counts only created
+  rows (an update of its other columns is not seen — the honest limit of what it records). A pipeline an auto-train
+  process declares is left to it (`covered-by-auto-train`); one past `retrainPerRun` is `deferred`.
 - **D4-212 · Step 4's re-enable list** (M7.2): the processes step 5 re-enables are read from every earlier run's
   `Details.PreChangeModels.DisabledProcessIDs` of the same Registry Check job plus this run's, filtered to processes
   still disabled whose configured model belongs to the published pipeline.
@@ -10717,6 +10740,95 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   Nine paths changed by D4-184's two fixes (Materialize List From View, `RunAction` output params), the phase-3 fixes
   (the shared tab kernel's suite, ServerBootstrapLite's `integration-engine` dependency for next's Peer Sync class),
   M5b's exports and IT182's identity and teardown helpers are listed with the ruling each serves.
+- **D4-240 · IT182's publish UPDATE and tag-keyed teardown SQL are a documented exception** (M5b self-audit, M5b-5).
+  The publish UPDATE stays: Status is gate-owned and the PreSave guard re-derives a move into Published from training
+  evidence the no-sidecar tier cannot produce (IT166 precedent; G5.6 publishes through the gate). The tag-keyed
+  teardown SQL stays: `MJMLModelScoringBindingEntityServer.Delete` refuses an Active binding or one a Feature Value
+  names, so an entity-layer teardown would have to withdraw (a scoring side effect) and could not run for a Setup that
+  failed before its rows were read back. Both carry a comment block citing this ruling.
+- **D4-241 · One Core parser for a stored prediction; the grid keeps its `ResultPayload` adapter** (M5b self-audit,
+  M5b-10). `StoredPrediction.Parse` (Core) reads `ValueJSON` for the record panel and the predictions grid;
+  `LatestPredictionRows.ToRunDetail` still builds the `ResultPayload` string, because the grid has one row model for
+  run details and latest values (parsed by `AtRiskRules.ParseAtRiskRows`), and re-modelling it is outside an audit fix.
+- **D4-242 · The binding editor re-reads on a `Model` input setter; no `Provider` setter** (M5b self-audit, M5b-15; the
+  same holds for M7-10's five components). `BaseAngularComponent.Provider` is a plain input field, and overriding a field
+  with an accessor is TS2610/TS2611, so `Model` is an `@Input()` setter and the first read runs in `ngOnInit`, once
+  every input including `Provider` is bound; a later `Provider` change reloads nothing, as for every other
+  `BaseAngularComponent`. Supporting it needs a change to the shared base class in `ng-base-types`, outside PR 4.
+- **D4-243 · The default view authorization lives in `PredictionViewAuthorization`** (M5b self-audit, M5b-23; better
+  owner than the audit's "statics on `PredictionPanelQueries`"). `DefaultName` and `FindDefault` are the binding's
+  concern (editor, resolver, backfill), not the panel's; the panel's caps and field lists are statics of
+  `PredictionPanelQueries` (`MaxHistoryRows`, `MaxDerivedRows`, `BindingFields`, …) and `MAX_DRIVERS` is
+  `ModelPredictionLogic.MaxDrivers`.
+- **D4-244 · The e2e specs escape SQL literals with a local `SqlTextLiteral`** (M5b self-audit, M5b-32). `e2e/` is outside
+  the pnpm package graph (the root declares no `@memberjunction/*` dependency), so it cannot import `EscapeSQLString`
+  without a new root dependency and a lockfile change; `e2e/fixtures.ts`'s `SqlTextLiteral` escapes exactly as
+  `EscapeSQLString` (NULs dropped, quotes doubled) and is the one helper both honest-serving specs use (with M7-33's
+  `EXPLORER_BASE_URL`, `RequiredEnv`, `RedeemSignInLink`).
+- **D4-245 · A parity retrain's gate outcome goes into the run's `Details`, not the stored `Parity` JSON** (M6
+  self-audit, M6-2). `CheckParity` returns `{ Parity, Retrain }` (`ChallengerStep.FromOutcome` of the retrain's gate
+  outcome), the notification's wording comes from it and `MonitoredPeriodOutcome.ParityRetrain` carries it into
+  `Details.Periods[].ParityRetrain`. The `MJMLMonitoringResultEntity_MonitoringParity` JSONType keeps its shape: the
+  row's `Parity.trainingRunId` and the gate's own publish/refusal record of that run are the durable trail, and a new
+  member would need a metadata change, CodeGen and a release migration for no reader.
+- **D4-246 · `RunModelMonitoring`'s output type pins `triggersFired` and `challengerOutcome` to Core's literal unions**
+  (M6 self-audit, M6-21). The type file and `remote_operations.ts` carry the unions, and two JSONType mirrors pin them
+  to Core. The audit hand-wrote the generated text; the post-audit clean CodeGen reproduced it and moved only the
+  operation's `ContractFingerprint` (`ro_fp_b000910fbd8bc41b`, the merged type with D4-237's state), committed as
+  CodeGen wrote it.
+- **D4-247 · `MonitorCalibrate` stays as operator API; `Q_BY_LOOKS` is removed** (M6 self-audit, M6-25). The calibrator
+  is how q(L) is derived for a new look design and is documented as such; the fixed table had no reader.
+- **D4-248 · The D1c scenario's `revertFrom` is removed, not wired in** (M6 self-audit, M6-26): no rollback gate uses a
+  reverted D1c, so the generator branch and `make-scenario-revert.test.ts` go with it (TruthSuite 188 → 187 tests).
+- **D4-249 · One rollback-candidate rule, the gate's own precondition** (M7 self-audit, M7-7). `RollbackCandidates.Find`
+  (Engine `registry/rollback-candidates.ts`) serves `LifecycleGate.RollBackToIncumbent` and the registry check's
+  `RollBackPipeline`: the newest `Archived` model of the pipeline with a `Delivery`, a `publish` or `adopt` record for
+  its training run (`checkPurpose` / `FindPublishForRun`; D4-204's backing purposes also include `rollback`, which the
+  gate refuses `illegal-transition`, so the registry check had offered candidates the gate refuses), and an artifact
+  that verifies now (not the stored `ArtifactStatus`). A candidate whose bytes are gone is passed over.
+- **D4-250 · The monitoring tab's two `LIKE` reads stay RunViews with structural matching** (M7 self-audit, M7-8). A
+  stored query would bypass the entity permissions and RLS of `Scheduled Job Runs` and `ML Model Publish Records`
+  (the field-security rule), and a structured column needs a schema change. Both `LIKE`s only bound the read (a model's
+  UUID cannot match another model; `auto-train` appears only in that initiator's component); each row is then matched
+  structurally — `UUIDsEqual` in Core's `RegistryCheckDetails.FindingsAbout` and the typed `InitiatorObject`.
+- **D4-251 · The "more than one Published model per pipeline" query stays as the backstop** (M7 self-audit, M7-28).
+  `UX_MLModel_OnePublishedPerPipeline` makes its finding unreachable while the index exists; the query proves the index
+  is still in force (it returns rows only after the index was dropped or disabled outside the migrations). Its SQL file
+  and metadata say so.
+- **D4-252 · Section 13 of the serving migration is a documented exception to "no raw DML on a tracked entity"** (M7
+  self-audit, M7-4; controller ruling; D4-13). Its raw UPDATEs of `MLModel` business state (Status, StatusReason,
+  ArtifactStatus) are the one-time pre-change status fix and write no Record Changes; the migration header and the
+  section banner cite D4-13, and every later change goes through the lifecycle gate. The comment changed the
+  migration's checksum, so both agent databases were rebuilt from clean (D4-225).
+- **D4-253 · The post-audit merge keeps both sides** (post-audit verification). `monitoring-driver.ts`: D4-237's
+  `recordInsufficientRows` and the audit's single reference read (`evaluateAndAct` → `ActedPeriod`, M6-15).
+  `monitoring-periods.test.ts` (add/add): the audit's week/month/quarter cases and D4-237's two year cases.
+  `UnitFixtures.provision` takes the audit's `ProvisionOptions` (M6-40) with D4-238's `Promotion` as a member. G6.11
+  (D4-238) reads its challenger through the audit's `MonitoringFixture.ChallengerOutcome` (M6-34), which now also
+  returns the run's stored `Gate`, so the incumbent comparison is matched by `UUIDsEqual` instead of `toLowerCase`.
+- **D4-254 · G3.4 is not re-run after the audit** (post-audit verification). Its inputs are untouched: training, the
+  W2 generator and `ps-gate-w2-s6-5-2.checks.ts` are not in the audit's diff; the publish rule
+  (`PublishRules`/`GateRules` in Core `registry-contracts.ts`/`gate.ts`) is unchanged; `lifecycle-gate.ts` changed only
+  the rollback candidate (D4-249, not on G3.4's path) and `persistedStatusOf` (same six statuses through
+  `LifecycleLabels.IsPersistedStatus`); `seed-rules.ts`'s `NoisePublishPasses` is the same Wilson-lower-bound ≤ 0.05
+  rule behind a named constant; the sidecar changed only `monitor.py`/`MonitorDrift`. Its §11 count stays the final
+  verification's `0 of 400`.
+- **D4-255 · The allowlist names the self-audit fixes' new files outside it** (post-audit verification). Five paths the
+  M5b–M7 self-audit added outside the plan's globs are listed with the finding each serves: `MergeOutputParams`' test
+  (M5b-24, a D4-184 file), `e2e/fixtures.ts` (the shared SQL-literal and sign-in helpers, M5b-32/M7-33, D4-244), IT182's
+  MJAPI-affinity unit test (M5b-2), the monitoring-fixture unit test (M6-43) and the dashboards' typed entity-row test
+  fixture (M5b round 2, no `as unknown as` in M5b tests).
+- **D4-256 · G0.10 gets a 20-minute budget** (post-audit verification). `W1 -> S5.4` runs eight single-threaded
+  trainings on the one suite sidecar and had no `MaxExecutionTimeMS` (the 300 s default); it took 242 s in the final
+  verification and timed out at 300 s twice under host load 26–29 (in the Containment suite and alone), while the
+  sidecar finished the queued trainings after the budget expired — slow, not hung. Every other training gate carries
+  900 000–3 600 000 ms; `.gate-W1-S5.4.json` now carries `MaxExecutionTimeMS: 1200000`.
+- **D4-257 · SQLParser's shipped goldens follow the audit's edit of the registry-check SQL** (post-audit verification).
+  M7-28 rewrote `metadata/queries/SQL/predictive-studio-pipelines-with-more-than-one-published-model.sql` (header,
+  bracketed `[__mj]`), a file of SQLParser's shipped corpus, so 7 golden tests failed `--- CHANGED shipped/SQL/…`
+  (found by `milestone-exit`'s `cmd:test packages/SQLParser`). The goldens were rewritten with `vitest run -u` on
+  `src/__tests__/legacy-goldens/` only: 11 files, one line each, every changed line that entry's (b0a85a7847's
+  precedent); SQLParser 63 files / 2175 passed.
 - **D-086 · Program process ruling (owner, 2026-11-16).** Fix rounds are capped at two per task, Minor/Nit findings are
   parked and fixed in one batch at the milestone exit self-audit (Important at once); no scoped re-review for nit-only
   rounds; reviewers verify by reading and targeted runs (the DB-lane case, the mutation, the runtime proof) and do not
@@ -10819,7 +10931,7 @@ All resolved; the defaults are implemented and the kickoff only confirms the fac
 The owner's ruling of 2026-11-10 (D4-69) removed OF4-1, OF4-2, OF4-4 and OF4-6: CI gains the sidecar pytest job at M1
 (Task M1.6), M5.4 drops `'Materialized'` from `ModeBadgeClass`, M4.3 deletes the grid's `@deprecated` aliases, and M3.4
 deletes `ProductionModelPromotionGate` and rewrites RD9 and the `ps-live-*` rigs, each with the test or rig it breaks
-updated as caller maintenance (§2.6). Forty-three flags are listed (OF4-12…OF4-15 added at M3, OF4-17 at M4's start, OF4-16 and OF4-18…OF4-26 at M4, OF4-27…OF4-33 at M4b, OF4-34…OF4-36 at M5's start, OF4-37…OF4-41 at M5's exit, OF4-42…OF4-47 at the M5b/M6/M7 integration); OF4-30 is closed, so forty-two remain, each decided out of scope with its
+updated as caller maintenance (§2.6). Fifty flags are listed (OF4-12…OF4-15 added at M3, OF4-17 at M4's start, OF4-16 and OF4-18…OF4-26 at M4, OF4-27…OF4-33 at M4b, OF4-34…OF4-36 at M5's start, OF4-37…OF4-41 at M5's exit, OF4-42…OF4-47 at the M5b/M6/M7 integration, OF4-48…OF4-52 at the M5b–M7 final verification, OF4-53…OF4-54 at the post-audit verification); OF4-30 is closed and OF4-48…OF4-51 are resolved, so forty-five remain, each decided out of scope with its
 default implemented:
 
 - **OF4-3 · `packages/Angular/Explorer/core-entity-forms/src/lib/custom/RecordProcesses/**` stays out of scope**
@@ -10982,7 +11094,10 @@ default implemented:
 - **OF4-36 · next's PB7 (and PB18 after it) fails once Sage runs decision discovery** (recorded at M5's start). Sage
   now has `decisionDiscovery: true`. Discovery's `LLMDecision` chat call is answered by the harness `TestLLM` and uses
   up PB7's first scripted reply, so Sage runs 3 prompts. PB18 fails because of PB7's pointer counts. **Default:**
-  recorded; not PR 4's check.
+  recorded; not PR 4's check. **Addendum (post-audit Deterministic run):** the failing member moves between runs: PB7
+  passed with `P:4/A:3` and PB18 failed on `PB7 Sage step storage (100354 B) exceeded 65000 B ceiling` (start 31350 B,
+  end 62697 B, pointers 5/3), where the final verification's PB7 ran `P:3/A:2` (36249 B) — which call gets which
+  scripted TestLLM reply differs between runs.
 
 - **OF4-37 · The scoring-run recorder writes its six JSON columns as text** (M5.9 review M3, M5 exit). Moving
   `scoring-run-recorder.ts` onto the typed `…Object` setters breaks 5 Engine tests: the unit fake
@@ -11041,6 +11156,19 @@ default implemented:
   `insufficient-rows` (0 scored rows) and does not fail the run.
 - **OF4-52 · The monitoring tab repeats the trigger kind** ("outcome-degradation: outcome-degradation: …"; the stored
   reason already starts with the kind). **Default:** recorded (cosmetic).
+- **OF4-53 · G0.10 does not test estimator determinism** (post-audit verification, D4-256). Every G0.10 training —
+  logistic regression, XGBoost and LightGBM alike — delivers a byte-identical artifact (`ArtifactSha256 a78ba176…` on
+  all of them, probed during a run), so the model the check scores is the same delivered simple member whatever the
+  pipeline's algorithm, and the check compares one model with itself. Its mutation (random forest with
+  `random_state=None` in the sidecar, which moves an unseeded forest's probabilities by up to 0.16 on a toy set) does
+  not bite: `4 of 4`, `random_forestMaxDiff 0`. G0.10 is PR 2's gate; a real test needs the finalist delivered (a
+  protocol whose only simple baseline is the dummy, as D4-238 did for G6.11) or the finalists' predictions compared
+  directly. **Default:** recorded for the controller; the row's budget change (D4-256) stays.
+- **OF4-54 · next's ABV3 races a metadata reload requested by the bundle before it** (post-audit Deterministic run).
+  `work-bus-core` writes a metadata member entity ("no item timestamp moved"), which requests a full metadata reload;
+  the reload landed between ABV3's second and third RunView, replaced the `EntityInfo` objects and dropped the synthetic
+  alternate base view ABV3 had registered in memory (`'TestMirrorView' is not registered … (none)`). `IT132 - Alternate
+  Base Views` alone: 6/6. Neither file is PR 4's. **Default:** recorded; not PR 4's check.
 
 ## 10. PR description draft
 
@@ -11092,7 +11220,7 @@ are monitored on real outcomes.
 - Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, PS_SEED_LIMIT, PS_SIGN_IN_URL, PS_STORAGE_PROVIDER, PW_BASE_URL, STORAGE_LOCAL_ROOT<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->29<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->29<!-- /gen:checks -->
-- Head: <!-- gen:head -->e274ed9840<!-- /gen:head -->
+- Head: <!-- gen:head -->87d983984b<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,
@@ -12973,8 +13101,8 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   2175; Sidecar TS 37; sidecar pytest 536; truth pytest 24 + mypy clean.
 - **Gates:** Scoring 7/7 (G5.1–G5.6, G3.9); IT182 Z1–Z8 ✓; `Integration Tests — Deterministic` (PR lane)
   `131/160 passed, 28 skipped`, Skip gate PASSED, ✗ PB7/PB18 only (OF4-36).
-- **Mutation output G5.6:** `✗ ps-gate-c1-s7-4-2.G5.6: … the panel shows the prediction to a user holding the binding's authorization, 1 of 1, and shows nothing to a user without it, 0 of 1` (`{"panelAuthorized":1,"panelRestricted":1,"rowsWithLineage":6673,…}`; the UI role's Latest-FV read permission without its view-gate filter, MJAPI restarted, Registry Check paused, D4-236).
-- **Z6 / OF4-45:** with the Registry Check job paused: `✗ ps-prediction-serving.Z6: … reads no prediction — expected 0, got 4`;
+- **Mutation output G5.6:** `✗ ps-gate-c1-s7-4-2.G5.6: … the panel shows the prediction to a user holding the binding's authorization, 1 of 1, and shows nothing to a user without it, 0 of 1` (`{"panelAuthorized":1,"panelRestricted":1,"rowsWithLineage":6673,…}`; the UI role's Latest-FV read permission without its view-gate filter, MJAPI restarted, Registry Check paused, D4-236) (post-audit re-run on the merged audit, 2026-11-20: Registry Check paused, the package rebuilt or the sidecar restarted, MJAPI restarted, restored `cmp` identical, census equal)
+- **Z6 / OF4-45:** with the Registry Check job paused: `✗ ps-prediction-serving.Z6: Z6: a user without the binding's authorization reads no prediction — expected 0, got 4` (post-audit re-run, same permission mutation as G5.6);
   without the pause the hourly job's step (i) re-attached the view gate mid-run (D4-236).
 - **Runtime:** M5b.5 retention run-now → driver `PredictiveStudioPredictionRetentionJobDriver`, `ViewAuthorizationID IS
   NULL` → 0, `Details.Bindings[0]` `RetentionDays 30, Cutoff 2026-10-21, Deleted 0`. Save as list: list `973DA275-…`
@@ -12993,18 +13121,18 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   have a joined outcome` (`"joined":12000`, `"scoredForPeriod":"4000 4000 4000"`); G6.4 `0` fires; G6.12 `0 alert without
   the skew, 1 with a planted 1e-6 skew on 200 stored scores`. **Monitoring (statistical) 3/3:** G3.4 `0 of 400` published,
   G6.6 `19 of 400` alarming (q 0.0095), G6.8 `400 of 400` detected, mean FDP 0.0076. IT166 PSD1, PSD2 ✓.
-- **Mutation output G6.1:** `✗ ps-gate-d1c-s8-1.G6.1: 36000 of 36000 closed-window predictions have a joined outcome` (the check's per-period row count catches it)
-- **Mutation output G6.2:** `✗ ps-gate-d1r-s8-2.G6.2: 0 of 3 labelled periods carry RMSE with 95% bounds; 0 post-shift RMSE above the pre-shift upper bound 4.032828931969381`
-- **Mutation output G6.3:** `✗ ps-gate-d1c-s8-4.G6.3: the trigger did not fire within 1 period of the shift`
-- **Mutation output G6.4:** `✗ ps-gate-t4-s8-4.G6.4: 4 fires: 0 of 12 one-row months insufficient-rows, 1 of 1 pooled 12-month windows judged (expected 0 fires, 12, 1)` (minimum dropped)
-- **Mutation output G6.5:** `✗ ps-gate-w6-s8-4.G6.5: no 2024+ period flagged a retrain (0 of 1)`
-- **Mutation output G6.6:** `✗ ps-gate-t4-s8-3.G6.6: 87 of 400 no-drift replays raised an alarm over 12 looks at q(12) (at most 28)`
-- **Mutation output G6.7:** `✗ ps-gate-d1c-s8-2.G6.7: period-3 positive rate 0.4618831956517756 against the periods 0–2 upper bound 0.4663423457063208`
-- **Mutation output G6.8:** `✗ ps-gate-d2-s8-3.G6.8: EngagementZ flagged within 1 period of the shift in 400 of 400 seeds (at least 372); mean FDP 0.6628 (at most 0.05)`
-- **Mutation output G6.9:** `✗ ps-gate-d1c-s8-5.G6.9: D1c: challenger 8B6065C4-…, paired on the incumbent's rows true, replaced false` (D4-234)
-- **Mutation output G6.10:** `✗ ps-gate-d1r-s8-5.G6.10: D1r: challenger 31198691-…, paired on the incumbent's rows true, replaced false`
-- **Mutation output G6.11:** `✗ ps-gate-t4-s8-5.G6.11: D2: challenger 38235CB1-… (gate outcome model), reached the incumbent comparison true, replaced true`
-- **Mutation output G6.12:** `✗ ps-gate-r1-s7-6.G6.12: 0 alert without the skew, 0 with a planted 1e-6 skew on 200 stored scores`
+- **Mutation output G6.1:** `✗ ps-gate-d1c-s8-1.G6.1: 36000 of 36000 closed-window predictions have a joined outcome` (the check's per-period row count catches it) (post-audit re-run on the merged audit, 2026-11-20: Registry Check paused, the package rebuilt or the sidecar restarted, MJAPI restarted, restored `cmp` identical, census equal)
+- **Mutation output G6.2:** `✗ ps-gate-d1r-s8-2.G6.2: 0 of 3 labelled periods carry RMSE with 95% bounds; 0 post-shift RMSE above the pre-shift upper bound 4.032828931969381` (post-audit re-run on the merged audit, 2026-11-20: Registry Check paused, the package rebuilt or the sidecar restarted, MJAPI restarted, restored `cmp` identical, census equal)
+- **Mutation output G6.3:** `✗ ps-gate-d1c-s8-4.G6.3: the trigger did not fire within 1 period of the shift` (spec re-pointed at the audit's single reference read in `evaluateAndAct`, M6-15) (post-audit re-run on the merged audit, 2026-11-20: Registry Check paused, the package rebuilt or the sidecar restarted, MJAPI restarted, restored `cmp` identical, census equal)
+- **Mutation output G6.4:** `✗ ps-gate-t4-s8-4.G6.4: 4 fires: 0 of 12 one-row months insufficient-rows, 1 of 1 pooled 12-month windows judged (expected 0 fires, 12, 1)` (minimum dropped) (post-audit re-run on the merged audit, 2026-11-20: Registry Check paused, the package rebuilt or the sidecar restarted, MJAPI restarted, restored `cmp` identical, census equal)
+- **Mutation output G6.5:** `✗ ps-gate-w6-s8-4.G6.5: no 2024+ period flagged a retrain (0 of 1)` (post-audit re-run on the merged audit, 2026-11-20: Registry Check paused, the package rebuilt or the sidecar restarted, MJAPI restarted, restored `cmp` identical, census equal)
+- **Mutation output G6.6:** `✗ ps-gate-t4-s8-3.G6.6: 87 of 400 no-drift replays raised an alarm over 12 looks at q(12) (at most 28)` (post-audit re-run on the merged audit, 2026-11-20: Registry Check paused, the package rebuilt or the sidecar restarted, MJAPI restarted, restored `cmp` identical, census equal)
+- **Mutation output G6.7:** `✗ ps-gate-d1c-s8-2.G6.7: period-3 positive rate 0.4618831956517756 against the periods 0–2 upper bound 0.4663423457063208` (post-audit re-run on the merged audit, 2026-11-20: Registry Check paused, the package rebuilt or the sidecar restarted, MJAPI restarted, restored `cmp` identical, census equal)
+- **Mutation output G6.8:** `✗ ps-gate-d2-s8-3.G6.8: EngagementZ flagged within 1 period of the shift in 400 of 400 seeds (at least 372); mean FDP 0.6628 (at most 0.05)` (post-audit re-run on the merged audit, 2026-11-20: Registry Check paused, the package rebuilt or the sidecar restarted, MJAPI restarted, restored `cmp` identical, census equal)
+- **Mutation output G6.9:** `✗ ps-gate-d1c-s8-5.G6.9: D1c: challenger 4CC968ED-…, paired on the incumbent's rows true, replaced false` (D4-234) (post-audit re-run on the merged audit, 2026-11-20: Registry Check paused, the package rebuilt or the sidecar restarted, MJAPI restarted, restored `cmp` identical, census equal)
+- **Mutation output G6.10:** `✗ ps-gate-d1r-s8-5.G6.10: D1r: challenger 17E238D5-…, paired on the incumbent's rows true, replaced false` (post-audit re-run on the merged audit, 2026-11-20: Registry Check paused, the package rebuilt or the sidecar restarted, MJAPI restarted, restored `cmp` identical, census equal)
+- **Mutation output G6.11:** `✗ ps-gate-t4-s8-5.G6.11: D2: challenger 15559A73-… (gate outcome model), reached the incumbent comparison true, replaced true` (post-audit re-run on the merged audit, 2026-11-20: Registry Check paused, the package rebuilt or the sidecar restarted, MJAPI restarted, restored `cmp` identical, census equal)
+- **Mutation output G6.12:** `✗ ps-gate-r1-s7-6.G6.12: 0 alert without the skew, 0 with a planted 1e-6 skew on 200 stored scores` (post-audit re-run on the merged audit, 2026-11-20: Registry Check paused, the package rebuilt or the sidecar restarted, MJAPI restarted, restored `cmp` identical, census equal)
 - Every mutation run: Registry Check paused, package rebuilt, MJAPI restarted, the one bundle, restore `cmp` identical,
   rebuild; census equal after each. G6.1–G6.7, G6.12 and G5.6 re-run on the fixed code in the close-out round (replacing
   the phase-2 outputs).
@@ -13047,6 +13175,51 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   entityfield-sequence EXIT=0; census = baseline. `milestone-exit --skip-commands`: M5b, M6, M7 each `# checks 10 ·
   failed 1` — `tasks: 1 unticked`, the self-audit box (the controller's, after the audit agent); allowlist 702 paths, 0
   outside; handoff found; mutation-checks 31 gate rows, 0 without output.
+
+### 2026-11-20 — Claude (Opus 5.5) — M5b–M7 self-audit and post-audit verification
+
+- **Self-audit:** `self-audit-M5b-M7.md`, 108 findings (M5b 31, M6 44, M7 33), all fixed or ruled on
+  `ps/pr-4-honest-serving--audit` (40 commits from `2dd946fe8e`; `audit-fixes-M5b-report.md`, `audit-fixes-M6-report.md`,
+  `audit-fixes-M7-report.md`). Rulings D4-240…D4-252 (M5b-5, -10, -15, -23, -32; M6-2, -21, -25, -26; M7-7, -8, -10,
+  -28; the D4-13 exception); D4-184, D4-211 and the view-gate outcome claim amended per the earlier fix reports.
+- **Merge** `git merge --no-ff ps/pr-4-honest-serving--audit` on `87d983984b`: five conflicts resolved keeping both sides
+  (D4-253: driver, the `monitoring-periods.test.ts` add/add, `UnitFixtures.provision`, `ps-gate-monitoring.ts` and
+  G6.11's check). The migration auto-merged with D4-237's CHECKs and the D4-13 header. One audit test file failed the
+  Engine test-inclusive `tsc` (`ml-model-inference-processor.test.ts(347,90) TS2345`, a slice passed to
+  `RunView.FromMetadataProvider`); fixed with the slice's own `RunView` (tsc 0, the file 57/57).
+- **Rebuild:** both databases from clean (the migration's checksum changed): `194 applied` each; M5b.8 fresh-install
+  proof on review right after its migrate (`MJ: Latest Feature Values|vwLatestFeatureValues|0|1|0|0|0`, 19 fields = 19
+  view columns); tail check OF4-34 + OF4-9 only; sync push `92/54/16927/42`, 0 errors; post-sync CodeGen OF4-9 only,
+  byte-identical on both; CodeGen changed one committed file, `remote_operations.ts` (`RunModelMonitoring`'s
+  `ContractFingerprint` → `ro_fp_b000910fbd8bc41b`, D4-246); provision 48; it-metadata 804; **identity identical**
+  (510 entities, 7,943 fields, 1,027 relationships, 12 PS remote ops, 31 gate rows, suites as before, 160 deterministic
+  members, 292 tests); C1 corpus loaded.
+- **Unit tier** (0 failed, stderr 0): Core 593 · Engine 1875 (+ test-inclusive tsc 0) · TruthSuite 187 · FeaturePipelines
+  312 · RSP engine 182 / base 31 · MJCoreEntitiesServer 1621 · MJCoreEntities 1687 · core-entity-forms 722 + `test:types`
+  0 · dashboards 3174 + `test:types` 0 · integration-test-suite 1112 + rigs tsc 0 · GraphQLDataProvider 780 · CoreActions
+  1224 · Sidecar 38 + pytest 535 · TruthSuite pytest 24 + mypy clean.
+- **Gates** (`RUN_MUTATION_TESTS=1`, census = baseline after each): Scoring 7/7 · Registry and Gate 9/9 · Containment
+  11/12 in the suite (G0.10 timed out at the 300 s default under host load 26–29, slow not hung) → G0.10 given 1 200 000 ms
+  (D4-256) and re-run ✓ `4 of 4` in 216 s, so 12/12 by member · **Monitoring 10/10** (G6.4 `0 fires: 12 of 12 one-row
+  months insufficient-rows, 1 of 1 pooled windows judged`; G6.11 D2 `reached the incumbent comparison true, replaced
+  false`) · G6.6 `19 of 400` (q 0.0095) · G6.8 `400 of 400`, mean FDP 0.0076 · IT166 PSD1, PSD2 ✓ · IT182 Z1–Z8 ✓. G3.4 not
+  re-run (D4-254; its §11 count stays `0 of 400`).
+- **TruthSuite DB lane** (MJAPI stopped): 13 files / 152 passed, stderr 0, skipped 0, census equal.
+- **Walks** (Explorer :4201 on MJAPI :4041, exact spec paths, no filter): record panel **2 passed**; publish flow **5
+  passed in one run**. Seeds deleted through the entity layer, census = baseline.
+- **`Integration Tests — Deterministic`** (PR lane): `130/160 passed, 28 SKIPPED`, Skip gate PASSED, IT182 ✓; ✗ PB18
+  (OF4-36, addendum) and ABV3 (OF4-54; `IT132` alone 6/6).
+- **Mutations re-run on the merged audit** (every G6 gate, G5.6 and Z6; outputs replace the M5b and M6 entries' lines):
+  all bite. **Mutation output G0.10:** `✓ ps-gate-w1-s5-4.G0.10` — **does not bite** (`4 of 4`, `random_forestMaxDiff 0`
+  with random forest unseeded; every algorithm delivers the same artifact): OF4-53.
+- **Repo gates:** `check:guards`, `check:standards`, `check:ui`, `check:changeset`, `check:codegen-tail`,
+  `check:claude-md`, `check-migration-entityfield-sequence.mjs` → EXIT=0 each.
+- **SQLParser:** 7 shipped-corpus goldens failed on the audit's SQL edit; rewritten for that entry only (D4-257), 2175 passed.
+- **`milestone-exit` with commands:** M5b `# checks 47 · failed 0` (exit 0) · M6 `# checks 47 · failed 0` (exit 0) · M7
+  `# checks 47 · failed 1`: `cmd:test packages/SQLParser` = `linearTime.test.ts › Analyze on manyComposition` (`expected
+  3.2056 to be less than 3`, load 30–35, timing only) → that command re-run alone: 63 files / 2175 passed, exit 0.
+  (A first M5b run failed the same command on the goldens, fixed by D4-257 before these runs.)
+- **Rulings:** D4-240…D4-257. **Flags:** OF4-53, OF4-54; OF4-36 addendum.
 
 ## 12. Refresh log (append-only)
 

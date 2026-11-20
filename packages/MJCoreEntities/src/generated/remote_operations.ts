@@ -2657,7 +2657,7 @@ export class PredictiveStudioRunModelMonitoringOperation extends BaseRemotableOp
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "predictive:execute";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_d2f60f72e5dbb5a3";
+    public readonly ContractFingerprint = "ro_fp_b000910fbd8bc41b";
 }
 
 // ============================================================

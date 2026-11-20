@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { RunView, type UserInfo, type IMetadataProvider, type BaseEntity, type RunViewParams, type RunViewResult } from '@memberjunction/core';
+import { type UserInfo, type IMetadataProvider, type BaseEntity, type RunViewParams, type RunViewResult } from '@memberjunction/core';
 import type { MJMLModelEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import type {
   PredictRequest,
@@ -344,7 +344,7 @@ describe('MLModelInferenceProcessor — a model trained before Prediction Units 
     const known = (names: readonly string[]): IMetadataProvider => {
       const reads: string[] = [];
       const base = pipelineRowSlice([row], reads);
-      const slice = { EntityByID: base.EntityByID, RunView: RunView.FromMetadataProvider(base).ProviderToUse.RunView, EntityByName: (n: string) => (names.includes(n) ? { Name: n } : undefined) };
+      const slice = { EntityByID: base.EntityByID, RunView: base.RunView, EntityByName: (n: string) => (names.includes(n) ? { Name: n } : undefined) };
       return slice as unknown as IMetadataProvider;
     };
     const bytes = new TextEncoder().encode('fake-model-bytes');

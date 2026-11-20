@@ -51,7 +51,7 @@
   "shipped/SQL/predictive-studio-lock-model.sql": {"IsBalanced":false,"Reason":"it contains a comment"},
   "shipped/SQL/predictive-studio-lock-pipeline.sql": {"IsBalanced":false,"Reason":"it contains a comment"},
   "shipped/SQL/predictive-studio-next-model-version.sql": {"IsBalanced":false,"Reason":"it contains a comment"},
-  "shipped/SQL/predictive-studio-pipelines-with-more-than-one-published-model.sql": {"IsBalanced":true,"Reason":null},
+  "shipped/SQL/predictive-studio-pipelines-with-more-than-one-published-model.sql": {"IsBalanced":false,"Reason":"it contains a comment"},
   "shipped/SQL/predictive-studio-publish-records-without-a-status-change.sql": {"IsBalanced":false,"Reason":"it contains a comment"},
   "shipped/SQL/predictive-studio-published-models-without-a-publish-record.sql": {"IsBalanced":false,"Reason":"it contains a comment"},
   "shipped/SQL/predictive-studio-running-training-run.sql": {"IsBalanced":false,"Reason":"it contains a comment"},

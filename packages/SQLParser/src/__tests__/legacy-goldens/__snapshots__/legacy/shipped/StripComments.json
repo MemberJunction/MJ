@@ -51,7 +51,7 @@
   "shipped/SQL/predictive-studio-lock-model.sql": {"$patch":{"keep":[0,105],"text":"\n\n\n\n\n\n\n\n"}},
   "shipped/SQL/predictive-studio-lock-pipeline.sql": {"$patch":{"keep":[0,115],"text":"\n\n\n\n\n\n\n\n"}},
   "shipped/SQL/predictive-studio-next-model-version.sql": {"$patch":{"keep":[0,146],"text":"\n\n\n\n\n\n"}},
-  "shipped/SQL/predictive-studio-pipelines-with-more-than-one-published-model.sql": {"$slice":[0,126]},
+  "shipped/SQL/predictive-studio-pipelines-with-more-than-one-published-model.sql": {"$patch":{"keep":[0,129],"text":"\n\n\n"}},
   "shipped/SQL/predictive-studio-publish-records-without-a-status-change.sql": {"$patch":{"keep":[0,559],"text":"\n\n\n\n"}},
   "shipped/SQL/predictive-studio-published-models-without-a-publish-record.sql": {"$patch":{"keep":[0,289],"text":"\n\n"}},
   "shipped/SQL/predictive-studio-running-training-run.sql": {"$patch":{"keep":[0,200],"text":"\n\n\n\n\n\n\n"}},

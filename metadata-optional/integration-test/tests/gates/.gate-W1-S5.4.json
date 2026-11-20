@@ -6,6 +6,7 @@
     "Status": "Active",
     "Tags": "[\"gate\",\"G0.10\",\"owner:PR2\",\"phase:0\",\"dataset:W1\",\"criterion:S5.4\"]",
     "InputDefinition": {},
+    "MaxExecutionTimeMS": 1200000,
     "ExpectedOutcomes": {
       "summary": "4 of 4 algorithms reproduce predictions within 1e-9."
     },
