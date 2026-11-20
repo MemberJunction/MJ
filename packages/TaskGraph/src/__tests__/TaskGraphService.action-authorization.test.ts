@@ -17,7 +17,25 @@ const AGENT = '33333333-3333-4333-8333-333333333333';
 const AGENT_RUN = '77777777-7777-4777-8777-777777777777';
 const ENTITY_ACTION = '88888888-8888-4888-8888-888888888888';
 
-const ACTION_NAMES: Record<string, string> = { [RESERVE]: 'Reserve', [RELEASE]: 'Release' };
+const RESTOCK = '99999999-9999-4999-8999-999999999999';
+const ACTION_NAMES: Record<string, string> = { [RESERVE]: 'Reserve', [RELEASE]: 'Release', [RESTOCK]: 'Restock' };
+
+const PLANNER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
+const OTHER_AGENT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2';
+const NOT_RUNNABLE_AGENT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3';
+const CHILD_RUN = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1';
+const OTHER_USERS_RUN = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2';
+const NOT_RUNNABLE_RUN = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb3';
+const OTHER_USER_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+
+type AgentRunRow = { ID: string; AgentID: string; UserID: string; ParentRunID: string | null };
+type AgentActionRow = { AgentID: string; ActionID: string; Status: 'Active' };
+
+/** Reads used when a test gives none: one run of `AGENT` by `REGULAR_USER`, and `AGENT` bound to Reserve. */
+const DEFAULT_AGENT_READS: { runs: AgentRunRow[]; agentActions: AgentActionRow[] } = {
+    runs: [{ ID: AGENT_RUN, AgentID: AGENT, UserID: '66666666-6666-4666-8666-666666666666', ParentRunID: null }],
+    agentActions: [{ AgentID: AGENT, ActionID: RESERVE, Status: 'Active' }],
+};
 
 /** A non-Owner user who holds `GRANTED_AUTHORIZATION` through `ROLE`. */
 const REGULAR_USER = {
@@ -36,7 +54,11 @@ type ActionAuthorizationRow = { ActionID: string; AuthorizationID: string };
  * `REGULAR_USER`'s run of `AGENT`, which is bound to Reserve, and the durable entity-action binding
  * also names Reserve.
  */
-function fakeRunView(actionAuthorizations: ActionAuthorizationRow[], compensations: Record<string, string> = {}) {
+function fakeRunView(
+    actionAuthorizations: ActionAuthorizationRow[],
+    compensations: Record<string, string> = {},
+    agentReads: { runs: AgentRunRow[]; agentActions: AgentActionRow[] } = DEFAULT_AGENT_READS,
+) {
     const answer = async (params: RunViewParams) => {
         const filter = params.ExtraFilter ?? '';
         const mentioned = (id: string) => filter.toLowerCase().includes(id.toLowerCase());
@@ -56,9 +78,9 @@ function fakeRunView(actionAuthorizations: ActionAuthorizationRow[], compensatio
             case 'MJ: Action Authorizations':
                 return { Success: true, Results: actionAuthorizations.filter((r) => mentioned(r.ActionID)) };
             case 'MJ: AI Agent Runs':
-                return { Success: true, Results: [{ ID: AGENT_RUN, AgentID: AGENT, UserID: REGULAR_USER.ID }] };
+                return { Success: true, Results: agentReads.runs.filter((r) => mentioned(r.ID)) };
             case 'MJ: AI Agent Actions':
-                return { Success: true, Results: [{ AgentID: AGENT, ActionID: RESERVE, Status: 'Active' }] };
+                return { Success: true, Results: agentReads.agentActions.filter((r) => mentioned(r.AgentID)) };
             case 'MJ: Entity Actions':
                 return { Success: true, Results: [{ ID: ENTITY_ACTION, ActionID: RESERVE, Status: 'Active', RunMode: 'Durable' }] };
             default:
@@ -97,16 +119,51 @@ function spec(compensationActionId?: string): TaskGraphSpec {
     } as TaskGraphSpec;
 }
 
-/** Reserve and Release as two independent Action nodes. */
-function twoActionSpec(): TaskGraphSpec {
+/** Two independent Action nodes, Reserve and `second`. */
+function twoActionSpec(second = 'Release'): TaskGraphSpec {
     return {
         workflowName: 'Checkout',
         continuation: 'none',
         tasks: [
             { tempId: 'r', name: 'Reserve', kind: 'Action', configuration: { actionName: 'Reserve' } },
-            { tempId: 'x', name: 'Release', kind: 'Action', configuration: { actionName: 'Release' } },
+            { tempId: 'x', name: second, kind: 'Action', configuration: { actionName: second } },
         ],
     } as TaskGraphSpec;
+}
+
+/**
+ * A run chain submitted from `CHILD_RUN` (a run of `PLANNER`, bound to nothing). Its ancestors are a
+ * run of another user (agent bound to Release), a run whose agent the user may not run (agent bound
+ * to Restock), and the root: a run of `AGENT`, bound to Reserve.
+ */
+const RUN_CHAIN = {
+    runs: [
+        { ID: CHILD_RUN, AgentID: PLANNER, UserID: '66666666-6666-4666-8666-666666666666', ParentRunID: OTHER_USERS_RUN },
+        { ID: OTHER_USERS_RUN, AgentID: OTHER_AGENT, UserID: OTHER_USER_ID, ParentRunID: NOT_RUNNABLE_RUN },
+        { ID: NOT_RUNNABLE_RUN, AgentID: NOT_RUNNABLE_AGENT, UserID: '66666666-6666-4666-8666-666666666666', ParentRunID: AGENT_RUN },
+        { ID: AGENT_RUN, AgentID: AGENT, UserID: '66666666-6666-4666-8666-666666666666', ParentRunID: null },
+    ],
+    agentActions: [
+        { AgentID: AGENT, ActionID: RESERVE, Status: 'Active' as const },
+        { AgentID: OTHER_AGENT, ActionID: RELEASE, Status: 'Active' as const },
+        { AgentID: NOT_RUNNABLE_AGENT, ActionID: RESTOCK, Status: 'Active' as const },
+    ],
+};
+
+/** `CHILD_RUN` (a run of `PLANNER`, bound to nothing) whose parent is the run of `AGENT`, bound to Reserve. */
+const PARENT_ONLY_CHAIN = {
+    runs: [
+        { ID: CHILD_RUN, AgentID: PLANNER, UserID: '66666666-6666-4666-8666-666666666666', ParentRunID: AGENT_RUN },
+        { ID: AGENT_RUN, AgentID: AGENT, UserID: '66666666-6666-4666-8666-666666666666', ParentRunID: null },
+    ],
+    agentActions: [{ AgentID: AGENT, ActionID: RESERVE, Status: 'Active' as const }],
+};
+
+/** Submits `spec` from `CHILD_RUN` in `chain`; the user may run every agent but `NOT_RUNNABLE_AGENT`. */
+async function submitFromRunChain(spec: TaskGraphSpec, saved: string[], chain: typeof RUN_CHAIN | typeof PARENT_ONLY_CHAIN = RUN_CHAIN) {
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(fakeRunView([], {}, chain) as unknown as RunView);
+    vi.spyOn(AIAgentPermissionHelper, 'HasPermission').mockImplementation(async (agentID) => agentID !== NOT_RUNNABLE_AGENT);
+    return new TaskGraphService().Submit(spec, { EnvironmentID: '', Provider: provider(saved), ContextUser: REGULAR_USER, AgentRunID: CHILD_RUN });
 }
 
 afterEach(() => vi.restoreAllMocks());
@@ -176,5 +233,30 @@ describe('TaskGraphService.Submit action authorization', () => {
         expect(outcome.ErrorMessage).toContain(`not authorized to run action ${RELEASE}`);
         expect(outcome.ErrorMessage).not.toContain(RESERVE);
         expect(saved).toEqual([]);
+    });
+
+    it('accepts an action bound to the agent of a parent run, and refuses only the action bound to no agent in the run chain', async () => {
+        const saved: string[] = [];
+
+        const outcome = await submitFromRunChain(twoActionSpec('Release'), saved, PARENT_ONLY_CHAIN);
+
+        expect(outcome.Success).toBe(false);
+        expect(outcome.ErrorMessage).toContain(`not authorized to run action ${RELEASE}`);
+        expect(outcome.ErrorMessage).not.toContain(RESERVE);
+        expect(saved).toEqual([]);
+    });
+
+    it('gives no exemption for a parent run of another user', async () => {
+        const outcome = await submitFromRunChain(twoActionSpec('Release'), []);
+
+        expect(outcome.ErrorMessage).toContain(`not authorized to run action ${RELEASE}`);
+        expect(outcome.ErrorMessage).not.toContain(RESERVE);
+    });
+
+    it('gives no exemption for a parent run whose agent the user may not run', async () => {
+        const outcome = await submitFromRunChain(twoActionSpec('Restock'), []);
+
+        expect(outcome.ErrorMessage).toContain(`not authorized to run action ${RESTOCK}`);
+        expect(outcome.ErrorMessage).not.toContain(RESERVE);
     });
 });

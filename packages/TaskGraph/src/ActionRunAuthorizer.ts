@@ -2,13 +2,14 @@
  * @fileoverview Decides whether a task graph's user may run its actions.
  *
  * An action passes when the user may run it (`CheckActionRunAuthorization`), or when it is bound to
- * what submitted the graph: the agent of the submitting agent run, or the durable entity-action
- * binding. Both come from records read here, never from a list of action IDs a caller supplies.
+ * what submitted the graph: the agent of the submitting agent run or of one of its parent runs, or the
+ * durable entity-action binding. Both come from records read here, never from a list of action IDs a caller supplies.
  *
  * @module @memberjunction/task-graph
  */
 import { CheckActionRunAuthorization, type ActionRunRefusal } from '@memberjunction/actions-base';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
+import { MAX_AGENT_RUN_TREE_DEPTH } from '@memberjunction/ai-core-plus';
 import { LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type {
     MJAIAgentActionEntity,
@@ -26,7 +27,7 @@ export type ActionRunGrant = {
     EntityActionID?: string | null;
 };
 
-type AgentRunRow = Pick<MJAIAgentRunEntity, 'ID' | 'AgentID' | 'UserID'>;
+type AgentRunRow = Pick<MJAIAgentRunEntity, 'ID' | 'AgentID' | 'UserID' | 'ParentRunID'>;
 type BoundActionRow = Pick<MJAIAgentActionEntity | MJAIAgentStepEntity, 'ActionID'>;
 type EntityActionRow = Pick<MJEntityActionEntity, 'ID' | 'ActionID' | 'Status' | 'RunMode'>;
 
@@ -74,21 +75,19 @@ export class ActionRunAuthorizer {
     }
 
     /**
-     * The actions bound to the agent of the submitting run: its active `MJ: AI Agent Actions` rows and
-     * the actions of its active `MJ: AI Agent Steps`. None unless the run exists, belongs to the user,
-     * and the user may run its agent.
+     * The actions bound to the agents of the submitting run and of each of its parent runs: their
+     * active `MJ: AI Agent Actions` rows and the actions of their active `MJ: AI Agent Steps`.
      */
     private async agentBoundActions(): Promise<string[]> {
-        const runID = this.grant.AgentRunID;
-        if (!runID || !IsValidUUID(runID)) return [];
-        const agentID = await this.agentOfUsersRun(runID);
-        if (!agentID) return [];
+        const agentIDs = await this.agentsOfUsersRunChain();
+        if (agentIDs.length === 0) return [];
+        const idList = agentIDs.map((id) => `'${id}'`).join(', ');
         const [actions, steps] = await RunView.FromMetadataProvider(this.provider).RunViews(
             [
-                { EntityName: 'MJ: AI Agent Actions', ExtraFilter: `AgentID='${agentID}' AND Status='Active'`, Fields: ['ActionID'], ResultType: 'simple' },
+                { EntityName: 'MJ: AI Agent Actions', ExtraFilter: `AgentID IN (${idList}) AND Status='Active'`, Fields: ['ActionID'], ResultType: 'simple' },
                 {
                     EntityName: 'MJ: AI Agent Steps',
-                    ExtraFilter: `AgentID='${agentID}' AND Status='Active' AND ActionID IS NOT NULL`,
+                    ExtraFilter: `AgentID IN (${idList}) AND Status='Active' AND ActionID IS NOT NULL`,
                     Fields: ['ActionID'],
                     ResultType: 'simple',
                 },
@@ -101,15 +100,39 @@ export class ActionRunAuthorizer {
             .filter((id): id is string => !!id);
     }
 
-    /** The agent of the run, when the run belongs to the user and the user may run that agent; else null. */
-    private async agentOfUsersRun(runID: string): Promise<string | null> {
+    /**
+     * Walks from the submitting run up through its parent runs, at most `MAX_AGENT_RUN_TREE_DEPTH`
+     * runs and never the same run twice. A run adds its agent only when it belongs to the user and the
+     * user may run that agent; a run that fails this adds nothing, and the walk goes on to its parent.
+     * The walk stops at a run it cannot read.
+     */
+    private async agentsOfUsersRunChain(): Promise<string[]> {
+        const agentIDs = new UUIDSet();
+        const visited = new UUIDSet();
+        let runID = this.grant.AgentRunID ?? null;
+        while (runID && IsValidUUID(runID) && !visited.Has(runID) && visited.Size < MAX_AGENT_RUN_TREE_DEPTH) {
+            visited.Add(runID);
+            const run = await this.readRun(runID);
+            if (!run) break;
+            if (await this.runGrantsItsAgent(run)) agentIDs.Add(run.AgentID);
+            runID = run.ParentRunID;
+        }
+        return [...agentIDs];
+    }
+
+    /** The run, or null when it cannot be read. */
+    private async readRun(runID: string): Promise<AgentRunRow | null> {
         const result = await RunView.FromMetadataProvider(this.provider).RunView<AgentRunRow>(
-            { EntityName: 'MJ: AI Agent Runs', ExtraFilter: `ID='${runID}'`, Fields: ['ID', 'AgentID', 'UserID'], ResultType: 'simple' },
+            { EntityName: 'MJ: AI Agent Runs', ExtraFilter: `ID='${runID}'`, Fields: ['ID', 'AgentID', 'UserID', 'ParentRunID'], ResultType: 'simple' },
             this.readUser,
         );
-        const run = result.Success ? result.Results?.[0] : undefined;
-        if (!run?.AgentID || !IsValidUUID(run.AgentID) || !UUIDsEqual(run.UserID, this.user.ID)) return null;
-        return (await this.userMayRunAgent(run.AgentID)) ? run.AgentID : null;
+        return (result.Success ? result.Results?.[0] : undefined) ?? null;
+    }
+
+    /** True when the run belongs to the user and the user may run the run's agent. */
+    private async runGrantsItsAgent(run: AgentRunRow): Promise<boolean> {
+        if (!run.AgentID || !IsValidUUID(run.AgentID) || !UUIDsEqual(run.UserID, this.user.ID)) return false;
+        return this.userMayRunAgent(run.AgentID);
     }
 
     private async userMayRunAgent(agentID: string): Promise<boolean> {

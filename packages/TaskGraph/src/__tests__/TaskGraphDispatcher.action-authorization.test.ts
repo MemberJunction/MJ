@@ -15,6 +15,8 @@ const AGENT = '33333333-3333-4333-8333-333333333333';
 const AGENT_RUN = '44444444-4444-4444-8444-444444444444';
 const ENTITY_ACTION = '55555555-5555-4555-8555-555555555555';
 const PARENT = '77777777-7777-4777-8777-777777777777';
+const SUB_AGENT = '88888888-8888-4888-8888-888888888888';
+const SUB_AGENT_RUN = '99999999-9999-4999-8999-999999999999';
 
 const DISPATCHER_USER = { ID: '00000000-0000-4000-8000-000000000001', Name: 'Dispatcher', Type: 'Owner' } as unknown as UserInfo;
 const REGULAR_USER = { ID: '66666666-6666-4666-8666-666666666666', Name: 'Regular User', Type: 'User', IsActive: true, UserRoles: [] } as unknown as UserInfo;
@@ -22,9 +24,16 @@ const REGULAR_USER = { ID: '66666666-6666-4666-8666-666666666666', Name: 'Regula
 type Outcome = { Success: boolean; ErrorMessage?: string };
 type RunTaskBody = (task: MJTaskEntity, provider: IMetadataProvider, input: unknown, deps: Map<string, unknown>) => Promise<Outcome>;
 
+/** `AGENT_RUN`, a run of `AGENT` (bound to `BOUND`), and its sub-agent run `SUB_AGENT_RUN` (bound to nothing). */
+const AGENT_RUNS = [
+    { ID: AGENT_RUN, AgentID: AGENT, UserID: REGULAR_USER.ID, ParentRunID: null },
+    { ID: SUB_AGENT_RUN, AgentID: SUB_AGENT, UserID: REGULAR_USER.ID, ParentRunID: AGENT_RUN },
+];
+
 /** Answers every read the dispatcher makes; no action has `MJ: Action Authorizations` rows. */
 function stubReads(): ReturnType<typeof vi.fn> {
     const answer = async (params: RunViewParams) => {
+        const mentioned = (id: string) => (params.ExtraFilter ?? '').toLowerCase().includes(id.toLowerCase());
         switch (params.EntityName) {
             case 'MJ: Actions':
                 return {
@@ -32,9 +41,9 @@ function stubReads(): ReturnType<typeof vi.fn> {
                     Results: [BOUND, UNBOUND].map((ID) => ({ ID, Name: ID === BOUND ? 'Bound' : 'Unbound', Type: 'Custom', DriverClass: null })),
                 };
             case 'MJ: AI Agent Runs':
-                return { Success: true, Results: [{ ID: AGENT_RUN, AgentID: AGENT, UserID: REGULAR_USER.ID }] };
+                return { Success: true, Results: AGENT_RUNS.filter((r) => mentioned(r.ID)) };
             case 'MJ: AI Agent Actions':
-                return { Success: true, Results: [{ AgentID: AGENT, ActionID: BOUND, Status: 'Active' }] };
+                return { Success: true, Results: [{ AgentID: AGENT, ActionID: BOUND, Status: 'Active' }].filter((r) => mentioned(r.AgentID)) };
             case 'MJ: Entity Actions':
                 return { Success: true, Results: [{ ID: ENTITY_ACTION, ActionID: BOUND, Status: 'Active', RunMode: 'Durable' }] };
             default:
@@ -163,5 +172,21 @@ describe('TaskGraphDispatcher action authorization', () => {
 
         expect(runner.RunActionForTask).not.toHaveBeenCalled();
         expect(result.Success).toBe(false);
+    });
+
+    it('runs an action bound to the agent of a parent run of the submitting run and refuses one bound to no agent in the chain', async () => {
+        stubReads();
+        const runner = actionRunner();
+        const run = dispatcher(runner, DISPATCHER_USER);
+        const provider = providerWithParent(submittedBy({ submittedByAgentRunID: SUB_AGENT_RUN }), SUB_AGENT_RUN);
+
+        const bound = await run(actionTask(BOUND), provider, {}, new Map());
+        const unbound = await run(actionTask(UNBOUND), provider, {}, new Map());
+
+        expect(bound.Success).toBe(true);
+        expect(unbound.Success).toBe(false);
+        expect(unbound.ErrorMessage).toContain(UNBOUND);
+        expect(runner.RunActionForTask).toHaveBeenCalledTimes(1);
+        expect(runner.RunActionForTask.mock.calls[0][0].ActionID).toBe(BOUND);
     });
 });
