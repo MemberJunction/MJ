@@ -101,6 +101,7 @@ export interface PreChangeMigrationConfig {
 
 /** What step 2 did in one run. */
 export interface ReverifyResult {
+  /** Models the step read (at most the batch). */
   readonly Visited: number;
   /** Published models kept Published with an `adopt` record. */
   readonly Adopted: string[];
@@ -114,12 +115,17 @@ export interface ReverifyResult {
 
 /** What step 3 did in one run. */
 export interface ArtifactMigrationResult {
+  /** Models the step read (at most the batch). */
   readonly Visited: number;
   /** Models whose `ArtifactStatus` this run changed. */
   readonly Changed: number;
+  /** Models whose artifact this run recorded `verified` (stored write-once in provider storage). */
   readonly Verified: string[];
+  /** Models whose artifact this run recorded `legacy-local` (local bytes not on this host). */
   readonly LegacyLocal: string[];
+  /** Models whose artifact this run recorded `missing`. */
   readonly Missing: string[];
+  /** Models whose artifact this run recorded `hash-mismatch`. */
   readonly HashMismatch: string[];
   /** Models whose storage could not be read, retried on the next run. */
   readonly Retry: { readonly ModelID: string; readonly Reason: string }[];
@@ -159,14 +165,19 @@ export type ReEvaluationFinding =
 export interface ReEvaluationResult {
   /** Training runs started. */
   readonly Trained: number;
+  /** Each pipeline's outcome, in the order visited (oldest demotion first). */
   readonly Findings: ReEvaluationFinding[];
 }
 
 /** What one registry run of the migration did: the job run's `Details` under {@link PreGateModelMigration.DetailsKey}. */
 export interface PreChangeStepDetails {
+  /** Step 2's result. */
   readonly Reverified: ReverifyResult;
+  /** Step 3's result. */
   readonly Artifacts: ArtifactMigrationResult;
+  /** Step 4's result. */
   readonly Schedules: ScheduleResult;
+  /** Step 5's result. */
   readonly ReEvaluation: ReEvaluationResult;
   /** The Record Processes this run disabled, read back by later runs' step 5 (D4-14). */
   readonly DisabledProcessIDs: string[];
@@ -190,20 +201,33 @@ export interface PreChangePassOptions {
   readonly DryRun: boolean;
   /** The Registry Check job run a writing pass belongs to; null for none (a writing pass is then refused). */
   readonly ScheduledJobRunID: string | null;
+  /** The pass's limits. */
   readonly Config: PreChangeMigrationConfig;
 }
 
 /** What one on-demand pass did: the remaining work before it, and for a writing pass what its steps did. */
 export interface PreChangePassResult {
+  /** True when the pass wrote nothing. */
   readonly DryRun: boolean;
+  /** The pre-change work that remained before the pass. */
   readonly Survey: PreChangeSurvey;
   /** Null for a dry run, or when no pre-change work remained. */
   readonly Details: PreChangeStepDetails | null;
 }
 
+/** What one earlier run of the Registry Check job recorded under {@link PreGateModelMigration.DetailsKey} in step 4. */
+export interface EarlierRunRecord {
+  /** The Record Processes that run disabled (re-enabled by step 5 after a publish). */
+  readonly DisabledProcessIDs: string[];
+  /** The models whose scoring Action that run disabled (not visited by step 4 again). */
+  readonly ScoringActionsDisabled: string[];
+}
+
 /** The newest publish-ledger row of a pipeline's training runs: its run and when it was recorded. */
 interface PipelineAttempt {
+  /** The training run the row records. */
   readonly TrainingRunID: string;
+  /** When the row was recorded. */
   readonly RecordedAt: Date;
 }
 
@@ -251,12 +275,21 @@ export class PreGateModelMigration {
   public static readonly ChangePageSize = 500;
   /** The job configuration's defaults (D4-22). */
   public static readonly DefaultConfig: PreChangeMigrationConfig = { BatchSize: 50, RetrainPerRun: 3 };
+  /** Step 2's models: Published or Draft, no `Delivery`, a stored training run, an `unverified` artifact. */
+  private static readonly EVIDENCE_BEARING = `Delivery IS NULL AND ArtifactStatus='unverified' AND TrainingRunID IS NOT NULL AND Status IN ('Published', 'Draft')`;
+  /** Step 3's models with no stored training run. */
+  private static readonly LEGACY_WITHOUT_RUN = `Delivery IS NULL AND ArtifactStatus='unverified' AND TrainingRunID IS NULL`;
+  /** Step 3's models with a stored training run in a status step 2 does not own (disjoint from {@link LEGACY_WITHOUT_RUN}). */
+  private static readonly LEGACY_OTHER_STATUS = `Delivery IS NULL AND ArtifactStatus='unverified' AND TrainingRunID IS NOT NULL AND Status IN ('Unevaluated', 'Archived')`;
+  /** The non-serving `Unevaluated` models (step 4's). */
+  private static readonly DEMOTED = `Status='Unevaluated' AND ServingWhileUnevaluated=0`;
 
   // ============================================================================================== composers ==
 
   /**
    * The registry job's step (g): nothing when no pre-change work remains ({@link HasPendingWork}); otherwise steps 2,
-   * 3, 4 and 5 in that order, and what they did (the job run's `Details` under {@link DetailsKey}).
+   * 3, 4 and 5 in that order, and what they did (the job run's `Details` under {@link DetailsKey}). The earlier runs'
+   * records ({@link EarlierRunRecords}) are read once, for steps 4 and 5.
    */
   public static async RunRegistryStep(config: PreChangeMigrationConfig, ctx: PreGateMigrationContext): Promise<PreChangeStepDetails | null> {
     if (!(await PreGateModelMigration.HasPendingWork(ctx))) return null;
@@ -265,9 +298,10 @@ export class PreGateModelMigration {
     await PreGateModelMigration.beat(ctx);
     const artifacts = await PreGateModelMigration.MigrateArtifacts(config.BatchSize, ctx);
     await PreGateModelMigration.beat(ctx);
-    const schedules = await PreGateModelMigration.DisableDemotedSchedules(config.BatchSize, ctx);
+    const earlier = await PreGateModelMigration.EarlierRunRecords(ctx);
+    const schedules = await PreGateModelMigration.DisableDemotedSchedules(config.BatchSize, ctx, earlier);
     await PreGateModelMigration.beat(ctx);
-    const reEvaluation = await PreGateModelMigration.ReEvaluate(config.RetrainPerRun, ctx, schedules.Disabled);
+    const reEvaluation = await PreGateModelMigration.ReEvaluate(config.RetrainPerRun, ctx, schedules.Disabled, earlier);
     return { Reverified: reverified, Artifacts: artifacts, Schedules: schedules, ReEvaluation: reEvaluation, DisabledProcessIDs: schedules.Disabled };
   }
 
@@ -339,11 +373,12 @@ export class PreGateModelMigration {
    * whose model keeps serving, or one with `autoTrain`, keeps its schedule. A run after every demoted model was handled
    * changes and calls nothing.
    *
+   * @param earlier the earlier runs' records ({@link EarlierRunRecords}); read here when not given
    * @throws Error when a read or a save fails
    */
-  public static async DisableDemotedSchedules(batch: number, ctx: PreGateMigrationContext): Promise<ScheduleResult> {
-    const demoted = await PreGateModelMigration.ReadModels(`Status='Unevaluated' AND ServingWhileUnevaluated=0`, ctx);
-    const handled = (await PreGateModelMigration.EarlierRunRecords(ctx)).flatMap((r) => r.ScoringActionsDisabled);
+  public static async DisableDemotedSchedules(batch: number, ctx: PreGateMigrationContext, earlier?: readonly EarlierRunRecord[]): Promise<ScheduleResult> {
+    const demoted = await PreGateModelMigration.ReadModels(PreGateModelMigration.DEMOTED, ctx);
+    const handled = (earlier || (await PreGateModelMigration.EarlierRunRecords(ctx))).flatMap((r) => r.ScoringActionsDisabled);
     const actions: string[] = [];
     for (const model of ExcludeByUUIDs(demoted, handled, (m) => m.ID).slice(0, batch)) {
       await PreGateModelMigration.beat(ctx);
@@ -351,11 +386,7 @@ export class PreGateModelMigration {
       if (await ctx.Seams.ScoringActions.DisableForModel(model, ctx.ContextUser, ctx.Provider)) actions.push(model.ID);
     }
     const demotedIds = new UUIDSet(demoted.map((m) => m.ID));
-    const due = (await PreGateModelMigration.ReadScoringProcesses(`ScheduleEnabled=1`, ctx)).filter((rp) => {
-      const config = PreGateModelMigration.configurationOf(rp);
-      const modelId = JsonParse.JsonString(config, 'modelId');
-      return config['autoTrain'] === undefined && modelId !== null && demotedIds.Has(modelId);
-    });
+    const due = (await PreGateModelMigration.ReadScoringProcesses(`ScheduleEnabled=1`, ctx)).filter((rp) => PreGateModelMigration.ScoresDemotedWithoutAutoTrain(rp, demotedIds));
     const disabled: string[] = [];
     for (const rp of due.slice(0, batch)) {
       await PreGateModelMigration.beat(ctx);
@@ -375,8 +406,11 @@ export class PreGateModelMigration {
    * Processes step 4 disabled for that pipeline (listed by earlier runs' `Details` and `disabledThisRun`).
    *
    * @param disabledThisRun the processes this run's step 4 disabled (not in any `Details` yet)
+   * @param earlier the earlier runs' records ({@link EarlierRunRecords}); read on a publish when not given
    */
-  public static async ReEvaluate(retrainPerRun: number, ctx: PreGateMigrationContext, disabledThisRun: readonly string[] = []): Promise<ReEvaluationResult> {
+  public static async ReEvaluate(
+    retrainPerRun: number, ctx: PreGateMigrationContext, disabledThisRun: readonly string[] = [], earlier?: readonly EarlierRunRecord[],
+  ): Promise<ReEvaluationResult> {
     const pipelines = await PreGateModelMigration.PipelinesToReEvaluate(ctx);
     const covered = new UUIDSet(await PreGateModelMigration.AutoTrainedPipelines(ctx));
     const findings: ReEvaluationFinding[] = [];
@@ -401,7 +435,7 @@ export class PreGateModelMigration {
         continue;
       }
       trained++;
-      findings.push(await PreGateModelMigration.RetrainOne(pipeline.ID, disabledThisRun, ctx));
+      findings.push(await PreGateModelMigration.RetrainOne(pipeline.ID, disabledThisRun, ctx, earlier));
     }
     return { Trained: trained, Findings: findings };
   }
@@ -453,17 +487,30 @@ export class PreGateModelMigration {
    * @throws Error when a read fails
    */
   public static async Survey(ctx: RegistryContext): Promise<PreChangeSurvey> {
-    const evidence = await PreGateModelMigration.ReadEvidenceBearing(Number.MAX_SAFE_INTEGER, ctx);
-    const legacy = await PreGateModelMigration.ReadUnverifiedLegacy(Number.MAX_SAFE_INTEGER, ctx);
-    const demoted = await PreGateModelMigration.ReadModels(`Status='Unevaluated' AND ServingWhileUnevaluated=0`, ctx);
-    const demotedIds = new UUIDSet(demoted.map((m) => m.ID));
-    const schedules = (await PreGateModelMigration.ReadScoringProcesses(`ScheduleEnabled=1`, ctx)).filter((rp) => {
-      const config = PreGateModelMigration.configurationOf(rp);
-      const modelId = JsonParse.JsonString(config, 'modelId');
-      return config['autoTrain'] === undefined && modelId !== null && demotedIds.Has(modelId);
-    });
+    const evidence = await PreGateModelMigration.CountModels(PreGateModelMigration.EVIDENCE_BEARING, ctx);
+    const legacy = (await PreGateModelMigration.CountModels(PreGateModelMigration.LEGACY_WITHOUT_RUN, ctx))
+      + (await PreGateModelMigration.CountModels(PreGateModelMigration.LEGACY_OTHER_STATUS, ctx));
+    const demoted = await StoredRowReads.Run<Pick<MJMLModelEntity, 'ID'>>({ EntityName: 'MJ: ML Models', ExtraFilter: PreGateModelMigration.DEMOTED, Fields: ['ID'], ResultType: 'simple' }, ctx);
+    if (!demoted.Success) throw new Error(`Reading the demoted pre-change models failed: ${demoted.ErrorMessage || 'unknown error'}`);
+    const demotedIds = new UUIDSet(demoted.Results.map((m) => m.ID));
+    const processes = await StoredRowReads.Run<Pick<MJRecordProcessEntity, 'ID' | 'Configuration'>>(
+      { EntityName: 'MJ: Record Processes', ExtraFilter: `WorkType='ML Model' AND ScheduleEnabled=1`, Fields: ['ID', 'Configuration'], ResultType: 'simple' },
+      ctx,
+    );
+    if (!processes.Success) throw new Error(`Reading the ML Model Record Processes failed: ${processes.ErrorMessage || 'unknown error'}`);
+    const schedules = processes.Results.filter((rp) => PreGateModelMigration.ScoresDemotedWithoutAutoTrain(rp, demotedIds)).length;
     const pipelines = await PreGateModelMigration.PipelinesToReEvaluate(ctx);
-    return { EvidenceBearing: evidence.length, UnverifiedArtifacts: legacy.length, SchedulesToDisable: schedules.length, PipelinesToReEvaluate: pipelines.length };
+    return { EvidenceBearing: evidence, UnverifiedArtifacts: legacy, SchedulesToDisable: schedules, PipelinesToReEvaluate: pipelines.length };
+  }
+
+  /**
+   * True when a Record Process scores with one of `demotedIds` (its `Configuration.modelId`) and declares no
+   * `autoTrain`: step 4 disables its schedule. Pure.
+   */
+  public static ScoresDemotedWithoutAutoTrain(rp: Pick<MJRecordProcessEntity, 'Configuration'>, demotedIds: UUIDSet): boolean {
+    const config = PreGateModelMigration.configurationOf(rp);
+    const modelId = JsonParse.JsonString(config, 'modelId');
+    return config['autoTrain'] === undefined && modelId !== null && demotedIds.Has(modelId);
   }
 
   /**
@@ -631,7 +678,9 @@ export class PreGateModelMigration {
    * One retrain of a pipeline through the single-flight training and `AutomatedPublisher` as the job run; a publish
    * repoints and re-enables the pipeline's disabled processes ({@link ReEnableProcesses}).
    */
-  protected static async RetrainOne(pipelineId: string, disabledThisRun: readonly string[], ctx: PreGateMigrationContext): Promise<ReEvaluationFinding> {
+  protected static async RetrainOne(
+    pipelineId: string, disabledThisRun: readonly string[], ctx: PreGateMigrationContext, earlier?: readonly EarlierRunRecord[],
+  ): Promise<ReEvaluationFinding> {
     let run: AutoTrainedRun;
     try {
       run = await ctx.Seams.Train(pipelineId, ctx.Provider, ctx.ContextUser);
@@ -641,7 +690,7 @@ export class PreGateModelMigration {
     }
     const outcome = await ctx.Seams.Publisher.EvaluateAndPublish(run.TrainingRunID, PreGateModelMigration.initiatorOf(ctx), ctx);
     if (outcome.Kind === 'published' || outcome.Kind === 'already-published') {
-      const reEnabled = await PreGateModelMigration.ReEnableProcesses(pipelineId, outcome.ModelID, disabledThisRun, ctx);
+      const reEnabled = await PreGateModelMigration.ReEnableProcesses(pipelineId, outcome.ModelID, disabledThisRun, ctx, earlier);
       return { PipelineID: pipelineId, Kind: 'published', TrainingRunID: run.TrainingRunID, ModelID: outcome.ModelID, ReEnabled: reEnabled };
     }
     const refusal = outcome.Kind === 'withheld' || outcome.Kind === 'run-recorded' || outcome.Kind === 'refused' ? outcome.Refusal : null;
@@ -653,10 +702,14 @@ export class PreGateModelMigration {
    * run's) that still has its schedule disabled and is configured with a model of this pipeline is repointed at the new
    * model (`PipelineAutoTrainer.RepointedConfiguration`, auto-train's rule) and re-enabled. Returns their IDs.
    *
+   * @param earlier the earlier runs' records ({@link EarlierRunRecords}); read here when not given
    * @throws Error when a read or a save fails
    */
-  protected static async ReEnableProcesses(pipelineId: string, modelId: string, disabledThisRun: readonly string[], ctx: PreGateMigrationContext): Promise<string[]> {
-    const listed = [...disabledThisRun, ...(await PreGateModelMigration.DisabledByEarlierRuns(ctx))].filter((id) => IsValidUUID(id));
+  protected static async ReEnableProcesses(
+    pipelineId: string, modelId: string, disabledThisRun: readonly string[], ctx: PreGateMigrationContext, earlier?: readonly EarlierRunRecord[],
+  ): Promise<string[]> {
+    const byEarlierRuns = (earlier || (await PreGateModelMigration.EarlierRunRecords(ctx))).flatMap((r) => r.DisabledProcessIDs);
+    const listed = [...disabledThisRun, ...byEarlierRuns].filter((id) => IsValidUUID(id));
     if (listed.length === 0) return [];
     const ids = listed.map((id) => `'${EscapeSQLString(id)}'`).join(', ');
     const processes = await PreGateModelMigration.ReadScoringProcesses(`ID IN (${ids}) AND ScheduleEnabled=0`, ctx);
@@ -677,22 +730,14 @@ export class PreGateModelMigration {
   }
 
   /**
-   * The Record Processes earlier runs of this job disabled: `DisabledProcessIDs` under {@link DetailsKey} in the
-   * `Details` of every run of the job the current run belongs to ({@link EarlierRunRecords}).
-   *
-   * @throws Error when a read fails
-   */
-  protected static async DisabledByEarlierRuns(ctx: PreGateMigrationContext): Promise<string[]> {
-    return (await PreGateModelMigration.EarlierRunRecords(ctx)).flatMap((r) => r.DisabledProcessIDs);
-  }
-
-  /**
    * What step 4 of each run of the job the current run belongs to recorded under {@link DetailsKey}: the Record
    * Processes it disabled and the models whose scoring Action it disabled. A `Details` that is not JSON records nothing.
+   * Only runs whose `Details` carry the {@link DetailsKey} token are read: a run after the migration finished (no pre-change
+   * work, so no record) is never fetched; each fetched one is parsed structurally ({@link recordOf}).
    *
    * @throws Error when a read fails
    */
-  protected static async EarlierRunRecords(ctx: PreGateMigrationContext): Promise<{ readonly DisabledProcessIDs: string[]; readonly ScoringActionsDisabled: string[] }[]> {
+  protected static async EarlierRunRecords(ctx: PreGateMigrationContext): Promise<EarlierRunRecord[]> {
     const current = await StoredRowReads.Run<Pick<MJScheduledJobRunEntity, 'ID' | 'ScheduledJobID'>>(
       { EntityName: 'MJ: Scheduled Job Runs', ExtraFilter: `ID='${EscapeSQLString(ctx.ScheduledJobRunID)}'`, Fields: ['ID', 'ScheduledJobID'], MaxRows: 1, ResultType: 'simple' },
       ctx,
@@ -701,7 +746,10 @@ export class PreGateModelMigration {
     const jobId = current.Results[0]?.ScheduledJobID;
     if (!jobId) return [];
     const runs = await StoredRowReads.Run<Pick<MJScheduledJobRunEntity, 'ID' | 'Details'>>(
-      { EntityName: 'MJ: Scheduled Job Runs', ExtraFilter: `ScheduledJobID='${EscapeSQLString(jobId)}'`, Fields: ['ID', 'Details'], ResultType: 'simple' },
+      {
+        EntityName: 'MJ: Scheduled Job Runs', ExtraFilter: `ScheduledJobID='${EscapeSQLString(jobId)}' AND Details LIKE '%"${PreGateModelMigration.DetailsKey}"%'`,
+        Fields: ['ID', 'Details'], ResultType: 'simple',
+      },
       ctx,
     );
     if (!runs.Success) throw new Error(`Reading the runs of Scheduled Job ${jobId} failed: ${runs.ErrorMessage || 'unknown error'}`);
@@ -840,8 +888,8 @@ export class PreGateModelMigration {
   protected static async PipelinesToReEvaluate(ctx: RegistryContext): Promise<ReEvaluatedPipeline[]> {
     const unevaluated = await PreGateModelMigration.ReadModelColumns(`Status='Unevaluated'`, ctx);
     if (unevaluated.length === 0) return [];
-    const pipelineIds = [...new Map(unevaluated.map((m) => [m.PipelineID.toLowerCase(), m.PipelineID])).values()];
-    const inList = pipelineIds.map((id) => `'${EscapeSQLString(id)}'`).join(', ');
+    const byPipeline = GroupByUUID(unevaluated, (m) => m.PipelineID);
+    const inList = [...byPipeline].map(([, models]) => `'${EscapeSQLString(models[0].PipelineID)}'`).join(', ');
     const published = await PreGateModelMigration.ReadModelColumns(`Status='Published' AND PipelineID IN (${inList})`, ctx);
     const r = await StoredRowReads.Run<ReEvaluatedPipeline>(
       {
@@ -851,7 +899,6 @@ export class PreGateModelMigration {
       ctx,
     );
     if (!r.Success) throw new Error(`Reading the pipelines of Unevaluated models failed: ${r.ErrorMessage || 'unknown error'}`);
-    const byPipeline = GroupByUUID(unevaluated, (m) => m.PipelineID);
     const demotedAt = (pipelineId: string): number => Math.min(...(byPipeline.Get(pipelineId) || []).map((m) => (m.__mj_UpdatedAt ? new Date(m.__mj_UpdatedAt).getTime() : 0)));
     return ExcludeByUUIDs(r.Results, published.map((m) => m.PipelineID))
       .sort((a, b) => demotedAt(a.ID) - demotedAt(b.ID));
@@ -878,7 +925,7 @@ export class PreGateModelMigration {
   protected static async ReadEvidenceBearing(batch: number, ctx: RegistryContext): Promise<Pick<MJMLModelEntity, 'ID' | 'Status'>[]> {
     const r = await StoredRowReads.Run<Pick<MJMLModelEntity, 'ID' | 'Status'>>(
       {
-        EntityName: 'MJ: ML Models', ExtraFilter: `Delivery IS NULL AND ArtifactStatus='unverified' AND TrainingRunID IS NOT NULL AND Status IN ('Published', 'Draft')`,
+        EntityName: 'MJ: ML Models', ExtraFilter: PreGateModelMigration.EVIDENCE_BEARING,
         OrderBy: 'Version ASC', Fields: ['ID', 'Status'], MaxRows: batch, ResultType: 'simple',
       },
       ctx,
@@ -892,11 +939,16 @@ export class PreGateModelMigration {
    * status step 2 does not own (`Unevaluated`, `Archived`); at most `batch`, one ID once.
    */
   protected static async ReadUnverifiedLegacy(batch: number, ctx: RegistryContext): Promise<MJMLModelEntity[]> {
-    const legacy = await PreGateModelMigration.ReadModels(`Delivery IS NULL AND ArtifactStatus='unverified' AND TrainingRunID IS NULL`, ctx, batch);
-    const rest = legacy.length >= batch ? [] : await PreGateModelMigration.ReadModels(
-      `Delivery IS NULL AND ArtifactStatus='unverified' AND TrainingRunID IS NOT NULL AND Status IN ('Unevaluated', 'Archived')`, ctx, batch - legacy.length,
-    );
+    const legacy = await PreGateModelMigration.ReadModels(PreGateModelMigration.LEGACY_WITHOUT_RUN, ctx, batch);
+    const rest = legacy.length >= batch ? [] : await PreGateModelMigration.ReadModels(PreGateModelMigration.LEGACY_OTHER_STATUS, ctx, batch - legacy.length);
     return [...legacy, ...ExcludeByUUIDs(rest, legacy.map((l) => l.ID))].slice(0, batch);
+  }
+
+  /** How many model rows match `filter` (a `count_only` read: no row is fetched). */
+  protected static async CountModels(filter: string, ctx: RegistryContext): Promise<number> {
+    const r = await StoredRowReads.Run<Pick<MJMLModelEntity, 'ID'>>({ EntityName: 'MJ: ML Models', ExtraFilter: filter, ResultType: 'count_only' }, ctx);
+    if (!r.Success) throw new Error(`Counting ML Models (${filter}) failed: ${r.ErrorMessage || 'unknown error'}`);
+    return r.TotalRowCount;
   }
 
   /** Model rows as entity objects (they are saved), oldest version first. */

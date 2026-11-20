@@ -1,8 +1,9 @@
 /**
  * `GateTestStore` — the lifecycle gate's fake provider over in-memory rows (Task M3.2), and `GateWorld`, the stored rows
  * of one pipeline that the gate tests act on. The store answers `RunView` (evaluating the `Field='v'`, `Field=n` and
- * `Field IN (…)` clauses the registry writes, and `Field IN (SELECT ID FROM [__mj].[<view>] WHERE Col='v')` over the
- * entities {@link GateTestStore.BaseViews} names, case-insensitively as SQL Server's collation does), `GetEntityObject`,
+ * `Field IN (…)` clauses the registry writes, `Field LIKE '…%…'` (`%` wildcards only, case-insensitively), and
+ * `Field IN (SELECT ID FROM [__mj].[<view>] WHERE Col='v')` over the entities {@link GateTestStore.BaseViews} names,
+ * case-insensitively as SQL Server's collation does), `GetEntityObject`,
  * `EntityByName` for the entities {@link GateTestStore.PermissionedEntities} names, with their permissions from
  * {@link GateTestStore.EntityPermissions} ({@link GateWorld.User}'s role holds every grant, {@link GateTestStore.UserWithPermissions}
  * makes a user with others; any other name throws, so a test cannot silently get `undefined`), and a `Save()` of one
@@ -636,6 +637,11 @@ export class GateTestStore {
     }
     const sub = /^(\w+) IN \(SELECT (\w+) FROM \[__mj\]\.\[(\w+)\] WHERE (\w+)='((?:[^']|'')*)'\)$/.exec(clause);
     if (sub) return this.subqueryClause(sub[1], sub[2], sub[3], sub[4], sub[5].replace(/''/g, "'"));
+    const like = /^(\w+) LIKE '((?:[^']|'')*)'$/.exec(clause);
+    if (like) {
+      const pattern = new RegExp(`^${like[2].replace(/''/g, "'").split('%').map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`, 'is');
+      return (row) => typeof row[like[1]] === 'string' && pattern.test(String(row[like[1]]));
+    }
     const isNull = /^(\w+) IS (NOT )?NULL$/.exec(clause);
     if (isNull) return (row) => (row[isNull[1]] === null || row[isNull[1]] === undefined) === (isNull[2] === undefined);
     const inList = /^(\w+) IN \((.*)\)$/.exec(clause);
