@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { DatePipe } from '@angular/common';
 import { CreateFakeProvider, renderComponentFixture, query } from '@memberjunction/ng-test-utils';
-import type { RemoteOpResult } from '@memberjunction/core';
+import type { RemoteOpResult, RunViewParams, RunViewResult } from '@memberjunction/core';
 import {
   PredictiveStudioGetModelEvidenceOperation,
   PredictiveStudioPromoteModelOperation,
@@ -84,6 +84,8 @@ interface SignOffScenario {
   withheldAt?: Date;
   flags?: PredictiveStudioLeakageFlagKind[];
   promoteResult?: RemoteOpResult<PredictiveStudioPromoteModelOutput>;
+  /** The protocol read fails with this message. */
+  failProtocolRead?: string;
 }
 
 const validated: SignOffScenario['model'] = { ID: 'M-VAL', Status: 'Validated', EvaluationProtocolID: PROTOCOL_ID };
@@ -117,9 +119,16 @@ async function RenderSignOff(s: SignOffScenario) {
   });
   const protocolRow = ProtocolRow(s.protocol ?? { requiresHumanSignOff: false, signOffExpiryDays: 30 });
   const refusals: RefusalRecordDouble[] = s.withheldAt ? [{ ID: 'R-1', RecordedAt: s.withheldAt, RefusalObject: { kind: 'no-sign-off' } }] : [];
-  const provider = CreateFakeProvider<EvaluationProtocolColumns | RefusalRecordDouble>({
-    runViewResults: (p) => (p.EntityName === 'MJ: ML Evaluation Protocols' ? [protocolRow] : p.EntityName === 'MJ: ML Model Publish Records' ? refusals : []),
-  });
+  const rowsOf = (p: RunViewParams): (EvaluationProtocolColumns | RefusalRecordDouble)[] =>
+    p.EntityName === 'MJ: ML Evaluation Protocols' ? [protocolRow] : p.EntityName === 'MJ: ML Model Publish Records' ? refusals : [];
+  const provider = CreateFakeProvider<EvaluationProtocolColumns | RefusalRecordDouble>({ runViewResults: rowsOf });
+  const failure = s.failProtocolRead;
+  if (failure !== undefined) {
+    const read = (p: RunViewParams): RunViewResult => p.EntityName === 'MJ: ML Evaluation Protocols'
+      ? { Success: false, ErrorMessage: failure, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0 }
+      : { Success: true, ErrorMessage: '', Results: rowsOf(p), RowCount: rowsOf(p).length, TotalRowCount: rowsOf(p).length, ExecutionTime: 0 };
+    Object.assign(provider, { RunViews: async (all: RunViewParams[]): Promise<RunViewResult[]> => all.map(read) });
+  }
   const f = renderComponentFixture(PSSignOffPanelComponent, { inputs: { Provider: provider } });
   f.componentInstance.Published.subscribe((st) => published.values.push(st));
   f.componentInstance.Model = s.model as unknown as MJMLModelEntity;
@@ -155,6 +164,11 @@ const AddDays = (d: Date, n: number): Date => new Date(d.getTime() + n * 86_400_
 
 describe('PSSignOffPanelComponent (DOM)', () => {
   afterEach(() => vi.restoreAllMocks());
+
+  it('a failed protocol read shows the load error, never a panel without the sign-off policy', async () => {
+    const f = await RenderSignOff({ model: held, failProtocolRead: 'the protocol read was refused' });
+    expect(Text(f, 'ps-sign-off-load-error')).toContain('the protocol read was refused');
+  });
 
   it('a model held by requiresHumanSignOff shows the closing date and asks for a sign-off before Publish', async () => {
     const f = await RenderSignOff({ model: held, protocol: { requiresHumanSignOff: true, signOffExpiryDays: 30 }, withheldAt: DAY0 });
