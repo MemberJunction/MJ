@@ -57,6 +57,7 @@ import {
   SaveContext,
   RestoreContext,
   CloneContext,
+  SyncContext,
   RecordChangeSource,
   RecordChangePayload,
   EntityDeleteOptions,
@@ -2153,6 +2154,11 @@ export class SQLServerDataProvider
       ? `,
                                                                                         @Source='Clone',
                                                                                         @ChangeContext=${bind('ChangeContext', `N'${EscapeSQLString(payload.changeContext)}'`)}`
+      : payload.source === 'Sync'
+      ? `,
+                                                                                        @Source='Sync',
+                                                                                        @ChangeContext=${bind('ChangeContext', `N'${EscapeSQLString(payload.changeContext)}'`)}${payload.integrationID ? `,
+                                                                                        @IntegrationID=${bind('IntegrationID', `'${payload.integrationID}'`)}` : ''}`
       : '';
     return `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName=N'${entityName}',
                                                                                         @EntityID='${payload.entityID}',
@@ -2460,8 +2466,9 @@ export class SQLServerDataProvider
     wrapRecordIdInQuotes: boolean,
     restoreContext?: RestoreContext | null,
     cloneContext?: CloneContext | null,
+    syncContext?: SyncContext | null,
   ) {
-    return this.renderLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, wrapRecordIdInQuotes, restoreContext, cloneContext);
+    return this.renderLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, wrapRecordIdInQuotes, restoreContext, cloneContext, undefined, syncContext);
   }
 
   /**
@@ -2480,6 +2487,7 @@ export class SQLServerDataProvider
     restoreContext?: RestoreContext | null,
     cloneContext?: CloneContext | null,
     params?: SaveParameterCollector,
+    syncContext?: SyncContext | null,
   ): string | null {
     // Dialect-agnostic payload assembly is hoisted into DatabaseProviderBase
     // so SQL Server and PostgreSQL share one implementation. We only render
@@ -2494,6 +2502,8 @@ export class SQLServerDataProvider
       restoreContext,
       "'",
       cloneContext,
+      false,
+      syncContext,
     );
     if (!payload) return null;
 
@@ -2515,8 +2525,9 @@ export class SQLServerDataProvider
     user: UserInfo,
     restoreContext?: RestoreContext | null,
     cloneContext?: CloneContext | null,
+    syncContext?: SyncContext | null,
   ): { sql: string; parameters?: unknown[] } | null {
-    const sql = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true, restoreContext, cloneContext);
+    const sql = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true, restoreContext, cloneContext, syncContext);
     if (sql) return { sql };
     return null;
   }
@@ -2595,6 +2606,7 @@ export class SQLServerDataProvider
         entity.RestoreContext,
         entity.CloneContext,
         params,
+        entity.SyncContext,
       );
       if (entity.EntityInfo.CascadeDeletes) {
         // A cascading spDelete EXECs other procs (spUpdate* to null references, spDelete* for
@@ -3616,6 +3628,7 @@ export class SQLServerDataProvider
     safeUserId: string,
     source?: RecordChangeSource,
     changeContext?: string | null,
+    integrationID?: string | null,
   ): string {
     const schema = entityInfo.SchemaName || '__mj';
     const view = entityInfo.BaseView;
@@ -3630,6 +3643,11 @@ export class SQLServerDataProvider
       ? `,
         @Source='Clone',
         @ChangeContext=N'${EscapeSQLString(changeContext)}'`
+      : source === 'Sync'
+      ? `,
+        @Source='Sync',
+        @ChangeContext=N'${EscapeSQLString(changeContext)}'${integrationID ? `,
+        @IntegrationID='${EscapeSQLString(integrationID)}'` : ''}`
       : '';
 
     return `

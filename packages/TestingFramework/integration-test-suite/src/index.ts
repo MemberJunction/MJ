@@ -44,6 +44,8 @@ export * from './checks/native-tool-loop-live.checks';
 export * from './checks/record-process-facade.checks';
 export * from './checks/entity-actions.checks';
 export * from './checks/task-graph-execution.checks';
+export * from './checks/task-graph-waiting-steps.checks';
+export * from './checks/task-graph-durable-retry.checks';
 export * from './checks/task-graph-orchestration.checks';
 export * from './checks/workflow-demo-agents.checks';
 export * from './checks/record-process.checks';

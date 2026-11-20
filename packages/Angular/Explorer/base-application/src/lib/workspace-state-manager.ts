@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
-import { Metadata, IMetadataProvider, LogStatus, PermissionConstrainedError } from '@memberjunction/core';
+import { EntitySaveOptions, Metadata, IMetadataProvider, LogError, LogStatus, PermissionConstrainedError } from '@memberjunction/core';
 import { UserInfoEngine, MJWorkspaceEntity } from '@memberjunction/core-entities';
 import {
   WorkspaceConfiguration,
@@ -387,7 +387,17 @@ export class WorkspaceStateManager {
       this.inFlightConfiguration = json;
       this.writeJournal();
       try {
-        await workspace.Save();
+        // No concurrency check: this is the user's own layout row, so the last layout saved wins. With
+        // the check, a row changed after this tab read it (another tab or device, or our own save that
+        // landed after its response was lost to a dropped connection) refused this save and, since the
+        // entity kept its old values, every later save until a page reload, each refusal also writing
+        // an MJ: Error Logs row on the server. The cost: a stale tab's next change overwrites a newer
+        // layout saved elsewhere, as before MJ 6.2.
+        const options = new EntitySaveOptions();
+        options.SkipOldValuesCheck = true;
+        if (!(await workspace.Save(options))) {
+          LogError(`[WorkspaceStateManager] Workspace save failed: ${workspace.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
       } finally {
         this.inFlightConfiguration = null;
         // Re-base the journal on the stamp this save produced (a failed save leaves the stamp, and
