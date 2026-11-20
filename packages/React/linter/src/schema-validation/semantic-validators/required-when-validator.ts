@@ -6,7 +6,7 @@
  *
  * Config:
  * - condition: boolean expression over `siblingProp` (the dependent property value).
- *   Accepted forms: `siblingProp`, string/number/boolean/null literals, `undefined`, arrays of
+ *   Accepted forms: `siblingProp`, string/number (including negative)/boolean/null literals, `undefined`, arrays of
  *   literals, the operators === !== == != < <= > >= && || ! typeof, parentheses, and
  *   `[<literals>].includes(siblingProp)`. At most MAX_CONDITION_LENGTH characters.
  *   An accepted condition is evaluated by SafeExpressionEvaluator with `siblingProp` as the only name in scope.
@@ -41,8 +41,13 @@ const COMPARISON_OPERATORS: ReadonlySet<string> = new Set(['===', '!==', '==', '
 const LOGICAL_OPERATORS: ReadonlySet<string> = new Set(['&&', '||']);
 const UNARY_OPERATORS: ReadonlySet<string> = new Set(['!', 'typeof']);
 
+function isNegativeNumber(node: t.Node): boolean {
+  return t.isUnaryExpression(node, { operator: '-' }) && t.isNumericLiteral(node.argument);
+}
+
 function isLiteralNode(node: t.Node | null): boolean {
-  return node !== null && (t.isStringLiteral(node) || t.isNumericLiteral(node) || t.isBooleanLiteral(node) || t.isNullLiteral(node));
+  return node !== null &&
+    (t.isStringLiteral(node) || t.isNumericLiteral(node) || isNegativeNumber(node) || t.isBooleanLiteral(node) || t.isNullLiteral(node));
 }
 
 function isLiteralArray(node: t.Node): boolean {

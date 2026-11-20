@@ -68,6 +68,16 @@ describe('RequiredWhenValidator condition evaluation', () => {
         expect(violations.map(v => v.type)).toEqual(['unsupported-condition']);
     });
 
+    it('evaluates a comparison with a negative number literal and refuses other minus forms', () => {
+        const typesFor = (condition: string, sibling: unknown): string[] =>
+            validator.validate(contextWith('', sibling), constraintWith(condition)).map(v => v.type);
+
+        expect(typesFor('siblingProp > -1', 0)).toEqual(['missing-required-prop']);
+        expect(typesFor('siblingProp > -1', -5)).toEqual([]);
+        expect(typesFor('-siblingProp > 0', -5)).toEqual(['unsupported-condition']);
+        expect(typesFor('- -1 < siblingProp', 5)).toEqual(['unsupported-condition']);
+    });
+
     it('refuses a condition longer than the length limit', () => {
         const long = Array.from({ length: 20 }, (_, i) => `siblingProp === 'v${i}'`).join(' || ') + " || siblingProp === 'sum'";
         const violations = validator.validate(contextWith('', 'sum'), constraintWith(long));
