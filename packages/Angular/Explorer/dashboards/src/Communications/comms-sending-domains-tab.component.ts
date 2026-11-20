@@ -6,6 +6,22 @@ import type { DomainDNSRecord } from '@memberjunction/communication-types';
 import type { MJCommunicationSendingDomainEntity } from '@memberjunction/core-entities';
 import type { CommsAdminLoadedMetadata } from './communications-admin.types';
 
+interface GqlCapableProvider {
+  ExecuteGQL(query: string, variables?: Record<string, unknown>): Promise<Record<string, unknown>>;
+}
+
+function asGqlProvider(provider: unknown): GqlCapableProvider | null {
+  if (
+    provider &&
+    typeof provider === 'object' &&
+    'ExecuteGQL' in provider &&
+    typeof (provider as { ExecuteGQL?: unknown }).ExecuteGQL === 'function'
+  ) {
+    return provider as GqlCapableProvider;
+  }
+  return null;
+}
+
 @Component({
   selector: 'mj-comms-sending-domains-tab',
   standalone: true,
@@ -161,43 +177,39 @@ export class CommsSendingDomainsTabComponent extends BaseAngularComponent {
     this.cdr.markForCheck();
 
     try {
-      const records: DomainDNSRecord[] = [
-        {
-          Type: 'TXT',
-          Purpose: 'SPF',
-          Host: domain.Domain,
-          Value: 'v=spf1 include:sendgrid.net ~all',
-          Validated: false,
-        },
-        {
-          Type: 'CNAME',
-          Purpose: 'DKIM',
-          Host: `s1._domainkey.${domain.Domain}`,
-          Value: `s1.domainkey.u.wl.sendgrid.net`,
-          Validated: false,
-        },
-        {
-          Type: 'CNAME',
-          Purpose: 'DKIM',
-          Host: `s2._domainkey.${domain.Domain}`,
-          Value: `s2.domainkey.u.wl.sendgrid.net`,
-          Validated: false,
-        },
-        {
-          Type: 'TXT',
-          Purpose: 'DMARC',
-          Host: `_dmarc.${domain.Domain}`,
-          Value: `v=DMARC1; p=none;`,
-          Validated: false,
-        },
-      ];
-      domain.DNSRecords = JSON.stringify(records);
-      domain.Status = 'Pending';
-      if (!(await domain.Save())) {
-        throw new Error(domain.LatestResult?.CompleteMessage || 'Failed to save DNS records.');
+      const gql = asGqlProvider(this.ProviderToUse);
+      if (!gql) {
+        throw new Error('GraphQL provider is not available.');
+      }
+      const mutation = `
+        mutation CreateCommsSendingDomain($DomainID: String!) {
+          CreateCommsSendingDomain(DomainID: $DomainID) {
+            Success
+            Status
+            ProviderDomainID
+            DNSRecordsJSON
+            ErrorMessage
+          }
+        }
+      `;
+      const res = await gql.ExecuteGQL(mutation, { DomainID: domain.ID });
+      const payload = res['CreateCommsSendingDomain'] as
+        | { Success: boolean; Status?: string; ProviderDomainID?: string; DNSRecordsJSON?: string; ErrorMessage?: string }
+        | undefined;
+      if (!payload?.Success) {
+        throw new Error(payload?.ErrorMessage || 'Failed to create provider domain authentication.');
+      }
+      if (payload.DNSRecordsJSON) {
+        domain.DNSRecords = payload.DNSRecordsJSON;
+      }
+      if (payload.ProviderDomainID) {
+        domain.ProviderDomainID = payload.ProviderDomainID;
+      }
+      if (payload.Status) {
+        domain.Status = payload.Status as MJCommunicationSendingDomainEntity['Status'];
       }
       this.SelectDomain(domain);
-      this.StatusMessage = `Generated SPF/DKIM/DMARC records for ${domain.Domain}.`;
+      this.StatusMessage = `Generated provider DNS records for ${domain.Domain}.`;
       this.RefreshRequested.emit();
     } catch (err: unknown) {
       this.ErrorMessage = err instanceof Error ? err.message : 'Failed to generate DNS records.';
@@ -214,24 +226,47 @@ export class CommsSendingDomainsTabComponent extends BaseAngularComponent {
     this.cdr.markForCheck();
 
     try {
-      const records = this.parseRecords(domain.DNSRecords);
-      if (records.length === 0) {
-        throw new Error('Generate SPF/DKIM records before verifying DNS.');
+      const gql = asGqlProvider(this.ProviderToUse);
+      if (!gql) {
+        throw new Error('GraphQL provider is not available.');
       }
-      const now = new Date();
-      domain.LastVerifiedAt = now;
-      const allValidated = records.every((r) => r.Validated);
-      if (allValidated) {
-        domain.Status = 'Verified';
-        domain.VerifiedAt = domain.VerifiedAt ?? now;
+      const mutation = `
+        mutation VerifyCommsSendingDomain($DomainID: String!) {
+          VerifyCommsSendingDomain(DomainID: $DomainID) {
+            Success
+            Verified
+            Status
+            ProviderDomainID
+            DNSRecordsJSON
+            ErrorMessage
+          }
+        }
+      `;
+      const res = await gql.ExecuteGQL(mutation, { DomainID: domain.ID });
+      const payload = res['VerifyCommsSendingDomain'] as
+        | { Success: boolean; Verified?: boolean; Status?: string; DNSRecordsJSON?: string; ErrorMessage?: string }
+        | undefined;
+      if (!payload) {
+        throw new Error('No response from VerifyCommsSendingDomain.');
       }
-      if (!(await domain.Save())) {
-        throw new Error(domain.LatestResult?.CompleteMessage || 'Failed to update verification state.');
+      if (payload.DNSRecordsJSON) {
+        domain.DNSRecords = payload.DNSRecordsJSON;
+      }
+      if (payload.Status) {
+        domain.Status = payload.Status as MJCommunicationSendingDomainEntity['Status'];
+      }
+      domain.LastVerifiedAt = new Date();
+      if (payload.Verified) {
+        domain.VerifiedAt = domain.VerifiedAt ?? domain.LastVerifiedAt;
       }
       this.SelectDomain(domain);
-      this.StatusMessage = allValidated
-        ? `${domain.Domain} is Verified.`
-        : `DNS check recorded for ${domain.Domain}. Publish all DNS records to complete verification.`;
+      if (!payload.Success && payload.ErrorMessage) {
+        this.ErrorMessage = payload.ErrorMessage;
+      } else {
+        this.StatusMessage = payload.Verified
+          ? `${domain.Domain} is Verified.`
+          : `DNS check recorded for ${domain.Domain}. Publish all DNS records to complete verification.`;
+      }
       this.RefreshRequested.emit();
     } catch (err: unknown) {
       this.ErrorMessage = err instanceof Error ? err.message : 'Failed to verify DNS.';

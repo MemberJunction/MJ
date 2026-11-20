@@ -69,7 +69,8 @@ export class ComplianceGate {
     const enforcementMode: EnforcementMode =
       ctx.Sender.EnforcementMode ?? options.InstanceEnforcementMode ?? 'Enforce';
 
-    // Step 1: Suppressions
+    // Step 1: Endpoint status & Suppressions
+    const endpointBlock = this.evaluateEndpointStatus(ctx);
     const suppressionResult = this.evaluateSuppressions(ctx, options.Suppressions);
     const senderJurisdiction = options.SenderJurisdiction ?? ctx.Sender.JurisdictionID ?? null;
 
@@ -89,6 +90,19 @@ export class ComplianceGate {
       MergedRules: regimeResult.MergedRules,
     };
 
+    if (endpointBlock?.IsTerminal) {
+      return this.applyEnforcementMode(
+        {
+          Decision: 'Blocked',
+          Reason: endpointBlock.Reason,
+          Detail: endpointBlock.Detail,
+          Obligations: regimeResult.Obligations,
+          AuditSnapshot: auditSnapshot,
+        },
+        endpointBlock.Reason,
+      );
+    }
+
     if (suppressionResult.HardBlock) {
       return this.applyEnforcementMode(
         {
@@ -100,6 +114,19 @@ export class ComplianceGate {
           AuditSnapshot: auditSnapshot,
         },
         suppressionResult.HardBlock.Reason,
+      );
+    }
+
+    if (endpointBlock) {
+      return this.applyEnforcementMode(
+        {
+          Decision: 'Blocked',
+          Reason: endpointBlock.Reason,
+          Detail: endpointBlock.Detail,
+          Obligations: regimeResult.Obligations,
+          AuditSnapshot: auditSnapshot,
+        },
+        endpointBlock.Reason,
       );
     }
 
@@ -149,6 +176,42 @@ export class ComplianceGate {
       Obligations: regimeResult.Obligations,
       AuditSnapshot: auditSnapshot,
     };
+  }
+
+  private evaluateEndpointStatus(
+    ctx: ComplianceEvalContext,
+  ): { Reason: SuppressionReason | 'Erased'; Detail: string; IsTerminal: boolean } | null {
+    switch (ctx.Endpoint.Status) {
+      case 'Hard Bounced':
+        return {
+          Reason: 'Hard Bounce',
+          Detail: 'Endpoint status is Hard Bounced',
+          IsTerminal: true,
+        };
+      case 'Invalid':
+        return {
+          Reason: 'Invalid Address',
+          Detail: 'Endpoint status is Invalid',
+          IsTerminal: true,
+        };
+      case 'Erased':
+        return {
+          Reason: 'Erased',
+          Detail: 'Endpoint status is Erased',
+          IsTerminal: true,
+        };
+      case 'Complained':
+        if (NON_TRANSACTIONAL_CLASSES.has(ctx.MessageClass)) {
+          return {
+            Reason: 'Spam Complaint',
+            Detail: 'Endpoint status is Complained',
+            IsTerminal: false,
+          };
+        }
+        return null;
+      default:
+        return null;
+    }
   }
 
   private evaluateSuppressions(
@@ -397,10 +460,12 @@ export class ComplianceGate {
 
   private applyEnforcementMode(
     result: ComplianceGateResult,
-    suppressionReason?: SuppressionReason,
+    suppressionReason?: SuppressionReason | 'Erased',
   ): ComplianceGateResult {
     const isHardBounceOrInvalid =
-      suppressionReason === 'Hard Bounce' || suppressionReason === 'Invalid Address';
+      suppressionReason === 'Hard Bounce' ||
+      suppressionReason === 'Invalid Address' ||
+      suppressionReason === 'Erased';
 
     if (isHardBounceOrInvalid || result.AuditSnapshot.EnforcementMode === 'Enforce') {
       return result;

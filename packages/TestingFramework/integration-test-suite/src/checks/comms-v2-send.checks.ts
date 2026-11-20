@@ -183,6 +183,16 @@ export const CommsV2SendChecks: NamedCheck[] = [
         const log = logRes.Results[0];
         Assert(log.TrackingToken != null && log.TrackingToken.length > 0, 'Expected TrackingToken on log');
         Assert(log.UnsubscribeToken != null && log.UnsubscribeToken.length > 0, 'Expected UnsubscribeToken on log');
+        Assert(log.ComplianceDecision != null && log.ComplianceDecision.length > 0, 'Expected ComplianceDecision JSON on log');
+        const parsedDecision = JSON.parse(log.ComplianceDecision!) as { Decision?: string };
+        AssertEqual(parsedDecision.Decision, 'Allowed', 'Expected ComplianceDecision.Decision = Allowed');
+
+        const v1Allowed = await sendService.CheckV1ComplianceGate(channel.ID, address, 'Transactional', ctx.User);
+        Assert(v1Allowed.Allowed, 'Expected V1 gate to allow Active endpoint');
+        endpoint.Status = 'Hard Bounced';
+        Assert(await endpoint.Save(), 'Failed updating endpoint to Hard Bounced');
+        const v1Blocked = await sendService.CheckV1ComplianceGate(channel.ID, address, 'Transactional', ctx.User);
+        Assert(!v1Blocked.Allowed, 'Expected V1 gate to block Hard Bounced endpoint');
 
         const sig = ComputeTrackingSignature(log.TrackingToken!, targetUrl, hmacSecret);
         Assert(VerifyTrackingSignature(log.TrackingToken!, targetUrl, sig, hmacSecret), 'HMAC signature verification failed');

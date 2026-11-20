@@ -11,6 +11,22 @@ import type {
 import { EscapeSQLString } from '@memberjunction/global';
 import type { CommsAdminLoadedMetadata } from './communications-admin.types';
 
+interface GqlCapableProvider {
+  ExecuteGQL(query: string, variables?: Record<string, unknown>): Promise<Record<string, unknown>>;
+}
+
+function asGqlProvider(provider: unknown): GqlCapableProvider | null {
+  if (
+    provider &&
+    typeof provider === 'object' &&
+    'ExecuteGQL' in provider &&
+    typeof (provider as { ExecuteGQL?: unknown }).ExecuteGQL === 'function'
+  ) {
+    return provider as GqlCapableProvider;
+  }
+  return null;
+}
+
 @Component({
   selector: 'mj-comms-endpoints-suppressions-tab',
   standalone: true,
@@ -243,7 +259,33 @@ export class CommsEndpointsSuppressionsTabComponent extends BaseAngularComponent
   }
 
   public async RevokeSuppression(supp: MJCommunicationSuppressionEntity): Promise<void> {
+    this.ErrorMessage = '';
     try {
+      const gql = asGqlProvider(this.ProviderToUse);
+      if (gql) {
+        const mutation = `
+          mutation RevokeCommsSuppression($SuppressionID: String!) {
+            RevokeCommsSuppression(SuppressionID: $SuppressionID) {
+              Success
+              ErrorMessage
+              WarningMessage
+            }
+          }
+        `;
+        const res = await gql.ExecuteGQL(mutation, { SuppressionID: supp.ID });
+        const payload = res['RevokeCommsSuppression'] as
+          | { Success: boolean; ErrorMessage?: string; WarningMessage?: string }
+          | undefined;
+        if (!payload?.Success) {
+          throw new Error(payload?.ErrorMessage || 'Failed to revoke suppression.');
+        }
+        if (payload.WarningMessage) {
+          this.ErrorMessage = `Revoked in MJ, but downstream provider returned warning: ${payload.WarningMessage}`;
+        }
+        await this.Search();
+        return;
+      }
+
       const prev = { Status: supp.Status };
       supp.Status = 'Revoked';
       supp.RevokedAt = new Date();

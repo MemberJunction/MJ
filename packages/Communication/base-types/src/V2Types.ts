@@ -142,6 +142,7 @@ export interface SendableRecipient {
   Decision: 'Allowed' | 'Deferred';
   DeferUntil?: Date;
   Obligations: ComplianceObligations;
+  AuditSnapshot?: ComplianceAuditSnapshot;
   SenderTemplateContext?: Record<string, unknown>;
   PrincipalAttributes?: PrincipalAttributes;
 }

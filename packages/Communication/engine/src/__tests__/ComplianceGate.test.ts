@@ -194,7 +194,7 @@ describe('JurisdictionResolver & ComplianceGate', () => {
     ID: 'ep-100',
     BaseMessageTypeID: CHANNEL_EMAIL,
     NormalizedValue: 'member@example.com',
-    Status: 'Hard Bounced', // ComplianceGate MUST ignore Endpoint.Status and read CommunicationSuppression!
+    Status: 'Active',
   } as MJCommunicationEndpointEntity;
 
   const pref = {

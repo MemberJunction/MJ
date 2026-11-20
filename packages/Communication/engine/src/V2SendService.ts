@@ -11,6 +11,7 @@ import {
   EvaluateEligibilityParams,
   EvaluateEligibilityResult,
   Message,
+  MessageClass,
   MessagePayload,
   PrincipalAttributes,
   PrincipalMessageContext,
@@ -281,6 +282,7 @@ export class V2SendService {
           Decision: gateResult.Decision,
           DeferUntil: gateResult.DeferUntil,
           Obligations: gateResult.Obligations,
+          AuditSnapshot: gateResult.AuditSnapshot,
           SenderTemplateContext: senderTemplateContext,
           PrincipalAttributes: attrs,
         });
@@ -511,7 +513,7 @@ export class V2SendService {
     const hmacSecret = this.config.TrackingHMACSecret ?? process.env.MJ_COMMS_HMAC_SECRET ?? '';
 
     const obligations = this.enrichObligations(target.Obligations, baseUrl, unsubscribeToken);
-    const snapshot: ProtectedComplianceSnapshot = {
+    const snapshot: ProtectedComplianceSnapshot = Object.freeze({
       From: sender.FromEmail ?? sender.FromPhone ?? '',
       To: target.Endpoint.NormalizedValue,
       ListUnsubscribe: obligations.RequireOneClickHeader && obligations.UnsubscribeURL
@@ -523,7 +525,7 @@ export class V2SendService {
       FooterHTML: this.buildComplianceFooterHTML(obligations),
       FooterText: this.buildComplianceFooterText(obligations),
       LogID: log.ID,
-    };
+    });
     const expectedHash = ComputeProtectedElementsHash(snapshot);
 
     const driver = target.Principal ? this.getPrincipalDriver(target.Principal.EntityID) : undefined;
@@ -550,6 +552,27 @@ export class V2SendService {
       baseUrl,
     );
 
+    const enforcementMode =
+      sender.EnforcementMode ?? this.config.InstanceEnforcementMode ?? 'Enforce';
+    if (enforcementMode === 'Enforce') {
+      const obligationError = this.validateBodyObligations(finalPayload, obligations);
+      if (obligationError) {
+        log.Status = 'Failed';
+        log.ErrorMessage = obligationError;
+        await log.Save();
+        return {
+          Principal: target.Principal,
+          Endpoint: target.Endpoint,
+          CommunicationLogID: log.ID,
+          Status: 'Blocked',
+          Reason: 'ObligationValidationFailed',
+          Detail: obligationError,
+        };
+      }
+    }
+
+    this.assertProtectedElementsIntact(finalPayload, snapshot);
+
     const msg = new Message();
     msg.MessageType = pmt as NonNullable<typeof pmt>;
     msg.From = snapshot.From;
@@ -560,6 +583,10 @@ export class V2SendService {
     msg.HTMLBody = finalPayload.HTMLBody;
     msg.Headers = finalPayload.Headers;
     msg.DryRun = params.Envelope.DryRun;
+    msg.ContextData = {
+      mj_log_id: log.ID,
+      CommunicationLogID: log.ID,
+    };
 
     const processed = new ProcessedMessageServer(msg);
     processed.ProcessedSubject = finalPayload.Subject ?? '';
@@ -1051,7 +1078,156 @@ export class V2SendService {
     log.CorrelationData = params.Envelope.CorrelationData
       ? JSON.stringify(params.Envelope.CorrelationData)
       : null;
+    log.ComplianceDecision = JSON.stringify({
+      Decision: target.Decision,
+      Obligations: target.Obligations,
+      ...target.AuditSnapshot,
+    });
 
     return (await log.Save()) ? log : undefined;
+  }
+
+  /**
+   * V1 gate: checks endpoint status and active suppressions for legacy SendSingleMessage / SendMessages callers.
+   */
+  public async CheckV1ComplianceGate(
+    channelID: string,
+    recipientAddress: string,
+    messageClass: MessageClass,
+    contextUser: UserInfo,
+  ): Promise<{ Allowed: boolean; Reason?: string; Detail?: string }> {
+    const trimmed = recipientAddress.trim();
+    if (!trimmed) {
+      return { Allowed: true };
+    }
+    const norm = NormalizeEndpointAddress(trimmed, channelID);
+    const hash = norm?.ValueHash ?? ComputeEndpointHash(trimmed.toLowerCase());
+
+    const rv = new RunView();
+    const epRes = await rv.RunView<MJCommunicationEndpointEntity>(
+      {
+        EntityName: 'MJ: Communication Endpoints',
+        ExtraFilter: `BaseMessageTypeID='${EscapeSQLString(channelID)}' AND ValueHash='${EscapeSQLString(hash)}'`,
+        ResultType: 'entity_object',
+      },
+      contextUser,
+    );
+    if (!epRes.Success || epRes.Results.length === 0) {
+      return { Allowed: true };
+    }
+
+    const endpoint = epRes.Results[0];
+    if (endpoint.Status === 'Hard Bounced' || endpoint.Status === 'Invalid' || endpoint.Status === 'Erased') {
+      return {
+        Allowed: false,
+        Reason: endpoint.Status,
+        Detail: `Blocked by endpoint status '${endpoint.Status}'`,
+      };
+    }
+    if (endpoint.Status === 'Complained' && messageClass !== 'Transactional') {
+      return {
+        Allowed: false,
+        Reason: 'Spam Complaint',
+        Detail: `Blocked by endpoint status 'Complained'`,
+      };
+    }
+
+    const supRes = await rv.RunView<MJCommunicationSuppressionEntity>(
+      {
+        EntityName: 'MJ: Communication Suppressions',
+        ExtraFilter: `CommunicationEndpointID='${EscapeSQLString(endpoint.ID)}' AND Status='Active'`,
+        ResultType: 'entity_object',
+      },
+      contextUser,
+    );
+    if (!supRes.Success || supRes.Results.length === 0) {
+      return { Allowed: true };
+    }
+
+    const nowMs = Date.now();
+    for (const s of supRes.Results) {
+      if (s.ExpiresAt && s.ExpiresAt.getTime() <= nowMs) continue;
+      if (s.Reason === 'Hard Bounce' || s.Reason === 'Invalid Address') {
+        return {
+          Allowed: false,
+          Reason: s.Reason,
+          Detail: `Suppressed by ${s.Reason}`,
+        };
+      }
+      if (messageClass !== 'Transactional') {
+        if (s.Reason === 'Spam Complaint' || s.Reason === 'Admin Block') {
+          return {
+            Allowed: false,
+            Reason: s.Reason,
+            Detail: `Suppressed by ${s.Reason}`,
+          };
+        }
+        if ((s.Reason === 'User Unsubscribe' || s.Reason === 'Policy') && messageClass === 'Marketing') {
+          return {
+            Allowed: false,
+            Reason: s.Reason,
+            Detail: `Suppressed by ${s.Reason}`,
+          };
+        }
+      }
+    }
+
+    return { Allowed: true };
+  }
+
+  private validateBodyObligations(
+    finalPayload: MessagePayload,
+    obligations: ComplianceObligations,
+  ): string | undefined {
+    if (obligations.RequireFooterUnsubscribe) {
+      const unsubUrl = obligations.UnsubscribeURL?.trim();
+      if (!unsubUrl) {
+        return 'Missing required UnsubscribeURL for footer obligation';
+      }
+      const hasHtmlUnsub = finalPayload.HTMLBody ? finalPayload.HTMLBody.includes(unsubUrl) : false;
+      const hasTextUnsub = finalPayload.Body ? finalPayload.Body.includes(unsubUrl) : false;
+      if (finalPayload.HTMLBody && !hasHtmlUnsub) {
+        return 'HTML body is missing required footer unsubscribe link';
+      }
+      if (!finalPayload.HTMLBody && !hasTextUnsub) {
+        return 'Text body is missing required footer unsubscribe link';
+      }
+    }
+
+    if (obligations.RequireSenderPostalAddress) {
+      const postal = obligations.SenderPostalAddress?.trim();
+      if (!postal) {
+        return 'Missing required SenderPostalAddress for compliance footer obligation';
+      }
+      const hasHtmlPostal = finalPayload.HTMLBody ? finalPayload.HTMLBody.includes(postal) : false;
+      const hasTextPostal = finalPayload.Body ? finalPayload.Body.includes(postal) : false;
+      if (finalPayload.HTMLBody && !hasHtmlPostal) {
+        return 'HTML body is missing required sender postal address';
+      }
+      if (!finalPayload.HTMLBody && !hasTextPostal) {
+        return 'Text body is missing required sender postal address';
+      }
+    }
+
+    return undefined;
+  }
+
+  private assertProtectedElementsIntact(
+    finalPayload: MessagePayload,
+    snapshot: ProtectedComplianceSnapshot,
+  ): void {
+    const headers = finalPayload.Headers ?? {};
+    if (snapshot.ListUnsubscribe && headers['List-Unsubscribe'] !== snapshot.ListUnsubscribe) {
+      throw new Error('Protected List-Unsubscribe header failed integrity check');
+    }
+    if (snapshot.ListUnsubscribePost && headers['List-Unsubscribe-Post'] !== snapshot.ListUnsubscribePost) {
+      throw new Error('Protected List-Unsubscribe-Post header failed integrity check');
+    }
+    if (snapshot.FooterHTML && finalPayload.HTMLBody && !finalPayload.HTMLBody.includes(snapshot.FooterHTML)) {
+      throw new Error('Protected compliance HTML footer failed integrity check');
+    }
+    if (snapshot.FooterText && !finalPayload.HTMLBody && finalPayload.Body && !finalPayload.Body.includes(snapshot.FooterText)) {
+      throw new Error('Protected compliance text footer failed integrity check');
+    }
   }
 }

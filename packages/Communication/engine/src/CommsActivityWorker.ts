@@ -362,6 +362,11 @@ export class CommsActivityWorker {
       return `TrackingToken='${EscapeSQLString(event.TrackingToken)}'`;
     }
     if (event.ProviderMessageID && event.CommunicationProviderID) {
+      const filterIdx = event.ProviderMessageID.indexOf('.filter');
+      if (filterIdx > 0) {
+        const baseId = event.ProviderMessageID.slice(0, filterIdx);
+        return `CommunicationProviderID='${EscapeSQLString(event.CommunicationProviderID)}' AND (ProviderMessageID='${EscapeSQLString(event.ProviderMessageID)}' OR ProviderMessageID='${EscapeSQLString(baseId)}')`;
+      }
       return `CommunicationProviderID='${EscapeSQLString(event.CommunicationProviderID)}' AND ProviderMessageID='${EscapeSQLString(event.ProviderMessageID)}'`;
     }
     return undefined;

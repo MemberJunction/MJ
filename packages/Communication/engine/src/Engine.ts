@@ -5,6 +5,7 @@ import {
     EvaluateEligibilityParams,
     EvaluateEligibilityResult,
     Message,
+    MessageClass,
     MessageRecipient,
     MessageResult,
     MJCommunicationProviderEntityExtended,
@@ -106,6 +107,23 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
             throw new Error(`Metadata not loaded. Call Config() before accessing metadata.`);
         }
         return this._v2SendService.EvaluateEligibility(params, contextUser ?? this.ContextUser);
+    }
+
+    /**
+     * V1 gate: checks endpoint status and active suppressions for a recipient address.
+     */
+    public async CheckV1ComplianceGate(
+        channelID: string,
+        recipientAddress: string,
+        messageClass: MessageClass = 'Transactional',
+        contextUser?: UserInfo,
+    ): Promise<{ Allowed: boolean; Reason?: string; Detail?: string }> {
+        return this._v2SendService.CheckV1ComplianceGate(
+            channelID,
+            recipientAddress,
+            messageClass,
+            contextUser ?? this.ContextUser,
+        );
     }
 
     /**
@@ -276,8 +294,33 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
             else {
                 const log = await this.base.StartLog(processedMessage, run);
                 if (log) {
+                    const effectiveUser = contextUser ?? this.ContextUser;
+                    const channelID = message.MessageType?.CommunicationBaseMessageTypeID;
+                    const rawClass = message.ContextData?.['MessageClass'];
+                    const messageClass: MessageClass =
+                        rawClass === 'Marketing' || rawClass === 'Operational' || rawClass === 'Transactional'
+                            ? rawClass
+                            : 'Transactional';
+
+                    if (channelID && message.To && effectiveUser) {
+                        const gateResult = await this.CheckV1ComplianceGate(
+                            channelID,
+                            message.To,
+                            messageClass,
+                            effectiveUser,
+                        );
+                        if (!gateResult.Allowed) {
+                            const blockMsg = gateResult.Detail ?? gateResult.Reason ?? 'Blocked by compliance gate';
+                            log.Status = 'Failed';
+                            log.ErrorMessage = blockMsg;
+                            await log.Save();
+                            return { Success: false, Error: blockMsg, Message: processedMessage };
+                        }
+                    }
+
                     const sendResult = await provider.SendSingleMessage(processedMessage, credentials);
                     log.Status = sendResult.Success ? 'Complete' : 'Failed';
+                    log.ProviderMessageID = sendResult.ProviderMessageID ?? log.ProviderMessageID;
                     log.ErrorMessage = sendResult.Error;
                     if (!await log.Save()){
                         throw new Error(`Failed to complete log for message: ${log.LatestResult?.Message}`);
