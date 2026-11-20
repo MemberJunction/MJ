@@ -21,7 +21,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { randomUUID } from 'crypto';
-import { Readable } from 'stream';
+import { ForwardSessionMessage } from './sessionMessages.js';
 import express, { Request, Response, NextFunction } from 'express';
 import sql from "mssql";
 import { z } from "zod";
@@ -1432,39 +1432,7 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
                 return;
             }
 
-            // Buffer the body then pass to transport
-            const chunks: Buffer[] = [];
-            for await (const chunk of req) {
-                chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
-            }
-            const bodyBuffer = Buffer.concat(chunks as unknown as Uint8Array[]);
-
-            // Create a new readable stream from the buffered body for the transport
-            const bodyStream = new Readable({
-                read() {
-                    this.push(bodyBuffer);
-                    this.push(null);
-                }
-            });
-
-            // Create a mock request with the buffered body stream
-            const mockReq = Object.assign(bodyStream, {
-                headers: req.headers,
-                method: req.method,
-                url: req.url,
-                query: req.query
-            });
-
-            try {
-                await transport.handlePostMessage(mockReq as unknown as Request, res);
-            } catch (error) {
-                console.error('[Messages] Error handling message:', error);
-                if (!res.headersSent) {
-                    res.status(500).json({
-                        error: error instanceof Error ? error.message : 'Internal server error'
-                    });
-                }
-            }
+            await ForwardSessionMessage(transport, req, res);
         });
 
         // Health check endpoint

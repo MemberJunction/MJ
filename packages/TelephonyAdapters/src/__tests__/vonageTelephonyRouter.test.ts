@@ -293,6 +293,33 @@ describe('media websocket (WireVonageMediaSocket)', () => {
         socket.emit('close');
         expect(registry.HasCall('CALL-1')).toBe(false);
     });
+
+    describe('logged call id', () => {
+        const RAW_CALL_ID = `A\u001b[2J\nB${'x'.repeat(500)}`;
+        const query = `call_uuid=${encodeURIComponent(RAW_CALL_ID)}&mj_token=wrong`;
+
+        /** The logged text that follows `for call `, up to the next ':'. */
+        function loggedCallId(line: string): string {
+            return line.slice(line.indexOf('for call ') + 'for call '.length).split(':')[0];
+        }
+
+        it('logs only printable ASCII, cut to 100 characters, when it refuses a socket', () => {
+            WireVonageMediaSocket(fakeSocket(), upgrade(query), new VonageCallMediaRegistry());
+            const id = loggedCallId(String(vi.mocked(LogError).mock.calls[0][0]));
+            expect(id).toMatch(/^[\x20-\x7E]*$/);
+            expect(id.length).toBeLessThanOrEqual(100);
+        });
+
+        it('logs only printable ASCII, cut to 100 characters, on a socket error', () => {
+            const socket = fakeSocket();
+            WireVonageMediaSocket(socket, upgrade(query), new VonageCallMediaRegistry());
+            vi.mocked(LogError).mockClear();
+            socket.emit('error', new Error('bad frame'));
+            const id = loggedCallId(String(vi.mocked(LogError).mock.calls[0][0]));
+            expect(id).toMatch(/^[\x20-\x7E]*$/);
+            expect(id.length).toBeLessThanOrEqual(100);
+        });
+    });
 });
 
 describe('media socket server (CreateVonageTelephonyHandler)', () => {

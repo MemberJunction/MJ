@@ -198,8 +198,9 @@ function attachMediaStreamServer(registry: VonageCallMediaRegistry): void {
  */
 export function WireVonageMediaSocket(socket: WebSocket, request: IncomingMessage, registry: VonageCallMediaRegistry): void {
     const claim = readSocketClaim(request);
+    const shownCallId = loggableCallId(claim);
     socket.on('error', (err: Error) => {
-        LogError(`[Telephony][Vonage] media socket error for call ${claim.CallUuid ?? claim.CorrelationId ?? 'unknown'}: ${err.message}`);
+        LogError(`[Telephony][Vonage] media socket error for call ${shownCallId}: ${err.message}`);
     });
     const adapter = {
         sendBinary: (data: Uint8Array) => socket.send(data),
@@ -208,7 +209,7 @@ export function WireVonageMediaSocket(socket: WebSocket, request: IncomingMessag
     };
     const verdict = registry.TryAttachSocket({ CallUuid: claim.CallUuid, CorrelationId: claim.CorrelationId }, claim.Token, adapter);
     if (!verdict.Ok) {
-        LogError(`[Telephony][Vonage] refusing media socket for call ${claim.CallUuid ?? claim.CorrelationId ?? 'unknown'}: ${verdict.Reason}.`);
+        LogError(`[Telephony][Vonage] refusing media socket for call ${shownCallId}: ${verdict.Reason}.`);
         socket.close();
         return;
     }
@@ -254,6 +255,15 @@ function readSocketClaim(request: IncomingMessage): SocketClaim {
         LogError('[Telephony][Vonage] Failed to read socket claim from request URL', undefined, err);
         return {};
     }
+}
+
+/** The longest call id a log line quotes. */
+const MAX_LOGGED_CALL_ID_CHARS = 100;
+
+/** The claimed call id for a log line: printable ASCII only (others become '?'), cut to {@link MAX_LOGGED_CALL_ID_CHARS}. */
+function loggableCallId(claim: SocketClaim): string {
+    const raw = claim.CallUuid ?? claim.CorrelationId ?? 'unknown';
+    return raw.replace(/[^\x20-\x7E]/g, '?').slice(0, MAX_LOGGED_CALL_ID_CHARS);
 }
 
 /** Maps a missing or empty query value to `undefined`. */
