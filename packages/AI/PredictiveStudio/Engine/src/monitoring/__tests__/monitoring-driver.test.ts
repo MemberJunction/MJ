@@ -157,6 +157,23 @@ describe('PredictiveStudioModelMonitoringJobDriver.Execute', () => {
     expect(challengerOf()).toMatchObject({ outcome: 'stopped', trainingRunId: null, reason: expect.stringContaining('human-only') });
   });
 
+  it('a challenger whose training fails restores the protocol version current before the re-carve, so the next run starts clean (M9)', async () => {
+    PeriodRows(JUNE, 300, 0.1, 150);
+    world.Publisher.RecarvedFrom = 'P0000000-0000-4000-8000-0000000000B1';
+    world.Publisher.TrainFailure = new Error('the trainer is unreachable');
+    await driver.Execute(await Context(D('2026-07-31')));
+    expect(world.Publisher.Calls).toEqual([`prepare:${PIPELINE}`, `train:${PIPELINE}`, `restore:${PIPELINE}:P0000000-0000-4000-8000-0000000000B1`]);
+    expect(challengerOf()).toMatchObject({ outcome: 'failed', trainingRunId: null, reason: expect.stringContaining('restored to P0000000-0000-4000-8000-0000000000B1') });
+  });
+
+  it('a challenger whose training fails with no re-carve restores nothing', async () => {
+    PeriodRows(JUNE, 300, 0.1, 150);
+    world.Publisher.TrainFailure = new Error('the trainer is unreachable');
+    await driver.Execute(await Context(D('2026-07-31')));
+    expect(world.Publisher.Calls).toEqual([`prepare:${PIPELINE}`, `train:${PIPELINE}`]);
+    expect(challengerOf()).toMatchObject({ outcome: 'failed', reason: expect.stringContaining('the trainer is unreachable') });
+  });
+
   it('a fired trigger starts one challenger through AutomatedPublisher and records the outcome; monitoring writes no Status', async () => {
     PeriodRows(JUNE, 300, 0.1, 150);
     await driver.Execute(await Context(D('2026-07-31')));

@@ -57,6 +57,7 @@ import { RunViewTrainingSnapshotStore } from '../snapshot/training-snapshot-stor
 import { MetadataEntityFactory } from '../training/seams';
 import { ChallengerProtocol } from './challenger-protocol';
 import type {
+  ChallengerPreparation,
   DriftInputValues,
   IMonitoringDrift,
   IMonitoringGate,
@@ -438,8 +439,13 @@ export class SidecarMonitoringDrift implements IMonitoringDrift {
 /** The challenger's training (single-flight, on a fresh snapshot) and its publish through `AutomatedPublisher`. */
 export class AutomatedMonitoringPublisher implements IMonitoringPublisher {
   /** @inheritdoc */
-  public async PrepareChallenger(pipelineId: string, initiator: Actor, now: Date, ctx: RegistryContext): Promise<string | null> {
+  public async PrepareChallenger(pipelineId: string, initiator: Actor, now: Date, ctx: RegistryContext): Promise<ChallengerPreparation> {
     return ChallengerProtocol.Prepare(pipelineId, initiator, now, ctx);
+  }
+
+  /** @inheritdoc */
+  public async RestoreProtocol(pipelineId: string, protocolId: string, ctx: RegistryContext): Promise<void> {
+    await ChallengerProtocol.Restore(pipelineId, protocolId, ctx);
   }
 
   /** @inheritdoc */

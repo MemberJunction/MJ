@@ -19,6 +19,7 @@ import { GateTestProvider, GateTestStore } from '../../__tests__/fakes/gate-test
 import type { RegistryContext } from '../../registry/registry-context';
 import type { ChallengerSelection } from '../../scoring/scoring-seams';
 import type {
+  ChallengerPreparation,
   DriftInputValues,
   IMonitoringDrift,
   IMonitoringGate,
@@ -216,15 +217,27 @@ export class WorldPublisher implements IMonitoringPublisher {
   public Answer: (trainingRunId: string) => PublishOutcome | EvaluateOutcome = (id) => ({ Kind: 'published', Purpose: 'publish', ModelID: `model-of-${id}`, PublishRecordID: `publish-of-${id}`, Replaces: CURRENT, Approver: 'automated-gate' });
   /** The refusal `PrepareChallenger` answers with; null prepares it. */
   public PrepareRefusal: string | null = null;
-  /** `prepare:<pipeline>` and `train:<pipeline>`, in call order. */
+  /** The protocol version a re-carve replaced (`PrepareChallenger`'s `RestoreProtocolID`); null when nothing moved. */
+  public RecarvedFrom: string | null = null;
+  /** The error the next `Train` throws; null trains. */
+  public TrainFailure: Error | null = null;
+  /** `prepare:<pipeline>`, `train:<pipeline>` and `restore:<pipeline>:<protocol>`, in call order. */
   public readonly Calls: string[] = [];
-  public async PrepareChallenger(pipelineId: string): Promise<string | null> {
+  public async PrepareChallenger(pipelineId: string): Promise<ChallengerPreparation> {
     this.Calls.push(`prepare:${pipelineId}`);
-    return this.PrepareRefusal;
+    return this.PrepareRefusal === null ? { Kind: 'ready', RestoreProtocolID: this.RecarvedFrom } : { Kind: 'refused', Reason: this.PrepareRefusal };
+  }
+  public async RestoreProtocol(pipelineId: string, protocolId: string): Promise<void> {
+    this.Calls.push(`restore:${pipelineId}:${protocolId}`);
   }
   public async Train(pipelineId: string): Promise<{ readonly TrainingRunID: string; readonly ModelID: string | null }> {
     const id = `run-${this.Trained.length + 1}`;
     this.Calls.push(`train:${pipelineId}`);
+    if (this.TrainFailure !== null) {
+      const failure = this.TrainFailure;
+      this.TrainFailure = null;
+      throw failure;
+    }
     this.Trained.push(pipelineId);
     return { TrainingRunID: id, ModelID: `model-of-${id}` };
   }
