@@ -2,6 +2,7 @@ import { configInfo } from '../config.js';
 import { AuthProviderConfig, LogError, LogStatus, LogStatusEx, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import { AuthProviderFactory, LocalDevProvider } from '@memberjunction/auth-providers';
 import { AuthProviderEngine } from './AuthProviderEngine.js';
+import { RecordRequireVerifiedEmailSetting } from './tokenEmailScreen.js';
 
 /**
  * Returns true when local development auth is enabled via `MJ_DEV_AUTH_ENABLED=true`
@@ -87,6 +88,7 @@ export function InitializeAuthProviders(): void {
     for (const providerConfig of configInfo.authProviders) {
       try {
         const provider = AuthProviderFactory.createProvider(providerConfig as AuthProviderConfig);
+        RecordRequireVerifiedEmailSetting(provider, providerConfig as AuthProviderConfig);
         // register() emits the verbose-only "Registered auth provider: … with issuer: …" line
         // (gated by the global verbose flag). Provider NAMES are surfaced compactly in the
         // startup summary `Auth` line at `standard`.

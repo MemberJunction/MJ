@@ -8,6 +8,7 @@ import sql from 'mssql';
 import { GetSigningKeys, GetSystemUser, GetValidationOptions, VerifyUserRecord, ExtractUserInfoFromPayload } from './auth/index.js';
 import { CloneUserForSessionContext } from './auth/sessionUserClone.js';
 import { EmailsMatch, ResolveUserLookupEmail, type LoginEmailResolution } from './auth/loginEmailResolution.js';
+import { IssuerRequiresVerifiedEmail, ScreenTokenEmailClaims } from './auth/tokenEmailScreen.js';
 import { GetAPIKeyActingContextResolver } from './auth/actingContextResolver.js';
 import { TokenExpiredError, AuthProviderFactory } from '@memberjunction/auth-providers';
 import { AuthCache, HashAuthToken } from './cache.js';
@@ -546,7 +547,13 @@ export const GetUserPayload = async (
 
     // Use provider to extract user information
     const userInfo = ExtractUserInfoFromPayload(payload);
-    const loginEmail = ResolveUserLookupEmail(userInfo, userEmailMap);
+    // Refuses an email the IdP marks as not verified, before the user lookup and auto-create.
+    const screened = ScreenTokenEmailClaims(payload, userInfo, IssuerRequiresVerifiedEmail(payload.iss));
+    if (!screened.Claims) {
+      console.warn(`Token refused: ${screened.Reason}`);
+      throw new AuthenticationError('Email address not verified');
+    }
+    const loginEmail = ResolveUserLookupEmail(screened.Claims, userEmailMap);
     const email = loginEmail.LookupEmail;
     
     const userRecord = await VerifyUserRecord(

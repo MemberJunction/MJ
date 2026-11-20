@@ -547,6 +547,54 @@ Providers are registered via `@RegisterClass(BaseAuthProvider, 'type-key')` and 
 
 Configure providers in `mj.config.cjs` under `authProviders` or via environment variables (see Configuration section).
 
+#### Verified email addresses
+
+The server finds the MJ user by the email address in the token. It always refuses a token whose `email_verified` claim is `false` (the boolean or the text `"false"`). This check runs before the user lookup and before automatic user creation.
+
+Each provider entry also accepts `requireVerifiedEmail` (default `false`). When it is `true`:
+
+- The token must have `email_verified` set to `true` (the boolean or the text `"true"`).
+- Only the `email` claim is used to find the user. Fallback claims such as `preferred_username` or `cognito:username` are not used.
+
+```javascript
+authProviders: [
+  {
+    name: 'auth0',
+    type: 'auth0',
+    issuer: 'https://tenant.auth0.com/',
+    audience: 'your-client-id',
+    jwksUri: 'https://tenant.auth0.com/.well-known/jwks.json',
+    clientId: 'your-client-id',
+    domain: 'tenant.auth0.com',
+    requireVerifiedEmail: true,
+  },
+]
+```
+
+Turn it on for providers that let people sign up with an address that is not verified (for example Auth0 database connections, Okta self-service registration, Cognito).
+
+The default rule gives no protection when the token has no `email_verified` claim: such a token is accepted. Only the strict rule refuses it.
+
+**Where to set it.** In `mj.config.cjs` the value must be a boolean; any other value stops the server at startup. In `AdditionalConfiguration`, `true` turns the strict rule on; any other value except `false` (for example the text `"true"`) also turns it on and logs an error. A missing value leaves it off.
+
+- **`mj.config.cjs`:** add `requireVerifiedEmail: true` to the provider entry, as in the example above.
+- **Environment variables only:** providers that are configured only through environment variables (for example `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`) cannot turn the option on. To turn it on, declare the provider in the `authProviders` array of `mj.config.cjs`, or add a row to the `MJ: Authentication Providers` table. An `authProviders` array in the config file replaces the providers from environment variables.
+- **`MJ: Authentication Providers` table:** put `{"requireVerifiedEmail": true}` in `AdditionalConfiguration`. A row with the same `Name` as a provider from the config file replaces that provider, so the option then follows the row, not the config file.
+
+**Which claim gives the address.** The values below come from each provider class's `extractUserInfo`.
+
+| Provider `type` | Address used by the default rule | Strict rule |
+|---|---|---|
+| `auth0` | `email`; when it is missing, `preferred_username` | Only `email`, with `email_verified` true |
+| `okta` | `email`; when it is missing, `preferred_username` | Only `email`, with `email_verified` true |
+| `cognito` | `email`; when it is missing, `cognito:username` | Only `email`, with `email_verified` true |
+| `msal` (Microsoft Entra ID) | `email`; when it is missing, `preferred_username` | Entra ID tokens do not send `email_verified`, so the strict rule refuses **every** sign-in. Do not turn it on for `msal`. |
+| `google` | `email` | Only `email`, with `email_verified` true |
+| `workos` | `email` (from the WorkOS JWT Template); when it is missing, `preferred_username` | Only `email`, with `email_verified` true |
+| `magic-link`, `local` | `email` (the server makes these tokens itself) | Not used for these providers |
+
+With both rules, a token with `email_verified` set to `false` is refused. The MCP server (`@memberjunction/ai-mcp-server`) applies the same rules to bearer tokens and to the upstream token of its OAuth proxy. In the proxy, the default rule also accepts `unique_name` and `upn` after `preferred_username`.
+
 ### API Key Authentication
 
 The server supports two types of API key authentication:

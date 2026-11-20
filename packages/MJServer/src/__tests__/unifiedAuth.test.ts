@@ -96,8 +96,8 @@ vi.mock('../config.js', () => ({
 vi.mock('@memberjunction/auth-providers', () => ({
   TokenExpiredError: MockTokenExpiredError,
   AuthProviderFactory: {
-    getInstance: () => ({ getByIssuer: mockGetByIssuer }),
-    get Instance() { return { getByIssuer: mockGetByIssuer }; },
+    getInstance: () => ({ getByIssuer: mockGetByIssuer, getAllByIssuer: () => [] }),
+    get Instance() { return { getByIssuer: mockGetByIssuer, getAllByIssuer: () => [] }; },
   },
 }));
 
