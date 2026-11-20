@@ -64,7 +64,7 @@ export const Month = (iso: string): MonitoringPeriod => {
 
 const UNIT_SPEC: PredictionUnitSpec = {
   id: 'U1', lineageRootId: 'U1', version: 1, name: 'members',
-  rows: { kind: 'grain-x-periods', grainEntity: 'Members', periodEntity: 'Member Periods', grainForeignKey: 'MemberID', periodDate: 'PeriodStart', periodIndex: 'PeriodIndex', filter: [] },
+  rows: { kind: 'grain-x-periods', grainEntity: 'Members', childEntity: 'Member Periods', foreignKey: 'MemberID', periodDate: 'PeriodStart', filter: [] },
   label: { rule: { kind: 'column', column: 'Renewed' }, windowDays: 30, gapDays: 0, outcome: BINARY, labelVersion: 1 },
   censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'now' } },
   history: { onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' }, groupKey: null, temporal: null,

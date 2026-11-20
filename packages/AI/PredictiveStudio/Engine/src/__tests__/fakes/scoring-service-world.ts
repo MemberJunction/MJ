@@ -116,7 +116,7 @@ export class TargetTable {
 }
 
 /** The store's provider, describing and serving the target entity and describing `MJ: Authorizations`. */
-class ScoringTestProvider extends GateTestProvider {
+export class ScoringTestProvider extends GateTestProvider {
   constructor(store: GateTestStore, target: TargetTable) {
     super(store);
     this.RunView = vi.fn().mockImplementation(async (params: RunViewParams, user?: UserInfo) => (params.EntityName === MEMBERSHIPS ? target.View(params) : store.RunViewRows(params, user)));
@@ -318,7 +318,7 @@ export class ScoringServiceWorld {
   public readonly Runtime = new RuntimeDouble();
   public readonly Challengers = new ChallengersDouble();
   public readonly Artifacts = new InMemoryArtifactLoader();
-  public readonly Provider: IMetadataProvider = new ScoringTestProvider(this.Store, this.Target);
+  public readonly Provider: ScoringTestProvider = new ScoringTestProvider(this.Store, this.Target);
   /** The scorer: it holds the store's full role (so it may save the model's ArtifactStatus) and the view authorization. */
   public static readonly User = new UserInfo(null, {
     ID: 'A0000000-0000-4000-8000-0000000005D1', Email: 'scorer@example.com', Type: 'User',

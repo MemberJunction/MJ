@@ -193,7 +193,7 @@ describe('PredictiveStudioModelMonitoringJobDriver.Execute', () => {
   });
 
   it('a withheld challenger is recorded with the gate\'s refusal record', async () => {
-    world.Publisher.Answer = (id) => ({ Kind: 'withheld', Purpose: 'publish', ModelID: `model-of-${id}`, Status: 'Validated', Refusal: { kind: 'gate-no-signal' }, Transient: false, RefusalRecordID: `refusal-of-${id}` });
+    world.Publisher.Answer = (id) => ({ Kind: 'withheld', Purpose: 'publish', ModelID: `model-of-${id}`, Status: 'Validated', Refusal: { kind: 'gate-no-signal', reason: 'the challenger\'s paired lower bound did not beat the margin' }, Transient: false, RefusalRecordID: `refusal-of-${id}` });
     PeriodRows(JUNE, 300, 0.1, 150);
     await driver.Execute(await Context(D('2026-07-31')));
     expect(challengerOf()).toMatchObject({ outcome: 'withheld', recordId: 'refusal-of-run-1', reason: expect.any(String) });
