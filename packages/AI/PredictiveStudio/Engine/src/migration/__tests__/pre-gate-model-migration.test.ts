@@ -415,13 +415,13 @@ describe('step 3: legacy artifacts', () => {
     expect(store.Row('MJ: Files', String(row['ArtifactFileID']))?.['ProviderKey']).toBeTruthy();
   });
 
-  it('marks a local-only artifact legacy-local and an absent one missing, and a second run changes nothing', async () => {
+  it('marks a local-only artifact legacy-local and an absent one missing, and a second run visits and changes nothing (M7.8: idempotent)', async () => {
     const pipelineId = Pipeline();
     const localOnly = Legacy(pipelineId, 'Unevaluated', 'local-only');
     const none = Legacy(pipelineId, 'Archived', 'none');
     await PreGateModelMigration.MigrateArtifacts(50, ctx);
     expect([ModelOf(localOnly.ID)['ArtifactStatus'], ModelOf(none.ID)['ArtifactStatus']]).toEqual(['legacy-local', 'missing']);
-    expect(await PreGateModelMigration.MigrateArtifacts(50, ctx)).toMatchObject({ Changed: 0 });
+    expect(await PreGateModelMigration.MigrateArtifacts(50, ctx)).toMatchObject({ Visited: 0, Changed: 0 });
   });
 
   it('visits at most 50 models per run', async () => {
