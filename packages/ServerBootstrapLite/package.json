@@ -102,6 +102,7 @@
     "@memberjunction/feature-pipelines-engine": "6.3.0-edge.1",
     "@memberjunction/generic-database-provider": "6.3.0-edge.1",
     "@memberjunction/geo-core": "6.3.0-edge.1",
+    "@memberjunction/integration-engine": "6.3.0-edge.1",
     "@memberjunction/predictive-studio": "6.3.0-edge.1",
     "@memberjunction/queue": "6.3.0-edge.1",
     "@memberjunction/react-linter": "6.3.0-edge.1",
