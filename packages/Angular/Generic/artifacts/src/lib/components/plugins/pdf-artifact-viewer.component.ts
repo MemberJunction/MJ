@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { DataSnapshot } from '@memberjunction/core';
-import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
+import { BaseArtifactViewerPluginComponent, FILE_EXPORT_KEY, type ArtifactExportOption } from '../base-artifact-viewer.component';
 import { ArtifactFileService } from '../../services/artifact-file.service';
 
 type PdfJsModule = typeof import('pdfjs-dist');
@@ -499,6 +499,15 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
     this.isLoading = false;
     this.errorMessage = message;
     this.cdr.markForCheck();
+  }
+
+  /** The original file, once it has loaded. */
+  public override GetExportOptions(): ArtifactExportOption[] {
+    return this.downloadUrl ? [this.FileExportOption('PDF (.pdf)', 'fa-solid fa-file-pdf', 'The original file')] : [];
+  }
+
+  public override async RunExport(key: string): Promise<void> {
+    return key === FILE_EXPORT_KEY ? this.OnDownload() : super.RunExport(key);
   }
 
   public override GetCurrentStateSnapshot(): DataSnapshot | null {

@@ -411,8 +411,7 @@ export class DocumentImportExportService {
       ],
     });
 
-    const buffer = await Packer.toBuffer(doc);
-    return new Uint8Array(buffer);
+    return new Uint8Array(await Packer.toArrayBuffer(doc));
   }
 
   /**
