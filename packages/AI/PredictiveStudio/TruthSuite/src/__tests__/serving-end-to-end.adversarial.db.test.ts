@@ -28,7 +28,7 @@
 //                   bindings, Model, Human and Pipeline rows (last: it reads the rows the cells above wrote)
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import sql from 'mssql';
-import { RunView, type IMetadataProvider, type RunViewParams, type UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, RunView, type IMetadataProvider, type RunViewParams, type UserInfo } from '@memberjunction/core';
 import {
   PredictiveStudioTrainModelOperation,
   type MJMLAlgorithmEntity,
@@ -159,9 +159,45 @@ function periodOf(p: number): MonitoringPeriod {
 }
 
 /** A monitoring context of the production store and scorer, the clock at {@link MONITORING_NOW}, as the file's user. */
-function monitoringCtx(): { readonly Driver: PredictiveStudioModelMonitoringJobDriver; readonly Ctx: MonitoringContext } {
+function monitoringCtx(provider: IMetadataProvider = server.Provider): { readonly Driver: PredictiveStudioModelMonitoringJobDriver; readonly Ctx: MonitoringContext } {
   const driver = new PredictiveStudioModelMonitoringJobDriver({ Clock: { Now: () => MONITORING_NOW } });
-  return { Driver: driver, Ctx: driver.ContextFor(server.User, server.Provider, null) };
+  return { Driver: driver, Ctx: driver.ContextFor(server.User, provider, null) };
+}
+
+/**
+ * The console lines a case may produce on purpose: SQL Server's NOWAIT refusal while the gate waits for a held publish
+ * lock, the post-commit and scoring-Action lines of an applied publish, and MJ's ClassFactory falling back to
+ * `BaseEntity` for a truth-suite world table (no generated subclass is kept in the tree for `pstruth` entities).
+ */
+const EXPECTED_LINES: readonly RegExp[] = [
+  /Lock request time out period exceeded/,
+  /^Running \d+ post-commit task\(s\) after transaction commit$/,
+  /^ModelScoringActionGenerator: (ensured|disabled) scoring action 'Score with PSTruth: M8\.5 /,
+  /^ClassFactory: no registration found for base class 'BaseEntity' with key 'PS Truth: W9_EventRegistration'/,
+];
+
+/** Runs `work` with the console's log, warn and error channels captured; the lines no {@link EXPECTED_LINES} entry matches are `Unexpected` (a case requires none). */
+async function quietly<T>(work: () => Promise<T>): Promise<{ readonly Result: T; readonly Unexpected: string[] }> {
+  const warned = await ConsoleCapture.During('warn', () => ConsoleCapture.During('error', () => ConsoleCapture.During('log', work)));
+  const lines = [...warned.Result.Result.Lines, ...warned.Result.Lines, ...warned.Lines];
+  return { Result: warned.Result.Result.Result, Unexpected: lines.filter((l) => !EXPECTED_LINES.some((x) => x.test(l))) };
+}
+
+/** Independent provider instances this file created, released in teardown. */
+const instances: DatabaseProviderBase[] = [];
+
+/**
+ * A provider sharing the pool and metadata with its own transaction stack: one per concurrent caller, as MJAPI's
+ * per-request providers and each scheduled job's run. Concurrent callers on ONE provider instance do not get their own
+ * transactions — the provider joins a second caller's transaction to the first as a savepoint — so a race between
+ * callers must give each its own instance.
+ */
+async function ownProvider(): Promise<DatabaseProviderBase> {
+  const p = server.Provider;
+  if (!(p instanceof DatabaseProviderBase)) throw new Error('the DB lane bootstrap did not install a database provider');
+  const own = await p.CreateIndependentInstance();
+  instances.push(own);
+  return own;
 }
 
 /** The model's open monitoring job's spec with retraining off and a rollback whenever the predecessor wins one period. */
@@ -385,6 +421,7 @@ afterAll(async () => {
       expect(await census()).toEqual(startCensus);
     }
   } finally {
+    for (const p of instances) await p.ReleaseIndependentInstance();
     UserCache.Instance.Dispose();
     await pool?.close();
     await server?.ClosePool();
@@ -450,14 +487,19 @@ describe('M8.5 harness', () => {
       const second = await train(d1c.Pipeline);
       for (const m of [first, second]) await gate.Evaluate({ modelId: m.ID }, human(), gateCtx());
       const spec = await rollbackSpecOf(d1c.Weak.ID);
-      const { Driver, Ctx } = monitoringCtx();
+      // Three callers, three providers (each its own transaction), as three requests or a request and a job would be.
+      const [pm, pa, pb] = [await ownProvider(), await ownProvider(), await ownProvider()];
+      const { Driver, Ctx } = monitoringCtx(pm);
       const raceStart = new Date(Date.now() - 1000);
 
-      const [monitored, firstOutcome, secondOutcome]: [MonitoringRunOutcome, PublishOutcome, PublishOutcome] = await Promise.all([
+      const race = await quietly(() => Promise.all([
         Driver.MonitorPeriods(spec, [periodOf(5)], Ctx),
-        gate.Publish({ modelId: first.ID, purpose: 'publish', initiator: human(), signOffId: null, reason: null }, gateCtx()),
-        gate.Publish({ modelId: second.ID, purpose: 'publish', initiator: human(), signOffId: null, reason: null }, gateCtx()),
-      ]);
+        new LifecycleGate().Publish({ modelId: first.ID, purpose: 'publish', initiator: human(), signOffId: null, reason: null }, gateCtx(pa)),
+        new LifecycleGate().Publish({ modelId: second.ID, purpose: 'publish', initiator: human(), signOffId: null, reason: null }, gateCtx(pb)),
+      ]));
+      // Only the gate's lock wait and an applied publish's own lines may log.
+      expect(race.Unexpected).toEqual([]);
+      const [monitored, firstOutcome, secondOutcome]: [MonitoringRunOutcome, PublishOutcome, PublishOutcome] = race.Result;
 
       const published = await publishedOf(d1c.Pipeline.ID);
       expect(published).toHaveLength(1);
@@ -531,62 +573,66 @@ describe('M8.5 harness', () => {
 
   describe('M5 × PR 1 — a person\'s value in a binding\'s column through a scoring run and the withdrawal, and one on a pipeline target', () => {
     it('the column copy never overwrites a person\'s value, whichever writer recorded it, and withdrawal clears only the binding\'s own copies', async () => {
-      await DatasetLoader.Load({ Provider: server.Provider, User: server.User, Pool: pool }, { Kind: 'world', ID: 'W9-multiclass', Seed: 42 });
-      const entityName = w9EntityName();
-      const entity = server.Provider.EntityByName(entityName);
-      if (!entity) throw new Error(`${entityName} is not in metadata`);
-      const today = UtcDay.UtcDayIso(new Date());
-      const draft: UnitDraft = {
-        Name: 'W9 served', Description: null,
-        UnitRows: { kind: 'grain', grainEntity: entityName, decisionDate: { kind: 'fixed', date: today }, filter: [] },
-        LabelRule: { kind: 'column', column: 'Outcome' }, LabelWindowDays: 1, LabelGapDays: 0, TaskType: MULTICLASS,
-        Censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: UtcDay.UtcDayIso(new Date(Date.now() + 86_400_000)) } },
-        ChangeHistoryPolicy: { onUncoveredRow: 'exclude-and-count', externalSourceRows: 'ineligible' }, GroupKey: null, TemporalSpec: null,
-        DecisionSpec: { action: 'reminder', actorRole: 'events team', capacityPerPeriod: null, period: 'year' }, IncumbentHeuristic: { kind: 'none' },
-      };
-      const pipeline = await provision(draft, ['TicketTier', 'DaysRegisteredBefore', 'PriorAttendance'], 'Logistic Regression', []);
-      await publish(await train(pipeline));
-      const binding = await bind(pipeline, entity.ID, 'W9 column', { Name: 'TruthScore', Source: '$.AdverseProbability' }, null);
+      // The W9 world's table has no generated entity subclass: ClassFactory's BaseEntity fallback is the one line expected.
+      const quiet = await quietly(async () => {
+        await DatasetLoader.Load({ Provider: server.Provider, User: server.User, Pool: pool }, { Kind: 'world', ID: 'W9-multiclass', Seed: 42 });
+        const entityName = w9EntityName();
+        const entity = server.Provider.EntityByName(entityName);
+        if (!entity) throw new Error(`${entityName} is not in metadata`);
+        const today = UtcDay.UtcDayIso(new Date());
+        const draft: UnitDraft = {
+          Name: 'W9 served', Description: null,
+          UnitRows: { kind: 'grain', grainEntity: entityName, decisionDate: { kind: 'fixed', date: today }, filter: [] },
+          LabelRule: { kind: 'column', column: 'Outcome' }, LabelWindowDays: 1, LabelGapDays: 0, TaskType: MULTICLASS,
+          Censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: UtcDay.UtcDayIso(new Date(Date.now() + 86_400_000)) } },
+          ChangeHistoryPolicy: { onUncoveredRow: 'exclude-and-count', externalSourceRows: 'ineligible' }, GroupKey: null, TemporalSpec: null,
+          DecisionSpec: { action: 'reminder', actorRole: 'events team', capacityPerPeriod: null, period: 'year' }, IncumbentHeuristic: { kind: 'none' },
+        };
+        const pipeline = await provision(draft, ['TicketTier', 'DaysRegisteredBefore', 'PriorAttendance'], 'Logistic Regression', []);
+        await publish(await train(pipeline));
+        const binding = await bind(pipeline, entity.ID, 'W9 column', { Name: 'TruthScore', Source: '$.AdverseProbability' }, null);
 
-      // Fixture: the copied records' column emptied (their planted values are kept here and restored in teardown).
-      const picked = (await pool.request().query<{ ID: string; TruthScore: number | null }>(`SELECT TOP ${COPY_RECORDS} CONVERT(NVARCHAR(36), ID) AS ID, TruthScore FROM ${t(entityName)} ORDER BY ID`)).recordset;
-      for (const r of picked) truthScores.set(r.ID, r.TruthScore);
-      const ids = picked.map((r) => r.ID);
-      const idList = ids.map((id) => `'${EscapeSQLString(id)}'`).join(',');
-      await pool.request().query(`UPDATE ${t(entityName)} SET TruthScore = NULL WHERE ID IN (${idList})`);
-      const column = async (): Promise<Map<string, number | null>> => new Map((await pool.request()
-        .query<{ ID: string; TruthScore: number | null }>(`SELECT CONVERT(NVARCHAR(36), ID) AS ID, TruthScore FROM ${t(entityName)} WHERE ID IN (${idList})`)).recordset
-        .map((r) => [r.ID.toLowerCase(), r.TruthScore]));
+        // Fixture: the copied records' column emptied (their planted values are kept here and restored in teardown).
+        const picked = (await pool.request().query<{ ID: string; TruthScore: number | null }>(`SELECT TOP ${COPY_RECORDS} CONVERT(NVARCHAR(36), ID) AS ID, TruthScore FROM ${t(entityName)} ORDER BY ID`)).recordset;
+        for (const r of picked) truthScores.set(r.ID, r.TruthScore);
+        const ids = picked.map((r) => r.ID);
+        const idList = ids.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+        await pool.request().query(`UPDATE ${t(entityName)} SET TruthScore = NULL WHERE ID IN (${idList})`);
+        const column = async (): Promise<Map<string, number | null>> => new Map((await pool.request()
+          .query<{ ID: string; TruthScore: number | null }>(`SELECT CONVERT(NVARCHAR(36), ID) AS ID, TruthScore FROM ${t(entityName)} WHERE ID IN (${idList})`)).recordset
+          .map((r) => [r.ID.toLowerCase(), r.TruthScore]));
 
-      const day = new Date(`${today}T00:00:00.000Z`);
-      await scoreCompleted(binding, entityName, ids, day);
-      const copied = await column();
-      expect(ids.every((id) => typeof copied.get(id.toLowerCase()) === 'number')).toBe(true);
+        const day = new Date(`${today}T00:00:00.000Z`);
+        await scoreCompleted(binding, entityName, ids, day);
+        const copied = await column();
+        expect(ids.every((id) => typeof copied.get(id.toLowerCase()) === 'number')).toBe(true);
 
-      // Adversary (a person types a value into the bound column of record 0, by direct SQL).
-      const person = 0.123;
-      await pool.request().input('ID', sql.UniqueIdentifier, ids[0]).input('Value', sql.Float, person).query(`UPDATE ${t(entityName)} SET TruthScore = @Value WHERE ID = @ID`);
-      // A person's value on record 1 recorded by PR 1's writer under a Feature Pipeline's scope (a Record Process), on the
-      // binding's feature: the column still holds the binding's copy.
-      await FeatureValueCacheService.Instance.RecordHumanValue({
-        RecordProcessID: await anyRecordProcessId(), EntityID: entity.ID, RecordID: ids[1], FeatureName: binding.FeatureName,
-        Value: copied.get(ids[1].toLowerCase()), ContextUser: server.User, Provider: server.Provider,
+        // Adversary (a person types a value into the bound column of record 0, by direct SQL).
+        const person = 0.123;
+        await pool.request().input('ID', sql.UniqueIdentifier, ids[0]).input('Value', sql.Float, person).query(`UPDATE ${t(entityName)} SET TruthScore = @Value WHERE ID = @ID`);
+        // A person's value on record 1 recorded by PR 1's writer under a Feature Pipeline's scope (a Record Process), on the
+        // binding's feature: the column still holds the binding's copy.
+        await FeatureValueCacheService.Instance.RecordHumanValue({
+          RecordProcessID: await anyRecordProcessId(), EntityID: entity.ID, RecordID: ids[1], FeatureName: binding.FeatureName,
+          Value: copied.get(ids[1].toLowerCase()), ContextUser: server.User, Provider: server.Provider,
+        });
+
+        // The scoring run: record 0's value is the person's, so it is kept and recorded as a Human row of the binding.
+        await scoreCompleted(binding, entityName, ids, day);
+        const afterRun = await column();
+        expect(afterRun.get(ids[0].toLowerCase())).toBe(person);
+        const humanRows = await rows<{ RecordID: string; MLModelScoringBindingID: string | null }>('MJ: Feature Values',
+          `EntityID='${EscapeSQLString(entity.ID)}' AND FeatureName='${EscapeSQLString(binding.FeatureName)}' AND Source='Human'`, ['RecordID', 'MLModelScoringBindingID']);
+        expect(humanRows.some((r) => UUIDsEqual(r.RecordID, ids[0]) && UUIDsEqual(r.MLModelScoringBindingID, binding.ID))).toBe(true);
+
+        // The withdrawal: the person's value (record 0) and the copy a pipeline-scoped Human row claims (record 1) are kept;
+        // every other copy is cleared.
+        const withdrawn = await ScoringBindings.Withdraw(binding.ID, { ContextUser: server.User, Provider: server.Provider });
+        expect([withdrawn.Cleared, withdrawn.KeptHuman]).toEqual([ids.length - 2, 2]);
+        const afterWithdrawal = await column();
+        expect(ids.map((id) => afterWithdrawal.get(id.toLowerCase()))).toEqual([person, copied.get(ids[1].toLowerCase()), ...ids.slice(2).map(() => null)]);
       });
-
-      // The scoring run: record 0's value is the person's, so it is kept and recorded as a Human row of the binding.
-      await scoreCompleted(binding, entityName, ids, day);
-      const afterRun = await column();
-      expect(afterRun.get(ids[0].toLowerCase())).toBe(person);
-      const humanRows = await rows<{ RecordID: string; MLModelScoringBindingID: string | null }>('MJ: Feature Values',
-        `EntityID='${EscapeSQLString(entity.ID)}' AND FeatureName='${EscapeSQLString(binding.FeatureName)}' AND Source='Human'`, ['RecordID', 'MLModelScoringBindingID']);
-      expect(humanRows.some((r) => UUIDsEqual(r.RecordID, ids[0]) && UUIDsEqual(r.MLModelScoringBindingID, binding.ID))).toBe(true);
-
-      // The withdrawal: the person's value (record 0) and the copy a pipeline-scoped Human row claims (record 1) are kept;
-      // every other copy is cleared.
-      const withdrawn = await ScoringBindings.Withdraw(binding.ID, { ContextUser: server.User, Provider: server.Provider });
-      expect([withdrawn.Cleared, withdrawn.KeptHuman]).toEqual([ids.length - 2, 2]);
-      const afterWithdrawal = await column();
-      expect(ids.map((id) => afterWithdrawal.get(id.toLowerCase()))).toEqual([person, copied.get(ids[1].toLowerCase()), ...ids.slice(2).map(() => null)]);
+      expect(quiet.Unexpected).toEqual([]);
     }, CASE_TIMEOUT_MS);
   });
 

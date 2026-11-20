@@ -13,7 +13,7 @@ export class ConsoleCapture {
    * Runs `work` with `console[method]` silenced and returns its result with every line the channel received (an `Error`
    * argument contributes its message). The spy is restored even when `work` throws.
    */
-  public static async During<T>(method: 'log' | 'error', work: () => Promise<T>): Promise<{ Result: T; Lines: string[] }> {
+  public static async During<T>(method: 'log' | 'error' | 'warn', work: () => Promise<T>): Promise<{ Result: T; Lines: string[] }> {
     const lines: string[] = [];
     const spy = vi.spyOn(console, method).mockImplementation((...args) => {
       lines.push(args.map((a) => (a instanceof Error ? a.message : String(a))).join(' '));
