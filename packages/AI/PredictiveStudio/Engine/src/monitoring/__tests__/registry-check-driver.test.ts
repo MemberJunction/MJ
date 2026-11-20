@@ -86,10 +86,11 @@ class OrderRecordingDriver extends PredictiveStudioRegistryCheckJobDriver {
 }
 
 /** A job run of the registry check with `configuration` as its `Configuration`. */
-async function JobContext(configuration: string): Promise<ScheduledJobExecutionContext> {
+async function JobContext(configuration: string, ownerUserId: string | null = null): Promise<ScheduledJobExecutionContext> {
   const schedule = await store.Provider().GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', GateWorld.User);
   schedule.Name = 'registry check';
   schedule.Configuration = configuration;
+  schedule.OwnerUserID = ownerUserId;
   const run = await store.Provider().GetEntityObject<MJScheduledJobRunEntity>('MJ: Scheduled Job Runs', GateWorld.User);
   run.ID = JOB_RUN;
   return { Schedule: schedule, Run: run, ContextUser: GateWorld.User, Provider: store.Provider() };
@@ -224,6 +225,38 @@ describe('PredictiveStudioRegistryCheckJobDriver', () => {
     await Published();
     const findings = await Run();
     expect(findings.map((f) => f.Finding)).toEqual(['i']);
+  });
+
+  describe('the job\'s user and its notifications (D4-18, I1)', () => {
+    it('with no job owner, each model finding is notified to the owner of that model\'s monitoring job', async () => {
+      const published = await Published();
+      actions.Missing.add(published.ID);
+      const modelOwner = String(store.ScheduledJobs(published.ID)[0]?.['OwnerUserID']);
+      expect(modelOwner).toMatch(/^[0-9A-F-]{36}$/i);
+      await driver.Execute(await JobContext('{}'));
+      expect(notifier.Sent).toEqual(expect.arrayContaining([expect.objectContaining({ UserID: modelOwner, Title: expect.stringContaining('(d)') })]));
+    });
+
+    it('a finding with no model owner to notify is listed in the run\'s Details, never dropped silently', async () => {
+      store.Insert('MJ: ML Scoring Runs', { ID: 'A1000000-0000-4000-8000-000000000009', Status: 'running', StartedAt: new Date(now.getTime() - 7 * 3_600_000) });
+      const result = await driver.Execute(await JobContext('{}'));
+      expect(result.Details?.['Unnotified']).toEqual(expect.arrayContaining([expect.objectContaining({ Finding: 'e', SubjectID: 'A1000000-0000-4000-8000-000000000009' })]));
+    });
+
+    it('a job owner that cannot be resolved fails the run before any step (fails closed)', async () => {
+      const intruder = world.Model('Validated', 'model');
+      store.SetStatus(intruder.ID, 'Published');
+      const host = globalThis as typeof globalThis & { ___SINGLETON__UserCache?: object };
+      const previous = host.___SINGLETON__UserCache;
+      host.___SINGLETON__UserCache = undefined;
+      try {
+        const result = await driver.Execute(await JobContext('{}', '7A2B3C4D-0000-4000-8000-0000000000F9'));
+        expect(result).toMatchObject({ Success: false, ErrorMessage: expect.stringContaining('7A2B3C4D-0000-4000-8000-0000000000F9') });
+        expect(store.Status(intruder.ID)).toBe('Published');
+      } finally {
+        host.___SINGLETON__UserCache = previous;
+      }
+    });
   });
 
   describe('step (g): the pre-change model migration', () => {

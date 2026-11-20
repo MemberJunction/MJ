@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import type { MJScheduledJobEntity, MJScheduledJobRunEntity } from '@memberjunction/core-entities';
 import type { ScheduledJobExecutionContext } from '@memberjunction/scheduling-engine';
 import { EvaluationProtocol, type MonitoringChallengerResult, type MonitoringJobSpec } from '@memberjunction/predictive-studio-core';
@@ -25,8 +27,14 @@ async function Context(now: Date, spec: MonitoringJobSpec = SPEC): Promise<Sched
   schedule.OwnerUserID = OWNER;
   const run = await world.Provider.GetEntityObject<MJScheduledJobRunEntity>('MJ: Scheduled Job Runs', MonitoringWorld.User);
   run.ID = JOB_RUN;
-  return { Schedule: schedule, Run: run, ContextUser: MonitoringWorld.User, Provider: world.Provider };
+  return { Schedule: schedule, Run: run, ContextUser: MonitoringWorld.Scheduler, Provider: world.Provider };
 }
+
+/** The process-wide user cache `BaseScheduledJob.resolveScheduleOwnerUser` reads the job's owner from. */
+const userCacheHost = globalThis as typeof globalThis & { ___SINGLETON__UserCache?: { FindUser(criteria: { ID?: string }): Promise<UserInfo | undefined> } };
+let previousUserCache: typeof userCacheHost.___SINGLETON__UserCache;
+/** The users the cache knows (the job's owner unless a case removes it). */
+let cachedUsers: UserInfo[];
 
 /** `n` July-scored predictions of June decisions with realised outcomes: a well-calibrated period (`p`, rate `rate`). */
 function PeriodRows(day: Date, n: number, score: number, positives: number, prefix = 'r'): void {
@@ -41,9 +49,16 @@ function PeriodRows(day: Date, n: number, score: number, positives: number, pref
 const challengerOf = (): MonitoringChallengerResult | null => world.Store.Last().Challenger;
 
 beforeEach(() => {
+  previousUserCache = userCacheHost.___SINGLETON__UserCache;
+  cachedUsers = [MonitoringWorld.User, MonitoringWorld.Scheduler];
+  userCacheHost.___SINGLETON__UserCache = { FindUser: async (c) => cachedUsers.find((u) => UUIDsEqual(u.ID, c.ID)) };
   world = new MonitoringWorld();
   world.Store.Binding = MonitoringWorld.BINDING;
   driver = new PredictiveStudioModelMonitoringJobDriver(world.Seams());
+});
+
+afterEach(() => {
+  userCacheHost.___SINGLETON__UserCache = previousUserCache;
 });
 
 describe('PredictiveStudioModelMonitoringJobDriver.Execute', () => {
@@ -65,6 +80,33 @@ describe('PredictiveStudioModelMonitoringJobDriver.Execute', () => {
     expect(r.ErrorMessage).toContain(`does not hold the view authorization of scoring binding ${MonitoringWorld.BINDING.ID}`);
     expect(world.Store.Last()).toMatchObject({ State: 'failed', JoinedRows: 0, ScoredRows: 0 });
     expect(world.Store.ModelRowReads).toBe(0);
+  });
+
+  it('reads as the job\'s owner, not the scheduler\'s user: an owner without the binding\'s view gets a failed period naming the owner (D4-179)', async () => {
+    PeriodRows(JUNE, 200, 0.3, 60);
+    world.Store.ViewDenied.add(OWNER.toLowerCase());
+    const r = await driver.Execute(await Context(NOW));
+    expect(r.Success).toBe(false);
+    expect(r.ErrorMessage).toContain('the job owner owner@example.com does not hold the view authorization');
+    expect(world.Store.Last()).toMatchObject({ State: 'failed', JoinedRows: 0 });
+    expect(world.Store.ModelRowReads).toBe(0);
+  });
+
+  it('a job with no owner is refused, naming the missing owner, and monitors nothing', async () => {
+    PeriodRows(JUNE, 200, 0.3, 60);
+    const ctx = await Context(NOW);
+    ctx.Schedule.OwnerUserID = null;
+    const r = await driver.Execute(ctx);
+    expect(r).toMatchObject({ Success: false, ErrorMessage: expect.stringContaining('has no OwnerUserID') });
+    expect(world.Store.Rows).toHaveLength(0);
+  });
+
+  it('a job whose owner cannot be resolved is refused (fails closed) and monitors nothing', async () => {
+    PeriodRows(JUNE, 200, 0.3, 60);
+    cachedUsers = [MonitoringWorld.Scheduler];
+    const r = await driver.Execute(await Context(NOW));
+    expect(r).toMatchObject({ Success: false, ErrorMessage: expect.stringContaining(`owner user ${OWNER} not found`) });
+    expect(world.Store.Rows).toHaveLength(0);
   });
 
   it('a period whose label window is open is stored window-open with 0 joined rows', async () => {

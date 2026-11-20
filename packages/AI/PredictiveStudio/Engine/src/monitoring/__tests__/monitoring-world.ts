@@ -16,6 +16,7 @@ import type {
 
 import type { EvaluateOutcome, PublishOutcome, PublishRequest } from '../../registry/gate-context';
 import { GateTestProvider, GateTestStore } from '../../__tests__/fakes/gate-test-store';
+import type { RegistryContext } from '../../registry/registry-context';
 import type { ChallengerSelection } from '../../scoring/scoring-seams';
 import type {
   DriftInputValues,
@@ -47,6 +48,8 @@ export const CURRENT = 'C0000000-0000-4000-8000-0000000000A1';
 export const PREDECESSOR = 'C0000000-0000-4000-8000-0000000000A0';
 export const JOB_RUN = 'C0000000-0000-4000-8000-0000000000F1';
 export const OWNER = 'C0000000-0000-4000-8000-0000000000E1';
+/** The scheduler's polling user, who is not the job's owner. */
+export const SCHEDULER = 'C0000000-0000-4000-8000-0000000000E9';
 export const BINARY: TaskType = { kind: 'binary', classOrder: ['0', '1'], adverseIndex: 1 };
 
 /** Day `iso` at 00:00 UTC. */
@@ -102,10 +105,12 @@ export class WorldStore implements IMonitoringStore {
   }
   /** Whether the job's user holds the binding's view authorization (D4-157); true unless a case says otherwise. */
   public HoldsView = true;
+  /** Users (by ID) who do not hold the binding's view authorization even when {@link HoldsView} is true. */
+  public readonly ViewDenied = new Set<string>();
   /** How many times the binding's stored rows were read. */
   public ModelRowReads = 0;
-  public async HoldsBindingView(): Promise<boolean> {
-    return this.HoldsView;
+  public async HoldsBindingView(_bindingId: string, ctx: RegistryContext): Promise<boolean> {
+    return this.HoldsView && !this.ViewDenied.has(NormalizeUUID(ctx.ContextUser.ID));
   }
   public async ModelRows(modelId: string, _bindingId: string, role: 'Champion' | 'Challenger', period: MonitoringPeriod): Promise<ModelPrediction[]> {
     this.ModelRowReads++;
@@ -266,7 +271,9 @@ export class MonitoringWorld {
   /** A provider the in-memory seams never read (the registry's test provider over an empty store). */
   public readonly GateStore = new GateTestStore();
   public readonly Provider = new GateTestProvider(this.GateStore);
-  public static readonly User = new UserInfo(null, { ID: OWNER, Email: 'owner@example.com', Type: 'User', UserRoles: [] });
+  public static readonly User = new UserInfo(null, { ID: OWNER, Email: 'owner@example.com', Type: 'User', IsActive: true, UserRoles: [] });
+  /** The scheduler's polling user (MJServer polls as its system user); scheduled runs must not read as it. */
+  public static readonly Scheduler = new UserInfo(null, { ID: SCHEDULER, Email: 'system@example.com', Type: 'User', IsActive: true, UserRoles: [] });
 
   constructor() {
     this.Store.Models.set(NormalizeUUID(CURRENT), MonitoringWorld.model(CURRENT, 'Published'));

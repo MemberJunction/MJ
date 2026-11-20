@@ -19,7 +19,7 @@
  * | {@link WritePeriod} | the one `MJ: ML Monitoring Results` row of the period (a re-run updates it) |
  *
  * Monitoring writes no model status: every status change goes through the gate. Every read runs on the job's provider
- * as the job's user.
+ * as the job's owner (`OwnerUserID`, resolved by `resolveScheduleOwnerUser`; D4-179), never as the scheduler's user.
  */
 import { ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import type { MJScheduledJobEntity } from '@memberjunction/core-entities';
@@ -114,13 +114,16 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
 
   /**
    * The scheduled run: the job's spec from its `Configuration`, then the last complete period of the spec's grain and
-   * every earlier period stored `window-open`. A failed period is recorded on its row (`State = 'failed'`) and fails the
-   * run; the other periods still run.
+   * every earlier period stored `window-open`. Every read runs as the job's owner (D4-179, D4-157), never as the
+   * scheduler's polling user: a job with no `OwnerUserID`, or whose owner is missing or inactive, is refused before any
+   * read. A failed period is recorded on its row (`State = 'failed'`) and fails the run; the other periods still run.
    */
   public async Execute(context: ScheduledJobExecutionContext): Promise<ScheduledJobResult> {
     const spec = MonitoringResultSchemas.ParseJobSpec(context.Schedule.Configuration);
     if (spec.Ok === false) return { Success: false, ErrorMessage: `The monitoring job's Configuration is not a valid MonitoringJobSpec: ${spec.Errors.join('; ')}` };
-    const ctx = this.ContextFor(context.ContextUser, context.Provider, context.Run.ID);
+    const owner = await this.ownerOf(context);
+    if (typeof owner === 'string') return { Success: false, ErrorMessage: owner };
+    const ctx = this.ContextFor(owner, context.Provider, context.Run.ID);
     const now = ctx.Seams.Clock.Now();
     const last = MonitoringPeriods.LastComplete(now, spec.Value.performance.period);
     const reopened = (await ctx.Seams.Store.EarlierPeriods(spec.Value.modelId, last.Grain, last.Start, ctx))
@@ -175,6 +178,21 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
    */
   public ContextFor(user: MonitoringContext['ContextUser'], provider: MonitoringContext['Provider'], scheduledJobRunId: string | null): MonitoringContext {
     return { ContextUser: user, Provider: provider, ScheduledJobRunID: scheduledJobRunId, Seams: MonitoringSeamDefaults.Resolve(this.seams) };
+  }
+
+  /**
+   * The job's owner, resolved through `BaseScheduledJob.resolveScheduleOwnerUser` (fails closed for a missing or
+   * inactive owner); the refusal in words when the job has no owner or it cannot be resolved.
+   */
+  private async ownerOf(context: ScheduledJobExecutionContext): Promise<MonitoringContext['ContextUser'] | string> {
+    if (!context.Schedule.OwnerUserID) {
+      return `The monitoring job "${context.Schedule.Name}" has no OwnerUserID: monitoring reads as the job's owner (D4-179), never as the scheduler's user, so it did not run; give the job an owner who holds the binding's view authorization`;
+    }
+    try {
+      return await this.resolveScheduleOwnerUser(context.Schedule, context.ContextUser);
+    } catch (e) {
+      return `The monitoring job's owner could not be resolved, so it did not run: ${e instanceof Error ? e.message : String(e)}`;
+    }
   }
 
   // ----- one period ------------------------------------------------------------------------------------------------

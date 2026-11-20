@@ -3,9 +3,10 @@
  *
  * `PredictiveStudioRegistryCheckJobDriver` — the hourly registry check (§5.7 R6, R7; D4-19, D4-20). Every finding of
  * the model registry is remediated through the lifecycle gate (initiator `{ kind: 'scheduled-job', scheduledJobRunId }`)
- * and written, with the action taken, to the run's `Details` and a D4-18 notification to the job's owner. A finding the
- * job cannot remediate in one run (a lock that did not come free, a gate refusal) is recorded `retry` and found again
- * on the next run. One JSDoc'd protected step per finding:
+ * and written, with the action taken, to the run's `Details` and a D4-18 notification (to the job's owner; the seeded
+ * job has none, so to the owner of the finding's model's monitoring job, and a finding with neither is listed in the
+ * run's `Details` under `Unnotified`). A finding the job cannot remediate in one run (a lock that did not come free, a
+ * gate refusal) is recorded `retry` and found again on the next run. One JSDoc'd protected step per finding:
  *
  * | Step | Finding | Action |
  * |---|---|---|
@@ -39,6 +40,7 @@ import type { GateContext, PublishOutcome, PublishRequest, GateApplyResult } fro
 import { GateRefusals } from '../registry/gate-refusals';
 import { GateContexts } from '../registry/gate-seams';
 import { LifecycleGate } from '../registry/lifecycle-gate';
+import { MonitoringJobs } from '../registry/monitoring-job';
 import { PublishLocks } from '../registry/publish-locks';
 import { PublishRecords } from '../registry/publish-records';
 import type { RegistryContext } from '../registry/registry-context';
@@ -79,6 +81,13 @@ export interface RegistryFinding {
   readonly Action: string;
   /** `remediated`, `recorded` (nothing to act on), or `retry` (the action did not complete; found again next run). */
   readonly Outcome: 'remediated' | 'recorded' | 'retry';
+}
+
+/** A finding no one was notified of: the job has no owner and its subject is not a model with a monitoring job owner. */
+export interface UnnotifiedFinding {
+  readonly Finding: RegistryFinding['Finding'];
+  readonly SubjectID: string | null;
+  readonly Reason: string;
 }
 
 /** The registry check's per-model scoring Action seam: whether a model has an active Action, and its re-sync. */
@@ -147,23 +156,36 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
   }
 
   /**
-   * Every step, in the table's order, as the job's user on the job's provider: step (g) first, then (a)–(i). A step that
+   * Every step, in the table's order, on the job's provider, as the job's owner when it has one
+   * (`resolveScheduleOwnerUser`, which fails closed for a missing or inactive owner: the run then fails before any step)
+   * and otherwise as the scheduler's system user: the seeded registry job has no owner by design, because (a)–(i) must
+   * see every pipeline and no seeded user other than the system user can. Step (g) runs first, then (a)–(i). A step that
    * throws is recorded as one `retry` finding naming the error; the other steps still run. The run fails only when a
    * step threw. Step (g)'s record, when it ran, is the run's `Details` under {@link PreGateModelMigration.DetailsKey}
    * (later runs read the Record Processes it disabled back from there, D4-14).
    */
   public async Execute(context: ScheduledJobExecutionContext): Promise<ScheduledJobResult> {
     const config = PredictiveStudioRegistryCheckJobDriver.ReadConfiguration(context.Schedule.Configuration);
-    const ctx = GateContexts.ForRequest({ ContextUser: context.ContextUser, Provider: context.Provider });
+    let runAs: GateContext['ContextUser'];
+    try {
+      runAs = await this.resolveScheduleOwnerUser(context.Schedule, context.ContextUser);
+    } catch (e) {
+      return { Success: false, ErrorMessage: `The registry check's owner could not be resolved, so it did not run: ${e instanceof Error ? e.message : String(e)}` };
+    }
+    const ctx = GateContexts.ForRequest({ ContextUser: runAs, Provider: context.Provider });
     const initiator: Actor = { kind: 'scheduled-job', scheduledJobRunId: context.Run.ID };
     const migration = await this.MigratePreChangeModels(config, context.Run.ID, ctx);
     const findings = [...migration.Findings, ...(await this.RunChecks(config, initiator, ctx))];
-    await this.notify(context.Schedule.OwnerUserID, findings, ctx);
+    const unnotified = await this.notify(context.Schedule.OwnerUserID, findings, ctx);
     const failed = findings.filter((f) => f.Outcome === 'retry' && f.Action.startsWith('the step failed'));
     return {
       Success: failed.length === 0,
       ErrorMessage: failed.length === 0 ? undefined : failed.map((f) => f.Detail).join('; '),
-      Details: migration.Details === null ? { Findings: findings } : { Findings: findings, [PreGateModelMigration.DetailsKey]: migration.Details },
+      Details: {
+        Findings: findings,
+        ...(unnotified.length > 0 ? { Unnotified: unnotified } : {}),
+        ...(migration.Details === null ? {} : { [PreGateModelMigration.DetailsKey]: migration.Details }),
+      },
     };
   }
 
@@ -499,12 +521,32 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
     return r.Success && !!r.Results[0]?.EvaluationProtocolID;
   }
 
-  /** One notification per finding to the job's owner (D4-18); none without an owner. */
-  private async notify(ownerUserId: string | null, findings: readonly RegistryFinding[], ctx: RegistryContext): Promise<void> {
-    if (!ownerUserId) return;
+  /**
+   * One notification per finding (D4-18): to the job's owner when the job has one; otherwise (the seeded job has none)
+   * to the owner of the finding's model's monitoring job ({@link MonitoringJobs.OwnerOf}), the user its publish
+   * ran as. Returns the findings no one could be notified of (no job owner and no model owner), which the run's
+   * `Details` lists under `Unnotified`.
+   */
+  private async notify(ownerUserId: string | null, findings: readonly RegistryFinding[], ctx: RegistryContext): Promise<UnnotifiedFinding[]> {
+    const unnotified: UnnotifiedFinding[] = [];
+    const owners = new Map<string, string | null>();
     for (const f of findings) {
-      await this.resolved.Notifier.Notify(ownerUserId, `Predictive Studio registry check (${f.Finding}): ${f.Outcome}`, `${f.Detail}. Action: ${f.Action}.`, f.SubjectID || '', ctx);
+      const recipient = ownerUserId || (await this.modelOwner(f.SubjectID, owners, ctx));
+      if (!recipient) {
+        unnotified.push({ Finding: f.Finding, SubjectID: f.SubjectID, Reason: 'the registry job has no owner and the subject is not a model with a monitoring job owner' });
+        continue;
+      }
+      await this.resolved.Notifier.Notify(recipient, `Predictive Studio registry check (${f.Finding}): ${f.Outcome}`, `${f.Detail}. Action: ${f.Action}.`, f.SubjectID || '', ctx);
     }
+    return unnotified;
+  }
+
+  /** The owner of `subjectId`'s monitoring job when the subject is a model that has one (memoised per run); else null. */
+  private async modelOwner(subjectId: string | null, owners: Map<string, string | null>, ctx: RegistryContext): Promise<string | null> {
+    if (!subjectId) return null;
+    const key = subjectId.toLowerCase();
+    if (!owners.has(key)) owners.set(key, await MonitoringJobs.OwnerOf(subjectId, ctx));
+    return owners.get(key) || null;
   }
 
   private static isNoSignOff(refusal: MJMLModelPublishRecordEntity['RefusalObject']): boolean {
