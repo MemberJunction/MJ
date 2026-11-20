@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
-import { AuthorizationInfo, EntityInfo, RunView, type IMetadataProvider, type RemoteOpResult, type RunViewParams, type UserInfo } from '@memberjunction/core';
+import { AuthorizationInfo, BaseEntityResult, EntityInfo, RunView, type IMetadataProvider, type RemoteOpResult, type RunViewParams, type UserInfo } from '@memberjunction/core';
 import { ValidationErrorInfo } from '@memberjunction/global';
 import {
   PredictiveStudioWithdrawScoringBindingOperation,
   type MJMLModelEntity,
-  type MJMLModelScoringBindingEntity,
+  MJMLModelScoringBindingEntity,
   type PredictiveStudioWithdrawScoringBindingInput,
   type PredictiveStudioWithdrawScoringBindingOutput,
 } from '@memberjunction/core-entities';
@@ -30,25 +30,26 @@ try {
 /** The model members the editor reads. */
 type ModelDouble = Pick<MJMLModelEntity, 'ID' | 'PipelineID' | 'Pipeline' | 'ProblemType' | 'Version'>;
 
-/** The binding fields the editor writes, plus the members of the entity layer it calls. */
-class BindingDouble {
-  public ID = '';
-  public MLTrainingPipelineID = '';
-  public FeatureName = '';
-  public TargetEntityID: string | null = null;
-  public TargetColumn: string | null = null;
-  public TargetColumnSource: string | null = null;
-  public ViewAuthorizationID: string | null = null;
-  public RetentionDays: number | null = null;
-  public Status: MJMLModelScoringBindingEntity['Status'] = 'Active';
-  public LatestResult: { Success: boolean; Errors: ValidationErrorInfo[]; CompleteMessage: string } | null = null;
+/** The binding fields the double's in-memory entity holds. */
+const BINDING_FIELDS = ['ID', 'MLTrainingPipelineID', 'FeatureName', 'TargetEntityID', 'TargetEntity', 'TargetColumn', 'TargetColumnSource', 'ViewAuthorizationID', 'ViewAuthorization', 'RetentionDays', 'Status'];
 
+/**
+ * A scoring binding double: the generated entity over an in-memory `EntityInfo`, with the entity-layer members the
+ * editor calls (NewRecord, Save, Revert) answered by the test's world (no provider is reached).
+ */
+class BindingDouble extends MJMLModelScoringBindingEntity {
   /** The stored values {@link Revert} restores; set by {@link MarkStored} and by a successful save. */
   private stored: ReturnType<BindingDouble['fields']> | null = null;
 
-  constructor(private readonly world: World) {}
+  constructor(private readonly world: World) {
+    super(new EntityInfo({
+      ID: 'E-BINDINGS', Name: 'MJ: ML Model Scoring Bindings',
+      EntityFields: BINDING_FIELDS.map((f, i) => ({ Name: f, Sequence: i + 1, Type: f === 'RetentionDays' ? 'int' : 'nvarchar', IsPrimaryKey: f === 'ID', AllowUpdateAPI: f !== 'ID' })),
+    }));
+    this.Status = 'Active';
+  }
 
-  public NewRecord(): boolean {
+  public override NewRecord(): boolean {
     return true;
   }
 
@@ -59,16 +60,18 @@ class BindingDouble {
   }
 
   /** Puts back the stored values, as `BaseEntity.Revert` does. */
-  public Revert(): boolean {
+  public override Revert(): boolean {
     if (this.stored) Object.assign(this, this.stored);
     return true;
   }
 
-  public async Save(): Promise<boolean> {
+  public override async Save(): Promise<boolean> {
     if (this.world.HoldSave) await this.world.HoldSave;
     const refusal = this.world.SaveRefusal;
     if (refusal) {
-      this.LatestResult = { Success: false, Errors: [new ValidationErrorInfo(refusal.Source, refusal.Message, null)], CompleteMessage: refusal.Message };
+      const result = new BaseEntityResult(false, refusal.Message, 'update');
+      result.Errors = [new ValidationErrorInfo(refusal.Source, refusal.Message, null)];
+      this.RegisterResultHistoryEntry(result);
       return false;
     }
     this.ID = this.ID || `B-${this.world.Saved.length + 1}`;
@@ -133,8 +136,8 @@ async function RenderEditor(o: RenderOptions = {}): Promise<{ f: ComponentFixtur
       return fakeRunViews(params, user);
     },
     Authorizations: [otherAuthorization, viewModelPredictions],
-    // the editor creates its entity through the provider; the double carries only the members the editor calls
-    GetEntityObject: async () => new BindingDouble(world) as unknown as MJMLModelScoringBindingEntity,
+    // the editor creates its entity through the provider: a typed mock of the generic GetEntityObject
+    GetEntityObject: vi.fn<IMetadataProvider['GetEntityObject']>().mockImplementation(async () => new BindingDouble(world)),
   });
   vi.spyOn(MJNotificationService.prototype, 'CreateSimpleNotification').mockImplementation(() => undefined);
   // Inputs are set untyped (setInput), so the double carrying only the members the editor reads is passed as is.
