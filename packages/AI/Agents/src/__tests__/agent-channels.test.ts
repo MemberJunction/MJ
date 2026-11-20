@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
 import {
-    MJAIBridgeAgentIdentityEntity,
     MJAgentChannelEntity,
     MJAgentChannelParticipantEntity,
     MJUserRoutineEntity,
@@ -9,10 +8,6 @@ import {
 import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { AgentWakeTriggerService } from '../AgentWakeTriggerService';
-import {
-    InboundMailboxFetcher,
-    InboundUtilityMailboxIngestionService,
-} from '../InboundUtilityMailboxIngestionService';
 
 function makeUser(id: string, email: string, type: 'User' | 'Owner' = 'User'): UserInfo {
     return {
@@ -25,7 +20,7 @@ function makeUser(id: string, email: string, type: 'User' | 'Owner' = 'User'): U
     } as unknown as UserInfo;
 }
 
-describe('AgentWakeTriggerService.TriggerWakeOnAgentChannelMessage & InboundUtilityMailboxIngestionService', () => {
+describe('AgentWakeTriggerService.TriggerWakeOnAgentChannelMessage', () => {
     const alice = makeUser('user-alice', 'alice@example.com');
     const bob = makeUser('user-bob', 'bob@example.com');
     const mallory = makeUser('user-mallory', 'mallory@example.com');
@@ -33,7 +28,6 @@ describe('AgentWakeTriggerService.TriggerWakeOnAgentChannelMessage & InboundUtil
 
     beforeEach(() => {
         vi.restoreAllMocks();
-        InboundUtilityMailboxIngestionService.Instance.ResetState();
         vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(systemUser);
     });
 
@@ -217,64 +211,5 @@ describe('AgentWakeTriggerService.TriggerWakeOnAgentChannelMessage & InboundUtil
         expect(channel.ConsecutiveAgentTurns).toBe(0);
         expect(channel.LastHumanMessageAt).toEqual(now);
         expect(outcome.results[0].triggered).toBe(true);
-    });
-
-    it('InboundUtilityMailboxIngestionService deduplicates messageIDs and sweeps active Email bridge identities', async () => {
-        const identity = {
-            ID: 'id-mail-1',
-            AgentID: 'agent-cos',
-            IdentityType: 'Email',
-            IdentityValue: 'cos@example.com',
-            IsActive: true,
-        } as unknown as MJAIBridgeAgentIdentityEntity;
-
-        const md = {} as IMetadataProvider;
-        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
-            RunView: vi.fn().mockResolvedValue({ Success: true, Results: [identity] }),
-        } as unknown as RunView);
-
-        const routeSpy = vi
-            .spyOn(AgentWakeTriggerService.Instance, 'RouteInboundUtilityMailboxWake')
-            .mockResolvedValue({
-                triggered: true,
-                resultCode: 'WAKE_SCHEDULED',
-                reason: 'ok',
-                routineID: 'r-1',
-                targetUserID: alice.ID,
-                targetAgentID: 'agent-cos',
-                workstreamKey: 'inbound-utility-mailbox',
-                nextRunAtISO: new Date().toISOString(),
-            });
-
-        const fetcher: InboundMailboxFetcher = {
-            FetchMessages: vi.fn().mockResolvedValue([
-                {
-                    messageID: 'msg-100',
-                    toAddress: 'cos@example.com',
-                    fromAddress: 'alice@example.com',
-                    subject: 'Follow up with finance',
-                    bodyPreview: 'Please check Q3 forecast.',
-                },
-                {
-                    messageID: 'msg-100',
-                    toAddress: 'cos@example.com',
-                    fromAddress: 'alice@example.com',
-                    subject: 'Follow up with finance',
-                    bodyPreview: 'Duplicate delivery.',
-                },
-            ]),
-        };
-
-        const sweep = await InboundUtilityMailboxIngestionService.Instance.PollActiveUtilityMailboxes(
-            systemUser,
-            md,
-            fetcher
-        );
-
-        expect(sweep.identitiesScanned).toBe(1);
-        expect(sweep.messagesSeen).toBe(2);
-        expect(sweep.wakesScheduled).toBe(1);
-        expect(sweep.duplicatesSkipped).toBe(1);
-        expect(routeSpy).toHaveBeenCalledTimes(1);
     });
 });

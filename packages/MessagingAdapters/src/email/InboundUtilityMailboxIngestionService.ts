@@ -6,7 +6,7 @@ import {
     AgentWakeTriggerResult,
     AgentWakeTriggerService,
     InboundUtilityMailboxEmailInput,
-} from './AgentWakeTriggerService';
+} from '@memberjunction/ai-agents';
 
 /**
  * Normalized inbound email message produced by a mail provider webhook or poller
@@ -47,14 +47,18 @@ export interface InboundMailboxIngestionResult {
 }
 
 /**
- * Ingestion coordinator that connects active `MJ: AI Bridge Agent Identities` utility email
- * mailboxes (`IdentityType = 'Email'`, `IsActive = 1`) to
- * {@link AgentWakeTriggerService.RouteInboundUtilityMailboxWake}.
+ * Inbound email channel ingestion coordinator connecting active
+ * `MJ: AI Bridge Agent Identities` utility email mailboxes (`IdentityType = 'Email'`, `IsActive = 1`)
+ * to {@link AgentWakeTriggerService.RouteInboundUtilityMailboxWake}.
+ *
+ * Lives in `@memberjunction/messaging-adapters` alongside the Slack and Teams messaging
+ * adapters so `@memberjunction/ai-agents` remains transport-agnostic.
  *
  * Supports both:
- * - **Push / Webhook delivery** ({@link HandleWebhookMessage}): called directly by Microsoft Graph
- *   change-notification or Gmail push handlers.
- * - **1-minute poll fallback** ({@link PollActiveUtilityMailboxes}): sweeps every active Email
+ * - **Push / Webhook delivery** ({@link HandleWebhookMessage}): invoked by
+ *   {@link EmailUtilityMailboxExtension} or provider webhook handlers (Microsoft Graph
+ *   change notifications, Gmail push).
+ * - **Poll fallback** ({@link PollActiveUtilityMailboxes}): sweeps every active Email
  *   bridge identity via a registered {@link InboundMailboxFetcher}, deduplicates by `messageID`,
  *   and wakes the verified internal sender's agent.
  */
@@ -75,6 +79,11 @@ export class InboundUtilityMailboxIngestionService extends BaseSingleton<Inbound
     /** Registers the provider-specific mailbox fetcher used by the poll fallback. */
     public RegisterFetcher(fetcher: InboundMailboxFetcher): void {
         this.fetcher = fetcher;
+    }
+
+    /** Returns true when a mailbox fetcher has been registered for poll sweeps. */
+    public get HasRegisteredFetcher(): boolean {
+        return this.fetcher !== null;
     }
 
     /** Clears in-memory deduplication & watermark state (primarily for tests). */

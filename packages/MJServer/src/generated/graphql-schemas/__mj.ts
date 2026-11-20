@@ -24712,6 +24712,10 @@ export class MJAgentChannelParticipant_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
+    @MaxLength(255)
+    AgentChannel?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(100)
     User?: string;
         

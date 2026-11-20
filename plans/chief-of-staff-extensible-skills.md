@@ -67,7 +67,7 @@ The principle running through all of it: **a Chief of Staff is not a database ex
 
 ## Workstream 1 — MJ Core Chief of Staff
 
-Core removes ad-hoc SQL and generic CRUD from the Chief of Staff, adds typed actions (including deterministic briefing assembly), preserves narrowed per-user policies across typed actions and sub-agents, enforces recurring-routine governance in code, wires inbound email, hardens cross-user/event wakes, and enables PostgreSQL RLS platform variants. All work ships in `MemberJunction/MJ` (`@memberjunction/ai-core-plus`, `@memberjunction/actions`, `@memberjunction/core-actions`, `@memberjunction/ai-agents`, `@memberjunction/core`, `@memberjunction/ng-dashboards`, metadata, and migrations).
+Core removes ad-hoc SQL and generic CRUD from the Chief of Staff, adds typed actions (including deterministic briefing assembly), preserves narrowed per-user policies across typed actions and sub-agents, enforces recurring-routine governance in code, wires inbound email ingestion via `@memberjunction/messaging-adapters`, hardens cross-user/event wakes, and enables PostgreSQL RLS platform variants. All work ships in `MemberJunction/MJ` (`@memberjunction/ai-core-plus`, `@memberjunction/actions`, `@memberjunction/core-actions`, `@memberjunction/ai-agents`, `@memberjunction/messaging-adapters`, `@memberjunction/core`, `@memberjunction/ng-dashboards`, metadata, and migrations).
 
 ### 1.1 Typed Actions for Core Agent Data & Briefing Assembly
 
@@ -426,7 +426,7 @@ flowchart LR
 
 ### Design & Pragmatic Provider Sequencing
 
-1. **`TranscriptSourceBase` plugin contract (in MJ core or shared package, registered via `ClassFactory`):**
+1. **`TranscriptSourceBase` plugin contract (in `@mj-biz-apps/tasks-core`, registered via `ClassFactory` alongside `VideoProviderBase`):**
    - `FindTranscript(meetingContext)` and `FetchTranscript(ref)` — decoupled from `VideoProviderBase` because organizations frequently record with a tool different from the conferencing platform.
    - Store fetched transcripts as `Meeting.TranscriptFileID` (already wired in `bizapps-tasks` schema and UI!), inheriting the meeting's `Visibility` / 1:1 attendee RLS.
 2. **Phased provider rollout (accounting for real-world API/licensing constraints):**
@@ -575,8 +575,8 @@ flowchart TD
 
 | Repo | Phases | Primary Deliverables |
 | --- | --- | --- |
-| `MemberJunction/MJ` | 0, 1, 3 | Core typed actions + `Assemble My Briefing`, prompt + `realtime.directActions` update, lifted `AgentDataPolicyGuard`, `check:standards` rules, `Rhythm Templates`, `Suggestions`, recurring wake code gate, sub-agent policy ceiling, PG `GetPlatformFilterText`, inbound email (`UserCache` fix + ingestion), Governance monitoring, `TranscriptSourceBase`, `Agent Channels` (6.3) |
-| `MemberJunction/bizapps-tasks` | 0, 1, 2, 3 | Merge `#202`/`#196`/`#151`/`#165` + UX redesign alignment, typed task & work-report actions (incl. `Get/List Work Reports`), Tasks Entity Document, Tasks RLS (SQL + PG), rhythms & event wakes, `Agent Task` hooks, `Meetings` skill + transcript plugins (Zoom / file / 3P → Teams / Meet) |
+| `MemberJunction/MJ` | 0, 1, 3 | Core typed actions + `Assemble My Briefing`, prompt + `realtime.directActions` update, lifted `TypedActionPolicyGuard`, `check:standards` rules, `Rhythm Templates`, `Suggestions`, recurring wake code gate, sub-agent policy ceiling, PG `GetPlatformFilterText`, inbound email (`UserCache` fix + `@memberjunction/messaging-adapters` ingestion extension), Governance monitoring, `Agent Channels` (6.3) |
+| `MemberJunction/bizapps-tasks` | 0, 1, 2, 3 | Merge `#202`/`#196`/`#151`/`#165` + UX redesign alignment, typed task & work-report actions (incl. `Get/List Work Reports`), Tasks Entity Document, Tasks RLS (SQL + PG), rhythms & event wakes, `Agent Task` hooks, `Meetings` skill + `TranscriptSourceBase` contract (`@mj-biz-apps/tasks-core`) & transcript plugins (Zoom / file / 3P → Teams / Meet) |
 | `MemberJunction/bizapps-planning` | 2 | Bump `mj-bizapps-tasks >=1.15.0`, backfill `MJ: Action Params` + `AuthorizesCaller` + UI permissions on 19 existing actions, 10 new typed read/write/briefing/drift actions, 3 skills + `Align Strategic Planning Coach` via `AISkillSubAgent`, rhythms & alert wakes |
 
 ---

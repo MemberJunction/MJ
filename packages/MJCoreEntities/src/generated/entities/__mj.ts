@@ -32566,6 +32566,15 @@ export class MJAgentChannelParticipantEntity extends BaseEntity<MJAgentChannelPa
     }
 
     /**
+    * * Field Name: AgentChannel
+    * * Display Name: Agent Channel
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AgentChannel(): string | null {
+        return this.Get('AgentChannel');
+    }
+
+    /**
     * * Field Name: User
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)

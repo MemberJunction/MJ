@@ -33,7 +33,7 @@ import { RunUserRoutineNowAction } from '@memberjunction/scheduling-engine';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, UUIDsEqual } from '@memberjunction/global';
 import {
     Assert,
     AssertEqual,
@@ -330,11 +330,12 @@ export const ChiefOfStaffChecks: NamedCheck[] = [
                 'delete record',
                 'get record',
             ]);
+            const actionsById = IndexByUUID(ActionEngineServer.Instance.Actions, (a) => a.ID);
             const agentActions = AIEngine.Instance.AgentActions.filter((aa) =>
                 UUIDsEqual(aa.AgentID, fx().AgentID) && aa.Status === 'Active'
             );
             const bannedFound = agentActions
-                .map((aa) => ActionEngineServer.Instance.Actions.find((a) => UUIDsEqual(a.ID, aa.ActionID))?.Name ?? '')
+                .map((aa) => actionsById.Get(aa.ActionID)?.Name ?? '')
                 .filter((name) => banned.has(name.trim().toLowerCase()));
             AssertEqual(bannedFound.length, 0, `Chief of Staff must not hold raw SQL or generic CRUD actions, found: ${bannedFound.join(', ')}`);
 

@@ -1,6 +1,6 @@
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { ActionEngineServer, BaseAction } from '@memberjunction/actions';
-import { EscapeSQLString, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     MJAIAgentRequestEntity,
@@ -160,12 +160,13 @@ export class GetMyAgentContextAction extends BaseAction {
             const policy: MJAIAgentUserPolicyEntity | null =
                 policyLookup.status === 'found' ? policyLookup.policy : null;
 
+            const skillsById = IndexByUUID(AIEngine.Instance.Skills, (s) => s.ID);
             const agentSkillLinks = AIEngine.Instance.AgentSkills.filter((link) =>
                 UUIDsEqual(link.AgentID, agent.ID) && link.Status === 'Active'
             );
             const grantedSkills = agentSkillLinks
                 .map((link) => {
-                    const skill = AIEngine.Instance.Skills.find((s) => UUIDsEqual(s.ID, link.SkillID));
+                    const skill = skillsById.Get(link.SkillID);
                     if (!skill || skill.Status !== 'Active') {
                         return null;
                     }

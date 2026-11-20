@@ -1,17 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { UserInfo } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
 import { MJAIAgentUserPolicyEntity } from '@memberjunction/core-entities';
 import { AgentUserPolicyEngine } from '../AgentUserPolicyEngine';
 import { TypedActionPolicyGuard } from '../TypedActionPolicyGuard';
-import {
-    FetchedTranscript,
-    ResolveTranscriptSource,
-    TranscriptMeetingContext,
-    TranscriptReference,
-    TranscriptSourceBase,
-    TranscriptSourceContext,
-} from '../transcript-source';
 
 function makePolicy(overrides: Partial<MJAIAgentUserPolicyEntity> = {}): MJAIAgentUserPolicyEntity {
     return {
@@ -50,29 +41,6 @@ const alice = {
     Type: 'User',
     UserRoles: [],
 } as unknown as UserInfo;
-
-@RegisterClass(TranscriptSourceBase, 'UnitTestMockTranscriptSource')
-class MockTranscriptSource extends TranscriptSourceBase {
-    private configured = false;
-    public async Initialize(_ctx: TranscriptSourceContext, _user: UserInfo): Promise<void> {
-        this.configured = true;
-    }
-    public get IsConfigured(): boolean {
-        return this.configured;
-    }
-    public async FindTranscript(meeting: TranscriptMeetingContext): Promise<TranscriptReference | null> {
-        return meeting.ProviderMeetingID
-            ? { SourceKey: 'UnitTestMockTranscriptSource', ExternalTranscriptID: meeting.ProviderMeetingID }
-            : null;
-    }
-    public async FetchTranscript(reference: TranscriptReference): Promise<FetchedTranscript> {
-        return {
-            Reference: reference,
-            PlainText: 'Alice: Let us ship the release Friday.',
-            Speakers: ['Alice'],
-        };
-    }
-}
 
 describe('TypedActionPolicyGuard & Sub-Agent Policy Ceiling', () => {
     const engine = AgentUserPolicyEngine.Instance;
@@ -201,28 +169,5 @@ describe('TypedActionPolicyGuard & Sub-Agent Policy Ceiling', () => {
             outcome.DeniedFieldPatterns
         );
         expect(masked[0]).toEqual({ ID: 't1', Name: 'Launch' });
-    });
-
-    it('resolves registered TranscriptSourceBase plugins via ClassFactory', async () => {
-        // Ensure reference to MockTranscriptSource so decorator runs
-        expect(MockTranscriptSource).toBeDefined();
-        const src = ResolveTranscriptSource('UnitTestMockTranscriptSource');
-        expect(src).not.toBeNull();
-        await src!.Initialize({}, alice);
-        expect(src!.IsConfigured).toBe(true);
-
-        const ref = await src!.FindTranscript(
-            {
-                Title: 'Weekly Sync',
-                StartsAt: new Date(),
-                EndsAt: new Date(),
-                ProviderMeetingID: 'zoom-123',
-            },
-            alice
-        );
-        expect(ref?.ExternalTranscriptID).toBe('zoom-123');
-
-        const fetched = await src!.FetchTranscript(ref!, alice);
-        expect(fetched.PlainText).toContain('ship the release Friday');
     });
 });

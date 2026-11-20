@@ -10251,6 +10251,10 @@ export const MJAgentChannelParticipantSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    AgentChannel: z.string().nullable().describe(`
+        * * Field Name: AgentChannel
+        * * Display Name: Agent Channel
+        * * SQL Data Type: nvarchar(255)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User

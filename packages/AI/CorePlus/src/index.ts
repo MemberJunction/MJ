@@ -73,6 +73,5 @@ export * from './attachment-blob-store';
 export * from './realtime-recording-shard-format';
 export * from './AgentUserPolicyEngine';
 export * from './TypedActionPolicyGuard';
-export * from './transcript-source';
 
 
