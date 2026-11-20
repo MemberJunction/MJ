@@ -171,7 +171,7 @@ export interface ContentSourceGraphOverlayConfig {
     GraphID?: string | null;
     /** Target graph's `GraphType` name, used to select sensible defaults (`'Canon'` vs `'Knowledge'`). */
     TargetGraphType?: SemanticGraphType;
-    /** Explicit override or resolved `GraphType.IsCanon` flag indicating whether the target graph feeds institutional Canon. */
+    /** Explicit flag indicating whether the target graph feeds institutional Canon. Defaults to `true` only when `TargetGraphType` is `'Canon'`; the target graph's `MJ: Graph Types.IsCanon` is not read. */
     IsCanon?: boolean;
     /** How new concepts are handled. Defaults to `'propose-only'` when `IsCanon` is true and `'auto-grow'` otherwise. */
     ConceptTaxonomyMode?: ConceptTaxonomyMode;
@@ -183,7 +183,7 @@ export interface ContentSourceGraphOverlayConfig {
     ConceptMatchThreshold?: number;
     /** Maximum new `GraphConcept`s that may be proposed/created in a single pipeline run. `null` = unlimited. */
     MaxNewConceptsPerRun?: number | null;
-    /** Registration key of the `BaseConceptSynthesizer` implementation to use. Defaults to `'ManagedPrompt'`. */
+    /** Registration key of the `BaseConceptSynthesizer` implementation to use. Defaults to `'Deterministic'`. */
     SynthesizerKey?: string;
 }
 

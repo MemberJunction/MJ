@@ -32,7 +32,10 @@ time, never hand-written.
 
 Consumers, the operator and the sweeper each own an **independent executor** (`CreateIndependentInstance()`),
 never the shared provider's ambient transaction, so a claim can never be rolled back by an unrelated caller. The
-sweep lock is a transaction-scoped application lock: one sweeper pass at a time across every instance.
+sweep lock is a transaction-scoped application lock: one sweeper pass at a time across every instance. Every host
+(MJAPI and `mj queue work`) mints a provider **per delivery** through its `WorkQueueProviderSource` and releases it
+when the handler settles, so `this.Provider` inside a handler is never shared with a concurrent handler
+(`IndependentProviderSource`; `SharedProviderSource` is for tests and single-handler hosts).
 
 Identifiers that come back from SQL Server are normalised to lower case before they reach any comparison
 (`guides/UUID_COMPARISON_GUIDE.md`).
@@ -82,7 +85,13 @@ workQueue: {
 | `sweeperEnabled` / `sweeperIntervalMs` | `true` / 60000 | Lease expiry and retention purge. Any number of instances may enable it: a database application lock lets one pass run at a time |
 | `reconcileIntervalMs` | 30000 | How often the host re-plans. `0` plans only at start |
 
-`MJ_DISABLE_WORK_QUEUE_HOST=1` turns the host off for one process without touching configuration.
+`MJ_DISABLE_WORK_QUEUE_HOST=1` turns the host off for one process without touching configuration. It also turns the
+sweeper off, so use it only where another instance sweeps.
+
+**Publish-only MJAPI with a separate worker.** When the subscriptions run elsewhere (`mj queue work`, a container
+job), keep `enabled: true`, set `subscriptions: []` and leave `sweeperEnabled: true`: the host starts with no
+consumers and still runs lease expiry and the retention and deduplication purges, which nothing else does when the
+worker is down. Where no MJAPI host runs at all, schedule `mj queue sweep`.
 
 Any number of instances may run the same subscription: claims are atomic against the database (or the cloud queue),
 leases are fenced, and each instance only decides what **it** runs.
@@ -153,7 +162,7 @@ imported by the application. A key that resolves to nothing plans as `HandlerNot
 | Check bindings | `mj queue validate-bindings [--transport t]` | `WorkQueue.ValidateBindings` |
 | Run work in a container job | `mj queue work --subscription s --once` | — |
 | Run work until stopped | `mj queue work --subscription s [--concurrency n] [--sweeper-interval-ms ms] [--reconcile-interval-ms ms]` | — |
-| One sweeper pass (cron) | `mj queue sweep` | — |
+| One sweeper pass from a cron (exit 1 when the pass or a step fails; a held lock exits 0) | `mj queue sweep [--json]` | — |
 
 **Who may call the operations.** Every caller needs entity permissions: **Read** on `MJ: Work Queue Deliveries` for
 the read operations (stats, dead letters, partitions, backlog, validate-bindings) and **Update** on
@@ -186,22 +195,18 @@ mj queue work --subscription venue-import --once --max 5 --concurrency 2 --max-d
 after that long and drains; keep it below the scheduler's job deadline. `SIGTERM` and `SIGINT` drain the host in both
 `--once` and long-running modes.
 
-**Concurrency.** With `--concurrency` above 1, each delivery gets its own connection-scoped provider
-(`IndependentProviderSource`, as MJAPI does), released when the delivery settles, so parallel handlers never share
-transaction state. At 1, one provider is shared.
+**Concurrency.** Each delivery gets its own connection-scoped provider (`IndependentProviderSource`, as MJAPI does),
+released when the delivery settles, so parallel handlers never share transaction state. `--concurrency` above 1 is
+safe in both modes.
 
-**Long-running mode.** Without `--once`, the worker re-plans its subscriptions every `--reconcile-interval-ms`
-(default 30000, MJAPI's default) and runs the sweeper — lease expiry, retention and dedup purge — every
-`--sweeper-interval-ms` (default 300000). `0` turns either off. `--once` runs neither.
+**Long-running mode.** By default a `--once` job neither sweeps nor re-plans. Without `--once` the worker may be the
+only host against the database, so it runs the sweeper (lease expiry, retention and dedup purge) every 60 s and
+re-plans its subscriptions every 30 s, the same defaults as MJAPI. `--sweeper-interval-ms` and
+`--reconcile-interval-ms` override either in both modes, and `0` disables.
 
 **When no host sweeps.** Retention and dedup purge only happen in a sweeper pass. If every MJAPI instance is
-publish-only and workers run `--once`, schedule `mj queue sweep` (one pass, prints the per-step counts), or enable
-the sweeper on a publish-only MJAPI:
-
-```javascript
-// mj.config.cjs — an MJAPI that publishes and sweeps but runs no handlers
-workQueue: { enabled: true, subscriptions: [], sweeperEnabled: true },
-```
+publish-only and workers run `--once`, schedule `mj queue sweep` (one pass, prints the per-step counts), or leave the
+sweeper on in a publish-only MJAPI (see "Publish-only MJAPI with a separate worker" above).
 
 **Exit codes.** `0` when the host ran — including "the queue was empty", a spent budget, `--max-duration-ms`, a
 signal, or a subscription an operator paused — so a scheduler never records a failure for idleness. **Non-zero** when
@@ -305,7 +310,9 @@ must fit inside the platform's termination grace period.
 2. If the handler is alive and hung, cancel it: `mj queue discard --subscription <s> --delivery <id> --reason "<why>"`.
    Expect `cancelRequested: true`; the row is `Discarded` within ~30 seconds if the handler honors its signal.
 3. If the holder is dead, do nothing: the sweeper expires the lease within `LeaseSeconds` + `sweeperIntervalMs` and
-   the delivery retries (or dead-letters on its final attempt). Check that some instance has `sweeperEnabled: true`.
+   the delivery retries (or dead-letters on its final attempt). Check that some instance has `sweeperEnabled: true`,
+   or that a long-running `mj queue work` or a scheduled `mj queue sweep` is in place; a running consumer also expires
+   its own subscription's leases on each receive.
 
 ### Soak test (manual, before each release that touches the work queue)
 

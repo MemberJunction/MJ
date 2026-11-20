@@ -264,6 +264,9 @@ mj codegen
 # Generate class registration manifests only
 mj codegen manifest
 mj codegen manifest --exclude-packages @memberjunction --output ./src/generated/manifest.ts
+
+# Finish MJ Explorer's build: service worker check, and one HTML file per public page
+mj explorer postbuild --dir dist/MJExplorer/browser
 ```
 
 #### v5.0 Entity Name Migration Commands

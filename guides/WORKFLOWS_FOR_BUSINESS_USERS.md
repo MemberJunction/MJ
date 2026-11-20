@@ -98,12 +98,15 @@ All three use the same kind of condition, so what you learn in one carries to th
    - **Describe it**: say what you want done in a sentence or two. MemberJunction drafts the steps and
      you refine them on the canvas.
    - **From a past run**: turn something an AI agent already worked out into a reusable workflow.
-3. Review every step on the canvas. **Nothing is saved until you approve it.**
-4. Save. A new workflow runs **on demand**: it does nothing until someone runs it or an administrator
-   gives it a schedule or a record-change trigger.
+3. Choose **Create**. MemberJunction saves the workflow as a **draft** and opens it in the agent
+   editor, where you review and refine every step.
+4. A draft cannot run yet: it is saved as a disabled agent, so its **Run** button stays off. When the
+   steps are right, set its status to **Active**. An active workflow runs **on demand**: it does nothing
+   until someone runs it or an administrator gives it a schedule or a record-change trigger.
 
 You can also start from a conversation. When an agent breaks your request into steps, its plan card
-offers **Save as workflow**, so a plan that worked once becomes something anyone can rerun.
+offers **Save as workflow**. It saves the plan as a draft workflow; once it is set to **Active**, a plan
+that worked once becomes something anyone can rerun.
 
 ---
 
@@ -157,7 +160,7 @@ What you can count on once it is set up:
 | It runs too often | The condition describes a state ("is Approved"), not a change ("becomes Approved") | Ask for the condition to be rewritten as a change |
 | It finished but did nothing | Every branch was skipped, usually because an earlier step produced nothing for the decision to read | Open the run and look at the step before the branch |
 | It is stuck | A step is waiting for a person, or a step failed and the steps after it are blocked | Open the run; complete the waiting step or fix the failed one |
-| It ran while it was still a draft | A record-change trigger is switched on as soon as it is saved, even on a draft | Ask your administrator to switch the trigger off until the workflow is ready |
+| It won't run, and its **Run** button is off | It is still a draft (or paused). A draft or paused workflow is saved as a disabled agent, and its schedule and record-change triggers are saved switched off | Set the agent's **Status** to **Active** on its form so it can be run on demand. Its schedule and record-change triggers stay off until the workflow is saved again as **Active**; ask your administrator to do that |
 
 ---
 
