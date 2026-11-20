@@ -63,7 +63,7 @@ function failingMirrors(output: string): string[] {
 }
 
 describe('JSONType mirrors equal their Core types', () => {
-  it('compiles with no diagnostics (all twenty-six mirrors equal Core)', () => {
+  it('compiles with no diagnostics (all twenty-eight mirrors equal Core)', () => {
     expect(compile()).toBe('');
   }, 120_000);
 

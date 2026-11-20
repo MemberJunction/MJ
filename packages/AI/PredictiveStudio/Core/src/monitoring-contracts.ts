@@ -12,6 +12,8 @@
  * (`MJ: Scheduled Jobs.Configuration`, the protocol's JSON) and keep the contract's camelCase; the registry check and a
  * period result as the job computes it never leave the process and are PascalCase.
  */
+import type { ListsEveryMember } from './json-value';
+import type { MonitorDriftLook } from './sidecar-contract';
 import type { CalibrationReport } from './trainer-contract';
 import type { Interval, IntervalSpec, MetricWithInterval, PromotionRule, ProperScore, RetrainTrigger, RollbackTrigger } from './evaluation-protocol';
 
@@ -115,19 +117,11 @@ export interface TrackedMetric {
   readonly n: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
 }
 
-/** One input's procedure-M result at the period's look (`DriftLook` holds every input's; `DriftAlarms` the flagged ones). */
-export interface DriftLookEntry {
-  readonly input: string;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
-  readonly kind: 'mean' | 'proportion' | 'series';  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
-  readonly z: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
-  /** Empirical two-sided p against the look's no-drift replays. */
-  readonly p: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
-  /** Benjamini–Hochberg adjusted p across the look's inputs. */
-  readonly pAdjusted: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
-  readonly q: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
-  readonly look: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
-  readonly flagged: boolean;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
-}
+/**
+ * One input's procedure-M result at the period's look (`DriftLook` holds every input's; `DriftAlarms` the flagged ones):
+ * the sidecar's {@link MonitorDriftLook}, stored as it answered it.
+ */
+export type DriftLookEntry = Readonly<MonitorDriftLook>;
 
 /** The period's scoring parity check (`Parity`): sampled scored rows recomputed, re-sampled once on a failure (D4-20). */
 export interface MonitoringParity {
@@ -159,6 +153,15 @@ export interface MonitoringMirror {
   readonly failures: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
 }
 
+/** What a period's challenger came to ({@link MonitoringChallengerResult.outcome}). */
+export type MonitoringChallengerOutcome = 'none' | 'waiting' | 'published' | 'withheld' | 'stopped' | 'failed';
+
+/** Every {@link MonitoringChallengerOutcome}, the one list a reader of a stored outcome checks against. */
+export const MONITORING_CHALLENGER_OUTCOMES = ['none', 'waiting', 'published', 'withheld', 'stopped', 'failed'] as const satisfies readonly MonitoringChallengerOutcome[];
+/** Compile-time completeness: an outcome added without listing it in MONITORING_CHALLENGER_OUTCOMES breaks the build. */
+const challengerOutcomesComplete: ListsEveryMember<MonitoringChallengerOutcome, (typeof MONITORING_CHALLENGER_OUTCOMES)[number]> = true;
+void challengerOutcomesComplete;
+
 /**
  * The period's challenger outcome (`ChallengerResult`): a fired trigger's challenger training run and what the gate did
  * with it (`published` or `withheld` with the record the gate wrote; `stopped` when Evaluate shipped no model;
@@ -166,7 +169,7 @@ export interface MonitoringMirror {
  * mirror's divergence when the binding has a challenger.
  */
 export interface MonitoringChallengerResult {
-  readonly outcome: 'none' | 'waiting' | 'published' | 'withheld' | 'stopped' | 'failed';  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly outcome: MonitoringChallengerOutcome;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
   readonly trainingRunId: string | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
   /** The publish record of a published challenger, or the refusal record of a withheld one. */
   readonly recordId: string | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
@@ -192,3 +195,9 @@ export type MonitoringRollbackCheck =
       /** The publish or refusal record of the rollback; null when it did not fire. */
       readonly recordId: string | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
     };
+
+/** Every {@link MonitoringRollbackCheck} kind, the one list a reader of a stored check checks against. */
+export const MONITORING_ROLLBACK_CHECK_KINDS = ['off', 'no-predecessor', 'not-eligible', 'checked', 'rolled-back', 'rollback-withheld'] as const satisfies readonly MonitoringRollbackCheck['kind'][];
+/** Compile-time completeness: a check kind added without listing it in MONITORING_ROLLBACK_CHECK_KINDS breaks the build. */
+const rollbackCheckKindsComplete: ListsEveryMember<MonitoringRollbackCheck['kind'], (typeof MONITORING_ROLLBACK_CHECK_KINDS)[number]> = true;
+void rollbackCheckKindsComplete;

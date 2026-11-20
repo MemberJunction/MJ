@@ -15,9 +15,10 @@ import type * as GetModelEvidenceOutput from '../../../../../../../metadata/remo
 import type * as SignOffModelInput from '../../../../../../../metadata/remote-operations/types/predictive-studio-sign-off-model.input';
 import type * as ScoringRuns from '../../../../../../../metadata/entities/JSONType-interfaces/IMLScoringRunJsonTypes';
 import type * as MonitoringResults from '../../../../../../../metadata/entities/JSONType-interfaces/IMLMonitoringResultJsonTypes';
-import type { MetricWithInterval } from '../../evaluation-protocol';
+import type * as RunModelMonitoringOutput from '../../../../../../../metadata/remote-operations/types/predictive-studio-run-model-monitoring.output';
+import type { MetricWithInterval, RetrainTrigger } from '../../evaluation-protocol';
 import type { CalibrationReport } from '../../trainer-contract';
-import type { DriftLookEntry, MonitoringChallengerResult, MonitoringParity, MonitoringRollbackCheck, MonitoringTriggerFired, TrackedMetric } from '../../monitoring-contracts';
+import type { DriftLookEntry, MonitoringChallengerOutcome, MonitoringChallengerResult, MonitoringParity, MonitoringRollbackCheck, MonitoringTriggerFired, TrackedMetric } from '../../monitoring-contracts';
 import type { CodeVersion, LeakageFlag } from '../../trainer-contract';
 import type { OutputSemantics, PublishRecord, RegisteredDeliveryView, TransitionRefusal } from '../../registry-contracts';
 import type { Actor } from '../../prediction-unit';
@@ -58,3 +59,6 @@ export type MirrorMonitoringParity = Expect<Equal<MonitoringResults.MonitoringPa
 export type MirrorMonitoringTriggerFired = Expect<Equal<MonitoringResults.MonitoringTriggerFired, MonitoringTriggerFired>>;
 export type MirrorMonitoringChallengerResult = Expect<Equal<MonitoringResults.MonitoringChallengerResult, MonitoringChallengerResult>>;
 export type MirrorMonitoringRollbackCheck = Expect<Equal<MonitoringResults.MonitoringRollbackCheck, MonitoringRollbackCheck>>;
+/** `PredictiveStudio.RunModelMonitoring`'s period output (M6-21): the fired trigger kinds and the challenger outcome. */
+export type MirrorRunModelMonitoringTriggers = Expect<Equal<RunModelMonitoringOutput.PredictiveStudioMonitoredPeriod['triggersFired'], RetrainTrigger['kind'][]>>;
+export type MirrorRunModelMonitoringChallengerOutcome = Expect<Equal<NonNullable<RunModelMonitoringOutput.PredictiveStudioMonitoredPeriod['challengerOutcome']>, MonitoringChallengerOutcome>>;

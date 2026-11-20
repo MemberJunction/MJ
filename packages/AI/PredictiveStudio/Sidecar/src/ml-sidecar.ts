@@ -4,6 +4,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  MonitoringResultSchemas,
   TrainerContract,
   type JsonValue,
   type MonitorCalibrateRequest,
@@ -89,6 +90,18 @@ export class TrainerResultMalformedError extends Error {
   constructor(problems: readonly string[]) {
     super(`The sidecar's /trainer answer is not a TrainerResult: ${problems.join('; ')}`);
     this.name = 'TrainerResultMalformedError';
+    this.Problems = problems;
+  }
+}
+
+/** The sidecar's `/monitor/drift` answered 2xx with a body that is not a {@link MonitorDriftResponse}. */
+export class MonitorDriftResponseMalformedError extends Error {
+  /** One problem per mismatch with the contract (`<path>: <message>`). */
+  public readonly Problems: readonly string[];
+
+  constructor(problems: readonly string[]) {
+    super(`The sidecar's /monitor/drift answer is not a MonitorDriftResponse: ${problems.join('; ')}`);
+    this.name = 'MonitorDriftResponseMalformedError';
     this.Problems = problems;
   }
 }
@@ -404,17 +417,24 @@ export class MLSidecar {
   /**
    * Run one look of monitor procedure M by POSTing a {@link MonitorDriftRequest} to `/monitor/drift`: each input's z
    * against its training window, its empirical p against seeded no-drift replays at the look, and Benjamini–Hochberg
-   * across the look's inputs at q(L) (D4-11: the sidecar computes every statistic).
+   * across the look's inputs at q(L) (D4-11: the sidecar computes every statistic). The answer is checked against the
+   * contract before it is returned (the monitoring job stores it verbatim), never cast.
    * @throws {SidecarError} when the sidecar refuses the request (422: outside the contract) or fails (5xx)
+   * @throws {MonitorDriftResponseMalformedError} when a 2xx answer is not a {@link MonitorDriftResponse}
    */
   async MonitorDrift(req: MonitorDriftRequest, signal?: AbortSignal): Promise<MonitorDriftResponse> {
     this.assertRunning();
-    return this.httpPost<MonitorDriftRequest, MonitorDriftResponse>('/monitor/drift', req, undefined, signal);
+    const answer = await this.httpPost<MonitorDriftRequest, JsonValue>('/monitor/drift', req, undefined, signal);
+    const parsed = MonitoringResultSchemas.ParseMonitorDriftResponse(answer);
+    if (parsed.Ok === false) throw new MonitorDriftResponseMalformedError(parsed.Errors);
+    return parsed.Value;
   }
 
   /**
    * Find q(L) for a monitoring design by POSTing a {@link MonitorCalibrateRequest} to `/monitor/calibrate`: the
    * largest level whose any-alarm rate over L looks on seeded no-drift replays is at most the target, by bisection.
+   * Operator API (D4-11): no job calls it; it is how an operator derives q(L) for a look design other than the shipped
+   * 12-look (`MonitoringJobSpecs.DEFAULT_DRIFT_Q`) and 3-look ones, and the sidecar's calibration tests pin those two.
    * @throws {SidecarError} when the sidecar refuses the request (422: outside the contract) or fails (5xx)
    */
   async MonitorCalibrate(req: MonitorCalibrateRequest): Promise<MonitorCalibrateResponse> {

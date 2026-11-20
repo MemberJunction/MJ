@@ -11,6 +11,7 @@ import { IndexByUUID } from '@memberjunction/global';
 import type { RetrainTrigger, RollbackTrigger } from './evaluation-protocol';
 import type { MonitoringPeriodResult } from './monitoring-contracts';
 import type { TaskType } from './task-type';
+import { MS_PER_DAY } from './utc-day';
 
 /** One record's score from one model, for the live mirror's divergence; `Score` null when that record failed or timed out. */
 export interface ScoredValue {
@@ -53,14 +54,12 @@ export class MonitoringRules {
   /** The probability threshold the divergence's agreement compares decisions at. */
   public static readonly DECISION_THRESHOLD = 0.5;
 
-  private static readonly MS_PER_DAY = 86_400_000;
-
   /**
    * Whether the label window of a prediction made on `decisionDate` has closed at `now`: the unit's gap and then its
    * window have both passed (closed from `decisionDate + LabelGapDays + LabelWindowDays` on, inclusive).
    */
   public static LabelWindowClosed(unit: LabelWindowColumns, decisionDate: Date, now: Date): boolean {
-    const closesAt = decisionDate.getTime() + (unit.LabelGapDays + unit.LabelWindowDays) * MonitoringRules.MS_PER_DAY;
+    const closesAt = decisionDate.getTime() + (unit.LabelGapDays + unit.LabelWindowDays) * MS_PER_DAY;
     return now.getTime() >= closesAt;
   }
 

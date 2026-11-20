@@ -23,16 +23,12 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Annotated, Dict, Final, List, Literal
+from typing import Annotated, Final, List, Literal
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from .array_types import FArr
-
-# The documented q(L) of the two gate designs (plan §5, `logs/P12/qcal/verify_q.txt`): T4 at L = 12 and D1c at L = 3,
-# each calibrated on a >= 4M-replay null and checked on an independent one.
-Q_BY_LOOKS: Final[Dict[int, float]] = {12: 0.0095, 3: 0.0171}
 
 MIN_REPLAYS: Final = 100
 MAX_REPLAYS: Final = 100_000

@@ -5,7 +5,7 @@
  * `ParseEvaluationProtocolRow`); the protocol's behaviour rules are in `evaluation-protocol-rules.ts`, the gate in `gate.ts`.
  */
 import { UUIDsEqual } from '@memberjunction/global';
-import { JsonParse, type JsonObject, type JsonValue, type ParseResult } from './json-value';
+import { JsonParse, type JsonObject, type JsonValue, type ListsEveryMember, type ParseResult } from './json-value';
 import { PredictionUnit, type Actor } from './prediction-unit';
 import { UtcDay } from './utc-day';
 
@@ -152,6 +152,11 @@ export interface ResidualDiagnosticsSpec { readonly acfLags: number; readonly lj
 export type RetrainTrigger =
   | { readonly kind: 'outcome-degradation'; readonly margin: NonNegative; readonly consecutivePeriods: number }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
   | { readonly kind: 'calibration-drift'; readonly slopeOutside: readonly [number, number]; readonly consecutivePeriods: number };  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+/** Every `RetrainTrigger` kind, the one list a reader of a stored trigger kind checks against. */
+export const RETRAIN_TRIGGER_KINDS = ['outcome-degradation', 'calibration-drift'] as const satisfies readonly RetrainTrigger['kind'][];
+/** Compile-time completeness: a `RetrainTrigger` kind added without listing it in RETRAIN_TRIGGER_KINDS breaks the build. */
+const retrainTriggerKindsComplete: ListsEveryMember<RetrainTrigger['kind'], (typeof RETRAIN_TRIGGER_KINDS)[number]> = true;
+void retrainTriggerKindsComplete;
 /** When monitoring rolls back to the predecessor (D4-17): the predecessor beats the current model for N periods. */
 export interface RollbackTrigger {
   readonly kind: 'previous-beats-current';  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol Promotion JSON key
