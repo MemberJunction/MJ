@@ -21,6 +21,7 @@ import type { PdfOrientation } from '@memberjunction/ng-react';
 import { LogError, CompositeKey } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import {
+  ArtifactExportOption,
   ArtifactNavigationAnchor,
   ArtifactSelectionAnchor,
   ArtifactViewerViewMode,
@@ -513,6 +514,22 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
    */
   public async ExportPDF(orientation: PdfOrientation = 'portrait'): Promise<void> {
     await this.PluginInstance?.ExportPDF(orientation);
+  }
+
+  /**
+   * The export formats the loaded plugin offers, for the parent panel's Export menu.
+   * Empty while no plugin is loaded.
+   */
+  public GetExportOptions(): ArtifactExportOption[] {
+    return this.PluginInstance?.GetExportOptions() ?? [];
+  }
+
+  /**
+   * Asks the loaded plugin to run one of its export options.
+   * Pass-through to the plugin instance, called from the parent panel header.
+   */
+  public async RunExport(key: string): Promise<void> {
+    await this.PluginInstance?.RunExport(key);
   }
 
   async ngOnInit(): Promise<void> {

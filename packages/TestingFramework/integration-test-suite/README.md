@@ -25,7 +25,7 @@ needs a package the framework doesn't already have, add it to *this* package.jso
 src/
   index.ts              barrel — side-effect-imports every bundle so importing the package
                         registers the full catalog on the shared IntegrationCheckRegistry
-  checks/               the 30 check bundles (<bundle>.checks.ts) — the actual test logic
+  checks/               the check bundles (<bundle>.checks.ts) — the actual test logic
   __tests__/
     check-registry.test.ts   registry semantics + per-bundle count table (coverage-loss guard)
     sibling-parity.test.ts   bundle ↔ IT-record/suite-membership drift check + the
