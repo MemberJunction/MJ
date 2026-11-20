@@ -2,11 +2,12 @@
 
 **Date:** Nov 20, 2026  
 **Author:** @Amith Nagarajan  
-**Status:** Validated draft — filed for visibility; scheduled for post-PR-cleanup reassessment prior to execution  
+**Status:** Re-validated against afternoon `next` merges — in active parallel execution across `MJ`, `bizapps-tasks`, and `bizapps-planning`  
 **Baseline refs audited:**
-- `MemberJunction/MJ` `next` (`298046be00`, Nov 20, 2026) + open PRs `#6782`, `#6769`, `#6516`, `#6589`
-- `MemberJunction/bizapps-tasks` `next` (`5dd32162a4`, Nov 20, 2026) + open PRs `#151`, `#165`, `#196`, `#202`, `#154`, `#182` + local Tasks UX redesign (`an-dev-12`)
-- `MemberJunction/bizapps-planning` `next` (`b794c66baa`, Nov 15, 2026)
+- `MemberJunction/MJ` `next` (`68c7b1d873`, Nov 20, 2026) + open PR `#6782`
+- `MemberJunction/bizapps-tasks` `next` (`7aad5d0`, Nov 20, 2026 — post `#202`, `#201`, `#200`, `#165`, `#154`) + parallel `tasks-ux-redesign` (`OrganizationID` scoping, `BizAppsTasks.BulkUpdateTasks`, `BizAppsTasks.InstantiateTemplate`, UX redesign)
+- `MemberJunction/bizapps-planning` `next` (`0383a46`, Nov 20, 2026 — bumped to MJ `6.3.0-edge.1` with `lts/6.2` cut)
+- `MemberJunction/bizapps-common` `next` (`2874c29`, Nov 20, 2026) + parallel `feat/company-org-mirror` (`Organization.LinkedCompanyID`, `BizAppsCommon.SyncCompaniesToOrganizations`)
 
 ---
 
@@ -201,9 +202,9 @@ Every Open App that extends the Chief of Staff ships the same **8-part contract*
 
 ### Briefing Sections Contract
 
-- Add a `Role` column (`'Tool' | 'Briefing' | 'Both'`, default `'Tool'`) to `MJ: AI Skill Actions` (alongside `ExposeToModel`).
-- Each app ships one `Get My <App> Briefing` action (`Since`, optional `MaxItems`) marked `Role = 'Briefing'`, `ExposeToModel = 0`.
-- Core's `Assemble My Briefing` action (1.1) fans out across all granted briefing actions in parallel and returns a unified structured briefing payload to the Chief of Staff `Loop` agent.
+- Add a `Role` column (`'Tool' | 'Briefing' | 'Both'`, default `'Tool'`) to `MJ: AI Skill Actions`, directly mirroring `AISkillAction.ExposeToModel` (already on the junction table since v6.1.x). Placing `Role` on `MJ: AI Skill Actions` classifies **how the skill uses that action** without hardcoding action names or overloading `MJ: Action Categories` (which is UI taxonomy).
+- Each app ships one `Get My <App> Briefing` action (`Since`, optional `MaxItems`) bound to its skill with `Role = 'Briefing'` and `ExposeToModel = 0` (keeping briefing-only collectors out of the LLM's regular tool list).
+- Core's `Assemble My Briefing` action (1.1) reads `AIEngine.Instance.SkillActions` in memory, filters to `Role IN ('Briefing', 'Both')` across skills granted to the calling agent (checked via `AISkillPermissionHelper`), invokes them in parallel as `ContextUser`, and returns one structured briefing payload to the Chief of Staff `Loop` agent.
 
 ### Downstream Customization & Upgrade-Safe Grants
 
@@ -226,24 +227,15 @@ MJ core now supports pluggable human-task providers (`humanTasks.defaultProvider
 
 Tasks becomes the Chief of Staff's operational backbone for planned work: to-dos, assignments, approvals, 15Five work reports, and meeting follow-ups, backed by typed actions, RLS, daily/weekly rhythms, and agent task execution hooks.
 
-### 3.1 Pre-Merge Sequencing & Reconciling PR `#151` + PR `#165`
+### 3.1 Current Merge State & Parallel Alignment (Updated Nov 20 Afternoon)
 
-Before starting Phase 1 Tasks code, finish the in-flight cleanup in `MemberJunction/bizapps-tasks` in this exact order:
-
-1. **Merge foundational open PRs on `next`:**
-   - Merge **`#202`** (`security/consolidate-hardening` — consolidated hook dispatch, `PreventSelfApproval = true` default, UUID SQL guards) first so Workstream 3.6 builds on the hardened hook dispatcher.
-   - Align & merge **`#196`** (`BizAppsTasksHumanTaskProvider`) and active UI/filter fixes (`#111`, `#177`, `#178`, `#182`) plus the active Tasks UX redesign (`an-dev-12`).
-2. **Rebase & merge `#151` (`feat/cos-extension`) onto `next`:**
-   - Bump `mj-app.json` from `1.10.0` / `>=6.2.0` to the current release line (`>=6.2.1 <7.0.0`).
-   - Drop the MJ 6.1.x workarounds from commit `7d45bf6` (use MJ 6.2 `GroupByUUID`/`UUIDMap`/`UUIDSet` and `NavigationService` reattach helpers).
-   - Merge functionally as-is (skill, Priorities & To-dos page, `teardown/V1__Remove_Chief_of_Staff_Extension.sql`, `TSK-08` bundle); raw SQL instructions are replaced in 3.3.
-3. **Rebase & merge `#165` (`feat/work-bus-and-15five-reports`) onto the result — resolving ALL verified collisions:**
-   - **`teardown/` and `teardown-pg/` version collision:** Both `#151` and `#165` ship `V1__*` (`V1__Remove_Chief_of_Staff_Extension` vs `V1__Remove_Work_Reports_Extension`). Renumber `#165`'s teardown to `V2__Remove_Work_Reports_Extension` (SQL + PG) or merge into one `V1__Remove_Chief_of_Staff_Extensions` script so Skyway/Flyway does not fail on duplicate `V1`.
-   - **Three `.mj-sync.json` files:** Resolve `metadata/.mj-sync.json` (union of directory lists), `metadata/chief-of-staff-skills/.mj-sync.json` (two-skill pull filter), and `metadata/chief-of-staff-nav-items/.mj-sync.json` (identical filter — keep one).
-   - **Integration test collision:** Both branches claim `TSK-08` — renumber `#165`'s bundle to `TSK-09` and merge `metadata-tests/test-suites/.tasks-integration-suite.json`, `packages/IntegrationTests/src/index.ts`, and `bundle-registration.test.ts`.
-   - **Code & manifest overlaps:** Reconcile `mj-app.json`, `packages/Angular/src/lib/tasks.module.ts`, `packages/Angular/src/public-api.ts`, and `packages/Core/src/index.ts`.
-   - **Cleanup:** Delete stale/merged branch `feat/chief-of-staff-okr-priorities` if superseded.
-4. **Release on 6.2 LTS line** (`v1.15.x`, exposing `TaskType.ExtensionEntity` so `bizapps-planning` can depend on it cleanly; 6.3-only field suggestions & subtype folding remain dormant on 6.2 hosts as `#165` already handles).
+The major foundational wave has now **merged onto `bizapps-tasks/next`** (`7aad5d0`):
+- **Merged:** `#202` (consolidated security hardening, hook dispatch, `PreventSelfApproval = true`), `#201` (`SaveReturnMode`), `#200` (`RelatedRecordCollection`), **`#165`** (`TaskType.ExtensionEntity`, 15Five Work Reports, `teardown/V1__Remove_Work_Reports_Extension.sql`, `TSK-08`), and **`#154`** (Time Tracking & `LinkAgentRunToTaskAction`).
+- **In-flight parallel track (`tasks-ux-redesign` + `bizapps-common` `feat/company-org-mirror`):** Adds `Organization.LinkedCompanyID`, `Task`/`TaskCategory`/`TaskTemplate.OrganizationID` (`V202611201600__v1.15.x__Organization_Scoping.sql`), redesigned Angular pages + standalone `@mj-biz-apps/tasks-ng-widgets`, and 3 agent-callable Remotable Operations (`BizAppsCommon.SyncCompaniesToOrganizations`, `BizAppsTasks.BulkUpdateTasks`, `BizAppsTasks.InstantiateTemplate`).
+- **Parallel execution rules:**
+  1. Supersede `#151` (`feat/cos-extension`, now dirty post-`#165`): ship the typed `Chief of Staff Tasks & To-dos` skill and `teardown/V2__Remove_Chief_of_Staff_Tasks_Skills.sql` / `TSK-09` cleanly without touching `packages/Angular/` or adding `Task.Visibility` schema columns until `tasks-ux-redesign` merges.
+  2. Teach the Tasks skill to prefer `BizAppsTasks.BulkUpdateTasks` (multi-task edits) and `BizAppsTasks.InstantiateTemplate` (playbook instantiation) and to scope by `MJ_BizApps_Common: Organizations` (`LinkedCompanyID`) rather than `CompanyID` directly.
+  3. Hold `Task.Visibility` + Tasks RLS (`3.4`) until `V202611201600` (`OrganizationID`) merges so RLS can be `OrganizationID`-aware with zero CodeGen collisions.
 
 ### 3.2 Skills
 

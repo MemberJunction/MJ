@@ -93,6 +93,10 @@ vi.mock('@memberjunction/ai-core-plus', async (importOriginal) => {
                 },
                 SetCachedPolicy: (...args: Parameters<typeof setCachedPolicyMock>) => setCachedPolicyMock(...args),
                 ClearCache: vi.fn(),
+                GetActiveExecutingAgentID: () => actual.AgentUserPolicyEngine.Instance.GetActiveExecutingAgentID(),
+                GetActivePolicyCeilingAgentIDs: () => actual.AgentUserPolicyEngine.Instance.GetActivePolicyCeilingAgentIDs(),
+                GetEffectivePolicyAgentChain: (explicit?: string | null) =>
+                    actual.AgentUserPolicyEngine.Instance.GetEffectivePolicyAgentChain(explicit),
                 BuildPromptPolicyContextBlock: (...args: Parameters<typeof buildSummaryMock>) => buildSummaryMock(...args),
                 SnapshotPolicy: (p: MJAIAgentUserPolicyEntity) => actual.AgentUserPolicyEngine.Instance.SnapshotPolicy(p),
                 DetectAgentPolicyWidening: (

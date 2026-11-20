@@ -36,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (500 classes)
+// @memberjunction/core-entities (504 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -79,6 +79,7 @@ import {
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
     MJAIAgentRequestTypeEntity,
+    MJAIAgentRhythmTemplateEntity,
     MJAIAgentRubricEntity,
     MJAIAgentRunEntity,
     MJAIAgentRunMediaEntity,
@@ -92,6 +93,7 @@ import {
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
+    MJAIAgentSuggestionEntity,
     MJAIAgentTypeEntity,
     MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
@@ -151,6 +153,8 @@ import {
     MJActionLibraryEntity,
     MJActionParamEntity,
     MJActionResultCodeEntity,
+    MJAgentChannelEntity,
+    MJAgentChannelParticipantEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
@@ -668,16 +672,21 @@ import {
     WebURLPartComponent,
 } from '@memberjunction/ng-dashboard-viewer';
 
-// @memberjunction/ng-explorer-core (15 classes)
+// @memberjunction/ng-explorer-core (20 classes)
 import {
     ArtifactResource,
     ChatCollectionsResource,
     ChatConversationsResource,
+    ChatTasksResource,
     ConversationFeedbackResource,
     DashboardResource,
     EntityRecordResource,
+    HumanHandoffConsoleResource,
     LibraryResource,
     ListDetailResource,
+    LiveKitRoomResource,
+    MeetingsResource,
+    NotificationsResource,
     OmnibarAgentProvider,
     OmnibarCommandProvider,
     OmnibarRecordProvider,
@@ -833,6 +842,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
     MJAIAgentRequestTypeEntity,
+    MJAIAgentRhythmTemplateEntity,
     MJAIAgentRubricEntity,
     MJAIAgentRunEntity,
     MJAIAgentRunMediaEntity,
@@ -846,6 +856,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
+    MJAIAgentSuggestionEntity,
     MJAIAgentTypeEntity,
     MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
@@ -905,6 +916,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJActionLibraryEntity,
     MJActionParamEntity,
     MJActionResultCodeEntity,
+    MJAgentChannelEntity,
+    MJAgentChannelParticipantEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
@@ -975,14 +988,14 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJContentSourceTypeEntity,
     MJContentSourceTypeParamEntity,
     MJContentTypeAttributeEntity,
-    MJContentTypeEntity,
-    MJConversationArtifactEntity,
-    MJConversationArtifactPermissionEntity,
-    MJConversationArtifactVersionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJContentTypeEntity,
+    MJConversationArtifactEntity,
+    MJConversationArtifactPermissionEntity,
+    MJConversationArtifactVersionEntity,
     MJConversationBranchEntity,
     MJConversationBranchEntityExtended,
     MJConversationCompactionRunEntity,
@@ -1179,14 +1192,14 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordGeoCodeEntity,
     MJRecordLinkEntity,
     MJRecordMergeDeletionLogEntity,
-    MJRecordMergeLogEntity,
-    MJRecordProcessCategoryEntity,
-    MJRecordProcessEntity,
-    MJRecordProcessWatermarkEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecordMergeLogEntity,
+    MJRecordProcessCategoryEntity,
+    MJRecordProcessEntity,
+    MJRecordProcessWatermarkEntity,
     MJRemoteOperationCategoryEntity,
     MJRemoteOperationEntity,
     MJResourceLinkEntity,
@@ -1375,11 +1388,20 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ArtifactResource,
     ChatCollectionsResource,
     ChatConversationsResource,
+    ChatTasksResource,
     ConversationFeedbackResource,
     DashboardResource,
     EntityRecordResource,
+    HumanHandoffConsoleResource,
     LibraryResource,
     ListDetailResource,
+    LiveKitRoomResource,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
+    MeetingsResource,
+    NotificationsResource,
     OmnibarAgentProvider,
     OmnibarCommandProvider,
     OmnibarRecordProvider,
@@ -1387,10 +1409,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     QueryResource,
     SearchResultsResource,
     UserViewResource,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     RubricEngineBase,
     AIAgentCategoryHeaderPanel,
     AIAgentCategoryHierarchyPanel,
@@ -1480,7 +1498,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 675;
+export const CLASS_REGISTRATIONS_COUNT = 684;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

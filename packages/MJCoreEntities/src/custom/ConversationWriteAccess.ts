@@ -1,5 +1,5 @@
-import { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { MJConversationEntity, MJProjectEntity, MJResourcePermissionEntity } from '../generated/entity_subclasses';
 import { IsConversationHiddenByFieldSecurity, UserCanReadLinkedRecord } from './AnchoredConversationSecurity';
 import { ResourcePermissionEngine } from './ResourcePermissions/ResourcePermissionEngine';
@@ -9,6 +9,13 @@ export const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04
 
 /** Resource type ID for conversation folders (`MJ: Projects`) in the resource permission system. */
 const PROJECTS_RESOURCE_TYPE_ID = '88D0DF27-AF8F-43AC-9EC4-2AC314F49355';
+
+/**
+ * ConversationType ID for `AGENT_CHANNEL` (`MJ: Agent Channels` IS-A `MJ: Conversations`).
+ * Local copy of `BUILT_IN_CONVERSATION_TYPE_IDS.AGENT_CHANNEL` to avoid pulling `ConversationEngine`
+ * into every entity subclass.
+ */
+const AGENT_CHANNEL_CONVERSATION_TYPE_ID = '09E7A069-DB29-4329-BB29-4DF8CB998D94';
 
 /**
  * Returns whether a conversation inherits access from its folder (`ProjectID`).
@@ -130,6 +137,27 @@ export async function UserMayWriteConversation(
     if (isOwner) {
         return { Allowed: true, Reason: null, IsOwner: true, Loaded: true };
     }
+
+    // For AGENT_CHANNEL conversations (MJ: Agent Channels IS-A MJ: Conversations), any enrolled
+    // human/agent participant in MJ: Agent Channel Participants may post into the channel.
+    if (conversation.TypeID && UUIDsEqual(conversation.TypeID, AGENT_CHANNEL_CONVERSATION_TYPE_ID)) {
+        const rv = RunView.FromMetadataProvider(provider);
+        const partRes = await rv.RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Agent Channel Participants',
+                ExtraFilter: `AgentChannelID='${EscapeSQLString(conversationId)}' AND UserID='${EscapeSQLString(user.ID)}'`,
+                Fields: ['ID'],
+                MaxRows: 1,
+                ResultType: 'simple',
+            },
+            user
+        );
+        if (partRes.Success && (partRes.Results?.length ?? 0) > 0) {
+            return { Allowed: true, Reason: null, IsOwner: false, Loaded: true };
+        }
+        return { Allowed: false, Reason: 'You do not have access to this conversation.', IsOwner: false, Loaded: true };
+    }
+
     const engine = ResourcePermissionEngine.GetProviderInstance<ResourcePermissionEngine>(provider, ResourcePermissionEngine) as ResourcePermissionEngine;
     await engine.Config(false, user);
     const grant = engine

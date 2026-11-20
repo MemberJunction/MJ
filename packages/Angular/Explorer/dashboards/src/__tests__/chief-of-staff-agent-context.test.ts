@@ -12,6 +12,8 @@ import {
     ChiefOfStaffDisplayName,
     CreateDefaultPolicyDraft,
     CalculateChiefOfStaffMetrics,
+    EvaluateInstructionsOverrideSize,
+    INSTRUCTIONS_OVERRIDE_WARNING_THRESHOLD,
     IsApprovalRequest,
     PolicyGovernanceSummary,
     RequestSummaryItem,
@@ -295,10 +297,29 @@ describe('Email approval payload: the draft travels in the request Comments as J
 
 describe('Chief of Staff pages', () => {
     it('gives every page a nav item label and icon', () => {
-        expect(CHIEF_OF_STAFF_PAGES.map((p) => CHIEF_OF_STAFF_PAGE_LABELS[p])).toEqual(['Overview', 'Approvals & Wakes', 'Governance']);
+        expect(CHIEF_OF_STAFF_PAGES.map((p) => CHIEF_OF_STAFF_PAGE_LABELS[p])).toEqual([
+            'Overview',
+            'Approvals & Wakes',
+            'Agent Channels',
+            'Governance',
+        ]);
         for (const page of CHIEF_OF_STAFF_PAGES) {
             expect(CHIEF_OF_STAFF_PAGE_ICONS[page]).toMatch(/^fa-/);
         }
+    });
+
+    it('EvaluateInstructionsOverrideSize flags overrides over the 4,000-character threshold', () => {
+        expect(EvaluateInstructionsOverrideSize(null)).toEqual({
+            Length: 0,
+            Threshold: INSTRUCTIONS_OVERRIDE_WARNING_THRESHOLD,
+            ExceedsThreshold: false,
+            PercentOfThreshold: 0,
+        });
+        expect(EvaluateInstructionsOverrideSize('x'.repeat(4000)).ExceedsThreshold).toBe(false);
+        const oversized = EvaluateInstructionsOverrideSize('x'.repeat(4200));
+        expect(oversized.ExceedsThreshold).toBe(true);
+        expect(oversized.Length).toBe(4200);
+        expect(oversized.PercentOfThreshold).toBe(105);
     });
 });
 
