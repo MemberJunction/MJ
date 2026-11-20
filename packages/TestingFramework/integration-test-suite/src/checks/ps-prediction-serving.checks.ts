@@ -136,6 +136,8 @@ const DAY5 = new Date('2026-10-05T00:00:00Z');
 const TAG_SUFFIX = '(mj-integration-test — safe to delete)';
 
 let fixture: ServingFixture | null = null;
+/** The tag of the Setup in progress, registered before its first write: the teardown removes its rows even when Setup failed. */
+let setupTag: string | null = null;
 
 // ------------------------------------------------------------------------------------------------ shared steps ----
 
@@ -240,6 +242,27 @@ export class PsPredictionServing {
             ColumnCount: Number(row['ColumnCount']), ColumnChecksum: Number(row['ColumnChecksum']), MigrationCount: Number(row['MigrationCount']),
             EntityMetadataUpdatedAt: new Date(String(row['EntityMetadataUpdatedAt'])).toISOString(),
         };
+    }
+
+    /**
+     * The teardown's SQL for the rows a Setup tagged `tag` can have written, children before the rows they reference:
+     * the Feature Values and scoring runs of the tagged bindings, the bindings, the models of the tagged pipelines, the
+     * pipelines, the files and the target records. Keyed by the tag alone, so a Setup that failed before its fixture
+     * was built leaves nothing behind (D4-230). `table` names an entity's `[schema].[table]`. Pure.
+     */
+    public static TeardownSql(tag: string, table: (entityName: string) => string): string {
+        const like = `'${EscapeSQLString(tag)}%'`;
+        const bindings = `SELECT ID FROM ${table('MJ: ML Model Scoring Bindings')} WHERE FeatureName LIKE ${like}`;
+        const pipelines = `SELECT ID FROM ${table('MJ: ML Training Pipelines')} WHERE Name LIKE ${like}`;
+        return [
+            `DELETE FROM ${table('MJ: Feature Values')} WHERE MLModelScoringBindingID IN (${bindings})`,
+            `DELETE FROM ${table('MJ: ML Scoring Runs')} WHERE MLModelScoringBindingID IN (${bindings})`,
+            `DELETE FROM ${table('MJ: ML Model Scoring Bindings')} WHERE FeatureName LIKE ${like}`,
+            `DELETE FROM ${table('MJ: ML Models')} WHERE PipelineID IN (${pipelines})`,
+            `DELETE FROM ${table('MJ: ML Training Pipelines')} WHERE Name LIKE ${like}`,
+            `DELETE FROM ${table('MJ: Files')} WHERE Name LIKE ${like}`,
+            `DELETE FROM ${table(TARGET)} WHERE Name LIKE ${like}`,
+        ].join(';\n') + ';';
     }
 
     /** What changed between `before` and `after`. Pure. */
@@ -382,6 +405,7 @@ async function setup(ctx: IntegrationCheckContext): Promise<void> {
     fixture = null;
     const provider = sqlProvider(ctx);
     const tag = `IT180 ${Date.now()} ${TAG_SUFFIX}`;
+    setupTag = tag;
     const before = await PsPredictionServing.Fingerprint(ctx.Provider, ctx.User);
     const targetEntityId = ctx.Provider.EntityByName(TARGET)?.ID;
     if (!targetEntityId) throw new Error(`${TARGET} is not in metadata`);
@@ -424,25 +448,21 @@ async function setup(ctx: IntegrationCheckContext): Promise<void> {
     };
 }
 
-/** Deletes the world, children first (the binding refuses an entity delete before withdrawal, so this is SQL). */
+/**
+ * Deletes the world, children first (the binding refuses an entity delete before withdrawal, so this is SQL), by the
+ * Setup's tag: whatever a Setup wrote is removed even when it failed before building the fixture (D4-230). A failed
+ * Setup's identities were already released by `MintIdentities`.
+ */
 async function teardown(ctx: IntegrationCheckContext): Promise<void> {
     const f = fixture;
+    const tag = f !== null ? f.Tag : setupTag;
     fixture = null;
-    if (f === null) return;
+    setupTag = null;
+    if (tag === null) return;
     try {
-        await PsPredictionServing.ReleaseIdentities(ctx, f.Identities);
+        if (f !== null) await PsPredictionServing.ReleaseIdentities(ctx, f.Identities);
         const provider = sqlProvider(ctx);
-        const t = (entityName: string): string => tableOf(provider, entityName);
-        const like = `'${EscapeSQLString(f.Tag)}%'`;
-        const bindings = `SELECT ID FROM ${t('MJ: ML Model Scoring Bindings')} WHERE FeatureName LIKE ${like}`;
-        await provider.ExecuteSQL(`
-            DELETE FROM ${t('MJ: Feature Values')} WHERE MLModelScoringBindingID IN (${bindings});
-            DELETE FROM ${t('MJ: ML Scoring Runs')} WHERE MLModelScoringBindingID IN (${bindings});
-            DELETE FROM ${t('MJ: ML Model Scoring Bindings')} WHERE FeatureName LIKE ${like};
-            DELETE FROM ${t('MJ: ML Models')} WHERE ID = '${EscapeSQLString(f.ModelID)}';
-            DELETE FROM ${t('MJ: ML Training Pipelines')} WHERE ID = '${EscapeSQLString(f.PipelineID)}';
-            DELETE FROM ${t('MJ: Files')} WHERE Name LIKE ${like};
-            DELETE FROM ${t(TARGET)} WHERE Name LIKE ${like};`, undefined, { isMutation: true, description: 'IT180: delete its fixtures' }, undefined);
+        await provider.ExecuteSQL(PsPredictionServing.TeardownSql(tag, (entityName) => tableOf(provider, entityName)), undefined, { isMutation: true, description: 'IT180: delete its fixtures' }, undefined);
     } catch (e) {
         console.warn(`      ⚠ IT180 teardown: ${e instanceof Error ? e.message : String(e)}`);
     }

@@ -22,3 +22,31 @@ describe('PsPredictionServing.Delta', () => {
     expect(PsPredictionServing.Delta(BEFORE, after)).toEqual({ ColumnsChanged: 0, MigrationsAdded: 1, EntityMetadataChanged: 1 });
   });
 });
+
+describe('PsPredictionServing.TeardownSql (D4-230)', () => {
+  const table = (entityName: string): string => `[t].[${entityName.replace(/[^A-Za-z]/g, '')}]`;
+  const tag = "IT180 1 (mj-integration-test — safe to delete)";
+  const statements = (): string[] => PsPredictionServing.TeardownSql(tag, table).split(';').map((s) => s.trim()).filter((s) => s.length > 0);
+  const position = (needle: string): number => statements().findIndex((s) => s.startsWith(`DELETE FROM ${needle}`));
+
+  it('deletes every row Setup can have written by its tag alone, so a Setup that failed before its fixture was built leaves nothing', () => {
+    const sql = PsPredictionServing.TeardownSql(tag, table);
+    expect(sql).toContain(`'IT180 1 (mj-integration-test — safe to delete)%'`);
+    expect(sql).not.toMatch(/ID = '/);
+    for (const entity of ['MJFeatureValues', 'MJMLScoringRuns', 'MJMLModelScoringBindings', 'MJMLModels', 'MJMLTrainingPipelines', 'MJFiles', 'MJKnowledgeHubSavedSearches']) {
+      expect(position(`[t].[${entity}]`), entity).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('deletes children before the rows they reference', () => {
+    expect(position('[t].[MJFeatureValues]')).toBeLessThan(position('[t].[MJMLModelScoringBindings]'));
+    expect(position('[t].[MJMLScoringRuns]')).toBeLessThan(position('[t].[MJMLModelScoringBindings]'));
+    expect(position('[t].[MJMLModelScoringBindings]')).toBeLessThan(position('[t].[MJMLTrainingPipelines]'));
+    expect(position('[t].[MJMLModels]')).toBeLessThan(position('[t].[MJMLTrainingPipelines]'));
+    expect(position('[t].[MJMLModels]')).toBeLessThan(position('[t].[MJFiles]'));
+  });
+
+  it('escapes the tag', () => {
+    expect(PsPredictionServing.TeardownSql("IT180 o'clock", table)).toContain(`'IT180 o''clock%'`);
+  });
+});
