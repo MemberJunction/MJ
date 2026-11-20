@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import type { EntityInfo, EntityRecordNameInput, EntityRecordNameResult, IMetadataProvider } from '@memberjunction/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MJButtonDirective, MJDialogComponent, MJDialogActionsComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
@@ -9,7 +10,8 @@ import { ListDeltaConfirmComponent } from './list-delta-confirm.component';
 // ListDeltaConfirmComponent is module-declared (standalone: false). It renders into
 // mj-dialog (which projects ng-content inline into the fixture DOM — no CDK overlay),
 // and uses mjButton + mj-dialog-actions. It is pure @Input/@Output + getter-driven
-// gating with NO data loading, so it is a high-value, honestly-unit-testable component.
+// gating; its only data load is the record-name lookup for the preview rows, which the
+// tests below drive through a fake provider.
 
 const IMPORTS = [CommonModule, FormsModule, MJButtonDirective, MJDialogComponent, MJDialogActionsComponent, MJAlertComponent];
 const DECLARATIONS = [ListDeltaConfirmComponent];
@@ -30,6 +32,32 @@ function makeDelta(overrides: Partial<ListDelta> = {}): ListDelta {
 
 function render(inputs: Record<string, unknown>) {
   return renderComponentFixture(ListDeltaConfirmComponent, { imports: IMPORTS, declarations: DECLARATIONS, inputs });
+}
+
+/**
+ * A provider that knows one entity ("Contacts", keyed by ID) and names records from `names`.
+ * A record missing from `names` comes back unsuccessful, as the server does for an unknown ID.
+ */
+function fakeNameProvider(names: Record<string, string>, fail = false) {
+  const entity = { Name: 'Contacts' } as unknown as EntityInfo;
+  const GetEntityRecordNames = vi.fn(async (info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]> => {
+    if (fail) throw new Error('network down');
+    return info.map((i) => {
+      const id = String(i.CompositeKey.KeyValuePairs[0].Value);
+      return { EntityName: i.EntityName, CompositeKey: i.CompositeKey, Success: id in names, Status: '', RecordName: names[id] };
+    });
+  });
+  const provider = {
+    EntityByName: (name: string) => (name === 'Contacts' ? entity : undefined),
+    GetEntityRecordNames,
+  } as unknown as IMetadataProvider;
+  return { provider, GetEntityRecordNames };
+}
+
+/** Lets the async name lookup settle, then re-renders. */
+async function settle(fixture: { detectChanges(): void }) {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  fixture.detectChanges();
 }
 
 describe('ListDeltaConfirmComponent (DOM)', () => {
@@ -154,6 +182,79 @@ describe('ListDeltaConfirmComponent (DOM)', () => {
         PreviewLimit: 5,
       });
       expect(queryAll(fixture, '.delta-preview__row--remove').length).toBe(3);
+    });
+  });
+
+  describe('record names in the preview', () => {
+    const rowTexts = (fixture: Parameters<typeof queryAll>[0], kind: 'add' | 'remove') =>
+      queryAll(fixture, `.delta-preview__row--${kind}`).map((row) => ({
+        name: row.querySelector('.delta-preview__name')?.textContent?.trim() ?? null,
+        id: row.querySelector('.delta-preview__id')?.textContent?.trim() ?? null,
+      }));
+
+    it('shows each record\'s name with its ID beside it', async () => {
+      const { provider } = fakeNameProvider({ a1: 'Ada Lovelace', a2: 'Grace Hopper', r1: 'Alan Turing' });
+      const fixture = render({
+        Visible: true,
+        Provider: provider,
+        Delta: makeDelta({ ToAdd: ['a1', 'a2'], ToRemove: ['r1'], Counts: { Add: 2, Remove: 1, Unchanged: 0, SourceTotal: 2, TargetTotal: 1 } }),
+      });
+      await settle(fixture);
+      expect(rowTexts(fixture, 'add')).toEqual([
+        { name: 'Ada Lovelace', id: 'a1' },
+        { name: 'Grace Hopper', id: 'a2' },
+      ]);
+      expect(rowTexts(fixture, 'remove')).toEqual([{ name: 'Alan Turing', id: 'r1' }]);
+    });
+
+    it('keeps the ID alone for a record with no name', async () => {
+      const { provider } = fakeNameProvider({ a1: 'Ada Lovelace', a2: '   ' });
+      const fixture = render({ Visible: true, Provider: provider, Delta: makeDelta() });
+      await settle(fixture);
+      expect(rowTexts(fixture, 'add')).toEqual([
+        { name: 'Ada Lovelace', id: 'a1' },
+        { name: null, id: 'a2' },
+        { name: null, id: 'a3' },
+      ]);
+    });
+
+    it('looks up only the records it previews', async () => {
+      const { provider, GetEntityRecordNames } = fakeNameProvider({});
+      const fixture = render({
+        Visible: true,
+        Provider: provider,
+        PreviewLimit: 2,
+        Delta: makeDelta({ ToAdd: ['a1', 'a2', 'a3', 'a4'], ToRemove: ['r1', 'r2', 'r3'], Counts: { Add: 4, Remove: 3, Unchanged: 0, SourceTotal: 4, TargetTotal: 3 } }),
+      });
+      await settle(fixture);
+      expect(GetEntityRecordNames).toHaveBeenCalledTimes(1);
+      const asked = GetEntityRecordNames.mock.calls[0][0].map((i) => String(i.CompositeKey.KeyValuePairs[0].Value));
+      expect(asked).toEqual(['a1', 'a2', 'r1', 'r2']);
+    });
+
+    it('shows IDs when the lookup fails', async () => {
+      const { provider } = fakeNameProvider({ a1: 'Ada Lovelace' }, true);
+      const fixture = render({ Visible: true, Provider: provider, Delta: makeDelta() });
+      await settle(fixture);
+      expect(rowTexts(fixture, 'add').map((r) => r.name)).toEqual([null, null, null]);
+      expect(rowTexts(fixture, 'add').map((r) => r.id)).toEqual(['a1', 'a2', 'a3']);
+    });
+
+    it('shows IDs when the entity is unknown, without a lookup', async () => {
+      const { provider, GetEntityRecordNames } = fakeNameProvider({ a1: 'Ada Lovelace' });
+      const fixture = render({ Visible: true, Provider: provider, Delta: makeDelta({ EntityName: 'Nope' }) });
+      await settle(fixture);
+      expect(GetEntityRecordNames).not.toHaveBeenCalled();
+      expect(rowTexts(fixture, 'add').map((r) => r.name)).toEqual([null, null, null]);
+    });
+
+    it('drops names from an earlier delta', async () => {
+      const { provider } = fakeNameProvider({ a1: 'Ada Lovelace', b1: 'Barbara Liskov' });
+      const fixture = render({ Visible: true, Provider: provider, Delta: makeDelta({ ToAdd: ['a1'] }) });
+      await settle(fixture);
+      fixture.componentRef.setInput('Delta', makeDelta({ ToAdd: ['b1'] }));
+      await settle(fixture);
+      expect(rowTexts(fixture, 'add')).toEqual([{ name: 'Barbara Liskov', id: 'b1' }]);
     });
   });
 
