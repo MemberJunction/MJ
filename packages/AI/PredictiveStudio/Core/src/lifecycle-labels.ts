@@ -137,7 +137,7 @@ export class TransitionRefusalText {
       case 'status-written-outside-gate':
         return 'The status was changed outside the lifecycle gate, so the change was refused.';
       case 'artifact-unverifiable':
-        return `The model file could not be verified just now (${refusal.detail}). This is temporary; try again.`;
+        return `The model file could not be verified (${refusal.detail}). A model is never served from a file that does not verify, so the change was refused, and a model demoted for it stays out of service until its file is restored and verifies against its registered hash.`;
       case 'publish-in-progress':
         return 'Another publish of this pipeline is in progress. This is temporary; try again in a moment.';
       case 'keep-baseline-not-auto-published':

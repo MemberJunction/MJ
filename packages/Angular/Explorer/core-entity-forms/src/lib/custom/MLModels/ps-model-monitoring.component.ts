@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RunView } from '@memberjunction/core';
+import { LogError, RunView, type RunViewResult } from '@memberjunction/core';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import {
   PredictiveStudioRunModelMonitoringOperation,
@@ -268,10 +268,12 @@ export class PSModelMonitoringComponent extends BaseAngularComponent implements 
       const modelId = this.Model.ID;
       this.Findings = RegistryRuns.flatMap((run) => PSModelMonitoringComponent.FindingsOf(run, modelId));
     } catch (e) {
+      const reason = e instanceof Error ? e.message : String(e);
+      LogError(`Predictive Studio model monitoring: reading the monitoring of ML Model ${this.Model.ID} failed: ${reason}`);
       this.Periods = [];
       this.Findings = [];
       this.Chart = { Points: [], Band: null };
-      this.ErrorMessage = `The monitoring results could not be read: ${e instanceof Error ? e.message : String(e)}`;
+      this.ErrorMessage = `The monitoring results could not be read: ${reason}`;
     } finally {
       this.Loading = false;
       this.cdr.markForCheck();
@@ -301,10 +303,12 @@ export class PSModelMonitoringComponent extends BaseAngularComponent implements 
    * The model's monitoring rows, oldest period first; the reference band — the interval of the holdout score on the
    * model's newest publish record —; and the newest Registry Check job runs whose `Details` name the model, through the
    * host's provider (one batched `RunViews`).
+   *
+   * @throws Error naming the read that failed, with its message
    */
   protected async LoadPeriods(modelId: string): Promise<{ Rows: MJMLMonitoringResultEntity[]; Band: { Lower: number; Upper: number } | null; RegistryRuns: RegistryRunRow[] }> {
     const id = EscapeSQLString(modelId);
-    const [periods, publishes, registry] = await RunView.FromMetadataProvider(this.ProviderToUse).RunViews<MJMLMonitoringResultEntity | MJMLModelPublishRecordEntity | RegistryRunRow>([
+    const results = await RunView.FromMetadataProvider(this.ProviderToUse).RunViews([
       { EntityName: 'MJ: ML Monitoring Results', ExtraFilter: `ModelID='${id}'`, OrderBy: 'Period ASC', ResultType: 'entity_object' },
       { EntityName: 'MJ: ML Model Publish Records', ExtraFilter: `ModelID='${id}' AND Kind='publish'`, OrderBy: 'RecordedAt DESC', MaxRows: 1, ResultType: 'entity_object' },
       {
@@ -312,14 +316,16 @@ export class PSModelMonitoringComponent extends BaseAngularComponent implements 
         OrderBy: 'StartedAt DESC', MaxRows: REGISTRY_RUNS_READ, Fields: ['ID', 'StartedAt', 'Details'], ResultType: 'simple',
       },
     ]);
-    if (!periods?.Success) throw new Error(periods?.ErrorMessage || 'the view returned no result');
-    const rows: MJMLMonitoringResultEntity[] = [];
-    for (const r of periods.Results) if ('Period' in r) rows.push(r);
-    const publish = (publishes?.Results || []).find((r): r is MJMLModelPublishRecordEntity => 'EvidenceObject' in r);
-    const interval = publish?.EvidenceObject?.holdoutPrimary.interval;
-    const runs: RegistryRunRow[] = [];
-    for (const r of registry?.Results || []) if ('Details' in r && 'StartedAt' in r) runs.push({ ID: r.ID, StartedAt: r.StartedAt, Details: r.Details });
-    return { Rows: rows, Band: interval ? { Lower: interval.lower, Upper: interval.upper } : null, RegistryRuns: runs };
+    // RunViews answers in request order: the monitoring rows, the newest publish record, the Registry Check runs.
+    const periods: RunViewResult<MJMLMonitoringResultEntity> | undefined = results[0];
+    const publishes: RunViewResult<MJMLModelPublishRecordEntity> | undefined = results[1];
+    const registry: RunViewResult<RegistryRunRow> | undefined = results[2];
+    if (!periods?.Success) throw new Error(`the monitoring results: ${periods?.ErrorMessage || 'the view returned no result'}`);
+    if (!publishes?.Success) throw new Error(`the publish record: ${publishes?.ErrorMessage || 'the view returned no result'}`);
+    if (!registry?.Success) throw new Error(`the Registry Check runs: ${registry?.ErrorMessage || 'the view returned no result'}`);
+    const interval = publishes.Results[0]?.EvidenceObject?.holdoutPrimary.interval;
+    const runs = registry.Results.map((r): RegistryRunRow => ({ ID: r.ID, StartedAt: r.StartedAt, Details: r.Details }));
+    return { Rows: periods.Results, Band: interval ? { Lower: interval.lower, Upper: interval.upper } : null, RegistryRuns: runs };
   }
 
   /**
@@ -415,7 +421,7 @@ export class PSModelMonitoringComponent extends BaseAngularComponent implements 
     return {
       Outcome: c.outcome,
       Reason: c.reason,
-      Comparison: mirror ? `live mirror: ${mirror.paired} paired rows, ${(mirror.agreement * 100).toFixed(1)}% agreement, mean score difference ${mirror.meanScoreDelta.toFixed(3)}` : null,
+      Comparison: mirror ? `live mirror: ${mirror.paired} paired rows, ${mirror.agreement === null ? 'no decision agreement (not a classifier)' : `${(mirror.agreement * 100).toFixed(1)}% agreement`}, mean score difference ${mirror.meanScoreDelta.toFixed(3)}` : null,
       PublishRecordID: c.recordId,
     };
   }

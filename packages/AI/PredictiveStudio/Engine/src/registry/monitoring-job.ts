@@ -83,6 +83,22 @@ export class MonitoringJobs {
     return open[0]?.Configuration || null;
   }
 
+  /**
+   * The `OwnerUserID` of the model's newest monitoring job, of any status: the user its publish ran as (D4-179), whom the
+   * registry check notifies about the model (D4-18); null when no monitoring job names the model or it has no owner.
+   *
+   * @throws Error when a read fails
+   */
+  public static async OwnerOf(modelId: string, ctx: RegistryContext): Promise<string | null> {
+    const jobTypeId = await MonitoringJobs.jobTypeId(ctx);
+    const r = await StoredRowReads.Run<Pick<MJScheduledJobEntity, 'ID' | 'Configuration' | 'OwnerUserID'>>(
+      { EntityName: 'MJ: Scheduled Jobs', ExtraFilter: `JobTypeID='${EscapeSQLString(jobTypeId)}'`, OrderBy: '__mj_CreatedAt DESC', Fields: ['ID', 'Configuration', 'OwnerUserID'], ResultType: 'simple' },
+      ctx,
+    );
+    if (!r.Success) throw new Error(`Reading the monitoring jobs of ML Model ${modelId} failed: ${r.ErrorMessage || 'unknown error'}`);
+    return r.Results.find((j) => UUIDsEqual(MonitoringJobs.modelIdOf(j.Configuration), modelId))?.OwnerUserID || null;
+  }
+
   /** The model's open monitoring jobs: found by type and status, matched on their configuration's `modelId` with `UUIDsEqual`. */
   private static async openJobsOf(modelId: string, ctx: RegistryContext): Promise<MJScheduledJobEntity[]> {
     const jobTypeId = await MonitoringJobs.jobTypeId(ctx);

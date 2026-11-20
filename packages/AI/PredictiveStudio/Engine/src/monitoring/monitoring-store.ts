@@ -14,7 +14,7 @@
  * | {@link UserNotificationMonitoringNotifier} | one `MJ: User Notifications` row |
  */
 import { randomUUID } from 'node:crypto';
-import type { MJFeatureValueEntity, MJMLModelEntity, MJMLModelPublishRecordEntity, MJMLModelScoringBindingEntity, MJMLMonitoringResultEntity, MJScheduledJobEntity, MJScheduledJobRunEntity, MJUserNotificationEntity } from '@memberjunction/core-entities';
+import type { MJFeatureValueEntity, MJMLModelEntity, MJMLModelPublishRecordEntity, MJMLModelScoringBindingEntity, MJMLMonitoringResultEntity, MJUserNotificationEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, IndexByUUID } from '@memberjunction/global';
 import {
   JsonParse,
@@ -57,6 +57,7 @@ import { RunViewTrainingSnapshotStore } from '../snapshot/training-snapshot-stor
 import { MetadataEntityFactory } from '../training/seams';
 import { ChallengerProtocol } from './challenger-protocol';
 import type {
+  ChallengerPreparation,
   DriftInputValues,
   IMonitoringDrift,
   IMonitoringGate,
@@ -256,15 +257,6 @@ export class RunViewMonitoringStore implements IMonitoringStore {
     throw new Error(`Monitoring: saving the ${UtcDay.UtcDayIso(write.Period.Start)} period row of ML Model ${write.ModelID} failed: ${row.LatestResult?.CompleteMessage || 'unknown error'}`);
   }
 
-  /** @inheritdoc */
-  public async JobOwner(scheduledJobRunId: string, ctx: RegistryContext): Promise<string | null> {
-    const run = await StoredRowReads.Run<Pick<MJScheduledJobRunEntity, 'ScheduledJobID'>>({ EntityName: 'MJ: Scheduled Job Runs', ExtraFilter: `ID='${EscapeSQLString(scheduledJobRunId)}'`, Fields: ['ScheduledJobID'], ResultType: 'simple', MaxRows: 1 }, ctx); // pk-filter-ok: MJ core entity keyed by ID
-    const jobId = run.Success ? run.Results[0]?.ScheduledJobID : undefined;
-    if (!jobId) return null;
-    const job = await StoredRowReads.Run<Pick<MJScheduledJobEntity, 'OwnerUserID'>>({ EntityName: 'MJ: Scheduled Jobs', ExtraFilter: `ID='${EscapeSQLString(jobId)}'`, Fields: ['OwnerUserID'], ResultType: 'simple', MaxRows: 1 }, ctx); // pk-filter-ok: MJ core entity keyed by ID
-    return job.Success ? job.Results[0]?.OwnerUserID || null : null;
-  }
-
   // ----- helpers ---------------------------------------------------------------------------------------------------
 
   /**
@@ -447,8 +439,13 @@ export class SidecarMonitoringDrift implements IMonitoringDrift {
 /** The challenger's training (single-flight, on a fresh snapshot) and its publish through `AutomatedPublisher`. */
 export class AutomatedMonitoringPublisher implements IMonitoringPublisher {
   /** @inheritdoc */
-  public async PrepareChallenger(pipelineId: string, initiator: Actor, now: Date, ctx: RegistryContext): Promise<string | null> {
+  public async PrepareChallenger(pipelineId: string, initiator: Actor, now: Date, ctx: RegistryContext): Promise<ChallengerPreparation> {
     return ChallengerProtocol.Prepare(pipelineId, initiator, now, ctx);
+  }
+
+  /** @inheritdoc */
+  public async RestoreProtocol(pipelineId: string, protocolId: string, ctx: RegistryContext): Promise<void> {
+    await ChallengerProtocol.Restore(pipelineId, protocolId, ctx);
   }
 
   /** @inheritdoc */

@@ -10,6 +10,7 @@ import { IndexByUUID } from '@memberjunction/global';
 
 import type { RetrainTrigger, RollbackTrigger } from './evaluation-protocol';
 import type { MonitoringPeriodResult } from './monitoring-contracts';
+import type { TaskType } from './task-type';
 
 /** One record's score from one model, for the live mirror's divergence; `Score` null when that record failed or timed out. */
 export interface ScoredValue {
@@ -23,8 +24,12 @@ export interface ScoredValue {
 export interface MirrorDivergence {
   /** Records both models scored. */
   readonly Paired: number;
-  /** Share of the paired records on the same side of the 0.5 decision threshold (0 when nothing paired). */
-  readonly Agreement: number;
+  /**
+   * A classifier's share of the paired records on the same side of the 0.5 decision threshold (0 when nothing paired);
+   * null for every other task, whose scores are not probabilities, so the threshold means nothing (the plan states no
+   * regression agreement rule; {@link MeanScoreDelta} is the regression's divergence).
+   */
+  readonly Agreement: number | null;
   /** Mean of (challenger − champion) score over the paired records (0 when nothing paired). */
   readonly MeanScoreDelta: number;
   /** Champion records the challenger did not score: missing from its rows, or scored null (a failure or timeout). */
@@ -95,10 +100,11 @@ export class MonitoringRules {
 
   /**
    * The live mirror's divergence (D-069): each champion record is paired with the challenger's score of the same key
-   * (`IndexByUUID`); a champion record the challenger has no score for is a failure. Agreement compares the two scores'
-   * sides of {@link DECISION_THRESHOLD}; the mean delta is challenger minus champion.
+   * (`IndexByUUID`); a champion record the challenger has no score for is a failure. For a classifier (`binary`,
+   * `multiclass`: the score is the adverse-class probability) agreement compares the two scores' sides of
+   * {@link DECISION_THRESHOLD}; any other task computes no agreement (null). The mean delta is challenger minus champion.
    */
-  public static Divergence(champion: readonly ScoredValue[], challenger: readonly ScoredValue[]): MirrorDivergence {
+  public static Divergence(champion: readonly ScoredValue[], challenger: readonly ScoredValue[], task: TaskType): MirrorDivergence {
     let paired = 0;
     let agreeing = 0;
     let deltaSum = 0;
@@ -115,6 +121,7 @@ export class MonitoringRules {
       deltaSum += other.Score - c.Score;
       if ((c.Score >= MonitoringRules.DECISION_THRESHOLD) === (other.Score >= MonitoringRules.DECISION_THRESHOLD)) agreeing++;
     }
-    return { Paired: paired, Agreement: paired === 0 ? 0 : agreeing / paired, MeanScoreDelta: paired === 0 ? 0 : deltaSum / paired, Failures: failures };
+    const classifier = task.kind === 'binary' || task.kind === 'multiclass';
+    return { Paired: paired, Agreement: !classifier ? null : paired === 0 ? 0 : agreeing / paired, MeanScoreDelta: paired === 0 ? 0 : deltaSum / paired, Failures: failures };
   }
 }

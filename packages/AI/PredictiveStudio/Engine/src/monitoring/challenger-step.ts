@@ -2,7 +2,8 @@
  * @module monitoring/challenger-step
  *
  * `ChallengerStep` — what a fired retrain trigger does (D-029, D4-20, architecture C7): the pipeline's protocol
- * prepared for it (`ChallengerProtocol`, D4-180: a date-carved holdout re-carved over the current rows), then one
+ * prepared for it (`ChallengerProtocol`, D4-180: a date-carved holdout re-carved over the current rows; a training that
+ * then fails points the pipeline back at the version before the re-carve), then one
  * challenger training run on a fresh snapshot of the pipeline, published unattended through `AutomatedPublisher.EvaluateAndPublish` with the
  * scheduled-job initiator. The trainer compares the challenger with the incumbent on the incumbent's holdout rows and
  * the gate publishes it only when its paired lower bound beats the margin; monitoring writes no status. A trigger that
@@ -42,13 +43,16 @@ export class ChallengerStep {
       return { ChallengerRunID: null, Result: ChallengerStep.result('waiting', null, null, `${fired.map((f) => f.kind).join(', ')} stayed fired since the period that started a challenger; the next one waits until it is clear for a period`, mirror) };
     }
     let trainingRunId: string;
+    let restore: string | null = null;
     try {
-      const refusal = await ctx.Seams.Publisher.PrepareChallenger(model.PipelineID, initiator, ctx.Seams.Clock.Now(), ctx);
-      if (refusal !== null) return { ChallengerRunID: null, Result: ChallengerStep.result('stopped', null, null, refusal, mirror) };
+      const prepared = await ctx.Seams.Publisher.PrepareChallenger(model.PipelineID, initiator, ctx.Seams.Clock.Now(), ctx);
+      if (prepared.Kind === 'refused') return { ChallengerRunID: null, Result: ChallengerStep.result('stopped', null, null, prepared.Reason, mirror) };
+      restore = prepared.RestoreProtocolID;
       trainingRunId = (await ctx.Seams.Publisher.Train(model.PipelineID, ctx)).TrainingRunID;
     } catch (e) {
       const reason = e instanceof TrainingInFlightError ? `another training of the pipeline is in flight (run ${e.InFlightRunID})` : e instanceof Error ? e.message : String(e);
-      return { ChallengerRunID: null, Result: ChallengerStep.result('failed', null, null, `the challenger training did not start: ${reason}`, mirror) };
+      const restored = restore === null ? '' : await ChallengerStep.restoreProtocol(model.PipelineID, restore, ctx);
+      return { ChallengerRunID: null, Result: ChallengerStep.result('failed', null, null, `the challenger training did not start: ${reason}${restored}`, mirror) };
     }
     const outcome = await ctx.Seams.Publisher.EvaluateAndPublish(trainingRunId, initiator, ctx);
     return { ChallengerRunID: trainingRunId, Result: ChallengerStep.FromOutcome(trainingRunId, outcome, mirror) };
@@ -68,6 +72,19 @@ export class ChallengerStep {
         return ChallengerStep.result('withheld', trainingRunId, null, GateRefusals.Describe(outcome.Refusal), mirror);
       case 'evaluated':
         return ChallengerStep.result('stopped', trainingRunId, null, `the challenger was evaluated ${outcome.To} and not published`, mirror);
+    }
+  }
+
+  /**
+   * Points the pipeline back at the protocol version a re-carve replaced, after its challenger's training failed (M9),
+   * so the next run starts from it; the sentence the outcome's reason gains. A restore that fails is named there too.
+   */
+  private static async restoreProtocol(pipelineId: string, protocolId: string, ctx: MonitoringContext): Promise<string> {
+    try {
+      await ctx.Seams.Publisher.RestoreProtocol(pipelineId, protocolId, ctx);
+      return `; the pipeline's protocol was restored to ${protocolId}, the version before the re-carve`;
+    } catch (e) {
+      return `; restoring the pipeline's protocol to ${protocolId} failed: ${e instanceof Error ? e.message : String(e)}`;
     }
   }
 

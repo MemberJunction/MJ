@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RunView, type RemoteOpInvokeOptions } from '@memberjunction/core';
+import { RunView, type RemoteOpInvokeOptions, type RunViewResult } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 import {
   PredictiveStudioGetModelEvidenceOperation,
@@ -152,7 +152,7 @@ const DAY_MS = 86_400_000;
         }
 
         <div class="ps-so-actions">
-          <span class="ps-so-muted" style="flex:1">{{ PublishHint }}</span>
+          <span class="ps-so-muted ps-so-hint">{{ PublishHint }}</span>
           <button mjButton variant="primary" size="sm" data-testid="ps-sign-off-publish" [disabled]="!CanPublish" (click)="Ask('publish')">
             <i class="fa-solid fa-arrow-up"></i> Publish
           </button>
@@ -196,6 +196,7 @@ const DAY_MS = 86_400_000;
     .ps-so-flag { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--mj-text-primary); }
     .ps-so-reason { width: 100%; box-sizing: border-box; border: 1px solid var(--mj-border-default); border-radius: 6px; padding: 6px 8px; font: inherit; color: var(--mj-text-primary); background: var(--mj-bg-surface); }
     .ps-so-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .ps-so-hint { flex: 1; }
     .ps-so-ok { font-size: 12px; color: var(--mj-status-success-text); }
   `],
 })
@@ -287,7 +288,7 @@ export class PSSignOffPanelComponent extends BaseAngularComponent implements OnC
    */
   protected async LoadPolicy(model: MJMLModelEntity): Promise<void> {
     const protocolId = model.EvaluationProtocolID;
-    const [protocols, refusals] = await RunView.FromMetadataProvider(this.ProviderToUse).RunViews<MJMLEvaluationProtocolEntity | MJMLModelPublishRecordEntity>([
+    const results = await RunView.FromMetadataProvider(this.ProviderToUse).RunViews([
       {
         EntityName: 'MJ: ML Evaluation Protocols',
         ExtraFilter: protocolId ? `ID='${EscapeSQLString(protocolId)}'` : '1=0',
@@ -300,13 +301,18 @@ export class PSSignOffPanelComponent extends BaseAngularComponent implements OnC
         ResultType: 'entity_object',
       },
     ]);
-    const protocol = PSSignOffPanelComponent.firstProtocol(protocols?.Results || []);
+    // RunViews answers in request order: index 0 is the protocol read, index 1 the refusal records read.
+    const protocols: RunViewResult<MJMLEvaluationProtocolEntity> | undefined = results[0];
+    const refusals: RunViewResult<MJMLModelPublishRecordEntity> | undefined = results[1];
+    if (!protocols?.Success) throw new Error(`The model's Evaluation Protocol could not be read: ${protocols?.ErrorMessage || 'the view returned no result'}`);
+    if (!refusals?.Success) throw new Error(`The model's refusal records could not be read: ${refusals?.ErrorMessage || 'the view returned no result'}`);
+    const protocol = protocols.Results[0];
     if (protocol) {
       const parsed = EvaluationProtocol.ParseEvaluationProtocolRow(protocol);
       if (!parsed.Ok) throw new Error(`The model's Evaluation Protocol could not be read: ${parsed.Errors.join('; ')}`);
       this.Policy = { RequiresHumanSignOff: parsed.Value.promotion.requiresHumanSignOff, SignOffExpiryDays: parsed.Value.promotion.signOffExpiryDays };
     }
-    const waitOpened = PSSignOffPanelComponent.newestNoSignOff(refusals?.Results || []);
+    const waitOpened = refusals.Results.find((r) => r.RefusalObject?.kind === 'no-sign-off');
     this.WithheldAt = waitOpened ? waitOpened.RecordedAt : null;
   }
 
@@ -477,19 +483,5 @@ export class PSSignOffPanelComponent extends BaseAngularComponent implements OnC
   private opContext(): RemoteOpInvokeOptions {
     const provider = this.ProviderToUse;
     return { provider, user: provider.CurrentUser };
-  }
-
-  /** The protocol row of a mixed batch result. */
-  private static firstProtocol(rows: readonly (MJMLEvaluationProtocolEntity | MJMLModelPublishRecordEntity)[]): MJMLEvaluationProtocolEntity | null {
-    const row = rows[0];
-    return row && 'Promotion' in row ? row : null;
-  }
-
-  /** The newest no-sign-off refusal record of a mixed batch result (the rows are newest first), or null. */
-  private static newestNoSignOff(rows: readonly (MJMLEvaluationProtocolEntity | MJMLModelPublishRecordEntity)[]): MJMLModelPublishRecordEntity | null {
-    for (const row of rows) {
-      if ('RefusalObject' in row && row.RefusalObject?.kind === 'no-sign-off') return row;
-    }
-    return null;
   }
 }

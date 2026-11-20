@@ -19,7 +19,7 @@
  * | {@link WritePeriod} | the one `MJ: ML Monitoring Results` row of the period (a re-run updates it) |
  *
  * Monitoring writes no model status: every status change goes through the gate. Every read runs on the job's provider
- * as the job's user.
+ * as the job's owner (`OwnerUserID`, resolved by `resolveScheduleOwnerUser`; D4-179), never as the scheduler's user.
  */
 import { ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import type { MJScheduledJobEntity } from '@memberjunction/core-entities';
@@ -50,7 +50,7 @@ import { MonitoringPeriods } from './monitoring-periods';
 import { MonitoringSeamDefaults } from './monitoring-store';
 import { OutcomeJoin, OutcomeJoinFailedError, type OutcomeJoinResult } from './outcome-join';
 import { PeriodEvaluation, type PeriodScores, type PeriodScoringSpec } from './period-evaluation';
-import { RollbackComparisonError, RollbackStep } from './rollback-step';
+import { RollbackStep } from './rollback-step';
 
 /** What one monitored period came to, for the job run's `Details` and the operation's output. */
 export interface MonitoredPeriodOutcome {
@@ -73,6 +73,14 @@ export interface MonitoringRunOutcome {
   /** Why nothing was monitored (the model is gone or no longer Published); null when the periods ran. */
   readonly Skipped: string | null;
   readonly Periods: readonly MonitoredPeriodOutcome[];
+}
+
+/** A step of a period that threw: its message names the step and the error's own message. */
+class PeriodStepError extends Error {
+  constructor(step: string, reason: string) {
+    super(`${step} could not run: ${reason}`);
+    this.name = 'PeriodStepError';
+  }
 }
 
 /** The period's evaluated numbers, with the degradation the triggers read. */
@@ -114,13 +122,16 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
 
   /**
    * The scheduled run: the job's spec from its `Configuration`, then the last complete period of the spec's grain and
-   * every earlier period stored `window-open`. A failed period is recorded on its row (`State = 'failed'`) and fails the
-   * run; the other periods still run.
+   * every earlier period stored `window-open`. Every read runs as the job's owner (D4-179, D4-157), never as the
+   * scheduler's polling user: a job with no `OwnerUserID`, or whose owner is missing or inactive, is refused before any
+   * read. A failed period is recorded on its row (`State = 'failed'`) and fails the run; the other periods still run.
    */
   public async Execute(context: ScheduledJobExecutionContext): Promise<ScheduledJobResult> {
     const spec = MonitoringResultSchemas.ParseJobSpec(context.Schedule.Configuration);
     if (spec.Ok === false) return { Success: false, ErrorMessage: `The monitoring job's Configuration is not a valid MonitoringJobSpec: ${spec.Errors.join('; ')}` };
-    const ctx = this.ContextFor(context.ContextUser, context.Provider, context.Run.ID);
+    const owner = await this.ownerOf(context);
+    if (typeof owner === 'string') return { Success: false, ErrorMessage: owner };
+    const ctx = this.ContextFor(owner, context.Provider, context.Run.ID);
     const now = ctx.Seams.Clock.Now();
     const last = MonitoringPeriods.LastComplete(now, spec.Value.performance.period);
     const reopened = (await ctx.Seams.Store.EarlierPeriods(spec.Value.modelId, last.Grain, last.Start, ctx))
@@ -177,9 +188,28 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
     return { ContextUser: user, Provider: provider, ScheduledJobRunID: scheduledJobRunId, Seams: MonitoringSeamDefaults.Resolve(this.seams) };
   }
 
+  /**
+   * The job's owner, resolved through `BaseScheduledJob.resolveScheduleOwnerUser` (fails closed for a missing or
+   * inactive owner); the refusal in words when the job has no owner or it cannot be resolved.
+   */
+  private async ownerOf(context: ScheduledJobExecutionContext): Promise<MonitoringContext['ContextUser'] | string> {
+    if (!context.Schedule.OwnerUserID) {
+      return `The monitoring job "${context.Schedule.Name}" has no OwnerUserID: monitoring reads as the job's owner (D4-179), never as the scheduler's user, so it did not run; give the job an owner who holds the binding's view authorization`;
+    }
+    try {
+      return await this.resolveScheduleOwnerUser(context.Schedule, context.ContextUser);
+    } catch (e) {
+      return `The monitoring job's owner could not be resolved, so it did not run: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  }
+
   // ----- one period ------------------------------------------------------------------------------------------------
 
-  /** One period through every step; a failure of the join or a step is recorded on the period's row. */
+  /**
+   * One period through every step. A failure of the join or of any step (an unreachable sidecar, an artifact that no
+   * longer loads verified, a publisher, parity or notifier error) is recorded on the period's row as `failed` with the
+   * step and its reason, and the next period still runs. Only a failure to write the period's row itself propagates.
+   */
   protected async MonitorPeriod(plan: PeriodPlan, period: MonitoringPeriod, ctx: MonitoringContext): Promise<MonitoredPeriodOutcome> {
     const base = PredictiveStudioModelMonitoringJobDriver.emptyRow(plan.Model.ID, ctx.ScheduledJobRunID, period);
     if (!MonitoringRules.LabelWindowClosed(plan.Unit, MonitoringPeriods.LastDay(period), ctx.Seams.Clock.Now())) {
@@ -189,38 +219,49 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
     try {
       join = await this.JoinOutcomes(plan, period, ctx);
     } catch (e) {
-      if (!(e instanceof OutcomeJoinFailedError)) throw e;
-      return this.WritePeriod({ ...base, State: 'failed', ErrorMessage: e.message }, ctx);
+      const reason = e instanceof OutcomeJoinFailedError ? e.message : `the outcome join could not run: ${e instanceof Error ? e.message : String(e)}`;
+      return this.WritePeriod({ ...base, State: 'failed', ErrorMessage: reason }, ctx);
     }
     const counted = { ...base, ScoredRows: join.ScoredRows, JoinedRows: join.Rows.filter((r) => r.Outcome !== null).length, ExcludedInTrainingRows: join.ExcludedInTrainingRows };
     if (!join.Rows.some((r) => r.Outcome !== null)) {
       return this.WritePeriod({ ...counted, State: 'failed', ErrorMessage: `no realised outcome among the period's ${join.Rows.length} joined prediction(s)` }, ctx);
     }
+    let write: PeriodRowWrite;
     try {
-      return await this.evaluateAndAct(plan, period, join, counted, ctx);
+      write = await this.evaluateAndAct(plan, period, join, counted, ctx);
     } catch (e) {
-      if (!(e instanceof RollbackComparisonError)) throw e;
-      return this.WritePeriod({ ...counted, State: 'failed', ErrorMessage: `the rollback check could not run: ${e.message}` }, ctx);
+      return this.WritePeriod({ ...counted, State: 'failed', ErrorMessage: e instanceof Error ? e.message : String(e) }, ctx);
     }
+    return this.WritePeriod(write, ctx);
   }
 
-  /** Steps 2–8 of a joined period, then its row. */
-  private async evaluateAndAct(plan: PeriodPlan, period: MonitoringPeriod, join: OutcomeJoinResult, counted: PeriodRowWrite, ctx: MonitoringContext): Promise<MonitoredPeriodOutcome> {
-    const history = await ctx.Seams.Store.EarlierPeriods(plan.Model.ID, period.Grain, period.Start, ctx);
-    const evaluated = await this.EvaluatePeriod(plan, join.Rows, period, ctx);
-    const drift = await this.LookForDrift(plan, join, period, history, ctx);
+  /** Steps 2–8 of a joined period, each named in the error that stops it; the period's row to write. */
+  private async evaluateAndAct(plan: PeriodPlan, period: MonitoringPeriod, join: OutcomeJoinResult, counted: PeriodRowWrite, ctx: MonitoringContext): Promise<PeriodRowWrite> {
+    const step = PredictiveStudioModelMonitoringJobDriver.step;
+    const history = await step('the period history read', () => ctx.Seams.Store.EarlierPeriods(plan.Model.ID, period.Grain, period.Start, ctx));
+    const evaluated = await step('the evaluation', () => this.EvaluatePeriod(plan, join.Rows, period, ctx));
+    const drift = await step('the drift look', () => this.LookForDrift(plan, join, period, history, ctx));
     const current = PredictiveStudioModelMonitoringJobDriver.periodResult(plan.Model.ID, period, join.Rows.length, evaluated.Scores, evaluated.Degradation);
-    const fired = await this.FireTriggers(plan, history, current, ctx);
+    const fired = await step('the retrain triggers', () => this.FireTriggers(plan, history, current, ctx));
     const previousFired = history.filter((h) => h.State === 'evaluated').slice(-1).flatMap((h) => h.TriggersFired);
-    const mirror = await this.MeasureDivergence(plan, join, period, ctx);
-    const challenger = await this.RunChallenger(plan, fired, previousFired, mirror, ctx);
-    const rollback = await this.CheckRollback(plan, history, period, ctx);
-    const parity = await this.CheckParity(plan, join.Binding, period, ctx);
-    return this.WritePeriod({
+    const mirror = await step('the live mirror', () => this.MeasureDivergence(plan, join, period, ctx));
+    const challenger = await step('the challenger', () => this.RunChallenger(plan, fired, previousFired, mirror, ctx));
+    const rollback = await step('the rollback check', () => this.CheckRollback(plan, history, period, ctx));
+    const parity = await step('the parity check', () => this.CheckParity(plan, join.Binding, period, ctx));
+    return {
       ...counted, State: 'evaluated', Primary: evaluated.Scores.Primary, Tracked: evaluated.Scores.Tracked, Calibration: evaluated.Scores.Calibration,
       DriftLook: drift.Look, DriftAlarms: drift.Alarms, Parity: parity, TriggersFired: fired, ChallengerRunID: challenger.ChallengerRunID,
       Challenger: challenger.Result, Rollback: rollback,
-    }, ctx);
+    };
+  }
+
+  /** Runs one named step; an error it throws is rethrown as a {@link PeriodStepError} naming the step. */
+  private static async step<T>(name: string, run: () => Promise<T>): Promise<T> {
+    try {
+      return await run();
+    } catch (e) {
+      throw new PeriodStepError(name, e instanceof Error ? e.message : String(e));
+    }
   }
 
   /** Step 1: the period's predictions joined to their realised outcomes ({@link OutcomeJoin.Join}). */
@@ -241,7 +282,7 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
    */
   protected async LookForDrift(plan: PeriodPlan, join: OutcomeJoinResult, period: MonitoringPeriod, history: readonly StoredPeriodRow[], ctx: MonitoringContext): Promise<DriftLook> {
     const inputs = (await ctx.Seams.Store.DriftInputs(plan.Model, plan.Unit, join.Rows.map((r) => r.RecordID), ctx))
-      .map((i) => ({ name: i.Name, kind: PredictiveStudioModelMonitoringJobDriver.inputKind(i.Reference, i.Current), reference: [...i.Reference], current: [...i.Current] }))
+      .map((i) => ({ name: i.Name, kind: PredictiveStudioModelMonitoringJobDriver.inputKind(i.Reference, i.Current, plan.Unit.Spec.temporal !== null), reference: [...i.Reference], current: [...i.Current] }))
       .filter((i): i is typeof i & { kind: MonitorInputKind } => i.kind !== null);
     if (inputs.length === 0) return { Look: null, Alarms: [] };
     const look = Math.min(PredictiveStudioModelMonitoringJobDriver.MAX_LOOK, history.filter((h) => h.State === 'evaluated').length + 1);
@@ -284,7 +325,8 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
 
   /**
    * Step 7: the live mirror's divergence over the period — the binding's challenger `Challenger` rows against the
-   * champion rows of the records in the challenger's sample; null without a binding or a named challenger.
+   * champion rows of the records in the challenger's sample (agreement for a classifier only, M7); null without a
+   * binding or a named challenger.
    */
   protected async MeasureDivergence(plan: PeriodPlan, join: OutcomeJoinResult, period: MonitoringPeriod, ctx: MonitoringContext): Promise<MonitoringMirror | null> {
     if (join.Binding === null) return null;
@@ -292,7 +334,7 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
     if (selection === null) return null;
     const champion = (await ctx.Seams.Store.ModelRows(plan.Model.ID, join.Binding.ID, 'Champion', period, ctx)).filter((p) => selection.Sampled(p.RecordID));
     const challenger = await ctx.Seams.Store.ModelRows(selection.ModelID, join.Binding.ID, 'Challenger', period, ctx);
-    const d = MonitoringRules.Divergence(champion.map((p) => ({ RecordID: p.RecordID, Score: p.Score })), challenger.map((p) => ({ RecordID: p.RecordID, Score: p.Score })));
+    const d = MonitoringRules.Divergence(champion.map((p) => ({ RecordID: p.RecordID, Score: p.Score })), challenger.map((p) => ({ RecordID: p.RecordID, Score: p.Score })), plan.Task);
     return { challengerModelId: selection.ModelID, paired: d.Paired, agreement: d.Agreement, meanScoreDelta: d.MeanScoreDelta, failures: d.Failures };
   }
 
@@ -344,20 +386,28 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
     return { PrimaryScore: plan.Spec.performance.primaryScore, Interval: plan.Spec.performance.interval, Task: plan.Task, Seed: PredictiveStudioModelMonitoringJobDriver.SeedOf(plan.Model.ID, period, 'interval') };
   }
 
-  /** A notification to the job's owner (the operation's caller when no job run is behind the call), D4-18. */
+  /**
+   * A notification to the user the run executes as (D4-18): the job's owner on a scheduled run ({@link Execute}
+   * resolves it before any read, so there is no second read that could drop it), the operation's caller otherwise.
+   */
   private async notify(plan: PeriodPlan, title: string, message: string, ctx: MonitoringContext): Promise<void> {
-    const owner = ctx.ScheduledJobRunID ? await ctx.Seams.Store.JobOwner(ctx.ScheduledJobRunID, ctx) : ctx.ContextUser.ID;
-    if (owner) await ctx.Seams.Notifier.Notify(owner, title, message, plan.Model.ID, ctx);
+    await ctx.Seams.Notifier.Notify(ctx.ContextUser.ID, title, message, plan.Model.ID, ctx);
   }
 
-  /** The procedure-M input kind of a column, or null when the column cannot be tested (no variation, too short). Pure. */
-  private static inputKind(reference: readonly number[], current: readonly number[]): MonitorInputKind | null {
+  /**
+   * The procedure-M input kind of a column (D4-196), or null when the column cannot be tested (no variation, too
+   * short): `proportion` for 0/1 columns; `series` for the one value of a single series, which only a forecast unit is
+   * by design (a unit with a `TemporalSpec`; a multi-series forecast is refused at bind, D4-181), so its one-row period
+   * is the series' next value under the AR(1) null; else `mean`, including a non-forecast unit's period that happens to
+   * hold one row (a look mean of n = 1 under the independent-rows null). Pure.
+   */
+  private static inputKind(reference: readonly number[], current: readonly number[], singleSeries: boolean): MonitorInputKind | null {
     if (current.length === 0 || reference.length < 3) return null;
     const mean = reference.reduce((s, v) => s + v, 0) / reference.length;
     if (!reference.some((v) => v !== mean)) return null;
     const binary = (xs: readonly number[]): boolean => xs.every((v) => v === 0 || v === 1);
     if (binary(reference) && binary(current)) return 'proportion';
-    return current.length === 1 ? 'series' : 'mean';
+    return singleSeries && current.length === 1 ? 'series' : 'mean';
   }
 
   /** A row with nothing measured yet. */

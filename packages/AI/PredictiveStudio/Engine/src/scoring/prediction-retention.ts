@@ -13,9 +13,8 @@
 import { LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJFeatureValueEntity, MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
-import { UtcDay } from '@memberjunction/predictive-studio-core';
+import { DEFAULT_VIEW_AUTHORIZATION_NAME, FindDefaultViewAuthorization, UtcDay } from '@memberjunction/predictive-studio-core';
 import type { RegistryContext } from '../registry/registry-context';
-import { DEFAULT_VIEW_AUTHORIZATION_NAME } from './scoring-binding';
 
 /** Rows one sweep batch deletes at most (§5.8.7). */
 export const PREDICTION_RETENTION_BATCH_SIZE = 1000;
@@ -178,8 +177,7 @@ export class PredictionRetention {
 
   /** The seeded authorization's ID in the provider's metadata (trimmed, case-insensitive name), or null when absent. */
   public static SeededAuthorizationID(provider: Pick<IMetadataProvider, 'Authorizations'>): string | null {
-    const wanted = DEFAULT_VIEW_AUTHORIZATION_NAME.toLowerCase();
-    const seeded = provider.Authorizations.find((a) => a.Name.trim().toLowerCase() === wanted);
+    const seeded = FindDefaultViewAuthorization(provider.Authorizations);
     return seeded ? seeded.ID : null;
   }
 

@@ -87,6 +87,13 @@ describe('TransitionRefusalText', () => {
     expect(TransitionRefusalText.For(RefusalOf('illegal-transition'))).toContain('Archived model to Validated');
   });
 
+  it('says an unverifiable artifact keeps a demoted model out of service until its file is restored, never that it is temporary', () => {
+    const text = TransitionRefusalText.For({ kind: 'artifact-unverifiable', detail: 'the stored bytes do not hash to the registered SHA-256' });
+    expect(text).toContain('the stored bytes do not hash to the registered SHA-256');
+    expect(text).toContain('stays out of service until its file is restored');
+    expect(text).not.toMatch(/temporary|try again/i);
+  });
+
   it('says an actor-not-permitted refusal of a person names the missing update permission', () => {
     expect(TransitionRefusalText.For({ kind: 'actor-not-permitted', actor: 'human' })).toContain('update permission on ML Models');
   });

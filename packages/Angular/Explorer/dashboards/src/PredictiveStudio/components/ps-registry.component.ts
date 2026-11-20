@@ -4,7 +4,7 @@ import { AngularSplitModule } from 'angular-split';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UUIDMap, UUIDsEqual } from '@memberjunction/global';
-import { CompositeKey, IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
+import { CompositeKey, IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { MJMLModelEntity, MJMLModelPublishRecordEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { LifecycleLabels, TransitionRefusalText } from '@memberjunction/predictive-studio-core';
@@ -83,6 +83,12 @@ interface RunOutcomeVM {
                     </div>
                   </div>
                   <div class="ps-card-body" style="padding:8px">
+                    @if (RunOutcomesError) {
+                      <div class="ps-callout warn ps-small" data-testid="ps-registry-run-outcomes-error">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <div>The latest runs that shipped no model could not be read: {{ RunOutcomesError }}</div>
+                      </div>
+                    }
                     @if (RunOutcomes.length > 0) {
                       <div class="reg-run-outcomes">
                         <div class="ps-section-title">Latest runs that shipped no model</div>
@@ -154,6 +160,8 @@ export class PSRegistryComponent implements OnInit {
 
   /** Each pipeline's latest run that shipped no model row, newest first. */
   public RunOutcomes: RunOutcomeVM[] = [];
+  /** Why the run outcomes could not be read, or null when they were (shown in place of the section). */
+  public RunOutcomesError: string | null = null;
 
   public SelectedId = '';
 
@@ -276,6 +284,7 @@ export class PSRegistryComponent implements OnInit {
   /**
    * Reads the run-level refusal records (no model row, D4-56) and keeps each pipeline's newest one whose outcome shipped
    * no model: "No signal" or "Kept the existing rule" (one batched `RunView`; the run's pipeline from the engine cache).
+   * A failed read is logged and shown as the section's error ({@link RunOutcomesError}).
    */
   private async loadRunOutcomes(): Promise<void> {
     if (!this.engine || !this.provider) return;
@@ -283,10 +292,14 @@ export class PSRegistryComponent implements OnInit {
       const [result] = await RunView.FromMetadataProvider(this.provider).RunViews<MJMLModelPublishRecordEntity>([
         { EntityName: 'MJ: ML Model Publish Records', ExtraFilter: `Kind='refusal' AND ModelID IS NULL`, OrderBy: 'RecordedAt DESC', MaxRows: 200, ResultType: 'entity_object' },
       ]);
-      this.RunOutcomes = this.toRunOutcomes(result?.Success ? result.Results : []);
-    } catch {
-      // the run outcomes are informational; a failed read leaves the section out rather than blocking the registry
+      if (!result || !result.Success) throw new Error(result?.ErrorMessage || 'the publish records read returned no result');
+      this.RunOutcomes = this.toRunOutcomes(result.Results);
+      this.RunOutcomesError = null;
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : String(e);
+      LogError(`Predictive Studio registry: reading the run outcomes failed: ${reason}`);
       this.RunOutcomes = [];
+      this.RunOutcomesError = reason;
     }
     this.cdr.detectChanges();
   }

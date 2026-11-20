@@ -18,13 +18,15 @@
  * the job run (`{ kind: 'scheduled-job', scheduledJobRunId }`), every read and write runs on `ctx.Provider` as
  * `ctx.ContextUser`, and every ID comparison uses `UUIDsEqual`.
  */
-import { LogError } from '@memberjunction/core';
+import { CompositeKey, LogError } from '@memberjunction/core';
 import type {
   MJMLModelEntity,
   MJMLModelPublishRecordEntity,
+  MJMLModelScoringBindingEntity,
   MJMLTrainingPipelineEntity,
   MJMLTrainingRunEntity,
   MJMLTrainingSnapshotEntity,
+  MJRecordChangeEntity,
   MJRecordProcessEntity,
   MJScheduledJobRunEntity,
 } from '@memberjunction/core-entities';
@@ -233,6 +235,8 @@ export class PreGateModelMigration {
   /** The `StatusReason` the data section gives the pre-change model that keeps serving its pipeline. */
   public static readonly ServingReason =
     'Trained before the Predictive Studio lifecycle gate and still serving; never evaluated under an Evaluation Protocol; replaced automatically when a model is published through the gate.';
+  /** Record Changes rows read per keyset page by the change detection ({@link InputRowChangedAfter}). */
+  public static readonly ChangePageSize = 500;
   /** The job configuration's defaults (D4-22). */
   public static readonly DefaultConfig: PreChangeMigrationConfig = { BatchSize: 50, RetrainPerRun: 3 };
 
@@ -246,7 +250,7 @@ export class PreGateModelMigration {
     if (!(await PreGateModelMigration.HasPendingWork(ctx))) return null;
     const reverified = await PreGateModelMigration.ReverifyEvidenceBearing(config.BatchSize, ctx);
     const artifacts = await PreGateModelMigration.MigrateArtifacts(config.BatchSize, ctx);
-    const schedules = await PreGateModelMigration.DisableDemotedSchedules(ctx);
+    const schedules = await PreGateModelMigration.DisableDemotedSchedules(config.BatchSize, ctx);
     const reEvaluation = await PreGateModelMigration.ReEvaluate(config.RetrainPerRun, ctx, schedules.Disabled);
     return { Reverified: reverified, Artifacts: artifacts, Schedules: schedules, ReEvaluation: reEvaluation, DisabledProcessIDs: schedules.Disabled };
   }
@@ -310,26 +314,31 @@ export class PreGateModelMigration {
   }
 
   /**
-   * §5.6 step 4 (D4-14): the scoring Action of every non-serving `Unevaluated` model disabled, and every scheduled
-   * `'ML Model'` Record Process without `autoTrain` whose configured model is a non-serving `Unevaluated` one has its
-   * schedule disabled (its ID listed for step 5). A process whose model keeps serving, or one with `autoTrain`, keeps
-   * its schedule.
+   * §5.6 step 4 (D4-14), at most `batch` of each per run: the scoring Action of each non-serving `Unevaluated` model no
+   * earlier run of the job handled (its `Details` list the models whose Action it disabled) is disabled, and each
+   * scheduled `'ML Model'` Record Process without `autoTrain` whose configured model is a non-serving `Unevaluated` one
+   * — only processes whose schedule is still enabled — has its schedule disabled (its ID listed for step 5). A process
+   * whose model keeps serving, or one with `autoTrain`, keeps its schedule. A run after every demoted model was handled
+   * changes and calls nothing.
    *
    * @throws Error when a read or a save fails
    */
-  public static async DisableDemotedSchedules(ctx: PreGateMigrationContext): Promise<ScheduleResult> {
+  public static async DisableDemotedSchedules(batch: number, ctx: PreGateMigrationContext): Promise<ScheduleResult> {
     const demoted = await PreGateModelMigration.ReadModels(`Status='Unevaluated' AND ServingWhileUnevaluated=0`, ctx);
+    const handled = (await PreGateModelMigration.EarlierRunRecords(ctx)).flatMap((r) => r.ScoringActionsDisabled);
     const actions: string[] = [];
-    for (const model of demoted) {
+    for (const model of ExcludeByUUIDs(demoted, handled, (m) => m.ID).slice(0, batch)) {
       await ctx.Seams.ScoringActions.DisableForModel(model, ctx.ContextUser, ctx.Provider);
       actions.push(model.ID);
     }
-    const disabled: string[] = [];
     const demotedIds = new UUIDSet(demoted.map((m) => m.ID));
-    for (const rp of await PreGateModelMigration.ReadScoringProcesses(`ScheduleEnabled=1`, ctx)) {
+    const due = (await PreGateModelMigration.ReadScoringProcesses(`ScheduleEnabled=1`, ctx)).filter((rp) => {
       const config = PreGateModelMigration.configurationOf(rp);
       const modelId = JsonParse.JsonString(config, 'modelId');
-      if (config['autoTrain'] !== undefined || modelId === null || !demotedIds.Has(modelId)) continue;
+      return config['autoTrain'] === undefined && modelId !== null && demotedIds.Has(modelId);
+    });
+    const disabled: string[] = [];
+    for (const rp of due.slice(0, batch)) {
       rp.ScheduleEnabled = false;
       if (!(await rp.Save())) throw new Error(`Disabling the schedule of Record Process ${rp.ID} failed: ${rp.LatestResult?.CompleteMessage || 'unknown error'}`);
       disabled.push(rp.ID);
@@ -378,21 +387,43 @@ export class PreGateModelMigration {
 
   /**
    * One pass on demand (`PredictiveStudio.MigratePreGateModels`): a dry run returns {@link Survey}'s counts and writes
-   * nothing; a writing pass needs the Registry Check job run it belongs to (R9: every lifecycle change is that run's) and
-   * then runs {@link RunRegistryStep} as that run, after the same counts.
+   * nothing; a writing pass needs the Registry Check job run it belongs to (R9: every lifecycle change is that run's),
+   * one that is running now or that the caller executed ({@link WritingRunRefusal}: a finished run of someone else is
+   * never borrowed, so the record names who did the work), and then runs {@link RunRegistryStep} as that run, after the
+   * same counts.
    *
-   * @throws Error naming the run when a writing pass names no run of a Registry Check job
+   * @throws Error naming the run when a writing pass names no run of a Registry Check job, or a finished run the caller
+   *   did not execute
    */
   public static async RunPass(options: PreChangePassOptions, ctx: RegistryContext, seams: Partial<PreGateMigrationSeams> = {}): Promise<PreChangePassResult> {
     const survey = await PreGateModelMigration.Survey(ctx);
     if (options.DryRun) return { DryRun: true, Survey: survey, Details: null };
     const runId = options.ScheduledJobRunID;
-    const why = runId === null ? 'no scheduledJobRunId was given' : await RegistryCheckInitiators.RefusalOf({ kind: 'scheduled-job', scheduledJobRunId: runId }, ctx);
+    const notRegistry = runId === null ? 'no scheduledJobRunId was given' : await RegistryCheckInitiators.RefusalOf({ kind: 'scheduled-job', scheduledJobRunId: runId }, ctx);
+    const why = runId !== null && notRegistry === null ? await PreGateModelMigration.WritingRunRefusal(runId, ctx) : notRegistry;
     if (runId === null || why !== null) {
       throw new Error(`Predictive Studio pre-change migration: a writing pass runs only as a ${RegistryCheckInitiators.JobTypeName} job run (ruling R9); ${why}`);
     }
     const details = await PreGateModelMigration.RunRegistryStep(options.Config, PreGateMigrationContexts.ForJobRun(ctx, runId, seams));
     return { DryRun: false, Survey: survey, Details: details };
+  }
+
+  /**
+   * Why a Registry Check run may not carry a writing pass, or null when it may: it is `Running`, or the caller executed
+   * it (`ExecutedByUserID`). A finished run someone else executed is refused, in words naming its status.
+   *
+   * @throws Error when the read fails
+   */
+  protected static async WritingRunRefusal(runId: string, ctx: RegistryContext): Promise<string | null> {
+    const r = await StoredRowReads.Run<Pick<MJScheduledJobRunEntity, 'ID' | 'Status' | 'ExecutedByUserID'>>(
+      { EntityName: 'MJ: Scheduled Job Runs', ExtraFilter: `ID='${EscapeSQLString(runId)}'`, Fields: ['ID', 'Status', 'ExecutedByUserID'], MaxRows: 1, ResultType: 'simple' },
+      ctx,
+    );
+    if (!r.Success) throw new Error(`Reading Scheduled Job Run ${runId} failed: ${r.ErrorMessage || 'unknown error'}`);
+    const run = r.Results.find((x) => UUIDsEqual(x.ID, runId));
+    if (run === undefined) return `no Scheduled Job Run has the ID '${runId}'`;
+    if (run.Status === 'Running' || UUIDsEqual(run.ExecutedByUserID, ctx.ContextUser.ID)) return null;
+    return `run ${runId} is ${run.Status}, not Running, and was not executed by the caller`;
   }
 
   /**
@@ -623,11 +654,21 @@ export class PreGateModelMigration {
 
   /**
    * The Record Processes earlier runs of this job disabled: `DisabledProcessIDs` under {@link DetailsKey} in the
-   * `Details` of every run of the job the current run belongs to. A `Details` that is not JSON is skipped.
+   * `Details` of every run of the job the current run belongs to ({@link EarlierRunRecords}).
    *
    * @throws Error when a read fails
    */
   protected static async DisabledByEarlierRuns(ctx: PreGateMigrationContext): Promise<string[]> {
+    return (await PreGateModelMigration.EarlierRunRecords(ctx)).flatMap((r) => r.DisabledProcessIDs);
+  }
+
+  /**
+   * What step 4 of each run of the job the current run belongs to recorded under {@link DetailsKey}: the Record
+   * Processes it disabled and the models whose scoring Action it disabled. A `Details` that is not JSON records nothing.
+   *
+   * @throws Error when a read fails
+   */
+  protected static async EarlierRunRecords(ctx: PreGateMigrationContext): Promise<{ readonly DisabledProcessIDs: string[]; readonly ScoringActionsDisabled: string[] }[]> {
     const current = await StoredRowReads.Run<Pick<MJScheduledJobRunEntity, 'ID' | 'ScheduledJobID'>>(
       { EntityName: 'MJ: Scheduled Job Runs', ExtraFilter: `ID='${EscapeSQLString(ctx.ScheduledJobRunID)}'`, Fields: ['ID', 'ScheduledJobID'], MaxRows: 1, ResultType: 'simple' },
       ctx,
@@ -640,15 +681,23 @@ export class PreGateModelMigration {
       ctx,
     );
     if (!runs.Success) throw new Error(`Reading the runs of Scheduled Job ${jobId} failed: ${runs.ErrorMessage || 'unknown error'}`);
-    return runs.Results.flatMap((r) => PreGateModelMigration.DisabledProcessIDsOf(r.Details));
+    return runs.Results.map((r) => ({
+      DisabledProcessIDs: PreGateModelMigration.DisabledProcessIDsOf(r.Details),
+      ScoringActionsDisabled: PreGateModelMigration.ScoringActionsDisabledOf(r.Details),
+    }));
+  }
+
+  /** The models whose scoring Action a job run's step 4 disabled (`Schedules.ScoringActionsDisabled` under {@link DetailsKey}); [] for none or text that is not JSON. Pure. */
+  public static ScoringActionsDisabledOf(details: string | null): string[] {
+    const record = PreGateModelMigration.recordOf(details);
+    const schedules = record === null ? null : JsonParse.JsonObjectField(record, 'Schedules');
+    return schedules ? JsonParse.JsonStringArray(schedules, 'ScoringActionsDisabled') || [] : [];
   }
 
   /** The `DisabledProcessIDs` a job run's `Details` records under {@link DetailsKey}; [] for none or text that is not JSON. Pure. */
   public static DisabledProcessIDsOf(details: string | null): string[] {
-    const parsed = JsonParse.ParseJsonText(details, 'Details');
-    if (parsed.Ok === false || !JsonParse.IsJsonObject(parsed.Value)) return [];
-    const record = parsed.Value[PreGateModelMigration.DetailsKey];
-    return JsonParse.IsJsonObject(record) ? JsonParse.JsonStringArray(record, 'DisabledProcessIDs') || [] : [];
+    const record = PreGateModelMigration.recordOf(details);
+    return record === null ? [] : JsonParse.JsonStringArray(record, 'DisabledProcessIDs') || [];
   }
 
   /**
@@ -672,10 +721,13 @@ export class PreGateModelMigration {
   }
 
   /**
-   * True when one of the pipeline's change-detection columns moved after its last attempt (D4-22): the pipeline row's
-   * `__mj_UpdatedAt`; its bound protocol version's ID against the protocol the attempt's run was evaluated under; the
-   * newest `__mj_UpdatedAt` of its target entity's rows (the unit's source rows) and of the `MJ: Feature Values` of
-   * that entity.
+   * True when one of the pipeline's change-detection inputs moved after its last attempt (D4-22, D4-211 as amended):
+   * the pipeline row's `__mj_UpdatedAt`; its bound protocol version's ID against the protocol the attempt's run was
+   * evaluated under; the newest `__mj_UpdatedAt` of its target entity's input `MJ: Feature Values` (`Source` `Pipeline`
+   * or `Human`: a `Model` row is scoring's own prediction, never an input); and its target entity's rows. Scoring writes
+   * back into the target rows only through a binding's `TargetColumn` ({@link CopiedColumns}), so for an entity with
+   * such a column a row counts only through what changed in it ({@link InputRowChangedAfter}) or a row created after
+   * the attempt; an entity with none counts its rows' newest `__mj_UpdatedAt`.
    *
    * @throws Error when a read fails
    */
@@ -684,8 +736,67 @@ export class PreGateModelMigration {
     if (after(pipeline.__mj_UpdatedAt ? new Date(pipeline.__mj_UpdatedAt) : null)) return true;
     const run = await PreGateModelMigration.ReadRunRow(attempt.TrainingRunID, ctx);
     if (run !== null && pipeline.EvaluationProtocolID && !UUIDsEqual(run.EvaluationProtocolID, pipeline.EvaluationProtocolID)) return true;
-    if (pipeline.TargetEntityID && after(await PreGateModelMigration.NewestUpdate('MJ: Feature Values', `EntityID='${EscapeSQLString(pipeline.TargetEntityID)}'`, ctx))) return true;
-    return pipeline.TargetEntity ? after(await PreGateModelMigration.NewestUpdate(pipeline.TargetEntity, '', ctx)) : false;
+    const entityId = pipeline.TargetEntityID;
+    const inputValues = entityId ? `EntityID='${EscapeSQLString(entityId)}' AND Source IN ('Pipeline', 'Human')` : null;
+    if (inputValues !== null && after(await PreGateModelMigration.NewestStamp('MJ: Feature Values', '__mj_UpdatedAt', inputValues, ctx))) return true;
+    if (!pipeline.TargetEntity) return false;
+    const copied = entityId ? await PreGateModelMigration.CopiedColumns(entityId, ctx) : new Set<string>();
+    if (!entityId || copied.size === 0) return after(await PreGateModelMigration.NewestStamp(pipeline.TargetEntity, '__mj_UpdatedAt', '', ctx));
+    if (after(await PreGateModelMigration.NewestStamp(pipeline.TargetEntity, '__mj_CreatedAt', '', ctx))) return true;
+    return PreGateModelMigration.InputRowChangedAfter(entityId, copied, attempt.RecordedAt, ctx);
+  }
+
+  /**
+   * The columns of the entity that scoring writes back into: the `TargetColumn` of every scoring binding of the entity,
+   * whatever its status (a withdrawal clears its copies too), trimmed and lower-cased.
+   *
+   * @throws Error when the read fails
+   */
+  protected static async CopiedColumns(entityId: string, ctx: RegistryContext): Promise<Set<string>> {
+    const r = await StoredRowReads.Run<Pick<MJMLModelScoringBindingEntity, 'TargetColumn'>>(
+      { EntityName: 'MJ: ML Model Scoring Bindings', ExtraFilter: `TargetEntityID='${EscapeSQLString(entityId)}' AND TargetColumn IS NOT NULL`, Fields: ['TargetColumn'], ResultType: 'simple' },
+      ctx,
+    );
+    if (!r.Success) throw new Error(`Reading the scoring bindings of entity ${entityId} failed: ${r.ErrorMessage || 'unknown error'}`);
+    return new Set(r.Results.map((b) => (b.TargetColumn || '').trim().toLowerCase()).filter((c) => c.length > 0));
+  }
+
+  /**
+   * True when a complete Record Changes row of the entity after `since` is an input change ({@link IsInputChange}):
+   * read in keyset pages of {@link ChangePageSize}, stopping at the first one. An entity that does not track record
+   * changes has no rows, so only its created rows ({@link ChangedSince}) count.
+   *
+   * @throws Error when a read fails
+   */
+  protected static async InputRowChangedAfter(entityId: string, copiedColumns: ReadonlySet<string>, since: Date, ctx: RegistryContext): Promise<boolean> {
+    let afterKey: CompositeKey | undefined;
+    for (;;) {
+      const r = await StoredRowReads.Run<Pick<MJRecordChangeEntity, 'ID' | 'Type' | 'ChangesJSON'>>(
+        {
+          EntityName: 'MJ: Record Changes',
+          ExtraFilter: `EntityID='${EscapeSQLString(entityId)}' AND Status='Complete' AND ChangedAt > '${since.toISOString()}'`,
+          OrderBy: 'ID ASC', Fields: ['ID', 'Type', 'ChangesJSON'], MaxRows: PreGateModelMigration.ChangePageSize, ResultType: 'simple', ...(afterKey ? { AfterKey: afterKey } : {}),
+        },
+        ctx,
+      );
+      if (!r.Success) throw new Error(`Reading the record changes of entity ${entityId} failed: ${r.ErrorMessage || 'unknown error'}`);
+      if (r.Results.some((c) => PreGateModelMigration.IsInputChange(c, copiedColumns))) return true;
+      if (r.Results.length < PreGateModelMigration.ChangePageSize) return false;
+      afterKey = CompositeKey.FromID(r.Results[r.Results.length - 1].ID); // 'MJ: Record Changes' is an MJ core entity keyed by ID
+    }
+  }
+
+  /**
+   * True when a Record Changes row changed a training input: a `Create` or a `Delete`, or an `Update` listing a field
+   * that is not one of `copiedColumns` (scoring's write-backs), or whose `ChangesJSON` does not parse. A `Snapshot` (a
+   * history baseline) changes nothing. Pure.
+   */
+  public static IsInputChange(change: Pick<MJRecordChangeEntity, 'Type' | 'ChangesJSON'>, copiedColumns: ReadonlySet<string>): boolean {
+    if (change.Type === 'Snapshot') return false;
+    if (change.Type !== 'Update') return true;
+    const parsed = JsonParse.ParseJsonText(change.ChangesJSON, 'ChangesJSON');
+    if (parsed.Ok === false || !JsonParse.IsJsonObject(parsed.Value)) return true;
+    return Object.keys(parsed.Value).some((field) => !copiedColumns.has(field.trim().toLowerCase()));
   }
 
   /**
@@ -807,14 +918,14 @@ export class PreGateModelMigration {
     return r.Results.find((x) => UUIDsEqual(x.ID, snapshotId)) || null;
   }
 
-  /** The newest `__mj_UpdatedAt` of `entityName`'s rows matching `filter`; null for none. */
-  protected static async NewestUpdate(entityName: string, filter: string, ctx: RegistryContext): Promise<Date | null> {
-    const r = await StoredRowReads.Run<{ readonly __mj_UpdatedAt: Date | string | null }>(
-      { EntityName: entityName, ExtraFilter: filter, OrderBy: '__mj_UpdatedAt DESC', Fields: ['__mj_UpdatedAt'], MaxRows: 1, ResultType: 'simple' },
+  /** The newest `column` stamp of `entityName`'s rows matching `filter`; null for none. */
+  protected static async NewestStamp(entityName: string, column: '__mj_UpdatedAt' | '__mj_CreatedAt', filter: string, ctx: RegistryContext): Promise<Date | null> {
+    const r = await StoredRowReads.Run<Readonly<Record<typeof column, Date | string | null>>>(
+      { EntityName: entityName, ExtraFilter: filter, OrderBy: `${column} DESC`, Fields: [column], MaxRows: 1, ResultType: 'simple' },
       ctx,
     );
-    if (!r.Success) throw new Error(`Reading the newest change of ${entityName} failed: ${r.ErrorMessage || 'unknown error'}`);
-    const value = r.Results[0]?.__mj_UpdatedAt;
+    if (!r.Success) throw new Error(`Reading the newest ${column} of ${entityName} failed: ${r.ErrorMessage || 'unknown error'}`);
+    const value = r.Results[0]?.[column];
     return value ? new Date(value) : null;
   }
 
@@ -823,6 +934,14 @@ export class PreGateModelMigration {
   /** The job run as the initiator of every gate call. */
   private static initiatorOf(ctx: PreGateMigrationContext): Actor {
     return { kind: 'scheduled-job', scheduledJobRunId: ctx.ScheduledJobRunID };
+  }
+
+  /** This migration's record in a job run's `Details` (under {@link DetailsKey}); null for none or text that is not JSON. */
+  private static recordOf(details: string | null): JsonObject | null {
+    const parsed = JsonParse.ParseJsonText(details, 'Details');
+    if (parsed.Ok === false || !JsonParse.IsJsonObject(parsed.Value)) return null;
+    const record = parsed.Value[PreGateModelMigration.DetailsKey];
+    return JsonParse.IsJsonObject(record) ? record : null;
   }
 
   /** A Record Process `Configuration` as an object ({} when it is empty, not JSON, or not an object). */

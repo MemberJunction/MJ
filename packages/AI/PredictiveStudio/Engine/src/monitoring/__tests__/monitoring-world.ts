@@ -16,8 +16,10 @@ import type {
 
 import type { EvaluateOutcome, PublishOutcome, PublishRequest } from '../../registry/gate-context';
 import { GateTestProvider, GateTestStore } from '../../__tests__/fakes/gate-test-store';
+import type { RegistryContext } from '../../registry/registry-context';
 import type { ChallengerSelection } from '../../scoring/scoring-seams';
 import type {
+  ChallengerPreparation,
   DriftInputValues,
   IMonitoringDrift,
   IMonitoringGate,
@@ -47,6 +49,8 @@ export const CURRENT = 'C0000000-0000-4000-8000-0000000000A1';
 export const PREDECESSOR = 'C0000000-0000-4000-8000-0000000000A0';
 export const JOB_RUN = 'C0000000-0000-4000-8000-0000000000F1';
 export const OWNER = 'C0000000-0000-4000-8000-0000000000E1';
+/** The scheduler's polling user, who is not the job's owner. */
+export const SCHEDULER = 'C0000000-0000-4000-8000-0000000000E9';
 export const BINARY: TaskType = { kind: 'binary', classOrder: ['0', '1'], adverseIndex: 1 };
 
 /** Day `iso` at 00:00 UTC. */
@@ -102,10 +106,12 @@ export class WorldStore implements IMonitoringStore {
   }
   /** Whether the job's user holds the binding's view authorization (D4-157); true unless a case says otherwise. */
   public HoldsView = true;
+  /** Users (by ID) who do not hold the binding's view authorization even when {@link HoldsView} is true. */
+  public readonly ViewDenied = new Set<string>();
   /** How many times the binding's stored rows were read. */
   public ModelRowReads = 0;
-  public async HoldsBindingView(): Promise<boolean> {
-    return this.HoldsView;
+  public async HoldsBindingView(_bindingId: string, ctx: RegistryContext): Promise<boolean> {
+    return this.HoldsView && !this.ViewDenied.has(NormalizeUUID(ctx.ContextUser.ID));
   }
   public async ModelRows(modelId: string, _bindingId: string, role: 'Champion' | 'Challenger', period: MonitoringPeriod): Promise<ModelPrediction[]> {
     this.ModelRowReads++;
@@ -148,9 +154,6 @@ export class WorldStore implements IMonitoringStore {
     else this.Rows.push(write);
     return `row-${write.ModelID}-${write.Period.Start.toISOString().slice(0, 10)}`;
   }
-  public async JobOwner(): Promise<string | null> {
-    return OWNER;
-  }
 
   /** Stores a `Champion` (or `Challenger`) prediction of a record. */
   public Predict(modelId: string, recordId: string, asOf: Date, score: number, o: { readonly InTraining?: boolean; readonly Role?: 'Champion' | 'Challenger' } = {}): void {
@@ -192,8 +195,14 @@ export class WorldDrift implements IMonitoringDrift {
   public NextDrift(alarms: readonly string[]): void {
     this.next = alarms;
   }
+  /** How many of the next calls fail as an unreachable sidecar would. */
+  public FailNext = 0;
   public async MonitorDrift(request: MonitorDriftRequest): Promise<MonitorDriftResponse> {
     this.Requests.push(request);
+    if (this.FailNext > 0) {
+      this.FailNext--;
+      throw new Error('the ML sidecar is unreachable (ECONNREFUSED)');
+    }
     const flagged = new Set(this.next || []);
     this.next = null;
     const results: MonitorDriftLook[] = request.inputs.map((i) => ({ input: i.name, kind: i.kind, z: flagged.has(i.name) ? 5 : 0, p: flagged.has(i.name) ? 1e-4 : 0.9, pAdjusted: flagged.has(i.name) ? 1e-4 : 0.9, q: request.q, look: request.look, flagged: flagged.has(i.name) }));
@@ -208,15 +217,27 @@ export class WorldPublisher implements IMonitoringPublisher {
   public Answer: (trainingRunId: string) => PublishOutcome | EvaluateOutcome = (id) => ({ Kind: 'published', Purpose: 'publish', ModelID: `model-of-${id}`, PublishRecordID: `publish-of-${id}`, Replaces: CURRENT, Approver: 'automated-gate' });
   /** The refusal `PrepareChallenger` answers with; null prepares it. */
   public PrepareRefusal: string | null = null;
-  /** `prepare:<pipeline>` and `train:<pipeline>`, in call order. */
+  /** The protocol version a re-carve replaced (`PrepareChallenger`'s `RestoreProtocolID`); null when nothing moved. */
+  public RecarvedFrom: string | null = null;
+  /** The error the next `Train` throws; null trains. */
+  public TrainFailure: Error | null = null;
+  /** `prepare:<pipeline>`, `train:<pipeline>` and `restore:<pipeline>:<protocol>`, in call order. */
   public readonly Calls: string[] = [];
-  public async PrepareChallenger(pipelineId: string): Promise<string | null> {
+  public async PrepareChallenger(pipelineId: string): Promise<ChallengerPreparation> {
     this.Calls.push(`prepare:${pipelineId}`);
-    return this.PrepareRefusal;
+    return this.PrepareRefusal === null ? { Kind: 'ready', RestoreProtocolID: this.RecarvedFrom } : { Kind: 'refused', Reason: this.PrepareRefusal };
+  }
+  public async RestoreProtocol(pipelineId: string, protocolId: string): Promise<void> {
+    this.Calls.push(`restore:${pipelineId}:${protocolId}`);
   }
   public async Train(pipelineId: string): Promise<{ readonly TrainingRunID: string; readonly ModelID: string | null }> {
     const id = `run-${this.Trained.length + 1}`;
     this.Calls.push(`train:${pipelineId}`);
+    if (this.TrainFailure !== null) {
+      const failure = this.TrainFailure;
+      this.TrainFailure = null;
+      throw failure;
+    }
     this.Trained.push(pipelineId);
     return { TrainingRunID: id, ModelID: `model-of-${id}` };
   }
@@ -266,7 +287,9 @@ export class MonitoringWorld {
   /** A provider the in-memory seams never read (the registry's test provider over an empty store). */
   public readonly GateStore = new GateTestStore();
   public readonly Provider = new GateTestProvider(this.GateStore);
-  public static readonly User = new UserInfo(null, { ID: OWNER, Email: 'owner@example.com', Type: 'User', UserRoles: [] });
+  public static readonly User = new UserInfo(null, { ID: OWNER, Email: 'owner@example.com', Type: 'User', IsActive: true, UserRoles: [] });
+  /** The scheduler's polling user (MJServer polls as its system user); scheduled runs must not read as it. */
+  public static readonly Scheduler = new UserInfo(null, { ID: SCHEDULER, Email: 'system@example.com', Type: 'User', IsActive: true, UserRoles: [] });
 
   constructor() {
     this.Store.Models.set(NormalizeUUID(CURRENT), MonitoringWorld.model(CURRENT, 'Published'));

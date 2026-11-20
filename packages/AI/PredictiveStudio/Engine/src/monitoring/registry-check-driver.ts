@@ -3,9 +3,10 @@
  *
  * `PredictiveStudioRegistryCheckJobDriver` — the hourly registry check (§5.7 R6, R7; D4-19, D4-20). Every finding of
  * the model registry is remediated through the lifecycle gate (initiator `{ kind: 'scheduled-job', scheduledJobRunId }`)
- * and written, with the action taken, to the run's `Details` and a D4-18 notification to the job's owner. A finding the
- * job cannot remediate in one run (a lock that did not come free, a gate refusal) is recorded `retry` and found again
- * on the next run. One JSDoc'd protected step per finding:
+ * and written, with the action taken, to the run's `Details` and a D4-18 notification (to the job's owner; the seeded
+ * job has none, so to the owner of the finding's model's monitoring job, and a finding with neither is listed in the
+ * run's `Details` under `Unnotified`). A finding the job cannot remediate in one run (a lock that did not come free, a
+ * gate refusal) is recorded `retry` and found again on the next run. One JSDoc'd protected step per finding:
  *
  * | Step | Finding | Action |
  * |---|---|---|
@@ -15,13 +16,14 @@
  * | {@link RemediateArtifactHealth} (c) | a Published model whose stored artifact is `missing` or `hash-mismatch` | archived, the rollback rule, then one training run through `AutomatedPublisher` |
  * | {@link ResyncScoringActions} (d) | a Published model without an active scoring Action | re-synced |
  * | {@link FailStaleScoringRuns} (e) | a scoring run `running` past the threshold (default 6 h) | `failed` with the reason |
- * | {@link CloseSignOffWaits} (f) | a sign-off wait whose newer run was evaluated or whose expiry passed | `refusal` record `sign-off-wait-closed`, archived; the incumbent untouched |
+ * | {@link CloseSignOffWaits} (f) | a sign-off wait whose newer run was evaluated or whose expiry passed | archived through the gate, then (only once it applied) `refusal` record `sign-off-wait-closed`; the incumbent untouched |
  * | {@link RecordOrphanPublishRecords} (h) | a publish record with no matching status change | recorded only |
- * | {@link ReattachViewGate} (i) | a read permission on the prediction entities without the view gate | the filter attached |
+ * | {@link ReattachViewGate} (i) | a read permission on the prediction entities without the view gate | the filter attached where the permission has none; a different filter is recorded, never overwritten |
  *
  * The rollback rule ((a), §5.7 R7): when the pipeline is left with no Published model, the newest `Archived` model with
- * a publish record, a `Delivery` and a verified artifact is published back (`purpose: 'rollback'`); with none, the
- * pipeline serves nothing and scoring refuses `model-not-published`. Pre-change models (`Delivery IS NULL`) are step
+ * an applied backing record (`publish`, `rollback` or `adopt`, D4-204), a `Delivery` and a verified artifact is
+ * published back (`purpose: 'rollback'`); with none, the pipeline serves nothing and scoring refuses
+ * `model-not-published`. Pre-change models (`Delivery IS NULL`) are step
  * (g)'s and are not findings of (a)–(c); (g) runs first, so a model it back-fills is seen by (a)–(c) as migrated.
  */
 import { ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
@@ -39,6 +41,7 @@ import type { GateContext, PublishOutcome, PublishRequest, GateApplyResult } fro
 import { GateRefusals } from '../registry/gate-refusals';
 import { GateContexts } from '../registry/gate-seams';
 import { LifecycleGate } from '../registry/lifecycle-gate';
+import { MonitoringJobs } from '../registry/monitoring-job';
 import { PublishLocks } from '../registry/publish-locks';
 import { PublishRecords } from '../registry/publish-records';
 import type { RegistryContext } from '../registry/registry-context';
@@ -67,6 +70,19 @@ export interface RegistryCheckConfiguration {
   readonly StaleScoringRunHours: number;
   /** Step (g)'s limits, from `Configuration.migration` (`{ batchSize, retrainPerRun }`, D4-22). */
   readonly Migration: PreChangeMigrationConfig;
+  /** `Configuration.ArtifactHealth.Enabled` (default true): false skips step (c). */
+  readonly ArtifactHealth: boolean;
+  /**
+   * `Configuration.AuditComparison.Enabled` (default true): false skips the comparison of status changes with publish
+   * records (§5.7 R6): (a)'s Published-without-a-record check, (b) and (h). (a)'s more-than-one-Published invariant runs.
+   */
+  readonly AuditComparison: boolean;
+}
+
+/** A step the run's `Configuration` turned off, recorded in the run's `Details` under `Skipped`. */
+export interface SkippedStep {
+  readonly Step: RegistryFinding['Finding'];
+  readonly Reason: string;
 }
 
 /** One finding and what the job did about it. */
@@ -79,6 +95,13 @@ export interface RegistryFinding {
   readonly Action: string;
   /** `remediated`, `recorded` (nothing to act on), or `retry` (the action did not complete; found again next run). */
   readonly Outcome: 'remediated' | 'recorded' | 'retry';
+}
+
+/** A finding no one was notified of: the job has no owner and its subject is not a model with a monitoring job owner. */
+export interface UnnotifiedFinding {
+  readonly Finding: RegistryFinding['Finding'];
+  readonly SubjectID: string | null;
+  readonly Reason: string;
 }
 
 /** The registry check's per-model scoring Action seam: whether a model has an active Action, and its re-sync. */
@@ -126,6 +149,8 @@ type RegistryModel = Pick<MJMLModelEntity, 'ID' | 'PipelineID' | 'Version' | 'St
 /** Runs the registry check. */
 @RegisterClass(BaseScheduledJob, 'PredictiveStudioRegistryCheckJobDriver')
 export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
+  /** The `Configuration` sections whose `Enabled` turns steps off. */
+  public static readonly STEP_SETTINGS = ['ArtifactHealth', 'AuditComparison'] as const;
   /** The default `StaleScoringRunHours`. */
   public static readonly DEFAULT_STALE_HOURS = 6;
   private static readonly MS_PER_HOUR = 3_600_000;
@@ -147,27 +172,45 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
   }
 
   /**
-   * Every step, in the table's order, as the job's user on the job's provider: step (g) first, then (a)–(i). A step that
+   * Every step, in the table's order, on the job's provider, as the job's owner when it has one
+   * (`resolveScheduleOwnerUser`, which fails closed for a missing or inactive owner: the run then fails before any step)
+   * and otherwise as the scheduler's system user: the seeded registry job has no owner by design, because (a)–(i) must
+   * see every pipeline and no seeded user other than the system user can. Step (g) runs first, then (a)–(i). A step that
    * throws is recorded as one `retry` finding naming the error; the other steps still run. The run fails only when a
    * step threw. Step (g)'s record, when it ran, is the run's `Details` under {@link PreGateModelMigration.DetailsKey}
    * (later runs read the Record Processes it disabled back from there, D4-14).
    */
   public async Execute(context: ScheduledJobExecutionContext): Promise<ScheduledJobResult> {
     const config = PredictiveStudioRegistryCheckJobDriver.ReadConfiguration(context.Schedule.Configuration);
-    const ctx = GateContexts.ForRequest({ ContextUser: context.ContextUser, Provider: context.Provider });
+    let runAs: GateContext['ContextUser'];
+    try {
+      runAs = await this.resolveScheduleOwnerUser(context.Schedule, context.ContextUser);
+    } catch (e) {
+      return { Success: false, ErrorMessage: `The registry check's owner could not be resolved, so it did not run: ${e instanceof Error ? e.message : String(e)}` };
+    }
+    const ctx = GateContexts.ForRequest({ ContextUser: runAs, Provider: context.Provider });
     const initiator: Actor = { kind: 'scheduled-job', scheduledJobRunId: context.Run.ID };
     const migration = await this.MigratePreChangeModels(config, context.Run.ID, ctx);
     const findings = [...migration.Findings, ...(await this.RunChecks(config, initiator, ctx))];
-    await this.notify(context.Schedule.OwnerUserID, findings, ctx);
+    const unnotified = await this.notify(context.Schedule.OwnerUserID, findings, ctx);
+    const skipped = PredictiveStudioRegistryCheckJobDriver.SkippedSteps(config);
     const failed = findings.filter((f) => f.Outcome === 'retry' && f.Action.startsWith('the step failed'));
     return {
       Success: failed.length === 0,
       ErrorMessage: failed.length === 0 ? undefined : failed.map((f) => f.Detail).join('; '),
-      Details: migration.Details === null ? { Findings: findings } : { Findings: findings, [PreGateModelMigration.DetailsKey]: migration.Details },
+      Details: {
+        Findings: findings,
+        ...(skipped.length > 0 ? { Skipped: skipped } : {}),
+        ...(unnotified.length > 0 ? { Unnotified: unnotified } : {}),
+        ...(migration.Details === null ? {} : { [PreGateModelMigration.DetailsKey]: migration.Details }),
+      },
     };
   }
 
-  /** Checks the `Configuration`: `StaleScoringRunHours`, when present, is a positive number. */
+  /**
+   * Checks the `Configuration`: `StaleScoringRunHours`, when present, is a positive number; `ArtifactHealth.Enabled` and
+   * `AuditComparison.Enabled`, when present, are booleans.
+   */
   public ValidateConfiguration(schedule: MJScheduledJobEntity): ValidationResult {
     const result = new ValidationResult();
     const json = JsonParse.ParseJsonText(schedule.Configuration || '{}', 'Configuration');
@@ -176,6 +219,12 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
       const hours = JsonParse.JsonNumber(json.Value, 'StaleScoringRunHours');
       if ('StaleScoringRunHours' in json.Value && (hours === null || hours <= 0)) {
         result.Errors.push(new ValidationErrorInfo('Configuration.StaleScoringRunHours', 'must be a positive number of hours', schedule.Configuration, ValidationErrorType.Failure));
+      }
+      for (const setting of PredictiveStudioRegistryCheckJobDriver.STEP_SETTINGS) {
+        const section = JsonParse.JsonObjectField(json.Value, setting);
+        if (section !== null && 'Enabled' in section && JsonParse.JsonBoolean(section, 'Enabled') === null) {
+          result.Errors.push(new ValidationErrorInfo(`Configuration.${setting}.Enabled`, 'must be true or false', schedule.Configuration, ValidationErrorType.Failure));
+        }
       }
     }
     result.Success = result.Errors.length === 0;
@@ -196,16 +245,38 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
     const json = JsonParse.ParseJsonText(text || '{}', 'Configuration');
     const root = json.Ok && JsonParse.IsJsonObject(json.Value) ? json.Value : null;
     const hours = root === null ? null : JsonParse.JsonNumber(root, 'StaleScoringRunHours');
+    const enabled = (setting: string): boolean => {
+      const section = root === null ? null : JsonParse.JsonObjectField(root, setting);
+      return section === null || JsonParse.JsonBoolean(section, 'Enabled') !== false;
+    };
     return {
       StaleScoringRunHours: hours !== null && hours > 0 ? hours : PredictiveStudioRegistryCheckJobDriver.DEFAULT_STALE_HOURS,
       Migration: PreGateModelMigration.ConfigFrom(root === null ? null : JsonParse.JsonObjectField(root, 'migration')),
+      ArtifactHealth: enabled('ArtifactHealth'),
+      AuditComparison: enabled('AuditComparison'),
     };
   }
 
-  /** Every step in order; a step that throws becomes one `retry` finding. */
+  /** The steps the `Configuration` turned off, each with the setting that did it. Pure. */
+  public static SkippedSteps(config: RegistryCheckConfiguration): SkippedStep[] {
+    const audit = 'Configuration.AuditComparison.Enabled is false';
+    return [
+      ...(config.AuditComparison ? [] : [
+        { Step: 'a' as const, Reason: `${audit}: the Published-without-a-publish-record check is off (the more-than-one-Published invariant still runs)` },
+        { Step: 'b' as const, Reason: audit }, { Step: 'h' as const, Reason: audit },
+      ]),
+      ...(config.ArtifactHealth ? [] : [{ Step: 'c' as const, Reason: 'Configuration.ArtifactHealth.Enabled is false' }]),
+    ];
+  }
+
+  /**
+   * Every step in order, less those the `Configuration` turned off ({@link SkippedSteps}); a step that throws becomes one
+   * `retry` finding.
+   */
   public async RunChecks(config: RegistryCheckConfiguration, initiator: Actor, ctx: GateContext): Promise<RegistryFinding[]> {
-    const steps: { readonly Letter: RegistryFinding['Finding']; readonly Run: () => Promise<RegistryFinding[]> }[] = [
-      { Letter: 'a', Run: () => this.ArchiveOutsideGatePublishes(initiator, ctx) },
+    const off = new Set(PredictiveStudioRegistryCheckJobDriver.SkippedSteps(config).filter((s) => s.Step !== 'a').map((s) => s.Step));
+    const all: { readonly Letter: RegistryFinding['Finding']; readonly Run: () => Promise<RegistryFinding[]> }[] = [
+      { Letter: 'a', Run: () => this.ArchiveOutsideGatePublishes(initiator, ctx, config.AuditComparison) },
       { Letter: 'b', Run: () => this.RestoreOutsideGateDemotions(initiator, ctx) },
       { Letter: 'c', Run: () => this.RemediateArtifactHealth(initiator, ctx) },
       { Letter: 'd', Run: () => this.ResyncScoringActions(ctx) },
@@ -214,6 +285,7 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
       { Letter: 'h', Run: () => this.RecordOrphanPublishRecords(ctx) },
       { Letter: 'i', Run: () => this.ReattachViewGate(ctx) },
     ];
+    const steps = all.filter((step) => !off.has(step.Letter));
     const findings: RegistryFinding[] = [];
     for (const step of steps) {
       try {
@@ -242,13 +314,14 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
   }
 
   /**
-   * (a) A Published model with no publish record is archived `status-written-outside-gate`; of a pipeline's surplus
-   * Published models the one with the newest publish record stays and the rest are archived; then the rollback rule.
+   * (a) A Published model with no publish record is archived `status-written-outside-gate` (the audit comparison, off
+   * when `auditComparison` is false); of a pipeline's surplus Published models the one with the newest publish record
+   * stays and the rest are archived; then the rollback rule.
    */
-  protected async ArchiveOutsideGatePublishes(initiator: Actor, ctx: GateContext): Promise<RegistryFinding[]> {
+  protected async ArchiveOutsideGatePublishes(initiator: Actor, ctx: GateContext, auditComparison = true): Promise<RegistryFinding[]> {
     const out: RegistryFinding[] = [];
     const touched = new Set<string>();
-    for (const row of await this.query(REGISTRY_CHECK_QUERIES.PublishedWithoutRecord, {}, ctx)) {
+    for (const row of auditComparison ? await this.query(REGISTRY_CHECK_QUERIES.PublishedWithoutRecord, {}, ctx) : []) {
       const modelId = String(row['ModelID']);
       const archived = await this.resolved.Gate.Archive(modelId, 'status-written-outside-gate: the model was set Published without a publish record', initiator, ctx);
       out.push(PredictiveStudioRegistryCheckJobDriver.archiveFinding('a', modelId, 'Published with no publish record (set outside the lifecycle gate)', archived));
@@ -348,8 +421,12 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
   /**
    * (f) A sign-off wait (D4-19): a model whose newest record is a `no-sign-off` refusal is closed when a newer training
    * run of its pipeline has been evaluated, or when its protocol's `signOffExpiryDays` (default 30) have passed since
-   * the withheld attempt: a `refusal` record `sign-off-wait-closed` is written and the model archived; the incumbent
-   * keeps serving.
+   * the withheld attempt (a protocol that cannot be read or parsed leaves the wait open as a `retry` finding naming it,
+   * never a silent default): the model is archived through the gate first, and only once the archive applied is the
+   * `refusal` record `sign-off-wait-closed` written; the incumbent keeps serving. A refused archive writes no record, so
+   * the model's newest record stays `no-sign-off` and the next run finds the wait again (`retry`). The gate's archive
+   * opens its own transaction and takes no work to join it, so the record is written right after it commits; a record
+   * write that fails then is a `retry` finding naming the archived model (its `StatusReason` already names the rule).
    */
   protected async CloseSignOffWaits(initiator: Actor, ctx: GateContext): Promise<RegistryFinding[]> {
     const out: RegistryFinding[] = [];
@@ -357,15 +434,31 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
     for (const model of [...(await this.modelsOfAll('Validated', ctx)), ...(await this.modelsOfAll('KeepBaseline', ctx))]) {
       const latest = await this.latestRecord(model.ID, ctx);
       if (latest === null || latest.Kind !== 'refusal' || !PredictiveStudioRegistryCheckJobDriver.isNoSignOff(latest.RefusalObject)) continue;
-      const closedBy = (await this.newerRunEvaluated(model, ctx)) ? 'newer-run-evaluated'
-        : now.getTime() - new Date(latest.RecordedAt).getTime() >= (await this.expiryDays(model, ctx)) * PredictiveStudioRegistryCheckJobDriver.MS_PER_DAY ? 'expired' : null;
+      let closedBy: 'newer-run-evaluated' | 'expired' | null;
+      try {
+        closedBy = (await this.newerRunEvaluated(model, ctx)) ? 'newer-run-evaluated'
+          : now.getTime() - new Date(latest.RecordedAt).getTime() >= (await this.expiryDays(model, ctx)) * PredictiveStudioRegistryCheckJobDriver.MS_PER_DAY ? 'expired' : null;
+      } catch (e) {
+        out.push({ Finding: 'f', SubjectID: model.ID, Detail: 'a sign-off wait whose expiry could not be read', Action: `left open: ${e instanceof Error ? e.message : String(e)}`, Outcome: 'retry' });
+        continue;
+      }
       if (closedBy === null) continue;
       const refusal: TransitionRefusal = { kind: 'sign-off-wait-closed', closedBy };
-      await PublishRecords.WriteRefusal({ ModelID: model.ID, TrainingRunID: model.TrainingRunID, Purpose: 'publish', Approver: { Kind: 'automated-gate' }, Initiator: initiator, Refusal: refusal, Transient: false }, ctx);
       const archived = await this.resolved.Gate.Archive(model.ID, `sign-off-wait-closed: ${GateRefusals.Describe(refusal)}`, initiator, ctx);
-      out.push(PredictiveStudioRegistryCheckJobDriver.archiveFinding('f', model.ID, `a sign-off wait closed (${closedBy})`, archived));
+      const finding = PredictiveStudioRegistryCheckJobDriver.archiveFinding('f', model.ID, `a sign-off wait closed (${closedBy})`, archived);
+      out.push(archived.Ok ? await this.recordWaitClosed(model, refusal, initiator, finding, ctx) : finding);
     }
     return out;
+  }
+
+  /** (f)'s `sign-off-wait-closed` record, written after the archive applied; a failed write is a `retry` finding. */
+  private async recordWaitClosed(model: RegistryModel, refusal: TransitionRefusal, initiator: Actor, archived: RegistryFinding, ctx: GateContext): Promise<RegistryFinding> {
+    try {
+      await PublishRecords.WriteRefusal({ ModelID: model.ID, TrainingRunID: model.TrainingRunID, Purpose: 'publish', Approver: { Kind: 'automated-gate' }, Initiator: initiator, Refusal: refusal, Transient: false }, ctx);
+      return archived;
+    } catch (e) {
+      return { ...archived, Action: `archived by the lifecycle gate, but its sign-off-wait-closed record did not save: ${e instanceof Error ? e.message : String(e)}`, Outcome: 'retry' };
+    }
   }
 
   /** (h) A publish record with no matching status change (its model gone, Draft or Unevaluated) is recorded only. */
@@ -382,7 +475,11 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
     return out;
   }
 
-  /** (i) A read permission on `MJ: Feature Values` or `MJ: Latest Feature Values` without the view gate gets it. */
+  /**
+   * (i) A read permission on `MJ: Feature Values` or `MJ: Latest Feature Values` with no read filter gets the view gate.
+   * One that carries a different read filter is never overwritten (an admin may have set it on purpose, and replacing it
+   * could widen access): it is a `recorded` finding naming both filters.
+   */
   protected async ReattachViewGate(ctx: GateContext): Promise<RegistryFinding[]> {
     const filters = await StoredRowReads.Run<Pick<MJRowLevelSecurityFilterEntity, 'ID'>>({ EntityName: 'MJ: Row Level Security Filters', ExtraFilter: `Name='${EscapeSQLString(VIEW_GATE_FILTER_NAME)}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 }, ctx);
     if (!filters.Success) throw new Error(`reading the view gate filter failed: ${filters.ErrorMessage}`);
@@ -394,6 +491,14 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
     if (!permissions.Success) throw new Error(`reading the prediction entities' permissions failed: ${permissions.ErrorMessage}`);
     const out: RegistryFinding[] = [];
     for (const permission of permissions.Results.filter((p) => !UUIDsEqual(p.ReadRLSFilterID, gate.ID))) {
+      if (permission.ReadRLSFilterID) {
+        out.push({
+          Finding: 'i', SubjectID: permission.ID, Outcome: 'recorded',
+          Detail: `read permission of role ${permission.RoleID} on ${permission.Entity || permission.EntityID} carries read filter ${permission.ReadRLSFilterID}, not the view gate ${gate.ID}`,
+          Action: 'recorded only: a different read filter is never overwritten; attach the view gate to that filter\'s rule or replace it by hand',
+        });
+        continue;
+      }
       permission.ReadRLSFilterID = gate.ID;
       const saved = await permission.Save();
       out.push({
@@ -405,15 +510,16 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
   }
 
   /**
-   * The rollback rule: when the pipeline has no Published model left, the newest `Archived` model with a publish
-   * record, a `Delivery` and a verified artifact is published back through the gate (`purpose: 'rollback'`).
+   * The rollback rule: when the pipeline has no Published model left, the newest `Archived` model with an applied
+   * backing record (`publish`, `rollback` or `adopt`: {@link PublishRecords.BACKING_PURPOSES}, D4-204), a `Delivery` and
+   * a verified artifact is published back through the gate (`purpose: 'rollback'`).
    */
   protected async RollBackPipeline(pipelineId: string, finding: RegistryFinding['Finding'], initiator: Actor, ctx: GateContext): Promise<RegistryFinding[]> {
     if ((await this.modelsOf(pipelineId, 'Published', ctx)).length > 0) return [];
     const registry = ArtifactRegistry.ForContext(ctx, this.resolved.ArtifactLoader);
     const archived = (await this.modelsOf(pipelineId, 'Archived', ctx)).filter((m) => m.Delivery !== null).sort((a, b) => b.Version - a.Version);
     for (const candidate of archived) {
-      if ((await PublishRecords.FindLatestApplied(candidate.ID, 'publish', ctx)) === null && (await PublishRecords.FindLatestApplied(candidate.ID, 'rollback', ctx)) === null) continue;
+      if (!(await this.hasBackingRecord(candidate.ID, ctx))) continue;
       if ((await registry.Load(candidate, ctx)).Status !== 'verified') continue;
       const request: PublishRequest = { modelId: candidate.ID, purpose: 'rollback', initiator, signOffId: null, reason: `registry check (${finding}): pipeline ${pipelineId} was left with no Published model` };
       return [PredictiveStudioRegistryCheckJobDriver.rollbackFinding(finding, candidate.ID, await this.resolved.Gate.Publish(request, ctx))];
@@ -462,7 +568,20 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
       const record = await this.latestApplied(m.ID, ctx);
       at.set(m.ID, record === null ? -1 : new Date(record.RecordedAt).getTime());
     }
-    return [...models].sort((a, b) => (at.get(b.ID) || -1) - (at.get(a.ID) || -1));
+    const recordedAt = (id: string): number => {
+      const t = at.get(id);
+      return t === undefined ? -1 : t;
+    };
+    return [...models].sort((a, b) => recordedAt(b.ID) - recordedAt(a.ID));
+  }
+
+  /** Whether the model holds an applied record that backs a Published model ({@link PublishRecords.BackingRecordFilter}). */
+  private async hasBackingRecord(modelId: string, ctx: GateContext): Promise<boolean> {
+    const r = await StoredRowReads.Run<Pick<MJMLModelPublishRecordEntity, 'ID'>>({
+      EntityName: 'MJ: ML Model Publish Records', ExtraFilter: `ModelID='${EscapeSQLString(modelId)}' AND ${PublishRecords.BackingRecordFilter()}`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1,
+    }, ctx);
+    if (!r.Success) throw new Error(`reading the backing records of ML Model ${modelId} failed: ${r.ErrorMessage}`);
+    return r.Results.length > 0;
   }
 
   private async latestApplied(modelId: string, ctx: GateContext): Promise<Pick<MJMLModelPublishRecordEntity, 'ID' | 'RecordedAt'> | null> {
@@ -485,13 +604,21 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
     return others.some((m) => m.Version > model.Version);
   }
 
-  /** The model's protocol's `signOffExpiryDays` (30 when the row is missing or does not parse). */
+  /**
+   * The model's protocol's `signOffExpiryDays` (the protocol's own default of 30 applies inside its parse when the rule
+   * leaves it out).
+   *
+   * @throws Error naming the protocol when the model names none, its row cannot be read or is missing, or it does not parse
+   */
   private async expiryDays(model: RegistryModel, ctx: GateContext): Promise<number> {
-    if (!model.EvaluationProtocolID) return 30;
+    if (!model.EvaluationProtocolID) throw new Error(`ML Model ${model.ID} waits on a sign-off but names no Evaluation Protocol to read signOffExpiryDays from`);
     const r = await StoredRowReads.Run<Parameters<typeof EvaluationProtocol.ParseEvaluationProtocolRow>[0]>({ EntityName: 'MJ: ML Evaluation Protocols', ExtraFilter: `ID='${EscapeSQLString(model.EvaluationProtocolID)}'`, ResultType: 'simple', MaxRows: 1 }, ctx); // pk-filter-ok: MJ core entity keyed by ID
-    const row = r.Success ? r.Results[0] : undefined;
-    const parsed = row ? EvaluationProtocol.ParseEvaluationProtocolRow(row) : null;
-    return parsed !== null && parsed.Ok ? parsed.Value.promotion.signOffExpiryDays : 30;
+    if (!r.Success) throw new Error(`reading Evaluation Protocol ${model.EvaluationProtocolID} failed: ${r.ErrorMessage}`);
+    const row = r.Results[0];
+    if (!row) throw new Error(`Evaluation Protocol ${model.EvaluationProtocolID} of ML Model ${model.ID} is missing`);
+    const parsed = EvaluationProtocol.ParseEvaluationProtocolRow(row);
+    if (parsed.Ok === false) throw new Error(`Evaluation Protocol ${model.EvaluationProtocolID} does not parse: ${parsed.Errors.join('; ')}`);
+    return parsed.Value.promotion.signOffExpiryDays;
   }
 
   private async pipelineHasProtocol(pipelineId: string, ctx: GateContext): Promise<boolean> {
@@ -499,12 +626,32 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
     return r.Success && !!r.Results[0]?.EvaluationProtocolID;
   }
 
-  /** One notification per finding to the job's owner (D4-18); none without an owner. */
-  private async notify(ownerUserId: string | null, findings: readonly RegistryFinding[], ctx: RegistryContext): Promise<void> {
-    if (!ownerUserId) return;
+  /**
+   * One notification per finding (D4-18): to the job's owner when the job has one; otherwise (the seeded job has none)
+   * to the owner of the finding's model's monitoring job ({@link MonitoringJobs.OwnerOf}), the user its publish
+   * ran as. Returns the findings no one could be notified of (no job owner and no model owner), which the run's
+   * `Details` lists under `Unnotified`.
+   */
+  private async notify(ownerUserId: string | null, findings: readonly RegistryFinding[], ctx: RegistryContext): Promise<UnnotifiedFinding[]> {
+    const unnotified: UnnotifiedFinding[] = [];
+    const owners = new Map<string, string | null>();
     for (const f of findings) {
-      await this.resolved.Notifier.Notify(ownerUserId, `Predictive Studio registry check (${f.Finding}): ${f.Outcome}`, `${f.Detail}. Action: ${f.Action}.`, f.SubjectID || '', ctx);
+      const recipient = ownerUserId || (await this.modelOwner(f.SubjectID, owners, ctx));
+      if (!recipient) {
+        unnotified.push({ Finding: f.Finding, SubjectID: f.SubjectID, Reason: 'the registry job has no owner and the subject is not a model with a monitoring job owner' });
+        continue;
+      }
+      await this.resolved.Notifier.Notify(recipient, `Predictive Studio registry check (${f.Finding}): ${f.Outcome}`, `${f.Detail}. Action: ${f.Action}.`, f.SubjectID || '', ctx);
     }
+    return unnotified;
+  }
+
+  /** The owner of `subjectId`'s monitoring job when the subject is a model that has one (memoised per run); else null. */
+  private async modelOwner(subjectId: string | null, owners: Map<string, string | null>, ctx: RegistryContext): Promise<string | null> {
+    if (!subjectId) return null;
+    const key = subjectId.toLowerCase();
+    if (!owners.has(key)) owners.set(key, await MonitoringJobs.OwnerOf(subjectId, ctx));
+    return owners.get(key) || null;
   }
 
   private static isNoSignOff(refusal: MJMLModelPublishRecordEntity['RefusalObject']): boolean {

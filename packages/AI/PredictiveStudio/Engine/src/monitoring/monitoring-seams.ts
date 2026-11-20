@@ -199,8 +199,6 @@ export interface IMonitoringStore {
   DriftInputs(model: MonitoredModel, unit: MonitoredUnit, recordIds: readonly string[], ctx: RegistryContext): Promise<DriftInputValues[]>;
   /** Inserts the period row, or updates the one stored for the model, grain and period; returns its ID. */
   WritePeriod(write: PeriodRowWrite, ctx: RegistryContext): Promise<string>;
-  /** The user a scheduled job run's notifications go to (its job's `OwnerUserID`, D4-18); null when none. */
-  JobOwner(scheduledJobRunId: string, ctx: RegistryContext): Promise<string | null>;
 }
 
 /** Shadow scoring through `ScoringService.Predict` on the `monitoring` path (dry run, nothing written). */
@@ -218,14 +216,24 @@ export interface IMonitoringDrift {
   MonitorDrift(request: MonitorDriftRequest): Promise<MonitorDriftResponse>;
 }
 
+/**
+ * What preparing a challenger's protocol came to (D4-180): `refused` with the reason the challenger may not train, or
+ * `ready`, with the protocol version the pipeline pointed at before a re-carve moved it (`RestoreProtocolID`; null when
+ * nothing moved), which a failed training restores.
+ */
+export type ChallengerPreparation =
+  | { readonly Kind: 'refused'; readonly Reason: string }
+  | { readonly Kind: 'ready'; readonly RestoreProtocolID: string | null };
+
 /** A challenger's training and its unattended publish through `AutomatedPublisher` (D-029). */
 export interface IMonitoringPublisher {
   /**
    * Prepares the pipeline's protocol for a challenger (`ChallengerProtocol.Prepare`, D4-180): its date-carved holdout
-   * re-carved over the unit's current rows as of `now`. Returns null when the challenger may train, else the reason it
-   * may not.
+   * re-carved over the unit's current rows as of `now`.
    */
-  PrepareChallenger(pipelineId: string, initiator: Actor, now: Date, ctx: RegistryContext): Promise<string | null>;
+  PrepareChallenger(pipelineId: string, initiator: Actor, now: Date, ctx: RegistryContext): Promise<ChallengerPreparation>;
+  /** Points the pipeline back at `protocolId`, the version a re-carve replaced, after the challenger's training failed. */
+  RestoreProtocol(pipelineId: string, protocolId: string, ctx: RegistryContext): Promise<void>;
   /** Trains the pipeline on a fresh snapshot (single-flight); the model is compared with the incumbent on its rows. */
   Train(pipelineId: string, ctx: RegistryContext): Promise<{ readonly TrainingRunID: string; readonly ModelID: string | null }>;
   /** `AutomatedPublisher.EvaluateAndPublish` with the scheduled-job initiator. */

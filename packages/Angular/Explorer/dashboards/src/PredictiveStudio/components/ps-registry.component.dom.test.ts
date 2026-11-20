@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import type { RunViewParams, RunViewResult } from '@memberjunction/core';
 import { TestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { renderComponentFixture, query, queryAll, createFakeProvider } from '@memberjunction/ng-test-utils';
@@ -53,9 +54,13 @@ const M = makeModel;
 const runLevelRefusal = { ID: 'PR-9', ModelID: null, TrainingRunID: 'TR-1', Kind: 'refusal', RecordedAt: new Date('2026-11-12T00:00:00Z'), RefusalObject: { kind: 'gate-no-signal', reason: 'no candidate beat the flat guess' } };
 
 /** Renders the registry over `models`; the provider serves `records` as publish records, and the engine knows `runs`. */
-async function RenderRegistry(opts: { models: unknown[]; records?: unknown[] }) {
+async function RenderRegistry(opts: { models: unknown[]; records?: unknown[]; failReads?: string }) {
   const engine = { ...makeEngine(opts.models), Pipelines: [{ ID: 'P-1', Name: 'Renewal pipeline' }], TrainingRuns: [{ ID: 'TR-1', PipelineID: 'P-1' }] } as unknown as PredictiveStudioEngine;
   const provider = createFakeProvider({ runViewResults: (p) => (p.EntityName === 'MJ: ML Model Publish Records' ? opts.records || [] : []) });
+  const failure = opts.failReads;
+  if (failure !== undefined) {
+    Object.assign(provider, { RunViews: async (all: RunViewParams[]): Promise<RunViewResult[]> => all.map(() => ({ Success: false, ErrorMessage: failure, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0 })) });
+  }
   const f = renderComponentFixture(PSRegistryComponent, { inputs: { engine, provider }, providers: [{ provide: NavigationService, useValue: {} }] });
   for (let i = 0; i < 5; i++) await new Promise<void>((resolve) => setTimeout(resolve, 0));
   f.detectChanges();
@@ -123,6 +128,14 @@ describe('PSRegistryComponent (DOM)', () => {
     const f = await RenderRegistry({ models: [M({ Status: 'Published' })], records: [runLevelRefusal] });
     expect(Text(f, 'ps-registry-run-outcome')).toContain('Renewal pipeline');
     expect(Text(f, 'ps-registry-run-outcome')).toContain('No signal');
+  });
+
+  it('a failed read of the run outcomes is logged with its reason and shown as an error, never as no outcomes', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const f = await RenderRegistry({ models: [M({ Status: 'Published' })], failReads: 'the run outcomes read was refused' });
+    expect(Text(f, 'ps-registry-run-outcomes-error')).toContain('the run outcomes read was refused');
+    expect(logged.mock.calls.flat().map(String).some((m) => m.includes('the run outcomes read was refused'))).toBe(true);
+    logged.mockRestore();
   });
 
   it('selects and highlights the deep-linked model when the link spells its ID in another case', () => {

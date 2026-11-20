@@ -64,6 +64,20 @@ beforeEach(() => {
   driver = new PredictiveStudioRegistryCheckJobDriver({ Gate: gate, Publisher: trainer, ArtifactLoader: new StorageProviderArtifactLoader(), ScoringActions: actions, Notifier: notifier, Clock: { Now: () => now } });
 });
 
+/** The real gate, except that its first archive is refused as a publish in progress would refuse it. */
+class BusyOnceGate implements Pick<LifecycleGate, 'Publish' | 'Archive'> {
+  private refused = false;
+  constructor(private readonly inner: LifecycleGate) {}
+  public Publish(...args: Parameters<LifecycleGate['Publish']>): ReturnType<LifecycleGate['Publish']> {
+    return this.inner.Publish(...args);
+  }
+  public async Archive(...args: Parameters<LifecycleGate['Archive']>): ReturnType<LifecycleGate['Archive']> {
+    if (this.refused) return this.inner.Archive(...args);
+    this.refused = true;
+    return { Ok: false, Refusal: { kind: 'publish-in-progress' } };
+  }
+}
+
 /** A model published through the gate. */
 async function Published(o: { readonly IncumbentID?: string } = {}): Promise<WorldModel> {
   const model = world.Model('Validated', 'model', o);
@@ -86,10 +100,11 @@ class OrderRecordingDriver extends PredictiveStudioRegistryCheckJobDriver {
 }
 
 /** A job run of the registry check with `configuration` as its `Configuration`. */
-async function JobContext(configuration: string): Promise<ScheduledJobExecutionContext> {
+async function JobContext(configuration: string, ownerUserId: string | null = null): Promise<ScheduledJobExecutionContext> {
   const schedule = await store.Provider().GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', GateWorld.User);
   schedule.Name = 'registry check';
   schedule.Configuration = configuration;
+  schedule.OwnerUserID = ownerUserId;
   const run = await store.Provider().GetEntityObject<MJScheduledJobRunEntity>('MJ: Scheduled Job Runs', GateWorld.User);
   run.ID = JOB_RUN;
   return { Schedule: schedule, Run: run, ContextUser: GateWorld.User, Provider: store.Provider() };
@@ -140,6 +155,17 @@ describe('PredictiveStudioRegistryCheckJobDriver', () => {
     expect(findings.filter((f) => f.SubjectID === adopted.ID && (f.Finding === 'a' || f.Finding === 'h' || f.Finding === 'b'))).toEqual([]);
   });
 
+  it('the rollback rule takes an archived model backed by an adopt record (D4-204, M2)', async () => {
+    const adopted = await Published();
+    await gate.Archive(adopted.ID, 'retired', agent, ctx);
+    for (const r of store.PublishRecords(adopted.ID)) if (r['Kind'] === 'publish') r['Purpose'] = 'adopt';
+    const intruder = world.Model('Validated', 'model');
+    store.SetStatus(intruder.ID, 'Published');
+    const findings = await Run();
+    expect([store.Status(intruder.ID), store.Status(adopted.ID)]).toEqual(['Archived', 'Published']);
+    expect(findings).toEqual(expect.arrayContaining([expect.objectContaining({ Finding: 'a', SubjectID: adopted.ID, Outcome: 'remediated', Action: expect.stringContaining('rolled back') })]));
+  });
+
   it('two Published models with publish records: the newest stays', async () => {
     const older = await Published();
     const newer = await Published({ IncumbentID: older.ID });
@@ -181,6 +207,38 @@ describe('PredictiveStudioRegistryCheckJobDriver', () => {
     expect([store.Status(waiting.ID), store.Status(incumbent.ID)]).toEqual(['Archived', 'Published']);
   });
 
+  it('a refused archive leaves no sign-off-wait-closed record, so the next run finds the wait again and closes it (I2)', async () => {
+    const incumbent = await Published();
+    const waiting = world.Model('Validated', 'model', { IncumbentID: incumbent.ID });
+    world.PinProtocol(waiting.ID, { requiresHumanSignOff: true });
+    await gate.Publish({ modelId: waiting.ID, purpose: 'publish', initiator: registryJob, signOffId: null, reason: null }, ctx);
+    now = new Date(Date.now() + 31 * 86_400_000);
+    const busy = new BusyOnceGate(gate);
+    const flaky = new PredictiveStudioRegistryCheckJobDriver({ Gate: busy, Publisher: trainer, ArtifactLoader: new StorageProviderArtifactLoader(), ScoringActions: actions, Notifier: notifier, Clock: { Now: () => now } });
+    const first = await flaky.RunChecks(PredictiveStudioRegistryCheckJobDriver.ReadConfiguration(null), registryJob, ctx);
+    expect(first).toEqual(expect.arrayContaining([expect.objectContaining({ Finding: 'f', SubjectID: waiting.ID, Outcome: 'retry' })]));
+    expect(store.PublishRecords(waiting.ID).filter((r) => String(r['Refusal']).includes('sign-off-wait-closed'))).toHaveLength(0);
+    expect(store.Status(waiting.ID)).toBe('Validated');
+    const second = await flaky.RunChecks(PredictiveStudioRegistryCheckJobDriver.ReadConfiguration(null), registryJob, ctx);
+    expect(second).toEqual(expect.arrayContaining([expect.objectContaining({ Finding: 'f', SubjectID: waiting.ID, Outcome: 'remediated' })]));
+    expect(store.PublishRecords(waiting.ID).filter((r) => String(r['Refusal']).includes('sign-off-wait-closed'))).toHaveLength(1);
+    expect(store.Status(waiting.ID)).toBe('Archived');
+  });
+
+  it('a protocol that does not parse is a retry finding naming it, never a silent 30-day expiry (M6)', async () => {
+    const incumbent = await Published();
+    const waiting = world.Model('Validated', 'model', { IncumbentID: incumbent.ID });
+    world.PinProtocol(waiting.ID, { requiresHumanSignOff: true });
+    await gate.Publish({ modelId: waiting.ID, purpose: 'publish', initiator: registryJob, signOffId: null, reason: null }, ctx);
+    const protocolId = String(store.Row('MJ: ML Models', waiting.ID)?.['EvaluationProtocolID']);
+    const protocol = store.Row('MJ: ML Evaluation Protocols', protocolId);
+    if (protocol) protocol['Promotion'] = '{not json';
+    now = new Date(Date.now() + 31 * 86_400_000);
+    const findings = await Run();
+    expect(store.Status(waiting.ID)).toBe('Validated');
+    expect(findings).toEqual(expect.arrayContaining([expect.objectContaining({ Finding: 'f', SubjectID: waiting.ID, Outcome: 'retry', Action: expect.stringContaining(protocolId) })]));
+  });
+
   it('leaves a sign-off wait open before its expiry', async () => {
     const incumbent = await Published();
     const waiting = world.Model('Validated', 'model', { IncumbentID: incumbent.ID });
@@ -196,6 +254,14 @@ describe('PredictiveStudioRegistryCheckJobDriver', () => {
     store.Insert('MJ: Entity Permissions', { ID: 'F0000000-0000-4000-8000-000000000002', Entity: 'MJ: Latest Feature Values', EntityID: 'E1', RoleID: 'Analyst', CanRead: true, ReadRLSFilterID: null });
     await Run();
     expect(store.Row('MJ: Entity Permissions', 'F0000000-0000-4000-8000-000000000002')?.['ReadRLSFilterID']).toBe('F0000000-0000-4000-8000-000000000001');
+  });
+
+  it('never overwrites a different read filter on a prediction entity\'s permission: it is recorded as a finding (M3)', async () => {
+    store.Insert('MJ: Row Level Security Filters', { ID: 'F0000000-0000-4000-8000-000000000001', Name: VIEW_GATE_FILTER_NAME });
+    store.Insert('MJ: Entity Permissions', { ID: 'F0000000-0000-4000-8000-000000000003', Entity: 'MJ: Feature Values', EntityID: 'E2', RoleID: 'Auditor', CanRead: true, ReadRLSFilterID: 'F0000000-0000-4000-8000-0000000000AA' });
+    const findings = await Run();
+    expect(store.Row('MJ: Entity Permissions', 'F0000000-0000-4000-8000-000000000003')?.['ReadRLSFilterID']).toBe('F0000000-0000-4000-8000-0000000000AA');
+    expect(findings).toEqual(expect.arrayContaining([expect.objectContaining({ Finding: 'i', SubjectID: 'F0000000-0000-4000-8000-000000000003', Outcome: 'recorded', Detail: expect.stringContaining('F0000000-0000-4000-8000-0000000000AA') })]));
   });
 
   it('fails a scoring run running for more than six hours, and leaves a younger one running', async () => {
@@ -224,6 +290,68 @@ describe('PredictiveStudioRegistryCheckJobDriver', () => {
     await Published();
     const findings = await Run();
     expect(findings.map((f) => f.Finding)).toEqual(['i']);
+  });
+
+  describe('Configuration.ArtifactHealth / AuditComparison (M4)', () => {
+    it('ArtifactHealth.Enabled false skips (c) and the run\'s Details record the skip', async () => {
+      const published = await Published();
+      storage.Objects.delete(`artifacts/${String(store.Row('MJ: ML Models', published.ID)?.['ArtifactFileID'])}`);
+      const result = await driver.Execute(await JobContext(JSON.stringify({ ArtifactHealth: { Enabled: false } })));
+      expect(store.Status(published.ID)).toBe('Published');
+      expect(result.Details?.['Skipped']).toEqual([expect.objectContaining({ Step: 'c', Reason: expect.stringContaining('ArtifactHealth.Enabled is false') })]);
+    });
+
+    it('AuditComparison.Enabled false skips (b), (h) and (a)\'s no-record check, and records the skip', async () => {
+      const demoted = await Published();
+      store.SetStatus(demoted.ID, 'Validated');
+      const intruder = world.Model('Validated', 'model');
+      store.SetStatus(intruder.ID, 'Published');
+      const result = await driver.Execute(await JobContext(JSON.stringify({ AuditComparison: { Enabled: false } })));
+      expect([store.Status(intruder.ID), store.Status(demoted.ID)]).toEqual(['Published', 'Validated']);
+      expect(result.Details?.['Skipped']).toEqual(expect.arrayContaining([
+        expect.objectContaining({ Step: 'a', Reason: expect.stringContaining('AuditComparison.Enabled is false') }),
+        expect.objectContaining({ Step: 'b' }), expect.objectContaining({ Step: 'h' }),
+      ]));
+    });
+
+    it('both settings default to enabled, and a non-boolean Enabled fails validation', async () => {
+      const config = PredictiveStudioRegistryCheckJobDriver.ReadConfiguration(null);
+      expect([config.ArtifactHealth, config.AuditComparison]).toEqual([true, true]);
+      const ctxBad = await JobContext(JSON.stringify({ ArtifactHealth: { Enabled: 'no' } }));
+      expect(driver.ValidateConfiguration(ctxBad.Schedule).Success).toBe(false);
+    });
+  });
+
+  describe('the job\'s user and its notifications (D4-18, I1)', () => {
+    it('with no job owner, each model finding is notified to the owner of that model\'s monitoring job', async () => {
+      const published = await Published();
+      actions.Missing.add(published.ID);
+      const modelOwner = String(store.ScheduledJobs(published.ID)[0]?.['OwnerUserID']);
+      expect(modelOwner).toMatch(/^[0-9A-F-]{36}$/i);
+      await driver.Execute(await JobContext('{}'));
+      expect(notifier.Sent).toEqual(expect.arrayContaining([expect.objectContaining({ UserID: modelOwner, Title: expect.stringContaining('(d)') })]));
+    });
+
+    it('a finding with no model owner to notify is listed in the run\'s Details, never dropped silently', async () => {
+      store.Insert('MJ: ML Scoring Runs', { ID: 'A1000000-0000-4000-8000-000000000009', Status: 'running', StartedAt: new Date(now.getTime() - 7 * 3_600_000) });
+      const result = await driver.Execute(await JobContext('{}'));
+      expect(result.Details?.['Unnotified']).toEqual(expect.arrayContaining([expect.objectContaining({ Finding: 'e', SubjectID: 'A1000000-0000-4000-8000-000000000009' })]));
+    });
+
+    it('a job owner that cannot be resolved fails the run before any step (fails closed)', async () => {
+      const intruder = world.Model('Validated', 'model');
+      store.SetStatus(intruder.ID, 'Published');
+      const host = globalThis as typeof globalThis & { ___SINGLETON__UserCache?: object };
+      const previous = host.___SINGLETON__UserCache;
+      host.___SINGLETON__UserCache = undefined;
+      try {
+        const result = await driver.Execute(await JobContext('{}', '7A2B3C4D-0000-4000-8000-0000000000F9'));
+        expect(result).toMatchObject({ Success: false, ErrorMessage: expect.stringContaining('7A2B3C4D-0000-4000-8000-0000000000F9') });
+        expect(store.Status(intruder.ID)).toBe('Published');
+      } finally {
+        host.___SINGLETON__UserCache = previous;
+      }
+    });
   });
 
   describe('step (g): the pre-change model migration', () => {

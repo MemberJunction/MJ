@@ -64,6 +64,52 @@ function Pipeline(unit: string | null = GateWorld.UnitID): string {
   return pipelineId;
 }
 
+/** The target entity of {@link ScoredPipeline}: its rows, and the `ChurnScore` column a scoring binding copies into. */
+const MEMBERS = 'PS Pre-Gate Members';
+const MEMBERS_ENTITY_ID = '6A1D2E3F-0000-4000-8000-0000000007B1';
+
+/** A pipeline over a scored target entity, one member row, and the binding that copies predictions into `ChurnScore`. */
+interface ScoredPipelineRows {
+  readonly PipelineID: string;
+  readonly EntityID: string;
+  readonly RecordID: string;
+}
+
+/** A moment after any attempt a case records (attempts are stamped now). */
+function Later(): Date {
+  return new Date(Date.now() + 60_000);
+}
+
+/** A pipeline whose target entity a column-copy scoring binding writes back into; every row last changed long ago. */
+function ScoredPipeline(): ScoredPipelineRows {
+  const pipelineId = id();
+  const long = new Date('2025-01-01T00:00:00Z');
+  store.Insert('MJ: ML Training Pipelines', {
+    ID: pipelineId, Name: `pipeline ${pipelineId}`, PredictionUnitID: GateWorld.UnitID, EvaluationProtocolID: null, TargetEntityID: MEMBERS_ENTITY_ID, TargetEntity: MEMBERS,
+    __mj_UpdatedAt: long,
+  });
+  const recordId = id();
+  store.Insert(MEMBERS, { ID: recordId, Email: 'a@example.com', ChurnScore: null, __mj_CreatedAt: long, __mj_UpdatedAt: long });
+  store.Insert('MJ: ML Model Scoring Bindings', { ID: id(), TargetEntityID: MEMBERS_ENTITY_ID, TargetColumn: 'ChurnScore', Status: 'Active' });
+  return { PipelineID: pipelineId, EntityID: MEMBERS_ENTITY_ID, RecordID: recordId };
+}
+
+/** A tracked update of the member row (its `__mj_UpdatedAt` and its Record Changes row) listing `changes`. */
+function RowChanged(scored: ScoredPipelineRows, changes: JsonObject): void {
+  const at = Later();
+  const row = store.Row(MEMBERS, scored.RecordID);
+  if (row) row['__mj_UpdatedAt'] = at;
+  store.Insert('MJ: Record Changes', {
+    ID: id(), EntityID: scored.EntityID, RecordID: `ID|${scored.RecordID}`, Type: 'Update', Status: 'Complete', ChangedAt: at, ChangesJSON: JSON.stringify(changes),
+  });
+}
+
+/** What one scoring of the member writes: its `Model` prediction as a Feature Value, and the binding's column copy. */
+function ScoringWrote(scored: ScoredPipelineRows): void {
+  store.Insert('MJ: Feature Values', { ID: id(), EntityID: scored.EntityID, RecordID: scored.RecordID, Source: 'Model', __mj_UpdatedAt: Later() });
+  RowChanged(scored, { ChurnScore: { field: 'ChurnScore', oldValue: null, newValue: 0.7 } });
+}
+
 /** Moves a gate-world model, its training run and its snapshot onto `pipelineId`. */
 function MoveTo(model: WorldModel, pipelineId: string): WorldModel {
   const row = store.Row('MJ: ML Models', model.ID);
@@ -393,10 +439,41 @@ describe('step 4: serving side effects', () => {
     const plain = Process(demoted.ID, { ScheduleEnabled: true });
     const autoTrain = Process(demoted.ID, { ScheduleEnabled: true, AutoTrainPipelineID: pipelineId });
     const servedByLegacy = Process(serving.ID, { ScheduleEnabled: true });
-    const out = await PreGateModelMigration.DisableDemotedSchedules(ctx);
+    const out = await PreGateModelMigration.DisableDemotedSchedules(50, ctx);
     expect([ProcessState(plain.ID).ScheduleEnabled, ProcessState(autoTrain.ID).ScheduleEnabled, ProcessState(servedByLegacy.ID).ScheduleEnabled]).toEqual([false, true, true]);
     expect(out.Disabled).toEqual([plain.ID]);
     expect(scoringActions.Log).toContainEqual(expect.objectContaining({ ModelID: demoted.ID }));
+  });
+});
+
+describe('step 4: bounded and idempotent', () => {
+  it('disables at most the batch per run, and a later run picks up where the first stopped', async () => {
+    const pipelineId = Pipeline();
+    const demoted = [0, 1, 2].map(() => Legacy(pipelineId, 'Unevaluated', 'none'));
+    const processes = demoted.map((m) => Process(m.ID, { ScheduleEnabled: true }));
+    const first = await PreGateModelMigration.DisableDemotedSchedules(2, ctx);
+    expect([first.ScoringActionsDisabled.length, first.Disabled.length]).toEqual([2, 2]);
+    store.Insert('MJ: Scheduled Job Runs', {
+      ID: id(), ScheduledJobID: registryRun.ScheduledJobID, Status: 'Completed', Details: JSON.stringify({ [PreGateModelMigration.DetailsKey]: { Schedules: first, DisabledProcessIDs: first.Disabled } }),
+    });
+    const second = await PreGateModelMigration.DisableDemotedSchedules(2, ctx);
+    expect([second.ScoringActionsDisabled, second.Disabled]).toEqual([
+      demoted.map((m) => m.ID).filter((m) => !first.ScoringActionsDisabled.includes(m)),
+      processes.map((p) => p.ID).filter((p) => !first.Disabled.includes(p)),
+    ]);
+  });
+
+  it('a run after every demoted model was handled disables nothing and calls no scoring Action again', async () => {
+    const pipelineId = Pipeline();
+    const demoted = Legacy(pipelineId, 'Unevaluated', 'none');
+    Process(demoted.ID, { ScheduleEnabled: true });
+    const first = await PreGateModelMigration.DisableDemotedSchedules(50, ctx);
+    store.Insert('MJ: Scheduled Job Runs', {
+      ID: id(), ScheduledJobID: registryRun.ScheduledJobID, Status: 'Completed', Details: JSON.stringify({ [PreGateModelMigration.DetailsKey]: { Schedules: first, DisabledProcessIDs: first.Disabled } }),
+    });
+    const calls = scoringActions.Log.length;
+    expect(await PreGateModelMigration.DisableDemotedSchedules(50, ctx)).toEqual({ Disabled: [], ScoringActionsDisabled: [] });
+    expect(scoringActions.Log.length - calls).toBe(0);
   });
 });
 
@@ -434,6 +511,67 @@ describe('step 5: automated re-evaluation', () => {
     if (row) row['__mj_UpdatedAt'] = new Date(Date.now() + 60_000);
     await PreGateModelMigration.ReEvaluate(3, ctx);
     expect(trainer.Runs(noisy)).toHaveLength(2);
+  });
+
+  it('a withheld pipeline whose entity is scored is not retrained by its own predictions or their column copies (I-1)', async () => {
+    const scored = ScoredPipeline();
+    Legacy(scored.PipelineID, 'Unevaluated', 'none', { Serving: true });
+    await PreGateModelMigration.ReEvaluate(3, ctx);
+    ScoringWrote(scored);
+    const second = await PreGateModelMigration.ReEvaluate(3, ctx);
+    expect(trainer.Runs(scored.PipelineID)).toHaveLength(1);
+    expect(second).toMatchObject({ Trained: 0, Findings: [expect.objectContaining({ PipelineID: scored.PipelineID, Kind: 'unchanged-since-last-attempt' })] });
+  });
+
+  it('a withheld pipeline whose entity is scored is retrained after an input Feature Value changes', async () => {
+    const scored = ScoredPipeline();
+    Legacy(scored.PipelineID, 'Unevaluated', 'none', { Serving: true });
+    await PreGateModelMigration.ReEvaluate(3, ctx);
+    ScoringWrote(scored);
+    store.Insert('MJ: Feature Values', { ID: id(), EntityID: scored.EntityID, RecordID: scored.RecordID, Source: 'Pipeline', __mj_UpdatedAt: Later() });
+    await PreGateModelMigration.ReEvaluate(3, ctx);
+    expect(trainer.Runs(scored.PipelineID)).toHaveLength(2);
+  });
+
+  it('a withheld pipeline whose entity is scored is retrained after an input column of a target row changes', async () => {
+    const scored = ScoredPipeline();
+    Legacy(scored.PipelineID, 'Unevaluated', 'none', { Serving: true });
+    await PreGateModelMigration.ReEvaluate(3, ctx);
+    ScoringWrote(scored);
+    RowChanged(scored, { Email: { field: 'Email', oldValue: 'a@example.com', newValue: 'b@example.com' } });
+    await PreGateModelMigration.ReEvaluate(3, ctx);
+    expect(trainer.Runs(scored.PipelineID)).toHaveLength(2);
+  });
+
+  it('finds an input change past a full page of column copies (keyset pages of the Record Changes)', async () => {
+    const scored = ScoredPipeline();
+    Legacy(scored.PipelineID, 'Unevaluated', 'none', { Serving: true });
+    await PreGateModelMigration.ReEvaluate(3, ctx);
+    for (let i = 0; i <= PreGateModelMigration.ChangePageSize; i++) ScoringWrote(scored);
+    RowChanged(scored, { Email: { field: 'Email', oldValue: 'a@example.com', newValue: 'b@example.com' } });
+    await PreGateModelMigration.ReEvaluate(3, ctx);
+    expect(trainer.Runs(scored.PipelineID)).toHaveLength(2);
+  });
+
+  it('counts a Create, a Delete, a malformed or a non-copy Update as an input change, and a Snapshot or a copy-only Update as none', () => {
+    const copied = new Set(['churnscore']);
+    expect([
+      PreGateModelMigration.IsInputChange({ Type: 'Create', ChangesJSON: '{}' }, copied),
+      PreGateModelMigration.IsInputChange({ Type: 'Delete', ChangesJSON: '{}' }, copied),
+      PreGateModelMigration.IsInputChange({ Type: 'Update', ChangesJSON: 'not json' }, copied),
+      PreGateModelMigration.IsInputChange({ Type: 'Update', ChangesJSON: JSON.stringify({ ChurnScore: {}, Email: {} }) }, copied),
+      PreGateModelMigration.IsInputChange({ Type: 'Snapshot', ChangesJSON: '{}' }, copied),
+      PreGateModelMigration.IsInputChange({ Type: 'Update', ChangesJSON: JSON.stringify({ ' churnScore ': {} }) }, copied),
+    ]).toEqual([true, true, true, true, false, false]);
+  });
+
+  it('a withheld pipeline whose entity is scored is retrained after a target row is created', async () => {
+    const scored = ScoredPipeline();
+    Legacy(scored.PipelineID, 'Unevaluated', 'none', { Serving: true });
+    await PreGateModelMigration.ReEvaluate(3, ctx);
+    store.Insert(MEMBERS, { ID: id(), Email: 'new@example.com', ChurnScore: null, __mj_CreatedAt: Later(), __mj_UpdatedAt: Later() });
+    await PreGateModelMigration.ReEvaluate(3, ctx);
+    expect(trainer.Runs(scored.PipelineID)).toHaveLength(2);
   });
 
   it('records no-prediction-unit for a legacy pipeline and invents no unit', async () => {
@@ -517,6 +655,24 @@ describe('PredictiveStudio.MigratePreGateModels (RunPass)', () => {
     await expect(PreGateModelMigration.RunPass({ DryRun: false, ScheduledJobRunID: null, Config: PreGateModelMigration.DefaultConfig }, ctx, seams()))
       .rejects.toThrow('no scheduledJobRunId');
     expect(store.SaveCount() - saves).toBe(0);
+  });
+
+  it('refuses a writing pass naming a finished Registry Check run someone else executed, before any write', async () => {
+    EvidenceBearing('Published');
+    const saves = store.SaveCount();
+    const past = { ID: id(), ScheduledJobID: registryRun.ScheduledJobID, Status: 'Completed', ExecutedByUserID: null, Details: null };
+    store.Insert('MJ: Scheduled Job Runs', past);
+    await expect(PreGateModelMigration.RunPass({ DryRun: false, ScheduledJobRunID: past.ID, Config: PreGateModelMigration.DefaultConfig }, ctx, seams()))
+      .rejects.toThrow(`run ${past.ID} is Completed, not Running, and was not executed by the caller`);
+    expect(store.SaveCount() - saves).toBe(0);
+  });
+
+  it('a writing pass may name a finished Registry Check run the caller executed', async () => {
+    const pr3Good = EvidenceBearing('Published');
+    const own = { ID: id(), ScheduledJobID: registryRun.ScheduledJobID, Status: 'Completed', ExecutedByUserID: GateWorld.User.ID, Details: null };
+    store.Insert('MJ: Scheduled Job Runs', own);
+    const pass = await PreGateModelMigration.RunPass({ DryRun: false, ScheduledJobRunID: own.ID, Config: PreGateModelMigration.DefaultConfig }, ctx, seams());
+    expect(pass.Details?.Reverified.Adopted).toEqual([pr3Good.ID]);
   });
 
   it('a writing pass as the registry job run runs the step', async () => {

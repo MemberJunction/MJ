@@ -7,6 +7,21 @@
  */
 import { EscapeSQLString } from '@memberjunction/global';
 
+/**
+ * The name of the seeded authorization a scoring binding's predictions are seen through when its creator names none
+ * (§5.8.4): the binding editor's default, the engine's resolver default and the retention backfill's assignment.
+ */
+export const DEFAULT_VIEW_AUTHORIZATION_NAME = 'View Model Predictions';
+
+/**
+ * The {@link DEFAULT_VIEW_AUTHORIZATION_NAME} authorization among `authorizations` (a provider's `Authorizations`),
+ * matched by name trimmed and case-insensitive: the one rule every caller uses. Undefined when it is not loaded.
+ */
+export function FindDefaultViewAuthorization<T extends { readonly Name: string }>(authorizations: readonly T[]): T | undefined {
+  const wanted = DEFAULT_VIEW_AUTHORIZATION_NAME.toLowerCase();
+  return authorizations.find((a) => a.Name.trim().toLowerCase() === wanted);
+}
+
 /** Rows the panel reads of a record's history. */
 export const PREDICTION_PANEL_MAX_HISTORY_ROWS = 500;
 

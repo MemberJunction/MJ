@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { EvaluationProtocol, type RetrainTrigger, type RollbackTrigger } from '../evaluation-protocol';
 import type { MonitoringPeriodResult } from '../monitoring-contracts';
 import { MonitoringRules, type ScoredValue } from '../monitoring-rules';
+import type { TaskType } from '../task-type';
 
 const D = (iso: string): Date => new Date(`${iso}T00:00:00.000Z`);
 const V = (recordId: string, score: number | null): ScoredValue => ({ RecordID: recordId, Score: score });
+const BINARY_TASK: TaskType = { kind: 'binary', classOrder: ['0', '1'], adverseIndex: 1 };
 const nn = (x: number) => EvaluationProtocol.ToNonNegative(x);
 
 let period = 0;
@@ -98,22 +100,30 @@ describe('MonitoringRules.LabelWindowClosed', () => {
 
 describe('MonitoringRules.Divergence', () => {
   it('divergence pairs champion and challenger rows by key and counts unpaired rows as failures', () => {
-    expect(MonitoringRules.Divergence([V('r1', 0.7), V('r2', 0.2)], [V('r1', 0.6)])).toEqual({ Paired: 1, Agreement: 1, MeanScoreDelta: expect.closeTo(-0.1, 12), Failures: 1 });
+    expect(MonitoringRules.Divergence([V('r1', 0.7), V('r2', 0.2)], [V('r1', 0.6)], BINARY_TASK)).toEqual({ Paired: 1, Agreement: 1, MeanScoreDelta: expect.closeTo(-0.1, 12), Failures: 1 });
   });
 
   it('a challenger row with no score is a failure, not a pair', () => {
-    expect(MonitoringRules.Divergence([V('r1', 0.7), V('r2', 0.2)], [V('r1', 0.6), V('r2', null)])).toEqual({ Paired: 1, Agreement: 1, MeanScoreDelta: expect.closeTo(-0.1, 12), Failures: 1 });
+    expect(MonitoringRules.Divergence([V('r1', 0.7), V('r2', 0.2)], [V('r1', 0.6), V('r2', null)], BINARY_TASK)).toEqual({ Paired: 1, Agreement: 1, MeanScoreDelta: expect.closeTo(-0.1, 12), Failures: 1 });
   });
 
   it('agreement is the share of pairs on the same side of the 0.5 decision threshold', () => {
-    const d = MonitoringRules.Divergence([V('a', 0.7), V('b', 0.2)], [V('a', 0.4), V('b', 0.1)]);
+    const d = MonitoringRules.Divergence([V('a', 0.7), V('b', 0.2)], [V('a', 0.4), V('b', 0.1)], BINARY_TASK);
     expect(d.Agreement).toBe(0.5);
     expect(d.MeanScoreDelta).toBeCloseTo(-0.2, 12);
   });
 
+  it('a regression (or any non-classification task) computes no agreement: the 0.5 threshold is a probability\'s (M7)', () => {
+    for (const task of [{ kind: 'continuous' }, { kind: 'count' }, { kind: 'non-negative', tweediePower: 1.5 }, { kind: 'forecast', valueKind: 'continuous' }] as const) {
+      const d = MonitoringRules.Divergence([V('a', 12.5), V('b', 0.2)], [V('a', 11.5), V('b', 0.9)], task);
+      expect([d.Paired, d.Agreement, d.MeanScoreDelta]).toEqual([2, null, expect.closeTo(-0.15, 12)]);
+    }
+    expect(MonitoringRules.Divergence([V('a', 0.7)], [V('a', 0.6)], { kind: 'multiclass', classOrder: ['x', 'y', 'z'], adverseIndices: [2] }).Agreement).toBe(1);
+  });
+
   it('matches record keys case-insensitively (UUIDsEqual) and with no rows reports zero pairs', () => {
     const upper = 'AAAAAAAA-0000-0000-0000-000000000001';
-    expect(MonitoringRules.Divergence([V(upper, 0.6)], [V(upper.toLowerCase(), 0.6)]).Paired).toBe(1);
-    expect(MonitoringRules.Divergence([], [])).toEqual({ Paired: 0, Agreement: 0, MeanScoreDelta: 0, Failures: 0 });
+    expect(MonitoringRules.Divergence([V(upper, 0.6)], [V(upper.toLowerCase(), 0.6)], BINARY_TASK).Paired).toBe(1);
+    expect(MonitoringRules.Divergence([], [], BINARY_TASK)).toEqual({ Paired: 0, Agreement: 0, MeanScoreDelta: 0, Failures: 0 });
   });
 });

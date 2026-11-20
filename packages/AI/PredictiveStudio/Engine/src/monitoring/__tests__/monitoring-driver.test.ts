@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import type { MJScheduledJobEntity, MJScheduledJobRunEntity } from '@memberjunction/core-entities';
 import type { ScheduledJobExecutionContext } from '@memberjunction/scheduling-engine';
 import { EvaluationProtocol, type MonitoringChallengerResult, type MonitoringJobSpec } from '@memberjunction/predictive-studio-core';
@@ -25,8 +27,14 @@ async function Context(now: Date, spec: MonitoringJobSpec = SPEC): Promise<Sched
   schedule.OwnerUserID = OWNER;
   const run = await world.Provider.GetEntityObject<MJScheduledJobRunEntity>('MJ: Scheduled Job Runs', MonitoringWorld.User);
   run.ID = JOB_RUN;
-  return { Schedule: schedule, Run: run, ContextUser: MonitoringWorld.User, Provider: world.Provider };
+  return { Schedule: schedule, Run: run, ContextUser: MonitoringWorld.Scheduler, Provider: world.Provider };
 }
+
+/** The process-wide user cache `BaseScheduledJob.resolveScheduleOwnerUser` reads the job's owner from. */
+const userCacheHost = globalThis as typeof globalThis & { ___SINGLETON__UserCache?: { FindUser(criteria: { ID?: string }): Promise<UserInfo | undefined> } };
+let previousUserCache: typeof userCacheHost.___SINGLETON__UserCache;
+/** The users the cache knows (the job's owner unless a case removes it). */
+let cachedUsers: UserInfo[];
 
 /** `n` July-scored predictions of June decisions with realised outcomes: a well-calibrated period (`p`, rate `rate`). */
 function PeriodRows(day: Date, n: number, score: number, positives: number, prefix = 'r'): void {
@@ -41,9 +49,16 @@ function PeriodRows(day: Date, n: number, score: number, positives: number, pref
 const challengerOf = (): MonitoringChallengerResult | null => world.Store.Last().Challenger;
 
 beforeEach(() => {
+  previousUserCache = userCacheHost.___SINGLETON__UserCache;
+  cachedUsers = [MonitoringWorld.User, MonitoringWorld.Scheduler];
+  userCacheHost.___SINGLETON__UserCache = { FindUser: async (c) => cachedUsers.find((u) => UUIDsEqual(u.ID, c.ID)) };
   world = new MonitoringWorld();
   world.Store.Binding = MonitoringWorld.BINDING;
   driver = new PredictiveStudioModelMonitoringJobDriver(world.Seams());
+});
+
+afterEach(() => {
+  userCacheHost.___SINGLETON__UserCache = previousUserCache;
 });
 
 describe('PredictiveStudioModelMonitoringJobDriver.Execute', () => {
@@ -65,6 +80,46 @@ describe('PredictiveStudioModelMonitoringJobDriver.Execute', () => {
     expect(r.ErrorMessage).toContain(`does not hold the view authorization of scoring binding ${MonitoringWorld.BINDING.ID}`);
     expect(world.Store.Last()).toMatchObject({ State: 'failed', JoinedRows: 0, ScoredRows: 0 });
     expect(world.Store.ModelRowReads).toBe(0);
+  });
+
+  it('reads as the job\'s owner, not the scheduler\'s user: an owner without the binding\'s view gets a failed period naming the owner (D4-179)', async () => {
+    PeriodRows(JUNE, 200, 0.3, 60);
+    world.Store.ViewDenied.add(OWNER.toLowerCase());
+    const r = await driver.Execute(await Context(NOW));
+    expect(r.Success).toBe(false);
+    expect(r.ErrorMessage).toContain('the job owner owner@example.com does not hold the view authorization');
+    expect(world.Store.Last()).toMatchObject({ State: 'failed', JoinedRows: 0 });
+    expect(world.Store.ModelRowReads).toBe(0);
+  });
+
+  it('a job with no owner is refused, naming the missing owner, and monitors nothing', async () => {
+    PeriodRows(JUNE, 200, 0.3, 60);
+    const ctx = await Context(NOW);
+    ctx.Schedule.OwnerUserID = null;
+    const r = await driver.Execute(ctx);
+    expect(r).toMatchObject({ Success: false, ErrorMessage: expect.stringContaining('has no OwnerUserID') });
+    expect(world.Store.Rows).toHaveLength(0);
+  });
+
+  it('a job whose owner cannot be resolved is refused (fails closed) and monitors nothing', async () => {
+    PeriodRows(JUNE, 200, 0.3, 60);
+    cachedUsers = [MonitoringWorld.Scheduler];
+    const r = await driver.Execute(await Context(NOW));
+    expect(r).toMatchObject({ Success: false, ErrorMessage: expect.stringContaining(`owner user ${OWNER} not found`) });
+    expect(world.Store.Rows).toHaveLength(0);
+  });
+
+  it('a step error (a sidecar outage) fails only its period, with the reason on its row; the other periods still run (M1)', async () => {
+    PeriodRows(JUNE, 200, 0.3, 60);
+    PeriodRows(D('2026-07-10'), 200, 0.3, 60, 'j');
+    world.Store.Inputs = [{ Name: 'EngagementZ', Reference: [0, 1, 2, 3, 4], Current: [1, 2, 3] }];
+    await driver.Execute(await Context(NOW_INSIDE_WINDOW));
+    world.Drift.FailNext = 1;
+    const r = await driver.Execute(await Context(D('2026-08-31')));
+    const byMonth = (iso: string) => world.Store.Rows.find((row) => row.Period.Start.getTime() === D(iso).getTime());
+    expect(byMonth('2026-06-01')).toMatchObject({ State: 'failed', ErrorMessage: expect.stringContaining('the drift look could not run: the ML sidecar is unreachable') });
+    expect(byMonth('2026-07-01')).toMatchObject({ State: 'evaluated' });
+    expect(r).toMatchObject({ Success: false, ErrorMessage: expect.stringContaining('2026-06-01: the drift look could not run') });
   });
 
   it('a period whose label window is open is stored window-open with 0 joined rows', async () => {
@@ -100,6 +155,23 @@ describe('PredictiveStudioModelMonitoringJobDriver.Execute', () => {
     expect(world.Publisher.Calls).toEqual([`prepare:${PIPELINE}`]);
     expect(world.Publisher.Trained).toEqual([]);
     expect(challengerOf()).toMatchObject({ outcome: 'stopped', trainingRunId: null, reason: expect.stringContaining('human-only') });
+  });
+
+  it('a challenger whose training fails restores the protocol version current before the re-carve, so the next run starts clean (M9)', async () => {
+    PeriodRows(JUNE, 300, 0.1, 150);
+    world.Publisher.RecarvedFrom = 'P0000000-0000-4000-8000-0000000000B1';
+    world.Publisher.TrainFailure = new Error('the trainer is unreachable');
+    await driver.Execute(await Context(D('2026-07-31')));
+    expect(world.Publisher.Calls).toEqual([`prepare:${PIPELINE}`, `train:${PIPELINE}`, `restore:${PIPELINE}:P0000000-0000-4000-8000-0000000000B1`]);
+    expect(challengerOf()).toMatchObject({ outcome: 'failed', trainingRunId: null, reason: expect.stringContaining('restored to P0000000-0000-4000-8000-0000000000B1') });
+  });
+
+  it('a challenger whose training fails with no re-carve restores nothing', async () => {
+    PeriodRows(JUNE, 300, 0.1, 150);
+    world.Publisher.TrainFailure = new Error('the trainer is unreachable');
+    await driver.Execute(await Context(D('2026-07-31')));
+    expect(world.Publisher.Calls).toEqual([`prepare:${PIPELINE}`, `train:${PIPELINE}`]);
+    expect(challengerOf()).toMatchObject({ outcome: 'failed', reason: expect.stringContaining('the trainer is unreachable') });
   });
 
   it('a fired trigger starts one challenger through AutomatedPublisher and records the outcome; monitoring writes no Status', async () => {
@@ -140,6 +212,32 @@ describe('PredictiveStudioModelMonitoringJobDriver.Execute', () => {
     expect(world.Store.Last().DriftAlarms[0]).toMatchObject({ input: 'EngagementZ', flagged: true });
     expect(world.Drift.Requests[0]).toMatchObject({ look: 1, q: 0.0171 });
     expect(world.Notifier.Sent[0].UserID).toBe(OWNER);
+  });
+
+  it('a one-row period of a non-forecast unit is tested as a mean, never as a series (M5, D4-196)', async () => {
+    PeriodRows(JUNE, 1, 0.3, 1);
+    world.Store.Reference = null;
+    world.Store.Inputs = [{ Name: 'TenureZ', Reference: [0, 1, 2, 3, 4], Current: [2.5] }];
+    await driver.Execute(await Context(NOW));
+    expect(world.Drift.Requests[0].inputs).toEqual([expect.objectContaining({ name: 'TenureZ', kind: 'mean' })]);
+  });
+
+  it('a one-row period of a forecast unit (a single series by design) is tested as a series', async () => {
+    PeriodRows(JUNE, 1, 0.3, 1);
+    world.Store.Reference = null;
+    world.Store.Unit = { ...world.Store.Unit, Spec: { ...world.Store.Unit.Spec, temporal: { timeColumn: 'PeriodStart', horizonPeriods: 1, lags: [1], rollingWindows: [], period: 'month', seasonality: null } } };
+    world.Store.Inputs = [{ Name: 'LagTarget', Reference: [0, 1, 2, 3, 4], Current: [2.5] }];
+    await driver.Execute(await Context(NOW));
+    expect(world.Drift.Requests[0].inputs).toEqual([expect.objectContaining({ name: 'LagTarget', kind: 'series' })]);
+  });
+
+  it('a drift alarm is notified to the owner the run executes as, with no second read of the job that could drop it (M6)', async () => {
+    PeriodRows(JUNE, 200, 0.3, 60);
+    world.Store.Reference = null;
+    world.Store.Inputs = [{ Name: 'EngagementZ', Reference: [0, 1, 2, 3, 4], Current: [5, 6, 7] }];
+    world.Drift.NextDrift(['EngagementZ']);
+    await driver.Execute(await Context(D('2026-07-31')));
+    expect(world.Notifier.Sent.map((n) => n.UserID)).toEqual([OWNER]);
   });
 
   it('a parity failure is re-sampled once; a confirmed failure starts a training run, a passing re-sample does not', async () => {

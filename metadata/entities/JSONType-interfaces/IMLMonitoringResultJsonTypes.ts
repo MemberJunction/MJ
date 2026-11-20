@@ -78,11 +78,11 @@ export interface MonitoringTriggerFired {
   readonly reason: string;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
 }
 
-/** The live challenger mirror's divergence over the period. */
+/** The live challenger mirror's divergence over the period (`agreement` is a classifier's; null for any other task). */
 export interface MonitoringMirror {
   readonly challengerModelId: string;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
   readonly paired: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
-  readonly agreement: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
+  readonly agreement: number | null;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
   readonly meanScoreDelta: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
   readonly failures: number;  // case-violation-ok-legacy-back-compat: stored MJ: ML Monitoring Results JSON key
 }

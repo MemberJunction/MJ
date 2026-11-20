@@ -21,7 +21,7 @@ import {
   MjSlidePanelComponent,
 } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { CompositeKey, LogError, RunView, type IMetadataProvider, type RunViewParams, type UserInfo, EntityRecordNameInput, EntityRecordNameResult } from '@memberjunction/core';
+import { CompositeFilterSQLCompiler, CompositeKey, LogError, RunView, type CompositeFilterDescriptor, type EntityInfo, type IMetadataProvider, type RunViewParams, type UserInfo, EntityRecordNameInput, EntityRecordNameResult } from '@memberjunction/core';
 import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { MJMLModelEntity, UserInfoEngine, type MJMLModelScoringBindingEntity, type MJUserViewEntity } from '@memberjunction/core-entities';
 import type { ActionParam, ActionResult } from '@memberjunction/actions-base';
@@ -659,7 +659,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   private async loadScoredRows(model: PredictionGridModelFields | null, provider: IMetadataProvider, user: UserInfo | undefined): Promise<PSRunDetails | null> {
     const binding = this.RunId ? null : this.activeScoringBinding(model);
     if (binding) {
-      await this.resolveTargetEntity(model);
+      this.resolveBindingEntity(binding);
       const latest = await this.LoadLatestValues(binding);
       return { Rows: latest.Rows.map((r) => LatestPredictionRows.ToRunDetail(r)).filter((r): r is PSRunDetailRow => r !== null), Capped: latest.Capped };
     }
@@ -670,10 +670,26 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     return PredictiveStudioEngine.Instance.LoadRunDetails(runId, provider, user);
   }
 
-  /** The model pipeline's `Active` scoring binding with a target entity (one per pipeline and entity), from the engine's cache. */
+  /**
+   * The model pipeline's `Active` scoring binding (with a target entity) the grid shows, from the engine's cache, chosen
+   * the same way on every read: when the host opened the grid for an entity (`EntityName`), the Active binding on that
+   * entity, or none; otherwise any Active binding. Several candidates (a pipeline's bindings are unique per entity and
+   * feature, not per pipeline) are ordered by feature name, then ID, and the first is shown.
+   */
   private activeScoringBinding(model: PredictionGridModelFields | null): MJMLModelScoringBindingEntity | null {
     if (!model?.PipelineID) return null;
-    return PredictiveStudioEngine.Instance.ScoringBindingsForPipeline(model.PipelineID).find((b) => b.Status === 'Active' && !!b.TargetEntityID) || null;
+    const opened = this.EntityName ? this.ProviderToUse.EntityByName(this.EntityName) : undefined;
+    const candidates = PredictiveStudioEngine.Instance.ScoringBindingsForPipeline(model.PipelineID)
+      .filter((b) => b.Status === 'Active' && !!b.TargetEntityID && (!opened || UUIDsEqual(b.TargetEntityID, opened.ID)))
+      .sort((a, b) => a.FeatureName.localeCompare(b.FeatureName) || NormalizeUUID(a.ID).localeCompare(NormalizeUUID(b.ID)));
+    return candidates[0] || null;
+  }
+
+  /** Resolves the scored entity to the binding's target entity, whose records its values name. */
+  private resolveBindingEntity(binding: MJMLModelScoringBindingEntity): void {
+    const entity = binding.TargetEntityID ? this.ProviderToUse.EntityByID(binding.TargetEntityID) : undefined;
+    this.ResolvedEntityId = entity ? entity.ID : binding.TargetEntityID;
+    this.ResolvedEntityName = entity ? entity.Name : null;
   }
 
   /**
@@ -1662,7 +1678,6 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
   // ── CSV Export ──
 
-  /** Downloads the filtered rows as a CSV. */
   /** True while the selection is being saved as a List. */
   public SavingList = false;
 
@@ -1683,7 +1698,8 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   /**
    * Saves the grid's selection — the rows its tier and decile filters show — as a new List (§5.4): a private User View
    * of the target entity naming the selected records, materialized through the existing "Materialize List From View"
-   * action (with lineage to the view), then opens the List. No new action and no direct List Detail writes.
+   * action (with lineage to the view), then opens the List. No new action and no direct List Detail writes. When the
+   * action fails after the view was saved, the view is deleted again, so a failed save leaves nothing behind.
    */
   public async SaveSelectionAsList(): Promise<void> {
     const entity = this.ResolvedEntityName ? this.ProviderToUse.EntityByName(this.ResolvedEntityName) : undefined;
@@ -1691,18 +1707,23 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     this.SavingList = true;
     this.ListMessage = null;
     this.cdr.markForCheck();
+    let view: MJUserViewEntity | null = null;
+    let listCreated = false;
     try {
       const user = this.ProviderToUse.CurrentUser;
       const name = this.selectionListName();
-      const view = await this.ProviderToUse.GetEntityObject<MJUserViewEntity>('MJ: User Views', user);
+      view = await this.ProviderToUse.GetEntityObject<MJUserViewEntity>('MJ: User Views', user);
       view.NewRecord();
       view.Name = name;
       view.EntityID = entity.ID;
       view.UserID = user.ID;
       view.IsShared = false;
-      // A plain view (not CustomWhereClause, which MJ allows only an Owner): the clause set before the first save is
-      // kept, and the provider screens it when the view runs.
-      view.WhereClause = BuildRecordIdFilter(entity, this.FilteredRows.map((r) => r.recordId));
+      // A plain view (not CustomWhereClause, which MJ allows only an Owner), the provider screens its clause when the
+      // view runs. The selection is also its FilterState: a later save of the view recompiles WhereClause from
+      // FilterState, and this one compiles to the same records, so the lineage-linked List's refresh keeps them.
+      const recordIds = this.FilteredRows.map((r) => r.recordId);
+      view.WhereClause = BuildRecordIdFilter(entity, recordIds);
+      view.FilterState = JSON.stringify(PSPredictionsGridComponent.SelectionFilterState(entity, recordIds));
       if (!(await view.Save())) throw new Error(`the selection's view was not saved: ${view.LatestResult?.CompleteMessage || 'unknown error'}`);
       const actionId = await this.materializeActionID();
       const result = await this.RunListAction(actionId, [
@@ -1712,14 +1733,50 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       ]);
       const listId = result.Params?.find((p) => p.Name === 'CreatedListID')?.Value;
       if (!result.Success || typeof listId !== 'string' || !listId) throw new Error(result.Message || 'the action created no list');
+      listCreated = true;
       this.ListMessage = `Saved ${this.FilteredRows.length} record(s) as the list "${name}".`;
       this.navigationService.OpenEntityRecord('MJ: Lists', CompositeKey.FromID(listId));
     } catch (e) {
       this.ListMessage = `Could not save the list: ${e instanceof Error ? e.message : String(e)}`;
       LogError(`PSPredictionsGridComponent.SaveSelectionAsList: ${this.ListMessage}`);
     } finally {
+      if (!listCreated && view?.IsSaved) await this.deleteSelectionView(view);
       this.SavingList = false;
       this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * The User View FilterState naming exactly `recordIds` (compact key segments) of `entity`: for a single-column key,
+   * `in` rules of at most {@link CompositeFilterSQLCompiler.DefaultMaxInValues} IDs (the compiler's limit) ORed
+   * together; for a composite key, one AND of `eq` rules per record, ORed together.
+   */
+  public static SelectionFilterState(entity: EntityInfo, recordIds: readonly string[]): CompositeFilterDescriptor {
+    if (entity.PrimaryKeys.length === 1) {
+      const field = entity.FirstPrimaryKey.Name; // first-pk-ok: guarded by PrimaryKeys.length === 1
+      const chunk = CompositeFilterSQLCompiler.DefaultMaxInValues;
+      const filters: CompositeFilterDescriptor['filters'] = [];
+      for (let i = 0; i < recordIds.length; i += chunk) filters.push({ field, operator: 'in', value: recordIds.slice(i, i + chunk) });
+      return { logic: 'or', filters };
+    }
+    return {
+      logic: 'or',
+      filters: recordIds.map((id) => ({
+        logic: 'and',
+        filters: CompositeKey.FromURLSegment(entity, id).KeyValuePairs.map((kv) => ({ field: kv.FieldName, operator: 'eq', value: kv.Value })),
+      })),
+    };
+  }
+
+  /**
+   * Deletes the private view a failed "Save as list" created. Its own failure is logged and does not replace the
+   * message the user sees, which names why the list was not created.
+   */
+  private async deleteSelectionView(view: MJUserViewEntity): Promise<void> {
+    try {
+      if (!(await view.Delete())) LogError(`PSPredictionsGridComponent.SaveSelectionAsList: the selection's view ${view.ID} was not deleted: ${view.LatestResult?.CompleteMessage || 'unknown error'}`);
+    } catch (e) {
+      LogError(`PSPredictionsGridComponent.SaveSelectionAsList: the selection's view ${view.ID} was not deleted: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -1755,6 +1812,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     return name.length > 100 ? `${name.slice(0, 99)}…` : name;
   }
 
+  /** Downloads the filtered rows as a CSV. */
   public ExportCSV(): void {
     if (this.AllRows.length === 0) return;
 

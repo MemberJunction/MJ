@@ -12,7 +12,8 @@ import {
 } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CreateFakeProvider, Query, QueryAll, RenderComponentFixture } from '@memberjunction/ng-test-utils';
-import { PSScoringBindingEditorComponent, VIEW_MODEL_PREDICTIONS } from './ps-scoring-binding-editor.component';
+import { DEFAULT_VIEW_AUTHORIZATION_NAME } from '@memberjunction/predictive-studio-core';
+import { PSScoringBindingEditorComponent } from './ps-scoring-binding-editor.component';
 
 try {
   TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
@@ -42,9 +43,24 @@ class BindingDouble {
   public Status: MJMLModelScoringBindingEntity['Status'] = 'Active';
   public LatestResult: { Success: boolean; Errors: ValidationErrorInfo[]; CompleteMessage: string } | null = null;
 
+  /** The stored values {@link Revert} restores; set by {@link MarkStored} and by a successful save. */
+  private stored: ReturnType<BindingDouble['fields']> | null = null;
+
   constructor(private readonly world: World) {}
 
   public NewRecord(): boolean {
+    return true;
+  }
+
+  /** Records the current values as the stored row (an existing binding the read returned). */
+  public MarkStored(): this {
+    this.stored = this.fields();
+    return this;
+  }
+
+  /** Puts back the stored values, as `BaseEntity.Revert` does. */
+  public Revert(): boolean {
+    if (this.stored) Object.assign(this, this.stored);
     return true;
   }
 
@@ -56,6 +72,7 @@ class BindingDouble {
     }
     this.ID = this.ID || `B-${this.world.Saved.length + 1}`;
     this.world.Saved.push({ ...this.fields() });
+    this.stored = this.fields();
     return true;
   }
 
@@ -70,7 +87,7 @@ interface World {
   SaveRefusal: { Source: string; Message: string } | null;
 }
 
-const viewModelPredictions = new AuthorizationInfo({ ID: 'A-VIEW', Name: VIEW_MODEL_PREDICTIONS, IsActive: true });
+const viewModelPredictions = new AuthorizationInfo({ ID: 'A-VIEW', Name: DEFAULT_VIEW_AUTHORIZATION_NAME, IsActive: true });
 const otherAuthorization = new AuthorizationInfo({ ID: 'A-OTHER', Name: 'Run Reports', IsActive: true });
 
 const persons: Pick<EntityInfo, 'ID' | 'Name'> & { Fields: Array<Pick<EntityFieldInfo, 'Name' | 'ReadOnly' | 'IsPrimaryKey' | 'AllowUpdateAPI'>> } = {
@@ -194,5 +211,38 @@ describe('PSScoringBindingEditorComponent (DOM)', () => {
     await Click(f, 'ps-binding-withdraw');
     await Click(f, 'ps-binding-withdraw-confirm');
     expect(sent).toEqual([{ bindingId: 'B-LIVE' }]);
+  });
+
+  /** A stored Active binding kept 30 days under the seeded authorization. */
+  const storedBinding = (world: World): BindingDouble =>
+    Object.assign(new BindingDouble(world), { ID: 'B-LIVE', FeatureName: 'Renewal risk', MLTrainingPipelineID: pipeline.ID, TargetEntityID: persons.ID, ViewAuthorizationID: viewModelPredictions.ID, RetentionDays: 30 }).MarkStored();
+
+  it('a refused save of an existing binding leaves its row showing the stored values', async () => {
+    const world: World = { Saved: [], SaveRefusal: null };
+    const existing = storedBinding(world);
+    const { f, world: rendered } = await RenderEditor({ existing: [existing] });
+    rendered.SaveRefusal = { Source: 'RetentionDays', Message: 'too short' };
+    world.SaveRefusal = rendered.SaveRefusal;
+    await Click(f, 'ps-binding-edit');
+    Choose(f, 'ps-binding-view-authorization', '1: A-OTHER');
+    Type(f, 'ps-binding-retention', '3');
+    await Click(f, 'ps-binding-save');
+    // the form keeps what was typed; the row and the entity are the stored binding
+    expect(Text(f, 'ps-binding-form')).toContain('too short');
+    expect([existing.ViewAuthorizationID, existing.RetentionDays]).toEqual([viewModelPredictions.ID, 30]);
+    expect(Text(f, 'ps-binding-row')).toContain('kept 30 days');
+  });
+
+  it('after a refusal and Cancel, editing again starts from the stored values', async () => {
+    const world: World = { Saved: [], SaveRefusal: { Source: 'RetentionDays', Message: 'too short' } };
+    const existing = storedBinding(world);
+    const { f } = await RenderEditor({ existing: [existing] });
+    await Click(f, 'ps-binding-edit');
+    Type(f, 'ps-binding-retention', '3');
+    await Click(f, 'ps-binding-save');
+    await Click(f, 'ps-binding-cancel');
+    await Click(f, 'ps-binding-edit');
+    expect(el<HTMLInputElement>(f, 'ps-binding-retention').value).toBe('30');
+    expect(f.componentInstance.Draft?.ViewAuthorizationID).toBe(viewModelPredictions.ID);
   });
 });

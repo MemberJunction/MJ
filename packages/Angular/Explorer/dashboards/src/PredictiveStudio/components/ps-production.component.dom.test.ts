@@ -1,10 +1,10 @@
 import '@angular/compiler';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { BehaviorSubject } from 'rxjs';
 import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { renderComponentFixture, query, queryAll, createFakeProvider } from '@memberjunction/ng-test-utils';
-import type { CompositeKey } from '@memberjunction/core';
+import type { CompositeKey, RunViewParams, RunViewResult } from '@memberjunction/core';
 import { NavigationService } from '@memberjunction/ng-shared';
 import type { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { PSProductionComponent } from './ps-production.component';
@@ -83,12 +83,17 @@ const Refusal = (over: Partial<PublishRecordDouble>): PublishRecordDouble => ({
 const KeepBaselineNotAutoPublished = (): PublishRecordDouble['RefusalObject'] => ({ kind: 'keep-baseline-not-auto-published' });
 
 /** Renders the view over `models` with an auto-train process and, when given, its last auto-train outcome record. */
-async function RenderProduction(opts: { models: unknown[]; autoTrainOutcome?: PublishRecordDouble }) {
+async function RenderProduction(opts: { models: unknown[]; autoTrainOutcome?: PublishRecordDouble; failReads?: string }) {
   const records = opts.autoTrainOutcome ? [opts.autoTrainOutcome] : [];
+  const provider = createFakeProvider({ runViewResults: (p) => (p.EntityName === 'MJ: ML Model Publish Records' ? records : []) });
+  const failure = opts.failReads;
+  if (failure !== undefined) {
+    Object.assign(provider, { RunViews: async (all: RunViewParams[]): Promise<RunViewResult[]> => all.map(() => ({ Success: false, ErrorMessage: failure, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0 })) });
+  }
   const fixture = renderComponentFixture(PSProductionComponent, {
     inputs: {
       Engine: makeEngine(opts.models, [{ ID: 'RP-1', ScheduleEnabled: true }]),
-      Provider: createFakeProvider({ runViewResults: (p) => (p.EntityName === 'MJ: ML Model Publish Records' ? records : []) }),
+      Provider: provider,
     },
     providers: [{ provide: NavigationService, useValue: navigation }],
   });
@@ -160,6 +165,14 @@ describe('PSProductionComponent (DOM)', () => {
   it('an auto-train publish shows as published', async () => {
     const f = await RenderProduction({ models: [published], autoTrainOutcome: Refusal({ Kind: 'publish' }) });
     expect(Text(f, 'ps-auto-train-outcome')).toContain('published');
+  });
+
+  it('a failed read of the auto-train outcomes is logged with its reason and shown as an error, never as no outcome', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const f = await RenderProduction({ models: [published], failReads: 'the publish records read was refused' });
+    expect(Text(f, 'ps-auto-train-outcome-error')).toContain('the publish records read was refused');
+    expect(logged.mock.calls.flat().map(String).some((m) => m.includes('the publish records read was refused'))).toBe(true);
+    logged.mockRestore();
   });
 
   it('names the metric of each holdout score in the list and the header, so a loss never reads as an AUC', () => {
