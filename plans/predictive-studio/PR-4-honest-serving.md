@@ -3066,10 +3066,10 @@ removed with D-078 (D4-39).
   {"id": "d058-rls-markup", "file": "packages/MJCore/src/generic/securityInfo.ts", "symbol": "export class RowLevelSecurityFilterInfo", "pattern": "public MarkupFilterText(user: UserInfo, options?: MarkupFilterOptions): string {", "lineHint": 574, "atCommit": "25f11768a7"},
   {"id": "d058-rls-exempt", "file": "packages/MJCore/src/generic/entityInfo.ts", "symbol": "GetUserRowLevelSecurityWhereClause", "pattern": "public UserExemptFromRowLevelSecurity(user: UserInfo, type: EntityPermissionType): boolean {", "lineHint": 5037, "atCommit": "25f11768a7"},
   {"id": "d058-authz-eval", "file": "packages/MJServer/src/auth/actionAuthorization.ts", "symbol": "EvaluateActionRunAuthorization", "pattern": "function holdsLinkedAuthorization(", "lineHint": 82, "atCommit": "25f11768a7"},
-  {"id": "d058-guide-paths", "file": "guides/PREDICTIVE_STUDIO_GUIDE.md", "symbol": "Where predictions go", "pattern": "### 6.5 Where predictions go — the four storage paths", "lineHint": 453, "atCommit": "25f11768a7"},
-  {"id": "d058-guide-panel", "file": "guides/PREDICTIVE_STUDIO_GUIDE.md", "symbol": "ModelPredictionPanel", "pattern": "### 16.3 The generic model-prediction form panel (the risk card)", "lineHint": 1207, "atCommit": "25f11768a7"},
-  {"id": "d058-guide-binding-lineage", "file": "guides/PREDICTIVE_STUDIO_GUIDE.md", "symbol": "upsertScoringBinding", "pattern": "### 16.6 The scoring-binding lineage (the seam that lights it all up)", "lineHint": 1238, "atCommit": "25f11768a7"},
-  {"id": "d058-guide-sp5", "file": "guides/PREDICTIVE_STUDIO_GUIDE.md", "symbol": "MaterializedResultID", "pattern": "**SP5 — Materialized prediction columns**", "lineHint": 1267, "atCommit": "25f11768a7"},
+  {"id": "d058-guide-paths", "file": "guides/PREDICTIVE_STUDIO_GUIDE.md", "symbol": "Where predictions go", "pattern": "### 6.5 Where predictions go — Feature Values, the store of record", "lineHint": 452, "atCommit": "87d983984b"},
+  {"id": "d058-guide-panel", "file": "guides/PREDICTIVE_STUDIO_GUIDE.md", "symbol": "ModelPredictionPanel", "pattern": "### 16.3 The record panel: a record's predictions, with authorization and lineage", "lineHint": 1324, "atCommit": "87d983984b"},
+  {"id": "d058-guide-binding-lineage", "file": "guides/PREDICTIVE_STUDIO_GUIDE.md", "symbol": "ScoringBindings.Upsert", "pattern": "### 16.6 The scoring binding (the seam that lights it all up)", "lineHint": 1361, "atCommit": "87d983984b"},
+  {"id": "d058-guide-sp5", "file": "guides/PREDICTIVE_STUDIO_GUIDE.md", "symbol": "MJ: Latest Feature Values", "pattern": "| **Prediction storage** | **Shipped — the generic Feature Value path** |", "lineHint": 1405, "atCommit": "87d983984b"},
   {"id": "d078-virtual-entities", "file": "packages/CodeGenLib/src/Database/manage-metadata.ts", "symbol": "manageVirtualEntities", "pattern": "protected async manageVirtualEntities(pool: CodeGenConnection): Promise<{success: boolean, anyUpdates: boolean}> {", "lineHint": 3620, "atCommit": "25f11768a7"},
   {"id": "d078-first-column-key", "file": "packages/CodeGenLib/src/Database/manage-metadata.ts", "symbol": "manageSingleVirtualEntityField", "pattern": "await this.manageSingleVirtualEntityField(pool, virtualEntity, vef, i + 1, !hasPkey && i === 0);", "lineHint": 3996, "atCommit": "25f11768a7"},
   {"id": "d078-field-insert-guard", "file": "packages/CodeGenLib/src/Database/manage-metadata.ts", "symbol": "vwSQLColumnsAndEntityFields", "pattern": "WHERE ${this.qi('EntityFieldID')} IS NULL", "lineHint": 7178, "atCommit": "25f11768a7"},
@@ -13196,3 +13196,13 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   tests and `SAVE_FAILED` greps; prompt publish-only; anchors re-run at `origin/next` @ `25f11768a7`.
 - **Kickoff amendment fix round 3 2026-11-10:** leakage-flag kinds are PR 3's (`single-feature-auc`); `PROMOTION_FAILED`
   Action case; M5.6's code grep widened; anchors re-run at `origin/next` @ `25f11768a7`.
+
+### 2026-11-20 — refresh (M8.1: the guide's anchors re-pointed) — Claude (Opus 5.5)
+
+- **Anchors:** the four `d058-guide-*` anchors re-pointed to the rewritten guide's headings in the M8.1 commit
+  (`d058-guide-paths` → §6.5 "Where predictions go — Feature Values, the store of record"; `d058-guide-panel` → §16.3
+  "The record panel: a record's predictions, with authorization and lineage"; `d058-guide-binding-lineage` → §16.6 "The
+  scoring binding (the seam that lights it all up)", symbol `ScoringBindings.Upsert`; `d058-guide-sp5` → §17's
+  "Prediction storage" row, symbol `MJ: Latest Feature Values`, since `MaterializedResultID` is gone from the guide).
+  `atCommit` is the M8.1 commit's parent; the check ran at the M8.1 commit itself (`check-anchors.mjs … HEAD`).
+- **Plan edits:** §5.8.8 (four anchor lines), §12. No decision recorded.
