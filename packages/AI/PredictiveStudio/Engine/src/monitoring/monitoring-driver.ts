@@ -385,10 +385,12 @@ export class PredictiveStudioModelMonitoringJobDriver extends BaseScheduledJob {
     return { PrimaryScore: plan.Spec.performance.primaryScore, Interval: plan.Spec.performance.interval, Task: plan.Task, Seed: PredictiveStudioModelMonitoringJobDriver.SeedOf(plan.Model.ID, period, 'interval') };
   }
 
-  /** A notification to the job's owner (the operation's caller when no job run is behind the call), D4-18. */
+  /**
+   * A notification to the user the run executes as (D4-18): the job's owner on a scheduled run ({@link Execute}
+   * resolves it before any read, so there is no second read that could drop it), the operation's caller otherwise.
+   */
   private async notify(plan: PeriodPlan, title: string, message: string, ctx: MonitoringContext): Promise<void> {
-    const owner = ctx.ScheduledJobRunID ? await ctx.Seams.Store.JobOwner(ctx.ScheduledJobRunID, ctx) : ctx.ContextUser.ID;
-    if (owner) await ctx.Seams.Notifier.Notify(owner, title, message, plan.Model.ID, ctx);
+    await ctx.Seams.Notifier.Notify(ctx.ContextUser.ID, title, message, plan.Model.ID, ctx);
   }
 
   /**

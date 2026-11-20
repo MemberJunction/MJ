@@ -225,6 +225,20 @@ describe('PredictiveStudioRegistryCheckJobDriver', () => {
     expect(store.Status(waiting.ID)).toBe('Archived');
   });
 
+  it('a protocol that does not parse is a retry finding naming it, never a silent 30-day expiry (M6)', async () => {
+    const incumbent = await Published();
+    const waiting = world.Model('Validated', 'model', { IncumbentID: incumbent.ID });
+    world.PinProtocol(waiting.ID, { requiresHumanSignOff: true });
+    await gate.Publish({ modelId: waiting.ID, purpose: 'publish', initiator: registryJob, signOffId: null, reason: null }, ctx);
+    const protocolId = String(store.Row('MJ: ML Models', waiting.ID)?.['EvaluationProtocolID']);
+    const protocol = store.Row('MJ: ML Evaluation Protocols', protocolId);
+    if (protocol) protocol['Promotion'] = '{not json';
+    now = new Date(Date.now() + 31 * 86_400_000);
+    const findings = await Run();
+    expect(store.Status(waiting.ID)).toBe('Validated');
+    expect(findings).toEqual(expect.arrayContaining([expect.objectContaining({ Finding: 'f', SubjectID: waiting.ID, Outcome: 'retry', Action: expect.stringContaining(protocolId) })]));
+  });
+
   it('leaves a sign-off wait open before its expiry', async () => {
     const incumbent = await Published();
     const waiting = world.Model('Validated', 'model', { IncumbentID: incumbent.ID });

@@ -153,9 +153,6 @@ export class WorldStore implements IMonitoringStore {
     else this.Rows.push(write);
     return `row-${write.ModelID}-${write.Period.Start.toISOString().slice(0, 10)}`;
   }
-  public async JobOwner(): Promise<string | null> {
-    return OWNER;
-  }
 
   /** Stores a `Champion` (or `Challenger`) prediction of a record. */
   public Predict(modelId: string, recordId: string, asOf: Date, score: number, o: { readonly InTraining?: boolean; readonly Role?: 'Champion' | 'Challenger' } = {}): void {

@@ -421,7 +421,8 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
   /**
    * (f) A sign-off wait (D4-19): a model whose newest record is a `no-sign-off` refusal is closed when a newer training
    * run of its pipeline has been evaluated, or when its protocol's `signOffExpiryDays` (default 30) have passed since
-   * the withheld attempt: the model is archived through the gate first, and only once the archive applied is the
+   * the withheld attempt (a protocol that cannot be read or parsed leaves the wait open as a `retry` finding naming it,
+   * never a silent default): the model is archived through the gate first, and only once the archive applied is the
    * `refusal` record `sign-off-wait-closed` written; the incumbent keeps serving. A refused archive writes no record, so
    * the model's newest record stays `no-sign-off` and the next run finds the wait again (`retry`). The gate's archive
    * opens its own transaction and takes no work to join it, so the record is written right after it commits; a record
@@ -433,8 +434,14 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
     for (const model of [...(await this.modelsOfAll('Validated', ctx)), ...(await this.modelsOfAll('KeepBaseline', ctx))]) {
       const latest = await this.latestRecord(model.ID, ctx);
       if (latest === null || latest.Kind !== 'refusal' || !PredictiveStudioRegistryCheckJobDriver.isNoSignOff(latest.RefusalObject)) continue;
-      const closedBy = (await this.newerRunEvaluated(model, ctx)) ? 'newer-run-evaluated'
-        : now.getTime() - new Date(latest.RecordedAt).getTime() >= (await this.expiryDays(model, ctx)) * PredictiveStudioRegistryCheckJobDriver.MS_PER_DAY ? 'expired' : null;
+      let closedBy: 'newer-run-evaluated' | 'expired' | null;
+      try {
+        closedBy = (await this.newerRunEvaluated(model, ctx)) ? 'newer-run-evaluated'
+          : now.getTime() - new Date(latest.RecordedAt).getTime() >= (await this.expiryDays(model, ctx)) * PredictiveStudioRegistryCheckJobDriver.MS_PER_DAY ? 'expired' : null;
+      } catch (e) {
+        out.push({ Finding: 'f', SubjectID: model.ID, Detail: 'a sign-off wait whose expiry could not be read', Action: `left open: ${e instanceof Error ? e.message : String(e)}`, Outcome: 'retry' });
+        continue;
+      }
       if (closedBy === null) continue;
       const refusal: TransitionRefusal = { kind: 'sign-off-wait-closed', closedBy };
       const archived = await this.resolved.Gate.Archive(model.ID, `sign-off-wait-closed: ${GateRefusals.Describe(refusal)}`, initiator, ctx);
@@ -597,13 +604,21 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
     return others.some((m) => m.Version > model.Version);
   }
 
-  /** The model's protocol's `signOffExpiryDays` (30 when the row is missing or does not parse). */
+  /**
+   * The model's protocol's `signOffExpiryDays` (the protocol's own default of 30 applies inside its parse when the rule
+   * leaves it out).
+   *
+   * @throws Error naming the protocol when the model names none, its row cannot be read or is missing, or it does not parse
+   */
   private async expiryDays(model: RegistryModel, ctx: GateContext): Promise<number> {
-    if (!model.EvaluationProtocolID) return 30;
+    if (!model.EvaluationProtocolID) throw new Error(`ML Model ${model.ID} waits on a sign-off but names no Evaluation Protocol to read signOffExpiryDays from`);
     const r = await StoredRowReads.Run<Parameters<typeof EvaluationProtocol.ParseEvaluationProtocolRow>[0]>({ EntityName: 'MJ: ML Evaluation Protocols', ExtraFilter: `ID='${EscapeSQLString(model.EvaluationProtocolID)}'`, ResultType: 'simple', MaxRows: 1 }, ctx); // pk-filter-ok: MJ core entity keyed by ID
-    const row = r.Success ? r.Results[0] : undefined;
-    const parsed = row ? EvaluationProtocol.ParseEvaluationProtocolRow(row) : null;
-    return parsed !== null && parsed.Ok ? parsed.Value.promotion.signOffExpiryDays : 30;
+    if (!r.Success) throw new Error(`reading Evaluation Protocol ${model.EvaluationProtocolID} failed: ${r.ErrorMessage}`);
+    const row = r.Results[0];
+    if (!row) throw new Error(`Evaluation Protocol ${model.EvaluationProtocolID} of ML Model ${model.ID} is missing`);
+    const parsed = EvaluationProtocol.ParseEvaluationProtocolRow(row);
+    if (parsed.Ok === false) throw new Error(`Evaluation Protocol ${model.EvaluationProtocolID} does not parse: ${parsed.Errors.join('; ')}`);
+    return parsed.Value.promotion.signOffExpiryDays;
   }
 
   private async pipelineHasProtocol(pipelineId: string, ctx: GateContext): Promise<boolean> {

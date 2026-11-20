@@ -214,6 +214,15 @@ describe('PredictiveStudioModelMonitoringJobDriver.Execute', () => {
     expect(world.Drift.Requests[0].inputs).toEqual([expect.objectContaining({ name: 'LagTarget', kind: 'series' })]);
   });
 
+  it('a drift alarm is notified to the owner the run executes as, with no second read of the job that could drop it (M6)', async () => {
+    PeriodRows(JUNE, 200, 0.3, 60);
+    world.Store.Reference = null;
+    world.Store.Inputs = [{ Name: 'EngagementZ', Reference: [0, 1, 2, 3, 4], Current: [5, 6, 7] }];
+    world.Drift.NextDrift(['EngagementZ']);
+    await driver.Execute(await Context(D('2026-07-31')));
+    expect(world.Notifier.Sent.map((n) => n.UserID)).toEqual([OWNER]);
+  });
+
   it('a parity failure is re-sampled once; a confirmed failure starts a training run, a passing re-sample does not', async () => {
     PeriodRows(JUNE, 200, 0.3, 60);
     world.Store.Reference = null;

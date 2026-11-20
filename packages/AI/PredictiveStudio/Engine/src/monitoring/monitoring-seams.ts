@@ -199,8 +199,6 @@ export interface IMonitoringStore {
   DriftInputs(model: MonitoredModel, unit: MonitoredUnit, recordIds: readonly string[], ctx: RegistryContext): Promise<DriftInputValues[]>;
   /** Inserts the period row, or updates the one stored for the model, grain and period; returns its ID. */
   WritePeriod(write: PeriodRowWrite, ctx: RegistryContext): Promise<string>;
-  /** The user a scheduled job run's notifications go to (its job's `OwnerUserID`, D4-18); null when none. */
-  JobOwner(scheduledJobRunId: string, ctx: RegistryContext): Promise<string | null>;
 }
 
 /** Shadow scoring through `ScoringService.Predict` on the `monitoring` path (dry run, nothing written). */
