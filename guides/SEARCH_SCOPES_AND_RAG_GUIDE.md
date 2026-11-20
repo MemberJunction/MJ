@@ -291,7 +291,7 @@ No scope duplication needed.
 |---|---|---|
 | `EntitySearchProvider` / `FullTextSearchProvider` | RunView already evaluates `UserRowLevelSecurity` for `ContextCurrentUser`. The providers thread `contextUser` through to RunView — nothing extra required. In a scoped search both search only the scope's entity lanes; an empty entity list returns nothing. The entity provider applies each lane's `ExtraFilter` in its RunView; full-text hits are held to the same filter by the engine (below). | None: the hits are rows read from the labelled entity (`ResultsAreRowsOfLabelledEntity`). A hit promoted from a `MJ: Content Items` row to its origin record is verified: one `PK IN (...)` read per origin entity. |
 | `TagSearchProvider` | Restricted to the scope's entity lanes (none → nothing); its hits are held to each lane's `ExtraFilter` by the engine. | Verified: one `PK IN (...)` read per labelled entity. |
-| `VectorSearchProvider` | Each embedded record must carry permission metadata (role IDs, owner ID, tenant ID) at ingest time. At query time, translate `contextUser`'s roles into a native metadata filter and merge it with the scope's rendered `MetadataFilter` via `$and`. In a scoped search it queries only the scope's `Vector` index rows — none means no query, never every index. | One `PK IN (...)` read per labelled entity. |
+| `VectorSearchProvider` | The native metadata filter is built from the search's `Entity`, `SourceType` and `Tags` filters and merged with the scope's rendered per-index `MetadataFilter` via `$and`; the caller's roles are not added to it. Push-down in this lane is therefore whatever the scope's `MetadataFilter` expresses (for example a tenant or owner key stored in the vector metadata at ingest time), and every hit is permission-checked afterwards by the late filter. In a scoped search it queries only the scope's `Vector` index rows — none means no query, never every index. | One `PK IN (...)` read per labelled entity. |
 | `StorageSearchProvider` | Folder-path bounded by the scope, and account-permission bounded by `MJ: File Storage Account Permissions`, **evaluated per call** for the searching user by `StorageAccessEvaluator` (`@memberjunction/storage`): nothing is snapshotted at startup, so a grant or revocation applies to the next search. The rows are read as the MJ system user, never truncated by the entity row cap, and decided for the caller (Everyone, Role or User rows; `CanRead`); an account with no rows is open (the current product rule); a failed evaluation searches nothing. The searchable accounts themselves are read per search from `FileStorageEngine`'s live cache. **Storage hits are then re-checked in the late filter**: `SearchEngine.filterByPermissions` keeps a `storage-file` result only when its engine-stamped `ProviderId` is a `StorageSearchProvider` entry, its `RawMetadata.accountId` is readable by the user now, and the object it names (`RawMetadata.path` / `objectId`) does not back an `MJ: Files` row the user cannot read (the tracked-file rule: keys compared the way the account's driver addresses them, case-insensitively; one batched lookup per account; an account whose driver or provider cannot be resolved loses its hits) — a `storage-file` hit from any other provider, or naming no object, is dropped. Under an `Audience` storage hits are dropped: they are re-checked for the caller only, and per-reader storage checks are a follow-up. The storage GraphQL routes (`FileResolver`) and the File Storage core actions run the same evaluator and tracked-file rule before any driver call. | Not an entity row: re-checked against the account and the tracked-file rule instead (above). |
 | 3rd-party index providers (Azure AI Search, Typesense, Elasticsearch, OpenSearch, custom) | Use the engine's native permission/ACL filter, through the scope's `MetadataFilter`. In a scoped search each queries only the scope's rows of its own `IndexType`; with none it queries nothing. The configured `defaultIndex` / `defaultCollection` is used **only** by an unscoped search. | One `PK IN (...)` read per labelled entity. A hit whose document id is not the entity's primary key is dropped. |
 | **Every provider, lane `ExtraFilter`** | After the providers return and before per-scope fusion, `SearchEngine` keeps a hit for an entity that has a lane `ExtraFilter` in the scope only when its record satisfies that filter: one RunView per filtered entity per scope, as the user, with the lane's rendered filter ANDed to `PK IN (...)`. Content-item promotion runs per scope between two such passes, so a `MJ: Content Items` hit is held to a Content Items lane and the origin record it becomes to that record's lane. Only hits whose engine-stamped `ProviderId` names a provider declaring `AppliesLaneExtraFilter` (`EntitySearchProvider`, which applied the filter itself) are exempt, and never a promoted hit — the declared `SourceType` is not trusted. Storage files pass. A failed read drops that entity's hits. | — |
@@ -595,19 +595,26 @@ by `CK_SearchScopePermission_Principal`) at one of four levels:
 
 `SearchScopePermissionResolver.ResolveEffectivePermission(input)` evaluates:
 
-1. **Direct user grant** — `UserID = caller.ID` rows in `SearchScopePermission`.
-2. **Role grants** — rows where `RoleID` matches any role the caller belongs to. The highest-level grant across roles wins.
-3. **AIAgent.SearchScopeAccess fallback** — when an agent context is present, `'All'` lets the agent search any scope (granted as `'Search'`); `'None'` blocks; `'Assigned'` requires an explicit grant above.
+1. **Agent and skill restrictions** — an agent or skill with `SearchScopeAccess = 'None'` is refused (`AgentNone` / `SkillNone`); with `'Assigned'`, a scope not in its assigned list is refused (`AgentAssignedNotListed` / `SkillAssignedNotListed`). `'Assigned'` restricts but never grants. A host-assigned scope (`HostAssigned: true`) skips the agent checks. A supplied skill the caller may not activate is refused (`PrincipalNotActivatable`).
+2. **Direct user grant** — `UserID = caller.ID` rows in `SearchScopePermission`. A direct `'None'` row is an explicit deny that overrides any role grant (`Source: 'DirectGrant'`, `Allowed: false`); otherwise the highest direct level wins.
+3. **Role grants** — rows where `RoleID` matches any role the caller belongs to. The highest non-`'None'` level across roles wins; role-level `'None'` rows are ignored.
+4. **`'All'` fallback** — only when no direct or role grant applies: an agent with `SearchScopeAccess = 'All'` (which the caller may run) grants `'Search'` (`AgentUnscopedAll`), then a skill with `'All'` does the same (`SkillUnscopedAll`; when an agent is supplied, only once that agent is confirmed).
+5. **No grant** — refused (`NoGrant`).
 
-`'None'` entries at any tier mean "no-grant from this tier" — they fall through to the next tier rather than terminating.
+Only grants in force now (`StartAt` / `EndAt`) are considered, and a grant with a `PrimaryScopeRecordID` applies only to a search for that same tenant.
 
 ### Push-down vs safety-net
 
-The resolver's `toSqlPredicate()` returns either `'1=1'` (allowed) or `'1=0'`
-(rejected) — providers must compose this into their WHERE clause / filter so
-forbidden records never reach fusion. As a backstop,
-`SearchEngine.filterByPermissions()` runs after fusion and drops any row the
-provider missed (entity-level RLS check via `RunView`). When the late-filter
+`SearchEngine.Search()` does not call the resolver (only `ExplainScope()` does). The callers that choose
+scopes (pre-execution RAG, the Scoped Search action, and the GraphQL search
+resolvers) resolve the permission first and refuse a denied scope before the
+engine runs, writing a `Forbidden` log row through `LogForbiddenSearch`. The
+resolver's `toSqlPredicate()` returns either `'1=1'` (allowed) or `'1=0'`
+(rejected) for a caller that wants to compose the verdict into SQL; no shipped
+provider uses it. Row-level protection of results comes from provider push-down
+and from `SearchEngine.filterByPermissions()`, which runs after the providers
+return and drops any row the user cannot read (entity-level RLS check via
+`RunView`, see §4). When the late-filter
 removes more than a handful of rows, that's a signal the responsible provider's
 push-down is incomplete and should be tightened.
 
@@ -624,7 +631,8 @@ if (!result.Allowed) {
   throw new ForbiddenError(`Search scope access denied: ${result.Reason}`);
 }
 // result.Level === 'Read' | 'Search' | 'Manage'
-// result.Source === 'DirectGrant' | 'RoleGrant' | 'AgentUnscopedAll' | 'NoGrant'
+// result.Source === 'DirectGrant' | 'RoleGrant' | 'AgentUnscopedAll' | 'SkillUnscopedAll' | 'AgentNone'
+//   | 'AgentAssignedNotListed' | 'SkillNone' | 'SkillAssignedNotListed' | 'PrincipalNotActivatable' | 'NoGrant'
 ```
 
 ---
@@ -734,13 +742,15 @@ SQL queries.
 
 | Column | Purpose |
 |---|---|
-| `ID`, `SearchScopeID`, `UserID`, `AIAgentID` | Identity (FKs all nullable for unscoped / unauthenticated / human-direct calls) |
+| `ID`, `SearchScopeID`, `UserID`, `AIAgentID`, `AISkillID` | Identity (FKs all nullable for unscoped / unauthenticated / human-direct calls) |
+| `PrimaryScopeRecordID` | Tenant the search ran for, when one was supplied |
 | `Query` | Raw query text (`NVARCHAR(MAX)` — long natural-language queries) |
 | `TotalDurationMs`, `ResultCount` | Per-run timing + final result count |
 | `RerankerName`, `RerankerCostCents` | Populated when a reranker ran |
 | `Status` | `'Success' \| 'Failure' \| 'Forbidden'` |
 | `FailureReason` | Short message when not Success |
 | `ProvidersJSON` | Per-source breakdown — feeds dashboard charts |
+| `ScopeDecisionJSON` | Per-scope decisions captured while the search ran (dimension provenance and per-lane outcomes, the same shape `ExplainScope()` returns). Each decision's `Entitlement` is `null`, because the engine does not evaluate scope permission; only `ExplainScope()` fills it. `Forbidden` rows written by `LogForbiddenSearch` have `ScopeDecisionJSON` null; the refusal reason is in `FailureReason` |
 
 ### Write semantics
 

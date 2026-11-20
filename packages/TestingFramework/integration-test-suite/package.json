@@ -38,6 +38,7 @@
     "@memberjunction/ai-vectors-memory": "6.3.0-edge.1",
     "@memberjunction/aiengine": "6.3.0-edge.1",
     "@memberjunction/api-keys": "6.3.0-edge.1",
+    "@memberjunction/archiving-engine": "6.3.0-edge.1",
     "@memberjunction/auth-providers": "6.3.0-edge.1",
     "@memberjunction/codegen-lib": "6.3.0-edge.1",
     "@memberjunction/communication-engine": "6.3.0-edge.1",
