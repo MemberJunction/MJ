@@ -458,6 +458,22 @@ plans/predictive-studio/PR-4-honest-serving.md
 packages/TestingFramework/integration-test-suite/src/checks/predictive-shadow-drift.checks.ts
 packages/TestingFramework/integration-test-suite/src/__tests__/predictive-shadow-drift.checks.test.ts
 metadata-optional/integration-test/tests/integration/.IT166-predictive-shadow-drift.json
+# D4-184: Save as list for a non-Owner — Materialize List From View authorizes its caller itself (df98bde58d)
+packages/Actions/CoreActions/src/custom/lists/materialize-list-from-view.action.ts
+packages/Actions/CoreActions/src/__tests__/lists-phase1.actions.test.ts
+# D4-184: RunAction returns the action's output params, which Save as list reads (ffe1992413)
+packages/GraphQLDataProvider/src/graphQLActionClient.ts
+packages/GraphQLDataProvider/src/__tests__/graphQLActionClient.test.ts
+# D4-239: the shared tab kernel's suite never dials ws://localhost:4000 (phase 3 integration, 75b6460d48)
+packages/GraphQLDataProvider/src/__tests__/sharedTabKernel.test.ts
+# D4-176/D4-177: the record panel, the binding editor and the default view-authorization name exported (b41bdc773a, a76c70843d, 7d84ccb852)
+packages/Angular/Explorer/core-entity-forms/src/public-api.ts
+# D4-185: IT182 mints its identities through MJAPI with the FLS client's key helpers (734a6a77c3)
+packages/TestingFramework/integration-test-suite/src/checks/fls-client.checks.ts
+# D4-230: IT182's teardown by tag and the zero-schema-change measure, unit-tested (5104063f76, 1d9f1f1d99)
+packages/TestingFramework/integration-test-suite/src/__tests__/ps-prediction-serving.test.ts
+# D4-239: ServerBootstrapLite declares integration-engine, which next's Peer Sync class needs in the Lite manifest (e7e409f515)
+packages/ServerBootstrapLite/package.json
 ```
 
 ### 2.7 Milestone start and end mechanics (program/conventions.md §3; kickoff design §6.5)
@@ -1506,14 +1522,14 @@ texts are unchanged.
 | G6.1 | `D1c → S8.1` | D1c | S8.1 | after D1c's later periods load, every prediction whose label window has closed has a joined outcome row, 100% | — | — | M6 |
 | G6.2 | `D1r → S8.2` | D1r | S8.2 | a per-period row with RMSE and its 95% bounds exists for 100% of labelled periods, and every post-shift period's RMSE lies above the pre-shift period's upper bound | — | — | M6 |
 | G6.3 | `D1c → S8.4` | D1c | S8.4 | the performance trigger fires within 1 period of the planted shift at period 3, 1 of 1, is logged, and starts a challenger run | — | — | M6 |
-| G6.4 | `T4 → S8.4` | T4 | S8.4 | on T4 (serial correlation, no shift) the trigger fires 0 times over the monitored periods | — | — | M6 |
+| G6.4 | `T4 → S8.4` | T4 | S8.4 | on T4 (serial correlation, no shift) the trigger fires 0 times: each of the 12 monitored one-row months is recorded `insufficient-rows` (below the job's `minScoredRowsPerPeriod`, 10) and judged by no trigger, and the pooled 12-month window (period `year`) meets the minimum and is judged without firing (D4-237) | — | — | M6 |
 | G6.5 | `W6 → S8.4` | W6 | S8.4 | monitoring of the model trained on ≤ 2023 W6-drift s42 rows flags retrain once 2024+ outcomes arrive, 1 of 1 (T6(b)) | — | — | M6 |
 | G6.6 | `T4 → S8.3` | T4 | S8.3 | with monitor procedure M at L = 12 monthly looks (q(12) = 0.0095, or 0.0092 with a 100k null, calibrated on AR(1)-preserving no-drift replays and checked on an independent null, documented false-alarm rate 0.05 per replay), over 400 no-drift replays of T4, ≤ 28 of 400 replays raise any alarm (lower end of the two-sided 95% Wilson interval, z = 1.96, ≤ 0.05; P(pass) 0.969 at 5%, 0.023 at 10%, `logs/P11/s83_false_alarm.txt`; 0.974 at M's independently checked rate 0.0493, `logs/P12/qcal/qcal-4M.txt`, `logs/P12/qcal/verify_q.txt`) | — | false-alarm-400 | M6 |
 | G6.7 | `D1c → S8.2` | D1c | S8.2 | the per-period tracked positive rate and log loss carry 95% bounds, and the planted +0.75 logit intercept shift (about +15 points in the positive rate, `probes/scenarios/specs/D1c.json`) shows in period 3: its positive rate lies above the periods 0–2 rate's upper bound, 1 of 1 (D1c moves the labels only, so it is an outcome-drift check, not an input-drift one) | — | — | M6 |
 | G6.8 | `D2 → S8.3` | D2 | S8.3 | with monitor procedure M at L = 3 looks (periods 3–5, q(3) = 0.0171, or 0.0167 with a 100k null, calibrated on D1c-design no-drift replays and checked on an independent null), over 400 D2 seeds (planted +0.1 SD `EngagementZ` mean shift from period 3, labels from the unchanged model) `EngagementZ` is flagged within 1 period of the shift (the period-3 or period-4 look) in ≥ 372 of 400 seeds (upper end of the two-sided 95% Wilson interval, z = 1.96, ≥ 0.95; P(pass) 0.969 at a true 95% detection rate, 0.023 at 90%; M's simulated detection rate at q(3) = 0.0167 is 1.0000, period-3 look 0.9966, `logs/P12/qcal/verify_q.txt`), and the mean false-discovery proportion over the union of flags across the 3 looks is ≤ 0.05 (simulated 0.0168 at q(3) = 0.0167, `logs/P12/qcal/verify_q.txt`; P(pass) 1.000) (`logs/P11/D2/d2_power.txt` for the design, `logs/P12/qcal/` for q) | — | detection-400 | M6 |
 | G6.9 | `D1c → S8.5` | D1c | S8.5 | challenger and incumbent are scored on identical row IDs (100% shared), and after the shift the challenger replaces the incumbent because the paired improvement's lower bound exceeds the declared margin, 1 of 1 | — | — | M6 |
 | G6.10 | `D1r → S8.5` | D1r | S8.5 | the same on the regression twin: identical row IDs (100% shared), and the challenger replaces the incumbent after the shift, 1 of 1 | — | — | M6 |
-| G6.11 | `T4 → S8.5` | T4 | S8.5 | on T4 (no shift) no replacement happens, 0 of 1 | — | — | M6 |
+| G6.11 | `T4 → S8.5` | D2 | S8.5 | on D2 (labels from one unchanged model, so a challenger carries no real improvement; the base rate the only simple baseline) the period-4 challenger, gate outcome `model`, reaches the paired comparison with the incumbent (point above 0, lower bound not above the margin 0) and does not replace it, 0 of 1 (D4-238; the row keeps its `T4 → S8.5` key) | — | — | M6 |
 | G6.12 | `R1 → S7.6` | R1 | S7.6 | the parity job recomputes features and predictions for a sample of scored R1 rows; with one planted 1e-6 skew it raises 1 alert of 1, and with none it raises 0 | — | — | M6 |
 
 Statistical rules used above (from `reference/gates.md`): **noise-publish-400** — 400 seeds, pass if the lower end of the two-sided 95% Wilson interval (z = 1.96) on the publish rate is ≤ 0.05, i.e. ≤ 28 of 400; a publication is gate outcome `model`. **false-alarm-400** — the same rule on 400 autocorrelation-preserving no-drift T4 replays against a documented false-alarm rate of 0.05 (≤ 28 replays alarm). **detection-400** — flagged within 1 period in ≥ 372 of 400 seeds (upper Wilson bound ≥ 0.95) and mean false-discovery proportion ≤ 0.05.
@@ -1557,14 +1573,14 @@ Python assets as shipped. Exit counts are measured on the agent's database at ea
 | G6.1 | `D1c -> S8.1` | `mutation` · `client` | Monitoring | `ps-gate-d1c-s8-1` | the outcome join reads only the latest prediction per record, or includes training rows, so closed-window predictions lack outcomes |
 | G6.2 | `D1r -> S8.2` | `mutation` · `client` | Monitoring | `ps-gate-d1r-s8-2` | per-period RMSE is stored without its 95% bounds, or the post-shift periods do not clear the pre-shift upper bound |
 | G6.3 | `D1c -> S8.4` | `mutation` · `client` | Monitoring | `ps-gate-d1c-s8-4` | the trigger keys on table growth instead of realised performance, or fires without starting a challenger |
-| G6.4 | `T4 -> S8.4` | `mutation` · `client` | Monitoring | `ps-gate-t4-s8-4` | the trigger's reference band ignores serial correlation and fires on a no-shift series |
+| G6.4 | `T4 -> S8.4` | `mutation` · `client` | Monitoring | `ps-gate-t4-s8-4` | the trigger judges a period with fewer scored rows than the minimum (a one-row month's interval has no width) and fires on the no-shift series |
 | G6.5 | `W6 -> S8.4` | `mutation` · `client` | Monitoring | `ps-gate-w6-s8-4` | monitoring reads the wrong entity or no realised outcomes, so the 2024 regime shift never flags a retrain |
 | G6.6 | `T4 -> S8.3` | `mutation` · `client` | Monitoring (statistical) | `ps-gate-t4-s8-3` | drift alarms use an uncorrected per-look threshold, so no-drift replays alarm above the documented rate |
 | G6.7 | `D1c -> S8.2` | `mutation` · `client` | Monitoring | `ps-gate-d1c-s8-2` | the tracked positive rate comes from scores rather than labels, or carries no bounds |
 | G6.8 | `D2 -> S8.3` | `mutation` · `client` | Monitoring (statistical) | `ps-gate-d2-s8-3` | drift flags skip the false-discovery control or test the wrong statistic |
 | G6.9 | `D1c -> S8.5` | `mutation` · `client` | Monitoring | `ps-gate-d1c-s8-5` | the challenger is scored on its own holdout instead of the incumbent's rows |
 | G6.10 | `D1r -> S8.5` | `mutation` · `client` | Monitoring | `ps-gate-d1r-s8-5` | the regression twin's paired comparison uses the wrong loss, so a better challenger is never published |
-| G6.11 | `T4 -> S8.5` | `mutation` · `client` | Monitoring | `ps-gate-t4-s8-5` | a challenger replaces the incumbent on noise (point improvement, no margin) |
+| G6.11 | `T4 -> S8.5` | `mutation` · `client` | Monitoring | `ps-gate-t4-s8-5` | a challenger that reaches the incumbent comparison replaces the incumbent on noise (point improvement, no margin) |
 | G6.12 | `R1 -> S7.6` | `mutation` · `client` | Monitoring | `ps-gate-r1-s7-6` | parity does not recompute, or its tolerance hides a 1e-6 skew |
 
 **Mutation check G0.2:** make `LifecycleGate.WriteRefusalRecord` return without saving (no `refusal` record, model-level or run-level, for an automatic attempt that does not publish) → `ps-gate-w2-c1-1` fails its "60 of 60 runs consistent" assertion on every run that does not publish (at least 54 of 60 under `noise-publish-60`, so red whatever W2's outcome mix is; D4-64). The Outline's mutation (call `ApplyTransition` without `CheckPublishable`) goes red only when one of s100–s159 stores `keep-simple-baseline` with an artifact, a count no run has measured (`W2-noise 1/400` in PR 3's final verification counts the `model` outcome only); it is run as well when Task M1.1's mix shows at least one such seed, its output pasted beside this one.
@@ -1589,7 +1605,7 @@ Python assets as shipped. Exit counts are measured on the agent's database at ea
 **Mutation check G6.1:** join outcomes to the latest `Model` row per record instead of the row as of each period → `ps-gate-d1c-s8-1` finds closed-window predictions without a joined outcome (below 100%), or a period scoring rows other than its own (the check also asserts `scoredForPeriod` equals each period's own rows: phase 1's check passed the mutation, 36000 of 36000).
 **Mutation check G6.2:** store the point RMSE with `PrimaryLower`/`PrimaryUpper` null → `ps-gate-d1r-s8-2` fails "a row with RMSE and its 95% bounds for 100% of labelled periods".
 **Mutation check G6.3:** compare each period with the previous period instead of the reference band → `ps-gate-d1c-s8-4` sees no fire within 1 period of the shift.
-**Mutation check G6.4:** replace the protocol's interval with a naive iid interval for the reference band → `ps-gate-t4-s8-4` counts at least 1 fire (expected 0). T4's model trains on `LagTarget` (D4-181).
+**Mutation check G6.4:** drop the minimum (`MonitoringRules.EnoughScoredRows` true for any count) → `ps-gate-t4-s8-4` counts at least 1 fire (expected 0): the one-row months are judged. T4's model trains on `LagTarget` (D4-181). (The earlier mutation, a naive iid reference interval, cannot change a one-row month's zero-width interval, and the lag model's errors are not serially correlated; D4-237.)
 **Mutation check G6.5:** feed the performance trigger the row-count growth input only → `ps-gate-w6-s8-4` counts 0 of 1 retrain flags.
 **Mutation check G6.6:** use 0.05 in place of q(12) = 0.0095 → `ps-gate-t4-s8-3` counts more than 28 of 400 replays alarming.
 **Mutation check G6.7:** compute the tracked positive rate from the scores instead of the labels → `ps-gate-d1c-s8-2` sees no period-3 rate above the periods 0–2 upper bound (D1c moves labels only).
@@ -1601,7 +1617,7 @@ mean ≈ 0.67). The plan's earlier mutation, "skip the BH adjustment (flag raw p
 cannot bite with one shifted and two null inputs (D4-182).
 **Mutation check G6.9:** score the challenger on its training run's holdout row IDs → `ps-gate-d1c-s8-5` finds shared row IDs below 100%.
 **Mutation check G6.10:** reverse the sign of the paired difference in the regression comparison (challenger loss − incumbent loss in place of incumbent loss − challenger loss, squared error kept) → `ps-gate-d1r-s8-5` counts 0 of 1 replacements (the better challenger reads as worse and is withheld). The Outline's "log loss in place of squared error" on a continuous target fails before any comparison (log loss needs probabilities), so it would not show the asserted failure (review minor m8, D4-68).
-**Mutation check G6.11:** compare the point improvement with 0 instead of the lower bound with the margin → `ps-gate-t4-s8-5` counts 1 replacement (expected 0).
+**Mutation check G6.11:** compare the point improvement with 0 instead of the lower bound with the margin (`PublishRules.checkIncumbent`) → `ps-gate-t4-s8-5` counts 1 replacement (expected 0). The D2 fixture's retrain trigger is a calibration band no slope reaches, so a challenger always starts and, with D2's signal, reaches the incumbent step (D4-238).
 **Mutation check G6.12:** widen the parity tolerance from 1e-9 to 1e-3 → `ps-gate-r1-s7-6` raises 0 alerts on the planted 1e-6 skew (expected 1).
 
 ### 4.2 Keep-list (must stay green; each is a regression test this PR runs at every milestone end)
@@ -6988,22 +7004,22 @@ A-FV-VOLUME's outcome (M5).
 
 **Milestone start (design §6.5; the same five steps at every milestone):**
 
-- [ ] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
+- [x] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
   `"$PLANS/tools/ps-env.sh" <command>` (D-074).
-- [ ] `git fetch origin next`; `git rev-parse --short origin/next` recorded in §11 (#6180 merged `fa33e94dbe`; the
+- [x] `git fetch origin next`; `git rev-parse --short origin/next` recorded in §11 (#6180 merged `fa33e94dbe`; the
   `pr6180` fetch and A-6180-STATE/A-6180-COLUMNS are retired, D4-79).
-- [ ] merge `origin/next`: when `git diff --name-only HEAD...origin/next -- migrations/` shows a newer migration, run
+- [x] merge `origin/next`: when `git diff --name-only HEAD...origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
   `git merge origin/next` and `"$PLANS/tools/ps-env.sh" pnpm mj migrate`.
-- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
+- [x] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
   `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" pnpm mj codegen` →
   `pnpm run build`, each exit code 0 (PR 3 D3-212); sync write-backs into `metadata/**/*.json` restored from the index
   (`git show :<path> > <path>`), never from `HEAD`.
-- [ ] `git diff --name-only HEAD...origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
+- [x] `git diff --name-only HEAD...origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
   bundle-count changes (conventions §3); when the merge brought a migration, the CodeGen tail is regenerated only from a
   clean bootstrap (`bootstrap-clean-db`) and the `__mj.ts` getters are diffed against the migration's views.
-- [ ] (M5b) work is on the PR branch (serial default, D4-63; under the parallel option both sub-branches are merged
+- [x] (M5b) work is on the PR branch (serial default, D4-63; under the parallel option both sub-branches are merged
   into it first, M4 → M4b → M5): `git branch -vv` shows `[origin/ps/pr-4-honest-serving]`; the bundle number is re-checked:
   `git ls-tree --name-only origin/next metadata-optional/integration-test/tests/integration/ | grep -oE "IT[0-9]+" | sort -t T -k2 -n | tail -1`
   → below `IT182` (else D4-47's rule takes the next free number).
@@ -7458,10 +7474,10 @@ M5b.1's file)
 - [x] exit tests above run, each count measured and written into §11 — once per milestone (D4-87, program D-084): an
   exit-pass fix round re-runs only the suites whose inputs it changed (package suites of touched packages; integration
   suites only for runtime-code changes; a gate's suite for a change to its check); §11 names what was re-run
-- [ ] Task M5b.10's harness run by the reviewer (D-071), its counts, cells and claims in §11
+- [x] Task M5b.10's harness run by the reviewer (D-071), its counts, cells and claims in §11
 - [ ] self-audit of every added and changed line against `reference/coding-standards.md`, findings fixed
-- [ ] tasks ticked
-- [ ] §11 entry `### <date> — <agent> — M5b` with the counts, the `**Mutation output G5.6:**` line, A-FV-AUTHZ,
+- [x] tasks ticked
+- [x] §11 entry `### <date> — <agent> — M5b` with the counts, the `**Mutation output G5.6:**` line, A-FV-AUTHZ,
   A-FV-SYSUSER and the fresh-install outputs
 - [x] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
@@ -7535,19 +7551,19 @@ and its three test files), `export * from './maintenance'` (`Engine/src/index.ts
 
 **Milestone start (design §6.5; the same five steps at every milestone):**
 
-- [ ] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
+- [x] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
   `"$PLANS/tools/ps-env.sh" <command>` (D-074).
-- [ ] `git fetch origin next`; `git rev-parse --short origin/next` recorded in §11 (#6180 merged `fa33e94dbe`; the
+- [x] `git fetch origin next`; `git rev-parse --short origin/next` recorded in §11 (#6180 merged `fa33e94dbe`; the
   `pr6180` fetch and A-6180-STATE/A-6180-COLUMNS are retired, D4-79).
-- [ ] merge `origin/next`: when `git diff --name-only HEAD...origin/next -- migrations/` shows a newer migration, run
+- [x] merge `origin/next`: when `git diff --name-only HEAD...origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
   `git merge origin/next` and `"$PLANS/tools/ps-env.sh" pnpm mj migrate`.
-- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
+- [x] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
   `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" pnpm mj codegen` →
   `pnpm run build`, each exit code 0 (PR 3 D3-212); sync write-backs into `metadata/**/*.json` restored from the index
   (`git show :<path> > <path>`), never from `HEAD`.
-- [ ] `git diff --name-only HEAD...origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
+- [x] `git diff --name-only HEAD...origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
   bundle-count changes (conventions §3); when the merge brought a migration, the CodeGen tail is regenerated only from a
   clean bootstrap (`bootstrap-clean-db`) and the `__mj.ts` getters are diffed against the migration's views.
 
@@ -7862,12 +7878,12 @@ immutable (D4-205)
     });
   },
   ```
-- [ ] Step 2: Run each with its §4.1a mutation applied (`**Mutation check G6.1:**` … `**Mutation check G6.12:**`, the ten
+- [x] Step 2: Run each with its §4.1a mutation applied (`**Mutation check G6.1:**` … `**Mutation check G6.12:**`, the ten
   of this task) → each fails as its breaking scenario says; paste each into §11 as `**Mutation output G6.<n>:**`.
 - [x] Step 3: Restore.
-- [ ] Step 4: `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Monitoring"`
+- [x] Step 4: `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Monitoring"`
   → 10 passed, 0 failed; `cd packages/TestingFramework/integration-test-suite && pnpm test` → 0 failed.
-- [ ] Step 5: The logged lines (G6.1 `"joined"` equal to `"closedWindowPredictions"`, G6.4 `0` fires, G6.12 `1` and `0`
+- [x] Step 5: The logged lines (G6.1 `"joined"` equal to `"closedWindowPredictions"`, G6.4 `0` fires, G6.12 `1` and `0`
   alerts) pasted into §11.
 
 #### Task M6.7: Gates G6.6 `T4 -> S8.3` and G6.8 `D2 -> S8.3` (suite `Predictive Studio Gates — Monitoring (statistical)`)
@@ -7999,10 +8015,10 @@ milestone; counts, cells and claims go to §11.
 - [x] exit tests above run, each count measured and written into §11 — once per milestone (D4-87, program D-084): an
   exit-pass fix round re-runs only the suites whose inputs it changed (package suites of touched packages; integration
   suites only for runtime-code changes; a gate's suite for a change to its check); §11 names what was re-run
-- [ ] Task M6.9's harness run by the reviewer (D-071), its counts, cells and claims in §11
+- [x] Task M6.9's harness run by the reviewer (D-071), its counts, cells and claims in §11
 - [ ] self-audit of every added and changed line against `reference/coding-standards.md`, findings fixed
-- [ ] tasks ticked (Task M6.8 ticked `not applicable` with the merge state when the condition is false)
-- [ ] §11 entry `### <date> — <agent> — M6` with the counts, the twelve `**Mutation output G6.<n>:**` lines
+- [x] tasks ticked (Task M6.8 ticked `not applicable` with the merge state when the condition is false)
+- [x] §11 entry `### <date> — <agent> — M6` with the counts, the twelve `**Mutation output G6.<n>:**` lines
 - [x] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
 - [ ] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M6` → exit 0, summary in the commit body
@@ -8063,19 +8079,19 @@ the Pipeline Builder's auto-train outcome on the Process Run (M4b); PR 3's Playw
 
 **Milestone start (design §6.5; the same five steps at every milestone):**
 
-- [ ] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
+- [x] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
   `"$PLANS/tools/ps-env.sh" <command>` (D-074).
-- [ ] `git fetch origin next`; `git rev-parse --short origin/next` recorded in §11 (#6180 merged `fa33e94dbe`; the
+- [x] `git fetch origin next`; `git rev-parse --short origin/next` recorded in §11 (#6180 merged `fa33e94dbe`; the
   `pr6180` fetch and A-6180-STATE/A-6180-COLUMNS are retired, D4-79).
-- [ ] merge `origin/next`: when `git diff --name-only HEAD...origin/next -- migrations/` shows a newer migration, run
+- [x] merge `origin/next`: when `git diff --name-only HEAD...origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
   `git merge origin/next` and `"$PLANS/tools/ps-env.sh" pnpm mj migrate`.
-- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
+- [x] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
   `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" pnpm mj codegen` →
   `pnpm run build`, each exit code 0 (PR 3 D3-212); sync write-backs into `metadata/**/*.json` restored from the index
   (`git show :<path> > <path>`), never from `HEAD`.
-- [ ] `git diff --name-only HEAD...origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
+- [x] `git diff --name-only HEAD...origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
   bundle-count changes (conventions §3); when the merge brought a migration, the CodeGen tail is regenerated only from a
   clean bootstrap (`bootstrap-clean-db`) and the `__mj.ts` getters are diffed against the migration's views.
 
@@ -8527,12 +8543,12 @@ milestone; counts, cells and claims go to §11.
   through its run-now path.
 - [x] Step 2: The reviewer runs `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/AI/PredictiveStudio/TruthSuite && pnpm run test:db -- pre-change-migration'`
   → every case as its cell says; one training run per pipeline per claim window; counts measured at M7.
-- [ ] Step 3: The reviewer flips the M7 guards one at a time — the demotion predicate (`Delivery IS NULL`);
+- [x] Step 3: The reviewer flips the M7 guards one at a time — the demotion predicate (`Delivery IS NULL`);
   `MigratePreGateModels`' idempotency and its batch bound; the re-evaluation's change detection and the
   `no-prediction-unit` rule; the deploy state's `ArtifactStatus` read; the sign-off panel's reason requirement — and names
   the failing case of Step 2, of the Engine or Angular tests or of Task M7.6's spec for each.
-- [ ] Step 4: A broken claim is fixed at the invariant and the harness re-run → 0 broken.
-- [ ] Step 5: Counts, cells, claims and each mutation's failing case written to §11.
+- [x] Step 4: A broken claim is fixed at the invariant and the harness re-run → 0 broken.
+- [x] Step 5: Counts, cells, claims and each mutation's failing case written to §11.
 
 **Exit tests:**
 
@@ -8557,10 +8573,10 @@ milestone; counts, cells and claims go to §11.
 - [x] exit tests above run, each count measured and written into §11 — once per milestone (D4-87, program D-084): an
   exit-pass fix round re-runs only the suites whose inputs it changed (package suites of touched packages; integration
   suites only for runtime-code changes; a gate's suite for a change to its check); §11 names what was re-run
-- [ ] Task M7.8's harness run by the reviewer (D-071), its counts, cells and claims in §11
+- [x] Task M7.8's harness run by the reviewer (D-071), its counts, cells and claims in §11
 - [ ] self-audit of every added and changed line against `reference/coding-standards.md`, findings fixed
-- [ ] tasks ticked
-- [ ] §11 entry `### <date> — <agent> — M7` with the counts, §5.6 step 5's outputs, the G3.6, G0.2 and G0.3 lines
+- [x] tasks ticked
+- [x] §11 entry `### <date> — <agent> — M7` with the counts, §5.6 step 5's outputs, the G3.6, G0.2 and G0.3 lines
 - [x] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
 - [ ] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M7` → exit 0, summary in the commit body
@@ -10679,6 +10695,28 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   Registry Check's step (i) re-attaches the view gate to a read permission that lost it, so a permission mutation can be
   remediated while the test runs (seen 2026-11-20 08:00:34Z: Z6 green under its mutation). With the job `Paused`, Z6
   fails as designed (`expected 0, got 4`).
+- **D4-237 · A period with fewer scored rows than the job's minimum is recorded `insufficient-rows`, not judged**
+  (close-out round, controller ruling 1; OF4-48). `MonitoringJobSpec.performance.minScoredRowsPerPeriod` (default 10,
+  `MonitoringJobSpecs.DEFAULT_MIN_SCORED_ROWS_PER_PERIOD`; a spec stored before it reads as 10) sits beside the
+  monitoring period and interval. `MonitoringRules.EnoughScoredRows` / `InsufficientRowsReason` (Core) and the driver:
+  a period below the minimum is written `State = 'insufficient-rows'` with the reason naming both counts, no score, no
+  trigger input, no challenger or rollback; its drift look is still taken and counted as a look. A period with no
+  prediction at all is `insufficient-rows` too (OF4-51 resolved: it no longer fails the run). The serving migration's
+  `CK_MLMonitoringResult_State` gains the value, and the monitoring period gains `year` (`CK_MLMonitoringResult_Grain`,
+  `MonitoringPeriods`), the pooled window of a series with one row per month. G6.4 is re-specified on it (§4.1, §4.1a).
+- **D4-238 · G6.11 runs on D2 with a trigger that always fires** (close-out round, controller ruling 2; OF4-49). T4's
+  challengers came only from one-row fires and trained to `keep-simple-baseline`, refused before the incumbent step.
+  D2's labels follow one unchanged model, its features carry signal, and a calibration-drift band of [10, 20] fires
+  every period. With the default baselines the GLM ties D2's logistic truth and the challenger is `keep-simple-baseline`
+  (measured), so the fixture's protocol keeps the base rate as the only simple baseline (`MonitoredPromotion`, a new
+  `UnitFixtures.ProvisionMonitoredScenarioPipeline` option): the challenger is a real `model` that reaches
+  `checkIncumbent`. Period 4 is the fixture's period because its paired diff (measured `0.000295 [-0.000118, 0.000691]`)
+  is above 0 on the point and not on the lower bound — the case the mutation must turn into a replacement; period 3
+  (`-0.000068 [-0.000376, 0.000213]`) cannot show it. The row keeps its `T4 -> S8.5` key and check ID.
+- **D4-239 · The allowlist names the review and integration fixes outside it** (close-out round, controller ruling 6).
+  Nine paths changed by D4-184's two fixes (Materialize List From View, `RunAction` output params), the phase-3 fixes
+  (the shared tab kernel's suite, ServerBootstrapLite's `integration-engine` dependency for next's Peer Sync class),
+  M5b's exports and IT182's identity and teardown helpers are listed with the ruling each serves.
 - **D-086 · Program process ruling (owner, 2026-11-16).** Fix rounds are capped at two per task, Minor/Nit findings are
   parked and fixed in one batch at the milestone exit self-audit (Important at once); no scoped re-review for nit-only
   rounds; reviewers verify by reading and targeted runs (the DB-lane case, the mutation, the runtime proof) and do not
@@ -10985,20 +11023,22 @@ default implemented:
 - **OF4-48 · G6.4 cannot pass: a T4 monitored month is one row** (final verification). Each period has `ScoredRows 1`,
   so its primary RMSE interval has zero width and the degradation lower bound is one month's absolute error minus the
   reference RMSE and its half-width: 4 of 12 no-shift months fire (lower bounds 0.181, 1.800, 0.040, 0.616 > 0.01).
-  The protocol's serial-aware interval is never involved. **Default:** open for the controller (a minimum-rows rule for a
-  period's performance decision, or G6.4 on a grain with more rows per period).
+  The protocol's serial-aware interval is never involved. **Resolved** by D4-237 (a minimum of scored rows per judged
+  period; G6.4 on the pooled year; Monitoring 10/10).
 - **OF4-49 · G6.11's mutation cannot reach the line it changes** (final verification). On T4 the challenger (started by
   OF4-48's fires) trains to `keep-simple-baseline`; `ReverifyPublish` refuses it at `checkKeepBaseline`
   (`keep-baseline-not-auto-published`) before `checkIncumbent`, so "point improvement > 0 in place of the lower bound
-  beating the margin" leaves G6.11 green. **Default:** open for the controller.
+  beating the margin" leaves G6.11 green. **Resolved** by D4-238 (G6.11 on D2; its mutation replaces the incumbent).
 - **OF4-50 · A Models deep link shows the previously selected model when the user's saved workspace holds a Models tab**
   (final verification, M7.6 walk). Reproduced: with a saved `Models?modelId=A` tab, a new session's
   `page.goto(Models?modelId=B)` shows A (four publish-flow tests red in one run); each test passes once the user's
-  `MJ: Workspaces` row is deleted. **Default:** open for the controller (the Models resource's query-param round trip,
-  `packages/Angular/CLAUDE.md`).
+  `MJ: Workspaces` row is deleted. **Resolved** (`2eea509c00`): the base `ngOnInit` delivers the deep link through
+  `OnQueryParamsChanged`, and the resource then re-applied the tab's saved params; they now apply only when nothing was
+  delivered. The publish-flow walk passes 5/5 in one run.
 - **OF4-51 · A monitoring job run on a period with no predictions fails the job run** (final verification): run-now on a
   Published D1c model with no binding → period 2026-10-01 `failed` "no realised outcome among the period's 0 joined
-  prediction(s)", job run `Failed`, a failure notification to the owner. **Default:** recorded.
+  prediction(s)", job run `Failed`, a failure notification to the owner. **Resolved** by D4-237: such a period is
+  `insufficient-rows` (0 scored rows) and does not fail the run.
 - **OF4-52 · The monitoring tab repeats the trigger kind** ("outcome-degradation: outcome-degradation: …"; the stored
   reason already starts with the kind). **Default:** recorded (cosmetic).
 
@@ -11052,7 +11092,7 @@ are monitored on real outcomes.
 - Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, PS_SEED_LIMIT, PS_SIGN_IN_URL, PS_STORAGE_PROVIDER, PW_BASE_URL, STORAGE_LOCAL_ROOT<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->29<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->29<!-- /gen:checks -->
-- Head: <!-- gen:head -->9cbb5e1324<!-- /gen:head -->
+- Head: <!-- gen:head -->e274ed9840<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,
@@ -12914,69 +12954,99 @@ Report: `phase3-integration-report.md`. Nothing pushed.
 - **Next:** per-milestone reviews, then the final verification on databases rebuilt from clean (the retimed migration
   and V202610130001 change checksums; G6.4/G6.11 on `LagTarget`; G6.8's new mutation; IT182; the open Steps).
 
-### 2026-11-20 — Claude (Opus 5.5) — M5b, M6, M7 exit (combined)
+### 2026-11-20 — Claude (Opus 5.5) — M5b
 
-Report: `.superpowers/sdd/PR-4-honest-serving/final-verification-report.md`. Nothing pushed. Code at `c84d3f9289`
-(phase 3 + the controller's merge of `ps/pr-4-honest-serving--fixes`, 25 review-fix commits) and `9cbb5e1324` (D4-235).
-- **Clean rebuild, both DBs:** DROP/CREATE with RCSI; `mj migrate` → `194 applied` (claude 519.0 s, review 514.6 s).
-  **M5b.8 fresh-install proof, before any CodeGen:** `SELECT COUNT(*) FROM __mj.Entity WHERE ID = '1AC777D7-…'` → 1;
-  `MJ: Latest Feature Values | vwLatestFeatureValues | 0 | 1 | 0 | 0 | 0`; EntityField 19 = `sys.columns` 19; key `ID`.
-  Tail check `codegen --skipfiles` → only OF4-34's `EntityUniqueKey` row and OF4-9's two `SubtypeSelector` UPDATEs (no
-  `spDeleteAIPrompt`: D4-231's hand-merged tail reproduces); sync push `92/54/16927/42`, 0 errors; full CodeGen → OF4-9
-  only, **no tracked file changed** (the `series-without-key` JSONType mirror reproduces); `truth:provision` 48 pstruth;
-  it-metadata `created 804`; C1 corpus (305 immutable fields). Identity claude = review: entities 510, fields 7943
-  (field lists identical), relationships 1027, flyway 193, PS remote ops 12, gate rows 31, suites Scoring 7 · Registry
-  and Gate 9 · Containment 12 · Monitoring 10 · Monitoring (statistical) 3, deterministic members 160.
-- **Package suites (0 failed):** Core 573; Engine 1813; TruthSuite 188; FeaturePipelines 312; RSP engine 182 / base 31;
-  CodeGenLib 2610 (+66 skipped); MJCoreEntitiesServer 1621; core-entity-forms 713; dashboards 3166 (PS 284);
+Report: `.superpowers/sdd/PR-4-honest-serving/final-verification-report.md` (final verification and its close-out
+round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) through the close-out commits.
+- **Clean rebuilds, both DBs** (twice: at the final verification, and again in the close-out round after D4-237 changed
+  the serving migration): DROP/CREATE with RCSI; `mj migrate` → `194 applied`. **M5b.8 fresh-install proof, before any
+  CodeGen:** `SELECT COUNT(*) FROM __mj.Entity WHERE ID = '1AC777D7-…'` → 1; `MJ: Latest Feature Values |
+  vwLatestFeatureValues | 0 | 1 | 0 | 0 | 0`; EntityField 19 = `sys.columns` 19; key `ID`. Tail check `codegen
+  --skipfiles` → only OF4-34's `EntityUniqueKey` row and OF4-9's two `SubtypeSelector` UPDATEs on both DBs (no
+  `spDeleteAIPrompt`: D4-231's tail reproduces; the close-out's value-list rows reproduce); sync push `92/54/16927/42`,
+  0 errors; CodeGen after the push → OF4-9 only; `truth:provision` 48 pstruth; it-metadata `created 804`; C1 corpus (305
+  immutable fields). Identity claude = review: entities 510, fields 7943 (lists identical), relationships 1027, flyway
+  193, PS remote ops 12, gate rows 31, deterministic members 160.
+- **Package suites (0 failed, final):** Core 577; Engine 1820; TruthSuite 188; FeaturePipelines 312; RSP engine 182 /
+  base 31; CodeGenLib 2610 (+66 skipped); MJCoreEntitiesServer 1621; core-entity-forms 714; dashboards 3168 (PS 286);
   integration-test-suite 1103 + rigs `tsc` 0; React runtime 151; GraphQLDataProvider 777; CoreActions 1224; SQLParser
-  2175; Sidecar TS 37; sidecar pytest 536; truth pytest 24 + mypy 55 files clean.
-- **Gate suites** (`RUN_MUTATION_TESTS=1`, census = baseline after each): Scoring 7/7; Registry and Gate 9/9;
-  Containment 12/12 (G0.2 `published 0`, `consistent 60`; G0.3 `published 0`); **Monitoring 9/10 — ✗ G6.4** `4 fires
-  over 12 monitored months (expected 0)` (OF4-48: one row per month); Monitoring (statistical) 3/3 — G3.4 `0 of 400`
-  published, G6.6 `19 of 400` alarming (q 0.0095), G6.8 `400 of 400` detected, mean FDP 0.0076; IT166 PSD1, PSD2 ✓;
-  IT182 Z1–Z8 ✓.
+  2175; Sidecar TS 37; sidecar pytest 536; truth pytest 24 + mypy clean.
+- **Gates:** Scoring 7/7 (G5.1–G5.6, G3.9); IT182 Z1–Z8 ✓; `Integration Tests — Deterministic` (PR lane)
+  `131/160 passed, 28 skipped`, Skip gate PASSED, ✗ PB7/PB18 only (OF4-36).
+- **Mutation output G5.6:** `✗ ps-gate-c1-s7-4-2.G5.6: … the panel shows the prediction to a user holding the binding's authorization, 1 of 1, and shows nothing to a user without it, 0 of 1` (`{"panelAuthorized":1,"panelRestricted":1,"rowsWithLineage":6673,…}`; the UI role's Latest-FV read permission without its view-gate filter, MJAPI restarted, Registry Check paused, D4-236).
+- **Z6 / OF4-45:** with the Registry Check job paused: `✗ ps-prediction-serving.Z6: … reads no prediction — expected 0, got 4`;
+  without the pause the hourly job's step (i) re-attached the view gate mid-run (D4-236).
+- **Runtime:** M5b.5 retention run-now → driver `PredictiveStudioPredictionRetentionJobDriver`, `ViewAuthorizationID IS
+  NULL` → 0, `Details.Bindings[0]` `RetentionDays 30, Cutoff 2026-10-21, Deleted 0`. Save as list: list `973DA275-…`
+  (22 details), its view re-saved with `IgnoreDirtyState` → WhereClause SHA-256 `E735F160…` unchanged.
+- **Walk** (M5b.9, Explorer :4201 on MJAPI :4041): record panel 2/2 — authorized: card 32 %, lineage `Model v1 · scoring
+  run EA831143-… · as of Nov 19, 2026`; restricted: no card, Derived values only. Step 2's red: D4-232.
+- **DB lane** (MJAPI stopped): 13 files / 152 passed, 0 stderr lines, census equal (final verification and close-out).
+
+### 2026-11-20 — Claude (Opus 5.5) — M6
+
+- **Monitoring 10/10** (close-out round, after D4-237/D4-238): G6.1–G6.5, G6.7, G6.9–G6.12 ✓. G6.4 `0 fires: 12 of 12
+  one-row months insufficient-rows, 1 of 1 pooled 12-month windows judged` (`pooledScoredRows 12`, pooled RMSE
+  `1.898 [1.265, 2.474]`). G6.11 on D2: challenger gate outcome `model`, reached the incumbent comparison, diff
+  `0.000295 [-0.000118, 0.000691]` at margin 0, withheld, replaced false. (At the final verification, before the rulings:
+  9/10, G6.4 `4 fires over 12 monitored months` — OF4-48.) Logged lines: G6.1 `12000 of 12000 closed-window predictions
+  have a joined outcome` (`"joined":12000`, `"scoredForPeriod":"4000 4000 4000"`); G6.4 `0` fires; G6.12 `0 alert without
+  the skew, 1 with a planted 1e-6 skew on 200 stored scores`. **Monitoring (statistical) 3/3:** G3.4 `0 of 400` published,
+  G6.6 `19 of 400` alarming (q 0.0095), G6.8 `400 of 400` detected, mean FDP 0.0076. IT166 PSD1, PSD2 ✓.
+- **Mutation output G6.1:** `✗ ps-gate-d1c-s8-1.G6.1: 36000 of 36000 closed-window predictions have a joined outcome` (the check's per-period row count catches it)
+- **Mutation output G6.2:** `✗ ps-gate-d1r-s8-2.G6.2: 0 of 3 labelled periods carry RMSE with 95% bounds; 0 post-shift RMSE above the pre-shift upper bound 4.032828931969381`
+- **Mutation output G6.3:** `✗ ps-gate-d1c-s8-4.G6.3: the trigger did not fire within 1 period of the shift`
+- **Mutation output G6.4:** `✗ ps-gate-t4-s8-4.G6.4: 4 fires: 0 of 12 one-row months insufficient-rows, 1 of 1 pooled 12-month windows judged (expected 0 fires, 12, 1)` (minimum dropped)
+- **Mutation output G6.5:** `✗ ps-gate-w6-s8-4.G6.5: no 2024+ period flagged a retrain (0 of 1)`
+- **Mutation output G6.6:** `✗ ps-gate-t4-s8-3.G6.6: 87 of 400 no-drift replays raised an alarm over 12 looks at q(12) (at most 28)`
+- **Mutation output G6.7:** `✗ ps-gate-d1c-s8-2.G6.7: period-3 positive rate 0.4618831956517756 against the periods 0–2 upper bound 0.4663423457063208`
 - **Mutation output G6.8:** `✗ ps-gate-d2-s8-3.G6.8: EngagementZ flagged within 1 period of the shift in 400 of 400 seeds (at least 372); mean FDP 0.6628 (at most 0.05)`
 - **Mutation output G6.9:** `✗ ps-gate-d1c-s8-5.G6.9: D1c: challenger 8B6065C4-…, paired on the incumbent's rows true, replaced false` (D4-234)
 - **Mutation output G6.10:** `✗ ps-gate-d1r-s8-5.G6.10: D1r: challenger 31198691-…, paired on the incumbent's rows true, replaced false`
-- **Mutation output G6.11:** NOT caught — `✓ ps-gate-t4-s8-5.G6.11` (`challengerStatus KeepBaseline`, `outcome withheld`): the
-  refusal is `keep-baseline-not-auto-published` before the incumbent comparison is read (OF4-49).
-- **Mutation output G6.4:** not run — the gate is red without a mutation (OF4-48).
-- **Mutation output G3.6:** `✗ ps-gate-c1-s9-1.G3.6: 1 of 2 Published models have a publish record …; incomplete: A6AE4E7E-… (PSTruth: G3.6 W1 s42 automatic …) has no publish record`
-- **Mutation outputs carried from the phase-2 runs** (`phase2-m5b-report.md`, `phase2-m6-report.md`; the code those
-  mutations touch is unchanged by the review fixes except where noted): **Mutation output G5.6:** `✗ ps-gate-c1-s7-4-2.G5.6: … shows nothing to a user without it, 0 of 1 {"panelAuthorized":1,"panelRestricted":1,…}`;
-  **Mutation output G6.1:** `✗ ps-gate-d1c-s8-1.G6.1 … {"closedWindowPredictions":36000,"joined":36000,"scored":"12000 12000 12000","scoredForPeriod":"4000 4000 4000"}`;
-  **Mutation output G6.2:** `✗ ps-gate-d1r-s8-2.G6.2: 0 of 3 labelled periods carry RMSE with 95% bounds`;
-  **Mutation output G6.3:** `✗ ps-gate-d1c-s8-4.G6.3: the trigger did not fire within 1 period of the shift`;
-  **Mutation output G6.5:** `✗ ps-gate-w6-s8-4.G6.5: no 2024+ period flagged a retrain (0 of 1)`;
-  **Mutation output G6.6:** `✗ ps-gate-t4-s8-3.G6.6: 87 of 400 no-drift replays raised an alarm over 12 looks at q(12) (at most 28)`;
-  **Mutation output G6.7:** `✗ ps-gate-d1c-s8-2.G6.7: period-3 positive rate 0.4618831956517756 against the periods 0–2 upper bound 0.4663423457063208`;
-  **Mutation output G6.12:** `✗ ps-gate-r1-s7-6.G6.12: 0 alert without the skew, 0 with a planted 1e-6 skew on 200 stored scores`.
-  The review fixes changed the monitoring driver (per-period step errors, M1) and the drift input kind (R-5); these eight
-  were not re-run on the fixed code (time), the gates themselves were (Monitoring 9/10 above).
-- **OF4-45 / Z6:** with the Registry Check job paused (D4-236): `✗ ps-prediction-serving.Z6: … reads no prediction — expected 0, got 4`.
-- **DB lane** (MJAPI stopped): 13 files / 152 passed, 0 noise, census equal.
-- **Runtime:** M7.2 `MigratePreGateModels` over GraphQL — dry run `{evidenceBearing 0, unverifiedArtifacts 3,
-  pipelinesToReEvaluate 0}`, after section 13's demotion `pipelinesToReEvaluate 2`, writing pass as Registry Check run
-  `C2CC94FD-…` → `dryRun false … retrained 0`; Registry Check run-now `Details.PreChangeModels`: artifacts `Missing` ×3,
-  `ScoringActionsDisabled` [B1, A2], `ReEvaluation.Findings` `no-prediction-unit` ×2; M6.4: a model set Published by SQL
-  → finding (a) `"archived by the lifecycle gate"`, `remediated`, model `Archived` (`status-written-outside-gate`); step
-  (i) re-attached a removed view gate (run `271158B6-…`). M5b.5 retention run-now: driver
-  `PredictiveStudioPredictionRetentionJobDriver`, `ViewAuthorizationID IS NULL` → 0, `Details.Bindings[0]` `RetentionDays
-  30, Cutoff 2026-10-21, Deleted 0`. M6.3: D1c periods 2022-01 `evaluated 0.618 [0.606, 0.631]` and 2023-01 `0.634
-  [0.622, 0.647]` with the `outcome-degradation` trigger; the job's run-now on 2026-10 → `failed` (OF4-51). Save as list:
-  list `973DA275-…` (22 details), view `7F733F8B-…` re-saved with `IgnoreDirtyState` → WhereClause SHA-256 `E735F160…`
-  unchanged (fixes item 2).
-- **Walks** (Explorer :4201 on MJAPI :4041): record panel 2/2 (authorized: card 32 %, lineage `Model v1 · scoring run
-  EA831143-… · as of Nov 19, 2026`; restricted: no card, Derived values only); publish flow 5/5, one test per run after
-  deleting the user's saved workspace (OF4-50); `sqlcmd`: validated `publish | user | 79D9CEBB-…`, auto `publish |
-  automated-gate`, withheld `refusal | keep-baseline-not-auto-published`, sign-off `refusal no-sign-off` → `sign-off |
-  user` → `publish | user`. Screenshots in the verification scratchpad `fv/walk/`.
-- **Deterministic** (PR-lane): `131/160 passed, 28 skipped`, Skip gate PASSED; ✗ PB7/PB18 only (OF4-36). Repo gates:
-  `check:guards`, `check:standards` (0 errors), `check:ui`, `check:changeset`, `check:codegen-tail`, `check:claude-md`,
-  entityfield-sequence — EXIT=0 each.
-- **Fix:** D4-235 (monitoring-tab UTC label), `9cbb5e1324`. **Open for the controller:** OF4-48, OF4-49, OF4-50; M6.6
-  Steps 2, 4, 5 stay unticked (G6.4 red, G6.11's mutation not caught); M7.8 Steps 3–5 (the reviewer's guard flips) not run.
+- **Mutation output G6.11:** `✗ ps-gate-t4-s8-5.G6.11: D2: challenger 38235CB1-… (gate outcome model), reached the incumbent comparison true, replaced true`
+- **Mutation output G6.12:** `✗ ps-gate-r1-s7-6.G6.12: 0 alert without the skew, 0 with a planted 1e-6 skew on 200 stored scores`
+- Every mutation run: Registry Check paused, package rebuilt, MJAPI restarted, the one bundle, restore `cmp` identical,
+  rebuild; census equal after each. G6.1–G6.7, G6.12 and G5.6 re-run on the fixed code in the close-out round (replacing
+  the phase-2 outputs).
+- **Runtime:** M6.3 D1c periods 2022-01 `evaluated 0.618 [0.606, 0.631]`, 2023-01 `0.634 [0.622, 0.647]` with the
+  `outcome-degradation` trigger; the job's run-now on a period with no prediction failed the run at the final
+  verification (OF4-51, now `insufficient-rows`, D4-237). M6.4: a model set Published by SQL → finding (a) `archived by
+  the lifecycle gate`, `remediated`, model `Archived` (`status-written-outside-gate`); step (i) re-attached a removed
+  view gate (run `271158B6-…`).
+- **Fixes:** D4-235 (monitoring-tab UTC label); D4-237 (`insufficient-rows`, `minScoredRowsPerPeriod`, `year` grain;
+  migration + CodeGen); D4-238 (G6.11 on D2).
+
+### 2026-11-20 — Claude (Opus 5.5) — M7
+
+- **Gates:** Registry and Gate 9/9 (G3.6 `2 of 2 Published models have a publish record`); Containment 12/12 (G0.2
+  `published 0` (max 6), `consistent 60`, `trainingRuns 60`; G0.3 `published 0`, `leakageDecided 2`).
+- **Mutation output G3.6:** `✗ ps-gate-c1-s9-1.G3.6: 1 of 2 Published models have a publish record with approver, time, gate decision and evidence; incomplete: A6AE4E7E-… (PSTruth: G3.6 W1 s42 automatic …) has no publish record`
+- **§5.6 step 5 / M7.2 runtime:** `MigratePreGateModels` over GraphQL — dry run `{evidenceBearing 0, unverifiedArtifacts
+  3, pipelinesToReEvaluate 0}`; after section 13's demotion (SQL) `pipelinesToReEvaluate 2`; Registry Check run-now
+  `C2CC94FD-…` → `ScoringActionsDisabled [B1, A2]`, `no-prediction-unit` ×2, artifacts `Missing` ×3; writing pass as
+  that run → `{dryRun false, adopted 0, demoted 0, retrained 0}`.
+- **M7.8 Step 3 (reviewer's guard flips, one at a time, restore `cmp` identical):** the demotion predicate (`Delivery IS
+  NULL` dropped from section 13) → DB lane `× leaves Archived rows Archived and gate-produced rows untouched`, `× refuses
+  a second Published model of one pipeline after the migration`; the idempotency (step 3 reads every legacy model) →
+  survived unit and DB lane → fixed at the invariant (Step 4): the second-run case asserts `Visited 0` → `× … a second
+  run visits and changes nothing` (`e274ed9840`); the batch bound → `× visits at most 50 models per run`; the
+  re-evaluation's change detection → `× re-evaluation publishes, repoints and re-enables; a withheld pipeline is not
+  retrained until something changes`, `× … not retrained by its own predictions or their column copies (I-1)`; the
+  `no-prediction-unit` rule → `× records no-prediction-unit for a legacy pipeline and invents no unit`; the deploy
+  state's `ArtifactStatus` read → `× a model whose artifact is missing is unscorable with the reason and Operate
+  disabled`; the sign-off panel's reason requirement — Approve's (`× an override without a reason cannot be approved`)
+  and Reject's (survived → new case `× a rejection needs a reason …`, `b75589b455`). Step 4: 0 broken after the two new
+  cases; DB lane 13 / 152.
+- **Walk** (M7.6): publish flow **5/5 in one run** without deleting the user's saved workspace (OF4-50 fixed,
+  `2eea509c00`): `sqlcmd` — validated `publish | user`; auto `publish | automated-gate`; withheld `refusal |
+  automated-gate | keep-baseline-not-auto-published`; sign-off `refusal | no-sign-off` → `sign-off | user` → `publish |
+  user`. Step 2's red: D4-232.
+- **Final tree** (`e274ed9840` + this plan): root build 351/351 + 322/322; Core 577, Engine 1820, TruthSuite 188,
+  integration-test-suite 1103 + rigs 0, core-entity-forms 714, dashboards 3168 — 0 failed, 0 stderr; `check:guards`,
+  `check:standards` (0 errors), `check:ui`, `check:changeset`, `check:codegen-tail`, `check:claude-md`,
+  entityfield-sequence EXIT=0; census = baseline. `milestone-exit --skip-commands`: M5b, M6, M7 each `# checks 10 ·
+  failed 1` — `tasks: 1 unticked`, the self-audit box (the controller's, after the audit agent); allowlist 702 paths, 0
+  outside; handoff found; mutation-checks 31 gate rows, 0 without output.
 
 ## 12. Refresh log (append-only)
 
