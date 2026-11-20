@@ -2,10 +2,12 @@
 "@memberjunction/ai-agents": minor
 "@memberjunction/ai-core-plus": minor
 "@memberjunction/codegen-lib": minor
+"@memberjunction/core-actions": minor
 "@memberjunction/core": minor
 "@memberjunction/core-entities": minor
 "@memberjunction/core-entities-server": minor
 "@memberjunction/feature-pipelines": minor
+"@memberjunction/graphql-dataprovider": minor
 "@memberjunction/ng-bootstrap": minor
 "@memberjunction/ng-bootstrap-lite": minor
 "@memberjunction/ng-core-entity-forms": minor
