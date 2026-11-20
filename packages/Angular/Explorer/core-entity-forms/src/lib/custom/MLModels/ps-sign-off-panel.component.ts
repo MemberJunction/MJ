@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnInit, Output, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RunView, type RemoteOpInvokeOptions, type RunViewResult } from '@memberjunction/core';
@@ -12,13 +12,38 @@ import {
   type MJMLModelPublishRecordEntity,
   type PredictiveStudioEvidenceSnapshot,
   type PredictiveStudioLeakageFlagKind,
+  type PredictiveStudioSignOffModelInput,
 } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJButtonDirective, MJConfirmDialogComponent, type MJConfirmDialogType } from '@memberjunction/ng-ui-components';
 import { EvaluationProtocol, LifecycleLabels, TransitionRefusalText } from '@memberjunction/predictive-studio-core';
 
+/** A sign-off decision, as `PredictiveStudio.SignOffModel` takes it. */
+type SignOffDecision = PredictiveStudioSignOffModelInput['decision'];
+
 /** The confirmation the panel is asking for. */
-type PendingAction = 'publish' | 'approve' | 'reject';
+type PendingAction = 'publish' | SignOffDecision;
+
+/** One paired comparison of the evidence, as the panel lists it. */
+interface ComparisonVM {
+  /** The comparison's name, as the evidence keys it. */
+  readonly Name: string;
+  /** The paired difference. */
+  readonly Value: number;
+  /** The interval's lower bound. */
+  readonly Lower: number;
+  /** The interval's upper bound. */
+  readonly Upper: number;
+  /** True when the interval says the model beats the comparator. */
+  readonly Beats: boolean;
+}
+
+/** What one load read: the evidence, the pinned protocol's policy and when the open sign-off wait opened. */
+interface LoadedEvidence {
+  readonly Evidence: PredictiveStudioEvidenceSnapshot;
+  readonly Policy: SignOffPolicy | null;
+  readonly WithheldAt: Date | null;
+}
 
 /** What the protocol pinned by the model asks of a publish. */
 interface SignOffPolicy {
@@ -188,7 +213,7 @@ const DAY_MS = 86_400_000;
     .ps-so-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--mj-text-secondary); }
     .ps-so-value { font-size: 20px; font-weight: 600; color: var(--mj-text-primary); }
     .ps-so-value.small { font-size: 14px; }
-    .ps-so-mono { font-family: var(--mj-font-mono, monospace); }
+    .ps-so-mono { font-family: var(--mj-font-family-mono); }
     .ps-so-section { font-size: 12px; font-weight: 600; color: var(--mj-text-secondary); margin-top: 4px; }
     .ps-so-cmp { display: flex; gap: 10px; font-size: 13px; color: var(--mj-text-primary); }
     .ps-so-beats.yes { color: var(--mj-status-success-text); }
@@ -200,9 +225,17 @@ const DAY_MS = 86_400_000;
     .ps-so-ok { font-size: 12px; color: var(--mj-status-success-text); }
   `],
 })
-export class PSSignOffPanelComponent extends BaseAngularComponent implements OnChanges {
-  /** The model to publish (Validated or KeepBaseline). */
-  @Input() Model: MJMLModelEntity | null = null;
+export class PSSignOffPanelComponent extends BaseAngularComponent implements OnInit {
+  /** The model to publish (Validated or KeepBaseline); a change reloads the panel (after the first load in `ngOnInit`). */
+  @Input()
+  set Model(value: MJMLModelEntity | null) {
+    if (value === this.model) return;
+    this.model = value;
+    if (this.initialized) void this.Reload();
+  }
+  get Model(): MJMLModelEntity | null {
+    return this.model;
+  }
 
   /** The new status after an applied publish (the status the gate returned). */
   @Output() Published = new EventEmitter<MJMLModelEntity['Status']>();
@@ -215,6 +248,9 @@ export class PSSignOffPanelComponent extends BaseAngularComponent implements OnC
 
   /** When the newest no-sign-off refusal was recorded (the wait opened), or null. */
   public WithheldAt: Date | null = null;
+
+  /** The paired comparisons of the evidence, in name order (built once per load). */
+  public Comparisons: readonly ComparisonVM[] = [];
 
   /** The leakage flags the user has ticked to override. */
   public Overrides = new Set<PredictiveStudioLeakageFlagKind>();
@@ -244,35 +280,65 @@ export class PSSignOffPanelComponent extends BaseAngularComponent implements OnC
   public RefusalMessage: string | null = null;
 
   private readonly cdr = inject(ChangeDetectorRef);
+  private model: MJMLModelEntity | null = null;
+  /** True once `ngOnInit` ran: every input, the Provider included, is bound, so a Model change reloads. */
+  private initialized = false;
+  /** Counts loads; a load whose token is no longer the latest drops its result (the model changed while it read). */
+  private loadToken = 0;
 
-  /** Reloads the evidence and the protocol's sign-off policy when the model changes. */
-  public async ngOnChanges(changes: SimpleChanges): Promise<void> {
-    if (changes['Model'] || changes['Provider']) await this.Reload();
+  /** The first load, once every input (the Provider included) is bound. */
+  public ngOnInit(): void {
+    this.initialized = true;
+    void this.Reload();
   }
 
-  /** Reads the evidence, the pinned protocol's sign-off policy and the open wait; resets the flow. */
+  /**
+   * Reads the evidence, the pinned protocol's sign-off policy and the open wait; resets the flow. A load the model
+   * changed under (a newer load started) discards what it read, so the panel never shows, and the user never approves
+   * against, another model's evidence.
+   */
   public async Reload(): Promise<void> {
+    const token = ++this.loadToken;
+    const model = this.Model;
     this.Evidence = null;
     this.Policy = null;
     this.WithheldAt = null;
+    this.Comparisons = [];
     this.Overrides = new Set();
     this.Reason = '';
     this.SignOffRecordId = null;
     this.Rejected = false;
     this.RefusalMessage = null;
     this.LoadError = null;
-    if (!this.Model) return;
+    if (!model) {
+      this.Loading = false;
+      this.cdr.markForCheck();
+      return;
+    }
     this.Loading = true;
     this.cdr.markForCheck();
     try {
-      const [evidence] = await Promise.all([this.LoadEvidence(this.Model.ID), this.LoadPolicy(this.Model)]);
-      this.Evidence = evidence;
+      const loaded = await this.load(model);
+      if (token !== this.loadToken) return;
+      this.Evidence = loaded.Evidence;
+      this.Policy = loaded.Policy;
+      this.WithheldAt = loaded.WithheldAt;
+      this.Comparisons = PSSignOffPanelComponent.ComparisonsOf(loaded.Evidence);
     } catch (e) {
+      if (token !== this.loadToken) return;
       this.LoadError = e instanceof Error ? e.message : String(e);
     } finally {
-      this.Loading = false;
-      this.cdr.markForCheck();
+      if (token === this.loadToken) {
+        this.Loading = false;
+        this.cdr.markForCheck();
+      }
     }
+  }
+
+  /** The evidence and the policy of `model`, read together. */
+  private async load(model: MJMLModelEntity): Promise<LoadedEvidence> {
+    const [evidence, policy] = await Promise.all([this.LoadEvidence(model.ID), this.LoadPolicy(model)]);
+    return { Evidence: evidence, Policy: policy.Policy, WithheldAt: policy.WithheldAt };
   }
 
   /** The evidence of the model through `PredictiveStudio.GetModelEvidence`; throws its error message when refused. */
@@ -283,10 +349,10 @@ export class PSSignOffPanelComponent extends BaseAngularComponent implements OnC
   }
 
   /**
-   * The pinned protocol's sign-off policy and the newest no-sign-off refusal of the model (one batched `RunViews`): the
-   * wait opened when that refusal was recorded.
+   * The pinned protocol's sign-off policy (null when the model pins none) and when the newest no-sign-off refusal of the
+   * model was recorded, the wait's opening (one batched `RunViews`).
    */
-  protected async LoadPolicy(model: MJMLModelEntity): Promise<void> {
+  protected async LoadPolicy(model: MJMLModelEntity): Promise<Pick<LoadedEvidence, 'Policy' | 'WithheldAt'>> {
     const protocolId = model.EvaluationProtocolID;
     const results = await RunView.FromMetadataProvider(this.ProviderToUse).RunViews([
       {
@@ -307,13 +373,14 @@ export class PSSignOffPanelComponent extends BaseAngularComponent implements OnC
     if (!protocols?.Success) throw new Error(`The model's Evaluation Protocol could not be read: ${protocols?.ErrorMessage || 'the view returned no result'}`);
     if (!refusals?.Success) throw new Error(`The model's refusal records could not be read: ${refusals?.ErrorMessage || 'the view returned no result'}`);
     const protocol = protocols.Results[0];
+    let policy: SignOffPolicy | null = null;
     if (protocol) {
       const parsed = EvaluationProtocol.ParseEvaluationProtocolRow(protocol);
       if (!parsed.Ok) throw new Error(`The model's Evaluation Protocol could not be read: ${parsed.Errors.join('; ')}`);
-      this.Policy = { RequiresHumanSignOff: parsed.Value.promotion.requiresHumanSignOff, SignOffExpiryDays: parsed.Value.promotion.signOffExpiryDays };
+      policy = { RequiresHumanSignOff: parsed.Value.promotion.requiresHumanSignOff, SignOffExpiryDays: parsed.Value.promotion.signOffExpiryDays };
     }
     const waitOpened = refusals.Results.find((r) => r.RefusalObject?.kind === 'no-sign-off');
-    this.WithheldAt = waitOpened ? waitOpened.RecordedAt : null;
+    return { Policy: policy, WithheldAt: waitOpened ? waitOpened.RecordedAt : null };
   }
 
   /** The date the registry job closes the sign-off wait, or null when no wait is open. */
@@ -322,9 +389,9 @@ export class PSSignOffPanelComponent extends BaseAngularComponent implements OnC
     return new Date(this.WithheldAt.getTime() + this.Policy.SignOffExpiryDays * DAY_MS);
   }
 
-  /** The paired comparisons of the evidence, in name order. */
-  public get Comparisons(): { readonly Name: string; readonly Value: number; readonly Lower: number; readonly Upper: number; readonly Beats: boolean }[] {
-    const comparisons = this.Evidence?.comparisons || {};
+  /** The paired comparisons of `evidence`, in name order. Pure. */
+  public static ComparisonsOf(evidence: PredictiveStudioEvidenceSnapshot): ComparisonVM[] {
+    const comparisons = evidence.comparisons;
     return Object.keys(comparisons)
       .sort()
       .map((name) => {
@@ -444,7 +511,7 @@ export class PSSignOffPanelComponent extends BaseAngularComponent implements OnC
   }
 
   /** Records the sign-off through `PredictiveStudio.SignOffModel`. */
-  private async signOff(model: MJMLModelEntity, decision: 'approve' | 'reject'): Promise<void> {
+  private async signOff(model: MJMLModelEntity, decision: SignOffDecision): Promise<void> {
     const result = await new PredictiveStudioSignOffModelOperation().Execute(
       { modelId: model.ID, purpose: 'publish', decision, reason: this.Reason.trim(), overridesFlags: [...this.Overrides] },
       this.opContext(),

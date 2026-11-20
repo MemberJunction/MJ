@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnInit, Output, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RunView } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
@@ -109,12 +109,20 @@ const GATE_OUTCOME_WORDS: Readonly<Record<NonNullable<MJMLModelPublishRecordEnti
     .ps-ph-detail { font-size: 12px; color: var(--mj-text-secondary); margin-top: 4px; }
     .ps-ph-refusal { font-size: 13px; color: var(--mj-status-warning-text); margin-top: 4px; }
     .ps-ph-transient { color: var(--mj-text-muted); font-size: 12px; }
-    .ps-ph-hash { font-family: var(--mj-font-mono, monospace); font-size: 11px; color: var(--mj-text-muted); margin-top: 4px; }
+    .ps-ph-hash { font-family: var(--mj-font-family-mono); font-size: 11px; color: var(--mj-text-muted); margin-top: 4px; }
   `],
 })
-export class PSPublishHistoryComponent extends BaseAngularComponent implements OnChanges {
-  /** The model whose records are listed. */
-  @Input() Model: MJMLModelEntity | null = null;
+export class PSPublishHistoryComponent extends BaseAngularComponent implements OnInit {
+  /** The model whose records are listed; a change reloads (after the first load in `ngOnInit`). */
+  @Input()
+  set Model(value: MJMLModelEntity | null) {
+    if (value === this.model) return;
+    this.model = value;
+    if (this.initialized) void this.Reload();
+  }
+  get Model(): MJMLModelEntity | null {
+    return this.model;
+  }
 
   /** A request to open the record a link names (an initiator); the host navigates. */
   @Output() OpenRecord = new EventEmitter<PSOpenRecordRequest>();
@@ -129,30 +137,44 @@ export class PSPublishHistoryComponent extends BaseAngularComponent implements O
   public ErrorMessage: string | null = null;
 
   private readonly cdr = inject(ChangeDetectorRef);
+  private model: MJMLModelEntity | null = null;
+  /** True once `ngOnInit` ran: every input, the Provider included, is bound, so a Model change reloads. */
+  private initialized = false;
+  /** Counts loads; a load whose token is no longer the latest drops its result (the model changed while it read). */
+  private loadToken = 0;
 
-  /** Reloads when the model changes. */
-  public async ngOnChanges(changes: SimpleChanges): Promise<void> {
-    if (changes['Model'] || changes['Provider']) await this.Reload();
+  /** The first load, once every input (the Provider included) is bound. */
+  public ngOnInit(): void {
+    this.initialized = true;
+    void this.Reload();
   }
 
-  /** Reads the model's publish records and rebuilds the rows. */
+  /** Reads the model's publish records and rebuilds the rows; a load the model changed under discards what it read. */
   public async Reload(): Promise<void> {
-    if (!this.Model) {
+    const token = ++this.loadToken;
+    const model = this.Model;
+    if (!model) {
       this.Rows = [];
+      this.Loading = false;
+      this.cdr.markForCheck();
       return;
     }
     this.Loading = true;
     this.ErrorMessage = null;
     this.cdr.markForCheck();
     try {
-      const records = await this.LoadRecords(this.Model.ID);
+      const records = await this.LoadRecords(model.ID);
+      if (token !== this.loadToken) return;
       this.Rows = records.map((r) => PSPublishHistoryComponent.ToRow(r));
     } catch (e) {
+      if (token !== this.loadToken) return;
       this.Rows = [];
       this.ErrorMessage = `The publish history could not be read: ${e instanceof Error ? e.message : String(e)}`;
     } finally {
-      this.Loading = false;
-      this.cdr.markForCheck();
+      if (token === this.loadToken) {
+        this.Loading = false;
+        this.cdr.markForCheck();
+      }
     }
   }
 

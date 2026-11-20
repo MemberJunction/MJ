@@ -5,6 +5,7 @@ import { CreateFakeProvider, renderComponentFixture, query, queryAll } from '@me
 import { PredictiveStudioRunModelMonitoringOperation, type MJMLModelEntity, type MJMLMonitoringResultEntity } from '@memberjunction/core-entities';
 import type { RunViewParams, RunViewResult } from '@memberjunction/core';
 import { PSModelMonitoringComponent } from './ps-model-monitoring.component';
+import { GatedReads, SettleReads } from './ps-gated-reads.dom-fixture';
 
 try {
   TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
@@ -177,5 +178,23 @@ describe('PSModelMonitoringComponent (DOM)', () => {
       expect(reload).not.toHaveBeenCalled();
       expect(Text(f, 'ps-monitoring-check-error')).toContain('the model has no open monitoring job');
     });
+  });
+});
+
+describe('a model change while its rows load (M7-3)', () => {
+  it('shows the current model\'s monitored periods when an earlier model\'s read finishes last', async () => {
+    const reads = new GatedReads((modelId, p) => (p.EntityName === 'MJ: ML Monitoring Results' ? (modelId === 'M-A' ? [P(0), P(1), P(2)] : [P(0)]) : []));
+    const f = renderComponentFixture(PSModelMonitoringComponent, { inputs: { Provider: reads.Provider() } });
+    f.componentRef.setInput('Model', { ID: 'M-A' });
+    f.detectChanges();
+    f.componentRef.setInput('Model', { ID: 'M-B' });
+    f.detectChanges();
+    await SettleReads();
+    reads.Release('M-B');
+    await SettleReads();
+    reads.Release('M-A');
+    await SettleReads();
+    f.detectChanges();
+    expect(queryAll(f, '[data-testid="ps-monitoring-period"]').length).toBe(1);
   });
 });

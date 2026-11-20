@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnChanges, SimpleChanges, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RunView } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
@@ -52,7 +52,7 @@ const ERRORS_SHOWN = 3;
   `,
   styles: [`
     .ps-sr { display: flex; flex-direction: column; gap: 8px; }
-    .ps-sr-hash { font-family: var(--mj-font-mono, monospace); font-size: 11px; color: var(--mj-text-muted); }
+    .ps-sr-hash { font-family: var(--mj-font-family-mono); font-size: 11px; color: var(--mj-text-muted); }
     .ps-sr-note { font-size: 13px; color: var(--mj-text-muted); padding: 8px 0; }
     .ps-sr-error { font-size: 13px; color: var(--mj-status-error-text); background: var(--mj-status-error-bg); border: 1px solid var(--mj-status-error-border); border-radius: 6px; padding: 8px 10px; }
     .ps-sr-row { border: 1px solid var(--mj-border-subtle); border-radius: 8px; padding: 10px 12px; background: var(--mj-bg-surface); }
@@ -68,9 +68,17 @@ const ERRORS_SHOWN = 3;
     .ps-sr-err { font-size: 12px; color: var(--mj-status-error-text); margin-top: 2px; }
   `],
 })
-export class PSScoringRunsComponent extends BaseAngularComponent implements OnChanges {
-  /** The model whose runs are listed. */
-  @Input() Model: MJMLModelEntity | null = null;
+export class PSScoringRunsComponent extends BaseAngularComponent implements OnInit {
+  /** The model whose scoring runs are listed; a change reloads (after the first load in `ngOnInit`). */
+  @Input()
+  set Model(value: MJMLModelEntity | null) {
+    if (value === this.model) return;
+    this.model = value;
+    if (this.initialized) void this.Reload();
+  }
+  get Model(): MJMLModelEntity | null {
+    return this.model;
+  }
 
   /** The runs, newest first. */
   public Runs: readonly MJMLScoringRunEntity[] = [];
@@ -82,29 +90,44 @@ export class PSScoringRunsComponent extends BaseAngularComponent implements OnCh
   public ErrorMessage: string | null = null;
 
   private readonly cdr = inject(ChangeDetectorRef);
+  private model: MJMLModelEntity | null = null;
+  /** True once `ngOnInit` ran: every input, the Provider included, is bound, so a Model change reloads. */
+  private initialized = false;
+  /** Counts loads; a load whose token is no longer the latest drops its result (the model changed while it read). */
+  private loadToken = 0;
 
-  /** Reloads when the model changes. */
-  public async ngOnChanges(changes: SimpleChanges): Promise<void> {
-    if (changes['Model'] || changes['Provider']) await this.Reload();
+  /** The first load, once every input (the Provider included) is bound. */
+  public ngOnInit(): void {
+    this.initialized = true;
+    void this.Reload();
   }
 
-  /** Reads the model's scoring runs. */
+  /** Reads the model's scoring runs; a load the model changed under discards what it read. */
   public async Reload(): Promise<void> {
-    if (!this.Model) {
+    const token = ++this.loadToken;
+    const model = this.Model;
+    if (!model) {
       this.Runs = [];
+      this.Loading = false;
+      this.cdr.markForCheck();
       return;
     }
     this.Loading = true;
     this.ErrorMessage = null;
     this.cdr.markForCheck();
     try {
-      this.Runs = await this.LoadRuns(this.Model.ID);
+      const runs = await this.LoadRuns(model.ID);
+      if (token !== this.loadToken) return;
+      this.Runs = runs;
     } catch (e) {
+      if (token !== this.loadToken) return;
       this.Runs = [];
       this.ErrorMessage = `The scoring runs could not be read: ${e instanceof Error ? e.message : String(e)}`;
     } finally {
-      this.Loading = false;
-      this.cdr.markForCheck();
+      if (token === this.loadToken) {
+        this.Loading = false;
+        this.cdr.markForCheck();
+      }
     }
   }
 

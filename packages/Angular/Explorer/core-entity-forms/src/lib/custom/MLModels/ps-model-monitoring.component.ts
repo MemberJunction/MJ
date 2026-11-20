@@ -1,7 +1,7 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnInit, Output, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { LogError, RunView, type RunViewResult } from '@memberjunction/core';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString } from '@memberjunction/global';
 import {
   PredictiveStudioRunModelMonitoringOperation,
   type MJMLModelEntity,
@@ -9,20 +9,24 @@ import {
   type MJMLMonitoringResultEntity,
   type MJScheduledJobRunEntity,
 } from '@memberjunction/core-entities';
-import { JsonParse, type JsonObject } from '@memberjunction/predictive-studio-core';
+import { RegistryCheckDetails, type RegistryFindingLetter, type RegistryFindingOutcome } from '@memberjunction/predictive-studio-core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 
 /** One registry check finding about the model and the action the job took (§5.7 R7), newest run first. */
 export interface RegistryFindingVM {
+  /** The Registry Check job run that recorded it. */
   readonly RunID: string;
+  /** When that run started. */
   readonly At: Date;
   /** The finding's letter: (a)–(i), (g) for the pre-change model migration. */
-  readonly Finding: string;
+  readonly Finding: RegistryFindingLetter;
+  /** What the job found. */
   readonly Detail: string;
+  /** What the job did about it. */
   readonly Action: string;
   /** `remediated`, `recorded` or `retry`. */
-  readonly Outcome: string;
+  readonly Outcome: RegistryFindingOutcome;
 }
 
 /** The registry check job run columns the tab reads. */
@@ -35,23 +39,33 @@ const REGISTRY_RUNS_READ = 20;
 
 /** A retrain trigger that fired in a period, with its reason. */
 export interface MonitoringTriggerVM {
-  readonly Kind: string;
+  /** The trigger's kind, as the monitoring row stores it. */
+  readonly Kind: MJMLMonitoringResultEntity['TriggersFiredObject'][number]['kind'];
+  /** Why it fired. */
   readonly Reason: string | null;
 }
 
 /** The challenger a fired trigger started: published automatically or withheld, with its paired comparison. */
 export interface MonitoringChallengerVM {
-  readonly Outcome: string;
+  /** What became of the challenger, as the monitoring row stores it. */
+  readonly Outcome: NonNullable<MJMLMonitoringResultEntity['ChallengerResultObject']>['outcome'];
+  /** Why, when the gate withheld it. */
   readonly Reason: string | null;
+  /** The live mirror's comparison in words, or null. */
   readonly Comparison: string | null;
+  /** The publish record of an automatic publish, or null. */
   readonly PublishRecordID: string | null;
 }
 
 /** The period's rollback check (previous vs current model on the same rows) and any rollback it caused. */
 export interface MonitoringRollbackVM {
-  readonly Kind: string;
+  /** The check's result, as the monitoring row stores it. */
+  readonly Kind: NonNullable<MJMLMonitoringResultEntity['RollbackCheckObject']>['kind'];
+  /** Why no comparison ran, or null. */
   readonly Reason: string | null;
+  /** The paired loss difference in words, or null. */
   readonly Comparison: string | null;
+  /** The rollback's publish record, or null. */
   readonly PublishRecordID: string | null;
 }
 
@@ -206,15 +220,23 @@ const CHART_PAD = 16;
     .ps-mon-row { border: 1px solid var(--mj-border-subtle); border-radius: 8px; padding: 8px 12px; background: var(--mj-bg-surface); }
     .ps-mon-line { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; font-size: 13px; color: var(--mj-text-primary); }
     .ps-mon-state { font-size: 12px; color: var(--mj-text-secondary); }
-    .ps-mon-mono { font-family: var(--mj-font-mono, monospace); }
+    .ps-mon-mono { font-family: var(--mj-font-family-mono); }
     .ps-mon-drift, .ps-mon-trigger { font-size: 13px; color: var(--mj-status-warning-text); margin-top: 4px; }
     .ps-mon-findings { display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--mj-text-primary); border-top: 1px solid var(--mj-border-subtle); padding-top: 8px; }
     .ps-mon-detail { font-size: 13px; color: var(--mj-text-secondary); margin-top: 4px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   `],
 })
-export class PSModelMonitoringComponent extends BaseAngularComponent implements OnChanges {
-  /** The model whose monitoring is shown. */
-  @Input() Model: MJMLModelEntity | null = null;
+export class PSModelMonitoringComponent extends BaseAngularComponent implements OnInit {
+  /** The model whose monitoring is shown; a change reloads the tab (after the first load in `ngOnInit`). */
+  @Input()
+  set Model(value: MJMLModelEntity | null) {
+    if (value === this.model) return;
+    this.model = value;
+    if (this.initialized) void this.Reload();
+  }
+  get Model(): MJMLModelEntity | null {
+    return this.model;
+  }
 
   /** A request to open a publish record (a challenger's publish or an automatic rollback); the host navigates. */
   @Output() OpenPublishRecord = new EventEmitter<string>();
@@ -240,43 +262,63 @@ export class PSModelMonitoringComponent extends BaseAngularComponent implements 
   /** Why "Check now" failed, or null. */
   public CheckMessage: string | null = null;
 
+  /** The chart's viewBox width, in chart units. */
   public readonly ChartWidth = CHART_WIDTH;
+  /** The chart's viewBox height, in chart units. */
   public readonly ChartHeight = CHART_HEIGHT;
 
   private readonly cdr = inject(ChangeDetectorRef);
+  private model: MJMLModelEntity | null = null;
+  /** True once `ngOnInit` ran: every input, the Provider included, is bound, so a Model change reloads. */
+  private initialized = false;
+  /** Counts loads; a load whose token is no longer the latest drops its result (the model changed while it read). */
+  private loadToken = 0;
 
-  /** Reloads when the model changes. */
-  public async ngOnChanges(changes: SimpleChanges): Promise<void> {
-    if (changes['Model'] || changes['Provider']) await this.Reload();
+  /** The first load, once every input (the Provider included) is bound. */
+  public ngOnInit(): void {
+    this.initialized = true;
+    void this.Reload();
   }
 
-  /** Reads the model's monitoring rows and the reference band, and rebuilds the chart. */
+  /**
+   * Reads the model's monitoring rows and the reference band, and rebuilds the chart. A load the model changed under
+   * (a newer load started) discards what it read, so the tab never shows another model's monitoring.
+   */
   public async Reload(): Promise<void> {
-    if (!this.Model) {
+    const token = ++this.loadToken;
+    const model = this.Model;
+    if (!model) {
       this.Periods = [];
       this.Findings = [];
       this.Chart = { Points: [], Band: null };
+      this.Loading = false;
+      this.cdr.markForCheck();
       return;
     }
     this.Loading = true;
     this.ErrorMessage = null;
     this.cdr.markForCheck();
     try {
-      const { Rows, Band, RegistryRuns } = await this.LoadPeriods(this.Model.ID);
+      const { Rows, Band, RegistryRuns } = await this.LoadPeriods(model.ID);
+      if (token !== this.loadToken) return;
       this.Periods = Rows.map((r) => PSModelMonitoringComponent.ToPeriod(r));
       this.Chart = PSModelMonitoringComponent.BuildChart(this.Periods, Band);
-      const modelId = this.Model.ID;
-      this.Findings = RegistryRuns.flatMap((run) => PSModelMonitoringComponent.FindingsOf(run, modelId));
+      this.Findings = RegistryRuns.flatMap((run) =>
+        RegistryCheckDetails.FindingsAbout(run.Details, model.ID).map((finding): RegistryFindingVM => ({ RunID: run.ID, At: new Date(run.StartedAt), ...finding })),
+      );
     } catch (e) {
+      if (token !== this.loadToken) return;
       const reason = e instanceof Error ? e.message : String(e);
-      LogError(`Predictive Studio model monitoring: reading the monitoring of ML Model ${this.Model.ID} failed: ${reason}`);
+      LogError(`Predictive Studio model monitoring: reading the monitoring of ML Model ${model.ID} failed: ${reason}`);
       this.Periods = [];
       this.Findings = [];
       this.Chart = { Points: [], Band: null };
       this.ErrorMessage = `The monitoring results could not be read: ${reason}`;
     } finally {
-      this.Loading = false;
-      this.cdr.markForCheck();
+      if (token === this.loadToken) {
+        this.Loading = false;
+        this.cdr.markForCheck();
+      }
     }
   }
 
@@ -302,7 +344,9 @@ export class PSModelMonitoringComponent extends BaseAngularComponent implements 
   /**
    * The model's monitoring rows, oldest period first; the reference band — the interval of the holdout score on the
    * model's newest publish record —; and the newest Registry Check job runs whose `Details` name the model, through the
-   * host's provider (one batched `RunViews`).
+   * host's provider (one batched `RunViews`). The runs are pre-filtered by the model's ID as a token of `Details` (a UUID
+   * matches no other model) and read structurally after ({@link RegistryCheckDetails.FindingsAbout}); the read stays a
+   * RunView so the job runs' entity permissions apply.
    *
    * @throws Error naming the read that failed, with its message
    */
@@ -326,44 +370,6 @@ export class PSModelMonitoringComponent extends BaseAngularComponent implements 
     const interval = publishes.Results[0]?.EvidenceObject?.holdoutPrimary.interval;
     const runs = registry.Results.map((r): RegistryRunRow => ({ ID: r.ID, StartedAt: r.StartedAt, Details: r.Details }));
     return { Rows: periods.Results, Band: interval ? { Lower: interval.lower, Upper: interval.upper } : null, RegistryRuns: runs };
-  }
-
-  /**
-   * The findings of one Registry Check job run about `modelId`: step (g)'s record (`Details.PreChangeModels`: the
-   * re-verification and the artifact check) first, then the `Details.Findings` whose subject is the model. Pure.
-   */
-  public static FindingsOf(run: RegistryRunRow, modelId: string): RegistryFindingVM[] {
-    const parsed = JsonParse.ParseJsonText(run.Details, 'Details');
-    if (parsed.Ok === false || !JsonParse.IsJsonObject(parsed.Value)) return [];
-    const at = new Date(run.StartedAt);
-    const one = (Finding: string, Detail: string, Action: string, Outcome: string): RegistryFindingVM => ({ RunID: run.ID, At: at, Finding, Detail, Action, Outcome });
-    const out: RegistryFindingVM[] = [];
-    const migration = JsonParse.JsonObjectField(parsed.Value, 'PreChangeModels');
-    if (migration) out.push(...PSModelMonitoringComponent.migrationFindings(migration, modelId, one));
-    for (const f of JsonParse.JsonArrayField(parsed.Value, 'Findings') || []) {
-      if (!JsonParse.IsJsonObject(f) || !UUIDsEqual(JsonParse.JsonString(f, 'SubjectID'), modelId)) continue;
-      out.push(one(JsonParse.JsonString(f, 'Finding') || '?', JsonParse.JsonString(f, 'Detail') || '', JsonParse.JsonString(f, 'Action') || '', JsonParse.JsonString(f, 'Outcome') || ''));
-    }
-    return out;
-  }
-
-  /** Step (g)'s entries about the model: adopted, demoted (with the refusal) or its artifact's recorded state. */
-  private static migrationFindings(m: JsonObject, modelId: string, one: (finding: string, detail: string, action: string, outcome: string) => RegistryFindingVM): RegistryFindingVM[] {
-    const out: RegistryFindingVM[] = [];
-    const listed = (o: JsonObject | null, key: string): boolean => (o ? JsonParse.JsonStringArray(o, key) || [] : []).some((id) => UUIDsEqual(id, modelId));
-    const reverified = JsonParse.JsonObjectField(m, 'Reverified');
-    if (listed(reverified, 'Adopted')) out.push(one('g', 'trained before the lifecycle gate; re-verified on its stored gate record', 'kept Published with an adopt record', 'remediated'));
-    for (const d of (reverified ? JsonParse.JsonArrayField(reverified, 'Demoted') : null) || []) {
-      if (!JsonParse.IsJsonObject(d) || !UUIDsEqual(JsonParse.JsonString(d, 'ModelID'), modelId)) continue;
-      const refusal = JsonParse.JsonObjectField(d, 'Refusal');
-      out.push(one('g', 'trained before the lifecycle gate; its stored gate record did not re-verify', `demoted to Unevaluated (${(refusal && JsonParse.JsonString(refusal, 'kind')) || 'refused'})`, 'remediated'));
-    }
-    const artifacts = JsonParse.JsonObjectField(m, 'Artifacts');
-    const states: readonly (readonly [string, string])[] = [['Verified', 'verified'], ['LegacyLocal', 'legacy-local'], ['Missing', 'missing'], ['HashMismatch', 'hash-mismatch']];
-    for (const [key, state] of states) {
-      if (listed(artifacts, key)) out.push(one('g', 'trained before the lifecycle gate; its artifact was checked once', `artifact recorded ${state}`, 'recorded'));
-    }
-    return out;
   }
 
   /** One monitoring row as a period, its JSON columns read through their typed accessors. */

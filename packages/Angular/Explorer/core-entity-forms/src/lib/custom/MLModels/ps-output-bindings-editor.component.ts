@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnChanges, SimpleChanges, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RunView } from '@memberjunction/core';
@@ -75,9 +75,17 @@ const DIRECTION_WORDS: Readonly<Record<MJMLOutputBindingEntity['DriverDirectionR
     .ps-ob-error { grid-column: 1 / -1; font-size: 13px; color: var(--mj-status-error-text); background: var(--mj-status-error-bg); border: 1px solid var(--mj-status-error-border); border-radius: 6px; padding: 6px 10px; }
   `],
 })
-export class PSOutputBindingsEditorComponent extends BaseAngularComponent implements OnChanges {
-  /** The model whose bindings are edited. */
-  @Input() Model: MJMLModelEntity | null = null;
+export class PSOutputBindingsEditorComponent extends BaseAngularComponent implements OnInit {
+  /** The model whose bindings are edited; a change reloads (after the first load in `ngOnInit`). */
+  @Input()
+  set Model(value: MJMLModelEntity | null) {
+    if (value === this.model) return;
+    this.model = value;
+    if (this.initialized) void this.Reload();
+  }
+  get Model(): MJMLModelEntity | null {
+    return this.model;
+  }
 
   /** The model's output bindings, in surface order. */
   public Bindings: MJMLOutputBindingEntity[] = [];
@@ -91,30 +99,45 @@ export class PSOutputBindingsEditorComponent extends BaseAngularComponent implem
   private readonly saving = new Set<string>();
   private readonly errors = new Map<string, string>();
   private readonly cdr = inject(ChangeDetectorRef);
+  private model: MJMLModelEntity | null = null;
+  /** True once `ngOnInit` ran: every input, the Provider included, is bound, so a Model change reloads. */
+  private initialized = false;
+  /** Counts loads; a load whose token is no longer the latest drops its result (the model changed while it read). */
+  private loadToken = 0;
 
-  /** Reloads when the model changes. */
-  public async ngOnChanges(changes: SimpleChanges): Promise<void> {
-    if (changes['Model'] || changes['Provider']) await this.Reload();
+  /** The first load, once every input (the Provider included) is bound. */
+  public ngOnInit(): void {
+    this.initialized = true;
+    void this.Reload();
   }
 
-  /** Reads the model's output bindings. */
+  /** Reads the model's output bindings; a load the model changed under discards what it read. */
   public async Reload(): Promise<void> {
+    const token = ++this.loadToken;
+    const model = this.Model;
     this.errors.clear();
-    if (!this.Model) {
+    if (!model) {
       this.Bindings = [];
+      this.Loading = false;
+      this.cdr.markForCheck();
       return;
     }
     this.Loading = true;
     this.LoadError = null;
     this.cdr.markForCheck();
     try {
-      this.Bindings = await this.LoadBindings(this.Model.ID);
+      const bindings = await this.LoadBindings(model.ID);
+      if (token !== this.loadToken) return;
+      this.Bindings = bindings;
     } catch (e) {
+      if (token !== this.loadToken) return;
       this.Bindings = [];
       this.LoadError = `The output bindings could not be read: ${e instanceof Error ? e.message : String(e)}`;
     } finally {
-      this.Loading = false;
-      this.cdr.markForCheck();
+      if (token === this.loadToken) {
+        this.Loading = false;
+        this.cdr.markForCheck();
+      }
     }
   }
 

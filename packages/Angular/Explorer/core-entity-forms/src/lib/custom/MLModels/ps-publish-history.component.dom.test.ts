@@ -6,6 +6,7 @@ import type { MJMLModelEntity, MJMLModelPublishRecordEntity } from '@memberjunct
 import { TransitionRefusalText } from '@memberjunction/predictive-studio-core';
 import { PSPublishHistoryComponent } from './ps-publish-history.component';
 import type { PSOpenRecordRequest } from './ps-model-detail-events';
+import { GatedReads, SettleReads } from './ps-gated-reads.dom-fixture';
 
 try {
   TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
@@ -83,5 +84,23 @@ describe('PSPublishHistoryComponent (DOM)', () => {
 
   it('says so when nothing has been recorded', async () => {
     expect(query(await RenderHistory({ records: [] }), '[data-testid="ps-publish-history-empty"]')).not.toBeNull();
+  });
+});
+
+describe('a model change while its rows load (M7-3)', () => {
+  it('shows the current model\'s publish history when an earlier model\'s read finishes last', async () => {
+    const reads = new GatedReads((modelId, p) => (p.EntityName === 'MJ: ML Model Publish Records' ? (modelId === 'M-A' ? [Publish({}), Publish({}), Publish({})] : [Publish({})]) : []));
+    const f = renderComponentFixture(PSPublishHistoryComponent, { inputs: { Provider: reads.Provider() } });
+    f.componentRef.setInput('Model', { ID: 'M-A' });
+    f.detectChanges();
+    f.componentRef.setInput('Model', { ID: 'M-B' });
+    f.detectChanges();
+    await SettleReads();
+    reads.Release('M-B');
+    await SettleReads();
+    reads.Release('M-A');
+    await SettleReads();
+    f.detectChanges();
+    expect(queryAll(f, '[data-testid="ps-publish-history-row"]').length).toBe(1);
   });
 });
