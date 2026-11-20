@@ -242,6 +242,14 @@ describe('PredictiveStudioRegistryCheckJobDriver', () => {
     expect(store.Row('MJ: Entity Permissions', 'F0000000-0000-4000-8000-000000000002')?.['ReadRLSFilterID']).toBe('F0000000-0000-4000-8000-000000000001');
   });
 
+  it('never overwrites a different read filter on a prediction entity\'s permission: it is recorded as a finding (M3)', async () => {
+    store.Insert('MJ: Row Level Security Filters', { ID: 'F0000000-0000-4000-8000-000000000001', Name: VIEW_GATE_FILTER_NAME });
+    store.Insert('MJ: Entity Permissions', { ID: 'F0000000-0000-4000-8000-000000000003', Entity: 'MJ: Feature Values', EntityID: 'E2', RoleID: 'Auditor', CanRead: true, ReadRLSFilterID: 'F0000000-0000-4000-8000-0000000000AA' });
+    const findings = await Run();
+    expect(store.Row('MJ: Entity Permissions', 'F0000000-0000-4000-8000-000000000003')?.['ReadRLSFilterID']).toBe('F0000000-0000-4000-8000-0000000000AA');
+    expect(findings).toEqual(expect.arrayContaining([expect.objectContaining({ Finding: 'i', SubjectID: 'F0000000-0000-4000-8000-000000000003', Outcome: 'recorded', Detail: expect.stringContaining('F0000000-0000-4000-8000-0000000000AA') })]));
+  });
+
   it('fails a scoring run running for more than six hours, and leaves a younger one running', async () => {
     store.Insert('MJ: ML Scoring Runs', { ID: 'A1000000-0000-4000-8000-000000000001', Status: 'running', StartedAt: new Date(now.getTime() - 7 * 3_600_000) });
     store.Insert('MJ: ML Scoring Runs', { ID: 'A1000000-0000-4000-8000-000000000002', Status: 'running', StartedAt: new Date(now.getTime() - 1 * 3_600_000) });

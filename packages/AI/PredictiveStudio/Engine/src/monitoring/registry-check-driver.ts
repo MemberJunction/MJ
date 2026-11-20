@@ -18,7 +18,7 @@
  * | {@link FailStaleScoringRuns} (e) | a scoring run `running` past the threshold (default 6 h) | `failed` with the reason |
  * | {@link CloseSignOffWaits} (f) | a sign-off wait whose newer run was evaluated or whose expiry passed | archived through the gate, then (only once it applied) `refusal` record `sign-off-wait-closed`; the incumbent untouched |
  * | {@link RecordOrphanPublishRecords} (h) | a publish record with no matching status change | recorded only |
- * | {@link ReattachViewGate} (i) | a read permission on the prediction entities without the view gate | the filter attached |
+ * | {@link ReattachViewGate} (i) | a read permission on the prediction entities without the view gate | the filter attached where the permission has none; a different filter is recorded, never overwritten |
  *
  * The rollback rule ((a), §5.7 R7): when the pipeline is left with no Published model, the newest `Archived` model with
  * an applied backing record (`publish`, `rollback` or `adopt`, D4-204), a `Delivery` and a verified artifact is
@@ -418,7 +418,11 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
     return out;
   }
 
-  /** (i) A read permission on `MJ: Feature Values` or `MJ: Latest Feature Values` without the view gate gets it. */
+  /**
+   * (i) A read permission on `MJ: Feature Values` or `MJ: Latest Feature Values` with no read filter gets the view gate.
+   * One that carries a different read filter is never overwritten (an admin may have set it on purpose, and replacing it
+   * could widen access): it is a `recorded` finding naming both filters.
+   */
   protected async ReattachViewGate(ctx: GateContext): Promise<RegistryFinding[]> {
     const filters = await StoredRowReads.Run<Pick<MJRowLevelSecurityFilterEntity, 'ID'>>({ EntityName: 'MJ: Row Level Security Filters', ExtraFilter: `Name='${EscapeSQLString(VIEW_GATE_FILTER_NAME)}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 }, ctx);
     if (!filters.Success) throw new Error(`reading the view gate filter failed: ${filters.ErrorMessage}`);
@@ -430,6 +434,14 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
     if (!permissions.Success) throw new Error(`reading the prediction entities' permissions failed: ${permissions.ErrorMessage}`);
     const out: RegistryFinding[] = [];
     for (const permission of permissions.Results.filter((p) => !UUIDsEqual(p.ReadRLSFilterID, gate.ID))) {
+      if (permission.ReadRLSFilterID) {
+        out.push({
+          Finding: 'i', SubjectID: permission.ID, Outcome: 'recorded',
+          Detail: `read permission of role ${permission.RoleID} on ${permission.Entity || permission.EntityID} carries read filter ${permission.ReadRLSFilterID}, not the view gate ${gate.ID}`,
+          Action: 'recorded only: a different read filter is never overwritten; attach the view gate to that filter\'s rule or replace it by hand',
+        });
+        continue;
+      }
       permission.ReadRLSFilterID = gate.ID;
       const saved = await permission.Save();
       out.push({
