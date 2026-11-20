@@ -58,6 +58,7 @@ import { ProviderTransactions } from './provider-transactions';
 import { PUBLISH_LOCK_QUERIES, PublishLocks, SYSTEM_CLOCK, type GateClock, type LockAttempt } from './publish-locks';
 import { PublishRecords } from './publish-records';
 import { RegistryCheckInitiators } from './registry-check-initiators';
+import { RollbackCandidates } from './rollback-candidates';
 import type { RegistryContext } from './registry-context';
 import { StatusWriteAuthorisations } from './status-write-authorisations';
 import { StoredPublishInputsLoader, StoredRuns } from './stored-publish-inputs';
@@ -281,26 +282,15 @@ export class LifecycleGate {
   }
 
   /**
-   * §5.7 R7 (a)'s rollback rule for a pipeline left with no Published model: the newest (highest `Version`) `Archived`
-   * model of the pipeline that has a `Delivery`, a verified artifact and a `publish` record for its training run is
-   * published again through {@link Publish} (`purpose: 'rollback'`); null when the pipeline has none (scoring then refuses
-   * `model-not-published` until a re-evaluation publishes).
+   * §5.7 R7 (a)'s rollback rule for a pipeline left with no Published model: the candidate the registry check uses too
+   * ({@link RollbackCandidates.Find}: the newest `Archived` model with a `Delivery`, a `publish` or `adopt` record for its
+   * training run and an artifact that verifies now) is published again through {@link Publish} (`purpose: 'rollback'`);
+   * null when the pipeline has none (scoring then refuses `model-not-published` until a re-evaluation publishes).
    */
   protected async RollBackToIncumbent(pipelineId: string, initiator: Actor, ctx: GateContext): Promise<PublishOutcome | null> {
-    const r = await StoredRowReads.Run<Pick<MJMLModelEntity, 'ID' | 'TrainingRunID' | 'Delivery'>>(
-      {
-        EntityName: 'MJ: ML Models', ExtraFilter: `PipelineID='${EscapeSQLString(pipelineId)}' AND Status='Archived' AND ArtifactStatus='verified'`,
-        OrderBy: 'Version DESC', Fields: ['ID', 'TrainingRunID', 'Delivery'], ResultType: 'simple',
-      },
-      ctx,
-    );
-    if (!r.Success) throw new Error(`Reading the archived models of pipeline ${pipelineId} failed: ${r.ErrorMessage || 'unknown error'}`);
-    for (const candidate of r.Results) {
-      if (!candidate.Delivery || !candidate.TrainingRunID) continue;
-      if ((await PublishRecords.FindPublishForRun(candidate.TrainingRunID, ctx)) === null) continue;
-      return this.Publish({ modelId: candidate.ID, purpose: 'rollback', initiator, signOffId: null, reason: LifecycleGate.ADOPT_ROLLBACK_REASON }, ctx);
-    }
-    return null;
+    const candidate = await RollbackCandidates.Find(pipelineId, this.artifactLoader, ctx);
+    if (candidate === null) return null;
+    return this.Publish({ modelId: candidate, purpose: 'rollback', initiator, signOffId: null, reason: LifecycleGate.ADOPT_ROLLBACK_REASON }, ctx);
   }
 
   /**

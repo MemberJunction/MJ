@@ -343,6 +343,26 @@ describe('step 2: evidence-bearing models re-verified on their stored record', (
     expect(ModelOf(pr3BadIncumbent.ID)['Status']).toBe('Published');
   });
 
+  it('rolls back to the newest archived model whose artifact verifies, passing over one whose bytes are gone (M7-7)', async () => {
+    const pipelineId = Pipeline();
+    const archived = (version: number): WorldModel => {
+      const m = MoveTo(world.Model('Archived', 'model', { Version: version }), pipelineId);
+      store.Insert('MJ: ML Model Publish Records', {
+        ID: id(), ModelID: m.ID, TrainingRunID: m.RunID, Kind: 'publish', Purpose: 'publish', ApproverKind: 'automated-gate',
+        Initiator: JSON.stringify({ kind: 'system', component: 'test' }), RecordedAt: new Date('2026-01-01T00:00:00Z'),
+      });
+      return m;
+    };
+    const older = archived(1);
+    const newerWithoutBytes = archived(2);
+    storage.Objects.delete(`artifacts/${String(ModelOf(newerWithoutBytes.ID)['ArtifactFileID'])}`);
+    const pr3Bad = EvidenceBearing('Published', pipelineId);
+    RecomputesToNoSignal(pr3Bad);
+    const result = await PreGateModelMigration.ReverifyEvidenceBearing(50, ctx);
+    expect(result.Demoted).toEqual([expect.objectContaining({ ModelID: pr3Bad.ID, RolledBackTo: older.ID })]);
+    expect([ModelOf(older.ID)['Status'], ModelOf(newerWithoutBytes.ID)['Status']]).toEqual(['Published', 'Archived']);
+  });
+
   it('a demoted model with no incumbent leaves its pipeline without a model, and nothing is published', async () => {
     const pr3BadNoIncumbent = EvidenceBearing('Published');
     RecomputesToNoSignal(pr3BadNoIncumbent);
