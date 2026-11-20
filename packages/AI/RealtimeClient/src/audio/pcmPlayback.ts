@@ -136,12 +136,20 @@ export class RealtimePcmPlayback implements IRealtimePcmPlayback, IPlaybackClock
         }
     }
 
+    /** Resumes the audio context if the browser constructed or left it suspended. */
+    private ensureRunning(): void {
+        if (this.context.state === 'suspended' && typeof this.context.resume === 'function') {
+            void this.context.resume().catch(() => undefined);
+        }
+    }
+
     /** @inheritdoc */
     public Enqueue(pcm16: ArrayBuffer, mediaTimeMs?: number): void {
         const samples = Pcm16ToFloat32(pcm16);
         if (samples.length === 0) {
             return;
         }
+        this.ensureRunning();
         const buffer = this.context.createBuffer(1, samples.length, this.sampleRate);
         buffer.copyToChannel(samples, 0);
         const source = this.context.createBufferSource();
@@ -214,6 +222,7 @@ export class RealtimePcmPlayback implements IRealtimePcmPlayback, IPlaybackClock
      * goes on without that element's voice.
      */
     public ConnectMediaElement(element: HTMLMediaElement): void {
+        this.ensureRunning();
         if (this.connectedElements.has(element)) {
             return;
         }

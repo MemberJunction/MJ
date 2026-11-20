@@ -57,6 +57,7 @@ import {
   SaveContext,
   RestoreContext,
   CloneContext,
+  SyncContext,
   RecordChangeSource,
   RecordChangePayload,
   EntityDeleteOptions,
@@ -792,6 +793,7 @@ export class SQLServerDataProvider
     );
     cfg.ConcurrencyCheck = this.ConcurrencyCheck;
     cfg.DeltaUpdates = this.DeltaUpdates;
+    cfg.LoadQueryMetadata = this.LoadsQueryMetadata;
     await child.Config(cfg, this);
     return child;
   }
@@ -2152,6 +2154,11 @@ export class SQLServerDataProvider
       ? `,
                                                                                         @Source='Clone',
                                                                                         @ChangeContext=${bind('ChangeContext', `N'${EscapeSQLString(payload.changeContext)}'`)}`
+      : payload.source === 'Sync'
+      ? `,
+                                                                                        @Source='Sync',
+                                                                                        @ChangeContext=${bind('ChangeContext', `N'${EscapeSQLString(payload.changeContext)}'`)}${payload.integrationID ? `,
+                                                                                        @IntegrationID=${bind('IntegrationID', `'${payload.integrationID}'`)}` : ''}`
       : '';
     return `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName=N'${entityName}',
                                                                                         @EntityID='${payload.entityID}',
@@ -2374,9 +2381,12 @@ export class SQLServerDataProvider
   /**
    * Renders a binary field value as a T-SQL hexadecimal literal (`0x…`).
    *
-   * A binary field's value in a `BaseEntity` is a base64 string. SQL Server has no implicit
-   * conversion from a quoted string to `varbinary` — a quoted base64 value would either fail or be
-   * stored as the bytes of its ASCII text — so the value is decoded and written as a hex literal,
+   * A binary field's value in a `BaseEntity` is a base64 string. Outside a transaction group, a save
+   * sends a binary value to SQL Server as a typed parameter (see `saveParameters.ts`). This literal is
+   * used where the value appears in SQL text: the statement a transaction group executes, and the
+   * rendered statement that is logged, captured into migrations and shown in errors. SQL Server has no
+   * implicit conversion from a quoted string to `varbinary` — a quoted base64 value would either fail
+   * or be stored as the bytes of its ASCII text — so the value is decoded and written as a hex literal,
    * which is unambiguous, needs no escaping and works on every SQL Server version. A byte array
    * (e.g. a Buffer set by server code) is accepted as well.
    *
@@ -2387,14 +2397,16 @@ export class SQLServerDataProvider
    *   the save instead of being stored as garbage.
    */
   /**
-   * Largest binary value, in decoded bytes, that a save will inline as a `0x…` hex literal.
+   * Largest binary value, in decoded bytes, that a save accepts.
    *
-   * A save is one T-SQL batch, and SQL Server caps a batch at 65,536 × the network packet size
-   * (256 MB at the default 4 KB). The batch is UTF-16, so the literal costs 4 bytes per blob byte,
-   * and with Record Changes on an update the same bytes travel again as base64 in `ChangesJSON`
-   * (old and new) and `FullRecordJSON` — about 12 bytes per blob byte, a ceiling near 20 MB. Node
-   * also holds the hex, the batch and those JSON strings at once. Above this limit the save fails
-   * here with a message that says so, instead of a batch-size error from the server.
+   * Every binary value a save writes is decoded and checked against this limit. Outside a
+   * transaction group the value reaches SQL Server as a typed parameter (see `saveParameters.ts`).
+   * A transaction group executes the rendered statement text, where the value is a `0x…` hex literal:
+   * that batch is UTF-16, so the literal costs 4 bytes per blob byte, and SQL Server caps a batch at
+   * 65,536 × the network packet size (256 MB at the default 4 KB). With Record Changes on an update
+   * the same bytes also travel as base64 in `ChangesJSON` (old and new) and `FullRecordJSON`, and Node
+   * holds the bytes and those strings at once. Above this limit the save fails here with a message
+   * that says so, instead of a batch-size or memory error.
    */
   public static MaxInlineBinaryBytes: number = 32 * 1024 * 1024;
 
@@ -2459,8 +2471,9 @@ export class SQLServerDataProvider
     wrapRecordIdInQuotes: boolean,
     restoreContext?: RestoreContext | null,
     cloneContext?: CloneContext | null,
+    syncContext?: SyncContext | null,
   ) {
-    return this.renderLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, wrapRecordIdInQuotes, restoreContext, cloneContext);
+    return this.renderLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, wrapRecordIdInQuotes, restoreContext, cloneContext, undefined, syncContext);
   }
 
   /**
@@ -2479,6 +2492,7 @@ export class SQLServerDataProvider
     restoreContext?: RestoreContext | null,
     cloneContext?: CloneContext | null,
     params?: SaveParameterCollector,
+    syncContext?: SyncContext | null,
   ): string | null {
     // Dialect-agnostic payload assembly is hoisted into DatabaseProviderBase
     // so SQL Server and PostgreSQL share one implementation. We only render
@@ -2493,6 +2507,8 @@ export class SQLServerDataProvider
       restoreContext,
       "'",
       cloneContext,
+      false,
+      syncContext,
     );
     if (!payload) return null;
 
@@ -2514,8 +2530,9 @@ export class SQLServerDataProvider
     user: UserInfo,
     restoreContext?: RestoreContext | null,
     cloneContext?: CloneContext | null,
+    syncContext?: SyncContext | null,
   ): { sql: string; parameters?: unknown[] } | null {
-    const sql = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true, restoreContext, cloneContext);
+    const sql = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true, restoreContext, cloneContext, syncContext);
     if (sql) return { sql };
     return null;
   }
@@ -2594,6 +2611,7 @@ export class SQLServerDataProvider
         entity.RestoreContext,
         entity.CloneContext,
         params,
+        entity.SyncContext,
       );
       if (entity.EntityInfo.CascadeDeletes) {
         // A cascading spDelete EXECs other procs (spUpdate* to null references, spDelete* for
@@ -3615,6 +3633,7 @@ export class SQLServerDataProvider
     safeUserId: string,
     source?: RecordChangeSource,
     changeContext?: string | null,
+    integrationID?: string | null,
   ): string {
     const schema = entityInfo.SchemaName || '__mj';
     const view = entityInfo.BaseView;
@@ -3629,6 +3648,11 @@ export class SQLServerDataProvider
       ? `,
         @Source='Clone',
         @ChangeContext=N'${EscapeSQLString(changeContext)}'`
+      : source === 'Sync'
+      ? `,
+        @Source='Sync',
+        @ChangeContext=N'${EscapeSQLString(changeContext)}'${integrationID ? `,
+        @IntegrationID='${EscapeSQLString(integrationID)}'` : ''}`
       : '';
 
     return `

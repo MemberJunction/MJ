@@ -32,6 +32,7 @@ import {
   SpreadsheetEngine,
   ParseCellAddress,
   ParseRangeAddress,
+  ParseSparklineValue,
   FormatCellAddress,
   ColumnIndexToLetter,
   type WorkbookSpec,
@@ -54,6 +55,7 @@ import {
   type SpreadsheetConditionalFormatRuleSpec,
   type SpreadsheetProtectedRangeSpec,
   type SpreadsheetNamedRangeSpec,
+  type ParsedSparklineValue,
   type DocumentBlockSpec,
   type DocumentBlockExecutionResult,
 } from '@memberjunction/core-entities';
@@ -76,6 +78,7 @@ import {
   ArtifactViewerViewMode,
   BaseArtifactViewerPluginComponent,
   IArtifactVersionDiffViewer,
+  type ArtifactExportOption,
   type PreVerifiedFrozenSnapshotEntry,
 } from '../base-artifact-viewer.component';
 import { ResolvePreVerifiedFrozenSnapshotState } from '../../utils/frozen-snapshot-verification.util';
@@ -92,6 +95,7 @@ import { SpreadsheetVersionDiffComponent } from '../version-diff/spreadsheet-ver
 import { ArtifactFileService } from '../../services/artifact-file.service';
 import { ARTIFACT_AI_ASSISTANT_ENABLED, RequestArtifactAiAssistant } from '../../services/artifact-ai-assistant-bridge';
 import { FetchArrayBuffer } from '../previews/office-preview.logic';
+import type { ArtifactCommandPaletteItem } from './artifact-command-palette.component';
 import {
   DocumentCollaborationService,
   DocumentCollaborationSession,
@@ -146,11 +150,7 @@ export type SheetsToolbarItemKey =
   | 'named-ranges';
 
 export const DEFAULT_PINNED_SHEETS_TOOLBAR_ACTIONS: readonly SheetsToolbarItemKey[] = [
-  'bold',
   'currency',
-  'insert-row',
-  'insert-col',
-  'sort-asc',
   'add-chart',
 ];
 
@@ -298,7 +298,7 @@ export interface ResolvedSheetsToolbarItem {
       (keydown)="OnViewerKeydown($event)"
       data-testid="mj-sheets-shell"
     >
-      <!-- Top Workbook Toolbar -->
+      <!-- Top Workbook Toolbar (Calm Single-Row Option A Header) -->
       <div class="mj-sheets-toolbar" data-testid="sheets-toolbar">
         <div class="mj-sheets-toolbar-group">
           <input
@@ -310,18 +310,6 @@ export interface ResolvedSheetsToolbarItem {
             aria-label="Workbook Title"
             data-testid="sheet-workbook-title"
           />
-
-          <div class="mj-sheets-mode-pills" role="tablist" aria-label="Spreadsheet workspace mode">
-            <button
-              type="button"
-              class="mj-sheets-mode-pill"
-              [class.active]="WorkspaceMode === 'grid'"
-              (click)="SetWorkspaceMode('grid')"
-              data-testid="sheets-mode-grid"
-            >
-              <i class="fa-solid fa-table-cells"></i> Grid
-            </button>
-          </div>
 
           @if ((WorkspaceMode === 'source' && !IsToolbarItemShownOnBar('source-mode')) || (WorkspaceMode === 'diff' && !IsToolbarItemShownOnBar('diff-mode'))) {
             <button
@@ -385,7 +373,7 @@ export interface ResolvedSheetsToolbarItem {
           </div>
         }
 
-        <!-- Right-side Pinned Actions, Save, Comments, Tools & View Menu, Presence -->
+        <!-- Right-side Calm Status, AI, Comments, Cmd+K, More -->
         <div class="mj-sheets-toolbar-group mj-sheets-toolbar-right">
           @for (item of PinnedRightToolbarItems; track item.Key) {
             <button
@@ -404,45 +392,6 @@ export interface ResolvedSheetsToolbarItem {
             </button>
           }
 
-          @if (CanEdit && WorkspaceMode === 'grid') {
-            @if (PendingAiFormulaCount > 0) {
-              <button
-                type="button"
-                class="mj-sheets-tool-btn active"
-                [disabled]="IsEvaluatingAiFormulas"
-                (click)="RunAiFormulas()"
-                title="Evaluate opt-in =MJ.AI formulas in this workbook"
-                data-testid="sheets-run-ai-formulas-btn"
-              >
-                <i class="fa-solid" [ngClass]="IsEvaluatingAiFormulas ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles'"></i>
-                <span>Run AI Formulas ({{ PendingAiFormulaCount }})</span>
-              </button>
-            }
-            <button
-              type="button"
-              class="mj-sheets-tool-btn"
-              [class.active]="IsSelectedRangeProtected"
-              (click)="ToggleSelectedRangeProtection()"
-              [title]="IsSelectedRangeProtected ? 'Remove range protection' : 'Protect selected range (' + SelectedRange + ')'"
-              data-testid="sheets-protect-range-quick-btn"
-            >
-              <i class="fa-solid" [ngClass]="IsSelectedRangeProtected ? 'fa-lock' : 'fa-lock-open'"></i>
-              <span>{{ IsSelectedRangeProtected ? 'Protected' : 'Protect' }}</span>
-            </button>
-            @if (IsAiAssistantEnabled) {
-              <button
-                type="button"
-                class="mj-sheets-tool-btn mj-sheets-save-btn"
-                (click)="OpenAskAiForSpreadsheet()"
-                title="Open slide-in AI Assistant for this spreadsheet selection"
-                data-testid="sheets-ask-ai-quick-btn"
-              >
-                <i class="fa-solid fa-wand-magic-sparkles"></i>
-                <span>Ask AI</span>
-              </button>
-            }
-          }
-
           @if (CanEdit) {
             <input
               #fileInput
@@ -454,14 +403,33 @@ export interface ResolvedSheetsToolbarItem {
             />
             <button
               type="button"
-              class="mj-sheets-tool-btn mj-sheets-save-btn"
+              class="mj-sheets-tool-btn"
+              [class.mj-sheets-save-btn]="HasUnsavedChanges"
+              [class.mj-sheets-save-quiet]="!HasUnsavedChanges"
               (click)="SaveNewArtifactVersion()"
               [disabled]="IsSavingVersion || !HasUnsavedChanges"
-              [title]="HasUnsavedChanges ? 'Save changes as a new version' : 'No unsaved changes to save'"
+              [title]="HasUnsavedChanges ? 'Save changes as a new version' : 'All changes synced — no unsaved changes'"
               data-testid="sheet-save-version-btn"
             >
-              <i class="fa-solid fa-floppy-disk"></i>
-              <span>{{ !HasUnsavedChanges && LastSavedVersionNumber ? 'Saved v' + LastSavedVersionNumber : 'Save Version' }}</span>
+              @if (HasUnsavedChanges) {
+                <i class="fa-solid fa-floppy-disk"></i>
+              } @else {
+                <span class="mj-sheets-saved-dot" aria-hidden="true"></span>
+              }
+              <span>{{ !HasUnsavedChanges && LastSavedVersionNumber ? 'Saved v' + LastSavedVersionNumber : (HasUnsavedChanges ? 'Save Version' : 'Saved') }}</span>
+            </button>
+          }
+
+          @if (CanEdit && WorkspaceMode === 'grid' && IsAiAssistantEnabled) {
+            <button
+              type="button"
+              class="mj-sheets-tool-btn mj-sheets-ai-pill"
+              (click)="OpenAskAiForSpreadsheet()"
+              title="Ask AI about selected cells (/ai)"
+              data-testid="sheets-ask-ai-quick-btn"
+            >
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <span>AI</span>
             </button>
           }
 
@@ -470,11 +438,23 @@ export interface ResolvedSheetsToolbarItem {
             class="mj-sheets-tool-btn"
             [class.active]="ShowCommentsDrawer"
             (click)="ToggleCommentsDrawer()"
-            title="Toggle Cell & Range Comments"
+            [title]="'Toggle Cell & Range Comments (' + OpenThreadCount + ')'"
             data-testid="sheet-toggle-comments-btn"
           >
             <i class="fa-regular fa-comments"></i>
-            <span>Comments ({{ OpenThreadCount }})</span>
+            @if (OpenThreadCount > 0) {
+              <span class="mj-sheets-count-badge">{{ OpenThreadCount }}</span>
+            }
+          </button>
+
+          <button
+            type="button"
+            class="mj-sheets-tool-btn mj-sheets-cmdk-btn"
+            (click)="OpenCommandPalette()"
+            title="Search all spreadsheet actions, freeze, protect & export (Cmd/Ctrl+K)"
+            data-testid="sheets-cmdk-btn"
+          >
+            <span class="mj-sheets-kbd-tag">⌘K</span>
           </button>
 
           <div class="mj-sheets-more-anchor" #moreToolsAnchor>
@@ -779,17 +759,37 @@ export interface ResolvedSheetsToolbarItem {
             data-testid="sheet-selected-range-input"
           />
           <span class="mj-sheets-fx-label">fx</span>
-          <input
-            type="text"
-            class="mj-sheets-formula-input"
-            [(ngModel)]="FormulaBarInput"
-            [readonly]="!CanEdit"
-            (keydown.enter)="CommitFormulaBarInput()"
-            (blur)="OnFormulaBarBlur()"
-            placeholder="Enter value, formula (=SUM(B2:B9)), or =MJ.QUERY(&quot;Query Name&quot;, param)"
-            aria-label="Formula Bar Input"
-            data-testid="sheet-formula-input"
-          />
+          <div class="mj-sheets-formula-input-wrap">
+            <input
+              type="text"
+              class="mj-sheets-formula-input"
+              [(ngModel)]="FormulaBarInput"
+              (ngModelChange)="OnFormulaBarInputChange($event)"
+              [readonly]="!CanEdit"
+              (keydown)="OnFormulaBarKeyDown($event)"
+              (keydown.enter)="CommitFormulaBarInput()"
+              (blur)="OnFormulaBarBlur()"
+              placeholder="Enter value, formula (=SUM(B2:B9), =SPARKLINE(B2:E2)), or =MJ.QUERY(&quot;Query Name&quot;, param)"
+              aria-label="Formula Bar Input"
+              data-testid="sheet-formula-input"
+            />
+            @if (ShowFormulaAutocomplete && FormulaAutocompleteSuggestions.length > 0 && CanEdit) {
+              <div class="mj-sheets-formula-autocomplete" role="listbox" data-testid="sheet-formula-autocomplete">
+                @for (item of FormulaAutocompleteSuggestions; track item.Name; let idx = $index) {
+                  <button
+                    type="button"
+                    class="mj-sheets-autocomplete-item"
+                    [class.active]="idx === FormulaAutocompleteSelectedIndex"
+                    (mousedown)="$event.preventDefault(); ApplyFormulaAutocomplete(item)"
+                    [attr.data-testid]="'formula-suggestion-' + item.Name"
+                  >
+                    <span class="mj-sheets-ac-sig">{{ item.Signature }}</span>
+                    <span class="mj-sheets-ac-desc">{{ item.Summary }}</span>
+                  </button>
+                }
+              </div>
+            }
+          </div>
           @if (CanEdit) {
             <button
               type="button"
@@ -798,6 +798,87 @@ export interface ResolvedSheetsToolbarItem {
               data-testid="sheet-formula-apply-btn"
             >
               <i class="fa-solid fa-check"></i> Apply
+            </button>
+            @if (PendingAiFormulaCount > 0) {
+              <button
+                type="button"
+                class="mj-sheets-tool-btn active"
+                [disabled]="IsEvaluatingAiFormulas"
+                (click)="RunAiFormulas()"
+                title="Evaluate opt-in =MJ.AI formulas in this workbook"
+                data-testid="sheets-run-ai-formulas-btn"
+              >
+                <i class="fa-solid" [ngClass]="IsEvaluatingAiFormulas ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles'"></i>
+                <span>Run AI ({{ PendingAiFormulaCount }})</span>
+              </button>
+            }
+            <div class="mj-sheets-freeze-anchor">
+              <button
+                type="button"
+                class="mj-sheets-tool-btn"
+                [class.active]="ActiveSheet.FrozenRows > 0 || ActiveSheet.FrozenColumns > 0"
+                (click)="ToggleFreezePanesMenu()"
+                aria-haspopup="menu"
+                [attr.aria-expanded]="ShowFreezePanesMenu"
+                title="Freeze Rows & Columns"
+                data-testid="sheets-freeze-panes-btn"
+              >
+                <i class="fa-solid fa-snowflake"></i>
+                <span>
+                  @if (ActiveSheet.FrozenRows > 0 || ActiveSheet.FrozenColumns > 0) {
+                    {{ ActiveSheet.FrozenRows }}R/{{ ActiveSheet.FrozenColumns }}C
+                  } @else {
+                    Freeze
+                  }
+                </span>
+                <i class="fa-solid fa-caret-down"></i>
+              </button>
+              @if (ShowFreezePanesMenu) {
+                <div class="mj-sheets-freeze-menu" role="menu" data-testid="sheets-freeze-panes-menu">
+                  <button
+                    type="button"
+                    class="mj-sheets-freeze-menu-item"
+                    (click)="FreezeTopRow()"
+                    data-testid="freeze-top-row-option"
+                  >
+                    Freeze Top Row (Row 1)
+                  </button>
+                  <button
+                    type="button"
+                    class="mj-sheets-freeze-menu-item"
+                    (click)="FreezeFirstColumn()"
+                    data-testid="freeze-first-col-option"
+                  >
+                    Freeze First Column (Col A)
+                  </button>
+                  <button
+                    type="button"
+                    class="mj-sheets-freeze-menu-item"
+                    (click)="FreezeToActiveCell()"
+                    data-testid="freeze-selection-option"
+                  >
+                    Freeze Up to {{ ActiveCellAddress }}
+                  </button>
+                  <button
+                    type="button"
+                    class="mj-sheets-freeze-menu-item"
+                    (click)="UnfreezePanes()"
+                    data-testid="unfreeze-panes-option"
+                  >
+                    Unfreeze Panes
+                  </button>
+                </div>
+              }
+            </div>
+            <button
+              type="button"
+              class="mj-sheets-tool-btn"
+              [class.active]="IsSelectedRangeProtected"
+              (click)="ToggleSelectedRangeProtection()"
+              [title]="IsSelectedRangeProtected ? 'Remove range protection' : 'Protect selected range (' + SelectedRange + ')'"
+              data-testid="sheets-protect-range-quick-btn"
+            >
+              <i class="fa-solid" [ngClass]="IsSelectedRangeProtected ? 'fa-lock' : 'fa-lock-open'"></i>
             </button>
           }
           @if (ActiveCellSpec?.FormulaStable) {
@@ -1005,6 +1086,36 @@ export interface ResolvedSheetsToolbarItem {
                                     <option [value]="opt">{{ opt }}</option>
                                   }
                                 </select>
+                              } @else if (TryParseSparklineCell(cell); as spark) {
+                                <svg
+                                  class="mj-sheets-sparkline"
+                                  [attr.viewBox]="'0 0 ' + spark.Width + ' ' + spark.Height"
+                                  [attr.data-spark-type]="spark.Type"
+                                  [attr.aria-label]="'Sparkline (' + spark.Count + ' points)'"
+                                  data-testid="sheet-cell-sparkline"
+                                >
+                                  @if (spark.Type === 'bar' || spark.Type === 'winloss') {
+                                    @for (bar of spark.Bars; track $index) {
+                                      <rect
+                                        [attr.x]="bar.X"
+                                        [attr.y]="bar.Y"
+                                        [attr.width]="bar.W"
+                                        [attr.height]="bar.H"
+                                        [attr.fill]="bar.Positive ? 'var(--mj-brand-primary, #4f46e5)' : 'var(--mj-status-error, #dc2626)'"
+                                        rx="1"
+                                      ></rect>
+                                    }
+                                  } @else {
+                                    <polyline
+                                      fill="none"
+                                      stroke="var(--mj-brand-primary, #4f46e5)"
+                                      stroke-width="1.6"
+                                      stroke-linecap="round"
+                                      stroke-linejoin="round"
+                                      [attr.points]="spark.PolylinePoints"
+                                    ></polyline>
+                                  }
+                                </svg>
                               } @else {
                                 <span class="mj-sheets-cell-text">{{ GetCellDisplayText(cell) }}</span>
                               }
@@ -2788,6 +2899,15 @@ export interface ResolvedSheetsToolbarItem {
         (ItemSelected)="OnContextMenuCommand($event)"
         (Closed)="CloseContextMenu()"
       ></mj-context-menu>
+
+      <mj-artifact-command-palette
+        [Open]="ShowCommandPalette"
+        Title="Spreadsheet Commands"
+        Placeholder="Search formatting, freeze panes, protect, charts, export..."
+        [Commands]="SheetsCommandPaletteItems"
+        (Execute)="ExecuteSheetPaletteCommand($event)"
+        (Closed)="ShowCommandPalette = false"
+      ></mj-artifact-command-palette>
     </div>
   `,
   styles: [
@@ -2813,22 +2933,74 @@ export interface ResolvedSheetsToolbarItem {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        flex-wrap: wrap;
-        gap: 8px;
-        padding: 8px 12px;
-        background: var(--mj-bg-surface-card);
+        flex-wrap: nowrap;
+        gap: 6px;
+        min-height: 40px;
+        padding: 4px 10px;
+        background: var(--mj-bg-surface);
         border-bottom: 1px solid var(--mj-border-default);
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .mj-sheets-toolbar::-webkit-scrollbar {
+        display: none;
       }
 
       .mj-sheets-toolbar-group {
         display: flex;
         align-items: center;
-        flex-wrap: wrap;
-        gap: 6px;
+        flex-wrap: nowrap;
+        gap: 5px;
+        flex-shrink: 0;
       }
 
       .mj-sheets-toolbar-right {
         margin-left: auto;
+      }
+
+      .mj-sheets-save-quiet {
+        border-color: transparent;
+        background: transparent;
+        color: var(--mj-text-muted);
+      }
+
+      .mj-sheets-save-quiet:hover:not(:disabled) {
+        background: var(--mj-bg-surface-hover);
+        color: var(--mj-text-primary);
+      }
+
+      .mj-sheets-saved-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--mj-status-success);
+        display: inline-block;
+      }
+
+      .mj-sheets-ai-pill {
+        background: color-mix(in srgb, var(--mj-text-violet) 10%, var(--mj-bg-surface));
+        border-color: color-mix(in srgb, var(--mj-text-violet) 28%, transparent);
+        color: var(--mj-text-violet);
+      }
+
+      .mj-sheets-cmdk-btn {
+        padding: 3px 7px;
+        background: var(--mj-bg-surface-sunken);
+      }
+
+      .mj-sheets-kbd-tag {
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--mj-text-muted);
+      }
+
+      .mj-sheets-count-badge {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 1px 5px;
+        border-radius: 999px;
+        background: var(--mj-brand-primary);
+        color: var(--mj-brand-on-primary);
       }
 
       .mj-sheets-undo-group {
@@ -3002,14 +3174,22 @@ export interface ResolvedSheetsToolbarItem {
       }
 
       .mj-sheets-title-input {
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 600;
         color: var(--mj-text-primary);
-        background: var(--mj-bg-surface);
-        border: 1px solid var(--mj-border-subtle);
+        background: transparent;
+        border: 1px solid transparent;
         border-radius: 6px;
-        padding: 5px 10px;
-        min-width: 180px;
+        padding: 4px 8px;
+        min-width: 110px;
+        max-width: 165px;
+        text-overflow: ellipsis;
+        transition: border-color 120ms ease, background-color 120ms ease;
+      }
+      .mj-sheets-title-input:hover:not([readonly]),
+      .mj-sheets-title-input:focus:not([readonly]) {
+        background: var(--mj-bg-surface);
+        border-color: var(--mj-border-default);
       }
 
       .mj-sheets-mode-pills {
@@ -3242,8 +3422,15 @@ export interface ResolvedSheetsToolbarItem {
         color: var(--mj-text-muted);
       }
 
+      .mj-sheets-formula-input-wrap {
+        position: relative;
+        flex: 1;
+        display: flex;
+      }
+
       .mj-sheets-formula-input {
         flex: 1;
+        width: 100%;
         font-family: var(--mj-font-family-mono, monospace);
         font-size: 12px;
         padding: 5px 10px;
@@ -3251,6 +3438,85 @@ export interface ResolvedSheetsToolbarItem {
         border: 1px solid var(--mj-border-default);
         background: var(--mj-bg-surface);
         color: var(--mj-text-primary);
+      }
+
+      .mj-sheets-formula-autocomplete {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        min-width: 340px;
+        max-width: 520px;
+        z-index: 40;
+        background: var(--mj-bg-surface-card);
+        border: 1px solid var(--mj-border-default);
+        border-radius: 8px;
+        box-shadow: var(--mj-shadow-lg, 0 12px 28px rgba(15, 23, 42, 0.16));
+        padding: 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .mj-sheets-autocomplete-item {
+        border: none;
+        background: transparent;
+        text-align: left;
+        padding: 6px 8px;
+        border-radius: 5px;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .mj-sheets-autocomplete-item:hover,
+      .mj-sheets-autocomplete-item.active {
+        background: var(--mj-bg-surface-hover);
+      }
+      .mj-sheets-ac-sig {
+        font-family: var(--mj-font-family-mono, monospace);
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--mj-brand-primary);
+      }
+      .mj-sheets-ac-desc {
+        font-size: 11px;
+        color: var(--mj-text-muted);
+      }
+      .mj-sheets-freeze-anchor {
+        position: relative;
+        display: inline-flex;
+      }
+      .mj-sheets-freeze-menu {
+        position: absolute;
+        top: calc(100% + 4px);
+        right: 0;
+        min-width: 210px;
+        z-index: 45;
+        background: var(--mj-bg-surface-card);
+        border: 1px solid var(--mj-border-default);
+        border-radius: 8px;
+        box-shadow: var(--mj-shadow-lg, 0 12px 28px rgba(15, 23, 42, 0.16));
+        padding: 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .mj-sheets-freeze-menu-item {
+        border: none;
+        background: transparent;
+        text-align: left;
+        padding: 6px 10px;
+        border-radius: 5px;
+        font-size: 12px;
+        color: var(--mj-text-primary);
+        cursor: pointer;
+      }
+      .mj-sheets-freeze-menu-item:hover {
+        background: var(--mj-bg-surface-hover);
+      }
+      .mj-sheets-sparkline {
+        width: 84px;
+        height: 20px;
+        display: block;
       }
 
       .mj-sheets-stable-formula-badge {
@@ -4765,7 +5031,8 @@ export class SpreadsheetArtifactViewerComponent
   @ViewChild('moreToolsAnchor') private moreToolsAnchorRef?: ElementRef<HTMLElement>;
   @ViewChild('sheetsGridContainer') private sheetsGridContainerRef?: ElementRef<HTMLElement>;
 
-  public readonly MaxPinnedToolbarActions = 6;
+  public readonly MaxPinnedToolbarActions = 4;
+  public ShowCommandPalette = false;
   public ShowMoreToolsMenu = false;
   private _localToolbarPins: SheetsToolbarItemKey[] | null = null;
   private _serverToolbarPinsRaw: string | null = null;
@@ -4789,6 +5056,10 @@ export class SpreadsheetArtifactViewerComponent
   public SyntheticAgentPresence: CollaboratorPresence | null = null;
   private syntheticAgentTimer: ReturnType<typeof setTimeout> | null = null;
   public FormulaBarInput = '';
+  public ShowFormulaAutocomplete = false;
+  public FormulaAutocompleteSuggestions: readonly SpreadsheetFormulaSuggestion[] = [];
+  public FormulaAutocompleteSelectedIndex = 0;
+  public ShowFreezePanesMenu = false;
   public InlineEditingAddress: string | null = null;
   public InlineEditValue = '';
 
@@ -5220,6 +5491,25 @@ export class SpreadsheetArtifactViewerComponent
   public override GetCurrentStateSnapshot(): DataSnapshot | null {
     const serialized = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
     return CreateJsonSnapshot(serialized, this.Workbook.Title || this.getDisplayTitle());
+  }
+
+  public override GetExportOptions(): ArtifactExportOption[] {
+    return [
+      { Key: 'xlsx', Label: 'Excel (.xlsx)', Icon: 'fa-solid fa-file-excel', Description: 'Every sheet, with formulas and number formats' },
+      { Key: 'csv', Label: 'CSV (.csv)', Icon: 'fa-solid fa-file-csv', Description: 'The sheet you are on' },
+    ];
+  }
+
+  public override async RunExport(key: string): Promise<void> {
+    if (key === 'xlsx') {
+      this.ExportWorkbookAsXlsx();
+      return;
+    }
+    if (key === 'csv') {
+      this.ExportActiveSheetAsCsv();
+      return;
+    }
+    return super.RunExport(key);
   }
 
   private sessionInitGeneration = 0;
@@ -6032,6 +6322,12 @@ export class SpreadsheetArtifactViewerComponent
     const isMod = event.metaKey || event.ctrlKey;
     if (isMod && !event.altKey) {
       const key = event.key.toLowerCase();
+      if (key === 'k') {
+        event.preventDefault();
+        event.stopPropagation();
+        this.OpenCommandPalette();
+        return;
+      }
       if (key === 'z' && !event.shiftKey) {
         if (this.CanUndo) {
           event.preventDefault();
@@ -7492,6 +7788,205 @@ export class SpreadsheetArtifactViewerComponent
     if (!this.CanEdit) return;
     this.ActiveSheet.FrozenRows = (this.ActiveSheet.FrozenRows ?? 0) > 0 ? 0 : 1;
     this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+    this.cdr.markForCheck();
+  }
+
+  public OpenCommandPalette(): void {
+    this.ShowMoreToolsMenu = false;
+    this.ShowFreezePanesMenu = false;
+    this.ShowCommandPalette = true;
+    this.cdr.markForCheck();
+  }
+
+  public get SheetsCommandPaletteItems(): ArtifactCommandPaletteItem[] {
+    const items: ArtifactCommandPaletteItem[] = [
+      {
+        Id: 'freeze-top-row',
+        Label: 'Freeze Top Row (Row 1)',
+        Category: 'Freeze',
+        Icon: 'fa-snowflake',
+        Disabled: !this.CanEdit,
+      },
+      {
+        Id: 'freeze-first-col',
+        Label: 'Freeze First Column (Col A)',
+        Category: 'Freeze',
+        Icon: 'fa-snowflake',
+        Disabled: !this.CanEdit,
+      },
+      {
+        Id: 'freeze-active-cell',
+        Label: `Freeze Panes up to ${this.ActiveCellAddress}`,
+        Category: 'Freeze',
+        Icon: 'fa-snowflake',
+        Disabled: !this.CanEdit,
+      },
+      {
+        Id: 'unfreeze-panes',
+        Label: 'Unfreeze Panes',
+        Category: 'Freeze',
+        Icon: 'fa-border-none',
+        Disabled: !this.CanEdit,
+      },
+      {
+        Id: 'toggle-protect',
+        Label: this.IsSelectedRangeProtected
+          ? `Unprotect Range (${this.SelectedRange})`
+          : `Protect Selected Range (${this.SelectedRange})`,
+        Category: 'Permissions',
+        Icon: this.IsSelectedRangeProtected ? 'fa-lock-open' : 'fa-lock',
+        Disabled: !this.CanEdit,
+      },
+      {
+        Id: 'comments',
+        Label: `Toggle Cell Comments (${this.OpenThreadCount})`,
+        Category: 'Review',
+        Icon: 'fa-comments',
+      },
+    ];
+
+    for (const item of this.AllToolbarItems) {
+      items.push({
+        Id: `tb:${item.Key}`,
+        Label: item.Label,
+        Category: item.Category,
+        Icon: item.Icon,
+        Description: item.Description,
+        Active: item.Active,
+        Disabled: item.Disabled,
+      });
+    }
+    return items;
+  }
+
+  public ExecuteSheetPaletteCommand(commandId: string): void {
+    if (commandId === 'freeze-top-row') {
+      this.FreezeTopRow();
+      return;
+    }
+    if (commandId === 'freeze-first-col') {
+      this.FreezeFirstColumn();
+      return;
+    }
+    if (commandId === 'freeze-active-cell') {
+      this.FreezeToActiveCell();
+      return;
+    }
+    if (commandId === 'unfreeze-panes') {
+      this.UnfreezePanes();
+      return;
+    }
+    if (commandId === 'toggle-protect') {
+      this.ToggleSelectedRangeProtection();
+      return;
+    }
+    if (commandId === 'comments') {
+      this.ToggleCommentsDrawer();
+      return;
+    }
+    if (commandId.startsWith('tb:')) {
+      const key = commandId.slice(3) as SheetsToolbarItemKey;
+      const found = this.AllToolbarItems.find((i) => i.Key === key);
+      if (found) {
+        this.ExecuteToolbarItem(found, false);
+      }
+    }
+  }
+
+  public ToggleFreezePanesMenu(): void {
+    this.ShowFreezePanesMenu = !this.ShowFreezePanesMenu;
+    this.cdr.markForCheck();
+  }
+
+  public FreezeTopRow(): void {
+    this.ShowFreezePanesMenu = false;
+    if (!this.CanEdit) return;
+    this.ActiveSheet.FrozenRows = 1;
+    this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+    this.cdr.markForCheck();
+  }
+
+  public FreezeFirstColumn(): void {
+    this.ShowFreezePanesMenu = false;
+    if (!this.CanEdit) return;
+    this.ActiveSheet.FrozenColumns = 1;
+    this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+    this.cdr.markForCheck();
+  }
+
+  public FreezeToActiveCell(): void {
+    this.ShowFreezePanesMenu = false;
+    if (!this.CanEdit) return;
+    this.ActiveSheet.FrozenRows = Math.max(1, this.ActiveRowIndex - 1);
+    this.ActiveSheet.FrozenColumns = Math.max(0, this.ActiveColumnIndex - 1);
+    this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+    this.cdr.markForCheck();
+  }
+
+  public UnfreezePanes(): void {
+    this.ShowFreezePanesMenu = false;
+    if (!this.CanEdit) return;
+    this.ActiveSheet.FrozenRows = 0;
+    this.ActiveSheet.FrozenColumns = 0;
+    this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+    this.cdr.markForCheck();
+  }
+
+  public OnFormulaBarInputChange(val: string): void {
+    const trimmed = (val ?? '').trimStart();
+    if (!trimmed.startsWith('=')) {
+      this.ShowFormulaAutocomplete = false;
+      this.FormulaAutocompleteSuggestions = [];
+      return;
+    }
+    const tokenMatch = /(?:=|[(,+\-*/:])\s*(MJ\.[A-Za-z0-9_]*|[A-Za-z][A-Za-z0-9_.]*)$/i.exec(trimmed);
+    if (!tokenMatch) {
+      this.ShowFormulaAutocomplete = false;
+      this.FormulaAutocompleteSuggestions = [];
+      return;
+    }
+    const prefix = tokenMatch[1].toUpperCase();
+    const matches = SPREADSHEET_FORMULA_CATALOG.filter((f) => f.Name.startsWith(prefix)).slice(0, 7);
+    this.FormulaAutocompleteSuggestions = matches;
+    this.FormulaAutocompleteSelectedIndex = 0;
+    this.ShowFormulaAutocomplete = matches.length > 0;
+    this.cdr.markForCheck();
+  }
+
+  public OnFormulaBarKeyDown(event: KeyboardEvent): void {
+    if (!this.ShowFormulaAutocomplete || this.FormulaAutocompleteSuggestions.length === 0) {
+      return;
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      this.FormulaAutocompleteSelectedIndex =
+        (this.FormulaAutocompleteSelectedIndex + 1) % this.FormulaAutocompleteSuggestions.length;
+      this.cdr.markForCheck();
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      const len = this.FormulaAutocompleteSuggestions.length;
+      this.FormulaAutocompleteSelectedIndex = (this.FormulaAutocompleteSelectedIndex - 1 + len) % len;
+      this.cdr.markForCheck();
+    } else if (event.key === 'Tab') {
+      event.preventDefault();
+      const chosen = this.FormulaAutocompleteSuggestions[this.FormulaAutocompleteSelectedIndex];
+      if (chosen) {
+        this.ApplyFormulaAutocomplete(chosen);
+      }
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      this.ShowFormulaAutocomplete = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  public ApplyFormulaAutocomplete(item: SpreadsheetFormulaSuggestion): void {
+    const current = this.FormulaBarInput ?? '';
+    const tokenStart = findTrailingFormulaIdentifierStart(current);
+    const replaced = tokenStart >= 0 ? `${current.slice(0, tokenStart)}${item.Name}(` : current;
+    this.FormulaBarInput = replaced.startsWith('=') ? replaced : `=${item.Name}(`;
+    this.ShowFormulaAutocomplete = false;
+    this.FormulaAutocompleteSuggestions = [];
     this.cdr.markForCheck();
   }
 
@@ -10804,6 +11299,55 @@ export class SpreadsheetArtifactViewerComponent
     return SpreadsheetEngine.Instance.FormatCellValue(val, cell.Style);
   }
 
+  public TryParseSparklineCell(cell?: SpreadsheetCellSpec): SparklineSvgViewModel | null {
+    if (!cell) return null;
+    const parsed: ParsedSparklineValue | null = ParseSparklineValue(cell.ComputedValue ?? cell.RawValue);
+    if (!parsed || parsed.Values.length === 0) return null;
+    const width = 84;
+    const height = 20;
+    const pad = 2;
+    const vals = parsed.Values;
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    const span = max - min || 1;
+    if (parsed.Type === 'bar' || parsed.Type === 'winloss') {
+      const slotW = (width - pad * 2) / vals.length;
+      const barW = Math.max(1.5, slotW - 1.2);
+      const bars = vals.map((v, i) => {
+        if (parsed.Type === 'winloss') {
+          const positive = v >= 0;
+          const h = Math.round((height - pad * 2) / 2);
+          return {
+            X: Number((pad + i * slotW).toFixed(2)),
+            Y: positive ? pad : Math.round(height / 2),
+            W: Number(barW.toFixed(2)),
+            H: h,
+            Positive: positive,
+          };
+        }
+        const norm = (v - min) / span;
+        const h = Math.max(2, Math.round(norm * (height - pad * 2)));
+        return {
+          X: Number((pad + i * slotW).toFixed(2)),
+          Y: Number((height - pad - h).toFixed(2)),
+          W: Number(barW.toFixed(2)),
+          H: h,
+          Positive: v >= 0,
+        };
+      });
+      return { Type: parsed.Type, Width: width, Height: height, Count: vals.length, PolylinePoints: '', Bars: bars };
+    }
+    const stepX = vals.length > 1 ? (width - pad * 2) / (vals.length - 1) : 0;
+    const pts = vals
+      .map((v, i) => {
+        const x = pad + (vals.length > 1 ? i * stepX : (width - pad * 2) / 2);
+        const y = height - pad - ((v - min) / span) * (height - pad * 2);
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      })
+      .join(' ');
+    return { Type: 'line', Width: width, Height: height, Count: vals.length, PolylinePoints: pts, Bars: [] };
+  }
+
   public IsNumericOrRightAligned(cell?: SpreadsheetCellSpec): boolean {
     if (!cell) return false;
     if (cell.Style?.HorizontalAlign === 'right') return true;
@@ -13994,4 +14538,56 @@ export class SpreadsheetArtifactViewerComponent
     }
     this.cdr.markForCheck();
   }
+}
+
+export interface SpreadsheetFormulaSuggestion {
+  Name: string;
+  Signature: string;
+  Summary: string;
+}
+
+export interface SparklineSvgViewModel {
+  Type: 'line' | 'bar' | 'winloss';
+  Width: number;
+  Height: number;
+  Count: number;
+  PolylinePoints: string;
+  Bars: Array<{ X: number; Y: number; W: number; H: number; Positive: boolean }>;
+}
+
+export const SPREADSHEET_FORMULA_CATALOG: readonly SpreadsheetFormulaSuggestion[] = [
+  { Name: 'SUM', Signature: 'SUM(range)', Summary: 'Add all numeric values in a range' },
+  { Name: 'AVERAGE', Signature: 'AVERAGE(range)', Summary: 'Compute arithmetic mean across numbers' },
+  { Name: 'COUNT', Signature: 'COUNT(range)', Summary: 'Count numeric cells in a range' },
+  { Name: 'IF', Signature: 'IF(condition, when_true, when_false)', Summary: 'Conditional value branch' },
+  { Name: 'XLOOKUP', Signature: 'XLOOKUP(lookup, lookup_range, return_range)', Summary: 'Exact or fallback key lookup across ranges' },
+  { Name: 'SUMIFS', Signature: 'SUMIFS(sum_range, criteria_range, criteria)', Summary: 'Sum values matching one or more conditions' },
+  { Name: 'FILTER', Signature: 'FILTER(range, condition)', Summary: 'Dynamic array filter returning matching rows' },
+  { Name: 'UNIQUE', Signature: 'UNIQUE(range)', Summary: 'Return distinct values from a range' },
+  { Name: 'SORT', Signature: 'SORT(range, sort_index, ascending)', Summary: 'Sort a range dynamically' },
+  { Name: 'SPARKLINE', Signature: 'SPARKLINE(range, ["line"|"bar"|"winloss"])', Summary: 'Render an inline SVG trend chart inside the cell' },
+  { Name: 'MJ.QUERY', Signature: 'MJ.QUERY("Query Name", param)', Summary: 'Run a governed MemberJunction Saved Query' },
+  { Name: 'MJ.VIEW', Signature: 'MJ.VIEW("Entity Name", filter, fields)', Summary: 'Fetch viewer-scoped Entity View records' },
+  { Name: 'MJ.IMPORTRANGE', Signature: 'MJ.IMPORTRANGE(artifactId, "Sheet!A1:D10")', Summary: 'Live cross-workbook range import' },
+  { Name: 'MJ.AI', Signature: 'MJ.AI(prompt, range_context)', Summary: 'Opt-in AI evaluation over cell context' },
+];
+
+function isAsciiLetter(ch: string): boolean {
+  return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z');
+}
+
+function isFormulaIdentifierChar(ch: string): boolean {
+  return isAsciiLetter(ch) || (ch >= '0' && ch <= '9') || ch === '_' || ch === '.';
+}
+
+/** Finds the start index of a trailing formula identifier token using a linear scan. */
+function findTrailingFormulaIdentifierStart(input: string): number {
+  let runStart = input.length;
+  while (runStart > 0 && isFormulaIdentifierChar(input[runStart - 1])) {
+    runStart--;
+  }
+  while (runStart < input.length && !isAsciiLetter(input[runStart])) {
+    runStart++;
+  }
+  return runStart < input.length ? runStart : -1;
 }

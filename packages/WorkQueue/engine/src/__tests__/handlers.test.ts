@@ -8,7 +8,7 @@ import { BoundWorkHandler, SharedProviderSource } from '../handlers/BoundWorkHan
 import type { WorkQueueProviderSource } from '../handlers/BoundWorkHandler';
 import { ResolveWorkHandler } from '../handlers/ResolveWorkHandler';
 import { IndependentProviderSource } from '../handlers/IndependentProviderSource';
-import { MakeContext, MakeMessage, TEST_PROVIDER, TEST_USER } from './runtimeFakes';
+import { MakeContext, MakeMessage, SilentLogger, TEST_PROVIDER, TEST_USER } from './runtimeFakes';
 
 class EchoHandler extends BaseWorkHandler {
     public static LastBound: { UserID: string; Provider: IMetadataProvider } | null = null;
@@ -70,6 +70,43 @@ describe('BoundWorkHandler', () => {
         expect(source.Calls).toBe(0);
     });
 
+    it('releases the minted provider after the handler settles (#6273)', async () => {
+        const released: IMetadataProvider[] = [];
+        const source: WorkQueueProviderSource = {
+            CreateProvider: async () => TEST_PROVIDER,
+            ReleaseProvider: async provider => { released.push(provider); },
+        };
+        const bound = new BoundWorkHandler('test.echo-handler', TEST_USER, source, ResolveWorkHandler);
+        await bound.Handle(MakeMessage(), MakeContext());
+        expect(released).toEqual([TEST_PROVIDER]);
+    });
+
+    it('releases the minted provider even when the handler throws (#6273)', async () => {
+        const released: IMetadataProvider[] = [];
+        const source: WorkQueueProviderSource = {
+            CreateProvider: async () => TEST_PROVIDER,
+            ReleaseProvider: async provider => { released.push(provider); },
+        };
+        const bound = new BoundWorkHandler('test.echo-handler', TEST_USER, source, () => {
+            const handler = ResolveWorkHandler('test.echo-handler') as EchoHandler;
+            handler.Handle = async () => { throw new Error('handler blew up'); };
+            return handler;
+        });
+        await expect(bound.Handle(MakeMessage(), MakeContext())).rejects.toThrow('handler blew up');
+        expect(released).toEqual([TEST_PROVIDER]);
+    });
+
+    it("keeps the handler's outcome and logs when ReleaseProvider throws", async () => {
+        const source: WorkQueueProviderSource = {
+            CreateProvider: async () => TEST_PROVIDER,
+            ReleaseProvider: async () => { throw new Error('rollback failed'); },
+        };
+        const log = new SilentLogger();
+        const bound = new BoundWorkHandler('test.echo-handler', TEST_USER, source, ResolveWorkHandler);
+        expect(await bound.Handle(MakeMessage(), MakeContext({ Log: log }))).toEqual({ Kind: 'Complete' });
+        expect(log.Lines.some(line => line.includes('rollback failed'))).toBe(true);
+    });
+
     it('lets a provider failure propagate so the runtime retries the delivery', async () => {
         const failing: WorkQueueProviderSource = { CreateProvider: vi.fn(async () => { throw new Error('pool exhausted'); }) };
         const bound = new BoundWorkHandler('test.echo-handler', TEST_USER, failing, ResolveWorkHandler);
@@ -110,6 +147,23 @@ describe('IndependentProviderSource — a provider per delivery (#6273)', () => 
         };
         return { base, released };
     }
+
+    it('mints a new instance for every delivery instead of sharing the root provider', async () => {
+        const { base } = factory();
+        const source = new IndependentProviderSource(base);
+        const first = await source.CreateProvider();
+        const second = await source.CreateProvider();
+        expect(first).not.toBe(second);
+        expect(first).not.toBe(base);
+        expect(base.CreateIndependentInstance).toHaveBeenCalledTimes(2);
+    });
+
+    it('releases the instance it minted', async () => {
+        const { base, released } = factory();
+        const source = new IndependentProviderSource(base);
+        await source.ReleaseProvider(await source.CreateProvider());
+        expect(released).toEqual(['p1']);
+    });
 
     it('gives two concurrent deliveries distinct providers and releases each once', async () => {
         const { base, released } = factory();

@@ -427,12 +427,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   @Input() AllowForking = true;
 
+  private _allowRemoteBrowser = false;
   /**
    * Host-level opt-in for the conversation's Remote Browser: the header's Browser button, its drawer,
    * and the `browser_*` tools that let this conversation's agents drive it. Defaults false; a host
    * that wants an agent-driven browser beside the chat sets true.
    */
-  private _allowRemoteBrowser = false;
   @Input()
   set AllowRemoteBrowser(value: boolean) {
     this._allowRemoteBrowser = value;
@@ -8172,7 +8172,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   public ToggleRemoteBrowserPanel(): void {
     if (this.ShowRemoteBrowserPanel) {
-      this.CloseRemoteBrowserPanel();
+      this.HideRemoteBrowserPanel();
     } else {
       this.OpenRemoteBrowserPanel();
     }
@@ -8191,7 +8191,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.cdr.detectChanges();
   }
 
-  /** Closing the drawer ends the browser (hiding it behind an artifact does not). */
+  /** Hides the browser drawer while keeping the current browser session and page alive. */
+  public HideRemoteBrowserPanel(): void {
+    if (!this.ShowRemoteBrowserPanel) {
+      return;
+    }
+    this.ShowRemoteBrowserPanel = false;
+    this.resetArtifactPaneSizing();
+    this.cdr.detectChanges();
+  }
+
+  /** Closing the drawer ends the browser and returns the conversation to standby (hiding it does not). */
   public CloseRemoteBrowserPanel(): void {
     if (!this.ShowRemoteBrowserPanel) {
       return;
@@ -8199,6 +8209,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.ShowRemoteBrowserPanel = false;
     this.resetArtifactPaneSizing();
     void this.remoteBrowser?.Close();
+    this.standbyPreparedConversationId = null;
+    this.prepareStandbyRemoteBrowser(this.ConversationId);
     this.cdr.detectChanges();
   }
 
@@ -9063,13 +9075,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     const agentName = this.RealtimeReview?.AgentName ?? null;
+    const preferredModelId = this.RealtimeReview?.ModelID ?? null;
     try {
       const start = this.RealtimeSession.StartRealtimeSession(
         request.TargetAgentId,
         request.ConversationId ?? this.ConversationId,
         request.LastSessionId,
         agentName,
-        null, // preferredModelId
+        preferredModelId,
         null, // clientTools
         null, // coAgentId
         null, // configOverridesJson

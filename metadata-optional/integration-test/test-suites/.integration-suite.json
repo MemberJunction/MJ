@@ -186,12 +186,34 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT179 - List From Query",
+            "Sequence": 14,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "AC5EA8D1-270C-4C0E-8B2B-6693566F18C4"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT21 - Open-App Metadata Teardown",
             "Sequence": 15,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "C772274A-3A0C-424E-B74B-F40235B5F063"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT178 - Open App Install From a Local Folder",
+            "Sequence": 15,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "AE89BD61-438C-4D5B-AE9A-62E6BF8DA7BC"
           }
         },
         {
@@ -467,6 +489,28 @@
           },
           "primaryKey": {
             "ID": "CA15CEC9-DB0B-45D2-917D-E83589CB32FC"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT180 - Task Graph Waiting Steps",
+            "Sequence": 40,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D7751D35-421F-4F49-B2E4-42AC69FAA51B"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT181 - Task Graph Durable Retry",
+            "Sequence": 40,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "DBBEF0C4-628A-4310-AFDF-EE86D80AF6D1"
           }
         },
         {
@@ -1693,12 +1737,45 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT177 - Saved-Query Metadata Not Loaded Into Metadata",
+            "Sequence": 85,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6C75CCCD-9D4A-46BD-8E44-C995007B32A0"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT176 - Metadata Dataset Rows Reach Clients Once",
+            "Sequence": 86,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9C325FFD-F122-4114-88C6-4FCD88758AF7"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT172 - Gemini Decision 1 Decision Model",
             "Sequence": 49,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "260A41E9-9367-4D7D-AABE-754921CBF6E3"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT182 - Archive Runs Page Through Every Eligible Row",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5941BA01-ECFA-40CF-8B53-4D817EBAC6C2"
           }
         }
       ]

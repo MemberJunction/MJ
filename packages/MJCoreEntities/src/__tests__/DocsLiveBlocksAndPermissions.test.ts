@@ -21,6 +21,7 @@ import {
   LoadDocumentLiveBlocks,
   type DocumentBlockSpec,
 } from '../custom/DocumentLiveBlockEngine';
+import { QueryEngine } from '../engines/QueryEngine';
 import { ValidateArtifactContentMutationAgainstLocks } from '../custom/ArtifactLockValidation';
 import {
   LoadSpreadsheetEngine,
@@ -414,21 +415,34 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
     expect(result.ErrorMessage).toContain('do not have permission to read');
   });
 
+  /**
+   * Binds `provider`'s QueryEngine to a stub holding `queries`; the provider's deprecated query list
+   * stays empty, as it is unless query metadata is loaded into the metadata object.
+   */
+  function bindQueryEngine(queries: Array<Record<string, unknown>>): void {
+    const engine = {
+      Config: vi.fn().mockResolvedValue(undefined),
+      Queries: queries,
+    } as unknown as QueryEngine;
+    vi.spyOn(QueryEngine, 'GetProviderInstance').mockReturnValue(engine);
+  }
+
   it('strips SERVER_ONLY_RUN_QUERY_PARAMS and IsServerSet metadata parameters on SavedQuery blocks', async () => {
     let capturedParams: Record<string, unknown> | undefined;
+    bindQueryEngine([
+      {
+        ID: '99999999-9999-9999-9999-999999999999',
+        Name: 'Regional Sales',
+        UserCanRun: vi.fn().mockReturnValue({ canRun: true, deniedEntities: [] }),
+        QueryParameters: [
+          { Name: 'Region', IsServerSet: false },
+          { Name: 'TenantContextUserID', IsServerSet: true },
+        ],
+        QueryEntities: [],
+      },
+    ]);
     const provider = {
-      Queries: [
-        {
-          ID: '99999999-9999-9999-9999-999999999999',
-          Name: 'Regional Sales',
-          UserCanRun: vi.fn().mockReturnValue(true),
-          Parameters: [
-            { Name: 'Region', IsServerSet: false },
-            { Name: 'TenantContextUserID', IsServerSet: true },
-          ],
-          Entities: [],
-        },
-      ],
+      Queries: [],
       RunQuery: vi.fn().mockImplementation(async (params: { Parameters?: Record<string, unknown> }) => {
         capturedParams = params.Parameters;
         return {
@@ -457,6 +471,53 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
     expect(result.StrippedServerSetParameters).toEqual(
       expect.arrayContaining(['TenantContextUserID', 'context']),
     );
+    vi.restoreAllMocks();
+  });
+
+  it('refuses a SavedQuery block the viewer cannot run, from the query its provider\'s QueryEngine holds', async () => {
+    bindQueryEngine([
+      {
+        ID: '88888888-8888-8888-8888-888888888888',
+        Name: 'Payroll Summary',
+        UserCanRun: vi.fn().mockReturnValue({ canRun: false, deniedEntities: ['Employees'] }),
+        QueryParameters: [],
+        QueryEntities: [],
+      },
+    ]);
+    const runQuery = vi.fn();
+    const provider = { Queries: [], RunQuery: runQuery } as unknown as IMetadataProvider;
+
+    const result = await DocumentLiveBlockEngine.Instance.ExecuteBlock(
+      { BlockID: 'blk-q-2', Kind: 'SavedQuery', Mode: 'Live', QueryName: ' payroll SUMMARY ' },
+      viewerUser,
+      provider,
+    );
+
+    expect(result.Success).toBe(false);
+    expect(result.AccessDenied).toBe(true);
+    expect(runQuery).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  it('denies a SavedQuery block with a structured result when its provider\'s QueryEngine cannot load', async () => {
+    const engine = {
+      Config: vi.fn().mockRejectedValue(new Error('connection reset')),
+      Queries: [],
+    } as unknown as QueryEngine;
+    vi.spyOn(QueryEngine, 'GetProviderInstance').mockReturnValue(engine);
+    const runQuery = vi.fn();
+    const provider = { Queries: [], RunQuery: runQuery } as unknown as IMetadataProvider;
+
+    const result = await DocumentLiveBlockEngine.Instance.ExecuteBlock(
+      { BlockID: 'blk-q-3', Kind: 'SavedQuery', Mode: 'Live', QueryID: '88888888-8888-8888-8888-888888888888' },
+      viewerUser,
+      provider,
+    );
+
+    expect(result.Success).toBe(false);
+    expect(result.AccessDenied).toBe(true);
+    expect(runQuery).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
   });
 
   it('enforces explicit O5 security warning acknowledgment before freezing a live block', async () => {
@@ -1068,17 +1129,23 @@ describe('Security & Hardening Regression Coverage (SavedQuery, Component, Artif
     } as unknown as EntityInfo;
 
     const entities = [queryEntity, componentEntity, targetEntity];
-    const provider = {
-      ProviderType: 'Network',
-      Entities: entities,
+    // Saved queries resolve through the provider's QueryEngine; its deprecated query list stays empty.
+    const queryEngine = {
+      Config: vi.fn().mockResolvedValue(undefined),
       Queries: options.queryRows.map((q) => ({
         ID: q.ID,
         Name: q.Name,
         CategoryPath: q.CategoryPath ?? '',
-        Parameters: [],
-        Entities: [{ EntityID: 'ent-target', Entity: 'Employees' }],
-        UserCanRun: () => q.UserCanRun ?? true,
+        QueryParameters: [],
+        QueryEntities: [{ EntityID: 'ent-target', Entity: 'Employees' }],
+        UserCanRun: () => ({ canRun: q.UserCanRun ?? true, deniedEntities: [] }),
       })),
+    } as unknown as QueryEngine;
+    vi.spyOn(QueryEngine, 'GetProviderInstance').mockReturnValue(queryEngine);
+    const provider = {
+      ProviderType: 'Network',
+      Entities: entities,
+      Queries: [],
       EntityByID: (id: string) => entities.find((e) => e.ID === id),
       EntityByName: (name: string) => entities.find((e) => e.Name === name),
       RunQuery: vi.fn(async () => options.runQueryResult ?? { Success: true, Results: [] }),

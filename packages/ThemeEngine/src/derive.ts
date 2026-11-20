@@ -13,7 +13,7 @@
  * @module @memberjunction/theme-engine
  */
 
-import { MixHex, ParseHex } from './color.js';
+import { HexToOKLCH, MixHex, MixHexSRGB, OklchToHex, ParseHex } from './color.js';
 import { BuildContrastReport, ContrastReport } from './contrast.js';
 import {
   ACCENT_SHAPE,
@@ -23,7 +23,6 @@ import {
   GenerateNeutralRamp,
   TERTIARY_SHAPE,
 } from './ramps.js';
-import { HexToOKLCH, OklchToHex } from './color.js';
 import { MJ_DEFAULT_SEEDS, ResolvedSeeds, ResolveSeeds, ThemeSeeds } from './seeds.js';
 
 /** Fully derived theme: ramps, resolved per-mode maps, overlay vars, and a11y report. */
@@ -60,7 +59,8 @@ function resolveSemantics(
 ): Record<string, string> {
   if (mode === 'light') {
     return {
-      '--mj-bg-page': neutral[50], '--mj-bg-surface': neutral[0], '--mj-bg-surface-elevated': neutral[0],
+      '--mj-bg-page': neutral[50], '--mj-bg-canvas': neutral[100],
+      '--mj-bg-surface': neutral[0], '--mj-bg-surface-elevated': neutral[0],
       '--mj-bg-surface-card': neutral[50], '--mj-bg-surface-sunken': neutral[100],
       '--mj-bg-surface-hover': neutral[100], '--mj-bg-surface-active': neutral[200],
       '--mj-text-primary': neutral[800], '--mj-text-secondary': neutral[600], '--mj-text-muted': neutral[500],
@@ -68,6 +68,27 @@ function resolveSemantics(
       '--mj-text-link': brand[500], '--mj-text-link-hover': brand[600],
       '--mj-border-default': neutral[200], '--mj-border-subtle': neutral[100], '--mj-border-strong': neutral[300],
       '--mj-border-focus': brand[500], '--mj-border-error': STATUS.error,
+      '--mj-surface-sunken-bg': neutral[100], '--mj-surface-sunken-border': neutral[100],
+      '--mj-surface-base-bg': neutral[0], '--mj-surface-base-bg-hover': neutral[100],
+      '--mj-surface-base-bg-selected': MixHexSRGB(neutral[0], brand[500], 0.08),
+      '--mj-surface-base-border': neutral[200], '--mj-surface-base-border-selected': brand[500],
+      '--mj-surface-elevated-bg': neutral[0], '--mj-surface-elevated-bg-hover': neutral[100],
+      '--mj-surface-elevated-bg-selected': MixHexSRGB(neutral[0], brand[500], 0.10),
+      '--mj-surface-elevated-border': neutral[200], '--mj-surface-elevated-border-selected': brand[500],
+      '--mj-surface-overlay-bg': neutral[0], '--mj-surface-overlay-bg-hover': neutral[100],
+      '--mj-surface-overlay-bg-selected': MixHexSRGB(neutral[0], brand[500], 0.10),
+      '--mj-surface-overlay-border': neutral[300], '--mj-surface-overlay-border-selected': brand[500],
+      '--mj-surface-text-muted-selected': neutral[600],
+      // Light sunken (neutral-100) steps text one primitive darker so muted (6.92:1)
+      // and link (5.34:1) clear WCAG AA, mirroring how dark elevated steps brighter.
+      '--mj-surface-sunken-text-secondary': neutral[700], '--mj-surface-sunken-text-muted': neutral[600],
+      '--mj-surface-sunken-text-link': brand[600], '--mj-surface-sunken-text-link-hover': brand[700],
+      '--mj-surface-base-text-secondary': neutral[600], '--mj-surface-base-text-muted': neutral[500],
+      '--mj-surface-base-text-link': brand[500], '--mj-surface-base-text-link-hover': brand[600],
+      '--mj-surface-elevated-text-secondary': neutral[600], '--mj-surface-elevated-text-muted': neutral[500],
+      '--mj-surface-elevated-text-link': brand[500], '--mj-surface-elevated-text-link-hover': brand[600],
+      '--mj-surface-overlay-text-secondary': neutral[600], '--mj-surface-overlay-text-muted': neutral[500],
+      '--mj-surface-overlay-text-link': brand[500], '--mj-surface-overlay-text-link-hover': brand[600],
       '--mj-brand-primary': brand[500], '--mj-brand-primary-hover': brand[600], '--mj-brand-primary-active': brand[700],
       '--mj-brand-primary-light': brand[350], '--mj-brand-secondary': brand[900], '--mj-brand-on-primary': neutral[0],
       '--mj-brand-accent': accent[400], '--mj-brand-accent-hover': accent[500], '--mj-brand-accent-active': accent[600],
@@ -81,7 +102,8 @@ function resolveSemantics(
     };
   }
   return {
-    '--mj-bg-page': neutral[900], '--mj-bg-surface': neutral[800], '--mj-bg-surface-elevated': neutral[700],
+    '--mj-bg-page': neutral[900], '--mj-bg-canvas': neutral[900],
+    '--mj-bg-surface': neutral[800], '--mj-bg-surface-elevated': neutral[700],
     // Card sits between surface (800) and elevated (700). The 0.32 weight is calibrated
     // so MJ's default neutrals reproduce the historical #253347 (ΔE ≈ 0.011); the base
     // stylesheet's dark block uses the equivalent color-mix(in srgb-linear, 800 68%, 700)
@@ -93,6 +115,28 @@ function resolveSemantics(
     '--mj-text-link': brand[300], '--mj-text-link-hover': brand[200],
     '--mj-border-default': neutral[700], '--mj-border-subtle': neutral[800], '--mj-border-strong': neutral[600],
     '--mj-border-focus': brand[400], '--mj-border-error': STATUS.error400,
+    '--mj-surface-sunken-bg': neutral[950], '--mj-surface-sunken-border': neutral[800],
+    '--mj-surface-base-bg': neutral[800], '--mj-surface-base-bg-hover': neutral[600],
+    '--mj-surface-base-bg-selected': MixHexSRGB(neutral[800], brand[400], 0.08),
+    '--mj-surface-base-border': neutral[700], '--mj-surface-base-border-selected': brand[400],
+    '--mj-surface-elevated-bg': neutral[700], '--mj-surface-elevated-bg-hover': neutral[600],
+    '--mj-surface-elevated-bg-selected': MixHexSRGB(neutral[700], brand[400], 0.10),
+    '--mj-surface-elevated-border': neutral[700], '--mj-surface-elevated-border-selected': brand[400],
+    '--mj-surface-overlay-bg': neutral[700], '--mj-surface-overlay-bg-hover': neutral[600],
+    '--mj-surface-overlay-bg-selected': MixHexSRGB(neutral[700], brand[400], 0.10),
+    '--mj-surface-overlay-border': neutral[600], '--mj-surface-overlay-border-selected': brand[400],
+    '--mj-surface-text-muted-selected': neutral[300],
+    '--mj-surface-sunken-text-secondary': neutral[300], '--mj-surface-sunken-text-muted': neutral[400],
+    '--mj-surface-sunken-text-link': brand[300], '--mj-surface-sunken-text-link-hover': brand[200],
+    '--mj-surface-base-text-secondary': neutral[300], '--mj-surface-base-text-muted': neutral[400],
+    '--mj-surface-base-text-link': brand[300], '--mj-surface-base-text-link-hover': brand[200],
+    // Dark text tiers on elevated and overlay surfaces step one primitive brighter
+    // (neutral-300 -> 200, neutral-400 -> 300, brand-300 -> 200, brand-200 -> 100)
+    // to clear WCAG AA against neutral-700, in lockstep with _tokens.scss.
+    '--mj-surface-elevated-text-secondary': neutral[200], '--mj-surface-elevated-text-muted': neutral[300],
+    '--mj-surface-elevated-text-link': brand[200], '--mj-surface-elevated-text-link-hover': brand[100],
+    '--mj-surface-overlay-text-secondary': neutral[200], '--mj-surface-overlay-text-muted': neutral[300],
+    '--mj-surface-overlay-text-link': brand[200], '--mj-surface-overlay-text-link-hover': brand[100],
     '--mj-brand-primary': brand[400], '--mj-brand-primary-hover': brand[300], '--mj-brand-primary-active': brand[200],
     '--mj-brand-primary-light': brand[350], '--mj-brand-secondary': brand[900], '--mj-brand-on-primary': neutral[0],
     '--mj-brand-accent': accent[300], '--mj-brand-accent-hover': accent[200], '--mj-brand-accent-active': accent[100],
@@ -161,13 +205,19 @@ export function Derive(seeds: ThemeSeeds = MJ_DEFAULT_SEEDS): DerivedTheme {
     '--mj-shadow-brand-md': `0 4px 12px rgba(${brandRgb}, ${(0.4 * s.depth).toFixed(2)})`,
   };
 
-  // Shape (radius) and type (font, G1).
+  // Shape (radius) and type (font, G1). Re-declare the Tier-2 radius role tokens here
+  // so scoped previews (e.g. Theme Studio's preview canvas) re-resolve them against the
+  // overlay's scale steps instead of inheriting :root's resolved 8px/12px values.
   const shapeVars: Record<string, string> = {
     '--mj-radius-sm': px(s.radius / 2),
     '--mj-radius-md': px(s.radius),
     '--mj-radius-lg': px(s.radius * 1.5),
     '--mj-radius-xl': px(s.radius * 2),
     '--mj-radius-2xl': px(s.radius * 3),
+    '--mj-radius-control': 'var(--mj-radius-md)',
+    '--mj-radius-surface': 'var(--mj-radius-lg)',
+    '--mj-radius-overlay': 'var(--mj-radius-lg)',
+    '--mj-radius-pill': 'var(--mj-radius-full)',
   };
   const typeVars: Record<string, string> = {
     '--mj-font-family': s.fontFamily,
@@ -199,6 +249,9 @@ export function Derive(seeds: ThemeSeeds = MJ_DEFAULT_SEEDS): DerivedTheme {
 export function derive(seeds: ThemeSeeds = MJ_DEFAULT_SEEDS): DerivedTheme {
   return Derive(seeds);
 }
+
+/** Alias for {@link Derive} matching Phase 0 WS6b spec naming. */
+export const DeriveThemeVars = Derive;
 
 /** Optional advanced-customization layer applied on top of the seed-derived tokens. */
 export interface OverlayOptions {

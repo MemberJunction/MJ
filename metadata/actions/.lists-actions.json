@@ -282,6 +282,422 @@
   },
   {
     "fields": {
+      "Name": "Create List From Query",
+      "Description": "Create a list from a saved query (QueryID or QueryName) or from SQL written in a conversation (SQL plus EntityName), linked to that query so it keeps itself current. SQL gets the same checks as Run Ad-hoc Query, runs as the user, and is saved as a query Pending approval in the user's own User Lists query category. If the user can't save queries, the list is still created from the results but won't refresh. Thin wrapper around ListOperations.MaterializeFromQuery.",
+      "DriverClass": "Create List From Query",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-list-check"
+    },
+    "primaryKey": {
+      "ID": "2F06354A-5194-4F17-A5D2-10E98C41E8C5"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ListName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name for the new list. Make it describe who is in it.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "6E81F0D5-9B45-41E9-8687-1B5E96F30E1C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "QueryID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "A saved query whose rows become the list. Pass exactly one of QueryID, QueryName or SQL.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B6C156D5-D888-446A-A89B-32DEDAD622F3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "QueryName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The name of a saved query, when exactly one query has that name. Pass exactly one of QueryID, QueryName or SQL.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "21F5D2E7-6FF2-4086-8995-63886A7AA41F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SQL",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "A read-only SELECT written in the conversation. It is checked and run as the user, then saved as a query Pending approval in the user's User Lists. Requires EntityName. Pass exactly one of QueryID, QueryName or SQL.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5A5BB711-44E7-46FA-B873-ABDE300BB807"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Parameters",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "For a saved query: values for its parameters, as a JSON object. Stored on the list and reused by every refresh. Not used with SQL.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A9E6E2B3-9B37-485D-8E74-45F31B1819F4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The entity whose records the query returns. Required with SQL; for a saved query it is worked out from the query's fields when left out.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "722971AE-A868-41B4-BE49-DC3DAD55633E"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "KeyField",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The query column holding the entity's primary key. Defaults to the column named like the primary key, or for a saved query, the column traced to it.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "98F43BDB-5EEB-4118-8923-7FB8562E9735"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RefreshMode",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "How refreshes apply: 'Additive' (only add records) or 'Sync' (add and remove).",
+            "IsRequired": false,
+            "DefaultValue": "Additive"
+          },
+          "primaryKey": {
+            "ID": "D3F21A96-55FB-4253-8479-5721320EF992"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RefreshAutomatically",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Refresh the list on the Lists app's default schedule. Ask the user before turning it on.",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "178F08DE-BE28-43C2-A960-C7A3257798E0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Description",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Description for the new list.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "ACF3E101-3E00-4FC6-AFC4-321D1C67A760"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CategoryID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "List Category to file the new list under.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "51E3238D-EC43-4C80-B164-358F3F01AC1A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ListID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the new list.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "76894C87-B599-485D-A567-25A3C62480DB"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Added",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Records added to the new list.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0F8F5567-769D-4147-89C5-3CBE36E40CF2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Failed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Records that could not be added.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F7C6D307-E417-42D3-AB1E-F124FB7F964F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SourceQueryID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The query the list refreshes from, or empty when it won't refresh.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "94B67881-CF15-444B-9888-91EF4E18677C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SourceQueryName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The name of the query the list refreshes from.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E752A0E8-D9C6-41F5-B821-0AB806F209E9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SourceQueryStatus",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "'Pending' when this run saved the SQL as a new query; empty otherwise.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A06DDBDC-6282-4ACF-93CA-5C3478422C9E"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Refreshes",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "True when the list is linked to a query and can refresh.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AFE8D305-01FE-4781-AB66-6C55025E8FE9"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The list was created."
+          },
+          "primaryKey": {
+            "ID": "EBE29EB3-3F25-4993-B881-F661BD23D5FA"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PARTIAL_SUCCESS",
+            "IsSuccess": false,
+            "Description": "The list was created, but some records could not be added."
+          },
+          "primaryKey": {
+            "ID": "A9F4A8A4-892F-49AD-B881-E65A9864E992"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "A required parameter is missing, or none (or more than one) of QueryID, QueryName and SQL was given."
+          },
+          "primaryKey": {
+            "ID": "49900F01-C0B5-4EB4-AA11-178F374B114C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_PARAMETER",
+            "IsSuccess": false,
+            "Description": "A parameter value is not valid, for example an unknown entity or a key column the query doesn't return."
+          },
+          "primaryKey": {
+            "ID": "A500CA91-1D05-4276-B0E8-C5726FF92529"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "QUERY_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "No saved query matches QueryID or QueryName."
+          },
+          "primaryKey": {
+            "ID": "E6756909-4060-4506-B03E-5339F0667C11"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "AMBIGUOUS_QUERY",
+            "IsSuccess": false,
+            "Description": "More than one saved query has that name; pass QueryID."
+          },
+          "primaryKey": {
+            "ID": "E39090C3-6D4C-4642-BB7D-5DAC2FAB4942"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PERMISSION_DENIED",
+            "IsSuccess": false,
+            "Description": "The user or the calling agent may not run this SQL or read the key column."
+          },
+          "primaryKey": {
+            "ID": "95178499-1390-4D1D-9F72-F8D750AF1DB3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "DANGEROUS_QUERY",
+            "IsSuccess": false,
+            "Description": "The SQL was refused by the keyword screen or calls a function it may not."
+          },
+          "primaryKey": {
+            "ID": "6CC687A7-82FF-488C-9D15-AC36749CB1F3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_SELECT_STATEMENT",
+            "IsSuccess": false,
+            "Description": "The SQL is not a single read statement."
+          },
+          "primaryKey": {
+            "ID": "B4943328-7A0A-4EE4-91D5-FEEC40B0632B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "QUERY_TIMEOUT",
+            "IsSuccess": false,
+            "Description": "The SQL ran past its timeout."
+          },
+          "primaryKey": {
+            "ID": "D52D5589-B884-4A95-B334-48B7DB020397"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "DATABASE_ERROR",
+            "IsSuccess": false,
+            "Description": "The database returned an error running the SQL."
+          },
+          "primaryKey": {
+            "ID": "ACCFF489-E3DC-4BC5-B54F-B0C949E985A3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "TOO_MANY_RECORDS",
+            "IsSuccess": false,
+            "Description": "The SQL could not be saved as a query and returned more rows than a list that won't refresh may hold."
+          },
+          "primaryKey": {
+            "ID": "3D5F2FEB-AE89-4363-BF98-0CE651C25CE2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "Something else went wrong."
+          },
+          "primaryKey": {
+            "ID": "2DF4148E-F65F-4EB8-8464-CD07AB6267F3"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
       "Name": "Add View Results To List",
       "Description": "Append a User View's current results to an existing List. Always additive — never removes existing members. Dedupes silently.",
       "DriverClass": "Add View Results To List",

@@ -134,6 +134,36 @@
     ]
   },
 
+  // ── Public pages (OPTIONAL) ─────────────────────────────────────────────────
+  // Pages the host serves before sign-in, at /p/<slug>. Each page is a named export of a
+  // package declared above in client[] or shared[] that runs in the browser.
+  //   "slug"    REQUIRED — lowercase letters/digits, words joined by single hyphens, max 64.
+  //             Unique within the app; the install fails if another installed app owns it.
+  //   "package" REQUIRED — npm package that exports the page component
+  //   "export"  REQUIRED — the named export (a single JavaScript identifier)
+  //   "title"       OPTIONAL — page title, max 120 characters. The host's build writes it into
+  //                 the page's HTML, for the browser tab and link previews.
+  //   "description" OPTIONAL — link preview and search result text, max 300 characters
+  //   "subPaths"    OPTIONAL — true when the page also answers the addresses under its slug
+  //                 (/p/<slug>/...). Default false: such an address shows the error page.
+  // Reserved slugs are rejected: login, signin, sign-in, auth, sso, oauth, account, admin,
+  // password, reset.
+  //
+  // An entry with "role": "error" is an error page. The host shows it for a wrong address:
+  // the error page of the requested folder, then of each parent folder, then of the root.
+  //   "role"    REQUIRED — "error"
+  //   "scope"   REQUIRED — the folder under /p/ it covers, such as "crm-docs" or
+  //             "crm-docs/guides". It must start with a slug of this app. "" covers all of /p/.
+  //   "package", "export" — as for a page
+  "publicPages": [
+    {
+      "slug": "crm-signup", "package": "@acme/mj-crm-ng", "export": "CrmSignupPageComponent",
+      "title": "Join Acme CRM", "description": "Create your Acme CRM account in two minutes."
+    },
+    { "slug": "crm-docs", "package": "@acme/mj-crm-ng", "export": "CrmDocsPageComponent", "subPaths": true },
+    { "role": "error", "scope": "crm-docs", "package": "@acme/mj-crm-ng", "export": "CrmDocsNotFoundPageComponent" }
+  ],
+
   // ── Dependencies (OPTIONAL) ─────────────────────────────────────────────────
   // Other Open Apps this one needs. Resolved transitively and installed leaf-first.
   // Value is a semver range string, or an object (for a dep in another / multi-app repo).

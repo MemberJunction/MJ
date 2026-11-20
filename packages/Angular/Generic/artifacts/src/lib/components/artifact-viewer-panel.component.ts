@@ -37,11 +37,11 @@ import {
   type GuestShareLinkRecord,
 } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import type { PdfOrientation } from '@memberjunction/ng-react';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ArtifactTypePluginViewerComponent } from './artifact-type-plugin-viewer.component';
 import {
+  ArtifactExportOption,
   ArtifactNavigationAnchor,
   ArtifactSelectionAnchor,
   ArtifactViewerTab,
@@ -52,7 +52,10 @@ import {
 } from './base-artifact-viewer.component';
 import { ArtifactIconService } from '../services/artifact-icon.service';
 import { ArtifactFileService } from '../services/artifact-file.service';
-import { DocumentCollaborationService } from '../services/document-collaboration.service';
+import {
+  DocumentCollaborationService,
+  type LivingReportScheduleSummary,
+} from '../services/document-collaboration.service';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 
 /** Emitted after any plugin save, server collaboration save, or version restore produces a persisted version. */
@@ -298,7 +301,38 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     return this.ContextCollectionId;
   } // If viewing in collection, which collection
   @Input() canShare?: boolean; // Whether user can share this artifact
-  @Input() canEdit = false; // Default read-only unless explicitly granted edit permission
+  private _canEdit = false; // Default read-only unless explicitly granted edit permission
+  @Input()
+  set canEdit(value: boolean) {
+    const normalized = Boolean(value);
+    const prev = this._canEdit;
+    this._canEdit = normalized;
+    if (!normalized) {
+      this.ShowLivingReportModal = false;
+      this.cdr.markForCheck();
+    } else if (
+      !prev &&
+      !this.isLoading &&
+      this.artifactId &&
+      this.artifactVersion &&
+      this.ShowLivingReportControls &&
+      !this.ActiveLivingReportSchedule
+    ) {
+      void this.loadLivingReportSchedule(this.artifactId, this.artifactLoadToken);
+      this.cdr.markForCheck();
+    }
+  }
+  get canEdit(): boolean {
+    return this._canEdit;
+  }
+  /** PascalCase alias for {@link canEdit}. */
+  @Input()
+  set CanEdit(value: boolean) {
+    this.canEdit = value;
+  }
+  get CanEdit(): boolean {
+    return this.canEdit;
+  }
   @Input() IsMaximized: boolean = false;
   @Input() HasConnectedDriveLink = false;
   private _driverClass?: string;
@@ -971,6 +1005,12 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     this.IsRestoringVersion = false;
     this.MessageLinkedVersionIds = new Set<string>();
     this.fullVersionCache.clear();
+    this.ActiveLivingReportSchedule = null;
+    this.LivingReportRefreshing = false;
+    this.LivingReportBusy = false;
+    this.ShowLivingReportModal = false;
+    this.LivingReportError = '';
+    this.resetLivingReportFormDefaults();
     this.clearLinksData();
   }
 
@@ -1267,6 +1307,9 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
 
       // Load version attributes (depends on selected version being set)
       await this.loadVersionAttributes(artifactId, loadToken);
+      if (isCurrentLoad() && this.ShowLivingReportControls) {
+        void this.loadLivingReportSchedule(artifactId, loadToken);
+      }
     } catch (err) {
       if (!isCurrentLoad()) {
         return;
@@ -2798,49 +2841,44 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     this.ShareRequested.emit(this.artifactId);
   }
 
-  /** True while a PDF export is being prepared: the header button shows progress and ignores clicks. */
-  IsExportingPDF = false;
+  /** True while an export is being prepared: the header button shows progress and ignores clicks. */
+  IsExporting = false;
 
-  /** Whether the header's PDF menu (portrait / landscape) is open. */
-  ShowPDFMenu = false;
-
-  TogglePDFMenu(): void {
-    this.ShowPDFMenu = !this.ShowPDFMenu;
+  /** The export formats the loaded viewer offers. The header shows no Export button when empty. */
+  get ExportOptions(): ArtifactExportOption[] {
+    return this.pluginViewer?.GetExportOptions() ?? [];
   }
 
-  /** Closes header dropdown menus on any click outside them (menus stop their own clicks) or on Escape. */
+  /** True when the option at `index` starts a new group, so the menu shows the group's heading above it. */
+  StartsExportGroup(options: ArtifactExportOption[], index: number): boolean {
+    const group = options[index]?.Group;
+    return !!group && group !== options[index - 1]?.Group;
+  }
+
+  /** Closes the version dropdown on any click outside it (it stops its own clicks) or on Escape. */
   @HostListener('document:click')
   @HostListener('document:keydown.escape')
-  ClosePDFMenu(): void {
-    let changed = false;
-    if (this.ShowPDFMenu) {
-      this.ShowPDFMenu = false;
-      changed = true;
-    }
+  CloseHeaderMenus(): void {
     if (this.ShowVersionDropdown) {
       this.ShowVersionDropdown = false;
-      changed = true;
-    }
-    if (changed) {
       this.cdr.detectChanges();
     }
   }
 
-  /** Downloads what the viewer shows as an A4 PDF in the chosen orientation, from the header menu. */
-  async OnExportPDF(orientation: PdfOrientation): Promise<void> {
-    this.ShowPDFMenu = false;
-    if (this.IsExportingPDF) {
+  /** Runs the chosen Export menu option through the viewer and tells the user if it fails. */
+  async OnExport(option: ArtifactExportOption): Promise<void> {
+    if (option.DisabledReason || this.IsExporting) {
       return;
     }
-    this.IsExportingPDF = true;
+    this.IsExporting = true;
     this.cdr.detectChanges();
     try {
-      await this.pluginViewer?.ExportPDF(orientation);
+      await this.pluginViewer?.RunExport(option.Key);
     } catch (error) {
-      console.error('[ArtifactViewerPanel] PDF export failed:', error);
-      this.notificationService.CreateSimpleNotification('Could not create the PDF. See the browser console for details.', 'error', 5000);
+      console.error(`[ArtifactViewerPanel] Export "${option.Key}" failed:`, error);
+      this.notificationService.CreateSimpleNotification(`Could not export ${option.Label}. See the browser console for details.`, 'error', 5000);
     } finally {
-      this.IsExportingPDF = false;
+      this.IsExporting = false;
       this.cdr.detectChanges();
     }
   }
@@ -3083,6 +3121,329 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   public GuestShareBusy = false;
   public GuestShareError = '';
   public LatestCreatedGuestShareUrl = '';
+
+  public ActiveLivingReportSchedule: LivingReportScheduleSummary | null = null;
+  public ShowLivingReportModal = false;
+  public LivingReportBusy = false;
+  public LivingReportRefreshing = false;
+  private static readonly DEFAULT_TIMEZONE_CHOICES: ReadonlyArray<string> = [
+    'UTC',
+    'America/New_York',
+    'America/Chicago',
+    'America/Denver',
+    'America/Los_Angeles',
+    'Europe/London',
+    'Europe/Berlin',
+    'Europe/Paris',
+    'Asia/Tokyo',
+    'Asia/Singapore',
+    'Australia/Sydney',
+  ];
+
+  private getDefaultBrowserTimezone(): string {
+    return typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' : 'UTC';
+  }
+
+  private resetLivingReportFormDefaults(): void {
+    this.LivingReportScheduleName = this.displayName ? `${this.displayName} Living Report` : '';
+    this.LivingReportSchedulePreset = 'daily';
+    this.LivingReportCronExpression = '0 0 8 * * *';
+    this.LivingReportTimezone = this.getDefaultBrowserTimezone();
+    this.LivingReportEnabled = true;
+    this.LivingReportForceSave = false;
+  }
+
+  public LivingReportError = '';
+  public LivingReportScheduleName = '';
+  public LivingReportSchedulePreset: 'hourly' | 'daily' | 'weekly' | 'custom' = 'daily';
+  public LivingReportCronExpression = '0 0 8 * * *';
+  public LivingReportTimezone = this.getDefaultBrowserTimezone();
+  public LivingReportEnabled = true;
+  public LivingReportForceSave = false;
+
+  public get LivingReportTimezoneOptions(): ReadonlyArray<string> {
+    const candidates = [
+      this.LivingReportTimezone,
+      this.ActiveLivingReportSchedule?.Timezone,
+      this.getDefaultBrowserTimezone(),
+      ...ArtifactViewerPanelComponent.DEFAULT_TIMEZONE_CHOICES,
+    ];
+    return Array.from(new Set(candidates.filter((tz): tz is string => Boolean(tz && tz.trim().length > 0))));
+  }
+
+  public get ShowLivingReportControls(): boolean {
+    if (!this.canEdit || this.PreVerifiedFrozenSnapshots != null || !this.artifactVersion) {
+      return false;
+    }
+    const driver = (this.DriverClass || this.artifactTypeDriverClass || '').trim();
+    return (
+      driver === 'MarkdownArtifactViewerPlugin' ||
+      driver === 'SlideDeckArtifactViewerPlugin' ||
+      driver === 'SpreadsheetArtifactViewerPlugin'
+    );
+  }
+
+  public get ActiveLivingReportBadgeLabel(): string | null {
+    if (!this.ActiveLivingReportSchedule) {
+      return null;
+    }
+    return this.ActiveLivingReportSchedule.Enabled ? 'Scheduled' : 'Paused';
+  }
+
+  public async OnRefreshLivingArtifactNow(): Promise<void> {
+    const targetArtifactId = this.artifactId;
+    const loadToken = this.artifactLoadToken;
+    if (!targetArtifactId || this.LivingReportRefreshing || !this.canEdit) {
+      return;
+    }
+    this.LivingReportRefreshing = true;
+    this.LivingReportError = '';
+    this.cdr.markForCheck();
+    try {
+      const res = await this.collabService.RefreshLivingArtifactNow(
+        targetArtifactId,
+        {
+          VersionComments: 'Manual Living Report refresh from Artifact Viewer',
+          ForceSaveIfUnchanged: false,
+        },
+        this.ProviderToUse,
+      );
+      if (!this.isCurrentArtifactLoad(targetArtifactId, loadToken)) {
+        return;
+      }
+      if (!res.HandledByServer || !res.Success) {
+        const err = res.ErrorMessage || 'Failed to refresh Live Data on this artifact.';
+        this.LivingReportError = err;
+        this.notificationService.CreateSimpleNotification(err, 'error', 4000);
+        return;
+      }
+      if (res.SavedNewVersion && typeof res.VersionNumber === 'number') {
+        this.fullVersionCache.clear();
+        const expectedReloadToken = this.artifactLoadToken + 1;
+        await this.loadArtifact(res.VersionNumber);
+        if (!this.isCurrentArtifactLoad(targetArtifactId, expectedReloadToken)) {
+          return;
+        }
+        this.VersionSaved.emit({
+          ArtifactID: targetArtifactId,
+          VersionID: res.ArtifactVersionID,
+          VersionNumber: res.VersionNumber,
+          Configuration: this.artifactVersion?.Configuration ?? null,
+          UpdatedAt: new Date(),
+        });
+        this.notificationService.CreateSimpleNotification(
+          `Living Report refreshed to v${res.VersionNumber}${res.DiffSummary ? `: ${res.DiffSummary}` : '.'}`,
+          'success',
+          4000,
+        );
+      } else {
+        this.notificationService.CreateSimpleNotification(
+          res.DiffSummary || `Live data verified on v${this.selectedVersionNumber} — no changes detected.`,
+          'info',
+          3500,
+        );
+      }
+    } catch (err) {
+      if (!this.isCurrentArtifactLoad(targetArtifactId, loadToken)) {
+        return;
+      }
+      const msg = err instanceof Error ? err.message : 'Failed to refresh Living Report.';
+      this.LivingReportError = msg;
+      this.notificationService.CreateSimpleNotification(msg, 'error', 4000);
+    } finally {
+      if (UUIDsEqual(targetArtifactId, this.artifactId)) {
+        this.LivingReportRefreshing = false;
+        this.cdr.markForCheck();
+      }
+    }
+  }
+
+  public async OpenLivingReportScheduleModal(): Promise<void> {
+    const targetArtifactId = this.artifactId;
+    const loadToken = this.artifactLoadToken;
+    if (!this.ShowLivingReportControls || !targetArtifactId) {
+      return;
+    }
+    this.ShowLivingReportModal = true;
+    this.LivingReportError = '';
+    this.LivingReportBusy = true;
+    this.cdr.markForCheck();
+    try {
+      const res = await this.collabService.GetLivingReportSchedule(targetArtifactId, this.ProviderToUse);
+      if (!this.isCurrentArtifactLoad(targetArtifactId, loadToken)) {
+        return;
+      }
+      if (res.HandledByServer && res.Success && res.Schedule) {
+        this.applyScheduleSummaryToForm(res.Schedule);
+      } else if (!res.HandledByServer || !res.Success) {
+        if (res.ErrorMessage) {
+          this.LivingReportError = res.ErrorMessage;
+        }
+      } else {
+        this.ActiveLivingReportSchedule = null;
+        this.resetLivingReportFormDefaults();
+      }
+    } finally {
+      if (UUIDsEqual(targetArtifactId, this.artifactId)) {
+        this.LivingReportBusy = false;
+        this.cdr.markForCheck();
+      }
+    }
+  }
+
+  public CloseLivingReportScheduleModal(): void {
+    this.ShowLivingReportModal = false;
+    this.LivingReportError = '';
+    this.cdr.markForCheck();
+  }
+
+  public OnLivingReportPresetChange(preset: 'hourly' | 'daily' | 'weekly' | 'custom'): void {
+    this.LivingReportSchedulePreset = preset;
+    if (preset === 'hourly') {
+      this.LivingReportCronExpression = '0 0 * * * *';
+    } else if (preset === 'daily') {
+      this.LivingReportCronExpression = '0 0 8 * * *';
+    } else if (preset === 'weekly') {
+      this.LivingReportCronExpression = '0 0 8 * * 1';
+    }
+    this.cdr.markForCheck();
+  }
+
+  public async SaveLivingReportSchedule(): Promise<void> {
+    const targetArtifactId = this.artifactId;
+    const loadToken = this.artifactLoadToken;
+    if (!targetArtifactId || this.LivingReportBusy) {
+      return;
+    }
+    this.LivingReportBusy = true;
+    this.LivingReportError = '';
+    this.cdr.markForCheck();
+    try {
+      const ownScheduleId = this.ActiveLivingReportSchedule?.IsCallerScheduleOwner
+        ? this.ActiveLivingReportSchedule.ScheduleID
+        : undefined;
+      const res = await this.collabService.UpsertLivingReportSchedule(
+        {
+          ArtifactID: targetArtifactId,
+          Name: this.LivingReportScheduleName.trim() || `${this.displayName || 'Artifact'} Living Report`,
+          CronExpression: this.LivingReportCronExpression.trim(),
+          Timezone: this.LivingReportTimezone.trim() || 'UTC',
+          Enabled: this.LivingReportEnabled,
+          ForceSaveIfUnchanged: this.LivingReportForceSave,
+          ScheduleID: ownScheduleId,
+        },
+        this.ProviderToUse,
+      );
+      if (!this.isCurrentArtifactLoad(targetArtifactId, loadToken)) {
+        return;
+      }
+      if (!res.HandledByServer || !res.Success || !res.Schedule) {
+        this.LivingReportError = res.ErrorMessage || 'Failed to save Living Report schedule.';
+        return;
+      }
+      this.ActiveLivingReportSchedule = res.Schedule;
+      this.applyScheduleSummaryToForm(res.Schedule);
+      this.ShowLivingReportModal = false;
+      this.notificationService.CreateSimpleNotification(
+        `Living Report schedule ${res.Schedule.Enabled ? 'active' : 'paused'} (${res.Schedule.CronExpression}).`,
+        'success',
+        3500,
+      );
+    } catch (err) {
+      if (!this.isCurrentArtifactLoad(targetArtifactId, loadToken)) {
+        return;
+      }
+      this.LivingReportError =
+        err instanceof Error ? err.message : 'Failed to save Living Report schedule.';
+    } finally {
+      if (UUIDsEqual(targetArtifactId, this.artifactId)) {
+        this.LivingReportBusy = false;
+        this.cdr.markForCheck();
+      }
+    }
+  }
+
+  public async RemoveLivingReportSchedule(): Promise<void> {
+    const targetArtifactId = this.artifactId;
+    const loadToken = this.artifactLoadToken;
+    const targetSchedule = this.ActiveLivingReportSchedule;
+    if (!targetArtifactId || !targetSchedule || !targetSchedule.CanDelete || this.LivingReportBusy) {
+      return;
+    }
+    this.LivingReportBusy = true;
+    this.LivingReportError = '';
+    this.cdr.markForCheck();
+    try {
+      const res = await this.collabService.DeleteLivingReportSchedule(
+        targetArtifactId,
+        targetSchedule.ScheduleID,
+        this.ProviderToUse,
+      );
+      if (!this.isCurrentArtifactLoad(targetArtifactId, loadToken)) {
+        return;
+      }
+      if (!res.HandledByServer || !res.Success || !res.Deleted) {
+        this.LivingReportError = res.ErrorMessage || 'Failed to remove Living Report schedule.';
+        return;
+      }
+      this.ActiveLivingReportSchedule = null;
+      this.resetLivingReportFormDefaults();
+      this.ShowLivingReportModal = false;
+      this.notificationService.CreateSimpleNotification(
+        'Living Report schedule removed.',
+        'info',
+        3000,
+      );
+    } catch (err) {
+      if (!this.isCurrentArtifactLoad(targetArtifactId, loadToken)) {
+        return;
+      }
+      this.LivingReportError =
+        err instanceof Error ? err.message : 'Failed to remove Living Report schedule.';
+    } finally {
+      if (UUIDsEqual(targetArtifactId, this.artifactId)) {
+        this.LivingReportBusy = false;
+        this.cdr.markForCheck();
+      }
+    }
+  }
+
+  private async loadLivingReportSchedule(artifactId: string, loadToken: number): Promise<void> {
+    try {
+      const res = await this.collabService.GetLivingReportSchedule(artifactId, this.ProviderToUse);
+      if (!this.isCurrentArtifactLoad(artifactId, loadToken)) {
+        return;
+      }
+      if (res.HandledByServer && res.Success) {
+        this.ActiveLivingReportSchedule = res.Schedule ?? null;
+        if (res.Schedule) {
+          this.applyScheduleSummaryToForm(res.Schedule);
+        }
+        this.cdr.markForCheck();
+      }
+    } catch {
+      // Non-fatal: schedule metadata simply stays hidden when unavailable
+    }
+  }
+
+  private applyScheduleSummaryToForm(schedule: LivingReportScheduleSummary): void {
+    this.ActiveLivingReportSchedule = schedule;
+    this.LivingReportScheduleName = schedule.Name;
+    this.LivingReportCronExpression = schedule.CronExpression;
+    this.LivingReportTimezone = schedule.Timezone || 'UTC';
+    this.LivingReportEnabled = schedule.Enabled;
+    this.LivingReportForceSave = schedule.ForceSaveIfUnchanged;
+    const cron = schedule.CronExpression.trim();
+    if (cron === '0 0 * * * *') {
+      this.LivingReportSchedulePreset = 'hourly';
+    } else if (cron === '0 0 8 * * *') {
+      this.LivingReportSchedulePreset = 'daily';
+    } else if (cron === '0 0 8 * * 1') {
+      this.LivingReportSchedulePreset = 'weekly';
+    } else {
+      this.LivingReportSchedulePreset = 'custom';
+    }
+  }
 
   public get ActiveConnectedDriveLink(): ConnectedDriveLinkMetadata | null {
     return GetConnectedDriveLinkFromConfig(this.artifactVersion?.Configuration);

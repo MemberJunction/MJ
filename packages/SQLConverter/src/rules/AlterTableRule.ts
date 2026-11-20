@@ -1,5 +1,5 @@
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { ConvertIdentifiers, RemoveCollate, ConvertCommonFunctions, TransformCodeOnly, RemoveNPrefix, ConvertBooleanLiteralComparisons, CollectBooleanColumnNames, QuoteConstraintNames } from './ExpressionHelpers.js';
+import { ConvertIdentifiers, RemoveCollate, ConvertCommonFunctions, TransformCodeOnly, RemoveNPrefix, ConvertBooleanLiteralComparisons, CollectBooleanColumnNames, QuoteConstraintNames, AddNullsNotDistinct } from './ExpressionHelpers.js';
 
 export class AlterTableRule implements IConversionRule {
   Name = 'AlterTableRule';
@@ -115,6 +115,9 @@ export class AlterTableRule implements IConversionRule {
 
     // Quote PascalCase column names inside CHECK constraint bodies (preserve string literals)
     result = this.quoteCheckColumns(result);
+
+    // A SQL Server UNIQUE constraint treats NULLs as equal; keep that on PostgreSQL (#5194).
+    result = AddNullsNotDistinct(result);
 
     result = result.trimEnd();
     if (!result.endsWith(';')) result += ';';

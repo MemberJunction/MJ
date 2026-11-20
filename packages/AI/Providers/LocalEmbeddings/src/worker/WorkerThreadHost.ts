@@ -100,6 +100,14 @@ export abstract class WorkerThreadHost<TCall extends object, TResult> extends Ba
     return true;
   }
 
+  /**
+   * True while a worker thread exists: from the first {@link Run} until {@link Shutdown} or the
+   * worker's death. Lets a caller skip work that only matters to a live worker, since `Run` starts one.
+   */
+  public get IsRunning(): boolean {
+    return this.worker !== null;
+  }
+
   /** Why the host disabled itself, or null while it is healthy. */
   public get DisabledReason(): string | null {
     return this.disabledReason;

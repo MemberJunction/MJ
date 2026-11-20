@@ -855,8 +855,18 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     this.navigationService.OpenNavItemByName('Conversations', params, chatApp?.ID);
   }
 
-  /** Handle app/nav-item navigation requests emitted from the floating chat overlay */
-  public async OnOverlayNavigationRequested(event: { navItemName: string; appName?: string; queryParams?: Record<string, string> }): Promise<void> {
+  /** Handle artifact and app/nav-item navigation requests emitted from the floating chat overlay */
+  public async OnOverlayNavigationRequested(event: {
+    navItemName: string;
+    appName?: string;
+    queryParams?: Record<string, string>;
+    ArtifactID?: string;
+    ArtifactName?: string;
+  }): Promise<void> {
+    if (event.ArtifactID) {
+      this.navigationService.OpenArtifact(event.ArtifactID, event.ArtifactName);
+      return;
+    }
     const normalize = (v: string | null | undefined): string =>
       String(v ?? '').toLowerCase().replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
     const apps = this.ProviderToUse?.Applications || [];

@@ -72,6 +72,13 @@ const databaseSettingsInfoSchema = z.object({
   dbReadOnlyPassword: z.string().optional(),
   concurrencyCheck: z.enum(['off', 'log', 'enforce']).optional().default('off'),
   deltaUpdates: z.boolean().optional().default(true),
+  /**
+   * Load the saved-query metadata into the metadata object, for code that still reads the
+   * deprecated `Metadata.Queries`, `QueryFields`, … getters. Off by default: `QueryEngine` is the
+   * source of query metadata, and saving a query then refreshes no metadata. Removed in 7.0. Every
+   * server sharing a metadata cache should use the same setting.
+   */
+  loadQueryMetadata: z.boolean().optional().default(false),
   typedQueryDrift: z.enum(['warn', 'throw']).optional().default('warn'),
   connectionPool: z.object({
     max: z.number().optional().default(50),
@@ -546,6 +553,17 @@ const decisionsSchema = z.object({
    * calibration is fitted. Env: `MJ_TAG_MATCH_DECISION_MODE`.
    */
   tagMatch: z.string().optional().default(process.env.MJ_TAG_MATCH_DECISION_MODE || 'Shadow'),
+});
+
+/**
+ * Who answers human-in-the-loop asks: workflow Human steps that name no provider, and agents' feedback
+ * questions. By default the built-in inbox (`MJ: AI Agent Requests`). Set `defaultProvider` to the key a
+ * human-task provider registers under (for example `BizAppsTasks`) to send those asks there instead. The
+ * provider must declare `CanBeDefault` in its registration; one that does not, or is not loaded, is ignored
+ * with an error at startup and asks stay in the inbox. Env: `MJ_HUMAN_TASKS_DEFAULT_PROVIDER`.
+ */
+const humanTasksSchema = z.object({
+  defaultProvider: z.string().optional().default(process.env.MJ_HUMAN_TASKS_DEFAULT_PROVIDER || ''),
 });
 
 const magicLinkSchema = z.object({
@@ -1092,6 +1110,7 @@ const configInfoSchema = z.object({
   aiPromptRuns: aiPromptRunsSchema.optional(),
   feedbackSettings: feedbackSettingsSchema.optional().default({}),
   decisions: decisionsSchema.optional().default({}),
+  humanTasks: humanTasksSchema.optional().default({}),
   cors: corsSchema.optional().default({}),
   rateLimiting: rateLimitSchema.optional().default({}),
   startup: startupSchema.optional().default({}),
@@ -1252,6 +1271,7 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
       : 180000,
     concurrencyCheck: 'off',
     deltaUpdates: true,
+    loadQueryMetadata: false,
     typedQueryDrift: 'warn',
     connectionPool: {
       max: 50,

@@ -7,6 +7,7 @@ export * from './storage.js';
 export * from './narration/narration-timeline.js';
 export * from './narration/captions.js';
 export * from './narration/narration-pipeline.js';
+export * from './narration/pronunciation.js';
 export * from './data/data-snapshot.js';
 export * from './validate-spec-async.js';
 export * from './settings.js';
@@ -32,9 +33,12 @@ export {
     DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
     DEFAULT_RENDER_TIMEOUT_MS,
     DEFAULT_VIDEO_RENDER_DRIVER,
+    BuildDefaultAudioSettings,
+    ReadAudioSettings,
     ReadVideoRenderSettings,
     ReadVideoStudioOutputSettings,
     VIDEO_STUDIO_INLINE_MAX_BYTES,
+    type VideoRenderAudioSettings,
     type VideoRenderDockerSettings,
     type VideoRenderLocalSettings,
     type VideoRenderRemoteSettings,
@@ -107,6 +111,7 @@ export {
 
 export {
     BuildCheckRequest,
+    BuildRenderAudioMix,
     BuildRenderBundle,
     CheckProductionRules,
     FrameSizeFor,
@@ -124,8 +129,11 @@ export {
 } from './agents/pre-production-agent.js';
 
 export {
+    CollectRenderedAudioIssues,
     FormatCheckIssue,
     LoadVideoStudioRenderAgent,
+    SpecExpectsAudio,
+    SummarizeRenderedAudio,
     NO_STORAGE_ACCOUNT_ERROR_MESSAGE,
     VideoStudioRenderAgent,
 } from './agents/render-agent.js';

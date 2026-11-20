@@ -44,9 +44,14 @@
     "RepeatCount": null,
     "MaxExecutionTimeMS": null,
     "Variables": null,
-    "SkipEmbeddings": false
+    "SkipEmbeddings": false,
+    "RubricID": null
   },
   "primaryKey": {
     "ID": "F41D1D9B-73B1-499A-841C-E4A6E2C08FB3"
+  },
+  "sync": {
+    "lastModified": "2026-11-12T19:36:07.796Z",
+    "checksum": "9f5744d93fadb27cd25cc9066b5b4d908f0e24954857aa53c5b6acd6a5989a2e"
   }
 }
