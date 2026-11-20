@@ -36,8 +36,8 @@ interface BindingDraft {
   FeatureName: string;
   TargetEntityID: string | null;
   ViewAuthorizationID: string | null;
-  /** Kept as text so an empty box means "keep all history". */
-  RetentionDays: string;
+  /** The retention box's value: a number, or null for an empty box ("keep all history"). Angular's number input writes a number, not text. */
+  RetentionDays: number | null;
   CopyToColumn: boolean;
   TargetColumn: string | null;
   TargetColumnSource: string;
@@ -150,7 +150,7 @@ export class PSScoringBindingEditorComponent extends BaseAngularComponent implem
       FeatureName: '',
       TargetEntityID: this.pipeline?.TargetEntityID || null,
       ViewAuthorizationID: seeded ? seeded.ID : null,
-      RetentionDays: '',
+      RetentionDays: null,
       CopyToColumn: false,
       TargetColumn: null,
       TargetColumnSource: this.DefaultCopySource,
@@ -166,7 +166,7 @@ export class PSScoringBindingEditorComponent extends BaseAngularComponent implem
       FeatureName: binding.FeatureName,
       TargetEntityID: binding.TargetEntityID,
       ViewAuthorizationID: binding.ViewAuthorizationID,
-      RetentionDays: binding.RetentionDays === null ? '' : String(binding.RetentionDays),
+      RetentionDays: binding.RetentionDays,
       CopyToColumn: binding.TargetColumn !== null,
       TargetColumn: binding.TargetColumn,
       TargetColumnSource: binding.TargetColumnSource || this.DefaultCopySource,
@@ -189,7 +189,11 @@ export class PSScoringBindingEditorComponent extends BaseAngularComponent implem
     this.cdr.markForCheck();
   }
 
-  /** Saves the draft through the entity layer; on a refusal, shows each validation error beside its field. */
+  /**
+   * Saves the draft through the entity layer; on a refusal, shows each validation error beside its field. A refused or
+   * failed save of an existing binding reverts that binding to its stored values, so its list row never shows what was
+   * typed; the form keeps the typed values for another try.
+   */
   public async Save(): Promise<void> {
     const draft = this.Draft;
     if (!draft || this.Busy || !this.Model) return;
@@ -206,9 +210,11 @@ export class PSScoringBindingEditorComponent extends BaseAngularComponent implem
         await this.load();
       } else {
         this.showRefusal(binding);
+        if (draft.Binding) draft.Binding.Revert();
       }
     } catch (e) {
       this.GeneralError = e instanceof Error ? e.message : String(e);
+      if (draft.Binding) draft.Binding.Revert();
     } finally {
       this.Busy = false;
       this.cdr.markForCheck();
@@ -307,8 +313,7 @@ export class PSScoringBindingEditorComponent extends BaseAngularComponent implem
       binding.TargetEntityID = draft.TargetEntityID;
     }
     binding.ViewAuthorizationID = draft.ViewAuthorizationID;
-    const retention = draft.RetentionDays.trim();
-    binding.RetentionDays = retention === '' ? null : Number(retention);
+    binding.RetentionDays = typeof draft.RetentionDays === 'number' && Number.isFinite(draft.RetentionDays) ? draft.RetentionDays : null;
     binding.TargetColumn = draft.CopyToColumn ? draft.TargetColumn : null;
     binding.TargetColumnSource = draft.CopyToColumn ? draft.TargetColumnSource.trim() || null : null;
   }
