@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { CreateFakeProvider, renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
-import type { MJMLModelEntity, MJMLOutputBindingEntity } from '@memberjunction/core-entities';
+import type { MJMLOutputBindingEntity } from '@memberjunction/core-entities';
 import { PSOutputBindingsEditorComponent } from './ps-output-bindings-editor.component';
 import { GatedReads, SettleReads } from './ps-gated-reads.dom-fixture';
 
@@ -38,7 +38,8 @@ async function RenderBindingsEditor(opts: { saveRefusal: string | null }) {
   const binding = AtRiskBinding(opts.saveRefusal);
   const provider = CreateFakeProvider({ runViewResults: (p) => (p.EntityName === 'MJ: ML Output Bindings' ? [binding] : []) });
   const f = renderComponentFixture(PSOutputBindingsEditorComponent, { inputs: { Provider: provider } });
-  f.componentInstance.Model = { ID: 'M-1' } as unknown as MJMLModelEntity;
+  // inputs are set untyped (setInput), so the model double is passed as is
+  f.componentRef.setInput('Model', { ID: 'M-1' });
   await f.componentInstance.Reload();
   f.detectChanges();
   await f.whenStable();

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { CreateFakeProvider, renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
-import type { MJMLModelEntity, MJMLScoringRunEntity } from '@memberjunction/core-entities';
+import type { MJMLScoringRunEntity } from '@memberjunction/core-entities';
 import { PSScoringRunsComponent } from './ps-scoring-runs.component';
 import { GatedReads, SettleReads } from './ps-gated-reads.dom-fixture';
 
@@ -40,7 +40,8 @@ const SchemaMismatch = (missing: string[]): NonNullable<RunDouble['RefusalObject
 async function RenderRuns(opts: { runs: RunDouble[] }) {
   const provider = CreateFakeProvider({ runViewResults: (p) => (p.EntityName === 'MJ: ML Scoring Runs' ? opts.runs : []) });
   const f = renderComponentFixture(PSScoringRunsComponent, { inputs: { Provider: provider } });
-  f.componentInstance.Model = { ID: 'M-1', ArtifactSha256: 'f'.repeat(64) } as unknown as MJMLModelEntity;
+  // inputs are set untyped (setInput), so the model double is passed as is
+  f.componentRef.setInput('Model', { ID: 'M-1', ArtifactSha256: 'f'.repeat(64) });
   await f.componentInstance.Reload();
   f.detectChanges();
   return f;

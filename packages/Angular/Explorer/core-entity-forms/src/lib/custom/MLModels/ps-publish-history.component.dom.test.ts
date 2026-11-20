@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { CreateFakeProvider, renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
-import type { MJMLModelEntity, MJMLModelPublishRecordEntity } from '@memberjunction/core-entities';
+import type { MJMLModelPublishRecordEntity } from '@memberjunction/core-entities';
 import { TransitionRefusalText } from '@memberjunction/predictive-studio-core';
 import { PSPublishHistoryComponent } from './ps-publish-history.component';
 import type { PSOpenRecordRequest } from './ps-model-detail-events';
@@ -48,7 +48,8 @@ const GateNoSignal = (): NonNullable<RecordDouble['RefusalObject']> => ({ kind: 
 async function RenderHistory(opts: { records: RecordDouble[] }) {
   const provider = CreateFakeProvider({ runViewResults: (p) => (p.EntityName === 'MJ: ML Model Publish Records' ? opts.records : []) });
   const f = renderComponentFixture(PSPublishHistoryComponent, { inputs: { Provider: provider } });
-  f.componentInstance.Model = MODEL as unknown as MJMLModelEntity;
+  // inputs are set untyped (setInput), so the model double is passed as is
+  f.componentRef.setInput('Model', MODEL);
   await f.componentInstance.Reload();
   f.detectChanges();
   return f;

@@ -132,7 +132,8 @@ async function RenderSignOff(s: SignOffScenario) {
   }
   const f = renderComponentFixture(PSSignOffPanelComponent, { inputs: { Provider: provider } });
   f.componentInstance.Published.subscribe((st) => published.values.push(st));
-  f.componentInstance.Model = s.model as unknown as MJMLModelEntity;
+  // inputs are set untyped (setInput), so the model double is passed as is
+  f.componentRef.setInput('Model', s.model);
   await f.componentInstance.Reload();
   f.detectChanges();
   return f;
