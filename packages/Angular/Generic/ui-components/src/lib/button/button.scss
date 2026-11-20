@@ -235,7 +235,7 @@
   --_mj-button-text: var(--mj-button-icon-text, var(--mj-text-muted));
   --_mj-button-border: var(--mj-button-icon-border, transparent);
   padding: var(--mj-button-icon-padding, 8px);
-  min-width: var(--mj-button-icon-width, var(--mj-button-height, 44px));
+  min-width: var(--mj-button-height, 44px);
   min-height: var(--_mj-button-height);
 
   &:where(:not(:disabled):not([disabled]):not([aria-disabled="true"])):hover {

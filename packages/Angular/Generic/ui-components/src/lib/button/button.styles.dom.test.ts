@@ -3,11 +3,44 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 /**
+ * Extracts only the Tier 3 Property Vocabulary markdown table's first column ("Word") from NAMING.md,
+ * ignoring column 3 rationales and prose elsewhere in the file (which mention forbidden words such
+ * as `fill` and `btn` in backticks).
+ */
+function parseTier3PropertyWords(namingMd: string): Set<string> {
+  const startMarker = 'Property vocabulary. Fixed list;';
+  const endMarker = '\nWorked examples,';
+  const startIdx = namingMd.indexOf(startMarker);
+  const endIdx = namingMd.indexOf(endMarker, startIdx);
+  if (startIdx === -1 || endIdx === -1) {
+    throw new Error('Could not locate Tier 3 Property vocabulary table in NAMING.md');
+  }
+
+  const section = namingMd.slice(startIdx, endIdx);
+  const words = new Set<string>();
+  for (const line of section.split('\n')) {
+    const rowMatch = /^\|([^|]+)\|/.exec(line.trim());
+    if (!rowMatch) {
+      continue;
+    }
+    const firstCol = rowMatch[1].trim();
+    if (firstCol === 'Word' || /^-+$/.test(firstCol)) {
+      continue;
+    }
+    for (const tokenMatch of firstCol.matchAll(/`([a-z-]+)`/g)) {
+      words.add(tokenMatch[1]);
+    }
+  }
+  return words;
+}
+
+/**
  * Stylesheet contract tests for `button.scss`.
  *
  * Verifies:
  * 1. Every `--mj-button-*` custom property conforms to the Tier 3 grammar in `plans/ui-foundation/NAMING.md`
- *    (component, optional variant/size, closed property vocabulary, optional state).
+ *    (component, optional variant/size, closed property vocabulary parsed strictly from the Tier 3 table,
+ *    optional state), and square controls never expose a separate width axis (`--mj-button-icon-width`).
  * 2. Every private working variable uses the `--_mj-button-` prefix, and zero public `--mj-button-*`
  *    variables are declared on `:root` (preserving container-scoped resolution).
  * 3. Hover and active rules wrap their `:not(...)` exclusions in `:where()`, keeping specificity at `(0,2,0)`
@@ -22,39 +55,23 @@ describe('ui-components stylesheets: button.scss contract', () => {
   const uncommentedScss = buttonScss.replace(/\/\*[\s\S]*?\*\//g, '');
 
   const variants = ['primary', 'secondary', 'outline', 'flat', 'danger', 'success', 'warning', 'icon', 'sm', 'lg'];
-  const properties = [
-    'bg',
-    'text',
-    'border',
-    'border-width',
-    'border-style',
-    'radius',
-    'shadow',
-    'height',
-    'min-height',
-    'width',
-    'max-width',
-    'padding',
-    'gap',
-    'font-size',
-    'font-weight',
-    'icon-size',
-    'opacity',
-    'transform',
-  ];
+  const tablePropertySet = parseTier3PropertyWords(namingMd);
+  const properties = Array.from(tablePropertySet);
   const states = ['hover', 'active', 'focus', 'disabled', 'selected', 'checked', 'error'];
 
   const grammarRegex = new RegExp(
     `^--mj-button(?:-(?:${variants.join('|')}))?-(?:${properties.join('|')})(?:-(?:${states.join('|')}))?$`
   );
 
-  it('every property word used by button.scss appears in NAMING.md Tier 3 property table', () => {
-    for (const prop of properties) {
-      expect(namingMd, `NAMING.md lists property "${prop}"`).toContain(`\`${prop}\``);
-    }
+  it('parses strictly column 1 of the NAMING.md Tier 3 property table and excludes prose backticks', () => {
+    expect(tablePropertySet.has('bg')).toBe(true);
+    expect(tablePropertySet.has('opacity')).toBe(true);
+    expect(tablePropertySet.has('transform')).toBe(true);
+    expect(tablePropertySet.has('fill')).toBe(false);
+    expect(tablePropertySet.has('btn')).toBe(false);
   });
 
-  it('every --mj-button-* custom property in button.scss matches the NAMING.md Tier 3 grammar', () => {
+  it('every --mj-button-* custom property in button.scss matches the NAMING.md Tier 3 grammar and square-control rule', () => {
     const referenced = Array.from(
       new Set(Array.from(uncommentedScss.matchAll(/--mj-button-[a-z0-9-]+/g)).map((m) => m[0]))
     ).sort();
@@ -62,6 +79,7 @@ describe('ui-components stylesheets: button.scss contract', () => {
     expect(referenced.length).toBeGreaterThanOrEqual(100);
     const invalid = referenced.filter((token) => !grammarRegex.test(token));
     expect(invalid).toEqual([]);
+    expect(referenced).not.toContain('--mj-button-icon-width');
   });
 
   it('leaves public --mj-button-* tokens unset on :root and prefixes private vars with --_mj-button-', () => {
@@ -85,7 +103,7 @@ describe('ui-components stylesheets: button.scss contract', () => {
 
     const hoverIdx = uncommentedScss.indexOf('&:where(:not(:disabled)');
     const focusIdx = uncommentedScss.indexOf('&:focus-visible');
-    expect(hoverIdx).toBeGreaterThanOrEqual(0);
+    expect(hoverIdx).toBeGreaterThan(0);
     expect(focusIdx).toBeGreaterThan(hoverIdx);
   });
 

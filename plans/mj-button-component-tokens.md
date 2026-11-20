@@ -50,9 +50,9 @@ To avoid CSS Invalid-At-Computed-Value-Time (`IACVT`) wiping out resting variant
 - **Radius:** WS6b (`#6609`, merged on `origin/next`) already defines `--mj-radius-control: var(--mj-radius-md)` (`8px`). `--mj-button-radius` falls back to `var(--mj-radius-control, var(--mj-radius-md))`, matching `NAMING.md` line 176 with zero visual change, and `.mj-btn-group` outer corners read `var(--mj-button-radius, var(--mj-radius-control, var(--mj-radius-md)))`.
 
 ### D4. Private `--_mj-button-height` on `.mj-btn--circle` vs `.mj-btn--icon`
-`NAMING.md` (lines 212 and 342 on `origin/next`) specifies resolving button height into private `--_mj-button-height` so square controls read one height on both axes:
+`NAMING.md` (lines 215 and 344) specifies resolving button height into private `--_mj-button-height` so square controls read one height on both axes and forbids per-axis width tokens on square controls:
 - `.mj-btn--circle` already renders `44x44` (`md`), `32x32` (`sm`), `52x52` (`lg`), and `44x44` (`sm` on `pointer: coarse`). Driving `.mj-btn--circle`'s `width`, `height`, `min-width`, and `min-height` from `--_mj-button-height` has **zero pixel change** today and keeps circles round under any `--mj-button-height` override.
-- **Watch `.mj-btn--icon` + `Size="sm"`:** Today `.mj-btn--icon` sets `min-width: 44px; min-height: 44px` while `.mj-btn--sm` only overrides `min-height: 32px; padding: 6px 12px`, leaving ~30 `Variant="icon" Size="sm"` buttons in MJ at `44x32` instead of `32x32`. To keep this PR strictly zero-diff at rest across Explorer toolbars, `.mj-btn--icon` reads `min-width: var(--mj-button-icon-width, var(--mj-button-height, 44px))` (staying `44px` unless themed) while `min-height` follows `--_mj-button-height`. *(Open call for Matt: if we want `Variant="icon" Size="sm"` fixed to `32x32` now instead of waiting for Wave 1, change `.mj-btn--icon`'s `min-width` fallback to `var(--_mj-button-height)` and list that `44x32` -> `32x32` fix as an intentional visible change.)*
+- **Watch `.mj-btn--icon` + `Size="sm"`:** Today `.mj-btn--icon` sets `min-width: 44px; min-height: 44px` while `.mj-btn--sm` only overrides `min-height: 32px; padding: 6px 12px`, leaving ~30 `Variant="icon" Size="sm"` buttons in MJ at `44x32` instead of `32x32`. To keep this PR strictly zero-diff at rest across Explorer toolbars without publishing a forbidden `--mj-button-icon-width` token that would be locked in by additive-within-an-era, `.mj-btn--icon` sets `min-width: var(--mj-button-height, 44px)` while `min-height` follows `--_mj-button-height`. Switching `.mj-btn--icon`'s `min-width` to `var(--_mj-button-height)` (`44x32` -> `32x32`) waits for Wave 1 where intentional pixel changes are in scope.
 
 ### D5. PascalCase `[Disabled]` setter without hijacking native `<button [disabled]>`
 Across ~400 files in MJ, templates bind lowercase `<button mjButton [disabled]="isBusy">` directly to `HTMLButtonElement.disabled`.
@@ -70,7 +70,7 @@ Across ~400 files in MJ, templates bind lowercase `<button mjButton [disabled]="
 Grammar: `--mj-button[-<variant>]-<property>[-<state>]`
 All public `--mj-button-*` tokens are **unset** on `:root`.
 
-### Base, Motion, Focus, Disabled, and Selected (22 tokens)
+### Base, Motion, Focus, Disabled, and Selected (21 tokens)
 
 | Token | CSS property | Fallback in `button.scss` | Today's resolved value |
 | --- | --- | --- | --- |
@@ -95,7 +95,6 @@ All public `--mj-button-*` tokens are **unset** on `:root`.
 | `--mj-button-bg-selected` | `.mj-btn--selected` `background` | `var(--mj-brand-primary)` | brand-500 |
 | `--mj-button-text-selected` | `.mj-btn--selected` `color` | `var(--mj-brand-on-primary)` | neutral-0 |
 | `--mj-button-border-selected` | `.mj-btn--selected` `border-color` | `var(--mj-brand-primary)` | brand-500 |
-| `--mj-button-icon-width` | `.mj-btn--icon` `min-width` (see D4) | `var(--mj-button-height, 44px)` | `44px` |
 
 ### Size Variants: `sm` and `lg` (8 tokens)
 
@@ -126,6 +125,11 @@ Every variant exposes the 9-token set `--mj-button-<variant>-{bg,text,border}[-{
 | `icon` | `transparent` / `--mj-text-muted` / `transparent` (+ `--mj-button-icon-padding`: `8px`) | `--mj-bg-surface-hover` / `--mj-brand-primary` / rest `border` | `--mj-bg-surface-active` / hover `text` / hover `border` |
 
 *(Note on `warning`: `--mj-button-warning-text` retains today's `--mj-text-inverse` fallback so this PR stays visually zero-diff at rest; Issue `#3372` tracks switching filled status button contrast to `--mj-status-on-warning` separately.)*
+
+### Known Grammar Gaps Flagged for Naming Review (Matt + Colin)
+
+1. **Orthogonal states (`selected` + `hover`):** `NAMING.md` restricts `state` to a single slot (`hover | active | focus | disabled | selected | checked | error`), so `.mj-btn--selected:hover` cannot expose `--mj-button-bg-selected-hover` and currently borrows `--mj-button-primary-bg-hover` / `--mj-button-primary-border-hover` to preserve stock MJ's exact `#006aa3` hover color. A theme that sets `--mj-button-bg-selected` to a non-brand hue (such as green) will still see the primary hover color until `NAMING.md` settles orthogonal states across controls (`selected` + `hover` on buttons, rows, and surfaces; `checked` + `hover` on switches), either via compound state tails (`-selected-hover`) or computed `color-mix()` on `--_mj-<component>-bg`.
+2. **`icon-size` property vs `icon` variant and `icon` part:** In `NAMING.md`, `icon` appears as a `variant` (`Variant="icon"`), a named `part` (`icon` leading icon), and the prefix of the `icon-size` property. While `--mj-button-icon-size` parses unambiguously because `size` is not a property word, a per-variant or per-part override produces `--mj-button-icon-icon-size` or `--mj-card-icon-icon-size`, which fails the inferability test. Flagged for Matt and Colin to confirm whether `icon-size` stays or renames (for example `glyph-size`) before `--mj-button-icon-size` ships in a release.
 
 ---
 
