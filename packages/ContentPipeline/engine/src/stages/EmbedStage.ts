@@ -259,9 +259,7 @@ export abstract class BaseEmbedStage extends BasePipelineStage {
                     : `embedding model returned ${embedding.Vectors.length} vector(s) for ${multimodal.length} multimodal record(s)`;
                 const isFatal =
                     !embedding.Success &&
-                    (embedding.ErrorInfo?.severity === 'Fatal' ||
-                        embedding.ErrorInfo?.errorType === 'VendorValidationError' ||
-                        /cannot embed content of type/i.test(reason));
+                    embedding.ErrorInfo?.errorType === 'VendorValidationError';
                 outcomes.push(
                     ...multimodal.map((m) => ({
                         Key: m.Routed.Record.Identity.Key,

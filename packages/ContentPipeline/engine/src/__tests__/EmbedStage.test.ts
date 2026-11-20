@@ -445,6 +445,24 @@ describe('multimodal EmbedStage hooks and mixed-batch routing', () => {
         const fatalRes = await invoke(stage, [{ Record: mmFatal, Route: makeRoute() }]);
         expect(fatalRes[0].Outcome.Status).toBe('Failed');
 
+        // 3b. Cancelled / stage-budget expiry carries severity: 'Fatal' on ErrorInfo,
+        // but must map to Outcome.Retry so a slow media batch retries on the next run.
+        upsertSpy.mockClear();
+        vi.spyOn(AIEmbeddingRunner.prototype, 'RunEmbedding').mockResolvedValue({
+            Success: false,
+            Vectors: [],
+            PromptRunID: null,
+            TokensUsed: 0,
+            Cost: 0,
+            ErrorMessage: 'The Embeddings call was cancelled',
+            ErrorInfo: { errorType: 'Cancelled', severity: 'Fatal', canFailover: false },
+            ExecutionTimeMs: 1,
+        });
+        const mmCancelled = chunk('mm-cancelled', null);
+        mmCancelled.SetExtension('Pipeline', 'embedContent', [{ type: 'video_url', content: 'DD', mimeType: 'video/mp4' }]);
+        const cancelledRes = await invoke(stage, [{ Record: mmCancelled, Route: makeRoute() }]);
+        expect(cancelledRes[0].Outcome.Status).toBe('Retry');
+
         // 4. Throwing ResolveEmbedContent fails that record with Retry without aborting sibling text records
         upsertSpy.mockClear();
         vi.spyOn(AIEmbeddingRunner.prototype, 'RunEmbedding').mockResolvedValue({

@@ -1341,5 +1341,113 @@ describe('AIEmbeddingRunner', () => {
       expect(result.ErrorInfo?.severity).toBe('Fatal');
       expect(result.ErrorInfo?.errorType).toBe('VendorValidationError');
     });
+
+    it('returns Cancelled with zero vectors when the token aborts during credential resolution before any Contents call starts', async () => {
+      const controller = new AbortController();
+      const credSpy = vi
+        .spyOn(runner as unknown as { ResolveCredentialForExecution: (...args: unknown[]) => Promise<string> }, 'ResolveCredentialForExecution')
+        .mockImplementationOnce(async () => {
+          controller.abort('stage budget expired');
+          return 'test-api-key';
+        });
+      try {
+        const result = await runner.RunEmbedding({
+          Contents: [
+            [{ type: 'image_url', content: 'IMG_1', mimeType: 'image/png' }],
+            [{ type: 'image_url', content: 'IMG_2', mimeType: 'image/png' }],
+            [{ type: 'image_url', content: 'IMG_3', mimeType: 'image/png' }],
+          ],
+          ContextUser: mockUser,
+          PromptID: PROMPT_ID,
+          CancellationToken: controller.signal,
+        });
+        await runner.WaitForPendingPromptRunSaves();
+
+        expect(result.Success).toBe(false);
+        expect(result.Vectors).toEqual([]);
+        expect(result.ErrorInfo?.errorType).toBe('Cancelled');
+        expect(scriptFor(DRIVER_1).ContentCalls).toHaveLength(0);
+        expect(lastRun()?.Status).toBe('Cancelled');
+      } finally {
+        credSpy.mockRestore();
+      }
+    });
+
+    it('races in-flight Contents calls against the attempt abort so failover completes even when a driver ignores its signal', async () => {
+      addSecondVendorToModel1();
+      let vendor1Calls = 0;
+      scriptFor(DRIVER_1).ContentAnswer = () => {
+        if (vendor1Calls++ === 0) {
+          return Promise.reject(Object.assign(new Error('503 Service Unavailable'), { status: 503 }));
+        }
+        // Intentionally ignores CancellationToken — never settles on its own.
+        return new Promise(() => undefined);
+      };
+      scriptFor(DRIVER_1B).ContentAnswer = async (params) => ({
+        object: 'object',
+        model: params.model ?? '',
+        ModelUsage: new ModelUsage(2, 0),
+        vector: [0.6, 0.7],
+      });
+
+      const result = await runner.RunEmbedding({
+        Contents: [
+          [{ type: 'image_url', content: 'A', mimeType: 'image/png' }],
+          [{ type: 'image_url', content: 'B', mimeType: 'image/png' }],
+          [{ type: 'image_url', content: 'C', mimeType: 'image/png' }],
+        ],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+      });
+
+      expect(result.Success).toBe(true);
+      expect(result.Vectors).toEqual([[0.6, 0.7], [0.6, 0.7], [0.6, 0.7]]);
+      expect(scriptFor(DRIVER_1B).ContentCalls).toHaveLength(3);
+    });
+
+    it('aborts sibling in-flight Contents calls when a call returns an empty vector before failover', async () => {
+      addSecondVendorToModel1();
+      const vendor1Signals: Array<AbortSignal | undefined> = [];
+      let vendor2SawAllVendor1Aborted = false;
+
+      scriptFor(DRIVER_1).ContentAnswer = (params) => {
+        const callIndex = vendor1Signals.length;
+        vendor1Signals.push(params.CancellationToken);
+        if (callIndex === 0) {
+          return Promise.resolve({
+            object: 'object',
+            model: params.model ?? '',
+            ModelUsage: new ModelUsage(1, 0),
+            vector: [],
+          });
+        }
+        // Ignores signal so only attemptController.abort() + raceWithAttemptAbort can unwind it.
+        return new Promise(() => undefined);
+      };
+      scriptFor(DRIVER_1B).ContentAnswer = async (params) => {
+        if (!vendor2SawAllVendor1Aborted) {
+          vendor2SawAllVendor1Aborted = vendor1Signals.length > 0 && vendor1Signals.every(s => s?.aborted === true);
+        }
+        return {
+          object: 'object',
+          model: params.model ?? '',
+          ModelUsage: new ModelUsage(2, 0),
+          vector: [0.8, 0.9],
+        };
+      };
+
+      const result = await runner.RunEmbedding({
+        Contents: [
+          [{ type: 'image_url', content: 'A', mimeType: 'image/png' }],
+          [{ type: 'image_url', content: 'B', mimeType: 'image/png' }],
+        ],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+      });
+
+      expect(result.Success).toBe(true);
+      expect(result.Vectors).toEqual([[0.8, 0.9], [0.8, 0.9]]);
+      expect(vendor2SawAllVendor1Aborted).toBe(true);
+    });
   });
 });

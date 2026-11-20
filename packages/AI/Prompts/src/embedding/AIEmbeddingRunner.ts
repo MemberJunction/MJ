@@ -743,7 +743,7 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     };
 
     const worker = async (): Promise<void> => {
-      for (let idx = nextIndex++; !failed && !attemptController.signal.aborted && idx < contents.length; idx = nextIndex++) {
+      for (let idx = nextIndex++; !failed && idx < contents.length; idx = nextIndex++) {
         if (bound.Signal?.aborted) {
           failed = true;
           const boundErr = buildAttemptAbortError();
