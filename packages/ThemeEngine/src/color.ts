@@ -191,3 +191,14 @@ export function MixHex(a: string, b: string, t: number): string {
 export function mixHex(a: string, b: string, t: number): string {
   return MixHex(a, b, t);
 }
+
+/** Mix two hex colors in gamma-encoded sRGB space; `t` 0..1 is the weight of `b`.
+ *  Matches CSS `color-mix(in srgb, b <t*100>%, a)`. A non-finite `t` is treated as 0. */
+export function MixHexSRGB(a: string, b: string, t: number): string {
+  const A = ParseHex(a);
+  const B = ParseHex(b);
+  const k = clamp01(Number.isFinite(t) ? t : 0);
+  const ch = (x: number, y: number): string =>
+    Math.round(clamp01((x + (y - x) * k) / 255) * 255).toString(16).padStart(2, '0');
+  return `#${ch(A.r, B.r)}${ch(A.g, B.g)}${ch(A.b, B.b)}`;
+}

@@ -39,6 +39,7 @@ import {
     TaskGraphSpec,
     TaskGraphSpecNode,
     TaskGraphValidationError,
+    TaskGraphValidationOptions,
     TaskGraphValidationResult,
     NormalizeDependency,
     type TaskGraphDecisionQuestion,
@@ -52,10 +53,17 @@ import {
  */
 const CONDITION_SYNTAX = new SafeExpressionEvaluator();
 
-/** Kinds this build knows how to configure. Derived from the map so the two can never drift. */
-const KNOWN_KINDS: readonly TaskGraphNodeKind[] = [
-    'Agent', 'Action', 'Human', 'Prompt', 'ForEach', 'While', 'External', 'Decision',
-];
+/**
+ * True when this build knows how to configure `kind`.
+ *
+ * Read off {@link REQUIRED_CONFIG_FIELDS}, which is typed `Record<TaskGraphNodeKind, …>` and so
+ * cannot compile without an entry for every kind. This used to be a separate hand-written list whose
+ * comment claimed it was derived from that map; it was not, and adding the `Wait` kind left it behind,
+ * so every Wait step was refused as an unknown kind.
+ */
+function isKnownKind(kind: unknown): kind is TaskGraphNodeKind {
+    return typeof kind === 'string' && Object.prototype.hasOwnProperty.call(REQUIRED_CONFIG_FIELDS, kind);
+}
 
 /** A graph's Decision steps by `tempId`, with their configuration already narrowed. */
 type DecisionSteps = ReadonlyMap<string, { Name: string; Config: TaskGraphNodeConfigMap['Decision'] }>;
@@ -394,10 +402,72 @@ const REQUIRED_CONFIG_FIELDS: Record<TaskGraphNodeKind, readonly string[]> = {
     // about a setting that does not apply to it.
     While: ['condition'],
     External: ['domain'],
+    // Neither field alone is required — exactly one of `until` / `durationSeconds` is, which the
+    // per-kind check below says in words rather than as a missing field.
+    Wait: [],
     // `promptName` and `state` both have defaults (`Default Decision`, the whole payload); nothing
     // can default the questions.
     Decision: ['questions'],
 };
+
+/**
+ * Reports a Wait, External or Human step whose waiting settings could not work.
+ *
+ * Checked at submit because each failure is otherwise silent at run time: a Wait with neither
+ * `until` nor `durationSeconds` has no moment to wait for, a negative deadline expires the step the
+ * instant it is reached, and an empty correlation key can never be signalled.
+ */
+function checkWaitingStepConfiguration(task: TaskGraphSpecNode, errors: TaskGraphValidationError[]): void {
+    const problems = WaitingStepConfigurationProblems(task);
+    if (problems.length > 0) {
+        errors.push({
+            Code: 'InvalidConfiguration',
+            Message: `${task.kind} step "${task.name?.trim() || task.tempId}" cannot run: ${problems.join('; ')}.`,
+            TempId: task.tempId,
+        });
+    }
+}
+
+/** What is wrong with a waiting step's settings, as phrases. Empty when it can run. Exported for the flow editor. */
+export function WaitingStepConfigurationProblems(task: TaskGraphSpecNode): string[] {
+    const problems: string[] = [];
+    const wait = ConfigOf(task, 'Wait');
+    if (wait) {
+        const hasUntil = typeof wait.until === 'string' && wait.until.trim().length > 0;
+        const hasDuration = wait.durationSeconds !== undefined && wait.durationSeconds !== null;
+        if (hasUntil === hasDuration) {
+            problems.push('set exactly one of "until" (a timestamp or payload path) and "durationSeconds"');
+        }
+        if (hasDuration && !(typeof wait.durationSeconds === 'number' && Number.isFinite(wait.durationSeconds) && wait.durationSeconds >= 0)) {
+            problems.push('"durationSeconds" must be a number of seconds, zero or more');
+        }
+        if (hasUntil && !PAYLOAD_PATH.test(wait.until!.trim()) && Number.isNaN(Date.parse(wait.until!.trim()))) {
+            problems.push(`"until" is "${wait.until}", which is neither an ISO-8601 timestamp nor "payload.<path>"`);
+        }
+    }
+    const external = ConfigOf(task, 'External');
+    if (external) {
+        if (external.correlationKey !== undefined && !(typeof external.correlationKey === 'string' && external.correlationKey.trim())) {
+            problems.push('its correlationKey is empty; omit it to signal the step by its task ID');
+        }
+        problems.push(...deadlineProblems(external.expiresInHours));
+    }
+    const human = ConfigOf(task, 'Human');
+    if (human) {
+        if (human.provider !== undefined && !(typeof human.provider === 'string' && human.provider.trim())) {
+            problems.push('its provider is empty; omit it to use the built-in inbox');
+        }
+        problems.push(...deadlineProblems(human.expiresInHours));
+    }
+    return problems;
+}
+
+function deadlineProblems(expiresInHours: number | undefined): string[] {
+    if (expiresInHours === undefined || expiresInHours === null) return [];
+    return typeof expiresInHours === 'number' && Number.isFinite(expiresInHours) && expiresInHours > 0
+        ? []
+        : ['"expiresInHours" must be a positive number of hours; omit it for no deadline'];
+}
 
 /** `payload`, or `payload.<path>` — the only states a Decision step can resolve at run time. */
 const PAYLOAD_PATH = /^payload(?:\.[^.\s]+)*$/;
@@ -880,7 +950,7 @@ export function ValidateLoopOperationStructure(
 function checkConfiguration(task: TaskGraphSpecNode, errors: TaskGraphValidationError[]): void {
     if (!task.kind) return;   // absence is reported as NoAssignment, not as a configuration fault
 
-    if (!KNOWN_KINDS.includes(task.kind)) {
+    if (!isKnownKind(task.kind)) {
         errors.push({
             Code: 'UnknownKind',
             Message: `Task "${task.tempId}" has kind "${task.kind}", which this version does not know how to run.`,
@@ -938,7 +1008,7 @@ function checkExclusiveGroups(tasks: readonly TaskGraphSpecNode[], errors: TaskG
  * Does NOT verify that agent names resolve — that requires metadata and is done by the service,
  * which reports unresolvable agents as a hard error rather than silently dropping those nodes.
  */
-export function ValidateTaskGraphSpec(spec: TaskGraphSpec): TaskGraphValidationResult {
+export function ValidateTaskGraphSpec(spec: TaskGraphSpec, options?: TaskGraphValidationOptions): TaskGraphValidationResult {
     const errors: TaskGraphValidationError[] = [];
 
     if (!spec.workflowName || spec.workflowName.trim().length === 0) {
@@ -952,10 +1022,11 @@ export function ValidateTaskGraphSpec(spec: TaskGraphSpec): TaskGraphValidationR
         return { Valid: errors.length === 0, Errors: errors };
     }
 
-    if (tasks.length > MAX_TASKS_PER_GRAPH) {
+    const maxTasks = Math.min(options?.MaxTasks ?? MAX_TASKS_PER_GRAPH, MAX_TASKS_PER_GRAPH);
+    if (tasks.length > maxTasks) {
         errors.push({
             Code: 'TooManyTasks',
-            Message: `A task graph may contain at most ${MAX_TASKS_PER_GRAPH} tasks; received ${tasks.length}.`,
+            Message: `A task graph may contain at most ${maxTasks} tasks; received ${tasks.length}.`,
         });
     }
 
@@ -1002,6 +1073,7 @@ export function ValidateTaskGraphSpec(spec: TaskGraphSpec): TaskGraphValidationR
         checkConfiguration(task, errors);
         checkLoopConfiguration(task, decisionContext, errors);
         checkDecisionConfiguration(task, errors);
+        checkWaitingStepConfiguration(task, errors);
         checkConditionSyntax(task, decisionContext, errors);
 
         for (const raw of task.dependsOn ?? []) {
