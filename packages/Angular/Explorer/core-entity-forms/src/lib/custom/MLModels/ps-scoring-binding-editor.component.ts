@@ -22,7 +22,7 @@ import { EscapeSQLString, UUIDsEqual, ValidationErrorInfo } from '@memberjunctio
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
-import { FindDefaultViewAuthorization } from '@memberjunction/predictive-studio-core';
+import { PredictionViewAuthorization } from '@memberjunction/predictive-studio-core';
 
 /** The `MJ: ML Training Pipelines` fields the editor reads. */
 type PipelineRow = Pick<MJMLTrainingPipelineEntity, 'ID' | 'Name' | 'TargetEntityID'>;
@@ -142,7 +142,7 @@ export class PSScoringBindingEditorComponent extends BaseAngularComponent implem
 
   /** Opens the form for a new binding of the model's pipeline, with the seeded view authorization and no column copy. */
   public StartNew(): void {
-    const seeded = FindDefaultViewAuthorization(this.ProviderToUse.Authorizations);
+    const seeded = PredictionViewAuthorization.FindDefault(this.ProviderToUse.Authorizations);
     this.Draft = {
       Binding: null,
       FeatureName: '',

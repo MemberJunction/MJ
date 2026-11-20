@@ -13,7 +13,7 @@
 import { LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJFeatureValueEntity, MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
-import { DEFAULT_VIEW_AUTHORIZATION_NAME, FindDefaultViewAuthorization, UtcDay } from '@memberjunction/predictive-studio-core';
+import { PredictionViewAuthorization, UtcDay } from '@memberjunction/predictive-studio-core';
 import type { RegistryContext } from '../registry/registry-context';
 
 /** The binding columns the sweep reads. */
@@ -113,7 +113,7 @@ export class PredictionRetention {
   public static readonly BatchSize = 1000;
 
   /**
-   * Gives every binding whose `ViewAuthorizationID` is null the seeded {@link DEFAULT_VIEW_AUTHORIZATION_NAME}
+   * Gives every binding whose `ViewAuthorizationID` is null the seeded {@link PredictionViewAuthorization.DefaultName}
    * authorization, looked up by name in the run provider's metadata (`ctx.Authorizations`). Idempotent: a second run finds no such binding.
    * When the authorization is not loaded yet (it arrives by `mj sync push`, after the migration, D4-25) nothing
    * changes and nothing is raised; the next run retries.
@@ -198,7 +198,7 @@ export class PredictionRetention {
 
   /** The seeded authorization's ID in the provider's metadata (trimmed, case-insensitive name), or null when absent. */
   public static SeededAuthorizationID(provider: Pick<IMetadataProvider, 'Authorizations'>): string | null {
-    const seeded = FindDefaultViewAuthorization(provider.Authorizations);
+    const seeded = PredictionViewAuthorization.FindDefault(provider.Authorizations);
     return seeded ? seeded.ID : null;
   }
 

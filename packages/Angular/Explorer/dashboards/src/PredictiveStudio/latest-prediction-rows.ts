@@ -5,11 +5,16 @@
  * class order) and the per-record drivers in `ValueJSON`; a regression's point prediction in `ValueNumeric`. The
  * surfaces rank on the model's own score — P(class 1) of a binary model, the predicted class's probability of a
  * multiclass model, the point of a regression — so the score is read back from the stored probabilities, and the
- * surfaces' polarity rule (`AtRiskRules.BuildAtRiskOptions`) applies unchanged.
+ * surfaces' polarity rule (`AtRiskRules.BuildAtRiskOptions`) applies unchanged. `ValueJSON` is read by PS Core's
+ * `StoredPrediction`, the record panel's reader too.
+ *
+ * The grid renders one row model for both of its sources — a run's process run details and a binding's latest values —
+ * and `AtRiskRules.ParseAtRiskRows` reads that model's `ResultPayload`; {@link LatestPredictionRows.ToRunDetail} is the
+ * adapter from a stored value to it.
  */
 import type { MJMLModelScoringBindingEntity, MJvwLatestFeatureValuesEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
-import { JsonParse, type JsonObject } from '@memberjunction/predictive-studio-core';
+import { StoredPrediction } from '@memberjunction/predictive-studio-core';
 import type { PSRunDetailRow } from './engine/predictive-studio.engine';
 
 /** The `MJ: Latest Feature Values` fields the surfaces read. */
@@ -31,8 +36,8 @@ export class LatestPredictionRows {
   /** The model's own score of a stored row, or null when the row stores none (see the module comment). */
   public static Score(row: LatestPredictionRow): number | null {
     if (row.ValueText === null) return LatestPredictionRows.finite(row.ValueNumeric);
-    const probabilities = LatestPredictionRows.probabilities(row.ValueJSON);
-    if (probabilities.length === 2) return probabilities[1];
+    const probabilities = StoredPrediction.Parse(row.ValueJSON).Probabilities;
+    if (probabilities.length === 2) return probabilities[1].Probability;
     return LatestPredictionRows.finite(row.Confidence);
   }
 
@@ -48,27 +53,9 @@ export class LatestPredictionRows {
     return { ID: row.ID, RecordID: row.RecordID, ResultPayload: JSON.stringify(payload), Status: 'Succeeded', CompletedAt: scoredAt, __mj_CreatedAt: scoredAt || new Date(0) };
   }
 
-  /** The stored class probabilities in their stored (class) order. */
-  private static probabilities(valueJSON: string | null): number[] {
-    const json = LatestPredictionRows.json(valueJSON);
-    const probabilities = json ? JsonParse.JsonObjectField(json, 'Probabilities') : null;
-    if (!probabilities) return [];
-    return Object.keys(probabilities).map((k) => JsonParse.JsonNumber(probabilities, k)).filter((p): p is number => p !== null);
-  }
-
   /** The stored per-record drivers in the payload form the surfaces parse (`{ feature, value }`, signed on the model's score). */
   private static drivers(valueJSON: string | null): Array<{ feature: string; value: number }> { // case-violation-ok-legacy-back-compat: the scoring payload's wire keys AtRiskRules.ParseRowDrivers reads
-    const json = LatestPredictionRows.json(valueJSON);
-    const items = json ? JsonParse.JsonArrayField(json, 'Drivers') || [] : [];
-    return items
-      .filter(JsonParse.IsJsonObject)
-      .map((d) => ({ feature: JsonParse.JsonString(d, 'sourceColumn'), value: JsonParse.JsonNumber(d, 'contribution') }))
-      .filter((d): d is { feature: string; value: number } => d.feature !== null && d.value !== null);
-  }
-
-  private static json(valueJSON: string | null): JsonObject | null {
-    const parsed = JsonParse.ParseJsonText(valueJSON, 'ValueJSON');
-    return parsed.Ok && JsonParse.IsJsonObject(parsed.Value) ? parsed.Value : null;
+    return StoredPrediction.Parse(valueJSON).Drivers.map((d) => ({ feature: d.SourceColumn, value: d.Contribution }));
   }
 
   private static finite(value: number | null): number | null {

@@ -3,20 +3,20 @@
  *
  * The panel reads predictions as Feature Values: the entity's `Active` scoring bindings the user holds, the latest value
  * of each from `MJ: Latest Feature Values`, the binding's `Champion` history from `MJ: Feature Values`, and the lineage
- * of the value (its scoring run and the scoring model's `record-panel` output binding). Every read is built here, so the
- * panel and the G5.6 gate send the same parameters, and every card is built here, so the DOM is tested on the same
- * rules. Nothing in this file is entity-specific or domain-specific.
+ * of the value (its scoring run and the scoring model's `record-panel` output binding). Every read is built in PS Core
+ * (`PredictionPanelQueries`), so the panel and the G5.6 gate send the same parameters, and every card is built here, so
+ * the DOM is tested on the same rules. Nothing in this file is entity-specific or domain-specific.
  */
 
-import { AuthorizationEvaluator, type AuthorizationInfo, type RunViewParams, type UserInfo } from '@memberjunction/core';
+import { AuthorizationEvaluator, type AuthorizationInfo, type UserInfo } from '@memberjunction/core';
 import type {
     MJMLModelScoringBindingEntity,
     MJMLOutputBindingEntity,
     MJMLScoringRunEntity,
     MJvwLatestFeatureValuesEntity,
 } from '@memberjunction/core-entities';
-import { EscapeSQLString, IndexByUUID } from '@memberjunction/global';
-import { AtRiskRules, JsonParse, type JsonObject } from '@memberjunction/predictive-studio-core';
+import { IndexByUUID } from '@memberjunction/global';
+import { AtRiskRules, PredictionPanelQueries, StoredPrediction, type RiskBandDisplay, type StoredPredictionValue } from '@memberjunction/predictive-studio-core';
 
 /** The neutral tercile a 0–1 value falls into: position on the value axis only, no moral direction. */
 export type PredictionBand = 'low' | 'mid' | 'high';
@@ -24,30 +24,20 @@ export type PredictionBand = 'low' | 'mid' | 'high';
 /** How a prediction's primary value renders: a classification's adverse probability, or a regression's point. */
 export type PredictionValueKind = 'probability' | 'numeric';
 
-/** Maximum number of per-record drivers shown per card. */
-export const MAX_DRIVERS = 5;
-
-/** The `MJ: ML Model Scoring Bindings` fields the panel reads. */
-export type PanelBindingRow = Pick<
-    MJMLModelScoringBindingEntity,
-    'ID' | 'FeatureName' | 'MLTrainingPipelineID' | 'MLTrainingPipeline' | 'TargetEntityID' | 'ViewAuthorizationID' | 'Status' | 'LastScoredAt'
->;
+/**
+ * The `MJ: ML Model Scoring Bindings` fields the panel reads: exactly the fields its read names, so a field the read
+ * names that the entity lacks is a compile error.
+ */
+export type PanelBindingRow = Pick<MJMLModelScoringBindingEntity, (typeof PredictionPanelQueries.BindingFields)[number]>;
 
 /** The value fields the panel reads, from `MJ: Latest Feature Values` (the latest value) and `MJ: Feature Values` (the history). */
-export type PanelValueRow = Pick<
-    MJvwLatestFeatureValuesEntity,
-    'ID' | 'EntityID' | 'RecordID' | 'FeatureName' | 'Source' | 'EffectiveAsOf' | 'ComputedAt' | 'MLModelScoringBindingID' | 'MLModelID'
-    | 'MLScoringRunID' | 'InTraining' | 'ValueText' | 'ValueNumeric' | 'ValueJSON' | 'Confidence'
->;
+export type PanelValueRow = Pick<MJvwLatestFeatureValuesEntity, (typeof PredictionPanelQueries.ValueFields)[number]>;
 
 /** The `MJ: ML Scoring Runs` fields the lineage reads. */
-export type PanelRunRow = Pick<MJMLScoringRunEntity, 'ID' | 'ModelID' | 'ModelVersion' | 'StartedAt'>;
+export type PanelRunRow = Pick<MJMLScoringRunEntity, (typeof PredictionPanelQueries.RunFields)[number]>;
 
 /** The `MJ: ML Output Bindings` fields the card reads (the scoring model's `record-panel` row). */
-export type PanelOutputBindingRow = Pick<MJMLOutputBindingEntity, 'ID' | 'ModelID' | 'Surface' | 'SortsBy' | 'DriverDirectionRelativeTo' | 'Label'>;
-
-const RUN_FIELDS = ['ID', 'ModelID', 'ModelVersion', 'StartedAt'] as const satisfies readonly (keyof PanelRunRow)[];
-const OUTPUT_BINDING_FIELDS = ['ID', 'ModelID', 'Surface', 'SortsBy', 'DriverDirectionRelativeTo', 'Label'] as const satisfies readonly (keyof PanelOutputBindingRow)[];
+export type PanelOutputBindingRow = Pick<MJMLOutputBindingEntity, (typeof PredictionPanelQueries.OutputBindingFields)[number]>;
 
 /** One per-record driver of a prediction, for display. */
 export interface PredictionDriver {
@@ -82,7 +72,7 @@ export interface PredictionHistoryPoint {
 /** Where a shown value came from. */
 export interface PredictionLineage {
     /** `Model` for a scored value, `Human` for a person's value of the binding's feature. */
-    Source: string;
+    Source: PanelValueRow['Source'];
     /** The scoring model's version, read through the value's scoring run; null without a run. */
     ModelVersion: number | null;
     ScoringRunID: string | null;
@@ -107,7 +97,8 @@ export interface PredictionCard {
     Band: PredictionBand | null;
     /** The risk band's label of a classification ("High risk"); null for a regression. */
     StatusLabel: string | null;
-    BadgeColor: 'red' | 'amber' | 'green' | 'gray';
+    /** The risk band's badge colour, `gray` for a regression. */
+    BadgeColor: RiskBandDisplay['BadgeColor'] | 'gray';
     BadgeIcon: string | null;
     /** The predicted class of a classification; null for a regression. */
     Class: string | null;
@@ -126,14 +117,11 @@ export interface PredictionCard {
     Lineage: PredictionLineage;
 }
 
-/** The stored members of a `Model` row's `ValueJSON` (§5.8.1): probabilities in class order and the per-record drivers. */
-interface StoredPrediction {
-    Probabilities: Array<{ Class: string; Probability: number }>;
-    Drivers: Array<{ SourceColumn: string; Contribution: number; RaisesAdverse: boolean }>;
-}
-
-/** The record panel's rules: its reads, its authorization check and its cards. */
+/** The record panel's rules: its authorization check and its cards. */
 export class ModelPredictionLogic {
+    /** Maximum number of per-record drivers shown per card. */
+    public static readonly MaxDrivers = 5;
+
     /** A finite number from a dynamic value, or null. */
     public static ToNumber(value: unknown): number | null { // unknown: a stored JSON member or a view column of any type
         if (typeof value === 'number') return Number.isFinite(value) ? value : null;
@@ -163,32 +151,6 @@ export class ModelPredictionLogic {
         const d = value instanceof Date ? value : new Date(value);
         if (isNaN(d.getTime())) return null;
         return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-    }
-
-    /**
-     * The lineage read of the values the panel shows: the scoring models' `record-panel` output bindings (read past the
-     * server cache, as every surface reads its binding row) and the scoring runs. A read whose ID list is empty is left out.
-     */
-    public static LineageQueries(modelIds: readonly string[], runIds: readonly string[]): RunViewParams[] {
-        const queries: RunViewParams[] = [];
-        if (modelIds.length > 0) {
-            queries.push({
-                EntityName: 'MJ: ML Output Bindings',
-                ExtraFilter: `Surface='record-panel' AND ModelID IN (${ModelPredictionLogic.inList(modelIds)})`,
-                Fields: [...OUTPUT_BINDING_FIELDS],
-                ResultType: 'simple',
-                BypassCache: true,
-            });
-        }
-        if (runIds.length > 0) {
-            queries.push({
-                EntityName: 'MJ: ML Scoring Runs',
-                ExtraFilter: `ID IN (${ModelPredictionLogic.inList(runIds)})`,
-                Fields: [...RUN_FIELDS],
-                ResultType: 'simple',
-            });
-        }
-        return queries;
     }
 
     /**
@@ -229,7 +191,7 @@ export class ModelPredictionLogic {
         run: PanelRunRow | null,
     ): PredictionCard | null {
         if (latest === null) return null;
-        const stored = ModelPredictionLogic.storedPrediction(latest.ValueJSON);
+        const stored = StoredPrediction.Parse(latest.ValueJSON);
         const numeric = ModelPredictionLogic.ToNumber(latest.ValueNumeric);
         const kind: PredictionValueKind = latest.ValueText !== null ? 'probability' : 'numeric';
         const band = kind === 'probability' && numeric !== null ? AtRiskRules.RiskBandDisplayFor(AtRiskRules.RiskBandFor(Math.max(0, Math.min(1, numeric)))) : null;
@@ -294,15 +256,15 @@ export class ModelPredictionLogic {
     }
 
     /**
-     * The per-record drivers, strongest first (at most {@link MAX_DRIVERS}): pointing up when the stored effect raises the
+     * The per-record drivers, strongest first (at most {@link MaxDrivers}): pointing up when the stored effect raises the
      * adverse outcome, or, when the `record-panel` output binding signs by `raw-contribution`, when the contribution is positive.
      */
-    private static drivers(stored: StoredPrediction, outputBinding: PanelOutputBindingRow | null): PredictionDriver[] {
+    private static drivers(stored: StoredPredictionValue, outputBinding: PanelOutputBindingRow | null): PredictionDriver[] {
         const raw = outputBinding?.DriverDirectionRelativeTo === 'raw-contribution';
         const top = [...stored.Drivers]
             .filter((d) => d.Contribution !== 0)
             .sort((a, b) => Math.abs(b.Contribution) - Math.abs(a.Contribution))
-            .slice(0, MAX_DRIVERS);
+            .slice(0, ModelPredictionLogic.MaxDrivers);
         const strongest = top.length > 0 ? Math.abs(top[0].Contribution) : 0;
         return top.map((d) => ({
             Name: AtRiskRules.HumanizeFeatureName(d.SourceColumn),
@@ -312,37 +274,10 @@ export class ModelPredictionLogic {
         }));
     }
 
-    /** The probabilities and drivers a `Model` row's `ValueJSON` stores; empty lists when it stores none or does not parse. */
-    private static storedPrediction(valueJSON: string | null): StoredPrediction {
-        const parsed = JsonParse.ParseJsonText(valueJSON, 'ValueJSON');
-        if (!parsed.Ok || !JsonParse.IsJsonObject(parsed.Value)) return { Probabilities: [], Drivers: [] };
-        const json = parsed.Value;
-        const probabilities = JsonParse.JsonObjectField(json, 'Probabilities');
-        return {
-            Probabilities: probabilities ? ModelPredictionLogic.classProbabilities(probabilities) : [],
-            Drivers: (JsonParse.JsonArrayField(json, 'Drivers') || [])
-                .filter(JsonParse.IsJsonObject)
-                .map((d) => ({ SourceColumn: JsonParse.JsonString(d, 'sourceColumn'), Contribution: JsonParse.JsonNumber(d, 'contribution'), RaisesAdverse: JsonParse.JsonString(d, 'effect') === 'raises-adverse' }))
-                .filter((d): d is { SourceColumn: string; Contribution: number; RaisesAdverse: boolean } => d.SourceColumn !== null && d.Contribution !== null),
-        };
-    }
-
-    /** `{ class: probability }` in its stored key order, which is the model's class order (§5.8.1). */
-    private static classProbabilities(probabilities: JsonObject): StoredPrediction['Probabilities'] {
-        return Object.keys(probabilities)
-            .map((cls) => ({ Class: cls, Probability: JsonParse.JsonNumber(probabilities, cls) }))
-            .filter((p): p is { Class: string; Probability: number } => p.Probability !== null);
-    }
-
     /** Epoch milliseconds of a date, 0 when missing or invalid (an undated value sorts first). */
     private static time(value: Date | string | null | undefined): number {
         if (!value) return 0;
         const t = (value instanceof Date ? value : new Date(value)).getTime();
         return isNaN(t) ? 0 : t;
-    }
-
-    /** A quoted, escaped SQL `IN` list. */
-    private static inList(values: readonly string[]): string {
-        return values.map((v) => `'${EscapeSQLString(v)}'`).join(',');
     }
 }

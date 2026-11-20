@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { AuthorizationInfo, UserInfo } from '@memberjunction/core';
 import {
     ModelPredictionLogic,
-    MAX_DRIVERS,
     type PanelBindingRow,
     type PanelOutputBindingRow,
     type PanelRunRow,
@@ -68,17 +67,6 @@ describe('ModelPredictionLogic — number formatting', () => {
     });
 });
 
-describe('ModelPredictionLogic.LineageQueries — the lineage batch of the shown values', () => {
-    it('LineageQueries reads the scoring models\' record-panel output bindings and the runs, skipping an empty list', () => {
-        const q = ModelPredictionLogic.LineageQueries(['M1', 'M2'], ['RUN1']);
-        expect(q.map((p) => [p.EntityName, p.ExtraFilter])).toEqual([
-            ['MJ: ML Output Bindings', "Surface='record-panel' AND ModelID IN ('M1','M2')"],
-            ['MJ: ML Scoring Runs', "ID IN ('RUN1')"],
-        ]);
-        expect(ModelPredictionLogic.LineageQueries([], []).length).toBe(0);
-    });
-});
-
 describe('ModelPredictionLogic.AuthorizedBindings — the user holds the binding\'s view authorization', () => {
     const view = new HeldAuthorization({ ID: 'A-VIEW', Name: 'View Model Predictions' }, ['u-dev']);
     const child = new HeldAuthorization({ ID: 'A-CHILD', Name: 'Child', ParentID: 'A-VIEW' }, []);
@@ -139,11 +127,11 @@ describe('ModelPredictionLogic.BuildCard', () => {
         const raw = ModelPredictionLogic.BuildCard(binding(), value({ ValueJSON: JSON.stringify({ Drivers: [{ sourceColumn: 'AutoRenew', contribution: -0.4, effect: 'raises-adverse' }] }) }), [], recordPanel({ DriverDirectionRelativeTo: 'raw-contribution' }), run());
         expect(raw?.Drivers.map((d) => d.RaisesAdverse)).toEqual([false]);
     });
-    it('keeps at most MAX_DRIVERS drivers, strongest first', () => {
-        const drivers = Array.from({ length: MAX_DRIVERS + 2 }, (_, i) => ({ sourceColumn: `F${i}`, contribution: i + 1, effect: 'raises-adverse' }));
+    it('keeps at most ModelPredictionLogic.MaxDrivers drivers, strongest first', () => {
+        const drivers = Array.from({ length: ModelPredictionLogic.MaxDrivers + 2 }, (_, i) => ({ sourceColumn: `F${i}`, contribution: i + 1, effect: 'raises-adverse' }));
         const card = ModelPredictionLogic.BuildCard(binding(), value({ ValueJSON: JSON.stringify({ Drivers: drivers }) }), [], null, run());
-        expect(card?.Drivers.length).toBe(MAX_DRIVERS);
-        expect(card?.Drivers[0].Name).toBe(`F${MAX_DRIVERS + 1}`);
+        expect(card?.Drivers.length).toBe(ModelPredictionLogic.MaxDrivers);
+        expect(card?.Drivers[0].Name).toBe(`F${ModelPredictionLogic.MaxDrivers + 1}`);
     });
     it('the history is the binding\'s Champion values in as-of order, plotted on a 0–1 scale for a probability', () => {
         const history = [value({ ID: 'H3', EffectiveAsOf: DAY3, ValueNumeric: 0.72 }), value({ ID: 'H1', EffectiveAsOf: DAY1, ValueNumeric: 0.6 })];

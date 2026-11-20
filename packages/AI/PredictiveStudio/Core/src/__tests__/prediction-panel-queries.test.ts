@@ -4,7 +4,7 @@
  * history, and the record's pipeline values.
  */
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_VIEW_AUTHORIZATION_NAME, FindDefaultViewAuthorization, PredictionPanelQueries } from '../prediction-panel-queries';
+import { PredictionViewAuthorization, PredictionPanelQueries } from '../prediction-panel-queries';
 
 const ENTITY = 'E1';
 const RECORD = "r'1";
@@ -45,17 +45,33 @@ describe('PredictionPanelQueries.For', () => {
   });
 });
 
-describe('FindDefaultViewAuthorization', () => {
+describe('PredictionPanelQueries.Lineage', () => {
+  it('reads the scoring models\' record-panel output bindings and the runs in the documented positions, escaped', () => {
+    const q = PredictionPanelQueries.Lineage(['M1', "M'2"], ['RUN1']);
+    const { OutputBindings, Runs } = PredictionPanelQueries.LineageIndex;
+    expect([q[OutputBindings].EntityName, q[OutputBindings].ExtraFilter]).toEqual(['MJ: ML Output Bindings', "Surface='record-panel' AND ModelID IN ('M1','M''2')"]);
+    expect([q[Runs].EntityName, q[Runs].ExtraFilter]).toEqual(['MJ: ML Scoring Runs', "ID IN ('RUN1')"]);
+    expect(q[OutputBindings].BypassCache).toBe(true);
+  });
+
+  it('an empty ID list keeps its position and matches nothing', () => {
+    const q = PredictionPanelQueries.Lineage([], ['RUN1']);
+    expect(q.map((p) => p.ExtraFilter)).toEqual(["Surface='record-panel' AND 1=0", "ID IN ('RUN1')"]);
+    expect(PredictionPanelQueries.Lineage(['M1'], [])[PredictionPanelQueries.LineageIndex.Runs].ExtraFilter).toBe('1=0');
+  });
+});
+
+describe('PredictionViewAuthorization.FindDefault', () => {
   it('is the seeded "View Model Predictions" authorization', () => {
-    expect(DEFAULT_VIEW_AUTHORIZATION_NAME).toBe('View Model Predictions');
+    expect(PredictionViewAuthorization.DefaultName).toBe('View Model Predictions');
   });
 
   it('matches the name trimmed and case-insensitive, the one rule the editor and the engine share', () => {
-    const found = FindDefaultViewAuthorization([{ ID: 'A1', Name: 'Run Reports' }, { ID: 'A2', Name: ' view model PREDICTIONS ' }]);
+    const found = PredictionViewAuthorization.FindDefault([{ ID: 'A1', Name: 'Run Reports' }, { ID: 'A2', Name: ' view model PREDICTIONS ' }]);
     expect(found?.ID).toBe('A2');
   });
 
   it('is undefined when the authorization is not loaded', () => {
-    expect(FindDefaultViewAuthorization([{ ID: 'A1', Name: 'Run Reports' }])).toBeUndefined();
+    expect(PredictionViewAuthorization.FindDefault([{ ID: 'A1', Name: 'Run Reports' }])).toBeUndefined();
   });
 });
