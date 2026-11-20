@@ -17,6 +17,7 @@ import { Router, urlencoded, json, type Request, type Response } from 'express';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { IncomingMessage } from 'node:http';
 import { RegisterMediaUpgradeRoute } from '@memberjunction/server-extensions-core';
+import { MEDIA_SOCKET_MAX_MESSAGE_BYTES } from './mediaSocketLimits.js';
 import { LogError, LogStatus } from '@memberjunction/core';
 import {
     verifyVonageSignature,
@@ -181,7 +182,7 @@ function verifyVonageRequest(config: VonageTelephonyConfig, req: Request, params
  * Attaches the media WSS to the shared HTTP server on {@link VONAGE_MEDIA_WSS_PATH}.
  */
 function attachMediaStreamServer(registry: VonageCallMediaRegistry): void {
-    const wss = new WebSocketServer({ noServer: true });
+    const wss = new WebSocketServer({ noServer: true, maxPayload: MEDIA_SOCKET_MAX_MESSAGE_BYTES });
     wss.on('connection', (socket: WebSocket, request: IncomingMessage) => WireVonageMediaSocket(socket, request, registry));
     RegisterMediaUpgradeRoute(VONAGE_MEDIA_WSS_PATH, wss);
     LogStatus(`[Telephony][Vonage] media WSS route registered at ${VONAGE_MEDIA_WSS_PATH}`);
@@ -189,13 +190,17 @@ function attachMediaStreamServer(registry: VonageCallMediaRegistry): void {
 
 /**
  * Wires one media socket: authenticate against the upgrade URL's call identity + `mj_token`, attach,
- * dispatch inbound frames, tear down on close. A refused socket (unknown call, bad/missing token, call
+ * dispatch inbound frames, tear down on close. A socket error (for example an oversized message) is logged,
+ * and ws then closes the socket. A refused socket (unknown call, bad/missing token, call
  * already has a socket) is closed and logged, and nothing is registered for it.
  * Authentication happens synchronously at connection time (the credentials ride the upgrade URL), so an
  * unauthenticated socket never lingers and no idle-auth deadline is needed here, unlike Twilio's `start` frame.
  */
 export function WireVonageMediaSocket(socket: WebSocket, request: IncomingMessage, registry: VonageCallMediaRegistry): void {
     const claim = readSocketClaim(request);
+    socket.on('error', (err: Error) => {
+        LogError(`[Telephony][Vonage] media socket error for call ${claim.CallUuid ?? claim.CorrelationId ?? 'unknown'}: ${err.message}`);
+    });
     const adapter = {
         sendBinary: (data: Uint8Array) => socket.send(data),
         sendText: (data: string) => socket.send(data),

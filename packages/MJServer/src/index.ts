@@ -33,7 +33,7 @@ import { ReplaySubject } from 'rxjs';
 import { BuildSchemaOptions, buildSchemaSync, getMetadataStorage, GraphQLTimestamp, PubSubEngine } from 'type-graphql';
 import { PubSub } from 'graphql-subscriptions';
 import sql from 'mssql';
-import { WebSocketServer } from 'ws';
+import { CreateGraphQLWebSocketServer } from './graphqlWebSocketServer.js';
 import { RealtimeProxyServer } from './realtimeProxy/RealtimeProxyServer.js';
 import { ArtifactCollaborationServer, RedisTicketReplayStore, RedisYjsRoomRelay } from './collaboration/index.js';
 import buildApolloServer from './apolloServer/index.js';
@@ -1391,7 +1391,7 @@ const setupComplete$ = new ReplaySubject(1);
   // `noServer` so we own the HTTP `upgrade` routing ourselves (below) and can dispatch by path between
   // the graphql-ws server and the realtime proxy. (In `{ server, path }` mode, ws destroys any socket whose
   // path doesn't match, which would kill the proxy's `/realtime-proxy` upgrades — hence the explicit router.)
-  const webSocketServer = new WebSocketServer({ noServer: true });
+  const webSocketServer = CreateGraphQLWebSocketServer();
 
   // Single upgrade router: the realtime proxy claims its own path first (an authenticated byte-tunnel that
   // lets self-hosted realtime providers — e.g. HuggingFace speech-to-speech — run the shipped client-direct

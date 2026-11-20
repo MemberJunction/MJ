@@ -14,11 +14,14 @@ vi.mock('../telephony/runAsIdentity.js', () => ({ ResolveInboundContext: vi.fn()
 import { LogError } from '@memberjunction/core';
 import { ComputeTwilioSignature } from '@memberjunction/ai-bridge-twilio';
 import { ResolveInboundContext } from '../telephony/runAsIdentity.js';
+import { SendAndAwaitClose, StartMediaSocketHarness, type MediaSocketHarness } from './mediaSocketHarness.js';
 import {
+    CreateTwilioTelephonyHandler,
     HandleTwilioAmdCallback,
     HandleTwilioInboundVoice,
     HandleTwilioStatusCallback,
     MEDIA_SOCKET_AUTH_DEADLINE_MS,
+    TWILIO_MEDIA_WSS_PATH,
     WireTwilioMediaSocket,
     type TwilioTelephonyServiceLike,
 } from '../telephony/TwilioTelephonyRouter.js';
@@ -410,5 +413,23 @@ describe('Media-Streams socket (WireTwilioMediaSocket)', () => {
             vi.advanceTimersByTime(MEDIA_SOCKET_AUTH_DEADLINE_MS * 2);
             expect(errored.close).not.toHaveBeenCalled();
         });
+    });
+});
+
+describe('Media-Streams socket server (CreateTwilioTelephonyHandler)', () => {
+    let harness: MediaSocketHarness;
+
+    beforeEach(async () => {
+        CreateTwilioTelephonyHandler(PUBLIC_URL, CONFIG).attachMediaStreamServer();
+        harness = await StartMediaSocketHarness();
+    });
+
+    afterEach(async () => {
+        await harness.Close();
+    });
+
+    it('closes the socket with 1009 when a message is larger than 64 KiB', async () => {
+        const result = await SendAndAwaitClose(harness.Url(TWILIO_MEDIA_WSS_PATH), Buffer.alloc(64 * 1024 + 1, 0x61));
+        expect(result).toBe(1009);
     });
 });

@@ -20,7 +20,7 @@
     "@memberjunction/core-entities": "6.3.0-edge.1",
     "@memberjunction/credentials": "6.3.0-edge.1",
     "@memberjunction/global": "6.3.0-edge.1",
-    "@modelcontextprotocol/sdk": "^1.26.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "zod": "^3.25.0"
   },
   "devDependencies": {

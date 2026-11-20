@@ -19,6 +19,7 @@
 import { Router, urlencoded, type Request, type Response } from 'express';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { RegisterMediaUpgradeRoute } from '@memberjunction/server-extensions-core';
+import { MEDIA_SOCKET_MAX_MESSAGE_BYTES } from './mediaSocketLimits.js';
 import { LogError, LogStatus, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import {
     verifyTwilioSignature,
@@ -221,7 +222,7 @@ export async function HandleTwilioAmdCallback(
  * Attaches the Media-Streams WSS to the shared HTTP server on {@link TWILIO_MEDIA_WSS_PATH}.
  */
 function attachMediaStreamServer(registry: TwilioCallMediaRegistry): void {
-    const wss = new WebSocketServer({ noServer: true });
+    const wss = new WebSocketServer({ noServer: true, maxPayload: MEDIA_SOCKET_MAX_MESSAGE_BYTES });
     wss.on('connection', (socket: WebSocket) => WireTwilioMediaSocket(socket, registry));
     RegisterMediaUpgradeRoute(TWILIO_MEDIA_WSS_PATH, wss);
     LogStatus(`[Telephony][Twilio] Media-Streams WSS route registered at ${TWILIO_MEDIA_WSS_PATH}`);

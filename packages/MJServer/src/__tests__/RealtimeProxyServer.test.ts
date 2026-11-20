@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import type { IncomingMessage } from 'node:http';
+import { createServer, type IncomingMessage, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import type { Duplex } from 'node:stream';
+import { WebSocket as WsClient, WebSocketServer } from 'ws';
 import { RealtimeProxyRegistry, REALTIME_PROXY_PATH } from '@memberjunction/ai';
 import { RealtimeProxyServer } from '../realtimeProxy/RealtimeProxyServer';
 
@@ -133,5 +135,49 @@ describe('C3: Origin allowlist (MJ_REALTIME_PROXY_ALLOWED_ORIGINS)', () => {
         const fake = new FakeSocket();
         proxy.TryHandleUpgrade(reqWithOrigin(`${REALTIME_PROXY_PATH}?ticket=nope`), sock(fake), HEAD);
         expect(fake.Written.join('')).toContain('401'); // ticket check, not the origin gate
+    });
+});
+
+describe('RealtimeProxyServer tunnel message size', () => {
+    let httpServer: Server;
+    let upstream: WebSocketServer;
+
+    beforeEach(async () => {
+        delete process.env['MJ_REALTIME_PROXY_ALLOWED_ORIGINS'];
+        upstream = new WebSocketServer({ port: 0, host: '127.0.0.1' });
+        await new Promise<void>((resolve) => upstream.once('listening', () => resolve()));
+        httpServer = createServer();
+        httpServer.on('upgrade', (request, socket, head) => {
+            if (!RealtimeProxyServer.Instance.TryHandleUpgrade(request, socket, head as Buffer)) {
+                socket.destroy();
+            }
+        });
+        await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', () => resolve()));
+    });
+
+    afterEach(async () => {
+        upstream.close();
+        await new Promise<void>((resolve) => httpServer.close(() => resolve()));
+    });
+
+    /** Opens a browser leg through the proxy, sends one message, and reports its close code ('open' when kept). */
+    async function sendThroughTunnel(message: Buffer): Promise<number | 'open'> {
+        const upstreamUrl = `ws://127.0.0.1:${(upstream.address() as AddressInfo).port}/v1/realtime`;
+        const ticket = RealtimeProxyRegistry.Instance.Issue({ UpstreamUrl: upstreamUrl, TTLSeconds: 60 });
+        const port = (httpServer.address() as AddressInfo).port;
+        const client = new WsClient(`ws://127.0.0.1:${port}${REALTIME_PROXY_PATH}?ticket=${ticket.ID}`);
+        client.on('error', () => undefined);
+        await new Promise<void>((resolve) => client.once('open', () => resolve()));
+        const closed = new Promise<number>((resolve) => client.once('close', (code: number) => resolve(code)));
+        client.send(message);
+        const kept = new Promise<'open'>((resolve) => setTimeout(() => resolve('open'), 1500));
+        const result = await Promise.race([closed, kept]);
+        client.terminate();
+        return result;
+    }
+
+    it('closes the browser leg with 1009 when a message is larger than 2 MiB', async () => {
+        const result = await sendThroughTunnel(Buffer.alloc(2 * 1024 * 1024 + 1, 0x61));
+        expect(result).toBe(1009);
     });
 });
