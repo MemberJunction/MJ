@@ -636,6 +636,7 @@ describe('the M7.8 harness: the data section committed, then the Registry Check 
     const m = tableOf('MJ: ML Models');
     const left = await pool.request().query<{ N: number }>(`SELECT COUNT(*) AS N FROM ${m} WHERE ArtifactStatus = 'unverified' AND Delivery IS NULL`);
     const unrun = await pool.request().query<{ N: number }>(`SELECT COUNT(*) AS N FROM ${m} WHERE Status = 'Published' AND Delivery IS NULL`);
-    expect([second === null ? 0 : second.Artifacts.Changed, left.recordset[0].N, unrun.recordset[0].N]).toEqual([0, 0, 0]);
+    // Nothing retrained either: the pipelines' own scoring writes between the runs are not input changes (I-1).
+    expect([second === null ? 0 : second.Artifacts.Changed, second === null ? 0 : second.ReEvaluation.Trained, left.recordset[0].N, unrun.recordset[0].N]).toEqual([0, 0, 0, 0]);
   }, CASE_TIMEOUT_MS);
 });
