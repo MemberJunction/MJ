@@ -56,6 +56,7 @@ export * from './custom/FieldSuggestionRecordChangeHook';
 export * from './custom/RestrictedFieldCommentClassifier';
 export * from './custom/RestrictedFieldDecision';
 export * from './custom/AnchoredConversationReadSecurityHook';
+export * from './custom/RecordChangeReadSecurityHook';
 export * from './custom/MJProjectEntityServer.server';
 export * from './custom/MJAIAgentSessionBridgeParticipantEntityServer.server';
 export * from './custom/MJAIRemoteBrowserProviderEntityServer.server';

@@ -82,6 +82,8 @@ function answer(params: RunViewParams, user: UserInfo | undefined): RunViewResul
                 return ok(FILES.filter(f => named(params, f.ProviderID) && named(params, `'${f.ProviderKey.toLowerCase()}'`)));
             }
             return ok(FILES.filter(f => named(params, f.ID) && (READABLE[user?.ID ?? ''] ?? []).includes(f.ID)).map(f => ({ ID: f.ID })));
+        case 'MJ: File Entity Record Links':
+            return ok([]); // no file here is linked to a record
         default:
             return { Success: false, Results: [], ErrorMessage: 'unknown entity' } as RunViewResult<object>;
     }
