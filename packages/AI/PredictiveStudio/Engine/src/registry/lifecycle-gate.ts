@@ -24,6 +24,7 @@ import type { MJMLModelEntity, MJMLOutputBindingEntity } from '@memberjunction/c
 import { EscapeSQLString, IsValidUUID, UUIDsEqual } from '@memberjunction/global';
 import {
   GateRules,
+  LifecycleLabels,
   LifecycleStates,
   PublishRules,
   RegistrySchemas,
@@ -31,7 +32,6 @@ import {
   StatusWriteRules,
   type Actor,
   type ArtifactLoad,
-  type ListsEveryMember,
   type OutputSemantics,
   type PersistedModelStatus,
   type PublishReverification,
@@ -142,12 +142,6 @@ export interface GateWritePermission {
 
 /** A passing publish check. */
 type PassedCheck = Extract<PublishCheck, { readonly Ok: true }>;
-
-/** The persisted statuses, for checking the status a lock query returned (a lock row is untyped query output). */
-const PERSISTED_STATUSES = ['Draft', 'Validated', 'Published', 'Archived', 'KeepBaseline', 'Unevaluated'] as const satisfies readonly PersistedModelStatus[];
-/** Compile-time completeness: a status added to `PersistedModelStatus` without listing it here breaks the build. */
-const persistedStatusesComplete: ListsEveryMember<PersistedModelStatus, (typeof PERSISTED_STATUSES)[number]> = true;
-void persistedStatusesComplete;
 
 /** The lifecycle gate. */
 export class LifecycleGate {
@@ -1050,7 +1044,7 @@ export class LifecycleGate {
 
   /** A status a lock query returned (untyped query output) as a persisted status; null for none or an unknown value. */
   private static persistedStatusOf(value: string | number | null | undefined): PersistedModelStatus | null {
-    return PERSISTED_STATUSES.find((s) => s === value) || null;
+    return typeof value === 'string' && LifecycleLabels.IsPersistedStatus(value) ? value : null;
   }
 
   /**

@@ -49,8 +49,6 @@ export class PredictiveStudioStatusGuard {
   public static readonly HookMark: symbol = Symbol.for('@memberjunction/predictive-studio:status-guard');
   /** The entity the guard checks. */
   public static readonly EntityName = 'MJ: ML Models';
-  /** The scheduled-job type whose runs alone may demote a Published model to Unevaluated (R9; shipped by M6.4). */
-  public static readonly RegistryCheckJobTypeName = RegistryCheckInitiators.JobTypeName;
 
   /** Registers the hook once per process; idempotent within a copy of the module (a flag) and across copies (the mark). */
   public static Register(): void {
@@ -185,7 +183,7 @@ export class PredictiveStudioStatusGuard {
     if (why === null) return true;
     return PredictiveStudioStatusGuard.refusal(
       model, 'actor-not-permitted',
-      `Published → Unevaluated is authorised only for a run of a ${PredictiveStudioStatusGuard.RegistryCheckJobTypeName} job (ruling R9); ${why}`,
+      `Published → Unevaluated is authorised only for a run of a ${RegistryCheckInitiators.JobTypeName} job (ruling R9); ${why}`,
     );
   }
 
