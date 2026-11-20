@@ -103,6 +103,7 @@ A message's audience is its container's members: a channel, a group chat, a mail
 - A public channel can map to a directory role ("everyone in Finance") instead of a member list.
 - This becomes one more step in the shared visibility rule (MJ 6765 Rule 3): a node derived from a container is visible only to its members, intersected across every reader of an audience.
 - If a container's membership cannot be resolved, nothing derived from it is shown.
+- Every container check writes Rule 3's visibility audit event (allowed, redacted or hidden, and why). Conversations are where an organization most needs to show who could see a decision drawn from them.
 
 ### B3. Org-chart reach, as an explicit policy
 
@@ -156,6 +157,8 @@ Each decision becomes a `Proposed` concept of type Policy or Process (the shippe
 | Decider | The MJ user who made or confirmed it, and their role at the time |
 | Evidence | A `SourcedFrom` edge to the pointer: thread, message, deep link, date |
 | Confidence | How sure the extractor is that a decision was made, separately from whether it is right |
+
+Before a decision record is written, its edges are checked against the edge-type endpoint rows (MJ 6765 Rule 2): a `Governs` edge from something that cannot govern, for example, is dropped and counted, not put in front of a reviewer. The extractor is the highest-volume proposer Canon will have, so it is where this check saves the most review time.
 
 ### Who said it matters
 
@@ -269,3 +272,4 @@ Each gate is the test that lets the next phase start; letters in brackets name t
 | Date | Change |
 |---|---|
 | 2026-11-19 | Draft created from the sponsor's working doc. |
+| 2026-11-20 | Tied to MJ 6765's additions from the TrustGraph comparison: container checks write the visibility audit event (B2), and decision records are validated against the edge-type contract before they are written (D). |
