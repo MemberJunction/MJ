@@ -62,8 +62,15 @@ function makeFilteredEntity(): EntityInfo {
 
 const SAVED_VIEW_ID = 'DDDDDDDD-0000-4000-8000-000000000002';
 
+/** How a stored view double loads data, and which user it was built for. */
+interface SavedViewOptions {
+    Owner?: UserInfo;
+    /** Applies `data` to the view and returns what `LoadFromData` returns. */
+    Load?: (view: MJUserViewEntityExtended, data: Record<string, unknown>) => boolean;
+}
+
 /** A stored view double: an entity object whose fields are plain properties. */
-function makeSavedView(whereClause: string): MJUserViewEntityExtended {
+function makeSavedView(whereClause: string, options: SavedViewOptions = {}): MJUserViewEntityExtended {
     const view = Object.create(BaseEntity.prototype) as MJUserViewEntityExtended;
     const fields = {
         ID: SAVED_VIEW_ID,
@@ -76,9 +83,13 @@ function makeSavedView(whereClause: string): MJUserViewEntityExtended {
     Object.defineProperties(view, {
         ...Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, { value: v, writable: true, configurable: true }])),
         PropertiesObject: { value: [], configurable: true },
+        ContextCurrentUser: { value: options.Owner, writable: true, configurable: true },
         GetAll: { value: () => ({ ...fields, WhereClause: view.WhereClause }), configurable: true },
         LoadFromData: {
             value: async (data: Record<string, unknown>) => {
+                if (options.Load) {
+                    return options.Load(view, data);
+                }
                 Object.assign(view, data);
                 return true;
             },
@@ -201,5 +212,35 @@ describe('Record Changes filter screen', () => {
         const view = await viewTheProviderRuns(screened, viewer);
 
         expect(view.WhereClause).toBe(`Type = 'Create'`);
+    });
+    it('runs the stored where clause when the caller\'s field access would leave it out of a copy built for the caller', async () => {
+        const owner = makeUser(SYSTEM_USER_ID);
+        vi.spyOn(ViewInfo, 'GetViewEntity').mockResolvedValue(makeSavedView(`Type = 'Create'`, { Owner: owner }));
+        vi.mocked(provider.GetEntityObject).mockImplementation(async (_name: string, user?: UserInfo) =>
+            makeSavedView('', {
+                Owner: user,
+                Load: (copy, data) => {
+                    const builtForCaller = Boolean(user && UUIDsEqual(user.ID, VIEWER_ID));
+                    Object.assign(copy, builtForCaller ? { ...data, WhereClause: '' } : data);
+                    return true;
+                },
+            }) as unknown as BaseEntity,
+        );
+        const params: RunViewParams = { EntityName: 'MJ: Record Changes', ViewID: SAVED_VIEW_ID, ResultType: 'simple' };
+
+        const screened = await runPreRunViewHooks(params, viewer, provider);
+        const view = await viewTheProviderRuns(screened, viewer);
+
+        expect(view.WhereClause).toBe(`Type = 'Create'`);
+    });
+
+    it('refuses the read when the copy of the saved view cannot be loaded', async () => {
+        vi.spyOn(ViewInfo, 'GetViewEntity').mockResolvedValue(makeSavedView(`Type = 'Create'`));
+        vi.mocked(provider.GetEntityObject).mockImplementation(async () =>
+            makeSavedView('', { Load: () => false }) as unknown as BaseEntity,
+        );
+        const params: RunViewParams = { EntityName: 'MJ: Record Changes', ViewID: SAVED_VIEW_ID, ResultType: 'simple' };
+
+        await expect(runPreRunViewHooks(params, viewer, provider)).rejects.toThrow(/saved view could not be read/);
     });
 });

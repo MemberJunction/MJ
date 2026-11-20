@@ -32,6 +32,7 @@ const LOCATOR_FIELDS = new Set([
 ]);
 
 const USER_VIEWS_ENTITY_NAME = 'MJ: User Views';
+const SAVED_VIEW_REFUSAL = 'The saved view could not be read, so the read of it was not run.';
 
 const CONTENT_REFUSAL =
     'Reads of MJ: Record Changes that filter, sort or search on change content must be limited to one entity ' +
@@ -78,7 +79,9 @@ async function loadSavedView(params: RunViewParams, user: UserInfo): Promise<MJU
 /**
  * The read with its stored view fixed: a copy of the view from one lookup, set as the read's
  * `ViewEntity`. The provider runs that copy, so a later lookup or a change to the cached view
- * cannot add clauses that the screen did not read. A read that names no stored view is returned as is.
+ * cannot add clauses that the screen did not read. The copy is built for the user the view object
+ * was built for (the caller when it has none), so it holds the same fields as the view. Throws when
+ * the copy cannot be loaded. A read that names no stored view is returned as is.
  */
 async function withFixedSavedView(params: RunViewParams, user: UserInfo, provider: IMetadataProvider): Promise<RunViewParams> {
     const view = await loadSavedView(params, user);
@@ -86,8 +89,10 @@ async function withFixedSavedView(params: RunViewParams, user: UserInfo, provide
         return view ? { ...params, ViewEntity: view } : params;
     }
     const data = view.GetAll();
-    const copy = await provider.GetEntityObject<MJUserViewEntityExtended>(USER_VIEWS_ENTITY_NAME, user);
-    await copy.LoadFromData(data);
+    const copy = await provider.GetEntityObject<MJUserViewEntityExtended>(USER_VIEWS_ENTITY_NAME, view.ContextCurrentUser ?? user);
+    if (!(await copy.LoadFromData(data))) {
+        throw new Error(SAVED_VIEW_REFUSAL);
+    }
     return { ...params, ViewEntity: copy };
 }
 

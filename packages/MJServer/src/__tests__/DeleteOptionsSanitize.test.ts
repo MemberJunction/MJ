@@ -104,6 +104,7 @@ describe('ResolverBase.DeleteRecord — the sanitize is wired, not just availabl
     function makeHarness() {
         const seen: { options?: DeleteOptionsInput } = {};
         const entityObject = {
+            EntityInfo: { Name: 'Customers' },
             InnerLoad: async () => true,
             GetAll: () => ({ ID: 'row-1' }),
             Delete: async (options: DeleteOptionsInput) => { seen.options = options; return true; },

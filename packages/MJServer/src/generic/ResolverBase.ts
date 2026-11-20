@@ -27,6 +27,8 @@ import {
   RecordChangePayloadFields,
   RecordPassesReadHooks,
   RowsPassingReadHooks,
+  LoadRecordPassingReadHooks,
+  IsPostRunViewProtectedEntity,
   RunView,
   RunViewParameters,
   RunViewParams,
@@ -2438,7 +2440,7 @@ export class ResolverBase {
           })
         );
 
-        if (await entityObject.InnerLoad(cKey)) {
+        if (await LoadRecordPassingReadHooks(entityObject, cKey, userInfo)) {
           // load worked, now, only IF we have OldValues, we need to check them against the values in the DB we just loaded.
           if (input.OldValues___) {
             // we DO have OldValues, so we need to do a more in depth analysis
@@ -2597,6 +2599,8 @@ export class ResolverBase {
    * moved the row outside the caller's scope without the check ever running. Evaluated last: it
    * builds the filter clause, and only callers with such a filter pay for the load. A missing user
    * (a user-cache miss) also loads: with no user the filter can't be ruled out.
+   *
+   * An entity guarded by read hooks always loads, so the hooks decide whether the caller may see the record.
    */
   protected MustLoadTruthFromDatabase(
     entityInfo: EntityInfo,
@@ -2613,6 +2617,7 @@ export class ResolverBase {
       hasDeniedReadFields ||
       hasNarrowedAuditPayload ||
       entityInfo.FieldLevelSecurityApplies ||
+      IsPostRunViewProtectedEntity(entityInfo.Name) ||
       !user ||
       entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Update, '').length > 0
     );
@@ -2916,7 +2921,7 @@ export class ResolverBase {
     if (await this.BeforeDelete(provider, key)) {
       // fire event and proceed if it wasn't cancelled
       const entityObject = await provider.GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
-      const loadSuccess = await entityObject.InnerLoad(key);
+      const loadSuccess = await LoadRecordPassingReadHooks(entityObject, key, this.GetUserFromPayload(userPayload));
       if (!loadSuccess) {
         // Use a generic message to avoid leaking whether a record exists — distinguishing
         // "not found" from "access denied" would let an attacker enumerate valid record IDs.
