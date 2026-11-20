@@ -135,6 +135,9 @@ export class PSModelsResourceComponent extends PSResourceBase {
 
   /** The Models app's sections (the registry and production), in nav order. */
   public readonly Sections: readonly PSSection[] = MODELS_SECTIONS;
+  /** Whether the tab's query params reached {@link OnQueryParamsChanged} (then the saved ones are not re-applied). */
+  private queryParamsDelivered = false;
+
   public initialModelId?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
   public IsNavCollapsed = false;
 
@@ -144,10 +147,15 @@ export class PSModelsResourceComponent extends PSResourceBase {
 
   override ngOnInit(): void {
     super.ngOnInit();
-    const qp = this.GetQueryParams();
-    const initial = qp['section'] as PSPanelKey | undefined;
-    if (initial && HasSection(this.Sections, initial)) this.ActiveSection = initial;
-    if (qp['modelId']) this.initialModelId = qp['modelId'];
+    // The base subscription replays the tab's current params through OnQueryParamsChanged while it subscribes; a
+    // workspace-restored tab's Data still holds the params it was saved with, so they apply only when nothing was
+    // delivered (a deep link to another model must win over the saved one, OF4-50).
+    if (!this.queryParamsDelivered) {
+      const qp = this.GetQueryParams();
+      const initial = qp['section'] as PSPanelKey | undefined;
+      if (initial && HasSection(this.Sections, initial)) this.ActiveSection = initial;
+      if (qp['modelId']) this.initialModelId = qp['modelId'];
+    }
     this.loadLayoutPrefs();
   }
 
@@ -188,6 +196,7 @@ export class PSModelsResourceComponent extends PSResourceBase {
   }
 
   protected override async OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): Promise<void> {
+    this.queryParamsDelivered = true;
     const next = params['section'] as PSPanelKey | undefined;
     if (next && next !== this.ActiveSection && HasSection(this.Sections, next)) {
       this.ActiveSection = next;
