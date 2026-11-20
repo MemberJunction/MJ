@@ -16,7 +16,7 @@ import type { EntityActionUXContext, EntityActionUXResult } from '@memberjunctio
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { ExportColumnTypeForSQLType } from '../utils/export-column.util';
-import { LogError, LogStatus, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression, CoerceImageSrc, ParseCssHexColor, CompositeKey, IsDateOnlySQLType, FormatDateOnly, EntityFieldTSType, BaseEntity, BaseEntityEvent } from '@memberjunction/core';
+import { LogError, LogStatus, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression, CoerceImageSrc, ParseCssHexColor, IsValidCssColor, CompositeKey, IsDateOnlySQLType, FormatDateOnly, EntityFieldTSType, BaseEntity, BaseEntityEvent } from '@memberjunction/core';
 import { UUIDsEqual, MJGlobal, MJEvent } from '@memberjunction/global';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { CommunicationEngineBase } from '@memberjunction/communication-types';
@@ -142,6 +142,32 @@ import {
 
 // Register AG Grid modules (required for v34+)
 ModuleRegistry.registerModules([AllCommunityModule]);
+
+const NAMED_CSS_COLOR_RE = /^[a-z]{3,30}$/i;
+const HSL_CSS_COLOR_RE = /^hsla?\(\s*[\d.]+(deg)?\s*,\s*[\d.]+%\s*,\s*[\d.]+%\s*(,\s*[\d.]+%?\s*)?\)$/i;
+
+/**
+ * Returns the trimmed value when it is a plain CSS colour (a named colour, hex, rgb(), rgba(),
+ * hsl() or hsla()), otherwise null. Grid state comes from the view's author, so a style value is
+ * used only when it passes this check.
+ */
+function safeCssColor(value: string | null | undefined): string | null {
+  const v = value?.trim();
+  if (!v) return null;
+  if (NAMED_CSS_COLOR_RE.test(v)) return v;
+  if (/^hsla?\(/i.test(v)) return HSL_CSS_COLOR_RE.test(v) ? v : null;
+  return IsValidCssColor(v) ? v : null;
+}
+
+/** Escapes a value for use inside a double-quoted HTML attribute. */
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
 
 /**
  * A modern, flexible data grid component for displaying and managing entity data.
@@ -3867,7 +3893,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       }
 
       // Build the span with optional style and class
-      const styleAttr = inlineStyle ? ` style="${inlineStyle}"` : '';
+      const styleAttr = inlineStyle ? ` style="${escapeHtmlAttribute(inlineStyle)}"` : '';
       const classAttr = extraClass ? ` class="${extraClass}"` : '';
 
       // Handle content that's already HTML (icons, etc.)
@@ -3892,7 +3918,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
    */
   private wrapWithStyle(content: string, style: string): string {
     if (!style) return content;
-    return `<span style="${style}">${content}</span>`;
+    return `<span style="${escapeHtmlAttribute(style)}">${content}</span>`;
   }
 
 
@@ -3905,8 +3931,10 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     if (style.bold) parts.push('font-weight: bold');
     if (style.italic) parts.push('font-style: italic');
     if (style.underline) parts.push('text-decoration: underline');
-    if (style.color) parts.push(`color: ${style.color}`);
-    if (style.backgroundColor) parts.push(`background-color: ${style.backgroundColor}`);
+    const color = safeCssColor(style.color);
+    const backgroundColor = safeCssColor(style.backgroundColor);
+    if (color) parts.push(`color: ${color}`);
+    if (backgroundColor) parts.push(`background-color: ${backgroundColor}`);
     return parts.join('; ');
   }
 
@@ -3918,8 +3946,10 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     if (style.bold) obj['fontWeight'] = 'bold';
     if (style.italic) obj['fontStyle'] = 'italic';
     if (style.underline) obj['textDecoration'] = 'underline';
-    if (style.color) obj['color'] = style.color;
-    if (style.backgroundColor) obj['backgroundColor'] = style.backgroundColor;
+    const color = safeCssColor(style.color);
+    const backgroundColor = safeCssColor(style.backgroundColor);
+    if (color) obj['color'] = color;
+    if (backgroundColor) obj['backgroundColor'] = backgroundColor;
     return obj;
   }
 

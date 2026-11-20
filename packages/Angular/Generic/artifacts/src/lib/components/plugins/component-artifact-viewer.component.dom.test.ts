@@ -37,7 +37,10 @@ class FeedbackPanelStub {
   @Output() public Closed = new EventEmitter<void>();
 }
 
-function makeComponentArtifactVersion(content: string): MJArtifactVersionEntity {
+function makeComponentArtifactVersion(
+  content: string,
+  author: { UserID: string | null; User: string | null } = { UserID: null, User: null },
+): MJArtifactVersionEntity {
   const ver = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
   Object.defineProperties(ver, {
     ID: { value: 'ver-comp-1', configurable: true, enumerable: true },
@@ -45,9 +48,62 @@ function makeComponentArtifactVersion(content: string): MJArtifactVersionEntity 
     VersionNumber: { value: 1, configurable: true, enumerable: true },
     Content: { value: content, configurable: true, enumerable: true },
     Configuration: { value: '{}', configurable: true, enumerable: true },
+    UserID: { value: author.UserID, configurable: true, enumerable: true },
+    User: { value: author.User, configurable: true, enumerable: true },
   });
   return ver;
 }
+
+const VIEWER_DECLARATIONS = [
+  ComponentArtifactViewerComponent,
+  ReactComponentStub,
+  InteractiveFormStub,
+  LoadingStub,
+  FeedbackPanelStub,
+];
+
+const CURRENT_USER_ID = 'B1A2C3D4-0000-0000-0000-000000000001';
+const OTHER_USER_ID = 'B1A2C3D4-0000-0000-0000-000000000002';
+
+function renderViewerForAuthor(author: { UserID: string | null; User: string | null }) {
+  const mockAdapter = { initialize: vi.fn(async () => undefined), isInitialized: vi.fn(() => false) };
+  const spec = JSON.stringify({ name: 'SharedWidget', code: 'function SharedWidget() { return null; }' });
+  const provider = { CurrentUser: { ID: CURRENT_USER_ID, Name: 'Viewer', Email: 'viewer@example.com' } } as IMetadataProvider;
+  const fixture = renderComponentFixture(ComponentArtifactViewerComponent, {
+    imports: [CommonModule, FormsModule],
+    declarations: VIEWER_DECLARATIONS,
+    providers: [{ provide: AngularAdapterService, useValue: mockAdapter }],
+    inputs: { Provider: provider, artifactVersion: makeComponentArtifactVersion(spec, author) },
+  });
+  fixture.detectChanges();
+  return fixture;
+}
+
+describe('ComponentArtifactViewerComponent code written by a different user', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    TestBed.resetTestingModule();
+  });
+
+  it('does not run the code until the viewer agrees, and names the author', () => {
+    const fixture = renderViewerForAuthor({ UserID: OTHER_USER_ID, User: 'Alice Author' });
+
+    expect(query(fixture, '.stub-react-component')).toBeNull();
+    expect(text(fixture, '.run-consent')).toContain('Alice Author');
+
+    (query(fixture, '.run-consent button') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(query(fixture, '.stub-react-component')).not.toBeNull();
+  });
+
+  it('does not run the code when the author is not known', () => {
+    const fixture = renderViewerForAuthor({ UserID: null, User: null });
+
+    expect(query(fixture, '.stub-react-component')).toBeNull();
+    expect(query(fixture, '.run-consent')).not.toBeNull();
+  });
+});
 
 describe('ComponentArtifactViewerComponent guest snapshot fail-closed security', () => {
   afterEach(() => {
@@ -118,7 +174,7 @@ describe('ComponentArtifactViewerComponent guest snapshot fail-closed security',
       inputs: {
         GuestSnapshotMode: false,
         Provider: mockProvider,
-        artifactVersion: makeComponentArtifactVersion(executableSpec),
+        artifactVersion: makeComponentArtifactVersion(executableSpec, { UserID: 'user-1', User: 'Test User' }),
       },
     });
     fixture.detectChanges();
