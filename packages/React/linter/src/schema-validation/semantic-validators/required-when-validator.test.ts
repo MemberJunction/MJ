@@ -51,6 +51,28 @@ describe('RequiredWhenValidator condition evaluation', () => {
         expect(violations).toHaveLength(1);
         expect(violations[0].type).toBe('unsupported-condition');
     });
+
+    it('refuses a condition with a method call that takes a callback', () => {
+        const violations = validator.validate(
+            contextWith('', 'sum'),
+            constraintWith("['sum'].some(x => x === siblingProp)"),
+        );
+        expect(violations.map(v => v.type)).toEqual(['unsupported-condition']);
+    });
+
+    it('refuses a method call other than includes on a literal array', () => {
+        const violations = validator.validate(
+            contextWith('', 'sum'),
+            constraintWith("''.padStart(3).length > 0"),
+        );
+        expect(violations.map(v => v.type)).toEqual(['unsupported-condition']);
+    });
+
+    it('refuses a condition longer than the length limit', () => {
+        const long = Array.from({ length: 20 }, (_, i) => `siblingProp === 'v${i}'`).join(' || ') + " || siblingProp === 'sum'";
+        const violations = validator.validate(contextWith('', 'sum'), constraintWith(long));
+        expect(violations.map(v => v.type)).toEqual(['unsupported-condition']);
+    });
 });
 
 describe('ComponentLinter with a required-when constraint from the spec', () => {
