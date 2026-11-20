@@ -2381,9 +2381,12 @@ export class SQLServerDataProvider
   /**
    * Renders a binary field value as a T-SQL hexadecimal literal (`0x…`).
    *
-   * A binary field's value in a `BaseEntity` is a base64 string. SQL Server has no implicit
-   * conversion from a quoted string to `varbinary` — a quoted base64 value would either fail or be
-   * stored as the bytes of its ASCII text — so the value is decoded and written as a hex literal,
+   * A binary field's value in a `BaseEntity` is a base64 string. A save sends a `varbinary` value to
+   * SQL Server as a typed parameter (see `saveParameters.ts`); this literal is used where the value
+   * must appear in SQL text: a `sql_variant` field, which a save keeps as its inline literal, and the
+   * rendered statement that is logged, captured into migrations and shown in errors. SQL Server has no
+   * implicit conversion from a quoted string to `varbinary` — a quoted base64 value would either fail
+   * or be stored as the bytes of its ASCII text — so the value is decoded and written as a hex literal,
    * which is unambiguous, needs no escaping and works on every SQL Server version. A byte array
    * (e.g. a Buffer set by server code) is accepted as well.
    *
@@ -2394,14 +2397,15 @@ export class SQLServerDataProvider
    *   the save instead of being stored as garbage.
    */
   /**
-   * Largest binary value, in decoded bytes, that a save will inline as a `0x…` hex literal.
+   * Largest binary value, in decoded bytes, that a save accepts.
    *
-   * A save is one T-SQL batch, and SQL Server caps a batch at 65,536 × the network packet size
-   * (256 MB at the default 4 KB). The batch is UTF-16, so the literal costs 4 bytes per blob byte,
-   * and with Record Changes on an update the same bytes travel again as base64 in `ChangesJSON`
-   * (old and new) and `FullRecordJSON` — about 12 bytes per blob byte, a ceiling near 20 MB. Node
-   * also holds the hex, the batch and those JSON strings at once. Above this limit the save fails
-   * here with a message that says so, instead of a batch-size error from the server.
+   * Every binary value a save writes is decoded and checked against this limit. The value reaches
+   * SQL Server as a typed `varbinary` parameter (see `saveParameters.ts`); the `0x…` hex literal is
+   * used only for a `sql_variant` field and for the rendered statement text that is logged and
+   * captured, where it costs two hex characters per byte. With Record Changes on an update the same
+   * bytes also travel as base64 in `ChangesJSON` (old and new) and `FullRecordJSON`, and Node holds
+   * the bytes and those strings at once. Above this limit the save fails here with a message that
+   * says so.
    */
   public static MaxInlineBinaryBytes: number = 32 * 1024 * 1024;
 

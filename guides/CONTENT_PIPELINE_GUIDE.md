@@ -509,7 +509,7 @@ See the **[Taxonomy & Tagging Guide](TAXONOMY_TAGGING_GUIDE.md)** for full detai
 
 - **Class**: [`GraphStage`](../packages/ContentPipeline/engine/src/stages/GraphStage.ts) (`@RegisterClass(BasePipelineStage, 'Graph')`)
 - **Entity**: `MJ: Content Items`
-- **Synthesizer Registry**: `BaseConceptSynthesizer` (`@memberjunction/content-pipeline-base`), defaulting to [`ManagedPromptConceptSynthesizer`](../packages/ContentPipeline/engine/src/ManagedPromptConceptSynthesizer.ts) (`@RegisterClass(BaseConceptSynthesizer, 'ManagedPrompt')`)
+- **Synthesizer Registry**: `BaseConceptSynthesizer` (`@memberjunction/content-pipeline-base`), defaulting to `DeterministicConceptSynthesizer` (`@RegisterClass(BaseConceptSynthesizer, 'Deterministic')`); set `GraphOverlay.SynthesizerKey` to `'ManagedPrompt'` to use [`ManagedPromptConceptSynthesizer`](../packages/ContentPipeline/engine/src/ManagedPromptConceptSynthesizer.ts)
 
 When a `ContentSource` has `GraphID` set (or `Configuration.GraphOverlay.EnableGraphOverlay = true`), `GraphStage` projects the item's segmented `MJ: Content Item Chunks` and governed `MJ: Content Item Tags` into `MJ: Graph Concepts` and `MJ: Graph Edges`:
 

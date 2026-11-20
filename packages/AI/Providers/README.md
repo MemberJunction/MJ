@@ -2,7 +2,7 @@
 
 This directory contains all provider-specific implementations of the MemberJunction AI framework interfaces. Each provider package implements the abstract base classes defined in `@memberjunction/ai` to integrate with a specific AI service, translating MJ's common interfaces into provider-specific API calls.
 
-There are 24 packages in total, grouped by category below.
+There are 34 provider packages in this directory, grouped by category below. (The Pinecone vector database provider is listed for convenience but lives in `packages/AI/Vectors/Providers`.)
 
 ## Packages
 
@@ -16,9 +16,11 @@ Direct integrations with large language model APIs.
 | [Gemini](./Gemini/readme.md) | `@memberjunction/ai-gemini` | Wrapper for Google Gemini AI Models, including the Gemini Decisions API (`gemini-decision-1`) |
 | [Groq](./Groq/readme.md) | `@memberjunction/ai-groq` | Wrapper for Groq AI LPU inference engine |
 | [Inception](./Inception/README.md) | `@memberjunction/ai-inception` | Inception Labs' Mercury diffusion models: the Mercury chat models, and the Mercury Decide decision model on Inception's Decisions API |
+| [MiniMax](./MiniMax/) | `@memberjunction/ai-minimax` | Wrapper for MiniMax AI models |
 | [Mistral](./Mistral/readme.md) | `@memberjunction/ai-mistral` | Wrapper for Mistral AI Models |
 | [OpenAI](./OpenAI/readme.md) | `@memberjunction/ai-openai` | Wrapper for OpenAI AI Models (GPT-4, etc.) |
 | [xAI](./xAI/README.md) | `@memberjunction/ai-xai` | Wrapper for xAI models (Grok) |
+| [Zhipu](./Zhipu/) | `@memberjunction/ai-zhipu` | Wrapper for Z.AI (Zhipu AI) GLM models |
 
 ### Cloud Platform Providers
 
@@ -37,8 +39,10 @@ Services that provide access to multiple models through a single API.
 
 | Package | npm | Description |
 |---------|-----|-------------|
+| [DeepInfra](./DeepInfra/) | `@memberjunction/ai-deepinfra` | Wrapper for DeepInfra serverless inference (OpenAI-compatible) |
 | [Fireworks](./Fireworks/README.md) | `@memberjunction/ai-fireworks` | Wrapper for Fireworks.ai AI Models |
 | [OpenRouter](./OpenRouter/README.md) | `@memberjunction/ai-openrouter` | Wrapper for OpenRouter AI inference services |
+| [SiliconFlow](./SiliconFlow/) | `@memberjunction/ai-siliconflow` | Wrapper for SiliconFlow serverless inference (OpenAI-compatible) |
 | [SystemOne](./SystemOne/README.md) | `@memberjunction/ai-systemone` | Decision models on any System One server (`/v1/systemone`): Kev on Modal, llama.cpp `llama-server`, TypeSafe; Perplexity's Decisions API (`pplx-decider-v1-27b`); and Subquadratic's SubQ Decisions API (SubQ Snap, `subq-snap-preview`, public preview) |
 
 ### Local Inference
@@ -57,12 +61,16 @@ Providers focused on specific AI capabilities beyond general-purpose LLMs.
 
 | Package | npm | Description |
 |---------|-----|-------------|
+| [AssemblyAI](./AssemblyAI/readme.md) | `@memberjunction/ai-assemblyai` | Wrapper for AssemblyAI - Voice Agent API realtime driver |
+| [Betty](./Betty/readme.md) | `@memberjunction/ai-betty` | Provider for Betty, the MJ-native, organization-scoped assistant (Betty Public API v1) |
 | [BettyBot](./BettyBot/README.md) | `@memberjunction/ai-betty-bot` | Wrapper for Betty Bot conversational AI |
 | [BlackForestLabs](./BlackForestLabs/README.md) | `@memberjunction/ai-blackforestlabs` | Wrapper for Black Forest Labs FLUX Image Generation Models |
 | [Cerebras](./Cerebras/README.md) | `@memberjunction/ai-cerebras` | Wrapper for Cerebras AI inference engine |
 | [Cohere](./Cohere/README.md) | `@memberjunction/ai-cohere` | Cohere AI Provider - Semantic reranking using Cohere's Rerank API |
-| [ElevenLabs](./ElevenLabs/README.md) | `@memberjunction/ai-elevenlabs` | Wrapper for ElevenLabs Audio Generation (TTS) |
+| [ElevenLabs](./ElevenLabs/readme.md) | `@memberjunction/ai-elevenlabs` | Wrapper for ElevenLabs Audio Generation (TTS) |
 | [HeyGen](./HeyGen/README.md) | `@memberjunction/ai-heygen` | Wrapper for HeyGen Video Generation |
+| [HuggingFace](./HuggingFace/readme.md) | `@memberjunction/ai-huggingface` | Wrapper for HuggingFace speech-to-speech - self-hosted realtime (voice) driver (OpenAI-Realtime-compatible) |
+| [Inworld](./Inworld/) | `@memberjunction/ai-inworld` | Wrapper for Inworld - Realtime API speech-to-speech voice driver |
 | [LocalEmbeddings](./LocalEmbeddings/README.md) | `@memberjunction/ai-local-embeddings` | Local Embeddings Models via Xenova/Transformers |
 
 ### Vector Database Providers

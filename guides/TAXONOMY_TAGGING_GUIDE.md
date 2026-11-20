@@ -84,6 +84,7 @@ erDiagram
         uuid TagID FK
         nvarchar Synonym
         nvarchar Source "Manual|LLM|Imported|Merged"
+        nvarchar Status "Active|Pending|Rejected"
     }
 
     TagSuggestion {
@@ -163,7 +164,7 @@ flowchart TD
     style Sugg fill:#ffe,stroke:#333
 ```
 
-The **`OnContentItemTagSaved` plugin point** is the seam where everything interesting happens. It is declared at [AutotagBaseEngine.ts:766](../packages/ContentAutotagging/src/Engine/generic/AutotagBaseEngine.ts#L766), wired up at [AutotagBaseEngine.ts:384](../packages/ContentAutotagging/src/Engine/generic/AutotagBaseEngine.ts#L384), and invoked at [AutotagBaseEngine.ts:807](../packages/ContentAutotagging/src/Engine/generic/AutotagBaseEngine.ts#L807). The default implementation calls into [AutotagEntity.BridgeContentItemTagToTaxonomy()](../packages/ContentAutotagging/src/Entity/generic/AutotagEntity.ts#L146), which reads per-source config and delegates to `TagEngine.ResolveTag()`.
+The **`OnContentItemTagSaved` plugin point** is the seam where everything interesting happens. It is declared at [AutotagBaseEngine.ts:840](../packages/ContentAutotagging/src/Engine/generic/AutotagBaseEngine.ts#L840), wired up by `InitializeTaxonomyBridge()` at [AutotagBaseEngine.ts:545](../packages/ContentAutotagging/src/Engine/generic/AutotagBaseEngine.ts#L545), and invoked at [AutotagBaseEngine.ts:889](../packages/ContentAutotagging/src/Engine/generic/AutotagBaseEngine.ts#L889). For entity sources, `AutotagEntity` installs its own callback, [bridgeContentItemTagToTaxonomy()](../packages/ContentAutotagging/src/Entity/generic/AutotagEntity.ts#L208), which reads per-source config and delegates to `TagEngine.ResolveTag()`. The engine's default callback, used for every other source type, delegates to `ContentItemTagBridge` with fixed settings (see the note under [Taxonomy modes](#taxonomy-modes)).
 
 If you want to intercept the bridge — for example to add custom governance, route to a different review surface, or attach domain-specific metadata to a `TaggedItem` — replace the callback. Do not subclass `BridgeContentItemTagToTaxonomy`; the seam is the callback.
 
@@ -237,6 +238,9 @@ Lower the band and you trade precision for recall (more auto-applied, fewer revi
 ## Taxonomy modes
 
 Each `ContentSource` picks one of four modes via `IContentSourceConfiguration.TagTaxonomyMode`. The mode controls *only* what happens at Tier 4 (no match). Tiers 0–3 always run.
+
+> [!NOTE]
+> Only entity sources (`AutotagEntity`) read `TagTaxonomyMode`, `TagRootID`, `TagMatchThreshold` and `SuggestThreshold` from the source. Currently, every other source type (website, cloud storage, local file system, RSS, upload) and the Content Pipeline's `TagStage` ignore these settings: they promote tags through [`ContentItemTagBridge`](../packages/AI/Knowledge/TagEngine/src/ContentItemTagBridge.ts), which always calls `ResolveTag()` in `'auto-grow'` mode across the whole taxonomy (no `TagRootID`) with a fixed match threshold of `0.8`.
 
 ```mermaid
 stateDiagram-v2
@@ -376,7 +380,7 @@ Synonyms are the **first thing the resolver checks**, before exact match. They t
 | `Imported` | Bulk-loaded from an external taxonomy file | Sync / migration |
 | `Merged` | `TagGovernanceEngine.MergeTags()` records the source tag's `Name` + every source `TagSynonym` row as synonyms of the surviving tag | Governance op |
 
-Synonyms are loaded once at `Config()` time into a `Map<lowercased synonym, TagID>` and consulted via `GetTagBySynonym(synonym, ctx?)`. Uniqueness is enforced per-tag via `UQ_TagSynonym_Tag_Synonym`.
+Synonyms are loaded once at `Config()` time into a `Map<lowercased synonym, TagID>` and consulted via `GetTagBySynonym(synonym, ctx?)`. The map includes every `MJ:Tag Synonyms` row whatever its `Status` (`Active`, `Pending` or `Rejected`); `GetTagBySynonym` only requires the tag it points to to be `Active` (and visible in scope). Uniqueness is enforced per-tag via `UQ_TagSynonym_Tag_Synonym`.
 
 **Always seed synonyms generously.** "AI" / "Artificial Intelligence" / "ML" / "Machine Learning" — different teams will say each. The synonym table is your shock absorber.
 
@@ -435,13 +439,13 @@ stateDiagram-v2
 | `LowUsage` | TagHealthJob | Tag has `< maxUsage` applications in the lookback window. |
 | `WideNode` | TagHealthJob | Tag has too many direct children (`> MaxChildren` if set, else `> maxImplicitChildren`). |
 
-Reviewers in the inbox UI see the reason, the source content item (when applicable), the source text snippet, the best-match tag (when applicable), and the score. Each suggestion can be approved, merged, or rejected; bulk approval is supported for the `MergeCandidate` cohort.
+Reviewers work in Explorer's **Tags → Suggestions** tab, which lists pending suggestions with the proposed name, reason, best-match tag (when applicable) and score, filterable by reason, minimum score and text; selecting a row opens a drawer that adds the source text snippet. Each suggestion can be created as a new tag, merged into its best match (when it has one), or rejected. Selected rows can be bulk-approved ("Approve all (auto-pick best)") or bulk-rejected.
 
 ---
 
 ## Tag Health
 
-Tag Health is co-occurrence-driven analytics that emits suggestions to keep the taxonomy from rotting. It runs in the post-run hook ([AutotagBaseEngine.ts:218 / 1728](../packages/ContentAutotagging/src/Engine/generic/AutotagBaseEngine.ts#L218)) immediately after `TagCoOccurrenceEngine.RecomputeCoOccurrence()`.
+Tag Health is co-occurrence-driven analytics that emits suggestions to keep the taxonomy from rotting. It runs in the post-run hook ([AutotagBaseEngine.ts:218 / 1728](../packages/ContentAutotagging/src/Engine/generic/AutotagBaseEngine.ts#L218)) immediately after `TagCoOccurrenceEngine.RecomputeCoOccurrence()`. In Explorer, **Tags → Health** shows the last run's counts as summary cards (merge candidates, low usage, wide nodes); each card opens **Tags → Suggestions** filtered to that reason, where the suggestions are reviewed.
 
 ### The three emitters
 
@@ -461,7 +465,7 @@ Today: opportunistically after each autotag run. There is a code path to wire it
 
 ## Per-source configuration knobs
 
-All knobs live on `ContentSource.Configuration`, a JSON blob that CodeGen exposes as the typed `_IContentSourceConfiguration` accessor. Source: [IContentSourceConfiguration.ts](../metadata/entities/JSONType-interfaces/IContentSourceConfiguration.ts).
+All knobs live on `ContentSource.Configuration`, a JSON blob that CodeGen exposes as the typed `_IContentSourceConfiguration` accessor. Source: [IContentSourceConfiguration.ts](../metadata/entities/JSONType-interfaces/IContentSourceConfiguration.ts). The tag-resolution knobs (`TagTaxonomyMode`, `TagRootID`, `TagMatchThreshold`, `SuggestThreshold`) currently take effect only for entity sources; see the note under [Taxonomy modes](#taxonomy-modes).
 
 | Field | Type | Default | What it controls |
 |---|---|---|---|
@@ -699,11 +703,11 @@ Either the tag is `IsGlobal=1` (the `Save()` invariant should have rejected the 
 
 ### 5. "Suggestions of `Reason='ConstrainedMode'` keep piling up — why isn't the steward seeing them?"
 
-Check that the Suggestion Inbox UI is filtered to `Status='Pending'` and that `SourceContentSourceID` filter isn't accidentally narrowing them out. Also verify the steward has read permission on `MJ:Tag Suggestions` — the entity is access-controlled like any other.
+**Tags → Suggestions** loads only `Status='Pending'` rows (newest first, up to 1,000); check that its reason, minimum-score and search filters aren't narrowing them out. Also verify the steward has read permission on `MJ:Tag Suggestions` — the entity is access-controlled like any other.
 
 ### 6. "Renaming a tag broke matching for a week."
 
-Two possibilities. (1) The `Save()` hook didn't re-embed — check the server logs for `TagGovernanceEngine: Failed to re-embed tag ...`. (2) The merge didn't write a synonym — `MergeTags` does this automatically; manual rename via `RenameTag` does *not* (rename is a name change, not a merge). When you intend "users will type the old name," rename + manually insert a `TagSynonym` row.
+Two possibilities. (1) The `Save()` hook didn't re-embed — check the server logs for `TagGovernanceEngine: Failed to re-embed tag ...`. (2) The merge didn't write a synonym — `MergeTags` does this automatically; manual rename via `RenameTag` does *not* (rename is a name change, not a merge). When you intend "users will type the old name," rename + manually insert a `TagSynonym` row. Note that editing a tag in **Tags → Taxonomy** saves `Name` and `Description` directly on the `MJ:Tags` row (the `Save()` hook still re-embeds); it does not call `RenameTag`, so `DisplayName` is not updated and no `Renamed` row is written to `MJ: Tag Audit Logs`.
 
 ### 7. "The LLM keeps returning a UUID as a tag name."
 
