@@ -137,6 +137,7 @@ New derived providers bring the missing kinds in (F9): `ComponentMetadataEdgePro
 - One direction per type, written on the row and in the guide. Proposed: **artifact → concept** for `Defines`, `Measures`, `Describes` and `Implements`, which is what `CanonGraphEngine`, `plans/canon-semantic-graph.md`, MJ 6667 and the agent actions already assume. The pipeline and the seed descriptions change to match. Existing stored edges are flipped once by a Record Process with a dry run. This fixes F4. (The review may prefer concept → artifact; either works, as long as there is one.)
 - One spelling per name and a real inverse instead of a second directed type (`Broader Than` with inverse `Narrower Than`; `NarrowerThan` retired).
 - Endpoint rows are seeded for the governed types, so the server subclass rejects, for example, a `Measures` edge whose source is not a query or a view.
+- **Proposers check the contract before they write.** The endpoint rows are also what every proposer (Rule 5) validates against *before* creating an edge, so a malformed proposal is never put in front of a reviewer. A violation is logged and counted per proposer, not written. The server subclass stays the backstop. *(From the TrustGraph comparison: its extractor rejects triples that break the ontology's domain and range at extraction time.)*
 
 ### Rule 3. Visibility: one rule, called by search and by the graph
 
@@ -147,6 +148,8 @@ One function in core, `ResolveVisibility(nodes, principals)`, answers for a batc
 3. Per-record permission through `PermissionEngine` where a domain exists (queries, skills, agents, artifacts).
 4. The derived-content gate: chunk → item → root item → entity record document → origin record, and concept → its `SourcedFrom` evidence.
 5. Audience intersection: kept only when every reader passes.
+
+The result for each node is one of three outcomes: **allowed**, **redacted** (visible, but label, description or specification withheld) or **hidden**, the same three MJ 6762's provenance policies already return. Each decision writes one **visibility audit event** (reader or audience, node, outcome, and the step that decided it), so search and the graph are audited the same way and an organization can show who could see which definition, and why. Events are written per batch, not per node, to keep the cost to one write per call. *(From the TrustGraph comparison: its SHACL policy layer returns allowed, filtered or violation per node and publishes an audit event for each evaluation.)*
 
 `SearchEngine.VerifyOriginRecords` and the graph's provenance access policies become callers of it (F8). Then:
 
@@ -168,6 +171,8 @@ A `CanonContextResolver` (in `@memberjunction/ai-agents`, beside the existing `A
 - **Dedup**: a concept reached through the graph lane and through `Get Graph Context` appears once.
 - **One budget** per run, split by source, configurable per agent.
 - **Citations**: every item carries its node key, so the agent can cite it and usage can be counted (MJ 6213's short-ID citations).
+- **Retrieval trace**: the resolver records which concepts, edges and evidence chunks each answer actually used, with their visibility outcome, on the agent run's existing record (no new table). The health scorecard and MJ 6213's usage signal read from it, and it answers "why did the agent say that". *(From the TrustGraph comparison: it stores a trace of every retrieval in a graph of its own.)*
+- **Seeds and filters**: the resolver accepts known concept or record seeds and edge-type filters, as `Get Graph Context` already does, and skips the step that infers concepts from the question when seeds are given. Restricting edge types per hop, rather than for the whole walk, is a later refinement if a use case needs it.
 
 The five routes in F5 become callers of the resolver. Nothing is removed in the first step; each route switches over behind a flag and is compared on the integration suite before the old path is retired.
 
@@ -180,7 +185,8 @@ The content pipeline is the training half of Canon, and it should hand its resul
 - When a scope reads a vector index fed by a content source with `GraphID`, `ExplainScope` reports that graph, and the scope can include it in one step (F10).
 - A concept found by search or by the graph carries its `SourcedFrom` chunks as evidence, so the resolver can show the document behind a definition without a second search.
 - `DeleteStage` and `DeleteContentItemStage` remove the edges whose endpoint they delete, in the same unit of work as the row delete (F11).
-- Every proposer, including the pipeline, DBAutoDoc (MJ 6586), the learning loop (MJ 6213) and usage mining, follows MJ 6675 decisions 2, 3 and 6: write `Proposed` rows through the one ledger, skip names already in the graph, write nothing by default.
+- Every proposer, including the pipeline, DBAutoDoc (MJ 6586), the learning loop (MJ 6213), usage mining, continuous ingest (MJ 6769) and taxonomy import, follows MJ 6675 decisions 2, 3 and 6: write `Proposed` rows through the one ledger, skip names already in the graph, write nothing by default. Each also validates its edges against the endpoint rows first (Rule 2).
+- **Taxonomy import is one more proposer.** An organization can seed a Canon graph from an existing vocabulary in SKOS (or the class and property hierarchy of an OWL or RDFS file): preferred label → concept name, alternative labels → synonyms, definition → description, broader and narrower → the concept hierarchy, related → `RelatedTo`. It writes `Proposed` concepts and `Inferred` edges through the ledger like any other proposer, dry run by default. Exporting a graph as a portable bundle is the other half of this and is tracked as its own `canon` issue in MJ 6675's backlog. *(From the TrustGraph comparison: it imports OWL and RDF and moves knowledge between deployments as portable bundles.)*
 - Permission metadata stamped on vectors at ingest (role, owner, tenant) stays the recall mechanism; Rule 3 stays the truth.
 
 ### Health: one scorecard over every member
@@ -188,7 +194,8 @@ The content pipeline is the training half of Canon, and it should hand its resul
 Because every member now has a `CanonState` and a node key, one scheduled job can score all of Canon, not just workflows:
 
 - approvals that went `Stale`, and how long they have been stale
-- members nobody has used in the trailing window (usage comes from Rule 4's citations, query runs and flow runs)
+- members nobody has used in the trailing window (usage comes from Rule 4's citations and retrieval traces, query runs and flow runs)
+- proposals rejected for breaking the edge-type contract, per proposer (Rule 2)
 - `Contradicts` edges awaiting review
 - questions that returned `NO_MATCH` or `AMBIGUOUS_CONCEPT` (MJ 6667), as gap alerts
 - the workflow telemetry and promotion discovery that already exist in `ai-core-plus`
@@ -209,10 +216,10 @@ Each phase is small enough to be one or two `canon` issues. Phases U0 to U2 have
 
 | Phase | What | Fixes | Depends on | Done when |
 |---|---|---|---|---|
-| **U0** | Edge type registry: seed the provider-only types, fix spellings and inverses, seed endpoint rows, add the name-resolution unit test. Pick one direction for the four concept edges, fix the synthesizer and the seed descriptions, and ship the flip Record Process. Graph edge cleanup in the two delete stages. | F3, F4, F11 | MJ 6762 merged (it edits the same seed file) | Test green; a pipeline-trained metric concept appears in `ExplainEntity`'s `MeasuringQueries` |
+| **U0** | Edge type registry: seed the provider-only types, fix spellings and inverses, seed endpoint rows, add the name-resolution unit test. Pick one direction for the four concept edges, fix the synthesizer and the seed descriptions, and ship the flip Record Process. Graph edge cleanup in the two delete stages. | F3, F4, F11 | MJ 6762 merged (it edits the same seed file) | Test green; a pipeline-trained metric concept appears in `ExplainEntity`'s `MeasuringQueries`; the pipeline rejects an edge that breaks its endpoint rows before writing it |
 | **U1** | `BaseCanonMemberAdapter` and adapters for every kind in F1; `GraphEngine` reads `CanonState` in its label step; `ApprovalStateOf` wired for fingerprinted kinds. | F1, F2 | U0 | A query edited after approval disappears from `CanonContext` and reappears when re-approved, in an integration bundle |
 | **U2** | New derived providers: components, dashboards, approved action code, active skills, saved flow agents. | F9 | U1 | Each kind is reachable from a concept in `MJ Canon` with no stored edge |
-| **U3** | `ResolveVisibility` in core; search's origin gate and the graph's provenance policies call it; `Graph Permissions` and `Search Scope Permissions` as `PermissionEngine` domains. | F7, F8 | MJ 6675 5b and 5c designs agreed | One test suite exercises the same fixtures through search and through the graph and gets the same answers, for one reader and for an audience |
+| **U3** | `ResolveVisibility` in core; search's origin gate and the graph's provenance policies call it; `Graph Permissions` and `Search Scope Permissions` as `PermissionEngine` domains. | F7, F8 | MJ 6675 5b and 5c designs agreed | One test suite exercises the same fixtures through search and through the graph and gets the same answers, for one reader and for an audience, and both write the same visibility audit events |
 | **U4** | `Graph` lane kind and `MJ: Search Scope Graphs`; `ExplainScope` reports graphs and the graphs behind a scope's indexes. | F6, F10 | U3; schema agreed at a monthly review | A scope with no graph rows reaches no graph |
 | **U5** | `CanonContextResolver`; the five routes switch over behind a flag; precedence, dedup, one budget, citations. | F5 | U1, U3, MJ 6213 precedence merged | The deterministic integration tier passes with the flag on; prompts for a fixed fixture contain each concept once |
 | **U6** | The Canon health scorecard as a scheduled job, and the monthly report. | — | U1, U5 | First report produced on a demo instance |
@@ -275,3 +282,4 @@ Indicative only; each issue names its own.
 |---|---|
 | 2026-11-19 | Plan created. |
 | 2026-11-20 | Recorded `topherHunnewell`'s input on open questions 1, 3, 5 and 6 and proposed answers. Rule 1 gains the stale policy, the adapter boundary and the Open App guard. Questions 2 and 4 remain open. |
+| 2026-11-20 | Folded in four ideas from a review of TrustGraph (an open-source RDF/OWL "ontology runtime for agents"): proposers validate against the edge-type contract (Rule 2); three visibility outcomes and a visibility audit event (Rule 3); retrieval traces and seeded walks (Rule 4); taxonomy import as a proposer (Rule 5). Export bundles go to MJ 6675's backlog. |
