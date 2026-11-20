@@ -327,5 +327,31 @@ describe('UpgradeApp — hands the previous version\'s packages to the package s
         expect(warnings.some((w) => w.includes('package pins'))).toBe(true);
     });
 
+    it('removes the old pins and installs when the new version omits the packages block', async () => {
+        vi.mocked(FindInstalledApp).mockResolvedValue(installed('app-x', manifest('1.0.0', packages)));
+        vi.mocked(ListInstalledApps).mockResolvedValue([installed('app-x', manifest('1.0.0', packages))]);
+        serveManifests({ 'https://github.com/test/app-x': manifest('2.0.0') });
+
+        const result = await UpgradeApp({ AppName: 'app-x' }, context);
+
+        expect(result.Success).toBe(true);
+        expect(vi.mocked(AddAppPackages)).toHaveBeenCalledWith(expect.objectContaining({
+            ServerPackages: [], ClientPackages: [], SharedPackages: [],
+            PreviousPackages: { Server: packages.server, Client: packages.client, Shared: packages.shared },
+        }));
+        expect(vi.mocked(RunPackageInstallAsync)).toHaveBeenCalled();
+    });
+
+    it('does no package work when neither version declares packages', async () => {
+        vi.mocked(FindInstalledApp).mockResolvedValue(installed('app-x', manifest('1.0.0')));
+        vi.mocked(ListInstalledApps).mockResolvedValue([installed('app-x', manifest('1.0.0'))]);
+        serveManifests({ 'https://github.com/test/app-x': manifest('2.0.0') });
+
+        const result = await UpgradeApp({ AppName: 'app-x' }, context);
+
+        expect(result.Success).toBe(true);
+        expect(vi.mocked(AddAppPackages)).not.toHaveBeenCalled();
+        expect(vi.mocked(RunPackageInstallAsync)).not.toHaveBeenCalled();
+    });
 });
 

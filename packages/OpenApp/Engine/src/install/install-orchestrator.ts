@@ -2444,7 +2444,8 @@ function ToPackageGroups(packages: MJAppManifest['packages']): AppPackageGroups 
  * The installed version's packages, read from the persisted `ManifestJSON` (the documented source
  * of truth), plus every package another installed app declares, which must keep its pin. Returns
  * undefined, after a warning, when that manifest cannot be parsed: the upgrade then only adds, as
- * it did before, and never fails over an unreadable historical record.
+ * it did before, and never fails over an unreadable historical record. Also undefined when the
+ * installed version declared no packages: there is nothing to remove.
  */
 async function ResolveReplacedPackages(existingApp: InstalledAppInfo, context: OrchestratorContext): Promise<ReplacedPackages | undefined> {
   let previous: MJAppManifest;
@@ -2458,9 +2459,10 @@ async function ResolveReplacedPackages(existingApp: InstalledAppInfo, context: O
     );
     return undefined;
   }
-  if (!previous.packages) return undefined;
+  const previousGroups = ToPackageGroups(previous.packages);
+  if (previousGroups.Server.length + previousGroups.Client.length + previousGroups.Shared.length === 0) return undefined;
   return {
-    PreviousPackages: ToPackageGroups(previous.packages),
+    PreviousPackages: previousGroups,
     RetainPackages: ListDeclaredPackageNames(await ListOtherAppManifests(existingApp.Name, context)),
   };
 }
@@ -2470,7 +2472,9 @@ async function ResolveReplacedPackages(existingApp: InstalledAppInfo, context: O
  *
  * @param packageVersion - The version string to write (may differ from manifest.version when an explicit version is requested)
  * @param versionStrategy - Override for version strategy (e.g., 'exact' when explicit version is requested)
- * @param replaced - Upgrade only: the replaced version's packages, whose pins the new manifest no longer places are removed
+ * @param replaced - Upgrade only: the replaced version's packages, whose pins the new manifest no longer places are removed.
+ *   With it, the step runs even when the new manifest declares no packages, so a version that drops them all
+ *   still loses its old pins (#6789).
  */
 async function HandlePackageInstallation(
   manifest: MJAppManifest,
@@ -2480,7 +2484,7 @@ async function HandlePackageInstallation(
   verbose?: boolean,
   replaced?: ReplacedPackages,
 ): Promise<InternalResult> {
-  if (!manifest.packages) {
+  if (!manifest.packages && !replaced) {
     return { Success: true };
   }
 
@@ -2511,7 +2515,7 @@ async function HandlePackageInstallation(
   // If the manifest declares a package prefix, bump ALL matching dependencies
   // across the workspace (not just the manifest-declared ones). This handles
   // consumer-added packages like bcsaas-settings, bcsaas-credentials, etc.
-  const prefix = manifest.packages.prefix;
+  const prefix = manifest.packages?.prefix;
   if (prefix) {
     const bareVersion = packageVersion ?? manifest.version;
     const updatedCount = BumpPrefixedDependencies(context.RepoRoot, prefix, bareVersion);
@@ -2521,7 +2525,7 @@ async function HandlePackageInstallation(
   }
 
   context.Callbacks?.OnProgress?.('Packages', 'Running package install...');
-  const installResult = await RunPackageInstallAsync(context.RepoRoot, verbose, manifest.packages.registry, context.PackageManager);
+  const installResult = await RunPackageInstallAsync(context.RepoRoot, verbose, manifest.packages?.registry, context.PackageManager);
   if (installResult.DevWorkspaceParent) {
     context.Callbacks?.OnProgress?.(
       'Packages',

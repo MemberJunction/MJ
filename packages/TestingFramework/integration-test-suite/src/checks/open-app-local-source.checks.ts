@@ -266,14 +266,16 @@ function writeDependencyApps(fixture: OpenAppLocalSourceFixture): void {
 
 /**
  * `moved` v1.0.0 declares its library under `shared`, so it is pinned in both workspaces; v1.1.0
- * (written by OLS11) moves it to `server`. The real bizapps-forms 0.14.0 → 1.0.0 shape (#6789).
+ * (written by OLS11) moves it to `server`, the real bizapps-forms 0.14.0 → 1.0.0 shape (#6789);
+ * v1.2.0 omits the optional `packages` block, so it ships no packages at all.
  */
 function movedManifest(fixture: OpenAppLocalSourceFixture, version: string): Record<string, unknown> {
     const server = { name: packageName(fixture, 'moved-server'), role: 'library' };
     const lib = { name: packageName(fixture, 'moved-lib'), role: 'library' };
     return manifest(appName(fixture, 'moved'), version, {
         schema: { name: schemaName(fixture, 'moved') },
-        packages: version === '1.0.0' ? { server: [server], shared: [lib] } : { server: [server, lib] },
+        ...(version === '1.0.0' && { packages: { server: [server], shared: [lib] } }),
+        ...(version === '1.1.0' && { packages: { server: [server, lib] } }),
     });
 }
 
@@ -524,6 +526,7 @@ async function checkUpgradeDropsMovedPackagePin(ctx: IntegrationCheckContext): P
     requireSchemaRights(fixture);
     const name = appName(fixture, 'moved');
     const lib = packageName(fixture, 'moved-lib');
+    const server = packageName(fixture, 'moved-server');
     track(fixture, name, schemaName(fixture, 'moved'));
     const install = engineRun(ctx);
     assertSucceeded(await InstallApp({ Source: 'file:openapps/moved' }, install.Context), install, 'install with a shared package');
@@ -538,6 +541,16 @@ async function checkUpgradeDropsMovedPackagePin(ctx: IntegrationCheckContext): P
     Assert(!existsSync(workspaceLink(fixture, CLIENT_WORKSPACE, lib)), 'the install unlinked the package from the client workspace');
     AssertEqual(workspaceDependency(fixture, SERVER_WORKSPACE, lib), 'workspace:*', 'the server workspace keeps the package');
     AssertEqual((await requireApp(ctx, name)).Version, '1.1.0', 'the app records the new folder version');
+
+    writeManifest(appFolder(fixture, 'moved'), movedManifest(fixture, '1.2.0'));
+    const drop = engineRun(ctx);
+    assertSucceeded(await UpgradeApp({ AppName: name }, drop.Context), drop, 'upgrade to a version with no packages block');
+
+    for (const pkg of [server, lib]) {
+        AssertEqual(workspaceDependency(fixture, SERVER_WORKSPACE, pkg), undefined, `a version with no packages block removes the server pin of ${pkg}`);
+        Assert(!existsSync(workspaceLink(fixture, SERVER_WORKSPACE, pkg)), `the install unlinked ${pkg} from the server workspace`);
+    }
+    AssertEqual((await requireApp(ctx, name)).Version, '1.2.0', 'the app records the version with no packages');
 }
 
 async function checkFileDependency(ctx: IntegrationCheckContext): Promise<void> {
@@ -587,7 +600,7 @@ export const OpenAppLocalSourceChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.OLS8`, Name: 'OLS8: app packages are written as workspace:* and linked by pnpm', Fn: checkWorkspacePackages },
     { Id: `${BUNDLE}.OLS9`, Name: 'OLS9: a file: dependency installs from its folder first', Fn: checkFileDependency },
     { Id: `${BUNDLE}.OLS10`, Name: 'OLS10: a folder outside the repository is refused', Fn: checkFolderOutsideRepository },
-    { Id: `${BUNDLE}.OLS11`, Name: 'OLS11: an upgrade that moves a package from shared to server removes its client pin', Fn: checkUpgradeDropsMovedPackagePin },
+    { Id: `${BUNDLE}.OLS11`, Name: 'OLS11: an upgrade removes the pins the new version no longer lists (moved to server, then no packages block)', Fn: checkUpgradeDropsMovedPackagePin },
 ];
 
 for (const check of OpenAppLocalSourceChecks) {
