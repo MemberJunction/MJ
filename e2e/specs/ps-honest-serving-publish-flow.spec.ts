@@ -21,17 +21,8 @@
  *   PS_UNEVALUATED_MODEL_ID=<a pre-change model the migration made Unevaluated> \
  *   npx playwright test --config e2e/playwright.config.ts e2e/specs/ps-honest-serving-publish-flow.spec.ts
  */
-import { test, expect } from '../fixtures';
+import { test, expect, EXPLORER_BASE_URL, RedeemSignInLink, RequiredEnv } from '../fixtures';
 import type { Locator, Page } from '@playwright/test';
-
-const BASE = process.env.PW_BASE_URL || 'http://localhost:4241';
-
-/** A required environment value, or a thrown error naming it. */
-function need(name: string): string {
-  const v = process.env[name];
-  if (!v) throw new Error(`${name} is required (see the spec header)`);
-  return v;
-}
 
 /**
  * Open an Explorer path signed in. With PS_SIGN_IN_URL, redeem it in this tab and wait until Explorer has kept the
@@ -39,13 +30,8 @@ function need(name: string): string {
  */
 async function openSignedIn(page: Page, path: string): Promise<void> {
   const url = process.env.PS_SIGN_IN_URL;
-  if (url) {
-    await page.goto(url, { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: 'Continue to sign in' }).click();
-    await page.waitForURL((u) => u.href.startsWith(BASE), { timeout: 60_000 });
-    await page.waitForFunction(() => !window.location.hash.includes('token='), undefined, { timeout: 60_000 });
-  }
-  await page.goto(`${BASE}${path}`, { waitUntil: 'domcontentloaded' });
+  if (url) await RedeemSignInLink(page, url);
+  await page.goto(`${EXPLORER_BASE_URL}${path}`, { waitUntil: 'domcontentloaded' });
 }
 
 /** Opens the model registry on `modelId` and returns its detail pane. */
@@ -79,7 +65,7 @@ async function historyRows(detail: Locator): Promise<Locator> {
 
 test.describe('Predictive Studio — the publish and sign-off flow', () => {
   test('publishes a Validated model from the panel and the publish record names the user', async ({ page }) => {
-    const detail = await openModel(page, need('PS_VALIDATED_MODEL_ID'));
+    const detail = await openModel(page, RequiredEnv('PS_VALIDATED_MODEL_ID'));
     const panel = detail.locator('[data-testid="ps-sign-off-panel"]');
     await expect(panel.locator('[data-testid="ps-evidence-primary"]')).toHaveText(/\d\.\d{3}/, { timeout: 60_000 });
     await panel.locator('[data-testid="ps-sign-off-publish"]').click();
@@ -92,7 +78,7 @@ test.describe('Predictive Studio — the publish and sign-off flow', () => {
   });
 
   test('a sign-off then publishes a model held by requiresHumanSignOff', async ({ page }) => {
-    const detail = await openModel(page, need('PS_SIGN_OFF_MODEL_ID'));
+    const detail = await openModel(page, RequiredEnv('PS_SIGN_OFF_MODEL_ID'));
     const panel = detail.locator('[data-testid="ps-sign-off-panel"]');
     await expect(panel.locator('[data-testid="ps-sign-off-required"]')).toContainText('Sign-off required by the protocol', { timeout: 60_000 });
     await expect(panel.locator('[data-testid="ps-sign-off-publish"]')).toBeDisabled();
@@ -111,12 +97,12 @@ test.describe('Predictive Studio — the publish and sign-off flow', () => {
 
 test.describe('Predictive Studio — the model detail tabs', () => {
   test('the publish history shows an automatic publish and a withheld one with their initiators', async ({ page }) => {
-    const auto = await historyRows(await openModel(page, need('PS_AUTO_PUBLISHED_MODEL_ID')));
+    const auto = await historyRows(await openModel(page, RequiredEnv('PS_AUTO_PUBLISHED_MODEL_ID')));
     const published = auto.filter({ hasText: 'automated gate' }).first();
     await expect(published).toContainText('Published', { timeout: 60_000 });
     await expect(published.locator('[data-testid="ps-publish-initiator"]')).toHaveAttribute('data-record-id', /[0-9A-Fa-f-]{36}/);
 
-    const withheld = await historyRows(await openModel(page, need('PS_WITHHELD_MODEL_ID')));
+    const withheld = await historyRows(await openModel(page, RequiredEnv('PS_WITHHELD_MODEL_ID')));
     const refusal = withheld.filter({ hasText: 'withheld' }).first();
     await expect(refusal).toBeVisible({ timeout: 60_000 });
     await expect(refusal.locator('[data-testid="ps-publish-refusal"]')).toHaveText(/\w+ \w+/);
@@ -124,7 +110,7 @@ test.describe('Predictive Studio — the model detail tabs', () => {
   });
 
   test('the monitoring tab renders the rows RunModelMonitoring wrote', async ({ page }) => {
-    const detail = await openModel(page, need('PS_MONITORED_MODEL_ID'));
+    const detail = await openModel(page, RequiredEnv('PS_MONITORED_MODEL_ID'));
     await detail.locator('[data-testid="ps-detail-tab-monitoring"]').click();
     const monitoring = detail.locator('[data-testid="ps-model-monitoring"]');
     const periods = monitoring.locator('[data-testid="ps-monitoring-period"]');
@@ -136,7 +122,7 @@ test.describe('Predictive Studio — the model detail tabs', () => {
   });
 
   test('an Unevaluated model shows its chip and reason', async ({ page }) => {
-    const detail = await openModel(page, need('PS_UNEVALUATED_MODEL_ID'));
+    const detail = await openModel(page, RequiredEnv('PS_UNEVALUATED_MODEL_ID'));
     await expect(detail.locator('[data-testid="ps-lifecycle-chip"]')).toContainText('retrain to publish', { timeout: 60_000 });
     await expect(detail.locator('[data-testid="ps-lifecycle-reason"]')).toContainText('Trained before the Predictive Studio lifecycle gate');
     const row = page.locator('[data-testid="ps-registry-row"].sel');

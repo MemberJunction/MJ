@@ -20,17 +20,8 @@
  *   npx playwright test --config e2e/playwright.config.ts e2e/specs/ps-honest-serving-record-panel.spec.ts
  */
 import { execFileSync } from 'child_process';
-import { test, expect } from '../fixtures';
+import { test, expect, EXPLORER_BASE_URL, RedeemSignInLink, RequiredEnv } from '../fixtures';
 import type { Page } from '@playwright/test';
-
-const BASE = process.env.PW_BASE_URL || 'http://localhost:4241';
-
-/** A required environment value, or a thrown error naming it. */
-function need(name: string): string {
-  const v = process.env[name];
-  if (!v) throw new Error(`${name} is required (see the spec header)`);
-  return v;
-}
 
 /** A SQL string literal of `value` (quotes doubled). */
 function sqlText(value: string): string {
@@ -39,7 +30,7 @@ function sqlText(value: string): string {
 
 /** The rows of `query` through PS_SQLCMD, each row's columns split on its `|` separator. */
 function sqlRows(query: string): string[][] {
-  const argv: unknown = JSON.parse(need('PS_SQLCMD'));
+  const argv: unknown = JSON.parse(RequiredEnv('PS_SQLCMD'));
   if (!Array.isArray(argv) || argv.length === 0 || !argv.every((a): a is string => typeof a === 'string')) {
     throw new Error('PS_SQLCMD must be a JSON array of strings (the sqlcmd argv without the query)');
   }
@@ -60,19 +51,11 @@ function storedPrediction(): StoredPrediction {
   const rows = sqlRows(
     `SELECT l.ValueNumeric, r.ModelVersion, l.MLScoringRunID, l.MLModelScoringBindingID FROM __mj.vwLatestFeatureValues l ` +
     `JOIN __mj.MLScoringRun r ON r.ID = l.MLScoringRunID ` +
-    `WHERE l.RecordID = ${sqlText(need('PS_SCORED_PERSON_ID'))} AND l.FeatureName = ${sqlText(need('PS_BINDING_FEATURE_NAME'))} AND l.Source = N'Model'`,
+    `WHERE l.RecordID = ${sqlText(RequiredEnv('PS_SCORED_PERSON_ID'))} AND l.FeatureName = ${sqlText(RequiredEnv('PS_BINDING_FEATURE_NAME'))} AND l.Source = N'Model'`,
   );
   if (rows.length !== 1) throw new Error(`expected one latest Model value of the scored record, found ${rows.length}`);
   const [value, version, run, binding] = rows[0];
   return { ValueNumeric: Number(value), ModelVersion: Number(version), ScoringRunID: run, BindingID: binding };
-}
-
-/** Redeem a one-time sign-in link in this tab and wait until Explorer has kept the session token. */
-async function signIn(page: Page, url: string): Promise<void> {
-  await page.goto(url, { waitUntil: 'domcontentloaded' });
-  await page.getByRole('button', { name: 'Continue to sign in' }).click();
-  await page.waitForURL((u) => u.href.startsWith(BASE), { timeout: 60_000 });
-  await page.waitForFunction(() => !window.location.hash.includes('token='), undefined, { timeout: 60_000 });
 }
 
 /**
@@ -80,10 +63,10 @@ async function signIn(page: Page, url: string): Promise<void> {
  * Predictive Studio door has loaded (PR 3's form: the shell opens it as a record tab on in-page navigation).
  */
 async function openScoredRecord(page: Page, signInUrl: string): Promise<void> {
-  await signIn(page, signInUrl);
-  await page.goto(`${BASE}/app/predictive-studio/Studio`, { waitUntil: 'domcontentloaded' });
+  await RedeemSignInLink(page, signInUrl);
+  await page.goto(`${EXPLORER_BASE_URL}/app/predictive-studio/Studio`, { waitUntil: 'domcontentloaded' });
   await expect(page.locator('mj-ps-studio-resource')).toBeVisible({ timeout: 60_000 });
-  const target = `/app/predictive-studio/record/${encodeURIComponent(need('PS_SCORED_ENTITY_NAME'))}/${need('PS_SCORED_PERSON_ID')}`;
+  const target = `/app/predictive-studio/record/${encodeURIComponent(RequiredEnv('PS_SCORED_ENTITY_NAME'))}/${RequiredEnv('PS_SCORED_PERSON_ID')}`;
   await page.evaluate((p) => { history.pushState(null, '', p); dispatchEvent(new PopStateEvent('popstate')); }, target);
   await expect(page.locator('mj-model-prediction-panel')).toHaveCount(1, { timeout: 60_000 });
 }
@@ -91,7 +74,7 @@ async function openScoredRecord(page: Page, signInUrl: string): Promise<void> {
 test.describe('Predictive Studio — the record panel reads predictions from Feature Values', () => {
   test('an authorized user sees the prediction with its lineage on a scored Person', async ({ page }) => {
     const stored = storedPrediction();
-    await openScoredRecord(page, need('PS_AUTHORIZED_SIGN_IN_URL'));
+    await openScoredRecord(page, RequiredEnv('PS_AUTHORIZED_SIGN_IN_URL'));
     // the card's title is the model's record-panel label, so the binding's card is found by its binding ID
     const card = page.locator(`[data-testid="ps-prediction-card"][data-binding-id="${stored.BindingID}" i]`);
     await expect(card).toHaveCount(1, { timeout: 60_000 });
@@ -106,10 +89,10 @@ test.describe('Predictive Studio — the record panel reads predictions from Fea
     // the prediction is stored: its absence from the page is the view gate, not a missing score
     expect(storedPrediction().ScoringRunID.length).toBeGreaterThan(0);
     const pipelineValues = sqlRows(
-      `SELECT COUNT(*) FROM __mj.vwFeatureValues WHERE RecordID = ${sqlText(need('PS_SCORED_PERSON_ID'))} AND RecordProcessID IS NOT NULL AND Role = N'Champion'`,
+      `SELECT COUNT(*) FROM __mj.vwFeatureValues WHERE RecordID = ${sqlText(RequiredEnv('PS_SCORED_PERSON_ID'))} AND RecordProcessID IS NOT NULL AND Role = N'Champion'`,
     );
     expect(Number(pipelineValues[0][0])).toBeGreaterThan(0);
-    await openScoredRecord(page, need('PS_RESTRICTED_SIGN_IN_URL'));
+    await openScoredRecord(page, RequiredEnv('PS_RESTRICTED_SIGN_IN_URL'));
     await expect(page.locator('[data-testid="ps-derived-values"]')).toBeVisible({ timeout: 60_000 });
     await expect(page.locator('[data-testid="ps-prediction-card"]')).toHaveCount(0);
   });
