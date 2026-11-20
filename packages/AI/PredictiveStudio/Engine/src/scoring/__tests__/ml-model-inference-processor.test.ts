@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { UserInfo, IMetadataProvider, BaseEntity, RunViewParams, RunViewResult } from '@memberjunction/core';
+import { RunView, type UserInfo, type IMetadataProvider, type BaseEntity, type RunViewParams, type RunViewResult } from '@memberjunction/core';
 import type { MJMLModelEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import type {
   PredictRequest,
@@ -148,15 +148,19 @@ class TestAssembler extends FeatureAssemblyExecutor {
  * A provider whose only use is the pipeline-row fallback read (`RunView` of `MJ: ML Training Pipelines`): it answers
  * with `rows` and records each read. The one deliberate test-double cast at the seam, shared by every fallback test.
  */
-function pipelineRowProvider(rows: Record<string, string>[], reads: string[]): IMetadataProvider {
-  const slice = {
+/** The provider members the pipeline-row read calls, answering every view with `rows` and logging each read. */
+function pipelineRowSlice(rows: Record<string, string>[], reads: string[]) {
+  return {
     EntityByID: (): undefined => undefined,
     RunView: async (params: RunViewParams): Promise<RunViewResult<Record<string, string>>> => {
       reads.push(`${params.EntityName}|${params.ExtraFilter}`);
       return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0, ErrorMessage: '' };
     },
   };
-  return slice as unknown as IMetadataProvider;
+}
+
+function pipelineRowProvider(rows: Record<string, string>[], reads: string[]): IMetadataProvider {
+  return pipelineRowSlice(rows, reads) as unknown as IMetadataProvider;
 }
 
 const CTX: RecordProcessorContext = {
@@ -339,8 +343,8 @@ describe('MLModelInferenceProcessor — a model trained before Prediction Units 
     const row = { TargetEntity: 'Members', SourceBindings: JSON.stringify([{ Kind: 'Entity', Ref: 'Members' }]), FeatureSteps: JSON.stringify({ Steps: [{ Id: 's1', Kind: 'select', Columns: ['tenure'] }] }), AsOfStrategy: JSON.stringify({ Mode: 'none' }) };
     const known = (names: readonly string[]): IMetadataProvider => {
       const reads: string[] = [];
-      const base = pipelineRowProvider([row], reads);
-      const slice = { EntityByID: base.EntityByID, RunView: base.RunView, EntityByName: (n: string) => (names.includes(n) ? { Name: n } : undefined) };
+      const base = pipelineRowSlice([row], reads);
+      const slice = { EntityByID: base.EntityByID, RunView: RunView.FromMetadataProvider(base).ProviderToUse.RunView, EntityByName: (n: string) => (names.includes(n) ? { Name: n } : undefined) };
       return slice as unknown as IMetadataProvider;
     };
     const bytes = new TextEncoder().encode('fake-model-bytes');

@@ -5,7 +5,7 @@
  * Feature Value.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { RunViewParams } from '@memberjunction/core';
+import { RunView, type RunViewParams } from '@memberjunction/core';
 
 import { ProductionScoreRecordSetRunner } from '../score-record-set.runner';
 import type { ScoreRecordSetRequest } from '../score-record-set.action';
@@ -38,7 +38,8 @@ function run(request: Omit<ScoreRecordSetRequest, 'contextUser' | 'provider'>) {
 
 /** The reads of the target entity, as RunView params. */
 function targetReads(): RunViewParams[] {
-  const calls = vi.mocked(world.Provider.RunView).mock.calls;
+  // the world provider's RunView (a vi.fn), typed through the RunView seam the runner reads with
+  const calls = vi.mocked(RunView.FromMetadataProvider(world.Provider).ProviderToUse.RunView).mock.calls;
   return calls.map(([params]) => params).filter((p) => p.EntityName === MEMBERSHIPS);
 }
 
