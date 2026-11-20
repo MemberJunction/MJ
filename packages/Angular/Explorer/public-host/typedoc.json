@@ -1,0 +1,9 @@
+{
+  "extends": [
+    "../../../../typedoc.base.json"
+  ],
+  "entryPoints": [
+    "src/public-api.ts",
+    "src/bootstrap.ts"
+  ]
+}
