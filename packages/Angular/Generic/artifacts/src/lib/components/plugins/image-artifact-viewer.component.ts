@@ -1,7 +1,7 @@
 import { ChangeDetectorRef, Component, OnDestroy, OnInit, Type } from '@angular/core';
 import { DataSnapshot } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
+import { BaseArtifactViewerPluginComponent, FILE_EXPORT_KEY, type ArtifactExportOption } from '../base-artifact-viewer.component';
 import { ArtifactFileService } from '../../services/artifact-file.service';
 import { IArtifactPreviewComponent } from '../../interfaces/artifact-viewer-plugin.interface';
 import { ImageArtifactPreviewComponent } from '../previews/image-artifact-preview.component';
@@ -602,6 +602,15 @@ export class ImageArtifactViewerComponent extends BaseArtifactViewerPluginCompon
      * in its current display state — used by snapshot-consuming features
      * (e.g. agent context capture, share / export flows).
      */
+    /** The original file, once it has loaded. */
+    public override GetExportOptions(): ArtifactExportOption[] {
+        return this.ImageUrl ? [this.FileExportOption('Image', 'fa-solid fa-file-image', 'The original file')] : [];
+    }
+
+    public override async RunExport(key: string): Promise<void> {
+        return key === FILE_EXPORT_KEY ? this.OnDownload() : super.RunExport(key);
+    }
+
     public override GetCurrentStateSnapshot(): DataSnapshot | null {
         if (!this.artifactVersion) {
             return null;

@@ -37,11 +37,11 @@ import {
   type GuestShareLinkRecord,
 } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import type { PdfOrientation } from '@memberjunction/ng-react';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ArtifactTypePluginViewerComponent } from './artifact-type-plugin-viewer.component';
 import {
+  ArtifactExportOption,
   ArtifactNavigationAnchor,
   ArtifactSelectionAnchor,
   ArtifactViewerTab,
@@ -2841,23 +2841,34 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     this.ShareRequested.emit(this.artifactId);
   }
 
-  /** True while a PDF export is being prepared: the header button shows progress and ignores clicks. */
-  IsExportingPDF = false;
+  /** True while an export is being prepared: the header button shows progress and ignores clicks. */
+  IsExporting = false;
 
-  /** Whether the header's PDF menu (portrait / landscape) is open. */
-  ShowPDFMenu = false;
+  /** Whether the header's Export menu is open. */
+  ShowExportMenu = false;
 
-  TogglePDFMenu(): void {
-    this.ShowPDFMenu = !this.ShowPDFMenu;
+  /** The export formats the loaded viewer offers. The header shows no Export button when empty. */
+  get ExportOptions(): ArtifactExportOption[] {
+    return this.pluginViewer?.GetExportOptions() ?? [];
+  }
+
+  ToggleExportMenu(): void {
+    this.ShowExportMenu = !this.ShowExportMenu;
+  }
+
+  /** True when the option at `index` starts a new group, so the menu shows the group's heading above it. */
+  StartsExportGroup(options: ArtifactExportOption[], index: number): boolean {
+    const group = options[index]?.Group;
+    return !!group && group !== options[index - 1]?.Group;
   }
 
   /** Closes header dropdown menus on any click outside them (menus stop their own clicks) or on Escape. */
   @HostListener('document:click')
   @HostListener('document:keydown.escape')
-  ClosePDFMenu(): void {
+  CloseHeaderMenus(): void {
     let changed = false;
-    if (this.ShowPDFMenu) {
-      this.ShowPDFMenu = false;
+    if (this.ShowExportMenu) {
+      this.ShowExportMenu = false;
       changed = true;
     }
     if (this.ShowVersionDropdown) {
@@ -2869,21 +2880,24 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     }
   }
 
-  /** Downloads what the viewer shows as an A4 PDF in the chosen orientation, from the header menu. */
-  async OnExportPDF(orientation: PdfOrientation): Promise<void> {
-    this.ShowPDFMenu = false;
-    if (this.IsExportingPDF) {
+  /** Runs the chosen Export menu option through the viewer and tells the user if it fails. */
+  async OnExport(option: ArtifactExportOption): Promise<void> {
+    if (option.DisabledReason) {
       return;
     }
-    this.IsExportingPDF = true;
+    this.ShowExportMenu = false;
+    if (this.IsExporting) {
+      return;
+    }
+    this.IsExporting = true;
     this.cdr.detectChanges();
     try {
-      await this.pluginViewer?.ExportPDF(orientation);
+      await this.pluginViewer?.RunExport(option.Key);
     } catch (error) {
-      console.error('[ArtifactViewerPanel] PDF export failed:', error);
-      this.notificationService.CreateSimpleNotification('Could not create the PDF. See the browser console for details.', 'error', 5000);
+      console.error(`[ArtifactViewerPanel] Export "${option.Key}" failed:`, error);
+      this.notificationService.CreateSimpleNotification(`Could not export ${option.Label}. See the browser console for details.`, 'error', 5000);
     } finally {
-      this.IsExportingPDF = false;
+      this.IsExporting = false;
       this.cdr.detectChanges();
     }
   }

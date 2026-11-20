@@ -250,15 +250,15 @@
   color: var(--mj-brand-primary);
 }
 
-.export-pdf-menu {
+.export-menu {
   position: relative;
 }
 
-.export-pdf-dropdown {
+.export-dropdown {
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  min-width: 170px;
+  min-width: 220px;
   padding: 4px;
   background: var(--mj-bg-surface);
   border: 1px solid var(--mj-border-default);
@@ -267,9 +267,24 @@
   z-index: 1000;
 }
 
-.export-pdf-dropdown button {
+.export-group-label {
+  padding: 6px 10px 2px;
+  color: var(--mj-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.export-group-label:not(:first-child) {
+  margin-top: 4px;
+  border-top: 1px solid var(--mj-border-subtle);
+  padding-top: 8px;
+}
+
+.export-dropdown button {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   width: 100%;
   padding: 6px 10px;
@@ -282,16 +297,39 @@
   cursor: pointer;
 }
 
-.export-pdf-dropdown button:hover {
+.export-dropdown button:not(:disabled):hover,
+.export-dropdown button:not(:disabled):focus-visible {
   background: var(--mj-bg-surface-sunken);
 }
 
-.export-pdf-dropdown button i {
+.export-dropdown button:disabled {
+  color: var(--mj-text-disabled);
+  cursor: not-allowed;
+}
+
+.export-dropdown button:disabled i,
+.export-dropdown button:disabled .export-option-desc {
+  color: var(--mj-text-disabled);
+}
+
+.export-dropdown button i {
   width: 14px;
+  margin-top: 2px;
   color: var(--mj-text-secondary);
 }
 
-.export-pdf-btn {
+.export-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.export-option-desc {
+  color: var(--mj-text-muted);
+  font-size: 11px;
+}
+
+.export-btn {
   background: none;
   border: none;
   cursor: pointer;
@@ -306,16 +344,16 @@
   height: 28px;
 }
 
-.export-pdf-btn:hover:not(:disabled) {
+.export-btn:hover:not(:disabled) {
   background: var(--mj-bg-surface-sunken);
   color: var(--mj-brand-primary);
 }
 
-.export-pdf-btn:disabled {
+.export-btn:disabled {
   cursor: progress;
 }
 
-.export-pdf-btn i {
+.export-btn i {
   font-size: 14px;
 }
 

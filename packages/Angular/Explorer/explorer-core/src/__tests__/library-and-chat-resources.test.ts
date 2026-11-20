@@ -312,6 +312,32 @@ describe('ChatConversationsResource — DriverClass-based routing across appMana
   });
 });
 
+describe('Artifact navigation requests from artifact viewers', () => {
+  it('opens the requested artifact in its own tab from the conversations resource', async () => {
+    const resource = Object.create(ChatConversationsResource.prototype) as ChatConversationsResource;
+    const openArtifact = vi.fn(() => 'tab-9');
+    const openNavItem = vi.fn(async () => null);
+    Object.assign(resource as object, { navigationService: { OpenArtifact: openArtifact, OpenNavItemByName: openNavItem } });
+
+    await resource.OnNavigationRequest({ navItemName: '', ArtifactID: 'art-9', ArtifactName: 'Sales — Live Sheet' });
+
+    expect(openArtifact).toHaveBeenCalledWith('art-9', 'Sales — Live Sheet');
+    expect(openNavItem).not.toHaveBeenCalled();
+  });
+
+  it('opens the requested artifact in its own tab from an artifact tab', async () => {
+    const resource = Object.create(ArtifactResource.prototype) as ArtifactResource;
+    const openArtifact = vi.fn(() => 'tab-9');
+    const openNavItem = vi.fn(async () => null);
+    Object.assign(resource as object, { navigationService: { OpenArtifact: openArtifact, OpenNavItemByName: openNavItem } });
+
+    await resource.OnNavigationRequest({ navItemName: '', ArtifactID: 'art-9', ArtifactName: 'Sales — Live Sheet' });
+
+    expect(openArtifact).toHaveBeenCalledWith('art-9', 'Sales — Live Sheet');
+    expect(openNavItem).not.toHaveBeenCalled();
+  });
+});
+
 describe('ArtifactResource — viewer-scoped permission resolution', () => {
   it('consults server ResolveArtifactUserPermissions via ExecuteGQL first and falls back to ArtifactPermissionEngine', async () => {
     const resolveSpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockResolvedValue({

@@ -1648,6 +1648,18 @@ describe('DashboardResource AI pane', () => {
     expect(doubles.userInfo.SetSettingDebounced).not.toHaveBeenCalled();
   });
 
+  it('opens an artifact the chat asks for in its own tab', async () => {
+    const { resource, internals } = await configTab();
+    const openArtifact = vi.fn(() => 'tab-9');
+    const openNavItem = vi.fn(async () => null);
+    internals['navigationService'] = { OpenArtifact: openArtifact, OpenNavItemByName: openNavItem };
+
+    resource.OnChatNavigationRequest({ navItemName: '', ArtifactID: 'art-9', ArtifactName: 'Sales — Live Sheet' });
+
+    expect(openArtifact).toHaveBeenCalledExactlyOnceWith('art-9', 'Sales — Live Sheet');
+    expect(openNavItem).not.toHaveBeenCalled();
+  });
+
   it('logs a page the chat links to that the shell cannot open', async () => {
     const { resource, internals } = await configTab();
     const openNavItem = vi.fn(async () => {

@@ -66,24 +66,31 @@
             <i class="fa-solid fa-star-half-stroke"></i>
           </button>
         }
-        @if (pluginViewer?.SupportsPDFExport) {
-          <div class="export-pdf-menu" (click)="$event.stopPropagation()">
-            <button class="export-pdf-btn"
-                    (click)="TogglePDFMenu()"
-                    [disabled]="IsExportingPDF"
+        @let exportOptions = ExportOptions;
+        @if (exportOptions.length > 0) {
+          <div class="export-menu" (click)="$event.stopPropagation()">
+            <button class="export-btn"
+                    (click)="ToggleExportMenu()"
+                    [disabled]="IsExporting"
                     aria-haspopup="menu"
-                    [attr.aria-expanded]="ShowPDFMenu"
-                    [title]="IsExportingPDF ? 'Preparing PDF…' : 'Export as PDF'">
-              <i class="fa-solid" [ngClass]="IsExportingPDF ? 'fa-spinner fa-spin' : 'fa-file-pdf'"></i>
+                    [attr.aria-expanded]="ShowExportMenu"
+                    [title]="IsExporting ? 'Exporting…' : 'Export'">
+              <i class="fa-solid" [ngClass]="IsExporting ? 'fa-spinner fa-spin' : 'fa-file-export'"></i>
             </button>
-            @if (ShowPDFMenu) {
-              <div class="export-pdf-dropdown" role="menu">
-                <button type="button" role="menuitem" (click)="OnExportPDF('portrait')">
-                  <i class="fa-solid fa-file"></i> PDF – Portrait
-                </button>
-                <button type="button" role="menuitem" (click)="OnExportPDF('landscape')">
-                  <i class="fa-solid fa-file fa-rotate-90"></i> PDF – Landscape
-                </button>
+            @if (ShowExportMenu) {
+              <div class="export-dropdown" role="menu">
+                @for (option of exportOptions; track option.Key; let i = $index) {
+                  @if (StartsExportGroup(exportOptions, i)) {
+                    <div class="export-group-label" role="presentation">{{ option.Group }}</div>
+                  }
+                  <button type="button" role="menuitem" (click)="OnExport(option)" [disabled]="!!option.DisabledReason" [attr.aria-disabled]="option.DisabledReason ? 'true' : null">
+                    <i [ngClass]="option.Icon" aria-hidden="true"></i>
+                    <span class="export-option-text">
+                      <span class="export-option-label">{{ option.Label }}</span>
+                      @if (option.DisabledReason || option.Description) { <span class="export-option-desc">{{ option.DisabledReason || option.Description }}</span> }
+                    </span>
+                  </button>
+                }
               </div>
             }
           </div>
