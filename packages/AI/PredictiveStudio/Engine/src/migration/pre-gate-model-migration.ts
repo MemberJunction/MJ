@@ -250,7 +250,7 @@ export class PreGateModelMigration {
     if (!(await PreGateModelMigration.HasPendingWork(ctx))) return null;
     const reverified = await PreGateModelMigration.ReverifyEvidenceBearing(config.BatchSize, ctx);
     const artifacts = await PreGateModelMigration.MigrateArtifacts(config.BatchSize, ctx);
-    const schedules = await PreGateModelMigration.DisableDemotedSchedules(ctx);
+    const schedules = await PreGateModelMigration.DisableDemotedSchedules(config.BatchSize, ctx);
     const reEvaluation = await PreGateModelMigration.ReEvaluate(config.RetrainPerRun, ctx, schedules.Disabled);
     return { Reverified: reverified, Artifacts: artifacts, Schedules: schedules, ReEvaluation: reEvaluation, DisabledProcessIDs: schedules.Disabled };
   }
@@ -314,26 +314,31 @@ export class PreGateModelMigration {
   }
 
   /**
-   * §5.6 step 4 (D4-14): the scoring Action of every non-serving `Unevaluated` model disabled, and every scheduled
-   * `'ML Model'` Record Process without `autoTrain` whose configured model is a non-serving `Unevaluated` one has its
-   * schedule disabled (its ID listed for step 5). A process whose model keeps serving, or one with `autoTrain`, keeps
-   * its schedule.
+   * §5.6 step 4 (D4-14), at most `batch` of each per run: the scoring Action of each non-serving `Unevaluated` model no
+   * earlier run of the job handled (its `Details` list the models whose Action it disabled) is disabled, and each
+   * scheduled `'ML Model'` Record Process without `autoTrain` whose configured model is a non-serving `Unevaluated` one
+   * — only processes whose schedule is still enabled — has its schedule disabled (its ID listed for step 5). A process
+   * whose model keeps serving, or one with `autoTrain`, keeps its schedule. A run after every demoted model was handled
+   * changes and calls nothing.
    *
    * @throws Error when a read or a save fails
    */
-  public static async DisableDemotedSchedules(ctx: PreGateMigrationContext): Promise<ScheduleResult> {
+  public static async DisableDemotedSchedules(batch: number, ctx: PreGateMigrationContext): Promise<ScheduleResult> {
     const demoted = await PreGateModelMigration.ReadModels(`Status='Unevaluated' AND ServingWhileUnevaluated=0`, ctx);
+    const handled = (await PreGateModelMigration.EarlierRunRecords(ctx)).flatMap((r) => r.ScoringActionsDisabled);
     const actions: string[] = [];
-    for (const model of demoted) {
+    for (const model of ExcludeByUUIDs(demoted, handled, (m) => m.ID).slice(0, batch)) {
       await ctx.Seams.ScoringActions.DisableForModel(model, ctx.ContextUser, ctx.Provider);
       actions.push(model.ID);
     }
-    const disabled: string[] = [];
     const demotedIds = new UUIDSet(demoted.map((m) => m.ID));
-    for (const rp of await PreGateModelMigration.ReadScoringProcesses(`ScheduleEnabled=1`, ctx)) {
+    const due = (await PreGateModelMigration.ReadScoringProcesses(`ScheduleEnabled=1`, ctx)).filter((rp) => {
       const config = PreGateModelMigration.configurationOf(rp);
       const modelId = JsonParse.JsonString(config, 'modelId');
-      if (config['autoTrain'] !== undefined || modelId === null || !demotedIds.Has(modelId)) continue;
+      return config['autoTrain'] === undefined && modelId !== null && demotedIds.Has(modelId);
+    });
+    const disabled: string[] = [];
+    for (const rp of due.slice(0, batch)) {
       rp.ScheduleEnabled = false;
       if (!(await rp.Save())) throw new Error(`Disabling the schedule of Record Process ${rp.ID} failed: ${rp.LatestResult?.CompleteMessage || 'unknown error'}`);
       disabled.push(rp.ID);
@@ -649,11 +654,21 @@ export class PreGateModelMigration {
 
   /**
    * The Record Processes earlier runs of this job disabled: `DisabledProcessIDs` under {@link DetailsKey} in the
-   * `Details` of every run of the job the current run belongs to. A `Details` that is not JSON is skipped.
+   * `Details` of every run of the job the current run belongs to ({@link EarlierRunRecords}).
    *
    * @throws Error when a read fails
    */
   protected static async DisabledByEarlierRuns(ctx: PreGateMigrationContext): Promise<string[]> {
+    return (await PreGateModelMigration.EarlierRunRecords(ctx)).flatMap((r) => r.DisabledProcessIDs);
+  }
+
+  /**
+   * What step 4 of each run of the job the current run belongs to recorded under {@link DetailsKey}: the Record
+   * Processes it disabled and the models whose scoring Action it disabled. A `Details` that is not JSON records nothing.
+   *
+   * @throws Error when a read fails
+   */
+  protected static async EarlierRunRecords(ctx: PreGateMigrationContext): Promise<{ readonly DisabledProcessIDs: string[]; readonly ScoringActionsDisabled: string[] }[]> {
     const current = await StoredRowReads.Run<Pick<MJScheduledJobRunEntity, 'ID' | 'ScheduledJobID'>>(
       { EntityName: 'MJ: Scheduled Job Runs', ExtraFilter: `ID='${EscapeSQLString(ctx.ScheduledJobRunID)}'`, Fields: ['ID', 'ScheduledJobID'], MaxRows: 1, ResultType: 'simple' },
       ctx,
@@ -666,15 +681,23 @@ export class PreGateModelMigration {
       ctx,
     );
     if (!runs.Success) throw new Error(`Reading the runs of Scheduled Job ${jobId} failed: ${runs.ErrorMessage || 'unknown error'}`);
-    return runs.Results.flatMap((r) => PreGateModelMigration.DisabledProcessIDsOf(r.Details));
+    return runs.Results.map((r) => ({
+      DisabledProcessIDs: PreGateModelMigration.DisabledProcessIDsOf(r.Details),
+      ScoringActionsDisabled: PreGateModelMigration.ScoringActionsDisabledOf(r.Details),
+    }));
+  }
+
+  /** The models whose scoring Action a job run's step 4 disabled (`Schedules.ScoringActionsDisabled` under {@link DetailsKey}); [] for none or text that is not JSON. Pure. */
+  public static ScoringActionsDisabledOf(details: string | null): string[] {
+    const record = PreGateModelMigration.recordOf(details);
+    const schedules = record === null ? null : JsonParse.JsonObjectField(record, 'Schedules');
+    return schedules ? JsonParse.JsonStringArray(schedules, 'ScoringActionsDisabled') || [] : [];
   }
 
   /** The `DisabledProcessIDs` a job run's `Details` records under {@link DetailsKey}; [] for none or text that is not JSON. Pure. */
   public static DisabledProcessIDsOf(details: string | null): string[] {
-    const parsed = JsonParse.ParseJsonText(details, 'Details');
-    if (parsed.Ok === false || !JsonParse.IsJsonObject(parsed.Value)) return [];
-    const record = parsed.Value[PreGateModelMigration.DetailsKey];
-    return JsonParse.IsJsonObject(record) ? JsonParse.JsonStringArray(record, 'DisabledProcessIDs') || [] : [];
+    const record = PreGateModelMigration.recordOf(details);
+    return record === null ? [] : JsonParse.JsonStringArray(record, 'DisabledProcessIDs') || [];
   }
 
   /**
@@ -911,6 +934,14 @@ export class PreGateModelMigration {
   /** The job run as the initiator of every gate call. */
   private static initiatorOf(ctx: PreGateMigrationContext): Actor {
     return { kind: 'scheduled-job', scheduledJobRunId: ctx.ScheduledJobRunID };
+  }
+
+  /** This migration's record in a job run's `Details` (under {@link DetailsKey}); null for none or text that is not JSON. */
+  private static recordOf(details: string | null): JsonObject | null {
+    const parsed = JsonParse.ParseJsonText(details, 'Details');
+    if (parsed.Ok === false || !JsonParse.IsJsonObject(parsed.Value)) return null;
+    const record = parsed.Value[PreGateModelMigration.DetailsKey];
+    return JsonParse.IsJsonObject(record) ? record : null;
   }
 
   /** A Record Process `Configuration` as an object ({} when it is empty, not JSON, or not an object). */

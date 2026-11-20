@@ -439,10 +439,41 @@ describe('step 4: serving side effects', () => {
     const plain = Process(demoted.ID, { ScheduleEnabled: true });
     const autoTrain = Process(demoted.ID, { ScheduleEnabled: true, AutoTrainPipelineID: pipelineId });
     const servedByLegacy = Process(serving.ID, { ScheduleEnabled: true });
-    const out = await PreGateModelMigration.DisableDemotedSchedules(ctx);
+    const out = await PreGateModelMigration.DisableDemotedSchedules(50, ctx);
     expect([ProcessState(plain.ID).ScheduleEnabled, ProcessState(autoTrain.ID).ScheduleEnabled, ProcessState(servedByLegacy.ID).ScheduleEnabled]).toEqual([false, true, true]);
     expect(out.Disabled).toEqual([plain.ID]);
     expect(scoringActions.Log).toContainEqual(expect.objectContaining({ ModelID: demoted.ID }));
+  });
+});
+
+describe('step 4: bounded and idempotent', () => {
+  it('disables at most the batch per run, and a later run picks up where the first stopped', async () => {
+    const pipelineId = Pipeline();
+    const demoted = [0, 1, 2].map(() => Legacy(pipelineId, 'Unevaluated', 'none'));
+    const processes = demoted.map((m) => Process(m.ID, { ScheduleEnabled: true }));
+    const first = await PreGateModelMigration.DisableDemotedSchedules(2, ctx);
+    expect([first.ScoringActionsDisabled.length, first.Disabled.length]).toEqual([2, 2]);
+    store.Insert('MJ: Scheduled Job Runs', {
+      ID: id(), ScheduledJobID: registryRun.ScheduledJobID, Status: 'Completed', Details: JSON.stringify({ [PreGateModelMigration.DetailsKey]: { Schedules: first, DisabledProcessIDs: first.Disabled } }),
+    });
+    const second = await PreGateModelMigration.DisableDemotedSchedules(2, ctx);
+    expect([second.ScoringActionsDisabled, second.Disabled]).toEqual([
+      demoted.map((m) => m.ID).filter((m) => !first.ScoringActionsDisabled.includes(m)),
+      processes.map((p) => p.ID).filter((p) => !first.Disabled.includes(p)),
+    ]);
+  });
+
+  it('a run after every demoted model was handled disables nothing and calls no scoring Action again', async () => {
+    const pipelineId = Pipeline();
+    const demoted = Legacy(pipelineId, 'Unevaluated', 'none');
+    Process(demoted.ID, { ScheduleEnabled: true });
+    const first = await PreGateModelMigration.DisableDemotedSchedules(50, ctx);
+    store.Insert('MJ: Scheduled Job Runs', {
+      ID: id(), ScheduledJobID: registryRun.ScheduledJobID, Status: 'Completed', Details: JSON.stringify({ [PreGateModelMigration.DetailsKey]: { Schedules: first, DisabledProcessIDs: first.Disabled } }),
+    });
+    const calls = scoringActions.Log.length;
+    expect(await PreGateModelMigration.DisableDemotedSchedules(50, ctx)).toEqual({ Disabled: [], ScoringActionsDisabled: [] });
+    expect(scoringActions.Log.length - calls).toBe(0);
   });
 });
 
