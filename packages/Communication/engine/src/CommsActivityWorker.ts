@@ -188,11 +188,15 @@ export class CommsActivityWorker {
     const lower = trimmed.toLowerCase();
 
     if (lower === 'mozilla/5.0') return true;
-    if (/apple\s*mail|applemail.*proxy|apple.*mpp/i.test(trimmed)) return true;
-    if (/googleimageproxy/i.test(trimmed)) return true;
-    if (/safelinks|atp\s*safelinks/i.test(trimmed)) return true;
-    if (/proofpoint|urldefense/i.test(trimmed)) return true;
-    if (/barracuda/i.test(trimmed)) return true;
+    if (/apple\s*mail/.test(lower)) return true;
+    const appleMailIdx = lower.indexOf('applemail');
+    if (appleMailIdx !== -1 && lower.includes('proxy', appleMailIdx + 9)) return true;
+    const appleIdx = lower.indexOf('apple');
+    if (appleIdx !== -1 && lower.includes('mpp', appleIdx + 5)) return true;
+    if (lower.includes('googleimageproxy')) return true;
+    if (lower.includes('safelinks')) return true;
+    if (lower.includes('proofpoint') || lower.includes('urldefense')) return true;
+    if (lower.includes('barracuda')) return true;
 
     return false;
   }

@@ -93,7 +93,11 @@ export function VerifyTrackingSignature(
 }
 
 function buildCommsRouteUrl(baseUrl: string, subpath: string): string {
-  const cleanBase = baseUrl.replace(/\/+$/, '');
+  let end = baseUrl.length;
+  while (end > 0 && baseUrl.charCodeAt(end - 1) === 47) {
+    end--;
+  }
+  const cleanBase = baseUrl.slice(0, end);
   if (!cleanBase) {
     return `/comms${subpath}`;
   }

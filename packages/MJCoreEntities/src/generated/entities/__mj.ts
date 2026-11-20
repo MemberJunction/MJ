@@ -39856,7 +39856,7 @@ export class MJCommunicationComplianceRegimeJurisdictionEntity extends BaseEntit
     * * Display Name: Communication Compliance Regime
     * * SQL Data Type: nvarchar(100)
     */
-    get CommunicationComplianceRegime(): string {
+    get CommunicationComplianceRegime(): string | null {
         return this.Get('CommunicationComplianceRegime');
     }
 
@@ -39865,7 +39865,7 @@ export class MJCommunicationComplianceRegimeJurisdictionEntity extends BaseEntit
     * * Display Name: Jurisdiction
     * * SQL Data Type: nvarchar(200)
     */
-    get Jurisdiction(): string {
+    get Jurisdiction(): string | null {
         return this.Get('Jurisdiction');
     }
 }
@@ -40743,7 +40743,7 @@ export class MJCommunicationEndpointPrincipalEntity extends BaseEntity<MJCommuni
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 }
@@ -41272,7 +41272,6 @@ export class MJCommunicationLogEntity extends BaseEntity<MJCommunicationLogEntit
     * * Field Name: UnsubscribeToken
     * * Display Name: Unsubscribe Token
     * * SQL Data Type: uniqueidentifier
-    * * Default Value: newid()
     * * Description: Non-enumerable random UUIDv4 capability token used in one-click unsubscribe and preference center links.
     */
     get UnsubscribeToken(): string | null {
@@ -41286,7 +41285,6 @@ export class MJCommunicationLogEntity extends BaseEntity<MJCommunicationLogEntit
     * * Field Name: TrackingToken
     * * Display Name: Tracking Token
     * * SQL Data Type: uniqueidentifier
-    * * Default Value: newid()
     * * Description: Separate random UUIDv4 token for open-tracking pixels so image-proxy logs never hold unsubscribe capability.
     */
     get TrackingToken(): string | null {
@@ -42234,7 +42232,7 @@ export class MJCommunicationProviderEventEntity extends BaseEntity<MJCommunicati
     * * Display Name: Communication Provider
     * * SQL Data Type: nvarchar(255)
     */
-    get CommunicationProvider(): string {
+    get CommunicationProvider(): string | null {
         return this.Get('CommunicationProvider');
     }
 }
@@ -66764,7 +66762,7 @@ export class MJEntityCommunicationMessageTypeEntity extends BaseEntity<MJEntityC
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 
@@ -66773,7 +66771,7 @@ export class MJEntityCommunicationMessageTypeEntity extends BaseEntity<MJEntityC
     * * Display Name: Base Message Type
     * * SQL Data Type: nvarchar(100)
     */
-    get BaseMessageType(): string {
+    get BaseMessageType(): string | null {
         return this.Get('BaseMessageType');
     }
 
@@ -82212,7 +82210,7 @@ export class MJJurisdictionMemberEntity extends BaseEntity<MJJurisdictionMemberE
     * * Display Name: Group Jurisdiction
     * * SQL Data Type: nvarchar(200)
     */
-    get GroupJurisdiction(): string {
+    get GroupJurisdiction(): string | null {
         return this.Get('GroupJurisdiction');
     }
 
@@ -82221,7 +82219,7 @@ export class MJJurisdictionMemberEntity extends BaseEntity<MJJurisdictionMemberE
     * * Display Name: Member Jurisdiction
     * * SQL Data Type: nvarchar(200)
     */
-    get MemberJurisdiction(): string {
+    get MemberJurisdiction(): string | null {
         return this.Get('MemberJurisdiction');
     }
 }

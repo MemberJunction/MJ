@@ -3081,56 +3081,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Communication Suppressions Section -->
-    <mj-collapsible-panel
-        SectionKey="mJCommunicationSuppressions"
-        SectionName="Communication Suppressions"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJCommunicationSuppressions')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Suppressions','EntityID')"
-                [NewRecordValues]="NewRecordValues('MJ: Communication Suppressions','EntityID')"
-                [AllowLoad]="IsSectionExpanded('mJCommunicationSuppressions')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJCommunicationSuppressions', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Communication Sender Types Section -->
-    <mj-collapsible-panel
-        SectionKey="mJCommunicationSenderTypes"
-        SectionName="Communication Sender Types"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJCommunicationSenderTypes')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Sender Types','EntityID')"
-                [NewRecordValues]="NewRecordValues('MJ: Communication Sender Types','EntityID')"
-                [AllowLoad]="IsSectionExpanded('mJCommunicationSenderTypes')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJCommunicationSenderTypes', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Communication Logs Section -->
     <mj-collapsible-panel
         SectionKey="mJCommunicationLogs"
@@ -3150,31 +3100,6 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJCommunicationLogs', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Communication Principal Preferences Section -->
-    <mj-collapsible-panel
-        SectionKey="mJCommunicationPrincipalPreferences"
-        SectionName="Communication Principal Preferences"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJCommunicationPrincipalPreferences')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Principal Preferences','EntityID')"
-                [NewRecordValues]="NewRecordValues('MJ: Communication Principal Preferences','EntityID')"
-                [AllowLoad]="IsSectionExpanded('mJCommunicationPrincipalPreferences')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJCommunicationPrincipalPreferences', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -3225,6 +3150,81 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJCommunicationPrincipals', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Communication Principal Preferences Section -->
+    <mj-collapsible-panel
+        SectionKey="mJCommunicationPrincipalPreferences"
+        SectionName="Communication Principal Preferences"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJCommunicationPrincipalPreferences')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Principal Preferences','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Communication Principal Preferences','EntityID')"
+                [AllowLoad]="IsSectionExpanded('mJCommunicationPrincipalPreferences')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJCommunicationPrincipalPreferences', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Communication Suppressions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJCommunicationSuppressions"
+        SectionName="Communication Suppressions"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJCommunicationSuppressions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Suppressions','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Communication Suppressions','EntityID')"
+                [AllowLoad]="IsSectionExpanded('mJCommunicationSuppressions')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJCommunicationSuppressions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Communication Sender Types Section -->
+    <mj-collapsible-panel
+        SectionKey="mJCommunicationSenderTypes"
+        SectionName="Communication Sender Types"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJCommunicationSenderTypes')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Sender Types','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Communication Sender Types','EntityID')"
+                [AllowLoad]="IsSectionExpanded('mJCommunicationSenderTypes')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJCommunicationSenderTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

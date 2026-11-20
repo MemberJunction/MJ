@@ -3470,6 +3470,56 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Communication Principal Preferences Section -->
+    <mj-collapsible-panel
+        SectionKey="mJCommunicationPrincipalPreferences"
+        SectionName="Communication Principal Preferences"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJCommunicationPrincipalPreferences')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Principal Preferences','ChangedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Communication Principal Preferences','ChangedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJCommunicationPrincipalPreferences')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJCommunicationPrincipalPreferences', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Communication Consent Audit Logs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJCommunicationConsentAuditLogs"
+        SectionName="Communication Consent Audit Logs"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJCommunicationConsentAuditLogs')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Consent Audit Logs','ChangedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Communication Consent Audit Logs','ChangedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJCommunicationConsentAuditLogs')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJCommunicationConsentAuditLogs', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Communication Suppressions (Revoked By User ID) Section -->
     <mj-collapsible-panel
         SectionKey="mJCommunicationSuppressionsRevokedByUserID"
@@ -3514,56 +3564,6 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJCommunicationSuppressionsCreatedByUserID', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Communication Consent Audit Logs Section -->
-    <mj-collapsible-panel
-        SectionKey="mJCommunicationConsentAuditLogs"
-        SectionName="Communication Consent Audit Logs"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJCommunicationConsentAuditLogs')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Consent Audit Logs','ChangedByUserID')"
-                [NewRecordValues]="NewRecordValues('MJ: Communication Consent Audit Logs','ChangedByUserID')"
-                [AllowLoad]="IsSectionExpanded('mJCommunicationConsentAuditLogs')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJCommunicationConsentAuditLogs', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Communication Principal Preferences Section -->
-    <mj-collapsible-panel
-        SectionKey="mJCommunicationPrincipalPreferences"
-        SectionName="Communication Principal Preferences"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJCommunicationPrincipalPreferences')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Principal Preferences','ChangedByUserID')"
-                [NewRecordValues]="NewRecordValues('MJ: Communication Principal Preferences','ChangedByUserID')"
-                [AllowLoad]="IsSectionExpanded('mJCommunicationPrincipalPreferences')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJCommunicationPrincipalPreferences', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

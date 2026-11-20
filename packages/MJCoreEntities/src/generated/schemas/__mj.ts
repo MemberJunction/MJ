@@ -12894,11 +12894,11 @@ export const MJCommunicationComplianceRegimeJurisdictionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    CommunicationComplianceRegime: z.string().describe(`
+    CommunicationComplianceRegime: z.string().nullable().describe(`
         * * Field Name: CommunicationComplianceRegime
         * * Display Name: Communication Compliance Regime
         * * SQL Data Type: nvarchar(100)`),
-    Jurisdiction: z.string().describe(`
+    Jurisdiction: z.string().nullable().describe(`
         * * Field Name: Jurisdiction
         * * Display Name: Jurisdiction
         * * SQL Data Type: nvarchar(200)`),
@@ -13264,7 +13264,7 @@ export const MJCommunicationEndpointPrincipalSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -13488,13 +13488,11 @@ export const MJCommunicationLogSchema = z.object({
         * * Field Name: UnsubscribeToken
         * * Display Name: Unsubscribe Token
         * * SQL Data Type: uniqueidentifier
-        * * Default Value: newid()
         * * Description: Non-enumerable random UUIDv4 capability token used in one-click unsubscribe and preference center links.`),
     TrackingToken: z.string().nullable().describe(`
         * * Field Name: TrackingToken
         * * Display Name: Tracking Token
         * * SQL Data Type: uniqueidentifier
-        * * Default Value: newid()
         * * Description: Separate random UUIDv4 token for open-tracking pixels so image-proxy logs never hold unsubscribe capability.`),
     CorrelationData: z.string().nullable().describe(`
         * * Field Name: CorrelationData
@@ -13887,7 +13885,7 @@ export const MJCommunicationProviderEventSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    CommunicationProvider: z.string().describe(`
+    CommunicationProvider: z.string().nullable().describe(`
         * * Field Name: CommunicationProvider
         * * Display Name: Communication Provider
         * * SQL Data Type: nvarchar(255)`),
@@ -22928,11 +22926,11 @@ export const MJEntityCommunicationMessageTypeSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Communication Principals (vwCommunicationPrincipals.ID)
         * * Description: The principal this channel mapping belongs to. NULL for rows created before Communications V2; the engine falls back to matching EntityID.`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
-    BaseMessageType: z.string().describe(`
+    BaseMessageType: z.string().nullable().describe(`
         * * Field Name: BaseMessageType
         * * Display Name: Base Message Type
         * * SQL Data Type: nvarchar(100)`),
@@ -28798,11 +28796,11 @@ export const MJJurisdictionMemberSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    GroupJurisdiction: z.string().describe(`
+    GroupJurisdiction: z.string().nullable().describe(`
         * * Field Name: GroupJurisdiction
         * * Display Name: Group Jurisdiction
         * * SQL Data Type: nvarchar(200)`),
-    MemberJurisdiction: z.string().describe(`
+    MemberJurisdiction: z.string().nullable().describe(`
         * * Field Name: MemberJurisdiction
         * * Display Name: Member Jurisdiction
         * * SQL Data Type: nvarchar(200)`),

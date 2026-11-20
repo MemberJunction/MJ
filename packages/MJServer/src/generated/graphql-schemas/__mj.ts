@@ -33497,10 +33497,10 @@ export class CreateMJCommunicationLogInput {
     ProviderMessageID: string | null;
 
     @Field({ nullable: true })
-    UnsubscribeToken?: string | null;
+    UnsubscribeToken: string | null;
 
     @Field({ nullable: true })
-    TrackingToken?: string | null;
+    TrackingToken: string | null;
 
     @Field({ nullable: true })
     CorrelationData: string | null;
