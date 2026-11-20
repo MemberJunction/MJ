@@ -394,11 +394,17 @@ describe('ML model publish records refuse inconsistent rows', () => {
   });
 
   it('refuses a status outside the widened CHECK', async () => {
-    // each of the six persisted values is saved and read back; KeepBaseline last, so the model ends there
+    // each of the six persisted values is saved and read back; KeepBaseline last, so the model ends there. The
+    // pipeline's Published fixture is set aside meanwhile: UX_MLModel_OnePublishedPerPipeline allows one Published row.
     const accepted = [...Object.keys(CORE_STATUSES).filter((v) => v !== 'KeepBaseline'), 'KeepBaseline'];
-    for (const status of accepted) {
-      await expect(RawStatusWrite(pool, fixtures.Model.ID, status)).resolves.toBeUndefined();
-      expect(await StoredModelColumn(pool, fixtures.Model.ID, 'Status')).toEqual([status]);
+    await RawStatusWrite(pool, fixtures.PublishedModel.ID, 'Archived');
+    try {
+      for (const status of accepted) {
+        await expect(RawStatusWrite(pool, fixtures.Model.ID, status)).resolves.toBeUndefined();
+        expect(await StoredModelColumn(pool, fixtures.Model.ID, 'Status')).toEqual([status]);
+      }
+    } finally {
+      await RawStatusWrite(pool, fixtures.PublishedModel.ID, 'Published');
     }
     await expect(RawStatusWrite(pool, fixtures.Model.ID, 'Shipped')).rejects.toThrow('CK_MLModel_Status');
     await expect(RawStatusWrite(pool, fixtures.Model.ID, 'NoSignal')).rejects.toThrow('CK_MLModel_Status');

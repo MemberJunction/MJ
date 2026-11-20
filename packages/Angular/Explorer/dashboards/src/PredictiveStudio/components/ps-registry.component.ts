@@ -3,9 +3,11 @@ import { CommonModule } from '@angular/common';
 import { AngularSplitModule } from 'angular-split';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { UUIDsEqual } from '@memberjunction/global';
-import { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { MJMLModelEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { UUIDMap, UUIDsEqual } from '@memberjunction/global';
+import { CompositeKey, IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
+import { NavigationService } from '@memberjunction/ng-shared';
+import { MJMLModelEntity, MJMLModelPublishRecordEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { LifecycleLabels, TransitionRefusalText } from '@memberjunction/predictive-studio-core';
 import { PSModelDetailComponent } from '@memberjunction/ng-core-entity-forms';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { PrimaryModelScore, FormatMetricValue } from '../predictive-studio.view-models';
@@ -17,8 +19,21 @@ interface ModelRowVM {
   algorithm: string;
   holdoutScore: string;
   scoreLabel: string;
-  status: string;
+  status: MJMLModelEntity['Status'];
+  /** The model's stored `StatusReason`. */
+  statusReason: string | null;
+  /** The model's `ServingWhileUnevaluated` flag. */
+  servingWhileUnevaluated: boolean;
   iconClass: string;
+}
+
+/** A pipeline's latest training run that shipped no model row (no signal, kept the existing rule), from its refusal record. */
+interface RunOutcomeVM {
+  pipelineId: string;
+  pipelineName: string;
+  outcome: string;
+  detail: string;
+  recordedAt: Date;
 }
 
 /**
@@ -68,8 +83,18 @@ interface ModelRowVM {
                     </div>
                   </div>
                   <div class="ps-card-body" style="padding:8px">
+                    @if (RunOutcomes.length > 0) {
+                      <div class="reg-run-outcomes">
+                        <div class="ps-section-title">Latest runs that shipped no model</div>
+                        @for (o of RunOutcomes; track o.pipelineId) {
+                          <div class="reg-run-outcome ps-small" data-testid="ps-registry-run-outcome" [title]="o.detail">
+                            <strong>{{ o.pipelineName }}</strong> · {{ o.outcome }} <span class="ps-muted">({{ o.recordedAt | date: 'mediumDate' }})</span>
+                          </div>
+                        }
+                      </div>
+                    }
                     @for (m of Models; track m.id) {
-                      <div class="mrow" data-testid="ps-registry-row" [class.sel]="IsSelected(m.id)" [class.arc]="m.status === 'Archived'" (click)="Select(m.id)">
+                      <div class="mrow" data-testid="ps-registry-row" [class.sel]="IsSelected(m.id)" [class.arc]="m.status === 'Archived'" [attr.title]="m.statusReason" (click)="Select(m.id)">
                         <div class="ico" [class]="m.iconClass"><i class="fa-solid fa-cube"></i></div>
                         <div style="flex:1;min-width:0">
                           <div class="nm">{{ m.name }}</div>
@@ -77,7 +102,10 @@ interface ModelRowVM {
                         </div>
                         <div class="auc">
                           <div class="v">{{ m.scoreLabel }} {{ m.holdoutScore }}</div>
-                          <div class="st" [class]="StatusClass(m.status)">{{ m.status }}</div>
+                          <div class="st" data-testid="ps-lifecycle-chip" [class]="StatusClass(m.status)">{{ LifecycleLabel(m) }}</div>
+                          @if (ServingNote(m); as note) {
+                            <div class="ps-small ps-muted" data-testid="ps-registry-serving">{{ note }}</div>
+                          }
                         </div>
                       </div>
                     }
@@ -95,7 +123,8 @@ interface ModelRowVM {
                     [displayName]="engine ? engine.ModelDisplayName(SelectedEntity) : undefined"
                     [Provider]="provider"
                     [CurrentUser]="CurrentUser"
-                    (StatusChanged)="OnModelStatusChanged($event)">
+                    (StatusChanged)="OnModelStatusChanged($event)"
+                    (OpenRecord)="OnOpenRecord($event)">
                   </ps-model-detail>
                 } @else {
                   <div class="ps-empty" style="padding: 40px 20px;">
@@ -119,8 +148,12 @@ export class PSRegistryComponent implements OnInit {
 
   private cdr = inject(ChangeDetectorRef);
   private notifications = inject(MJNotificationService);
+  private navigation = inject(NavigationService);
 
   public Models: ModelRowVM[] = [];
+
+  /** Each pipeline's latest run that shipped no model row, newest first. */
+  public RunOutcomes: RunOutcomeVM[] = [];
 
   public SelectedId = '';
 
@@ -164,6 +197,7 @@ export class PSRegistryComponent implements OnInit {
     }
 
     this.buildModels();
+    void this.loadRunOutcomes();
     const initial = this._initialModelId ? this.Models.find((m) => UUIDsEqual(m.id, this._initialModelId)) : undefined;
     this.SelectedId = initial ? initial.id : this.Models[0]?.id ?? '';
   }
@@ -216,10 +250,64 @@ export class PSRegistryComponent implements OnInit {
     switch (status) {
       case 'Published': return 'pub';
       case 'Validated': return 'val';
+      case 'KeepBaseline': return 'val';
       case 'Draft': return 'dr';
+      case 'Unevaluated': return 'dr';
       case 'Archived': return 'arc';
       default: return 'dr';
     }
+  }
+
+  /** The row's lifecycle chip text (shared with the model detail's chip through Predictive Studio Core). */
+  public LifecycleLabel(m: ModelRowVM): string {
+    return LifecycleLabels.For(m.status, m.statusReason).Label;
+  }
+
+  /** The "still serving" note of a serving pre-change model, or null. */
+  public ServingNote(m: ModelRowVM): string | null {
+    return LifecycleLabels.ServingNote(m.status, m.servingWhileUnevaluated);
+  }
+
+  /** The model detail asks to open a record (an initiator, a publish record): the registry, an L3 surface, navigates. */
+  public OnOpenRecord(request: { EntityName: string; RecordID: string }): void {
+    this.navigation.OpenEntityRecord(request.EntityName, CompositeKey.FromID(request.RecordID)); // first-pk-ok: every record the detail links (users, agent runs, job runs, process runs, publish records) is an MJ core entity keyed on ID
+  }
+
+  /**
+   * Reads the run-level refusal records (no model row, D4-56) and keeps each pipeline's newest one whose outcome shipped
+   * no model: "No signal" or "Kept the existing rule" (one batched `RunView`; the run's pipeline from the engine cache).
+   */
+  private async loadRunOutcomes(): Promise<void> {
+    if (!this.engine || !this.provider) return;
+    try {
+      const [result] = await RunView.FromMetadataProvider(this.provider).RunViews<MJMLModelPublishRecordEntity>([
+        { EntityName: 'MJ: ML Model Publish Records', ExtraFilter: `Kind='refusal' AND ModelID IS NULL`, OrderBy: 'RecordedAt DESC', MaxRows: 200, ResultType: 'entity_object' },
+      ]);
+      this.RunOutcomes = this.toRunOutcomes(result?.Success ? result.Results : []);
+    } catch {
+      // the run outcomes are informational; a failed read leaves the section out rather than blocking the registry
+      this.RunOutcomes = [];
+    }
+    this.cdr.detectChanges();
+  }
+
+  /** Each pipeline's newest run-level outcome among `records` (newest first). */
+  private toRunOutcomes(records: readonly MJMLModelPublishRecordEntity[]): RunOutcomeVM[] {
+    const pipelineOfRun = new UUIDMap<string>();
+    for (const run of this.engine.TrainingRuns || []) pipelineOfRun.Set(run.ID, run.PipelineID);
+    const pipelineNames = new UUIDMap<string>();
+    for (const p of this.engine.Pipelines || []) pipelineNames.Set(p.ID, p.Name);
+    const seen = new UUIDMap<true>();
+    const out: RunOutcomeVM[] = [];
+    for (const r of records) {
+      const refusal = r.RefusalObject;
+      const outcome = refusal ? LifecycleLabels.RunOutcome(refusal) : null;
+      const pipelineId = r.TrainingRunID ? pipelineOfRun.Get(r.TrainingRunID) : undefined;
+      if (!refusal || !outcome || !pipelineId || seen.Has(pipelineId)) continue;
+      seen.Set(pipelineId, true);
+      out.push({ pipelineId, pipelineName: pipelineNames.Get(pipelineId) || 'Pipeline', outcome, detail: TransitionRefusalText.For(refusal), recordedAt: r.RecordedAt });
+    }
+    return out;
   }
 
   // ---- lifecycle change handling ----
@@ -256,11 +344,13 @@ export class PSRegistryComponent implements OnInit {
       holdoutScore: formattedScore,
       scoreLabel: score?.label ?? 'Score',
       status: m.Status,
+      statusReason: m.StatusReason,
+      servingWhileUnevaluated: m.ServingWhileUnevaluated,
       iconClass: 'xgb',
     };
   }
 
   private placeholder(): ModelRowVM {
-    return { id: '', name: 'No model', version: 0, algorithm: '—', holdoutScore: '—', scoreLabel: 'Score', status: 'Draft', iconClass: 'xgb' };
+    return { id: '', name: 'No model', version: 0, algorithm: '—', holdoutScore: '—', scoreLabel: 'Score', status: 'Draft', statusReason: null, servingWhileUnevaluated: false, iconClass: 'xgb' };
   }
 }

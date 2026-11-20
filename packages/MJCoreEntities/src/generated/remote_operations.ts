@@ -577,6 +577,51 @@ export interface PredictiveStudioGetModelEvidenceOutput {
     evidenceSha256: string;
 }
 
+/** Input for `PredictiveStudio.MigratePreGateModels`. */
+export interface PredictiveStudioMigratePreGateModelsInput {
+    /**
+     * True (the default) reports what the pre-change model migration would visit and writes nothing. False runs one
+     * pass of its steps, which only a run of a Predictive Studio Registry Check job may do (`scheduledJobRunId`).
+     */
+    dryRun?: boolean;
+    /**
+     * The `MJ: Scheduled Job Runs` row of the Predictive Studio Registry Check job run this pass belongs to; required
+     * when `dryRun` is false (every lifecycle change it makes is initiated by that run).
+     */
+    scheduledJobRunId?: string;
+    /** Models visited per step in this pass (default 50). */
+    batchSize?: number;
+    /** Pipelines retrained in this pass (default 3). */
+    retrainPerRun?: number;
+}
+
+/**
+ * Output of `PredictiveStudio.MigratePreGateModels`: the counts of pre-change work remaining before the pass (a dry run
+ * reports only these), and for a pass that ran, what each step did.
+ */
+export interface PredictiveStudioMigratePreGateModelsOutput {
+    /** True when nothing was written. */
+    dryRun: boolean;
+    /** Published or Draft models with a stored gate record still to re-verify. */
+    evidenceBearing: number;
+    /** Other pre-change models whose artifact is still unverified. */
+    unverifiedArtifacts: number;
+    /** Record Processes whose schedule the pass would disable. */
+    schedulesToDisable: number;
+    /** Pipelines without a Published model that hold an Unevaluated one. */
+    pipelinesToReEvaluate: number;
+    /** Models kept Published with an adopt record by this pass. */
+    adopted?: number;
+    /** Models whose stored record did not re-verify, demoted by this pass. */
+    demoted?: number;
+    /** Artifacts whose state this pass recorded. */
+    artifactsChanged?: number;
+    /** Record Processes whose schedule this pass disabled. */
+    schedulesDisabled?: number;
+    /** Training runs this pass started. */
+    retrained?: number;
+}
+
 /**
  * A lifecycle transition the gate applies to an ML Model: `evaluate` (Draft → Validated or KeepBaseline from the
  * training run's stored gate decision), `publish` (Validated or KeepBaseline → Published), `archive` (→ Archived, with a
@@ -2524,6 +2569,23 @@ export class PredictiveStudioGetModelEvidenceOperation extends BaseRemotableOper
     public readonly RequiredScope = "predictive:execute";
     public readonly RequiresSystemUser = false;
     public readonly ContractFingerprint = "ro_fp_58ae71e740bbf717";
+}
+
+// ============================================================
+// PredictiveStudio.MigratePreGateModels — Migrate Pre-Gate ML Models
+// ============================================================
+/**
+ * Migrate Pre-Gate ML Models
+ * The pre-change model migration that the Predictive Studio Registry Check job runs on every run while work remains: models registered before the lifecycle gate with a stored gate record are back-filled and re-verified (kept Published with an adopt record, or demoted with the refusal), every other pre-change artifact is checked once (verified, legacy-local or missing), the scoring Actions and schedules of non-serving Unevaluated models are disabled, and each pipeline left without a Published model is retrained once under its protocol through the lifecycle gate (no Prediction Unit is invented for a legacy pipeline). A dry run (the default) reports the remaining work and writes nothing; a pass that writes needs the Registry Check job run it belongs to. Delegates to PreGateModelMigration in @memberjunction/predictive-studio.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'PredictiveStudio.MigratePreGateModels'. This generated base provides the typed contract only (client-safe).
+ */
+export class PredictiveStudioMigratePreGateModelsOperation extends BaseRemotableOperation<PredictiveStudioMigratePreGateModelsInput, PredictiveStudioMigratePreGateModelsOutput> {
+    public readonly OperationKey = "PredictiveStudio.MigratePreGateModels";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "predictive:execute";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_0380dffee16d0779";
 }
 
 // ============================================================

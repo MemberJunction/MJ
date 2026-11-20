@@ -470,6 +470,29 @@
   },
   {
     "fields": {
+      "Name": "Migrate Pre-Gate ML Models",
+      "OperationKey": "PredictiveStudio.MigratePreGateModels",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Predictive Studio",
+      "Description": "The pre-change model migration that the Predictive Studio Registry Check job runs on every run while work remains: models registered before the lifecycle gate with a stored gate record are back-filled and re-verified (kept Published with an adopt record, or demoted with the refusal), every other pre-change artifact is checked once (verified, legacy-local or missing), the scoring Actions and schedules of non-serving Unevaluated models are disabled, and each pipeline left without a Published model is retrained once under its protocol through the lifecycle gate (no Prediction Unit is invented for a legacy pipeline). A dry run (the default) reports the remaining work and writes nothing; a pass that writes needs the Registry Check job run it belongs to. Delegates to PreGateModelMigration in @memberjunction/predictive-studio.",
+      "InputTypeName": "PredictiveStudioMigratePreGateModelsInput",
+      "InputTypeDefinition": "@file:types/predictive-studio-migrate-pre-gate-models.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "PredictiveStudioMigratePreGateModelsOutput",
+      "OutputTypeDefinition": "@file:types/predictive-studio-migrate-pre-gate-models.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "predictive:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "D0290478-08BE-4446-BC33-5DB86B0EBDE9"
+    }
+  },
+  {
+    "fields": {
       "Name": "Export AI Skill Markdown",
       "OperationKey": "AISkill.ExportMarkdown",
       "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=AI Skills",

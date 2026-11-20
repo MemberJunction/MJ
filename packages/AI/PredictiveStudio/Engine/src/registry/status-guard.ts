@@ -25,13 +25,14 @@
  * instance's `EvidenceWriteAuthorisations` entry: hooks stop at the first refusal, so the evidence guard never takes it.
  */
 import type { BaseEntity, PreSaveHook, UserInfo } from '@memberjunction/core';
-import { MJMLModelEntity, type MJScheduledJobEntity, type MJScheduledJobRunEntity, type MJScheduledJobTypeEntity } from '@memberjunction/core-entities';
+import { MJMLModelEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { PublishRules, StatusWriteRules, type Actor, type PersistedStatus, type StatusGuardDecision, type StoredPublishInputs } from '@memberjunction/predictive-studio-core';
 
 import { EvidenceWriteAuthorisations } from './evidence-write-authorisations';
 import { GuardContexts } from './guard-context';
 import { PreSaveHookRegistration } from './pre-save-hook-registration';
+import { RegistryCheckInitiators } from './registry-check-initiators';
 import type { RegistryContext } from './registry-context';
 import { StatusWriteAuthorisations, type StatusWriteAuthorisation } from './status-write-authorisations';
 import { StoredPublishInputsLoader } from './stored-publish-inputs';
@@ -49,7 +50,7 @@ export class PredictiveStudioStatusGuard {
   /** The entity the guard checks. */
   public static readonly EntityName = 'MJ: ML Models';
   /** The scheduled-job type whose runs alone may demote a Published model to Unevaluated (R9; shipped by M6.4). */
-  public static readonly RegistryCheckJobTypeName = 'Predictive Studio Registry Check';
+  public static readonly RegistryCheckJobTypeName = RegistryCheckInitiators.JobTypeName;
 
   /** Registers the hook once per process; idempotent within a copy of the module (a flag) and across copies (the mark). */
   public static Register(): void {
@@ -180,26 +181,12 @@ export class PredictiveStudioStatusGuard {
 
   /** `Published → Unevaluated` only for a Registry Check job run (R9): the run's job's type is resolved by name. */
   protected static async CheckDemotionInitiator(model: MJMLModelEntity, initiator: Actor, ctx: RegistryContext): Promise<boolean | string> {
-    const why = await PredictiveStudioStatusGuard.registryCheckRefusal(initiator, ctx);
+    const why = await RegistryCheckInitiators.RefusalOf(initiator, ctx);
     if (why === null) return true;
     return PredictiveStudioStatusGuard.refusal(
       model, 'actor-not-permitted',
       `Published → Unevaluated is authorised only for a run of a ${PredictiveStudioStatusGuard.RegistryCheckJobTypeName} job (ruling R9); ${why}`,
     );
-  }
-
-  /** Null when `initiator` is a Registry Check job run, else why it is not. */
-  private static async registryCheckRefusal(initiator: Actor, ctx: RegistryContext): Promise<string | null> {
-    if (initiator.kind !== 'scheduled-job') return `the initiator is a ${initiator.kind}, not a scheduled job run`;
-    const runId = initiator.scheduledJobRunId;
-    const run = await GuardContexts.ReadById<Pick<MJScheduledJobRunEntity, 'ID' | 'ScheduledJobID'>>('MJ: Scheduled Job Runs', runId, ['ID', 'ScheduledJobID'], ctx);
-    if (run === null) return `no Scheduled Job Run has the ID '${runId}'`;
-    const job = await GuardContexts.ReadById<Pick<MJScheduledJobEntity, 'ID' | 'JobTypeID'>>('MJ: Scheduled Jobs', run.ScheduledJobID, ['ID', 'JobTypeID'], ctx);
-    if (job === null) return `the job ${run.ScheduledJobID} of run ${runId} does not exist`;
-    const type = await GuardContexts.ReadById<Pick<MJScheduledJobTypeEntity, 'ID' | 'Name'>>('MJ: Scheduled Job Types', job.JobTypeID, ['ID', 'Name'], ctx);
-    if (type === null) return `the job type ${job.JobTypeID} of run ${runId} does not exist`;
-    if (type.Name !== PredictiveStudioStatusGuard.RegistryCheckJobTypeName) return `run ${runId} is a run of a '${type.Name}' job`;
-    return null;
   }
 
   /** What a refusal reason means for this save. */

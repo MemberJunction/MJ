@@ -354,3 +354,14 @@
   outline: none;
   border-color: var(--mj-brand-primary);
 }
+
+/* Detail tabs */
+.ps-detail-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: 8px;
+  background: var(--mj-bg-surface-card);
+}

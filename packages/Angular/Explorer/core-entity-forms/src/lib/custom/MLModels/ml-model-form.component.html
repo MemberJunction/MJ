@@ -23,7 +23,8 @@
             <ps-model-detail
                 [Model]="record"
                 [Provider]="ProviderToUse"
-                [CurrentUser]="ProviderToUse.CurrentUser ?? null">
+                [CurrentUser]="ProviderToUse.CurrentUser ?? null"
+                (OpenRecord)="OnOpenModelRecord($event)">
             </ps-model-detail>
         </div>
     </mj-collapsible-panel>

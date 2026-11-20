@@ -3,7 +3,9 @@
  * world: each finding is remediated through the gate and recorded with its action.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
+import type { MJScheduledJobEntity, MJScheduledJobRunEntity } from '@memberjunction/core-entities';
 import type { Actor } from '@memberjunction/predictive-studio-core';
+import type { ScheduledJobExecutionContext } from '@memberjunction/scheduling-engine';
 
 import { FakeClock, GateTestStore, GateWorld, type WorldModel } from '../../__tests__/fakes/gate-test-store';
 import { RecordingScoringActions } from '../../__tests__/fakes/scoring-action-fakes';
@@ -11,8 +13,10 @@ import { MemoryStorageAccount, ProviderRow, RegisterMemoryStorage, ServeStorageP
 import type { GateContext } from '../../registry/gate-context';
 import { GateContexts } from '../../registry/gate-seams';
 import { LifecycleGate } from '../../registry/lifecycle-gate';
+import { PreGateModelMigration } from '../../migration/pre-gate-model-migration';
 import { StorageProviderArtifactLoader } from '../../scoring/storage-provider-artifact-loader';
-import { PredictiveStudioRegistryCheckJobDriver, VIEW_GATE_FILTER_NAME, type IRegistryScoringActions, type RegistryFinding } from '../registry-check-driver';
+import { SnapshotHash } from '../../snapshot/snapshot-hash';
+import { PredictiveStudioRegistryCheckJobDriver, VIEW_GATE_FILTER_NAME, type IRegistryScoringActions, type RegistryCheckConfiguration, type RegistryFinding } from '../registry-check-driver';
 import { WorldNotifier, WorldPublisher } from './monitoring-world';
 
 const log: string[] = [];
@@ -66,6 +70,48 @@ async function Published(o: { readonly IncumbentID?: string } = {}): Promise<Wor
   const outcome = await gate.Publish({ modelId: model.ID, purpose: 'publish', initiator: agent, signOffId: null, reason: null }, ctx);
   if (outcome.Kind !== 'published') throw new Error(`the test model did not publish: ${JSON.stringify(outcome)}`);
   return model;
+}
+
+/** The driver with step (g) and step (a) recording the order they ran in. */
+class OrderRecordingDriver extends PredictiveStudioRegistryCheckJobDriver {
+  public readonly Order: string[] = [];
+  protected override async MigratePreChangeModels(...args: Parameters<PredictiveStudioRegistryCheckJobDriver['MigratePreChangeModels']>): ReturnType<PredictiveStudioRegistryCheckJobDriver['MigratePreChangeModels']> {
+    this.Order.push('g');
+    return super.MigratePreChangeModels(...args);
+  }
+  protected override async ArchiveOutsideGatePublishes(...args: Parameters<PredictiveStudioRegistryCheckJobDriver['ArchiveOutsideGatePublishes']>): Promise<RegistryFinding[]> {
+    this.Order.push('a');
+    return super.ArchiveOutsideGatePublishes(...args);
+  }
+}
+
+/** A job run of the registry check with `configuration` as its `Configuration`. */
+async function JobContext(configuration: string): Promise<ScheduledJobExecutionContext> {
+  const schedule = await store.Provider().GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', GateWorld.User);
+  schedule.Name = 'registry check';
+  schedule.Configuration = configuration;
+  const run = await store.Provider().GetEntityObject<MJScheduledJobRunEntity>('MJ: Scheduled Job Runs', GateWorld.User);
+  run.ID = JOB_RUN;
+  return { Schedule: schedule, Run: run, ContextUser: GateWorld.User, Provider: store.Provider() };
+}
+
+/**
+ * A pre-change model as the serving migration's data section leaves a legacy serving one: `Unevaluated`, flagged
+ * serving, no registry entry, its #5001-era artifact under a provider key, on a pipeline that names no Prediction Unit.
+ */
+function LegacyServing(): { readonly ID: string; readonly PipelineID: string; readonly Bytes: Uint8Array } {
+  const pipelineId = '7A2B3C4D-0000-4000-8000-0000000000E1';
+  const modelId = '7A2B3C4D-0000-4000-8000-0000000000E2';
+  const fileId = '7A2B3C4D-0000-4000-8000-0000000000E3';
+  const bytes = new TextEncoder().encode(`legacy artifact of ${modelId}`);
+  store.Insert('MJ: ML Training Pipelines', { ID: pipelineId, Name: 'legacy pipeline', PredictionUnitID: null, EvaluationProtocolID: null, TargetEntityID: null, TargetEntity: null, __mj_UpdatedAt: new Date('2025-01-01T00:00:00Z') });
+  storage.Objects.set(`legacy/${fileId}`, bytes);
+  store.Insert('MJ: Files', { ID: fileId, ProviderID: GateWorld.StorageProviderID, ProviderKey: `legacy/${fileId}` });
+  store.Insert('MJ: ML Models', {
+    ID: modelId, PipelineID: pipelineId, Version: 1, Status: 'Unevaluated', StatusReason: PreGateModelMigration.ServingReason, TrainingRunID: null, Delivery: null,
+    ArtifactFileID: fileId, ArtifactSha256: null, ArtifactStatus: 'unverified', ArtifactCheckedAt: null, Lineage: null, ServingWhileUnevaluated: true, __mj_UpdatedAt: new Date('2026-01-01T00:00:00Z'),
+  });
+  return { ID: modelId, PipelineID: pipelineId, Bytes: bytes };
 }
 
 const Run = (): Promise<RegistryFinding[]> => driver.RunChecks(PredictiveStudioRegistryCheckJobDriver.ReadConfiguration(null), registryJob, ctx);
@@ -178,5 +224,33 @@ describe('PredictiveStudioRegistryCheckJobDriver', () => {
     await Published();
     const findings = await Run();
     expect(findings.map((f) => f.Finding)).toEqual(['i']);
+  });
+
+  describe('step (g): the pre-change model migration', () => {
+    it('step (g) runs before (a) and its Details carry the migration\'s record', async () => {
+      const legacy = LegacyServing();
+      const ordered = new OrderRecordingDriver({ Gate: gate, Publisher: trainer, ArtifactLoader: new StorageProviderArtifactLoader(), ScoringActions: actions, Notifier: notifier, Clock: { Now: () => now }, Migration: { Gate: gate } });
+      const result = await ordered.Execute(await JobContext(JSON.stringify({ migration: { batchSize: 50, retrainPerRun: 3 } })));
+      expect(ordered.Order).toEqual(['g', 'a']);
+      expect(store.Row('MJ: ML Models', legacy.ID)).toMatchObject({ Status: 'Unevaluated', ServingWhileUnevaluated: true, ArtifactStatus: 'verified', ArtifactSha256: SnapshotHash.Sha256Hex(legacy.Bytes) });
+      expect(result.Details?.[PreGateModelMigration.DetailsKey]).toMatchObject({
+        Artifacts: { Verified: [legacy.ID] },
+        ReEvaluation: { Trained: 0, Findings: [{ PipelineID: legacy.PipelineID, Kind: 'no-prediction-unit' }] },
+        DisabledProcessIDs: [],
+      });
+    });
+
+    it('records nothing under the migration\'s key once no pre-change work remains', async () => {
+      await Published();
+      const result = await driver.Execute(await JobContext('{}'));
+      expect(result.Details).not.toHaveProperty(PreGateModelMigration.DetailsKey);
+    });
+
+    it('reads Configuration.migration with the defaults of D4-22', () => {
+      const read = (text: string | null): RegistryCheckConfiguration['Migration'] => PredictiveStudioRegistryCheckJobDriver.ReadConfiguration(text).Migration;
+      expect([read(null), read(JSON.stringify({ migration: { batchSize: 10, retrainPerRun: 0 } })), read(JSON.stringify({ migration: { batchSize: -1 } }))]).toEqual([
+        { BatchSize: 50, RetrainPerRun: 3 }, { BatchSize: 10, RetrainPerRun: 0 }, { BatchSize: 50, RetrainPerRun: 3 },
+      ]);
+    });
   });
 });

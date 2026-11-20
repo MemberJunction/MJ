@@ -5,22 +5,23 @@ import { AngularSplitModule } from 'angular-split';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { RunView } from '@memberjunction/core';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
-import { MJMLModelEntity, MJMLModelScoringBindingEntity, MJProcessRunDetailEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { EscapeSQLString, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { MJMLModelEntity, MJMLModelPublishRecordEntity, MJMLModelScoringBindingEntity, MJProcessRunDetailEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { PSProcessRunRow, PrimaryModelScore, FormatMetricValue } from '../predictive-studio.view-models';
 import { HumanizeCron, ModeBadgeClass, StatusVariant } from '../production-distribution';
-import { JsonParse } from '@memberjunction/predictive-studio-core';
+import { JsonParse, TransitionRefusalText } from '@memberjunction/predictive-studio-core';
 import { PSOperateDialogComponent } from './ps-operate-dialog.component';
 import { PSPredictionsGridComponent } from './ps-predictions-grid.component';
 
-/** A model's deployment state, derived purely from cached bindings + Record Processes. */
 /**
- * `needs-training` overrides the others: a model with no trained artifact can't score, so it is
- * never shown as Bound/Scheduled (which would promise results a run can't deliver).
+ * A model's deployment state, derived from its `ArtifactStatus` and the cached bindings and Record Processes.
+ * `unscorable` overrides the others: a model whose artifact is missing, fails its registered hash, or exists only on a
+ * pre-change local path cannot score, so it is never shown as Bound/Scheduled (which would promise results a run can't
+ * deliver).
  */
-type DeployState = 'needs-training' | 'bound' | 'scheduled' | 'idle';
+type DeployState = 'unscorable' | 'bound' | 'scheduled' | 'idle';
 
 /** One scoring binding shown in a model's deployment detail. */
 interface BindingVM {
@@ -46,6 +47,10 @@ interface ProductionModelVM {
   /** Most recent scored-at across the model's bindings (cached lineage — no DB hit). */
   lastScoredAt: Date | null;
   lastRowCount: number | null;
+  /** Why the model cannot score (its `ArtifactStatus` in words), or null when it can. */
+  unscorableReason: string | null;
+  /** The last auto-train outcome of the model's pipeline (published, or withheld with the reason), or null. */
+  autoTrainOutcome: string | null;
 }
 
 /** One per-record prediction in a run's drill-in (parsed from `MJ: Process Run Details` `ResultPayload`). */
@@ -155,8 +160,8 @@ interface RunDetailVM {
                         <h2 data-testid="ps-production-detail-name">{{ Selected.label }} <span class="ps-tag ps-mono">v{{ Selected.version }}</span></h2>
                         <div class="ps-muted ps-small sub">{{ Selected.algorithm }} · {{ Selected.problemType }} · holdout {{ Selected.holdoutMetric }}</div>
                       </div>
-                      <span class="ps-badge" [class]="DeployBadge(Selected.deployState)">{{ DeployLabel(Selected.deployState) }}</span>
-                      <button mjButton variant="primary" size="sm" data-testid="ps-production-operate" [disabled]="Selected.deployState === 'needs-training'" [title]="Selected.deployState === 'needs-training' ? 'Train this model before operating it' : 'Operate this model'" (click)="OperateOpen = true">
+                      <span class="ps-badge" data-testid="ps-deploy-state" [class]="DeployBadge(Selected.deployState)">{{ DeployLabel(Selected.deployState) }}</span>
+                      <button mjButton variant="primary" size="sm" data-testid="ps-production-operate" [disabled]="!CanOperate(Selected)" [title]="Selected.unscorableReason || 'Operate this model'" (click)="OperateOpen = true">
                         <i class="fa-solid fa-rocket"></i> Operate
                       </button>
                       <button class="ps-card-collapse-btn" type="button" (click)="ToggleHeaderCollapse()" title="Collapse model header" aria-label="Collapse model header">
@@ -172,7 +177,7 @@ interface RunDetailVM {
                         <span class="ps-muted ps-small">· {{ Selected.algorithm }}</span>
                       </div>
                       <span class="ps-badge" [class]="DeployBadge(Selected.deployState)">{{ DeployLabel(Selected.deployState) }}</span>
-                      <button mjButton variant="primary" size="sm" data-testid="ps-production-operate-compact" [disabled]="Selected.deployState === 'needs-training'" (click)="$event.stopPropagation(); OperateOpen = true">
+                      <button mjButton variant="primary" size="sm" data-testid="ps-production-operate-compact" [disabled]="!CanOperate(Selected)" (click)="$event.stopPropagation(); OperateOpen = true">
                         <i class="fa-solid fa-rocket"></i> Operate
                       </button>
                       <button class="ps-card-collapse-btn" type="button" (click)="$event.stopPropagation(); ToggleHeaderCollapse()" title="Expand model header" aria-label="Expand model header">
@@ -201,10 +206,15 @@ interface RunDetailVM {
                   </div>
                   @if (!IsDeploymentCollapsed) {
                     <div class="ps-card-body">
-                      @if (Selected.deployState === 'needs-training') {
-                        <div class="ps-callout warn" data-testid="ps-production-needs-training">
+                      @if (Selected.autoTrainOutcome) {
+                        <div class="ps-small ps-muted" data-testid="ps-auto-train-outcome" style="margin-bottom:8px">
+                          <i class="fa-solid fa-robot"></i> Last auto-train: {{ Selected.autoTrainOutcome }}
+                        </div>
+                      }
+                      @if (Selected.deployState === 'unscorable') {
+                        <div class="ps-callout warn" data-testid="ps-production-unscorable">
                           <i class="fa-solid fa-triangle-exclamation"></i>
-                          <div class="ps-small">This model <strong>needs training</strong> — it has no trained model artifact on this server, so it can't score anything yet. Train its pipeline (Pipelines → Train), then publish the new model; scoring processes that opt in to auto-train do this on their next run.</div>
+                          <div class="ps-small">This model is <strong>unscorable</strong>: {{ Selected.unscorableReason }} Its pipeline is retrained automatically; a model published through the lifecycle gate replaces it.</div>
                         </div>
                       } @else if (Selected.deployState === 'idle') {
                         <div class="ps-callout info">
@@ -492,6 +502,7 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
 
   private rebuildModels(): void {
     this.Models = (this.Engine?.PublishedModels || []).map((m) => this.toVM(m));
+    void this.refreshAutoTrainOutcomes();
     if (!this.Models.some((m) => UUIDsEqual(m.modelId, this.SelectedModelId))) {
       const first = this.Models[0]?.modelId || '';
       if (first) {
@@ -527,13 +538,95 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
       problemType: m.ProblemType === null || m.ProblemType === undefined ? '—' : m.ProblemType,
       version: m.Version,
       holdoutMetric,
-      deployState: !m.ArtifactFileID ? 'needs-training' : bindings.length > 0 ? 'bound' : scheduledCount > 0 ? 'scheduled' : 'idle',
+      deployState: PSProductionComponent.UnscorableReason(m.ArtifactStatus) !== null ? 'unscorable' : bindings.length > 0 ? 'bound' : scheduledCount > 0 ? 'scheduled' : 'idle',
       bindingCount: bindings.length,
       processCount: processes.length,
       scheduledCount,
       lastScoredAt,
       lastRowCount,
+      unscorableReason: PSProductionComponent.UnscorableReason(m.ArtifactStatus),
+      autoTrainOutcome: this.autoTrainOutcomes.Get(m.ID) || null,
     };
+  }
+
+  /** Each production model's last auto-train outcome, by model ID (filled asynchronously). */
+  private autoTrainOutcomes = new UUIDMap<string>();
+
+  /**
+   * Why a model with `status` cannot score, or null when it can: a missing artifact, one whose bytes fail its registered
+   * hash, or one that exists only on a pre-change local path.
+   */
+  public static UnscorableReason(status: MJMLModelEntity['ArtifactStatus']): string | null {
+    switch (status) {
+      case 'missing': return "the model's artifact file is missing.";
+      case 'hash-mismatch': return "the model's artifact bytes do not match its registered hash.";
+      case 'legacy-local': return "the model's artifact exists only on a local path from before the lifecycle gate, so it cannot be verified.";
+      default: return null;
+    }
+  }
+
+  /** True when the model can be operated: it is not unscorable. */
+  public CanOperate(vm: ProductionModelVM): boolean {
+    return vm.deployState !== 'unscorable';
+  }
+
+  /** Loads the last auto-train outcome of every production model and re-renders the rows that changed. */
+  private async refreshAutoTrainOutcomes(): Promise<void> {
+    const ids = this.Models.filter((m) => this.Engine.RecordProcessesForModel(m.modelId).length > 0).map((m) => m.modelId);
+    if (ids.length === 0) return;
+    try {
+      this.autoTrainOutcomes = await this.LoadAutoTrainOutcomes(ids);
+    } catch {
+      // the outcome line is informational; a failed read leaves it out rather than blocking the view
+      return;
+    }
+    this.Models = this.Models.map((vm) => ({ ...vm, autoTrainOutcome: this.autoTrainOutcomes.Get(vm.modelId) || null }));
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * The last auto-train outcome of each model's pipeline: the newest `MJ: ML Model Publish Records` row, over the
+   * pipeline's models, whose `Initiator` is auto-train — "published", or "withheld: <reason>" (one batched `RunView`).
+   */
+  protected async LoadAutoTrainOutcomes(modelIds: readonly string[]): Promise<UUIDMap<string>> {
+    const pipelineOf = new UUIDMap<string>();
+    for (const m of [...(this.Engine.Models || []), ...this.Engine.PublishedModels]) pipelineOf.Set(m.ID, m.PipelineID);
+    const pipelines = new UUIDSet();
+    for (const id of modelIds) {
+      const pipeline = pipelineOf.Get(id);
+      if (pipeline) pipelines.Add(pipeline);
+    }
+    const candidates = [...pipelineOf].filter(([, pipeline]) => pipelines.Has(pipeline)).map(([id]) => `'${EscapeSQLString(id)}'`);
+    const [result] = await RunView.FromMetadataProvider(this.ProviderToUse).RunViews<MJMLModelPublishRecordEntity>([
+      {
+        EntityName: 'MJ: ML Model Publish Records',
+        ExtraFilter: `ModelID IN (${candidates.join(',')}) AND Kind IN ('publish','refusal') AND Initiator LIKE '%auto-train%'`,
+        OrderBy: 'RecordedAt DESC',
+        MaxRows: 500,
+        ResultType: 'entity_object',
+      },
+    ]);
+    const newestByPipeline = new UUIDMap<string>();
+    for (const r of result?.Success ? result.Results : []) {
+      const initiator = r.InitiatorObject;
+      const pipeline = r.ModelID ? pipelineOf.Get(r.ModelID) : undefined;
+      if (!pipeline || newestByPipeline.Has(pipeline) || initiator.kind !== 'system' || initiator.component !== 'auto-train') continue;
+      newestByPipeline.Set(pipeline, PSProductionComponent.OutcomeText(r));
+    }
+    const out = new UUIDMap<string>();
+    for (const id of modelIds) {
+      const pipeline = pipelineOf.Get(id);
+      const text = pipeline ? newestByPipeline.Get(pipeline) : undefined;
+      if (text) out.Set(id, text);
+    }
+    return out;
+  }
+
+  /** An auto-train publish record in words: "published", or "withheld: <reason>". */
+  public static OutcomeText(r: MJMLModelPublishRecordEntity): string {
+    if (r.Kind === 'publish') return 'published';
+    const refusal = r.RefusalObject;
+    return refusal ? `withheld: ${TransitionRefusalText.For(refusal)}` : 'withheld';
   }
 
   /** The bindings of the model's pipeline (a binding scores with whichever version of it is Published). */
@@ -587,6 +680,7 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
       this.Models[0] || {
         modelId: '', label: '—', algorithm: '—', problemType: '—', version: 0, holdoutMetric: '—',
         deployState: 'idle', bindingCount: 0, processCount: 0, scheduledCount: 0, lastScoredAt: null, lastRowCount: null,
+        unscorableReason: null, autoTrainOutcome: null,
       }
     );
   }
@@ -697,7 +791,7 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
   /** The icon of a deployment state. */
   public DeployIcon(state: DeployState): string {
     switch (state) {
-      case 'needs-training': return 'fa-solid fa-triangle-exclamation';
+      case 'unscorable': return 'fa-solid fa-triangle-exclamation';
       case 'bound': return 'fa-solid fa-arrow-right-to-bracket';
       case 'scheduled': return 'fa-solid fa-clock';
       case 'idle': return 'fa-solid fa-circle-pause';
@@ -707,7 +801,7 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
   /** The label of a deployment state. */
   public DeployLabel(state: DeployState): string {
     switch (state) {
-      case 'needs-training': return 'Needs training';
+      case 'unscorable': return 'Unscorable';
       case 'bound': return 'Bound';
       case 'scheduled': return 'Scheduled';
       case 'idle': return 'Idle';
@@ -717,7 +811,7 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
   /** The badge variant of a deployment state. */
   public DeployBadge(state: DeployState): StatusVariant {
     switch (state) {
-      case 'needs-training': return 'amber';
+      case 'unscorable': return 'amber';
       case 'bound': return 'green';
       case 'scheduled': return 'blue';
       case 'idle': return 'gray';

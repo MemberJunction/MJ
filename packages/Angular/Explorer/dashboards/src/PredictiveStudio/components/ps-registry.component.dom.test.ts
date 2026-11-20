@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
-import { renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { NavigationService } from '@memberjunction/ng-shared';
 import type { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { PSRegistryComponent } from './ps-registry.component';
 
@@ -41,7 +42,26 @@ const makeEngine = (models: unknown[]) =>
     AlgorithmName: () => 'XGBoost',
   } as unknown as PredictiveStudioEngine);
 
-const render = (models: unknown[]) => renderComponentFixture(PSRegistryComponent, { inputs: { engine: makeEngine(models) } });
+const render = (models: unknown[]) =>
+  renderComponentFixture(PSRegistryComponent, { inputs: { engine: makeEngine(models) }, providers: [{ provide: NavigationService, useValue: {} }] });
+
+const PRE_CHANGE_REASON =
+  'Trained before the Predictive Studio lifecycle gate; never evaluated under an Evaluation Protocol; the pipeline is retrained under its protocol automatically.';
+const M = makeModel;
+
+/** A run-level refusal record (no model row) of a training run of pipeline P-1. */
+const runLevelRefusal = { ID: 'PR-9', ModelID: null, TrainingRunID: 'TR-1', Kind: 'refusal', RecordedAt: new Date('2026-11-12T00:00:00Z'), RefusalObject: { kind: 'gate-no-signal', reason: 'no candidate beat the flat guess' } };
+
+/** Renders the registry over `models`; the provider serves `records` as publish records, and the engine knows `runs`. */
+async function RenderRegistry(opts: { models: unknown[]; records?: unknown[] }) {
+  const engine = { ...makeEngine(opts.models), Pipelines: [{ ID: 'P-1', Name: 'Renewal pipeline' }], TrainingRuns: [{ ID: 'TR-1', PipelineID: 'P-1' }] } as unknown as PredictiveStudioEngine;
+  const provider = createFakeProvider({ runViewResults: (p) => (p.EntityName === 'MJ: ML Model Publish Records' ? opts.records || [] : []) });
+  const f = renderComponentFixture(PSRegistryComponent, { inputs: { engine, provider }, providers: [{ provide: NavigationService, useValue: {} }] });
+  for (let i = 0; i < 5; i++) await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  f.detectChanges();
+  return f;
+}
+const Text = (f: Awaited<ReturnType<typeof RenderRegistry>>, testId: string): string => query(f, `[data-testid="${testId}"]`)?.textContent || '';
 
 describe('PSRegistryComponent (DOM)', () => {
   it('shows the empty state when there are no models', () => {
@@ -87,6 +107,22 @@ describe('PSRegistryComponent (DOM)', () => {
     (query(fixture, '[data-testid="ps-registry-validate"]') as HTMLElement).click();
     fixture.detectChanges();
     expect(query(fixture, '[data-testid="ps-confirm-modal"]')).not.toBeNull();
+  });
+
+  it('the registry lists an Unevaluated model with its chip', async () => {
+    const f = await RenderRegistry({ models: [M({ Status: 'Unevaluated', StatusReason: PRE_CHANGE_REASON })] });
+    expect(Text(f, 'ps-lifecycle-chip')).toContain('Unevaluated');
+  });
+
+  it('a KeepBaseline row says it ships the simple baseline and carries its reason', async () => {
+    const f = await RenderRegistry({ models: [M({ Status: 'KeepBaseline', StatusReason: 'the model did not beat the best simple baseline' })] });
+    expect([Text(f, 'ps-lifecycle-chip'), query(f, '[data-testid="ps-registry-row"]')?.getAttribute('title')]).toEqual(['Ships the simple baseline', 'the model did not beat the best simple baseline']);
+  });
+
+  it("shows each pipeline's latest run that shipped no model, from its run-level refusal record", async () => {
+    const f = await RenderRegistry({ models: [M({ Status: 'Published' })], records: [runLevelRefusal] });
+    expect(Text(f, 'ps-registry-run-outcome')).toContain('Renewal pipeline');
+    expect(Text(f, 'ps-registry-run-outcome')).toContain('No signal');
   });
 
   it('selects and highlights the deep-linked model when the link spells its ID in another case', () => {

@@ -13,9 +13,42 @@
             {{ Model.Algorithm || 'Model' }}{{ TargetSuffix }} &bull; immutable snapshot
           </div>
         </div>
-        <span class="ps-badge" [class]="StatusBadgeClass(Model.Status)">{{ Model.Status }}</span>
+        <ps-lifecycle-chip [Status]="Model.Status" [StatusReason]="Model.StatusReason" [ServingWhileUnevaluated]="Model.ServingWhileUnevaluated"></ps-lifecycle-chip>
       </div>
     </div>
+
+    <!-- Tabs -->
+    <div class="ps-detail-tabs" role="tablist">
+      @for (tab of Tabs; track tab.Key) {
+        <button mjButton [variant]="ActiveTab === tab.Key ? 'primary' : 'flat'" size="sm" type="button" role="tab"
+          [attr.aria-selected]="ActiveTab === tab.Key" [attr.data-testid]="'ps-detail-tab-' + tab.Key" (click)="SelectTab(tab.Key)">
+          {{ tab.Label }}
+        </button>
+      }
+    </div>
+
+    @switch (ActiveTab) {
+      @case ('history') {
+        <div class="ps-card"><div class="ps-card-body">
+          <ps-publish-history [Model]="Model" [Provider]="Provider" (OpenRecord)="OnOpenRecord($event)"></ps-publish-history>
+        </div></div>
+      }
+      @case ('scoring') {
+        <div class="ps-card"><div class="ps-card-body">
+          <ps-scoring-runs [Model]="Model" [Provider]="Provider"></ps-scoring-runs>
+        </div></div>
+      }
+      @case ('monitoring') {
+        <div class="ps-card"><div class="ps-card-body">
+          <ps-model-monitoring [Model]="Model" [Provider]="Provider" (OpenPublishRecord)="OnOpenPublishRecord($event)"></ps-model-monitoring>
+        </div></div>
+      }
+      @case ('bindings') {
+        <div class="ps-card"><div class="ps-card-body">
+          <ps-output-bindings-editor [Model]="Model" [Provider]="Provider"></ps-output-bindings-editor>
+        </div></div>
+      }
+      @default {
 
     <!-- 2. Lifecycle Stepper -->
     <div class="ps-card">
@@ -140,16 +173,18 @@
               <strong>{{ TopFeatureName }} at {{ TopFeatureValue }}</strong>, below the
               <strong>{{ DominanceThreshold }}</strong> dominance threshold.
             }
-            <div class="ps-small" style="margin-top:6px">
-              <i class="fa-solid fa-check"></i> Sign-off required before any Validated &rarr; Published promotion.
-            </div>
           }
         </div>
       </div>
     }
 
-    <!-- 6. Lifecycle Actions -->
-    @if (ShowActions) {
+    <!-- 6. Publish and sign-off on the stored evidence -->
+    @if (ShowsSignOff) {
+      <ps-sign-off-panel [Model]="Model" [Provider]="Provider" (Published)="OnPublished($event)"></ps-sign-off-panel>
+    }
+
+    <!-- 7. Lifecycle Actions -->
+    @if (ShowActions && AvailableTransitions.length > 0) {
       <div class="ps-card">
         <div class="ps-card-body ps-row" style="align-items:center;flex-wrap:wrap;gap:8px">
           <span class="ps-muted ps-small" style="flex:1">{{ ActionHint }}</span>
@@ -157,12 +192,6 @@
             <button mjButton [variant]="Presentation('evaluate').Primary ? 'primary' : 'secondary'" size="sm"
               [attr.data-testid]="Presentation('evaluate').TestID" data-action="evaluate" (click)="RequestTransition('evaluate')">
               <i [class]="Presentation('evaluate').Icon"></i> {{ Presentation('evaluate').Label }}
-            </button>
-          }
-          @if (Offers('publish')) {
-            <button mjButton [variant]="Presentation('publish').Primary ? 'primary' : 'secondary'" size="sm"
-              [attr.data-testid]="Presentation('publish').TestID" data-action="publish" (click)="RequestTransition('publish')">
-              <i [class]="Presentation('publish').Icon"></i> {{ Presentation('publish').Label }}
             </button>
           }
           @if (Offers('rollback')) {
@@ -181,7 +210,10 @@
       </div>
     }
 
-    <!-- 7. Confirm Transition Modal -->
+      }
+    }
+
+    <!-- 8. Confirm Transition Modal -->
     @if (Pending && PendingPresentation; as presentation) {
       <div class="ps-modal-backdrop" (click)="CancelTransition()">
         <div class="ps-modal" (click)="$event.stopPropagation()" data-testid="ps-confirm-modal">

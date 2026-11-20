@@ -137,6 +137,38 @@ export type PublishOutcome =
     };
 
 /**
+ * The outcome of `LifecycleGate.AdoptPublished` (§5.6 step 2, D4-61): a pre-change Published model re-verified on its
+ * stored gate record and kept Published with an `adopt` record; an adoption a retry finds already recorded; a model
+ * whose record did not re-verify, now `Unevaluated` and not serving, with the pipeline's incumbent rolled back when it
+ * has one; or an attempt that changed nothing — refused before the locks (`actor-not-permitted`), a model that is no
+ * longer Published, or a transient refusal (`publish-in-progress`, storage unreachable) the next run retries.
+ */
+export type AdoptOutcome =
+  | { readonly Kind: 'adopted'; readonly ModelID: string; readonly PublishRecordID: string }
+  | { readonly Kind: 'already-adopted'; readonly ModelID: string; readonly PublishRecordID: string }
+  | {
+      readonly Kind: 'demoted';
+      readonly ModelID: string;
+      /** Why the stored record did not re-verify; the model's `StatusReason` names it. */
+      readonly Refusal: TransitionRefusal;
+      readonly RefusalRecordID: string;
+      /** The rollback publish of the pipeline's incumbent, or null when the pipeline has none to roll back to. */
+      readonly Rollback: PublishOutcome | null;
+    }
+  | { readonly Kind: 'refused'; readonly ModelID: string; readonly Refusal: TransitionRefusal; readonly Transient: boolean };
+
+/** What `LifecycleGate.AdoptPublished` runs inside its locked transaction before the publish checks. */
+export interface AdoptOptions {
+  /**
+   * The back-fill of the model's registry entry from its stored run (§5.6 step 2), run under both locks before the
+   * checks, so a refused adoption rolls it back with everything else. Returns the refusal that demotes the model (its
+   * artifact cannot be verified against the run), or null; throws for a failure a later run may not repeat (storage
+   * unreachable), which rolls the attempt back and leaves the model as it was.
+   */
+  readonly BackFill?: (model: MJMLModelEntity, ctx: GateContext) => Promise<TransitionRefusal | null>;
+}
+
+/**
  * Who a refusal's audit (the `refusal` record and the model's `StatusReason`) is written as: the caller (`ctx.ContextUser`,
  * who holds the permissions the writes need), or the gate's own write identity, the MJ system user on the same provider
  * and transaction, for a caller the gate refused for lacking them (`actor-not-permitted`, D4-134), so the refusal is

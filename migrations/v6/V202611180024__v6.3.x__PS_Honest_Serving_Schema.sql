@@ -27,6 +27,9 @@
  *  10. vwUserHeldAuthorizations, the authorizations each user holds (MJ's authorization rule in SQL)
  *  11. vwLatestFeatureValues re-created with the prediction lineage columns
  *  12. spDeleteEntityWithCoreDependencies, re-created to clear the serving tables' rows when an entity is removed
+ *  13. MLModel               models registered before the lifecycle gate: re-checked from their stored gate record,
+ *                              or Unevaluated (the newest formerly Published one of a pipeline still serving it); then
+ *                              at most one Published model per pipeline
  **************************************************************************************************/
 
 -- ============================================================================
@@ -1074,6 +1077,92 @@ BEGIN CATCH
     THROW;
 END CATCH
 END
+GO
+
+-- ============================================================================
+-- 13. MLModel: models trained before the lifecycle gate, then one Published model per pipeline
+-- ============================================================================
+-- A model with no Delivery was registered before the lifecycle gate. One whose training run stored the gate record
+-- (ValidationResults.gate.decision.outcome, the newest such run whose ResultingModelID is the model) carries its own
+-- evidence: it takes that run as its TrainingRunID, its artifact is re-checked (ArtifactStatus 'unverified'), a
+-- Validated one returns to Draft (it is evaluated again from the stored record), a Published one stays Published until
+-- it is re-verified on that record, and of several such Published models of one pipeline all but the newest are
+-- archived. Every other Draft, Validated or Published model without a Delivery becomes Unevaluated with its artifact
+-- unverified; the newest formerly Published one of each pipeline that keeps no Published model goes on serving it,
+-- flagged ServingWhileUnevaluated, until a model published through the gate replaces it. Archived models stay as they
+-- are. The ValidationResults test reads JSON only when ISJSON says it is JSON, so one malformed value cannot abort the
+-- migration.
+DECLARE @Evidence TABLE ([ModelID] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY, [TrainingRunID] UNIQUEIDENTIFIER NOT NULL);
+DECLARE @Serving TABLE ([ModelID] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY);
+
+INSERT INTO @Evidence ([ModelID], [TrainingRunID])
+SELECT m.[ID], run.[ID]
+FROM [${flyway:defaultSchema}].[MLModel] m
+CROSS APPLY (
+    SELECT TOP 1 r.[ID]
+    FROM [${flyway:defaultSchema}].[MLTrainingRun] r
+    WHERE r.[ResultingModelID] = m.[ID]
+      AND (CASE WHEN ISJSON(r.[ValidationResults]) = 1
+                THEN JSON_VALUE(r.[ValidationResults], '$.gate.decision.outcome') END) IS NOT NULL
+    ORDER BY r.[__mj_CreatedAt] DESC, r.[ID] DESC
+) AS run
+WHERE m.[Delivery] IS NULL
+  AND m.[Status] IN (N'Draft', N'Validated', N'Published');
+
+UPDATE m
+   SET [TrainingRunID]  = e.[TrainingRunID],
+       [ArtifactStatus] = N'unverified',
+       [Status]         = CASE WHEN m.[Status] = N'Validated' THEN N'Draft' ELSE m.[Status] END
+FROM [${flyway:defaultSchema}].[MLModel] m
+JOIN @Evidence e ON e.[ModelID] = m.[ID];
+
+WITH [RankedEvidence] AS (
+    SELECT m.[ID],
+           ROW_NUMBER() OVER (PARTITION BY m.[PipelineID] ORDER BY m.[__mj_CreatedAt] DESC, m.[Version] DESC, m.[ID] DESC) AS [NewestRank]
+    FROM [${flyway:defaultSchema}].[MLModel] m
+    JOIN @Evidence e ON e.[ModelID] = m.[ID]
+    WHERE m.[Status] = N'Published'
+)
+UPDATE m
+   SET [Status]       = N'Archived',
+       [StatusReason] = N'Superseded: more than one Published model of the pipeline before the lifecycle gate'
+FROM [${flyway:defaultSchema}].[MLModel] m
+JOIN [RankedEvidence] ranked ON ranked.[ID] = m.[ID]
+WHERE ranked.[NewestRank] > 1;
+
+WITH [RankedLegacy] AS (
+    SELECT m.[ID],
+           ROW_NUMBER() OVER (PARTITION BY m.[PipelineID] ORDER BY m.[__mj_CreatedAt] DESC, m.[Version] DESC, m.[ID] DESC) AS [NewestRank]
+    FROM [${flyway:defaultSchema}].[MLModel] m
+    WHERE m.[Status] = N'Published'
+      AND m.[Delivery] IS NULL
+      AND NOT EXISTS (SELECT 1 FROM @Evidence e WHERE e.[ModelID] = m.[ID])
+      AND NOT EXISTS (SELECT 1
+                      FROM [${flyway:defaultSchema}].[MLModel] kept
+                      JOIN @Evidence ke ON ke.[ModelID] = kept.[ID]
+                      WHERE kept.[PipelineID] = m.[PipelineID] AND kept.[Status] = N'Published')
+)
+INSERT INTO @Serving ([ModelID])
+SELECT [ID] FROM [RankedLegacy] WHERE [NewestRank] = 1;
+
+UPDATE m
+   SET [Status]                  = N'Unevaluated',
+       [ArtifactStatus]          = N'unverified',
+       [ServingWhileUnevaluated] = CASE WHEN s.[ModelID] IS NULL THEN 0 ELSE 1 END,
+       [StatusReason]            = CASE WHEN s.[ModelID] IS NULL
+           THEN N'Trained before the Predictive Studio lifecycle gate; never evaluated under an Evaluation Protocol; the pipeline is retrained under its protocol automatically.'
+           ELSE N'Trained before the Predictive Studio lifecycle gate and still serving; never evaluated under an Evaluation Protocol; replaced automatically when a model is published through the gate.' END
+FROM [${flyway:defaultSchema}].[MLModel] m
+LEFT JOIN @Serving s ON s.[ModelID] = m.[ID]
+WHERE m.[Status] IN (N'Draft', N'Validated', N'Published')
+  AND m.[Delivery] IS NULL
+  AND NOT EXISTS (SELECT 1 FROM @Evidence e WHERE e.[ModelID] = m.[ID]);
+GO
+-- At most one Published model per pipeline. Created after the statuses above, so a pipeline that would still hold two
+-- fails the migration here instead of serving from either.
+CREATE UNIQUE NONCLUSTERED INDEX [UX_MLModel_OnePublishedPerPipeline]
+    ON [${flyway:defaultSchema}].[MLModel] ([PipelineID])
+    WHERE [Status] = N'Published';
 GO
 
 
@@ -9511,7 +9600,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField] SET [AutoUpdateIsNameField] = 0 W
 -- HAND EDIT (5) (re-apply after any tail regeneration): AutoUpdateIsNameField = 0 so CodeGen's name-field pick never makes MJ: ML Models.ArtifactStatus the name field; a name field on ML Models adds a joined name column to every view with a foreign key into MLModel
 UPDATE [${flyway:defaultSchema}].[EntityField] SET [AutoUpdateIsNameField] = 0 WHERE [EntityID] = 'A3997636-011D-46E0-BC01-8B1E61E1087B' AND [Name] = N'ArtifactStatus' AND [IsNameField] = 0;
 
-/* SQL text to sync entity unique keys (12 added, 0 updated, 0 removed) */
+/* SQL text to sync entity unique keys (13 added, 0 updated, 0 removed) */
 INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('dd3be67f-c35f-45a0-afe1-553285e7c93a', '18359693-D8DF-4E8F-B5E1-D2C17B742834', 'UQ_MLMonitoringResult_ModelPeriod', 'ModelID,PeriodGrain,Period', NULL);
 INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('cb945559-ef12-4233-a3d1-d2f033b073ce', '3BED585D-B150-4899-AB06-8A19624EA9BE', 'UQ_FeatureValue_ModelRow', 'MLModelScoringBindingID,EntityID,RecordID,EffectiveAsOf,Role', '([Source]=N''Model'')');
 INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('93275069-ad6d-46cb-bc40-23aa62f0bdef', '75F9DA13-10D3-4153-9299-E97F1ED296AD', 'UQ_MLOutputBinding_ModelSurface', 'ModelID,Surface', NULL);
@@ -9520,6 +9609,7 @@ IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityUniqueKey] WHERE [
     INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('b73646ed-db19-444e-9df2-5fc25e0ce986', '7DB88C96-C922-4724-AE93-7B91798CEAFE', 'UQ_MLEvaluationProtocol_Lineage_Version', 'LineageRootID,Version', NULL);
 INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('60bf8799-8770-4fb9-bc38-53b42d43f66e', 'A3997636-011D-46E0-BC01-8B1E61E1087B', 'UX_MLModel_OneServingUnevaluatedPerPipeline', 'PipelineID', '([ServingWhileUnevaluated]=(1))');
 INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('13d270c1-93e1-4a75-83c7-7db302f3a152', 'A3997636-011D-46E0-BC01-8B1E61E1087B', 'UX_MLModel_PipelineVersion', 'PipelineID,Version', NULL);
+INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('c4d35846-8f14-4255-a95a-d1d87500e501', 'A3997636-011D-46E0-BC01-8B1E61E1087B', 'UX_MLModel_OnePublishedPerPipeline', 'PipelineID', '([Status]=N''Published'')');
 INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('78910fdd-18f4-48e0-824f-d84855e29ce6', 'BC5C5F60-2512-467A-BEC8-14B4D8D3B640', 'UX_MLModelPublishRecord_OnePublishPerRun', 'TrainingRunID', '([Kind]=''publish'' AND ([Purpose] IN (''publish'', ''adopt'')) AND [TrainingRunID] IS NOT NULL)');
 INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('82235b10-3719-4320-b793-8e90b8d810f7', 'BC5C5F60-2512-467A-BEC8-14B4D8D3B640', 'UX_MLModelPublishRecord_OneRunOutcome', 'TrainingRunID', '([Purpose]=''evaluate'' AND [TrainingRunID] IS NOT NULL)');
 -- HAND EDIT (re-apply after any tail regeneration): guarded, because V202611101200__v6.3.x__Entity_Unique_Key_Sets.sql created the table without this row and any database where CodeGen ran after it already has it, under its own ID, so the guard matches the unique key (EntityID, Name) too
