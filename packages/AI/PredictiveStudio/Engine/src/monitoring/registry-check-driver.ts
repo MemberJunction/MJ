@@ -16,7 +16,7 @@
  * | {@link RemediateArtifactHealth} (c) | a Published model whose stored artifact is `missing` or `hash-mismatch` | archived, the rollback rule, then one training run through `AutomatedPublisher` |
  * | {@link ResyncScoringActions} (d) | a Published model without an active scoring Action | re-synced |
  * | {@link FailStaleScoringRuns} (e) | a scoring run `running` past the threshold (default 6 h) | `failed` with the reason |
- * | {@link CloseSignOffWaits} (f) | a sign-off wait whose newer run was evaluated or whose expiry passed | `refusal` record `sign-off-wait-closed`, archived; the incumbent untouched |
+ * | {@link CloseSignOffWaits} (f) | a sign-off wait whose newer run was evaluated or whose expiry passed | archived through the gate, then (only once it applied) `refusal` record `sign-off-wait-closed`; the incumbent untouched |
  * | {@link RecordOrphanPublishRecords} (h) | a publish record with no matching status change | recorded only |
  * | {@link ReattachViewGate} (i) | a read permission on the prediction entities without the view gate | the filter attached |
  *
@@ -370,8 +370,11 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
   /**
    * (f) A sign-off wait (D4-19): a model whose newest record is a `no-sign-off` refusal is closed when a newer training
    * run of its pipeline has been evaluated, or when its protocol's `signOffExpiryDays` (default 30) have passed since
-   * the withheld attempt: a `refusal` record `sign-off-wait-closed` is written and the model archived; the incumbent
-   * keeps serving.
+   * the withheld attempt: the model is archived through the gate first, and only once the archive applied is the
+   * `refusal` record `sign-off-wait-closed` written; the incumbent keeps serving. A refused archive writes no record, so
+   * the model's newest record stays `no-sign-off` and the next run finds the wait again (`retry`). The gate's archive
+   * opens its own transaction and takes no work to join it, so the record is written right after it commits; a record
+   * write that fails then is a `retry` finding naming the archived model (its `StatusReason` already names the rule).
    */
   protected async CloseSignOffWaits(initiator: Actor, ctx: GateContext): Promise<RegistryFinding[]> {
     const out: RegistryFinding[] = [];
@@ -383,11 +386,21 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
         : now.getTime() - new Date(latest.RecordedAt).getTime() >= (await this.expiryDays(model, ctx)) * PredictiveStudioRegistryCheckJobDriver.MS_PER_DAY ? 'expired' : null;
       if (closedBy === null) continue;
       const refusal: TransitionRefusal = { kind: 'sign-off-wait-closed', closedBy };
-      await PublishRecords.WriteRefusal({ ModelID: model.ID, TrainingRunID: model.TrainingRunID, Purpose: 'publish', Approver: { Kind: 'automated-gate' }, Initiator: initiator, Refusal: refusal, Transient: false }, ctx);
       const archived = await this.resolved.Gate.Archive(model.ID, `sign-off-wait-closed: ${GateRefusals.Describe(refusal)}`, initiator, ctx);
-      out.push(PredictiveStudioRegistryCheckJobDriver.archiveFinding('f', model.ID, `a sign-off wait closed (${closedBy})`, archived));
+      const finding = PredictiveStudioRegistryCheckJobDriver.archiveFinding('f', model.ID, `a sign-off wait closed (${closedBy})`, archived);
+      out.push(archived.Ok ? await this.recordWaitClosed(model, refusal, initiator, finding, ctx) : finding);
     }
     return out;
+  }
+
+  /** (f)'s `sign-off-wait-closed` record, written after the archive applied; a failed write is a `retry` finding. */
+  private async recordWaitClosed(model: RegistryModel, refusal: TransitionRefusal, initiator: Actor, archived: RegistryFinding, ctx: GateContext): Promise<RegistryFinding> {
+    try {
+      await PublishRecords.WriteRefusal({ ModelID: model.ID, TrainingRunID: model.TrainingRunID, Purpose: 'publish', Approver: { Kind: 'automated-gate' }, Initiator: initiator, Refusal: refusal, Transient: false }, ctx);
+      return archived;
+    } catch (e) {
+      return { ...archived, Action: `archived by the lifecycle gate, but its sign-off-wait-closed record did not save: ${e instanceof Error ? e.message : String(e)}`, Outcome: 'retry' };
+    }
   }
 
   /** (h) A publish record with no matching status change (its model gone, Draft or Unevaluated) is recorded only. */

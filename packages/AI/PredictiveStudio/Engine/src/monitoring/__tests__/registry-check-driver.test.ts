@@ -64,6 +64,20 @@ beforeEach(() => {
   driver = new PredictiveStudioRegistryCheckJobDriver({ Gate: gate, Publisher: trainer, ArtifactLoader: new StorageProviderArtifactLoader(), ScoringActions: actions, Notifier: notifier, Clock: { Now: () => now } });
 });
 
+/** The real gate, except that its first archive is refused as a publish in progress would refuse it. */
+class BusyOnceGate implements Pick<LifecycleGate, 'Publish' | 'Archive'> {
+  private refused = false;
+  constructor(private readonly inner: LifecycleGate) {}
+  public Publish(...args: Parameters<LifecycleGate['Publish']>): ReturnType<LifecycleGate['Publish']> {
+    return this.inner.Publish(...args);
+  }
+  public async Archive(...args: Parameters<LifecycleGate['Archive']>): ReturnType<LifecycleGate['Archive']> {
+    if (this.refused) return this.inner.Archive(...args);
+    this.refused = true;
+    return { Ok: false, Refusal: { kind: 'publish-in-progress' } };
+  }
+}
+
 /** A model published through the gate. */
 async function Published(o: { readonly IncumbentID?: string } = {}): Promise<WorldModel> {
   const model = world.Model('Validated', 'model', o);
@@ -180,6 +194,24 @@ describe('PredictiveStudioRegistryCheckJobDriver', () => {
     await Run();
     expect(store.PublishRecords(waiting.ID).at(-1)).toMatchObject({ Kind: 'refusal', Refusal: expect.stringContaining('sign-off-wait-closed') });
     expect([store.Status(waiting.ID), store.Status(incumbent.ID)]).toEqual(['Archived', 'Published']);
+  });
+
+  it('a refused archive leaves no sign-off-wait-closed record, so the next run finds the wait again and closes it (I2)', async () => {
+    const incumbent = await Published();
+    const waiting = world.Model('Validated', 'model', { IncumbentID: incumbent.ID });
+    world.PinProtocol(waiting.ID, { requiresHumanSignOff: true });
+    await gate.Publish({ modelId: waiting.ID, purpose: 'publish', initiator: registryJob, signOffId: null, reason: null }, ctx);
+    now = new Date(Date.now() + 31 * 86_400_000);
+    const busy = new BusyOnceGate(gate);
+    const flaky = new PredictiveStudioRegistryCheckJobDriver({ Gate: busy, Publisher: trainer, ArtifactLoader: new StorageProviderArtifactLoader(), ScoringActions: actions, Notifier: notifier, Clock: { Now: () => now } });
+    const first = await flaky.RunChecks(PredictiveStudioRegistryCheckJobDriver.ReadConfiguration(null), registryJob, ctx);
+    expect(first).toEqual(expect.arrayContaining([expect.objectContaining({ Finding: 'f', SubjectID: waiting.ID, Outcome: 'retry' })]));
+    expect(store.PublishRecords(waiting.ID).filter((r) => String(r['Refusal']).includes('sign-off-wait-closed'))).toHaveLength(0);
+    expect(store.Status(waiting.ID)).toBe('Validated');
+    const second = await flaky.RunChecks(PredictiveStudioRegistryCheckJobDriver.ReadConfiguration(null), registryJob, ctx);
+    expect(second).toEqual(expect.arrayContaining([expect.objectContaining({ Finding: 'f', SubjectID: waiting.ID, Outcome: 'remediated' })]));
+    expect(store.PublishRecords(waiting.ID).filter((r) => String(r['Refusal']).includes('sign-off-wait-closed'))).toHaveLength(1);
+    expect(store.Status(waiting.ID)).toBe('Archived');
   });
 
   it('leaves a sign-off wait open before its expiry', async () => {
