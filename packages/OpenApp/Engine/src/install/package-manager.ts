@@ -149,7 +149,7 @@ export function AddAppPackages(options: PackageManagerOptions): PackageOperation
 
   try {
     const targets = buildTargetList(options);
-    const wanted = PackagesByRole(options.ServerPackages, options.ClientPackages, options.SharedPackages);
+    const wanted = PackagesByRole({ Server: options.ServerPackages, Client: options.ClientPackages, Shared: options.SharedPackages });
     const stale = FindStalePins(wanted, options.PreviousPackages, options.RetainPackages);
 
     for (const target of targets) {
@@ -176,12 +176,8 @@ export function AddAppPackages(options: PackageManagerOptions): PackageOperation
 }
 
 /** What each workspace role declares: its own group plus shared. */
-function PackagesByRole(
-  server: ManifestPackageEntry[],
-  client: ManifestPackageEntry[],
-  shared: ManifestPackageEntry[],
-): Record<WorkspaceTarget['Role'], ManifestPackageEntry[]> {
-  return { server: [...server, ...shared], client: [...client, ...shared] };
+function PackagesByRole(groups: AppPackageGroups): Record<WorkspaceTarget['Role'], ManifestPackageEntry[]> {
+  return { server: [...groups.Server, ...groups.Shared], client: [...groups.Client, ...groups.Shared] };
 }
 
 /**
@@ -196,7 +192,7 @@ function FindStalePins(
 ): Record<WorkspaceTarget['Role'], ManifestPackageEntry[]> {
   if (!previous) return { server: [], client: [] };
   const retained = new Set(retainPackages ?? []);
-  const was = PackagesByRole(previous.Server, previous.Client, previous.Shared);
+  const was = PackagesByRole(previous);
   const staleFor = (role: WorkspaceTarget['Role']): ManifestPackageEntry[] => {
     const keep = new Set(wanted[role].map((p) => p.name));
     return was[role].filter((p) => !keep.has(p.name) && !retained.has(p.name));

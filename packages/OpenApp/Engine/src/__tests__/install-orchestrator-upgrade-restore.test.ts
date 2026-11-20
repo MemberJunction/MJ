@@ -79,6 +79,7 @@ vi.mock('@memberjunction/core', () => ({
 
 import { UpgradeApp, DescribeRestoredUpgrade } from '../install/install-orchestrator.js';
 import type { OrchestratorContext } from '../install/install-orchestrator.js';
+import type { InstalledAppInfo } from '../types/open-app-types.js';
 import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion } from '../github/github-client.js';
 import { SchemaExists } from '../install/schema-manager.js';
 import { RunAppMigrations } from '../install/migration-runner.js';
@@ -271,21 +272,24 @@ describe('UpgradeApp — hands the previous version\'s packages to the package s
         client: [{ name: '@test/app-x-client', role: 'bootstrap', startupExport: 'LoadClient' }],
         shared: [{ name: '@test/app-x-actions', role: 'library' }],
     };
-    const manifest = (version: string, pkgs: object): string => JSON.stringify({
+    // pkgs undefined omits the optional `packages` key, as a manifest that ships no packages does
+    const manifest = (version: string, pkgs?: object): string => JSON.stringify({
         manifestVersion: 1, name: 'app-x', displayName: 'app-x', description: 'app-x test app description',
         version, publisher: { name: 'Test' }, repository: 'https://github.com/test/app-x',
         mjVersionRange: '>=5.0.0 <6.0.0', packages: pkgs, dependencies: {},
     });
-    const installed = (manifestJSON: string) => ({
-        ID: 'app-x-id', Name: 'app-x', Version: '1.0.0', Status: 'Active',
-        RepositoryURL: 'https://github.com/test/app-x', ManifestJSON: manifestJSON,
-    }) as unknown as Awaited<ReturnType<typeof FindInstalledApp>>;
+    const installed = (name: string, manifestJSON: string, status: InstalledAppInfo['Status'] = 'Active'): InstalledAppInfo => ({
+        ID: `${name}-id`, Name: name, DisplayName: name, Description: null, Version: '1.0.0',
+        Publisher: 'Test', PublisherEmail: null, PublisherURL: null, RepositoryURL: `https://github.com/test/${name}`,
+        SchemaName: null, MJVersionRange: '>=5.0.0 <6.0.0', License: null, Icon: null, Color: null,
+        ManifestJSON: manifestJSON, ConfigurationSchemaJSON: null, InstalledByUserID: 'user-id', Status: status,
+    });
 
     beforeEach(() => {
         vi.clearAllMocks();
         vi.mocked(SetAppStatus).mockResolvedValue(undefined);
         vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
-        vi.mocked(GetLatestVersion).mockResolvedValue('2.0.0' as unknown as Awaited<ReturnType<typeof GetLatestVersion>>);
+        vi.mocked(GetLatestVersion).mockResolvedValue('2.0.0');
         vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: ['@test/app-x-actions'] });
         vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true, Added: [], Removed: [] });
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true } as ReturnType<typeof AddServerDynamicPackages>);
@@ -295,12 +299,12 @@ describe('UpgradeApp — hands the previous version\'s packages to the package s
     });
 
     it('passes the installed manifest\'s packages and every package another app declares', async () => {
-        vi.mocked(FindInstalledApp).mockResolvedValue(installed(manifest('1.0.0', packages)));
+        vi.mocked(FindInstalledApp).mockResolvedValue(installed('app-x', manifest('1.0.0', packages)));
         vi.mocked(ListInstalledApps).mockResolvedValue([
-            { Name: 'app-x', Status: 'Active', ManifestJSON: manifest('1.0.0', packages) },
-            { Name: 'app-y', Status: 'Active', ManifestJSON: manifest('3.0.0', { client: [{ name: '@test/shared-lib', role: 'library' }] }) },
-            { Name: 'app-z', Status: 'Removed', ManifestJSON: manifest('1.0.0', { client: [{ name: '@test/gone-lib', role: 'library' }] }) },
-        ] as unknown as Awaited<ReturnType<typeof ListInstalledApps>>);
+            installed('app-x', manifest('1.0.0', packages)),
+            installed('app-y', manifest('3.0.0', { client: [{ name: '@test/shared-lib', role: 'library' }] })),
+            installed('app-z', manifest('1.0.0', { client: [{ name: '@test/gone-lib', role: 'library' }] }), 'Removed'),
+        ]);
 
         const result = await UpgradeApp({ AppName: 'app-x' }, context);
 
@@ -312,9 +316,9 @@ describe('UpgradeApp — hands the previous version\'s packages to the package s
     });
 
     it('warns and removes nothing when the installed manifest cannot be parsed', async () => {
-        vi.mocked(FindInstalledApp).mockResolvedValue(installed('{not json'));
+        vi.mocked(FindInstalledApp).mockResolvedValue(installed('app-x', '{not json'));
         const warnings: string[] = [];
-        const warnContext = { ...context, Callbacks: { OnWarn: (_phase: string, message: string) => warnings.push(message) } } as unknown as OrchestratorContext;
+        const warnContext: OrchestratorContext = { ...context, Callbacks: { OnWarn: (_phase: string, message: string) => void warnings.push(message) } };
 
         const result = await UpgradeApp({ AppName: 'app-x' }, warnContext);
 
@@ -322,5 +326,6 @@ describe('UpgradeApp — hands the previous version\'s packages to the package s
         expect(vi.mocked(AddAppPackages).mock.calls[0][0].PreviousPackages).toBeUndefined();
         expect(warnings.some((w) => w.includes('package pins'))).toBe(true);
     });
+
 });
 

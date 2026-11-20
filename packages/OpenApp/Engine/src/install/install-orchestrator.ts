@@ -24,7 +24,7 @@ import { OfferTemplateUser } from './template-user.js';
 import { ExtractApplicationIds } from './migration-application-ids.js';
 import { CreateAppTempDir } from './temp-dir.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
-import { AddAppPackages, RemoveAppPackages, RunPackageInstallAsync, BumpPrefixedDependencies, PreflightAppPackages, ListPackageStepFiles, type PackageManagerOptions, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
+import { AddAppPackages, RemoveAppPackages, RunPackageInstallAsync, BumpPrefixedDependencies, PreflightAppPackages, ListPackageStepFiles, type AppPackageGroups, type PackageManagerOptions, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
 import { RestoreFileSnapshot, SnapshotFiles } from './file-snapshot.js';
 import { CheckWorkspacePackages } from './workspace-packages.js';
 import { BuildHookResolutionBases, ResolveHookModule } from './hook-module-resolver.js';
@@ -2435,6 +2435,11 @@ export function DescribeRestoredUpgrade(info: RestoredUpgradeInfo): string {
 /** What an upgrade's package step needs to remove the replaced version's stale pins (#6789). */
 type ReplacedPackages = Required<Pick<PackageManagerOptions, 'PreviousPackages' | 'RetainPackages'>>;
 
+/** A manifest's package groups, empty when it declares none (`packages` is optional). */
+function ToPackageGroups(packages: MJAppManifest['packages']): AppPackageGroups {
+  return { Server: packages?.server ?? [], Client: packages?.client ?? [], Shared: packages?.shared ?? [] };
+}
+
 /**
  * The installed version's packages, read from the persisted `ManifestJSON` (the documented source
  * of truth), plus every package another installed app declares, which must keep its pin. Returns
@@ -2455,11 +2460,7 @@ async function ResolveReplacedPackages(existingApp: InstalledAppInfo, context: O
   }
   if (!previous.packages) return undefined;
   return {
-    PreviousPackages: {
-      Server: previous.packages.server ?? [],
-      Client: previous.packages.client ?? [],
-      Shared: previous.packages.shared ?? [],
-    },
+    PreviousPackages: ToPackageGroups(previous.packages),
     RetainPackages: ListDeclaredPackageNames(await ListOtherAppManifests(existingApp.Name, context)),
   };
 }
@@ -2483,12 +2484,13 @@ async function HandlePackageInstallation(
     return { Success: true };
   }
 
+  const wanted = ToPackageGroups(manifest.packages);
   context.Callbacks?.OnProgress?.('Packages', 'Adding packages...');
   const addResult = AddAppPackages({
     RepoRoot: context.RepoRoot,
-    ServerPackages: manifest.packages.server ?? [],
-    ClientPackages: manifest.packages.client ?? [],
-    SharedPackages: manifest.packages.shared ?? [],
+    ServerPackages: wanted.Server,
+    ClientPackages: wanted.Client,
+    SharedPackages: wanted.Shared,
     Version: packageVersion ?? manifest.version,
     ServerPackagePath: context.ServerPackagePath,
     ClientPackagePath: context.ClientPackagePath,
