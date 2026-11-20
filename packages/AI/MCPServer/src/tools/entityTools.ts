@@ -415,6 +415,11 @@ function addSingleParamToObject(
     }
 }
 
+/** The primary key of `entity` from the key values in a tool's input. */
+function primaryKeyOf(entity: EntityInfo, props: Record<string, unknown>): CompositeKey {
+    return new CompositeKey(entity.PrimaryKeys.map((pk) => ({ FieldName: pk.Name, Value: props[pk.Name] })));
+}
+
 /**
  * Builds a Zod parameter object containing only the primary key fields for an entity.
  * Used for Get and Delete operations that only need to identify the record.
@@ -422,11 +427,6 @@ function addSingleParamToObject(
  * @param entity - The entity to build primary key parameters for
  * @returns Object with Zod schemas for each primary key field
  */
-/** The primary key of `entity` from the key values in a tool's input. */
-function primaryKeyOf(entity: EntityInfo, props: Record<string, unknown>): CompositeKey {
-    return new CompositeKey(entity.PrimaryKeys.map((pk) => ({ FieldName: pk.Name, Value: props[pk.Name] })));
-}
-
 function getEntityPrimaryKeyParamsObject(entity: EntityInfo): Record<string, z.ZodTypeAny> {
     const paramObject: Record<string, z.ZodTypeAny> = {};
     entity.PrimaryKeys.forEach((pk) => {
