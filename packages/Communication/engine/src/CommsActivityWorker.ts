@@ -1163,9 +1163,10 @@ export class CommsActivityWorker {
 
     let scrubbedCount = 0;
     for (const activity of res.Results) {
-      if (activity.IPAddress !== null || activity.UserAgent !== null) {
+      if (activity.IPAddress !== null || activity.UserAgent !== null || activity.RawPayload !== null) {
         activity.IPAddress = null;
         activity.UserAgent = null;
+        activity.RawPayload = null;
         if (await activity.Save()) {
           scrubbedCount++;
         }

@@ -541,7 +541,17 @@ export class SendGridProvider extends BaseCommunicationProvider {
         if (!sig || !ts) {
             return fail('Missing SendGrid Event Webhook signature or timestamp header', 401, false);
         }
-        const verification = VerifySendGridWebhookSignature(verificationKey, rawBody, sig, ts);
+        const skipReplayWindow = Boolean(
+            (credentials as { skipReplayWindow?: boolean } | undefined)?.skipReplayWindow,
+        );
+        const verification = VerifySendGridWebhookSignature(
+            verificationKey,
+            rawBody,
+            sig,
+            ts,
+            Math.floor(Date.now() / 1000),
+            skipReplayWindow,
+        );
         if (!verification.Valid) {
             return fail(verification.Reason ?? 'Invalid SendGrid Event Webhook signature', 401, false);
         }
@@ -945,6 +955,20 @@ export class SendGridProvider extends BaseCommunicationProvider {
 
 export type SendGridSuppressionType = 'bounces' | 'blocks' | 'spam_reports' | 'invalid_emails' | 'unsubscribes';
 
+/**
+ * Maps an already-verified array of raw SendGrid webhook event objects into NormalizedActivityEvent[].
+ */
+export function NormalizeSendGridWebhookEvents(items: unknown[]): NormalizedActivityEvent[] {
+    const out: NormalizedActivityEvent[] = [];
+    for (const item of items) {
+        const mapped = mapSendGridEventToActivity(item);
+        if (mapped) {
+            out.push(mapped);
+        }
+    }
+    return out;
+}
+
 const REPLAY_WINDOW_SECONDS = 600; // 10 minutes
 
 /**
@@ -956,13 +980,14 @@ export function VerifySendGridWebhookSignature(
     rawBody: string | Buffer,
     signatureBase64: string,
     timestampHeader: string,
-    nowSeconds: number = Math.floor(Date.now() / 1000)
+    nowSeconds: number = Math.floor(Date.now() / 1000),
+    skipReplayWindow: boolean = false,
 ): { Valid: boolean; Reason?: string } {
     const parsedTs = Number(timestampHeader);
     if (!Number.isFinite(parsedTs) || timestampHeader.trim().length === 0) {
         return { Valid: false, Reason: 'Invalid webhook timestamp header' };
     }
-    if (Math.abs(nowSeconds - parsedTs) > REPLAY_WINDOW_SECONDS) {
+    if (!skipReplayWindow && Math.abs(nowSeconds - parsedTs) > REPLAY_WINDOW_SECONDS) {
         return { Valid: false, Reason: 'Webhook timestamp outside 10-minute replay window' };
     }
     try {

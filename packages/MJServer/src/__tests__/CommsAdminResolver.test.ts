@@ -229,6 +229,9 @@ describe('CommsAdminResolver', () => {
     const epEntity = {
       ID: 'ep-1',
       NormalizedValue: 'bounced@example.com',
+      Status: 'Hard Bounced',
+      SoftBounceCount: 5,
+      Save: vi.fn(async () => true),
     };
     const senderEntity = {
       ID: 'sender-1',
@@ -304,7 +307,13 @@ describe('CommsAdminResolver', () => {
       RevokedAt: null as Date | null,
       Save: vi.fn(async () => true),
     };
-    const epEntity = { ID: 'ep-1', NormalizedValue: 'blocked@example.com' };
+    const epEntity = {
+      ID: 'ep-1',
+      NormalizedValue: 'blocked@example.com',
+      Status: 'Active',
+      SoftBounceCount: 0,
+      Save: vi.fn(async () => true),
+    };
     const senderEntity = { ID: 'sender-1', CommunicationProviderID: 'prov-sg' };
     const auditSave = vi.fn(async () => true);
 

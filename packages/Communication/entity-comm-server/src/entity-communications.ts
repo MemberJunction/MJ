@@ -66,8 +66,14 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
             const entityMessageType = this.ResolveEntityMessageType(params);
             const records = await this.RunRecipientView(entityInfo, params.RunViewParams, contextUser, provider);
 
+            const usesV1OnlyFeatures = Boolean(
+                params.Message.From ||
+                (params.Message.CCRecipients && params.Message.CCRecipients.length > 0) ||
+                (params.Message.BCCRecipients && params.Message.BCCRecipients.length > 0) ||
+                (params.Message.Subject && (params.Message.BodyTemplate || params.Message.HTMLBodyTemplate) && !params.Message.SubjectTemplate),
+            );
             const v2Engine = CommunicationEngine.Instance as Partial<CommunicationEngine>;
-            if (typeof v2Engine.EvaluateEligibility === 'function' && typeof v2Engine.Send === 'function') {
+            if (!usesV1OnlyFeatures && typeof v2Engine.EvaluateEligibility === 'function' && typeof v2Engine.Send === 'function') {
                 return await this.runEntityCommunicationV2(params, entityInfo, entityMessageType, records, contextUser, provider);
             }
 
@@ -574,21 +580,5 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
             ErrorMessage: sendResult.ErrorMessage ?? '',
             Results: outcomeItems,
         };
-    }
-
-    private async resolveDefaultPreferenceID(
-        contextUser: UserInfo,
-        provider?: RequestProvider,
-    ): Promise<string | undefined> {
-        const res = await this.RunViewFor(provider).RunView<{ ID: string }>(
-            {
-                EntityName: 'MJ: Communication Preferences',
-                ExtraFilter: "Name='General updates'",
-                Fields: ['ID'],
-                ResultType: 'simple',
-            },
-            contextUser,
-        );
-        return res.Success && res.Results.length > 0 ? res.Results[0].ID : undefined;
     }
 }

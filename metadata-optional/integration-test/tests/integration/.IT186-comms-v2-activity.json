@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT182 - Comms V2 Activity Worker and GDPR Erasure",
+    "Name": "IT186 - Comms V2 Activity Worker and GDPR Erasure",
     "Description": "Exercises CommsActivityWorker event processing, deduplication, SoftBounceThresholdPolicy auto-suppression, and EraseEndpointPII against live SQL Server.",
     "InputDefinition": {},
     "ExpectedOutcomes": {

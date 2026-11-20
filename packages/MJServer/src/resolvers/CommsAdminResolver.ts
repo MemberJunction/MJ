@@ -522,7 +522,44 @@ export class CommsAdminResolver {
     await audit.Save();
 
     const warning = await this.clearDownstreamSuppression(mdProvider, supp, user);
+    await this.restoreEndpointIfNoActiveSuppressions(mdProvider, supp.CommunicationEndpointID, user);
     return { Success: true, WarningMessage: warning };
+  }
+
+  private async restoreEndpointIfNoActiveSuppressions(
+    mdProvider: IMetadataProvider,
+    endpointID: string | null,
+    user: UserInfo,
+  ): Promise<void> {
+    if (!endpointID) return;
+    const rv = RunView.FromMetadataProvider(mdProvider);
+    const activeRes = await rv.RunView<{ ID: string }>(
+      {
+        EntityName: 'MJ: Communication Suppressions',
+        ExtraFilter: `CommunicationEndpointID='${EscapeSQLString(endpointID)}' AND Status='Active'`,
+        Fields: ['ID'],
+        MaxRows: 1,
+        ResultType: 'simple',
+      },
+      user,
+    );
+    if (!activeRes.Success || activeRes.Results.length > 0) {
+      return;
+    }
+
+    const endpoint = await mdProvider.GetEntityObject<MJCommunicationEndpointEntity>(
+      'MJ: Communication Endpoints',
+      user,
+    );
+    if (
+      (await endpoint.Load(endpointID)) &&
+      endpoint.Status !== 'Active' &&
+      endpoint.Status !== 'Erased'
+    ) {
+      endpoint.Status = 'Active';
+      endpoint.SoftBounceCount = 0;
+      await endpoint.Save();
+    }
   }
 
   private async clearDownstreamSuppression(

@@ -441,11 +441,16 @@ export class V2SendService {
 
     for (let i = 0; i < eligibility.Sendable.length; i++) {
       const target = eligibility.Sendable[i];
-      const rawRecipient = params.Recipients.find(
-        (r) =>
-          (r.Principal && target.Principal && PrincipalRecordKey(r.Principal) === PrincipalRecordKey(target.Principal)) ||
-          (!r.Principal && !target.Principal),
-      );
+      const rawRecipient = params.Recipients.find((r) => {
+        if (r.Principal && target.Principal) {
+          return PrincipalRecordKey(r.Principal) === PrincipalRecordKey(target.Principal);
+        }
+        if (!r.Principal && !target.Principal && r.Endpoint?.Address) {
+          const norm = NormalizeEndpointAddress(r.Endpoint.Address, params.Envelope.ChannelID);
+          return norm?.NormalizedValue === target.Endpoint.NormalizedValue;
+        }
+        return false;
+      });
 
       if (target.Decision === 'Deferred') {
         deferredCount++;
@@ -1011,7 +1016,10 @@ export class V2SendService {
       },
       contextUser,
     );
-    return res.Success ? res.Results : [];
+    if (!res.Success) {
+      throw new Error(`Failed loading communication suppressions: ${res.ErrorMessage ?? 'RunView failed'}`);
+    }
+    return res.Results;
   }
 
   private async loadPrincipalPreferences(
@@ -1152,7 +1160,14 @@ export class V2SendService {
       },
       contextUser,
     );
-    if (!epRes.Success || epRes.Results.length === 0) {
+    if (!epRes.Success) {
+      return {
+        Allowed: false,
+        Reason: 'GateLookupFailed',
+        Detail: epRes.ErrorMessage ?? 'Failed to query communication endpoints',
+      };
+    }
+    if (epRes.Results.length === 0) {
       return { Allowed: true };
     }
 
@@ -1180,7 +1195,14 @@ export class V2SendService {
       },
       contextUser,
     );
-    if (!supRes.Success || supRes.Results.length === 0) {
+    if (!supRes.Success) {
+      return {
+        Allowed: false,
+        Reason: 'GateLookupFailed',
+        Detail: supRes.ErrorMessage ?? 'Failed to query communication suppressions',
+      };
+    }
+    if (supRes.Results.length === 0) {
       return { Allowed: true };
     }
 

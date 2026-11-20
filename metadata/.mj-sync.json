@@ -105,7 +105,6 @@
     "communication-compliance-rule-types",
     "communication-compliance-regimes",
     "communication-suppression-policies",
-    "work-queue-topics",
     "work-queue-subscriptions"
   ],
   "sqlLogging": {

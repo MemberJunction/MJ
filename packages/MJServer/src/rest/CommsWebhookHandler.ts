@@ -8,7 +8,7 @@
  *   - `GET  /comms/click/:token`
  *
  * Each route authenticates its own capability (SendGrid ECDSA signature + 10-minute replay window,
- * UUIDv4 UnsubscribeToken, or HMAC-SHA256 `sig` over `TrackingToken + '|' + u`) and is protected
+ * UUIDv4 UnsubscribeToken, or HMAC-SHA256 `sig` over `TrackingToken + ':' + u`) and is protected
  * by per-IP rate limiting.
  *
  * @module @memberjunction/server/rest/CommsWebhookHandler
@@ -61,6 +61,7 @@ export interface CommsActivityWorkPayload {
     OccurredAt: string;
     CredentialID?: string;
     RawBody?: string;
+    SignatureVerifiedAtIngress?: boolean;
     Headers?: Record<string, string>;
     EventType?: 'Opened' | 'Clicked' | 'Unsubscribed';
     TrackingToken?: string;
@@ -279,24 +280,70 @@ async function handleSendGridWebhook(
     }
 
     const rawBodyText = rawBodyBuf.toString('utf8');
-    if (!isJsonArrayPayload(rawBodyText)) {
+    let parsedArray: unknown;
+    try {
+        parsedArray = JSON.parse(rawBodyText);
+    } catch {
+        parsedArray = null;
+    }
+    if (!Array.isArray(parsedArray)) {
         res.status(400).json({ error: 'Expected JSON array payload' });
         return;
     }
 
+    const MAX_QUEUE_PAYLOAD_BYTES = 180_000;
     try {
-        await publishActivity({
-            Source: 'sendgrid-webhook',
-            OccurredAt: new Date(nowSeconds() * 1000).toISOString(),
-            ...(credentialId ? { CredentialID: credentialId } : {}),
-            RawBody: rawBodyText,
-            Headers: normalizeHeaders(req.headers),
-        });
+        const occurredAt = new Date(nowSeconds() * 1000).toISOString();
+        const headers = normalizeHeaders(req.headers);
+        if (Buffer.byteLength(rawBodyText, 'utf8') <= MAX_QUEUE_PAYLOAD_BYTES) {
+            await publishActivity({
+                Source: 'sendgrid-webhook',
+                OccurredAt: occurredAt,
+                ...(credentialId ? { CredentialID: credentialId } : {}),
+                RawBody: rawBodyText,
+                Headers: headers,
+            });
+        } else {
+            const chunks = chunkWebhookArrayByBytes(parsedArray, MAX_QUEUE_PAYLOAD_BYTES);
+            for (const chunkJson of chunks) {
+                await publishActivity({
+                    Source: 'sendgrid-webhook',
+                    OccurredAt: occurredAt,
+                    ...(credentialId ? { CredentialID: credentialId } : {}),
+                    RawBody: chunkJson,
+                    SignatureVerifiedAtIngress: true,
+                    Headers: headers,
+                });
+            }
+        }
         res.status(202).json({ accepted: true });
     } catch (ex) {
         LogError(`[CommsWebhook] Failed to enqueue SendGrid webhook batch: ${ex instanceof Error ? ex.message : String(ex)}`);
         res.status(503).json({ error: 'Failed to enqueue webhook batch' });
     }
+}
+
+function chunkWebhookArrayByBytes(events: unknown[], maxBytes: number): string[] {
+    const chunks: string[] = [];
+    let current: unknown[] = [];
+    let currentBytes = 2; // '[]'
+
+    for (const ev of events) {
+        const serialized = JSON.stringify(ev);
+        const itemBytes = Buffer.byteLength(serialized, 'utf8') + (current.length > 0 ? 1 : 0);
+        if (current.length > 0 && currentBytes + itemBytes > maxBytes) {
+            chunks.push(JSON.stringify(current));
+            current = [ev];
+            currentBytes = 2 + Buffer.byteLength(serialized, 'utf8');
+        } else {
+            current.push(ev);
+            currentBytes += itemBytes;
+        }
+    }
+    if (current.length > 0) {
+        chunks.push(JSON.stringify(current));
+    }
+    return chunks;
 }
 
 async function handleUnsubscribe(
@@ -735,6 +782,20 @@ async function handlePostConfirm(
             }
             return;
         }
+        if (!result.Confirmed) {
+            if (prefersJson(req)) {
+                res.status(409).json(result);
+            } else {
+                const nonce = generateNonce();
+                setSecurityHeaders(res, nonce);
+                res.status(409).send(RenderCommsErrorPage({
+                    Message: 'This subscription cannot be confirmed because it has been opted out.',
+                    PageTitle: 'Confirmation Unavailable',
+                    CspNonce: nonce,
+                }));
+            }
+            return;
+        }
         if (prefersJson(req)) {
             res.status(200).json(result);
             return;
@@ -745,7 +806,7 @@ async function handlePostConfirm(
             Token: token,
             ApiRoot: (req.baseUrl || '/comms').replace(/\/+$/, ''),
             CspNonce: nonce,
-            Confirmed: true,
+            Confirmed: result.Confirmed,
         }));
     } catch (ex) {
         LogError(`[CommsWebhook] Failed to confirm opt-in: ${ex instanceof Error ? ex.message : String(ex)}`);
@@ -869,15 +930,54 @@ async function defaultResolvePreferenceCenterData(token: string): Promise<Prefer
         }
     }
 
+    const suppClauses: string[] = [];
+    if (log.CommunicationEndpointID) {
+        suppClauses.push(`CommunicationEndpointID='${EscapeSQLString(log.CommunicationEndpointID)}'`);
+    }
+    if (principal) {
+        suppClauses.push(`(EntityID='${EscapeSQLString(principal.EntityID)}' AND RecordID='${EscapeSQLString(principal.RecordID)}')`);
+    }
+    let hasGlobalUnsubscribe = false;
+    let latestUnsubscribeMs = 0;
+    if (suppClauses.length > 0) {
+        const suppRes = await rv.RunView<MJCommunicationSuppressionEntity>(
+            {
+                EntityName: 'MJ: Communication Suppressions',
+                ExtraFilter: `Status='Active' AND Reason='User Unsubscribe' AND CommunicationPreferenceID IS NULL AND (${suppClauses.join(' OR ')})`,
+                ResultType: 'entity_object',
+            },
+            systemUser,
+        );
+        if (suppRes.Success) {
+            for (const s of suppRes.Results) {
+                if (!s.CommunicationSenderID || (sender && UUIDsEqual(s.CommunicationSenderID, sender.ID))) {
+                    hasGlobalUnsubscribe = true;
+                    const effMs = s.EffectiveAt ? s.EffectiveAt.getTime() : 0;
+                    if (effMs > latestUnsubscribeMs) latestUnsubscribeMs = effMs;
+                }
+            }
+        }
+    }
+
     const items: PreferenceCenterItem[] = prefs.map((pref) => {
         const match = prefMatchById.Get(pref.ID);
+        let state: MJCommunicationPrincipalPreferenceEntity['State'] = match ? match.State : pref.DefaultState;
+        if (hasGlobalUnsubscribe) {
+            const optedInAfterUnsub =
+                match?.State === 'Opted In' &&
+                match.ConsentAt &&
+                match.ConsentAt.getTime() > latestUnsubscribeMs;
+            if (!optedInAfterUnsub) {
+                state = 'Opted Out';
+            }
+        }
         return {
             ID: pref.ID,
             Name: pref.Name,
             Description: pref.Description,
             Category: pref.Category,
             MessageClass: pref.MessageClass,
-            State: match ? match.State : pref.DefaultState,
+            State: state,
         };
     });
 
@@ -1014,8 +1114,13 @@ async function defaultSavePreferenceCenterChoices(
             }
         }
     } else if (principal && input.Preferences) {
+        const currentByPrefId = new Map(
+            data.Preferences.map((p) => [p.ID.toLowerCase(), p.State]),
+        );
         for (const choice of input.Preferences) {
             if (!visibleIds.has(choice.PreferenceID.toLowerCase())) continue;
+            const currentState = currentByPrefId.get(choice.PreferenceID.toLowerCase());
+            if (choice.State === currentState) continue;
             await upsertPrincipalPreferenceAndAudit(
                 {
                     EntityID: principal.EntityID,

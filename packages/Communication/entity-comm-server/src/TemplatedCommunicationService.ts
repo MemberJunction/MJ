@@ -88,7 +88,7 @@ interface RelatedEntityData {
   data: Record<string, unknown>[];
 }
 
-const DEFAULT_BATCH_SIZE = 500;
+const DEFAULT_BATCH_SIZE = 50;
 
 function principalKey(ref: PrincipalRecordRef): string {
   return `${ref.EntityID.trim().toLowerCase()}:${ref.RecordID}`;

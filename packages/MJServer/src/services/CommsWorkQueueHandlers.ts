@@ -16,6 +16,7 @@ import {
     CommsActivityWorker,
     CommunicationEngine,
 } from '@memberjunction/communication-engine';
+import { NormalizeSendGridWebhookEvents } from '@memberjunction/communication-sendgrid';
 import type {
     MessagePayload,
     NormalizedActivityEvent,
@@ -51,6 +52,15 @@ export interface CommsDispatchWorkPayload {
     Recipients: RecipientSendTarget[];
 }
 
+interface SendGridWebhookParseCredentials extends ProviderCredentialsBase {
+    webhookVerificationKey?: string;
+    skipReplayWindow?: boolean;
+}
+
+function toWorkJson(value: object): WorkJson {
+    return Object.fromEntries(Object.entries(value)) as WorkJson;
+}
+
 /**
  * Configures `CommunicationEngine` and `TemplatedCommunicationService` to publish
  * async chunks/batches onto `WorkQueueEngine` and use unified tracking URL/HMAC settings.
@@ -67,7 +77,7 @@ export function ConfigureCommsV2WorkQueue(
         BaseTrackingURL: baseTrackingUrl,
         TrackingHMACSecret: resolvedSecret,
         EnqueueWork: async (taskType, payload) => {
-            const results = await WorkQueueEngine.Instance.Publish(taskType, [{ Payload: payload as WorkJson }]);
+            const results = await WorkQueueEngine.Instance.Publish(taskType, [{ Payload: toWorkJson(payload) }]);
             const rejected = results.find((r) => r.Status === 'Rejected');
             if (rejected) {
                 throw new Error(`WorkQueue publish rejected for '${taskType}' (${rejected.Error?.Code ?? 'Unknown'}): ${rejected.Error?.Message ?? ''}`);
@@ -77,7 +87,7 @@ export function ConfigureCommsV2WorkQueue(
 
     TemplatedCommunicationService.Instance.Configure({
         EnqueueWork: async (taskType, payload) => {
-            const results = await WorkQueueEngine.Instance.Publish(taskType, [{ Payload: payload as unknown as WorkJson }]);
+            const results = await WorkQueueEngine.Instance.Publish(taskType, [{ Payload: toWorkJson(payload) }]);
             const rejected = results.find((r) => r.Status === 'Rejected');
             if (rejected) {
                 throw new Error(`WorkQueue publish rejected for '${taskType}' (${rejected.Error?.Code ?? 'Unknown'}): ${rejected.Error?.Message ?? ''}`);
@@ -152,12 +162,20 @@ export class CommsActivityWorkHandler extends BaseWorkHandler<CommsActivityWorkP
     private async normalizePayloadEvents(
         payload: CommsActivityWorkPayload,
     ): Promise<NormalizedActivityEvent[]> {
+        const sgEntity = CommunicationEngine.Instance.Providers.find((p) => p.Name === 'SendGrid');
         if (payload.Source === 'sendgrid-webhook' && payload.RawBody) {
-            const sgProvider = CommunicationEngine.Instance.GetProvider('SendGrid');
-            if (sgProvider?.ParseNotification) {
+            let events: NormalizedActivityEvent[];
+            if (payload.SignatureVerifiedAtIngress) {
+                const rawItems: unknown = JSON.parse(payload.RawBody);
+                events = Array.isArray(rawItems) ? NormalizeSendGridWebhookEvents(rawItems) : [];
+            } else {
+                const sgProvider = CommunicationEngine.Instance.GetProvider('SendGrid');
+                if (!sgProvider?.ParseNotification) {
+                    return [];
+                }
                 const webhookKey = await ResolveSendGridWebhookVerificationKey(payload.CredentialID);
-                const credentials = webhookKey
-                    ? ({ webhookVerificationKey: webhookKey } as ProviderCredentialsBase)
+                const credentials: SendGridWebhookParseCredentials | undefined = webhookKey
+                    ? { webhookVerificationKey: webhookKey, skipReplayWindow: true }
                     : undefined;
                 const parsed = await sgProvider.ParseNotification(
                     {
@@ -170,16 +188,22 @@ export class CommsActivityWorkHandler extends BaseWorkHandler<CommsActivityWorkP
                 if (!parsed.Success) {
                     throw new Error(parsed.ErrorMessage ?? 'SendGrid ParseNotification failed');
                 }
-                return (parsed.Notifications ?? []).flatMap((n) => n.ActivityEvents ?? []);
+                events = (parsed.Notifications ?? []).flatMap((n) => n.ActivityEvents ?? []);
             }
-            return [];
+            if (sgEntity?.ID) {
+                for (const ev of events) {
+                    if (!ev.CommunicationProviderID) {
+                        ev.CommunicationProviderID = sgEntity.ID;
+                    }
+                }
+            }
+            return events;
         }
 
         if (!payload.EventType) {
             return [];
         }
 
-        const sgEntity = CommunicationEngine.Instance.Providers.find((p) => p.Name === 'SendGrid');
         return [
             {
                 CommunicationProviderID: sgEntity?.ID ?? '',

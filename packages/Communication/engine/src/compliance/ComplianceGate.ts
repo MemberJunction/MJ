@@ -49,7 +49,7 @@ const NON_TRANSACTIONAL_CLASSES: ReadonlySet<MessageClass> = new Set([
 
 /**
  * 5-step compliance gate:
- * 1. Suppressions (never reads Endpoint.Status)
+ * 1. Endpoint.Status & Suppressions (Endpoint.Status + CommunicationSuppression)
  * 2. Regimes (expands jurisdictions, merges 9 rule types)
  * 3. Preferences (runs only when PreferenceID is set; handles Pending + Option B override)
  * 4. QuietHours (Deferred + DeferUntil)

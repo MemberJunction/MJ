@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT181 - Comms V2 Send Pipeline and Templated Delivery",
+    "Name": "IT185 - Comms V2 Send Pipeline and Templated Delivery",
     "Description": "Exercises V2SendService.Send (DryRun, tracking tokens, HMAC signatures, chunked comms.dispatch) and TemplatedCommunicationService.RenderAndSend against live SQL Server.",
     "InputDefinition": {},
     "ExpectedOutcomes": {

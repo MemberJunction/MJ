@@ -11,7 +11,7 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
   standalone: false,
   selector: 'mj-communication-compliance-admin-resource',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `<mj-communications-admin-dashboard></mj-communications-admin-dashboard>`,
+  template: `<mj-communications-admin-dashboard [Provider]="Provider"></mj-communications-admin-dashboard>`,
 })
 export class CommunicationComplianceAdminResourceComponent extends BaseResourceComponent implements AfterViewInit {
   public ngAfterViewInit(): void {
