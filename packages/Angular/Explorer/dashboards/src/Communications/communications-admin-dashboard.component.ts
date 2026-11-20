@@ -3,12 +3,13 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  Input,
   OnDestroy,
   inject,
 } from '@angular/core';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
-import { RunView } from '@memberjunction/core';
+import { RunView, type IMetadataProvider } from '@memberjunction/core';
 import type {
   MJCommunicationBaseMessageTypeEntity,
   MJCommunicationComplianceRegimeEntity,
@@ -117,6 +118,9 @@ import {
 @RegisterClass(BaseDashboard, 'CommunicationsAdminDashboard')
 export class CommunicationsAdminDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
   private readonly cdr = inject(ChangeDetectorRef);
+
+  /** Re-declared so host resource wrappers can bind `[Provider]` and thread it through to tabs. */
+  @Input() override Provider: IMetadataProvider | null = null;
 
   public readonly Tabs = COMMS_ADMIN_TABS;
   public ActiveTab: CommsAdminTabId = 'simulator';
