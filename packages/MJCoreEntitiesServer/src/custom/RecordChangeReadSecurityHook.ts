@@ -7,6 +7,7 @@ import {
     Metadata,
     ParseStoredRecordKey,
     PostRunViewHook,
+    PreRunViewHook,
     ReadableRecordKeyTexts,
     RecordKeyText,
     RecordChangesEntityName,
@@ -21,6 +22,7 @@ import {
 } from '@memberjunction/core';
 import { EscapeSQLString, IsValidUUID, UUIDMap } from '@memberjunction/global';
 import { EntityNamesMatch, ResolveTargetEntityNameAsync } from './ArtifactSecurityHookHelpers';
+import { RecordChangeFilterScreenHook } from './RecordChangeFilterScreen';
 
 const INTERNAL_PARAMS = new WeakSet<object>();
 
@@ -188,10 +190,14 @@ export const RecordChangePostRunViewHook: PostRunViewHook = async (
 };
 
 /**
- * Registers {@link RecordChangePostRunViewHook} and marks `MJ: Record Changes` as protected by
- * it, so raw SQL and aggregate reads of the entity are refused. Safe to call more than once.
+ * Registers {@link RecordChangePostRunViewHook} and {@link RecordChangeFilterScreenHook}, and marks
+ * `MJ: Record Changes` as protected by them, so raw SQL and aggregate reads of the entity are
+ * refused. Safe to call more than once.
  */
 export function EnsureRecordChangeReadHookRegistered(): void {
+    if (!GetDataHooks<PreRunViewHook>('PreRunView').includes(RecordChangeFilterScreenHook)) {
+        RegisterDataHook('PreRunView', RecordChangeFilterScreenHook);
+    }
     if (!GetDataHooks<PostRunViewHook>('PostRunView').includes(RecordChangePostRunViewHook)) {
         RegisterDataHook('PostRunView', RecordChangePostRunViewHook);
     }

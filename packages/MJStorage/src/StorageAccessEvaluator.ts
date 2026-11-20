@@ -58,10 +58,10 @@ export type StorageAccountPermissionRow = Pick<
     'FileStorageAccountID' | 'Type' | 'UserID' | 'RoleID' | 'CanRead' | 'CanWrite'
 >;
 
-/** The permission state of a set of accounts, as read by {@link StorageAccessEvaluator.LoadAccountPermissionState}. */
 /** The columns of an `MJ: File Entity Record Links` row the record-link check reads. */
 type RecordLinkRow = Pick<MJFileEntityRecordLinkEntity, 'ID' | 'FileID' | 'EntityID' | 'RecordID'>;
 
+/** The permission state of a set of accounts, as read by {@link StorageAccessEvaluator.LoadAccountPermissionState}. */
 export interface StorageAccountPermissionState {
     /** Normalized ({@link NormalizeUUID}) IDs of the requested accounts that exist. */
     ExistingAccountIDs: Set<string>;

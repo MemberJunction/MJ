@@ -12,6 +12,7 @@ import {
   MjSlidePanelComponent,
 } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { BaseEntity, CompositeKey } from '@memberjunction/core';
 import {
   MJFileStorageAccountEntity,
   MJFileStorageProviderEntity,
@@ -78,6 +79,20 @@ const MOCK_ATTACHMENTS: RecordAttachmentItem[] = [
 describe('RecordAttachmentsComponent (DOM & Verbs)', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('identifies a record with a composite key by every key field, in the compact key form', () => {
+    const f = renderComponentFixture(RecordAttachmentsComponent, {
+      ...MOD,
+      inputs: { Attachments: [...MOCK_ATTACHMENTS], Visible: true },
+    });
+    const key = CompositeKey.FromKeyValuePairs([
+      { FieldName: 'OrderID', Value: '7' },
+      { FieldName: 'LineNo', Value: '2' },
+    ]);
+    f.componentInstance.Record = { PrimaryKey: key, EntityInfo: { ID: 'entity-1' } } as unknown as BaseEntity;
+
+    expect(f.componentInstance.EffectiveRecordID).toBe(key.ToCompactURLSegment());
   });
 
   it('renders the attachments count badge and upload zone when storage accounts are configured', () => {

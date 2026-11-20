@@ -25,6 +25,7 @@ import {
   ReadableFieldsTransportKey,
   RecordChangeFieldSecurityProjector,
   RecordChangePayloadFields,
+  RecordPassesReadHooks,
   RunView,
   RunViewParameters,
   RunViewParams,
@@ -548,6 +549,9 @@ export class ResolverBase {
       return null;
     }
     if (!(await this.canMapEntityRecordForUser(entityName, dataObject, contextUser, provider))) {
+      return null;
+    }
+    if (!(await RecordPassesReadHooks(entityName, dataObject as Record<string, unknown>, contextUser, provider))) {
       return null;
     }
     const plan = this.buildFieldMappingPlan(entityName, contextUser, provider, deniedReadFields, recordChangeProjector);

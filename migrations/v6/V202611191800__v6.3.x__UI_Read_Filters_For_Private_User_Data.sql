@@ -2,10 +2,8 @@
  * Row filters that limit the UI role's reads of per-user data.
  *
  * The UI role is held by every ordinary signed-in user. The entities below hold
- * one user's data and the UI role reads them with no row filter, so any user can
- * read every row. EntityInfo.UserExemptFromRowLevelSecurity treats a grant with
- * no filter as exempt, so each filter here narrows the UI role's read grant to
- * the caller's own rows. Developer and Integration keep their unfiltered grants.
+ * one user's data. Each filter limits the UI role's read grant to the caller's
+ * own rows; Developer and Integration keep unfiltered grants.
  *
  * ── The filters ──────────────────────────────────────────────────────────────
  *   MJ: Diagnostic Sessions        CreatedByUserID is the caller.
@@ -56,7 +54,7 @@ USING (VALUES
         N'CreatedByUserID = ''{{UserID}}'''),
 
     (@UIAgentRunMediasFilterID, N'UI: Own AI Agent Run Medias',
-        N'Limits MJ: AI Agent Run Medias to the media of agent runs the current user owns. The media has no user column, so the filter goes through AgentRunID, the same shape as UI: Own AI Agent Run Steps. Attached to the UI role''s read permission on the entity.',
+        N'Limits MJ: AI Agent Run Medias to the media of agent runs the current user owns. The media has no user column, so the filter goes through AgentRunID, the same shape as UI: Own AI Agent Run Steps. Attached to the UI role''s read and update permissions on the entity.',
         N'AgentRunID IN (SELECT ID FROM ${flyway:defaultSchema}.vwAIAgentRuns WHERE UserID = ''{{UserID}}'')'),
 
     (@UIPromptRunMediasFilterID, N'UI: Own AI Prompt Run Medias',

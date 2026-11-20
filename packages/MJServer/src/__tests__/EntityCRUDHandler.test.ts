@@ -36,10 +36,16 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 });
 
 import {
+    ClearAllDataHooks,
     CompositeKey,
     EntityDeleteOptions,
     EntityPermissionType,
     EntitySaveOptions,
+    PostRunViewHook,
+    RegisterDataHook,
+    RegisterPostRunViewProtectedEntity,
+    RunViewParams,
+    RunViewResult,
     UserInfo,
 } from '@memberjunction/core';
 import { EntityCRUDHandler } from '../rest/EntityCRUDHandler.js';
@@ -226,6 +232,22 @@ describe('EntityCRUDHandler.getEntity', () => {
 
         expect(result.success).toBe(false);
         expect(result.error).toBe('Customers with ID ghost not found');
+    });
+
+    it('returns the not-found error for a record that the entity\'s read hooks remove', async () => {
+        const hideAll: PostRunViewHook = async (params: RunViewParams, results: RunViewResult): Promise<RunViewResult> =>
+            params.EntityName === 'Hooked Customers' ? { ...results, Results: [], RowCount: 0, TotalRowCount: 0 } : results;
+        RegisterDataHook('PostRunView', hideAll);
+        RegisterPostRunViewProtectedEntity('Hooked Customers');
+        try {
+            const result = await EntityCRUDHandler.getEntity('Hooked Customers', 'row-1', null, makeUser());
+
+            expect(result.success).toBe(false);
+            expect(result.error).toBe('Hooked Customers with ID row-1 not found');
+            expect(result.entity).toBeUndefined();
+        } finally {
+            ClearAllDataHooks();
+        }
     });
 
     it('loads a composite-primary-key entity from a "Field|Value||Field|Value" id segment', async () => {

@@ -20,6 +20,8 @@ const RECORD_CHANGES_ENTITY_ID = 'AAAAAAAA-0000-4000-8000-000000000001';
 const HIDDEN_ENTITY_ID = 'AAAAAAAA-0000-4000-8000-000000000002';
 const FILTERED_ENTITY_ID = 'AAAAAAAA-0000-4000-8000-000000000003';
 const OPEN_ENTITY_ID = 'AAAAAAAA-0000-4000-8000-000000000004';
+const KEY_FILTERED_ENTITY_ID = 'AAAAAAAA-0000-4000-8000-000000000005';
+const KEY_FILTER_ID = 'CCCCCCCC-0000-4000-8000-000000000001';
 
 const OWN_RECORD_ID = 'BBBBBBBB-0000-4000-8000-000000000001';
 const OTHER_RECORD_ID = 'BBBBBBBB-0000-4000-8000-000000000002';
@@ -54,13 +56,14 @@ function makeEntity(id: string, name: string, access: EntityAccess): EntityInfo 
         CanDelete: false,
     });
     vi.spyOn(info, 'UserExemptFromRowLevelSecurity').mockReturnValue(access.exemptFromRowFilter);
+    vi.spyOn(info, 'GetUserRowLevelSecurityWhereClause').mockReturnValue(access.exemptFromRowFilter ? '' : `OwnerID = '${VIEWER_ID}'`);
     return info;
 }
 
 /** A database provider double: only the target-entity read for the filtered entity returns rows. */
 function makeProvider(entities: EntityInfo[], visibleRecordIDs: string[]): IMetadataProvider & { RunView: ReturnType<typeof vi.fn> } {
     const runView = vi.fn(async (params: RunViewParams): Promise<RunViewResult> => {
-        const rows = params.EntityName === 'Filtered Things'
+        const rows = params.EntityName === 'Filtered Things' || params.EntityName === 'Key Filtered Things'
             ? visibleRecordIDs.map((id) => ({ ID: id }))
             : [];
         return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
@@ -111,6 +114,7 @@ describe('Record Changes read security', () => {
             makeEntity(HIDDEN_ENTITY_ID, 'Hidden Things', { canRead: false, exemptFromRowFilter: false }),
             makeEntity(FILTERED_ENTITY_ID, 'Filtered Things', { canRead: true, exemptFromRowFilter: false }),
             makeEntity(OPEN_ENTITY_ID, 'Open Things', { canRead: true, exemptFromRowFilter: true }),
+            makeEntity(KEY_FILTERED_ENTITY_ID, 'Key Filtered Things', { canRead: true, exemptFromRowFilter: true }),
         ];
         const provider = makeProvider(entities, [OWN_RECORD_ID]);
         Object.defineProperty(viewer, 'OwningProvider', { value: provider, configurable: true });
@@ -144,5 +148,19 @@ describe('Record Changes read security', () => {
         expect(result.RowCount).toBe(1);
         const targetCall = provider.RunView.mock.calls.find((c) => (c[0] as RunViewParams).EntityName === 'Filtered Things');
         expect(targetCall?.[1]).toBe(viewer);
+    });
+
+    it('keeps change rows of an entity under an API-key row filter only for records the caller can read', async () => {
+        const { provider } = setup();
+        const keyUser = makeUser(VIEWER_ID);
+        keyUser.APIKeyRowFilters = [{ EntityID: KEY_FILTERED_ENTITY_ID, PermissionType: 'Read', FilterID: KEY_FILTER_ID }];
+        Object.defineProperty(keyUser, 'OwningProvider', { value: provider, configurable: true });
+        const params: RunViewParams = { EntityName: 'MJ: Record Changes', ResultType: 'simple' };
+        const result = await runPostRunViewHooks(
+            params,
+            resultOf([changeRow('C1', KEY_FILTERED_ENTITY_ID, OWN_RECORD_ID), changeRow('C2', KEY_FILTERED_ENTITY_ID, OTHER_RECORD_ID)]),
+            keyUser,
+        );
+        expect((result.Results as Array<{ ID: string }>).map((r) => r.ID)).toEqual(['C1']);
     });
 });

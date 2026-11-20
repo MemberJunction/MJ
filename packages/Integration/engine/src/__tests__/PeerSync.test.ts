@@ -30,6 +30,7 @@ import {
     PlanPeerEntityOrder,
     SchemaPlanner,
 } from '../index.js';
+import { UUIDsEqual } from '@memberjunction/global';
 import type { ICompanyIntegrationEntityMap, ICompanyIntegrationFieldMap } from '../entity-types.js';
 import type {
     MJCompanyIntegrationEntity,
@@ -422,6 +423,8 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
                         },
                     ],
                     ParentEntityInfo: null,
+                    GetUserPermisions: () => ({ CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true }),
+                    GetEffectiveRowFilterWhereClause: () => '',
                 } as unknown as EntityInfo,
                 {
                     ID: ENTITY_CONTACTS_ID,
@@ -439,6 +442,8 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
                         },
                     ],
                     ParentEntityInfo: null,
+                    GetUserPermisions: () => ({ CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true }),
+                    GetEffectiveRowFilterWhereClause: () => '',
                 } as unknown as EntityInfo,
             ];
 
@@ -723,6 +728,8 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
                 PrimaryKeys: [{ Name: 'ID' }],
                 FirstPrimaryKey: { Name: 'ID' },
                 ParentEntityInfo: null,
+                GetUserPermisions: () => ({ CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true }),
+                GetEffectiveRowFilterWhereClause: () => '',
                 Fields: [
                     {
                         Name: 'ID',
@@ -833,6 +840,7 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
                     Entities: [contactEntityInfo],
                     EntityByName: (name: string) =>
                         name.toLowerCase() === 'contacts' ? contactEntityInfo : undefined,
+                    EntityByID: (id: string) => (UUIDsEqual(id, contactEntityInfo.ID) ? contactEntityInfo : undefined),
                     GetEntityObject: vi.fn(async (entityName: string) => {
                         if (entityName === 'MJ: Company Integration Record Maps') {
                             const rm = {
@@ -1177,6 +1185,8 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
                     { Name: 'PrimaryContactID', IsPrimaryKey: false, RelatedEntityID: ENTITY_CONTACTS_ID, AllowsNull: true },
                 ],
                 ParentEntityInfo: null,
+                GetUserPermisions: () => ({ CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true }),
+                GetEffectiveRowFilterWhereClause: () => '',
             } as unknown as EntityInfo;
 
             const contactEntityInfo = {
@@ -1189,6 +1199,8 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
                     { Name: 'CompanyID', IsPrimaryKey: false, RelatedEntityID: ENTITY_COMPANIES_ID, AllowsNull: false },
                 ],
                 ParentEntityInfo: null,
+                GetUserPermisions: () => ({ CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true }),
+                GetEffectiveRowFilterWhereClause: () => '',
             } as unknown as EntityInfo;
 
             const emptyRunView: IRunViewProvider = {
@@ -1460,6 +1472,8 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
                 PrimaryKeys: [{ Name: 'ID' }],
                 FirstPrimaryKey: { Name: 'ID' },
                 ParentEntityInfo: null,
+                GetUserPermisions: () => ({ CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true }),
+                GetEffectiveRowFilterWhereClause: () => '',
                 Fields: [
                     {
                         Name: 'ID',
@@ -1510,6 +1524,8 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
                 PrimaryKeys: [{ Name: 'ID' }],
                 FirstPrimaryKey: { Name: 'ID' },
                 ParentEntityInfo: null,
+                GetUserPermisions: () => ({ CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true }),
+                GetEffectiveRowFilterWhereClause: () => '',
                 Fields: [
                     {
                         Name: 'ID',
@@ -1906,6 +1922,7 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
 
                 const mdProvider = {
                     Entities: [companyEntity, contactEntity],
+                    EntityByID: (id: string) => [companyEntity, contactEntity].find(e => UUIDsEqual(e.ID, id)),
                     EntityByName: (name: string) =>
                         name.toLowerCase() === 'companies'
                             ? companyEntity
@@ -2248,5 +2265,39 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
                 }
             }
         });
+    });
+});
+
+describe('Peer sync change paging for a user who reads only part of an entity', () => {
+    it('refuses to page the change rows of an entity the sync user reads through a row filter', async () => {
+        const filtered = new EntityInfo({
+            ID: ENTITY_CONTACTS_ID,
+            Name: 'Contacts',
+            SchemaName: 'crm',
+            BaseTable: 'Contact',
+            BaseView: 'vwContacts',
+            Fields: [{ ID: 'c-f1', EntityID: ENTITY_CONTACTS_ID, Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, Sequence: 1 }],
+        });
+        vi.spyOn(filtered, 'GetUserPermisions').mockReturnValue({ CanRead: true, CanCreate: false, CanUpdate: false, CanDelete: false });
+        vi.spyOn(filtered, 'GetEffectiveRowFilterWhereClause').mockReturnValue(`OwnerID = '${createContextUser().ID}'`);
+        const runView = vi.fn(async (): Promise<RunViewResult> => ({
+            Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '',
+        }));
+        const endpoint = new PeerSyncEndpointService({
+            InstanceID: INSTANCE_A,
+            InstanceName: 'Peer-A',
+            MJCoreVersion: '5.27.0',
+            DatabaseEngine: 'SQLServer',
+            CompanyIntegrationID: 'ci-a',
+            AllowedEntityNames: ['Contacts'],
+            MetadataProvider: { Entities: [filtered], EntityByName: () => filtered } as unknown as IMetadataProvider,
+            RunViewProvider: { RunView: runView, RunViews: vi.fn() } as unknown as IRunViewProvider,
+        });
+
+        await expect(endpoint.FetchChangeBatch(
+            { PairingID: 'p', RequesterInstanceID: INSTANCE_B, EntityName: 'Contacts', SinceCursor: null, BatchSize: 10 },
+            createContextUser(),
+        )).rejects.toThrow(/every record/);
+        expect(runView).not.toHaveBeenCalled();
     });
 });

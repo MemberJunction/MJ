@@ -1,8 +1,8 @@
 import { CompositeKey } from './compositeKey';
 import { EntityInfo, EntityPermissionType } from './entityInfo';
-import { IMetadataProvider } from './interfaces';
+import { IMetadataProvider, RunViewResult } from './interfaces';
 import { UserInfo } from './securityInfo';
-import { IsPostRunViewProtectedEntity } from './dataHooks';
+import { GetDataHooks, IsPostRunViewProtectedEntity, PostRunViewHook } from './dataHooks';
 import { RunView, RunViewParams } from '../views/runView';
 
 /** Largest number of record keys put into one read of the target entity. */
@@ -35,12 +35,13 @@ export function RecordKeyText(entity: EntityInfo, key: CompositeKey): string {
 }
 
 /**
- * True when `user` reads every row of `entity`: the user has an unfiltered read grant and the
- * entity's reads are not guarded by server read hooks.
+ * True when `user` reads every row of `entity`: the user can read the entity, no row filter
+ * (role or API key) applies to the user's reads, and the entity's reads are not guarded by
+ * server read hooks.
  */
 export function UserReadsEveryRecord(entity: EntityInfo, user: UserInfo): boolean {
     return entity.GetUserPermisions(user).CanRead
-        && entity.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)
+        && entity.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '').length === 0
         && !IsPostRunViewProtectedEntity(entity.Name);
 }
 
@@ -81,4 +82,34 @@ export async function ReadableRecordKeyTexts(
         }
     }
     return readable;
+}
+
+/**
+ * True when one record read by key passes the server read hooks of its entity, the same hooks a
+ * view read of that entity runs. An entity that is not guarded by read hooks always passes. A hook
+ * that fails counts as removing the record.
+ *
+ * @param row the record as the database returned it, keyed by field name
+ */
+export async function RecordPassesReadHooks(
+    entityName: string,
+    row: Record<string, unknown>,
+    user: UserInfo | undefined,
+    provider?: IMetadataProvider
+): Promise<boolean> {
+    if (!IsPostRunViewProtectedEntity(entityName)) {
+        return true;
+    }
+    const params: RunViewParams = { EntityName: entityName, ResultType: 'simple' };
+    let result: RunViewResult = {
+        Success: true, Results: [row], RowCount: 1, TotalRowCount: 1, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: ''
+    };
+    try {
+        for (const hook of GetDataHooks<PostRunViewHook>('PostRunView')) {
+            result = await hook(params, result, user, provider);
+        }
+    } catch {
+        return false;
+    }
+    return Boolean(result?.Success) && Array.isArray(result.Results) && result.Results.length === 1;
 }

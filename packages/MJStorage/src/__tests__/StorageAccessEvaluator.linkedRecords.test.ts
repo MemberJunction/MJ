@@ -32,6 +32,7 @@ function makeSessionsEntity(): EntityInfo {
     });
     vi.spyOn(info, 'GetUserPermisions').mockReturnValue({ CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: false });
     vi.spyOn(info, 'UserExemptFromRowLevelSecurity').mockReturnValue(false);
+    vi.spyOn(info, 'GetUserRowLevelSecurityWhereClause').mockReturnValue(`UserID = '${bob.ID}'`);
     return info;
 }
 

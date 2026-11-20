@@ -33,6 +33,7 @@ import type {
     SyncResult,
 } from '../types.js';
 import {
+    AssertSyncUserSeesEveryChange,
     BuildCompositeWatermarkWhereClause,
     CoalesceRecordChanges,
     PlanPeerEntityOrder,
@@ -658,6 +659,11 @@ export class MemberJunctionConnector extends BaseIntegrationConnector {
         errored: number;
         skipped: number;
     }> {
+        const localEntity = md.EntityByID(entityMap.EntityID);
+        if (!localEntity) {
+            throw new Error(`Entity '${entityMap.Entity}' not found in local metadata.`);
+        }
+        AssertSyncUserSeesEveryChange(localEntity, contextUser);
         let cursor = fullSync
             ? null
             : await this.loadCompositeWatermark(entityMap.ID, 'Push', contextUser);

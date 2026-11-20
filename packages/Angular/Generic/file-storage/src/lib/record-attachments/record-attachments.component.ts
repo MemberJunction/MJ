@@ -466,17 +466,14 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
     return this.EntityID ?? null;
   }
 
+  /**
+   * The record's key as stored in `MJ: File Entity Record Links.RecordID`: the compact key form
+   * (the bare value for a one-column key, every key field for a composite key).
+   */
   public get EffectiveRecordID(): string | null {
-    if (this.Record) {
-      if (this.Record.PrimaryKey?.KeyValuePairs?.length > 0) {
-        const val = this.Record.PrimaryKey.KeyValuePairs[0].Value;
-        if (val !== null && val !== undefined && String(val).length > 0) return String(val);
-      }
-      const pkVal = this.Record.PrimaryKey?.GetValueByIndex(0);
-      if (pkVal !== null && pkVal !== undefined && String(pkVal).length > 0) return String(pkVal);
-      if ('ID' in this.Record && (this.Record as unknown as { ID: string }).ID) {
-        return String((this.Record as unknown as { ID: string }).ID);
-      }
+    const key = this.Record?.PrimaryKey;
+    if (key && key.KeyValuePairs?.length > 0 && key.KeyValuePairs.every((kv) => kv.Value !== null && kv.Value !== undefined && String(kv.Value).length > 0)) {
+      return key.ToCompactURLSegment();
     }
     return this.RecordID ?? null;
   }

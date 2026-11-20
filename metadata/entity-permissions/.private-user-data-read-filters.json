@@ -66,7 +66,8 @@
   },
   {
     "_comments": [
-      "Agent runs save their media as the run's user, so the UI role keeps create and update."
+      "Agent runs save their media as the run's user, so the UI role keeps create and update.",
+      "The same filter limits the UI role's reads and updates to media of the caller's own agent runs."
     ],
     "fields": {
       "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Run Medias",
@@ -76,7 +77,8 @@
       "CanCreate": true,
       "CanUpdate": true,
       "CanDelete": false,
-      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Own AI Agent Run Medias"
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Own AI Agent Run Medias",
+      "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Own AI Agent Run Medias"
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Run Medias&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow?create"
