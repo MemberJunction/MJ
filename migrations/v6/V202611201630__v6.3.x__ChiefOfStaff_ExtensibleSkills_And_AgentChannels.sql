@@ -1,4 +1,465 @@
+-- =====================================================================================
+-- Chief of Staff Extensible Skills, Offered Rhythms, Suggestions & Agent Channels (MJ 6.3)
+--
+-- 1. AISkillAction.Role:
+--    Classifies each skill-action binding as 'Tool' (normal model-callable tool),
+--    'Briefing' (deterministic briefing contributor invoked by Assemble My Briefing),
+--    or 'Both'. Mirrors AISkillAction.ExposeToModel.
+-- 2. AIAgentSkill.AllowMetadataSyncUpdate:
+--    Protects customer/admin local skill grant overrides (e.g., disabling or replacing
+--    an app-shipped skill) from being overwritten on mj app upgrade / Metadata_Sync.
+-- 3. AIAgentRhythmTemplate (`MJ: AI Agent Rhythm Templates`):
+--    Catalog of offered recurring wake templates contributed by core or Open App skills
+--    and enabled per user only after explicit confirmation.
+-- 4. AIAgentSuggestion (`MJ: AI Agent Suggestions`):
+--    Tracks proactive capability/rhythm suggestions offered to a user so declined
+--    suggestions are not repeated.
+-- 5. Agent Channel ConversationType (`AGENT_CHANNEL`), AgentChannel (IS-A Conversation),
+--    and AgentChannelParticipant (1-to-many child table):
+--    Shared, observable agent-to-agent conversation threads with persistent loop-guard
+--    and rate-limit counters.
+--
+-- Conventions (migrations/CLAUDE.md):
+--   - Plain DDL + sp_addextendedproperty only (no existence guards).
+--   - Explicit COLLATE SQL_Latin1_General_CP1_CI_AS on every new string column.
+--   - Readable spaced CHECK values where applicable.
+--   - Timestamp columns (__mj_CreatedAt / __mj_UpdatedAt) and single-column FK indexes
+--     are omitted; CodeGen generates them.
+--   - PostgreSQL counterpart is deferred to the release build engineer.
+-- =====================================================================================
 
+SET ANSI_NULLS ON;
+GO
+SET QUOTED_IDENTIFIER ON;
+GO
+
+-- -------------------------------------------------------------------------------------
+-- 1. AISkillAction.Role
+-- -------------------------------------------------------------------------------------
+ALTER TABLE [${flyway:defaultSchema}].[AISkillAction]
+ADD [Role] NVARCHAR(20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL
+    CONSTRAINT [DF_AISkillAction_Role] DEFAULT (N'Tool'),
+    CONSTRAINT [CK_AISkillAction_Role] CHECK ([Role] IN (N'Tool', N'Briefing', N'Both'));
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Role this action plays within the skill: Tool (normal tool invoked by the model), Briefing (deterministic briefing contributor invoked by Assemble My Briefing), or Both.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AISkillAction',
+    @level2type = N'COLUMN', @level2name = N'Role';
+GO
+
+-- -------------------------------------------------------------------------------------
+-- 2. AIAgentSkill.AllowMetadataSyncUpdate
+-- -------------------------------------------------------------------------------------
+ALTER TABLE [${flyway:defaultSchema}].[AIAgentSkill]
+ADD [AllowMetadataSyncUpdate] BIT NOT NULL
+    CONSTRAINT [DF_AIAgentSkill_AllowMetadataSyncUpdate] DEFAULT (1);
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'When 1 (default), metadata sync and app upgrades may update this agent-skill grant. Set to 0 when an administrator locally overrides or disables an app-shipped skill grant.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSkill',
+    @level2type = N'COLUMN', @level2name = N'AllowMetadataSyncUpdate';
+GO
+
+-- -------------------------------------------------------------------------------------
+-- 2b. RowLevelSecurityFilter.PlatformVariants
+-- -------------------------------------------------------------------------------------
+ALTER TABLE [${flyway:defaultSchema}].[RowLevelSecurityFilter]
+ADD [PlatformVariants] NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL;
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Optional JSON object mapping SQL field names (FilterText) to database-platform overrides (for example {"FilterText":{"postgresql":"..."}}) resolved by RowLevelSecurityFilterInfo.GetPlatformFilterText.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'RowLevelSecurityFilter',
+    @level2type = N'COLUMN', @level2name = N'PlatformVariants';
+GO
+
+-- -------------------------------------------------------------------------------------
+-- 3. AIAgentRhythmTemplate
+-- -------------------------------------------------------------------------------------
+CREATE TABLE [${flyway:defaultSchema}].[AIAgentRhythmTemplate] (
+    [ID]                    UNIQUEIDENTIFIER NOT NULL
+        CONSTRAINT [DF_AIAgentRhythmTemplate_ID] DEFAULT (newsequentialid()),
+    [AgentID]               UNIQUEIDENTIFIER NOT NULL,
+    [SkillID]               UNIQUEIDENTIFIER NULL,
+    [Name]                  NVARCHAR(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [WorkstreamKey]         NVARCHAR(150) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [Description]           NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [DefaultCronExpression] NVARCHAR(100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [DefaultWakeGate]       NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [WakeReason]            NVARCHAR(500) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [OfferAt]               NVARCHAR(20)  COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL
+        CONSTRAINT [DF_AIAgentRhythmTemplate_OfferAt] DEFAULT (N'Onboarding'),
+    [Status]                NVARCHAR(20)  COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL
+        CONSTRAINT [DF_AIAgentRhythmTemplate_Status] DEFAULT (N'Active'),
+    CONSTRAINT [PK_AIAgentRhythmTemplate] PRIMARY KEY CLUSTERED ([ID]),
+    CONSTRAINT [FK_AIAgentRhythmTemplate_AIAgent] FOREIGN KEY ([AgentID])
+        REFERENCES [${flyway:defaultSchema}].[AIAgent]([ID]),
+    CONSTRAINT [FK_AIAgentRhythmTemplate_AISkill] FOREIGN KEY ([SkillID])
+        REFERENCES [${flyway:defaultSchema}].[AISkill]([ID]),
+    CONSTRAINT [UQ_AIAgentRhythmTemplate_Agent_Workstream] UNIQUE NONCLUSTERED ([AgentID], [WorkstreamKey]),
+    CONSTRAINT [CK_AIAgentRhythmTemplate_OfferAt] CHECK ([OfferAt] IN (N'Onboarding', N'Install', N'Both')),
+    CONSTRAINT [CK_AIAgentRhythmTemplate_Status] CHECK ([Status] IN (N'Active', N'Inactive'))
+);
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Catalog of recurring wake rhythm templates offered by core agents or installed Open App skills. Users opt in to materialize a template into an MJ: User Routines row.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentRhythmTemplate';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'The always-on AI agent (for example Chief of Staff) to which this rhythm template applies.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentRhythmTemplate',
+    @level2type = N'COLUMN', @level2name = N'AgentID';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Optional AI Skill that contributes this rhythm template; NULL for core agent rhythms.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentRhythmTemplate',
+    @level2type = N'COLUMN', @level2name = N'SkillID';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Human-readable title of the offered rhythm shown to the user during onboarding or capability reviews.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentRhythmTemplate',
+    @level2type = N'COLUMN', @level2name = N'Name';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Stable programmatic workstream key (for example tasks-daily-triage, calendar-daily-review) used to upsert the user routine cleanly.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentRhythmTemplate',
+    @level2type = N'COLUMN', @level2name = N'WorkstreamKey';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Plain-language explanation of what this rhythm checks and delivers to the user.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentRhythmTemplate',
+    @level2type = N'COLUMN', @level2name = N'Description';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Default 5-field cron expression evaluated in the user''s local timezone when enabled.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentRhythmTemplate',
+    @level2type = N'COLUMN', @level2name = N'DefaultCronExpression';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Optional default 3-Tier Wake Gate JSON (watchedEntities, skipIfUnchanged, tier1Expression, tier2Decision) copied onto the created AgentWake routine.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentRhythmTemplate',
+    @level2type = N'COLUMN', @level2name = N'DefaultWakeGate';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Concise wake reason stored on the created AgentWake routine and passed to the agent when the rhythm fires.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentRhythmTemplate',
+    @level2type = N'COLUMN', @level2name = N'WakeReason';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Lifecycle moment when this rhythm should be suggested to the user: Onboarding, Install, or Both.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentRhythmTemplate',
+    @level2type = N'COLUMN', @level2name = N'OfferAt';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Whether this rhythm template is currently Active or Inactive.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentRhythmTemplate',
+    @level2type = N'COLUMN', @level2name = N'Status';
+GO
+
+-- -------------------------------------------------------------------------------------
+-- 4. AIAgentSuggestion
+-- -------------------------------------------------------------------------------------
+CREATE TABLE [${flyway:defaultSchema}].[AIAgentSuggestion] (
+    [ID]          UNIQUEIDENTIFIER NOT NULL
+        CONSTRAINT [DF_AIAgentSuggestion_ID] DEFAULT (newsequentialid()),
+    [AgentID]     UNIQUEIDENTIFIER NOT NULL,
+    [UserID]      UNIQUEIDENTIFIER NOT NULL,
+    [Kind]        NVARCHAR(30)  COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL
+        CONSTRAINT [DF_AIAgentSuggestion_Kind] DEFAULT (N'Rhythm'),
+    [TargetKey]   NVARCHAR(200) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [Summary]     NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [Status]      NVARCHAR(20)  COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL
+        CONSTRAINT [DF_AIAgentSuggestion_Status] DEFAULT (N'Offered'),
+    [OfferedAt]   DATETIMEOFFSET(7) NOT NULL
+        CONSTRAINT [DF_AIAgentSuggestion_OfferedAt] DEFAULT (GETUTCDATE()),
+    [RespondedAt] DATETIMEOFFSET(7) NULL,
+    CONSTRAINT [PK_AIAgentSuggestion] PRIMARY KEY CLUSTERED ([ID]),
+    CONSTRAINT [FK_AIAgentSuggestion_AIAgent] FOREIGN KEY ([AgentID])
+        REFERENCES [${flyway:defaultSchema}].[AIAgent]([ID]),
+    CONSTRAINT [FK_AIAgentSuggestion_User] FOREIGN KEY ([UserID])
+        REFERENCES [${flyway:defaultSchema}].[User]([ID]),
+    CONSTRAINT [CK_AIAgentSuggestion_Kind] CHECK ([Kind] IN (N'Rhythm', N'Skill', N'Behavior', N'Integration')),
+    CONSTRAINT [CK_AIAgentSuggestion_Status] CHECK ([Status] IN (N'Offered', N'Accepted', N'Declined', N'Expired'))
+);
+GO
+
+CREATE NONCLUSTERED INDEX [IDX_AIAgentSuggestion_Agent_User_Target]
+ON [${flyway:defaultSchema}].[AIAgentSuggestion] ([AgentID], [UserID], [TargetKey]);
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Log of proactive capability, skill, or rhythm suggestions offered by an agent to a specific user so declined suggestions are not repeated.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSuggestion';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'The AI agent that made the suggestion.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSuggestion',
+    @level2type = N'COLUMN', @level2name = N'AgentID';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'The user to whom the suggestion was offered.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSuggestion',
+    @level2type = N'COLUMN', @level2name = N'UserID';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Category of suggestion: Rhythm, Skill, Behavior, or Integration.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSuggestion',
+    @level2type = N'COLUMN', @level2name = N'Kind';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Stable deduplication key (such as a rhythm WorkstreamKey or skill name) preventing repeated offers of the same declined suggestion.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSuggestion',
+    @level2type = N'COLUMN', @level2name = N'TargetKey';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Concise description of the proposed capability or rhythm shown to the user.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSuggestion',
+    @level2type = N'COLUMN', @level2name = N'Summary';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Outcome of the suggestion: Offered, Accepted, Declined, or Expired.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSuggestion',
+    @level2type = N'COLUMN', @level2name = N'Status';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'UTC timestamp when the suggestion was first presented to the user.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSuggestion',
+    @level2type = N'COLUMN', @level2name = N'OfferedAt';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'UTC timestamp when the user accepted, declined, or let the suggestion expire.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentSuggestion',
+    @level2type = N'COLUMN', @level2name = N'RespondedAt';
+GO
+
+-- -------------------------------------------------------------------------------------
+-- 5. Agent Channel ConversationType, AgentChannel (IS-A Conversation) & Participants
+-- -------------------------------------------------------------------------------------
+INSERT INTO [${flyway:defaultSchema}].[ConversationType]
+    ([ID], [Name], [Code], [Description], [ExtensionEntity], [DriverClass])
+VALUES
+    ('09E7A069-DB29-4329-BB29-4DF8CB998D94', N'Agent Channel', N'AGENT_CHANNEL', N'Shared, observable agent-to-agent coordination thread where participating users and their agents exchange messages under loop-guard and policy boundaries.', N'MJ: Agent Channels', N'AgentChannelConversationDriver');
+GO
+
+CREATE TABLE [${flyway:defaultSchema}].[AgentChannel] (
+    [ID]                       UNIQUEIDENTIFIER NOT NULL,
+    [Topic]                    NVARCHAR(500) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [ChannelStatus]            NVARCHAR(30)  COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL
+        CONSTRAINT [DF_AgentChannel_ChannelStatus] DEFAULT (N'Open'),
+    [ReplyBy]                  DATETIMEOFFSET(7) NULL,
+    [ConsecutiveAgentTurns]    INT NOT NULL
+        CONSTRAINT [DF_AgentChannel_ConsecutiveAgentTurns] DEFAULT (0),
+    [MaxConsecutiveAgentTurns] INT NOT NULL
+        CONSTRAINT [DF_AgentChannel_MaxConsecutiveAgentTurns] DEFAULT (10),
+    [LastHumanMessageAt]       DATETIMEOFFSET(7) NULL,
+    [HourlyWakeCount]          INT NOT NULL
+        CONSTRAINT [DF_AgentChannel_HourlyWakeCount] DEFAULT (0),
+    [HourlyWakeWindowStart]    DATETIMEOFFSET(7) NULL,
+    [MaxHourlyWakes]           INT NOT NULL
+        CONSTRAINT [DF_AgentChannel_MaxHourlyWakes] DEFAULT (6),
+    CONSTRAINT [PK_AgentChannel] PRIMARY KEY CLUSTERED ([ID]),
+    CONSTRAINT [FK_AgentChannel_Conversation] FOREIGN KEY ([ID])
+        REFERENCES [${flyway:defaultSchema}].[Conversation]([ID]),
+    CONSTRAINT [CK_AgentChannel_ChannelStatus] CHECK ([ChannelStatus] IN (N'Open', N'Paused For Human', N'Resolved')),
+    CONSTRAINT [CK_AgentChannel_ConsecutiveAgentTurns] CHECK ([ConsecutiveAgentTurns] >= 0),
+    CONSTRAINT [CK_AgentChannel_MaxConsecutiveAgentTurns] CHECK ([MaxConsecutiveAgentTurns] >= 1),
+    CONSTRAINT [CK_AgentChannel_HourlyWakeCount] CHECK ([HourlyWakeCount] >= 0),
+    CONSTRAINT [CK_AgentChannel_MaxHourlyWakes] CHECK ([MaxHourlyWakes] >= 1)
+);
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'IS-A extension of MJ: Conversations for shared, observable agent-to-agent coordination channels, storing topic, lifecycle status, and loop-guard/rate-limit counters.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AgentChannel';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Shared primary key referencing MJ: Conversations(ID) for this IS-A Agent Channel conversation.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AgentChannel',
+    @level2type = N'COLUMN', @level2name = N'ID';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Short executive topic describing what the participating agents are coordinating on.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AgentChannel',
+    @level2type = N'COLUMN', @level2name = N'Topic';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Operational state of the channel: Open, Paused For Human (loop or wake limit reached), or Resolved.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AgentChannel',
+    @level2type = N'COLUMN', @level2name = N'ChannelStatus';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Optional deadline by which participants should respond or resolve the coordination topic.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AgentChannel',
+    @level2type = N'COLUMN', @level2name = N'ReplyBy';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Number of consecutive agent messages posted since the last human message; resets to 0 when any human posts.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AgentChannel',
+    @level2type = N'COLUMN', @level2name = N'ConsecutiveAgentTurns';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Maximum consecutive agent turns permitted without human intervention before the channel automatically pauses (default 10).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AgentChannel',
+    @level2type = N'COLUMN', @level2name = N'MaxConsecutiveAgentTurns';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'UTC timestamp of the most recent message posted directly by a human participant.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AgentChannel',
+    @level2type = N'COLUMN', @level2name = N'LastHumanMessageAt';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Count of peer agent wakes dispatched for this channel within the current rolling 1-hour window.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AgentChannel',
+    @level2type = N'COLUMN', @level2name = N'HourlyWakeCount';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'UTC start timestamp of the current 1-hour wake rate-limit window.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AgentChannel',
+    @level2type = N'COLUMN', @level2name = N'HourlyWakeWindowStart';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Maximum peer wakes allowed per hour for this channel before pausing for human review (default 6).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AgentChannel',
+    @level2type = N'COLUMN', @level2name = N'MaxHourlyWakes';
+GO
+
+CREATE TABLE [${flyway:defaultSchema}].[AgentChannelParticipant] (
+    [ID]               UNIQUEIDENTIFIER NOT NULL
+        CONSTRAINT [DF_AgentChannelParticipant_ID] DEFAULT (newsequentialid()),
+    [AgentChannelID]   UNIQUEIDENTIFIER NOT NULL,
+    [UserID]           UNIQUEIDENTIFIER NOT NULL,
+    [AgentID]          UNIQUEIDENTIFIER NOT NULL,
+    [Role]             NVARCHAR(20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL
+        CONSTRAINT [DF_AgentChannelParticipant_Role] DEFAULT (N'Participant'),
+    [LastSeenDetailID] UNIQUEIDENTIFIER NULL,
+    [JoinedAt]         DATETIMEOFFSET(7) NOT NULL
+        CONSTRAINT [DF_AgentChannelParticipant_JoinedAt] DEFAULT (GETUTCDATE()),
+    CONSTRAINT [PK_AgentChannelParticipant] PRIMARY KEY CLUSTERED ([ID]),
+    CONSTRAINT [FK_AgentChannelParticipant_AgentChannel] FOREIGN KEY ([AgentChannelID])
+        REFERENCES [${flyway:defaultSchema}].[AgentChannel]([ID]),
+    CONSTRAINT [FK_AgentChannelParticipant_User] FOREIGN KEY ([UserID])
+        REFERENCES [${flyway:defaultSchema}].[User]([ID]),
+    CONSTRAINT [FK_AgentChannelParticipant_AIAgent] FOREIGN KEY ([AgentID])
+        REFERENCES [${flyway:defaultSchema}].[AIAgent]([ID]),
+    CONSTRAINT [FK_AgentChannelParticipant_ConversationDetail] FOREIGN KEY ([LastSeenDetailID])
+        REFERENCES [${flyway:defaultSchema}].[ConversationDetail]([ID]),
+    CONSTRAINT [UQ_AgentChannelParticipant_Channel_User_Agent] UNIQUE NONCLUSTERED ([AgentChannelID], [UserID], [AgentID]),
+    CONSTRAINT [CK_AgentChannelParticipant_Role] CHECK ([Role] IN (N'Initiator', N'Participant'))
+);
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Participants (each a User + their AI Agent pair) enrolled in an Agent Channel conversation.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AgentChannelParticipant';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'The Agent Channel (and Conversation ID) to which this participant belongs.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AgentChannelParticipant',
+    @level2type = N'COLUMN', @level2name = N'AgentChannelID';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'The human user represented by this participant entry.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AgentChannelParticipant',
+    @level2type = N'COLUMN', @level2name = N'UserID';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'The AI agent acting on behalf of UserID in this channel.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AgentChannelParticipant',
+    @level2type = N'COLUMN', @level2name = N'AgentID';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Participant role in the channel: Initiator or Participant.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AgentChannelParticipant',
+    @level2type = N'COLUMN', @level2name = N'Role';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Optional ConversationDetail ID of the last message read by this participant.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AgentChannelParticipant',
+    @level2type = N'COLUMN', @level2name = N'LastSeenDetailID';
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'UTC timestamp when this participant joined the channel.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AgentChannelParticipant',
+    @level2type = N'COLUMN', @level2name = N'JoinedAt';
+GO
 
 
 
