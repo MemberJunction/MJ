@@ -24,7 +24,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CompositeFilterSQLCompiler, CompositeKey, LogError, RunView, type CompositeFilterDescriptor, type EntityInfo, type IMetadataProvider, type RunViewParams, type UserInfo, EntityRecordNameInput, EntityRecordNameResult } from '@memberjunction/core';
 import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { MJMLModelEntity, UserInfoEngine, type MJMLModelScoringBindingEntity, type MJUserViewEntity } from '@memberjunction/core-entities';
-import type { ActionParam, ActionResult } from '@memberjunction/actions-base';
+import { ActionEngineBase, type ActionParam, type ActionResult } from '@memberjunction/actions-base';
 import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { BuildRecordIdFilter } from '../../shared/record-id-filter';
 import { AgGridModule } from 'ag-grid-angular';
@@ -667,7 +667,15 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     if (!runId) return null;
     await this.resolveTargetEntity(model);
     // The run's process run details by keyset paging, read-only and only the columns the grid uses; throws on failure.
-    return PredictiveStudioEngine.Instance.LoadRunDetails(runId, provider, user);
+    return this.engine.LoadRunDetails(runId, provider, user);
+  }
+
+  /**
+   * The Predictive Studio engine of the grid's provider (multi-provider: the engine instance that provider's host
+   * configured, never the process-global one).
+   */
+  private get engine(): PredictiveStudioEngine {
+    return PredictiveStudioEngine.GetProviderInstance(this.ProviderToUse, PredictiveStudioEngine) as PredictiveStudioEngine;
   }
 
   /**
@@ -679,7 +687,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   private activeScoringBinding(model: PredictionGridModelFields | null): MJMLModelScoringBindingEntity | null {
     if (!model?.PipelineID) return null;
     const opened = this.EntityName ? this.ProviderToUse.EntityByName(this.EntityName) : undefined;
-    const candidates = PredictiveStudioEngine.Instance.ScoringBindingsForPipeline(model.PipelineID)
+    const candidates = this.engine.ScoringBindingsForPipeline(model.PipelineID)
       .filter((b) => b.Status === 'Active' && !!b.TargetEntityID && (!opened || UUIDsEqual(b.TargetEntityID, opened.ID)))
       .sort((a, b) => a.FeatureName.localeCompare(b.FeatureName) || NormalizeUUID(a.ID).localeCompare(NormalizeUUID(b.ID)));
     return candidates[0] || null;
@@ -730,7 +738,8 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
           { EntityName: 'MJ: Latest Feature Values', ExtraFilter: LatestPredictionRows.Filter(binding), Fields: ['ID'], MaxRows: 1, SkipTotalRowCount: true, AfterKey: afterKey, ResultType: 'simple', BypassCache: true },
           user,
         );
-        return { Rows: rows, Capped: probe.Success && probe.Results.length > 0 };
+        if (!probe.Success) throw new Error(`Could not tell whether "${binding.FeatureName}" has more than ${rows.length} latest values: ${probe.ErrorMessage || 'the request failed'}`);
+        return { Rows: rows, Capped: probe.Results.length > 0 };
       }
     }
   }
@@ -812,7 +821,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   private async resolveLatestRunId(): Promise<string | null> {
     if (!this.ModelId) return null;
     const provider = this.ProviderToUse;
-    const runs = await PredictiveStudioEngine.Instance.LoadRecentRunsForModel(this.ModelId, provider, provider.CurrentUser || undefined, { maxRows: 1 });
+    const runs = await this.engine.LoadRecentRunsForModel(this.ModelId, provider, provider.CurrentUser || undefined, { maxRows: 1 });
     return runs[0]?.ID || null;
   }
 
@@ -1710,29 +1719,9 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     let view: MJUserViewEntity | null = null;
     let listCreated = false;
     try {
-      const user = this.ProviderToUse.CurrentUser;
       const name = this.selectionListName();
-      view = await this.ProviderToUse.GetEntityObject<MJUserViewEntity>('MJ: User Views', user);
-      view.NewRecord();
-      view.Name = name;
-      view.EntityID = entity.ID;
-      view.UserID = user.ID;
-      view.IsShared = false;
-      // A plain view (not CustomWhereClause, which MJ allows only an Owner), the provider screens its clause when the
-      // view runs. The selection is also its FilterState: a later save of the view recompiles WhereClause from
-      // FilterState, and this one compiles to the same records, so the lineage-linked List's refresh keeps them.
-      const recordIds = this.FilteredRows.map((r) => r.recordId);
-      view.WhereClause = BuildRecordIdFilter(entity, recordIds);
-      view.FilterState = JSON.stringify(PSPredictionsGridComponent.SelectionFilterState(entity, recordIds));
-      if (!(await view.Save())) throw new Error(`the selection's view was not saved: ${view.LatestResult?.CompleteMessage || 'unknown error'}`);
-      const actionId = await this.materializeActionID();
-      const result = await this.RunListAction(actionId, [
-        { Name: 'ViewID', Value: view.ID, Type: 'Input' },
-        { Name: 'ListName', Value: name, Type: 'Input' },
-        { Name: 'RememberLineage', Value: 'true', Type: 'Input' },
-      ]);
-      const listId = result.Params?.find((p) => p.Name === 'CreatedListID')?.Value;
-      if (!result.Success || typeof listId !== 'string' || !listId) throw new Error(result.Message || 'the action created no list');
+      view = await this.saveSelectionView(entity, name);
+      const listId = await this.materializeList(view, name);
       listCreated = true;
       this.ListMessage = `Saved ${this.FilteredRows.length} record(s) as the list "${name}".`;
       this.navigationService.OpenEntityRecord('MJ: Lists', CompositeKey.FromID(listId));
@@ -1744,6 +1733,48 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       this.SavingList = false;
       this.cdr.markForCheck();
     }
+  }
+
+  /**
+   * Saves the private User View of `entity` naming the shown rows. A plain view (not CustomWhereClause, which MJ allows
+   * only an Owner): the provider screens its clause when the view runs. The selection is also its FilterState: a later
+   * save of the view recompiles WhereClause from FilterState, and this one compiles to the same records, so the
+   * lineage-linked List's refresh keeps them.
+   *
+   * @returns the saved view (the caller deletes it when the list is not created)
+   * @throws Error when the view is not saved
+   */
+  private async saveSelectionView(entity: EntityInfo, name: string): Promise<MJUserViewEntity> {
+    const user = this.ProviderToUse.CurrentUser;
+    const view = await this.ProviderToUse.GetEntityObject<MJUserViewEntity>('MJ: User Views', user);
+    view.NewRecord();
+    view.Name = name;
+    view.EntityID = entity.ID;
+    view.UserID = user.ID;
+    view.IsShared = false;
+    const recordIds = this.FilteredRows.map((r) => r.recordId);
+    view.WhereClause = BuildRecordIdFilter(entity, recordIds);
+    view.FilterState = JSON.stringify(PSPredictionsGridComponent.SelectionFilterState(entity, recordIds));
+    if (!(await view.Save())) throw new Error(`the selection's view was not saved: ${view.LatestResult?.CompleteMessage || 'unknown error'}`);
+    return view;
+  }
+
+  /**
+   * Runs "Materialize List From View" over the saved selection `view` with lineage to it.
+   *
+   * @returns the created List's ID
+   * @throws Error when the action fails or creates no list
+   */
+  private async materializeList(view: MJUserViewEntity, name: string): Promise<string> {
+    const actionId = await this.ResolveMaterializeActionID();
+    const result = await this.RunListAction(actionId, [
+      { Name: 'ViewID', Value: view.ID, Type: 'Input' },
+      { Name: 'ListName', Value: name, Type: 'Input' },
+      { Name: 'RememberLineage', Value: 'true', Type: 'Input' },
+    ]);
+    const listId = result.Params?.find((p) => p.Name === 'CreatedListID')?.Value;
+    if (!result.Success || typeof listId !== 'string' || !listId) throw new Error(result.Message || 'the action created no list');
+    return listId;
   }
 
   /**
@@ -1791,15 +1822,25 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     return new GraphQLActionClient(provider).RunAction(actionId, params);
   }
 
-  /** The ID of the "Materialize List From View" action, by name. */
-  private async materializeActionID(): Promise<string> {
-    const r = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<{ ID: string }>(
-      { EntityName: 'MJ: Actions', ExtraFilter: `Name='${EscapeSQLString(PSPredictionsGridComponent.materializeActionName)}'`, Fields: ['ID'], MaxRows: 1, ResultType: 'simple' },
-      this.ProviderToUse.CurrentUser,
-    );
-    const id = r.Success ? r.Results[0]?.ID : undefined;
-    if (!id) throw new Error(`the "${PSPredictionsGridComponent.materializeActionName}" action is not available${r.ErrorMessage ? `: ${r.ErrorMessage}` : ''}`);
+  /**
+   * The ID of the "Materialize List From View" action, from the action engine of the grid's provider (its cached
+   * `MJ: Actions`, loaded once when the engine is not configured yet).
+   *
+   * @throws Error when the action is not in the engine's cache
+   */
+  public async ResolveMaterializeActionID(): Promise<string> {
+    const provider = this.ProviderToUse;
+    const actions = ActionEngineBase.GetProviderInstance(provider, ActionEngineBase) as ActionEngineBase;
+    if (actions.Actions.length === 0) await actions.Config(false, provider.CurrentUser, provider);
+    const id = PSPredictionsGridComponent.ActionIDByName(actions.Actions, PSPredictionsGridComponent.materializeActionName);
+    if (!id) throw new Error(`the "${PSPredictionsGridComponent.materializeActionName}" action is not available`);
     return id;
+  }
+
+  /** The ID of the action named `name` (trimmed, case-insensitive) among `actions`, or null. Pure. */
+  public static ActionIDByName(actions: ReadonlyArray<{ readonly ID: string; readonly Name: string }>, name: string): string | null {
+    const wanted = name.trim().toLowerCase();
+    return actions.find((a) => a.Name.trim().toLowerCase() === wanted)?.ID || null;
   }
 
   private static readonly materializeActionName = 'Materialize List From View';

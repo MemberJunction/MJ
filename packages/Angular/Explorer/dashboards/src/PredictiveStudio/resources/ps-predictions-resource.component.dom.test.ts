@@ -137,6 +137,9 @@ function keptGlmResults(): string {
 }
 
 /** The engine members the workspace reads. `LoadRunDetails` must never be called: the grid reads the run. */
+/** The scoring binding fields the embedded grid reads from the engine's cache. */
+type ScoringBindingDouble = Pick<MJMLModelScoringBindingEntity, 'ID' | 'MLTrainingPipelineID' | 'FeatureName' | 'TargetEntityID' | 'Status'>;
+
 function fakeEngine(validationResults: string | null = storedResults(SHIPPED), lineage: string | null = null) {
   const published = { ...model, Lineage: lineage } as MJMLModelEntity;
   return {
@@ -153,6 +156,8 @@ function fakeEngine(validationResults: string | null = storedResults(SHIPPED), l
     ModelDisplayName: () => 'Who will renew?',
     LoadRecentRunsForModel: vi.fn(async () => [{ ID: 'run-1' }]),
     LoadRunDetails: vi.fn(async () => ({ Rows: [], Capped: false })),
+    // the embedded grid reads its model pipeline's scoring bindings from the engine's cache
+    ScoringBindingsForPipeline: vi.fn((): ScoringBindingDouble[] => []),
   };
 }
 
@@ -235,9 +240,7 @@ const latestValue = (recordId: string, score: number): LatestPredictionRow => ({
  * Opens the prediction in the workspace with the real embedded grid (appended to `host`): the provider serves the model
  * and its at-risk-list binding row, the latest run holds `scores` in that stored order.
  */
-async function RenderResource(host: HTMLElement, options: RenderResourceOptions): Promise<RunViewParams[]> {
-  // the engine's cached scoring binding of the model's pipeline: the double carries only the members the grid reads
-  vi.spyOn(PredictiveStudioEngine.Instance, 'ScoringBindingsForPipeline').mockReturnValue([{ ID: 'SB1', MLTrainingPipelineID: options.model.PipelineID, FeatureName: 'Renewal risk', TargetEntityID: ENTITY_ID, Status: 'Active' } as unknown as MJMLModelScoringBindingEntity]);
+async function RenderResource(host: HTMLElement, options: RenderResourceOptions): Promise<{ Reads: RunViewParams[]; Engine: ReturnType<typeof fakeEngine> }> {
   const reads: RunViewParams[] = [];
   const binding: BindingRow = {
     ID: 'B-list', ModelID: options.model.ID, Surface: options.binding.Surface || 'at-risk-list', SortsBy: options.binding.SortsBy || 'adverse-probability-desc',
@@ -251,12 +254,14 @@ async function RenderResource(host: HTMLElement, options: RenderResourceOptions)
     return [];
   };
   const provider = CreateFakeProvider<GridModelRow | BindingRow | LatestPredictionRow>({ entities: [{ ID: ENTITY_ID, Name: 'Members' }], runViewResults: served });
-  const { fixture, resource } = await renderCatalog(provider, undefined, null, PSPredictionsGridComponent);
+  const { fixture, resource, engine } = await renderCatalog(provider, undefined, null, PSPredictionsGridComponent);
+  // the engine's cached scoring binding of the model's pipeline: the double carries only the members the grid reads
+  engine.ScoringBindingsForPipeline.mockReturnValue([{ ID: 'SB1', MLTrainingPipelineID: options.model.PipelineID || '', FeatureName: 'Renewal risk', TargetEntityID: ENTITY_ID, Status: 'Active' }]);
   resource.Open(resource.Cards[0]);
   await settle(fixture);
   await settle(fixture);
   host.appendChild(fixture.nativeElement);
-  return reads;
+  return { Reads: reads, Engine: engine };
 }
 
 /** The scores of the at-risk list's rows as the embedded grid shows them, top row first. */
@@ -527,10 +532,9 @@ describe('PSPredictionsResourceComponent (DOM) — the At-Risk list from its bin
   });
 
   it("reads the At-Risk list from MJ: Latest Feature Values for the binding's feature, never a run's details", async () => {
-    const runDetails = vi.spyOn(PredictiveStudioEngine.Instance, 'LoadRunDetails');
-    const reads = await RenderResource(fixture, { model: renewalNamed, binding: { Surface: 'at-risk-list', SortsBy: 'adverse-probability-desc' }, scores: [0.9] });
-    expect(reads.find((p) => p.EntityName === 'MJ: Latest Feature Values')?.ExtraFilter).toBe(`EntityID='${ENTITY_ID}' AND FeatureName='Renewal risk' AND Source='Model'`);
-    expect(runDetails).not.toHaveBeenCalled();
+    const { Reads, Engine } = await RenderResource(fixture, { model: renewalNamed, binding: { Surface: 'at-risk-list', SortsBy: 'adverse-probability-desc' }, scores: [0.9] });
+    expect(Reads.find((p) => p.EntityName === 'MJ: Latest Feature Values')?.ExtraFilter).toBe(`EntityID='${ENTITY_ID}' AND FeatureName='Renewal risk' AND Source='Model'`);
+    expect(Engine.LoadRunDetails).not.toHaveBeenCalled();
   });
 
   it("keeps the stored scoring order when the binding row sorts by 'none'", async () => {
