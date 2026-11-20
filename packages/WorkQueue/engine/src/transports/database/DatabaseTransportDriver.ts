@@ -176,6 +176,9 @@ export class DatabaseTransportDriver implements ITransportDriver {
         for (let start = 0; start < rows.length; start += DELIVERY_INSERT_CHUNK) {
             await ExecuteWrite(executor, this.sql.Publish.InsertDeliveries(rows.slice(start, start + DELIVERY_INSERT_CHUNK)), user);
         }
+        if (rows.length > 0 && message.ScheduledAt !== undefined) {
+            await ExecuteWrite(executor, this.sql.Publish.ScheduleDeliveriesVisibleAt(message.MessageID, message.ScheduledAt), user);
+        }
         return Accepted(message.MessageID);
     }
 

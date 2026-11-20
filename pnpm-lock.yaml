@@ -5176,6 +5176,9 @@ importers:
       '@memberjunction/api-keys-base':
         specifier: 6.3.0-edge.1
         version: link:../../../APIKeys/Base
+      '@memberjunction/communication-types':
+        specifier: 6.3.0-edge.1
+        version: link:../../../Communication/base-types
       '@memberjunction/core':
         specifier: 6.3.0-edge.1
         version: link:../../../MJCore
@@ -7276,6 +7279,43 @@ importers:
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@opentelemetry/api@1.10.0)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/Angular/Generic/communications:
+    dependencies:
+      '@angular/common':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      '@angular/core':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@angular/elements':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      '@angular/forms':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
+      '@angular/platform-browser':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+    devDependencies:
+      '@angular/compiler':
+        specifier: 21.2.22
+        version: 21.2.22
+      '@angular/compiler-cli':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
+      '@memberjunction/ng-test-utils':
+        specifier: 6.3.0-edge.1
+        version: link:../test-utils
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@opentelemetry/api@1.10.0)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+      zone.js:
+        specifier: ~0.16.0
+        version: 0.16.0
 
   packages/Angular/Generic/composer:
     dependencies:
@@ -11016,6 +11056,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.3.0-edge.1
         version: link:../../MJGlobal
+      '@memberjunction/templates':
+        specifier: 6.3.0-edge.1
+        version: link:../../Templates/engine
     devDependencies:
       ts-node-dev:
         specifier: ^2.0.0
@@ -14206,6 +14249,9 @@ importers:
       '@memberjunction/version-history':
         specifier: 6.3.0-edge.1
         version: link:../VersionHistory
+      '@memberjunction/work-queue-core':
+        specifier: 6.3.0-edge.1
+        version: link:../WorkQueue/core
       '@memberjunction/work-queue-engine':
         specifier: 6.3.0-edge.1
         version: link:../WorkQueue/engine
@@ -16197,6 +16243,9 @@ importers:
       '@memberjunction/codegen-lib':
         specifier: 6.3.0-edge.1
         version: link:../CodeGenLib
+      '@memberjunction/communication-engine':
+        specifier: 6.3.0-edge.1
+        version: link:../Communication/engine
       '@memberjunction/communication-ms-graph':
         specifier: 6.3.0-edge.1
         version: link:../Communication/providers/MSGraph
@@ -17231,6 +17280,9 @@ importers:
       '@memberjunction/encryption':
         specifier: 6.3.0-edge.1
         version: link:../../Encryption
+      '@memberjunction/entity-communications-server':
+        specifier: 6.3.0-edge.1
+        version: link:../../Communication/entity-comm-server
       '@memberjunction/external-data-sources':
         specifier: 6.3.0-edge.1
         version: link:../../ExternalDataSources/Engine

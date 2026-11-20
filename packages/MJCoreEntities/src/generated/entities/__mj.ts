@@ -129,11 +129,29 @@ import type {
   MJCollectionEntityType,
   MJCommentTypeEntityType,
   MJCommentEntityType,
+  MJCommunicationActivityEntityType,
   MJCommunicationBaseMessageTypeEntityType,
+  MJCommunicationComplianceRegimeJurisdictionEntityType,
+  MJCommunicationComplianceRegimeRuleEntityType,
+  MJCommunicationComplianceRegimeEntityType,
+  MJCommunicationComplianceRuleTypeEntityType,
+  MJCommunicationConsentAuditLogEntityType,
+  MJCommunicationEndpointPrincipalEntityType,
+  MJCommunicationEndpointEntityType,
   MJCommunicationLogEntityType,
+  MJCommunicationPreferenceEntityType,
+  MJCommunicationPrincipalPreferenceEntityType,
+  MJCommunicationPrincipalEntityType,
+  MJCommunicationProviderEventEntityType,
   MJCommunicationProviderMessageTypeEntityType,
   MJCommunicationProviderEntityType,
   MJCommunicationRunEntityType,
+  MJCommunicationSenderPermissionEntityType,
+  MJCommunicationSenderTypeEntityType,
+  MJCommunicationSenderEntityType,
+  MJCommunicationSendingDomainEntityType,
+  MJCommunicationSuppressionPolicyEntityType,
+  MJCommunicationSuppressionEntityType,
   MJCompanyEntityType,
   MJCompanyIntegrationEntityMapEntityType,
   MJCompanyIntegrationFieldMapEntityType,
@@ -279,6 +297,8 @@ import type {
   MJInteractionLinkEntityType,
   MJInteractionOfferEntityType,
   MJInteractionEntityType,
+  MJJurisdictionMemberEntityType,
+  MJJurisdictionEntityType,
   MJKnowledgeHubSavedSearchEntityType,
   MJLibraryEntityType,
   MJLibraryItemEntityType,
@@ -39276,6 +39296,338 @@ export class MJCommentEntity extends BaseEntity<MJCommentEntityType> {
 
 
 /**
+ * MJ: Communication Activities - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CommunicationActivity
+ * * Base View: vwCommunicationActivities
+ * * @description Normalized delivery and engagement events from providers and the one-click unsubscribe endpoint. One row per provider event.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Communication Activities')
+export class MJCommunicationActivityEntity extends BaseEntity<MJCommunicationActivityEntityType> {
+    /**
+    * Loads the MJ: Communication Activities record from the database
+    * @param ID: string - primary key value to load the MJ: Communication Activities record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCommunicationActivityEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationLogID
+    * * Display Name: Communication Log ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Logs (vwCommunicationLogs.ID)
+    * * Description: Message the event belongs to. NULL when the event could not be matched.
+    */
+    get CommunicationLogID(): string | null {
+        return this.Get('CommunicationLogID');
+    }
+    set CommunicationLogID(value: string | null) {
+        this.Set('CommunicationLogID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationEndpointID
+    * * Display Name: Communication Endpoint ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Endpoints (vwCommunicationEndpoints.ID)
+    * * Description: Endpoint the event concerns.
+    */
+    get CommunicationEndpointID(): string | null {
+        return this.Get('CommunicationEndpointID');
+    }
+    set CommunicationEndpointID(value: string | null) {
+        this.Set('CommunicationEndpointID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationSenderID
+    * * Display Name: Communication Sender ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Senders (vwCommunicationSenders.ID)
+    * * Description: Sender of the message, copied from the log for reporting without a join.
+    */
+    get CommunicationSenderID(): string | null {
+        return this.Get('CommunicationSenderID');
+    }
+    set CommunicationSenderID(value: string | null) {
+        this.Set('CommunicationSenderID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationProviderID
+    * * Display Name: Communication Provider ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Providers (vwCommunicationProviders.ID)
+    * * Description: Provider that reported the event.
+    */
+    get CommunicationProviderID(): string {
+        return this.Get('CommunicationProviderID');
+    }
+    set CommunicationProviderID(value: string) {
+        this.Set('CommunicationProviderID', value);
+    }
+
+    /**
+    * * Field Name: EventType
+    * * Display Name: Event Type
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Clicked
+    *   * Deferred
+    *   * Delivered
+    *   * Dropped
+    *   * Hard Bounce
+    *   * Opened
+    *   * Queued
+    *   * Sent
+    *   * Soft Bounce
+    *   * Spam Complaint
+    *   * Unsubscribed
+    * * Description: Normalized event type.
+    */
+    get EventType(): 'Clicked' | 'Deferred' | 'Delivered' | 'Dropped' | 'Hard Bounce' | 'Opened' | 'Queued' | 'Sent' | 'Soft Bounce' | 'Spam Complaint' | 'Unsubscribed' {
+        return this.Get('EventType');
+    }
+    set EventType(value: 'Clicked' | 'Deferred' | 'Delivered' | 'Dropped' | 'Hard Bounce' | 'Opened' | 'Queued' | 'Sent' | 'Soft Bounce' | 'Spam Complaint' | 'Unsubscribed') {
+        this.Set('EventType', value);
+    }
+
+    /**
+    * * Field Name: OccurredAt
+    * * Display Name: Occurred At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the event happened, per the provider.
+    */
+    get OccurredAt(): Date {
+        return this.Get('OccurredAt');
+    }
+    set OccurredAt(value: Date) {
+        this.Set('OccurredAt', value);
+    }
+
+    /**
+    * * Field Name: ReceivedAt
+    * * Display Name: Received At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: When MJ received the event.
+    */
+    get ReceivedAt(): Date {
+        return this.Get('ReceivedAt');
+    }
+    set ReceivedAt(value: Date) {
+        this.Set('ReceivedAt', value);
+    }
+
+    /**
+    * * Field Name: ProviderEventID
+    * * Display Name: Provider Event ID
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Provider's unique event ID (for example SendGrid sg_event_id). Unique per provider; duplicates are dropped.
+    */
+    get ProviderEventID(): string | null {
+        return this.Get('ProviderEventID');
+    }
+    set ProviderEventID(value: string | null) {
+        this.Set('ProviderEventID', value);
+    }
+
+    /**
+    * * Field Name: ProviderMessageID
+    * * Display Name: Provider Message ID
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Provider's message ID, used to match the event when tracking metadata is missing.
+    */
+    get ProviderMessageID(): string | null {
+        return this.Get('ProviderMessageID');
+    }
+    set ProviderMessageID(value: string | null) {
+        this.Set('ProviderMessageID', value);
+    }
+
+    /**
+    * * Field Name: TargetURL
+    * * Display Name: Target URL
+    * * SQL Data Type: nvarchar(2000)
+    * * Description: Clicked URL, for Clicked events.
+    */
+    get TargetURL(): string | null {
+        return this.Get('TargetURL');
+    }
+    set TargetURL(value: string | null) {
+        this.Set('TargetURL', value);
+    }
+
+    /**
+    * * Field Name: BounceCode
+    * * Display Name: Bounce Code
+    * * SQL Data Type: nvarchar(50)
+    * * Description: SMTP or provider bounce code, for bounce events.
+    */
+    get BounceCode(): string | null {
+        return this.Get('BounceCode');
+    }
+    set BounceCode(value: string | null) {
+        this.Set('BounceCode', value);
+    }
+
+    /**
+    * * Field Name: BounceReason
+    * * Display Name: Bounce Reason
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: Provider bounce or drop explanation.
+    */
+    get BounceReason(): string | null {
+        return this.Get('BounceReason');
+    }
+    set BounceReason(value: string | null) {
+        this.Set('BounceReason', value);
+    }
+
+    /**
+    * * Field Name: IsMachineEvent
+    * * Display Name: Is Machine Event
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: 1 when the open or click is judged automated (mail privacy proxies, link scanners). Excluded from engagement.
+    */
+    get IsMachineEvent(): boolean {
+        return this.Get('IsMachineEvent');
+    }
+    set IsMachineEvent(value: boolean) {
+        this.Set('IsMachineEvent', value);
+    }
+
+    /**
+    * * Field Name: IPAddress
+    * * Display Name: IP Address
+    * * SQL Data Type: nvarchar(45)
+    * * Description: IP address reported with the event. Subject to the retention policy.
+    */
+    get IPAddress(): string | null {
+        return this.Get('IPAddress');
+    }
+    set IPAddress(value: string | null) {
+        this.Set('IPAddress', value);
+    }
+
+    /**
+    * * Field Name: UserAgent
+    * * Display Name: User Agent
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: User agent reported with the event. Subject to the retention policy.
+    */
+    get UserAgent(): string | null {
+        return this.Get('UserAgent');
+    }
+    set UserAgent(value: string | null) {
+        this.Set('UserAgent', value);
+    }
+
+    /**
+    * * Field Name: CorrelationData
+    * * Display Name: Correlation Data
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Caller CorrelationData echoed back by the provider.
+    */
+    get CorrelationData(): string | null {
+        return this.Get('CorrelationData');
+    }
+    set CorrelationData(value: string | null) {
+        this.Set('CorrelationData', value);
+    }
+
+    /**
+    * * Field Name: RawPayload
+    * * Display Name: Raw Payload
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Original provider payload for troubleshooting. Purged under the retention policy.
+    */
+    get RawPayload(): string | null {
+        return this.Get('RawPayload');
+    }
+    set RawPayload(value: string | null) {
+        this.Set('RawPayload', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CommunicationLog
+    * * Display Name: Communication Log
+    * * SQL Data Type: datetimeoffset
+    */
+    get CommunicationLog(): Date | null {
+        return this.Get('CommunicationLog');
+    }
+
+    /**
+    * * Field Name: CommunicationSender
+    * * Display Name: Communication Sender
+    * * SQL Data Type: nvarchar(200)
+    */
+    get CommunicationSender(): string | null {
+        return this.Get('CommunicationSender');
+    }
+
+    /**
+    * * Field Name: CommunicationProvider
+    * * Display Name: Communication Provider
+    * * SQL Data Type: nvarchar(255)
+    */
+    get CommunicationProvider(): string | null {
+        return this.Get('CommunicationProvider');
+    }
+}
+
+
+/**
  * MJ: Communication Base Message Types - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: CommunicationBaseMessageType
@@ -39404,6 +39756,1210 @@ export class MJCommunicationBaseMessageTypeEntity extends BaseEntity<MJCommunica
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Communication Compliance Regime Jurisdictions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CommunicationComplianceRegimeJurisdiction
+ * * Base View: vwCommunicationComplianceRegimeJurisdictions
+ * * @description Where a regime applies. Attach a regime to a group (EU) to cover all its members.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Communication Compliance Regime Jurisdictions')
+export class MJCommunicationComplianceRegimeJurisdictionEntity extends BaseEntity<MJCommunicationComplianceRegimeJurisdictionEntityType> {
+    /**
+    * Loads the MJ: Communication Compliance Regime Jurisdictions record from the database
+    * @param ID: string - primary key value to load the MJ: Communication Compliance Regime Jurisdictions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCommunicationComplianceRegimeJurisdictionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationComplianceRegimeID
+    * * Display Name: Communication Compliance Regime ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Compliance Regimes (vwCommunicationComplianceRegimes.ID)
+    * * Description: The regime.
+    */
+    get CommunicationComplianceRegimeID(): string {
+        return this.Get('CommunicationComplianceRegimeID');
+    }
+    set CommunicationComplianceRegimeID(value: string) {
+        this.Set('CommunicationComplianceRegimeID', value);
+    }
+
+    /**
+    * * Field Name: JurisdictionID
+    * * Display Name: Jurisdiction ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Jurisdictions (vwJurisdictions.ID)
+    * * Description: The jurisdiction (country, subdivision or group) where it applies.
+    */
+    get JurisdictionID(): string {
+        return this.Get('JurisdictionID');
+    }
+    set JurisdictionID(value: string) {
+        this.Set('JurisdictionID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CommunicationComplianceRegime
+    * * Display Name: Communication Compliance Regime
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CommunicationComplianceRegime(): string {
+        return this.Get('CommunicationComplianceRegime');
+    }
+
+    /**
+    * * Field Name: Jurisdiction
+    * * Display Name: Jurisdiction
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Jurisdiction(): string {
+        return this.Get('Jurisdiction');
+    }
+}
+
+
+/**
+ * MJ: Communication Compliance Regime Rules - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CommunicationComplianceRegimeRule
+ * * Base View: vwCommunicationComplianceRegimeRules
+ * * @description One rule in one regime, optionally narrowed to a channel and message class. Parameter values come from legal review, not engineering.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Communication Compliance Regime Rules')
+export class MJCommunicationComplianceRegimeRuleEntity extends BaseEntity<MJCommunicationComplianceRegimeRuleEntityType> {
+    /**
+    * Loads the MJ: Communication Compliance Regime Rules record from the database
+    * @param ID: string - primary key value to load the MJ: Communication Compliance Regime Rules record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCommunicationComplianceRegimeRuleEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationComplianceRegimeID
+    * * Display Name: Communication Compliance Regime ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Compliance Regimes (vwCommunicationComplianceRegimes.ID)
+    * * Description: The regime this rule belongs to.
+    */
+    get CommunicationComplianceRegimeID(): string {
+        return this.Get('CommunicationComplianceRegimeID');
+    }
+    set CommunicationComplianceRegimeID(value: string) {
+        this.Set('CommunicationComplianceRegimeID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationComplianceRuleTypeID
+    * * Display Name: Communication Compliance Rule Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Compliance Rule Types (vwCommunicationComplianceRuleTypes.ID)
+    * * Description: The kind of rule.
+    */
+    get CommunicationComplianceRuleTypeID(): string {
+        return this.Get('CommunicationComplianceRuleTypeID');
+    }
+    set CommunicationComplianceRuleTypeID(value: string) {
+        this.Set('CommunicationComplianceRuleTypeID', value);
+    }
+
+    /**
+    * * Field Name: BaseMessageTypeID
+    * * Display Name: Base Message Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Base Message Types (vwCommunicationBaseMessageTypes.ID)
+    * * Description: Channel the rule applies to. NULL = all channels.
+    */
+    get BaseMessageTypeID(): string | null {
+        return this.Get('BaseMessageTypeID');
+    }
+    set BaseMessageTypeID(value: string | null) {
+        this.Set('BaseMessageTypeID', value);
+    }
+
+    /**
+    * * Field Name: MessageClass
+    * * Display Name: Message Class
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Marketing
+    *   * Operational
+    *   * Transactional
+    * * Description: Message class the rule applies to. NULL = all classes.
+    */
+    get MessageClass(): 'Marketing' | 'Operational' | 'Transactional' | null {
+        return this.Get('MessageClass');
+    }
+    set MessageClass(value: 'Marketing' | 'Operational' | 'Transactional' | null) {
+        this.Set('MessageClass', value);
+    }
+
+    /**
+    * * Field Name: Parameters
+    * * Display Name: Parameters
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Rule parameters as JSON, validated against the rule type's ParameterSchema, for example {"Model":"Opt-In"} or {"StartHour":21,"EndHour":8}.
+    */
+    get Parameters(): string | null {
+        return this.Get('Parameters');
+    }
+    set Parameters(value: string | null) {
+        this.Set('Parameters', value);
+    }
+
+    /**
+    * * Field Name: Notes
+    * * Display Name: Notes
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Citation or reviewer notes for the parameter values.
+    */
+    get Notes(): string | null {
+        return this.Get('Notes');
+    }
+    set Notes(value: string | null) {
+        this.Set('Notes', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Active or Disabled.
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CommunicationComplianceRegime
+    * * Display Name: Communication Compliance Regime
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CommunicationComplianceRegime(): string | null {
+        return this.Get('CommunicationComplianceRegime');
+    }
+
+    /**
+    * * Field Name: CommunicationComplianceRuleType
+    * * Display Name: Communication Compliance Rule Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CommunicationComplianceRuleType(): string | null {
+        return this.Get('CommunicationComplianceRuleType');
+    }
+
+    /**
+    * * Field Name: BaseMessageType
+    * * Display Name: Base Message Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get BaseMessageType(): string | null {
+        return this.Get('BaseMessageType');
+    }
+}
+
+
+/**
+ * MJ: Communication Compliance Regimes - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CommunicationComplianceRegime
+ * * Base View: vwCommunicationComplianceRegimes
+ * * @description A legal regime admins can turn on, such as CAN-SPAM, GDPR, CASL or TCPA. A set of rules attached to jurisdictions. When several apply, each rule type resolves to its strictest value.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Communication Compliance Regimes')
+export class MJCommunicationComplianceRegimeEntity extends BaseEntity<MJCommunicationComplianceRegimeEntityType> {
+    /**
+    * Loads the MJ: Communication Compliance Regimes record from the database
+    * @param ID: string - primary key value to load the MJ: Communication Compliance Regimes record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCommunicationComplianceRegimeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique regime name.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Summary of the regime and its scope.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: AppliesBy
+    * * Display Name: Applies By
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: Recipient
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Recipient
+    *   * Recipient or Sender
+    *   * Sender
+    * * Description: Whose jurisdiction triggers the regime: the recipient's, the sender's, or either.
+    */
+    get AppliesBy(): 'Recipient' | 'Recipient or Sender' | 'Sender' {
+        return this.Get('AppliesBy');
+    }
+    set AppliesBy(value: 'Recipient' | 'Recipient or Sender' | 'Sender') {
+        this.Set('AppliesBy', value);
+    }
+
+    /**
+    * * Field Name: AppliesWhenJurisdictionUnknown
+    * * Display Name: Applies When Jurisdiction Unknown
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, the regime applies to recipients whose jurisdiction cannot be resolved. Default 1, so unknown recipients get the strictest combination of enabled regimes.
+    */
+    get AppliesWhenJurisdictionUnknown(): boolean {
+        return this.Get('AppliesWhenJurisdictionUnknown');
+    }
+    set AppliesWhenJurisdictionUnknown(value: boolean) {
+        this.Set('AppliesWhenJurisdictionUnknown', value);
+    }
+
+    /**
+    * * Field Name: ReferenceURL
+    * * Display Name: Reference URL
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: Link to the authoritative text or the legal review behind the rule parameters.
+    */
+    get ReferenceURL(): string | null {
+        return this.Get('ReferenceURL');
+    }
+    set ReferenceURL(value: string | null) {
+        this.Set('ReferenceURL', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Disabled
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Active regimes are enforced. Defaults to Disabled: an admin turns each regime on.
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Communication Compliance Rule Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CommunicationComplianceRuleType
+ * * Base View: vwCommunicationComplianceRuleTypes
+ * * @description A kind of compliance rule (ConsentModel, UnsubscribeMechanism, QuietHours, ...). Its driver evaluates the rule for a recipient and combines parameters from several regimes into the strictest result.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Communication Compliance Rule Types')
+export class MJCommunicationComplianceRuleTypeEntity extends BaseEntity<MJCommunicationComplianceRuleTypeEntityType> {
+    /**
+    * Loads the MJ: Communication Compliance Rule Types record from the database
+    * @param ID: string - primary key value to load the MJ: Communication Compliance Rule Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCommunicationComplianceRuleTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique rule type name.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What the rule controls and how the strictest value is chosen.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(200)
+    * * Description: ClassFactory key of a BaseComplianceRule subclass implementing Evaluate and Combine.
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: ParameterSchema
+    * * Display Name: Parameter Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON schema that regime rule Parameters must satisfy.
+    */
+    get ParameterSchema(): string | null {
+        return this.Get('ParameterSchema');
+    }
+    set ParameterSchema(value: string | null) {
+        this.Set('ParameterSchema', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Active or Disabled.
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Communication Consent Audit Logs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CommunicationConsentAuditLog
+ * * Base View: vwCommunicationConsentAuditLogs
+ * * @description Append-only history of every change to a suppression or principal preference. Never updated or deleted.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Communication Consent Audit Logs')
+export class MJCommunicationConsentAuditLogEntity extends BaseEntity<MJCommunicationConsentAuditLogEntityType> {
+    /**
+    * Loads the MJ: Communication Consent Audit Logs record from the database
+    * @param ID: string - primary key value to load the MJ: Communication Consent Audit Logs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCommunicationConsentAuditLogEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationSuppressionID
+    * * Display Name: Communication Suppression ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Suppressions (vwCommunicationSuppressions.ID)
+    * * Description: Suppression that changed. Exactly one of this and CommunicationPrincipalPreferenceID is set.
+    */
+    get CommunicationSuppressionID(): string | null {
+        return this.Get('CommunicationSuppressionID');
+    }
+    set CommunicationSuppressionID(value: string | null) {
+        this.Set('CommunicationSuppressionID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationPrincipalPreferenceID
+    * * Display Name: Communication Principal Preference ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Principal Preferences (vwCommunicationPrincipalPreferences.ID)
+    * * Description: Principal preference that changed. Exactly one of this and CommunicationSuppressionID is set.
+    */
+    get CommunicationPrincipalPreferenceID(): string | null {
+        return this.Get('CommunicationPrincipalPreferenceID');
+    }
+    set CommunicationPrincipalPreferenceID(value: string | null) {
+        this.Set('CommunicationPrincipalPreferenceID', value);
+    }
+
+    /**
+    * * Field Name: Action
+    * * Display Name: Action
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Confirmed
+    *   * Created
+    *   * Expired
+    *   * Revoked
+    *   * Updated
+    * * Description: Created, Updated, Revoked or Expired.
+    */
+    get Action(): 'Confirmed' | 'Created' | 'Expired' | 'Revoked' | 'Updated' {
+        return this.Get('Action');
+    }
+    set Action(value: 'Confirmed' | 'Created' | 'Expired' | 'Revoked' | 'Updated') {
+        this.Set('Action', value);
+    }
+
+    /**
+    * * Field Name: PreviousValue
+    * * Display Name: Previous Value
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON snapshot of the row before the change. NULL on Created.
+    */
+    get PreviousValue(): string | null {
+        return this.Get('PreviousValue');
+    }
+    set PreviousValue(value: string | null) {
+        this.Set('PreviousValue', value);
+    }
+
+    /**
+    * * Field Name: NewValue
+    * * Display Name: New Value
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON snapshot of the row after the change.
+    */
+    get NewValue(): string | null {
+        return this.Get('NewValue');
+    }
+    set NewValue(value: string | null) {
+        this.Set('NewValue', value);
+    }
+
+    /**
+    * * Field Name: Source
+    * * Display Name: Source
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * API
+    *   * Admin
+    *   * Import
+    *   * One-Click Header
+    *   * Policy
+    *   * Preference Center
+    *   * Provider Webhook
+    *   * Signup Form
+    *   * System
+    * * Description: Where the change came from.
+    */
+    get Source(): 'API' | 'Admin' | 'Import' | 'One-Click Header' | 'Policy' | 'Preference Center' | 'Provider Webhook' | 'Signup Form' | 'System' {
+        return this.Get('Source');
+    }
+    set Source(value: 'API' | 'Admin' | 'Import' | 'One-Click Header' | 'Policy' | 'Preference Center' | 'Provider Webhook' | 'Signup Form' | 'System') {
+        this.Set('Source', value);
+    }
+
+    /**
+    * * Field Name: CommunicationLogID
+    * * Display Name: Communication Log ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Logs (vwCommunicationLogs.ID)
+    * * Description: Message whose link or event caused the change, when applicable.
+    */
+    get CommunicationLogID(): string | null {
+        return this.Get('CommunicationLogID');
+    }
+    set CommunicationLogID(value: string | null) {
+        this.Set('CommunicationLogID', value);
+    }
+
+    /**
+    * * Field Name: IPAddress
+    * * Display Name: IP Address
+    * * SQL Data Type: nvarchar(45)
+    * * Description: IP address of the request that made the change.
+    */
+    get IPAddress(): string | null {
+        return this.Get('IPAddress');
+    }
+    set IPAddress(value: string | null) {
+        this.Set('IPAddress', value);
+    }
+
+    /**
+    * * Field Name: UserAgent
+    * * Display Name: User Agent
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: User agent of the request that made the change.
+    */
+    get UserAgent(): string | null {
+        return this.Get('UserAgent');
+    }
+    set UserAgent(value: string | null) {
+        this.Set('UserAgent', value);
+    }
+
+    /**
+    * * Field Name: ChangedByUserID
+    * * Display Name: Changed By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: MJ user who made the change, when not the person themselves.
+    */
+    get ChangedByUserID(): string | null {
+        return this.Get('ChangedByUserID');
+    }
+    set ChangedByUserID(value: string | null) {
+        this.Set('ChangedByUserID', value);
+    }
+
+    /**
+    * * Field Name: ChangedAt
+    * * Display Name: Changed At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: When the change happened.
+    */
+    get ChangedAt(): Date {
+        return this.Get('ChangedAt');
+    }
+    set ChangedAt(value: Date) {
+        this.Set('ChangedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CommunicationLog
+    * * Display Name: Communication Log
+    * * SQL Data Type: datetimeoffset
+    */
+    get CommunicationLog(): Date | null {
+        return this.Get('CommunicationLog');
+    }
+
+    /**
+    * * Field Name: ChangedByUser
+    * * Display Name: Changed By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ChangedByUser(): string | null {
+        return this.Get('ChangedByUser');
+    }
+}
+
+
+/**
+ * MJ: Communication Endpoint Principals - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CommunicationEndpointPrincipal
+ * * Base View: vwCommunicationEndpointPrincipals
+ * * @description Which principal records have used which endpoint, maintained by the engine at send time. Lets an address-only signal (bounce, one-click unsubscribe) find every record it affects.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Communication Endpoint Principals')
+export class MJCommunicationEndpointPrincipalEntity extends BaseEntity<MJCommunicationEndpointPrincipalEntityType> {
+    /**
+    * Loads the MJ: Communication Endpoint Principals record from the database
+    * @param ID: string - primary key value to load the MJ: Communication Endpoint Principals record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCommunicationEndpointPrincipalEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationEndpointID
+    * * Display Name: Communication Endpoint ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Endpoints (vwCommunicationEndpoints.ID)
+    * * Description: The endpoint.
+    */
+    get CommunicationEndpointID(): string {
+        return this.Get('CommunicationEndpointID');
+    }
+    set CommunicationEndpointID(value: string) {
+        this.Set('CommunicationEndpointID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Entity of the principal record.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(450)
+    * * Description: Primary key of the principal record (polymorphic, paired with EntityID).
+    */
+    get RecordID(): string {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string) {
+        this.Set('RecordID', value);
+    }
+
+    /**
+    * * Field Name: FirstSeenAt
+    * * Display Name: First Seen At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: When the engine first resolved this record to this endpoint.
+    */
+    get FirstSeenAt(): Date {
+        return this.Get('FirstSeenAt');
+    }
+    set FirstSeenAt(value: Date) {
+        this.Set('FirstSeenAt', value);
+    }
+
+    /**
+    * * Field Name: LastSeenAt
+    * * Display Name: Last Seen At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: When the engine last resolved this record to this endpoint.
+    */
+    get LastSeenAt(): Date {
+        return this.Get('LastSeenAt');
+    }
+    set LastSeenAt(value: Date) {
+        this.Set('LastSeenAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+}
+
+
+/**
+ * MJ: Communication Endpoints - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CommunicationEndpoint
+ * * Base View: vwCommunicationEndpoints
+ * * @description One canonical address per channel (an email address, a phone number), shared by every principal that uses it. Holds deliverability health so a bounce protects every record sharing the address.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Communication Endpoints')
+export class MJCommunicationEndpointEntity extends BaseEntity<MJCommunicationEndpointEntityType> {
+    /**
+    * Loads the MJ: Communication Endpoints record from the database
+    * @param ID: string - primary key value to load the MJ: Communication Endpoints record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCommunicationEndpointEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: BaseMessageTypeID
+    * * Display Name: Base Message Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Base Message Types (vwCommunicationBaseMessageTypes.ID)
+    * * Description: Channel of the address: the communication base message type (Email, SMS, ...).
+    */
+    get BaseMessageTypeID(): string {
+        return this.Get('BaseMessageTypeID');
+    }
+    set BaseMessageTypeID(value: string) {
+        this.Set('BaseMessageTypeID', value);
+    }
+
+    /**
+    * * Field Name: NormalizedValue
+    * * Display Name: Normalized Value
+    * * SQL Data Type: nvarchar(320)
+    * * Description: Normalized address: email lowercased and trimmed (dots and plus-tags kept); phone in E.164. NULL when Status is Erased.
+    */
+    get NormalizedValue(): string | null {
+        return this.Get('NormalizedValue');
+    }
+    set NormalizedValue(value: string | null) {
+        this.Set('NormalizedValue', value);
+    }
+
+    /**
+    * * Field Name: ValueHash
+    * * Display Name: Value Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 hex digest of the normalized value. Preserved on erasure so re-imported addresses resolve to the same suppressed endpoint.
+    */
+    get ValueHash(): string {
+        return this.Get('ValueHash');
+    }
+    set ValueHash(value: string) {
+        this.Set('ValueHash', value);
+    }
+
+    /**
+    * * Field Name: Domain
+    * * Display Name: Domain
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Email domain, for domain-level deliverability reporting. NULL for non-email channels.
+    */
+    get Domain(): string | null {
+        return this.Get('Domain');
+    }
+    set Domain(value: string | null) {
+        this.Set('Domain', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Complained
+    *   * Erased
+    *   * Hard Bounced
+    *   * Invalid
+    *   * Soft Bouncing
+    * * Description: Health summary maintained from activity. Suppression rows remain the authority for blocking.
+    */
+    get Status(): 'Active' | 'Complained' | 'Erased' | 'Hard Bounced' | 'Invalid' | 'Soft Bouncing' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Complained' | 'Erased' | 'Hard Bounced' | 'Invalid' | 'Soft Bouncing') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: SoftBounceCount
+    * * Display Name: Soft Bounce Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Consecutive soft bounces since the last delivery. A configurable threshold converts repeated soft bounces into a suppression.
+    */
+    get SoftBounceCount(): number {
+        return this.Get('SoftBounceCount');
+    }
+    set SoftBounceCount(value: number) {
+        this.Set('SoftBounceCount', value);
+    }
+
+    /**
+    * * Field Name: LastSentAt
+    * * Display Name: Last Sent At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Last time any message was handed to a provider for this address.
+    */
+    get LastSentAt(): Date | null {
+        return this.Get('LastSentAt');
+    }
+    set LastSentAt(value: Date | null) {
+        this.Set('LastSentAt', value);
+    }
+
+    /**
+    * * Field Name: LastDeliveredAt
+    * * Display Name: Last Delivered At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Last confirmed delivery.
+    */
+    get LastDeliveredAt(): Date | null {
+        return this.Get('LastDeliveredAt');
+    }
+    set LastDeliveredAt(value: Date | null) {
+        this.Set('LastDeliveredAt', value);
+    }
+
+    /**
+    * * Field Name: LastBouncedAt
+    * * Display Name: Last Bounced At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Last bounce of any kind.
+    */
+    get LastBouncedAt(): Date | null {
+        return this.Get('LastBouncedAt');
+    }
+    set LastBouncedAt(value: Date | null) {
+        this.Set('LastBouncedAt', value);
+    }
+
+    /**
+    * * Field Name: LastEngagedAt
+    * * Display Name: Last Engaged At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Last human open or click (machine events excluded).
+    */
+    get LastEngagedAt(): Date | null {
+        return this.Get('LastEngagedAt');
+    }
+    set LastEngagedAt(value: Date | null) {
+        this.Set('LastEngagedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: BaseMessageType
+    * * Display Name: Base Message Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get BaseMessageType(): string | null {
+        return this.Get('BaseMessageType');
     }
 }
 
@@ -39587,6 +41143,186 @@ export class MJCommunicationLogEntity extends BaseEntity<MJCommunicationLogEntit
     }
 
     /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Entity of the principal record the message was sent to.
+    */
+    get EntityID(): string | null {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string | null) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(450)
+    * * Description: Primary key of the principal record (polymorphic, paired with EntityID). NULL for transactional sends to a bare address.
+    */
+    get RecordID(): string | null {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string | null) {
+        this.Set('RecordID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationEndpointID
+    * * Display Name: Communication Endpoint ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Endpoints (vwCommunicationEndpoints.ID)
+    * * Description: Endpoint the message was sent to.
+    */
+    get CommunicationEndpointID(): string | null {
+        return this.Get('CommunicationEndpointID');
+    }
+    set CommunicationEndpointID(value: string | null) {
+        this.Set('CommunicationEndpointID', value);
+    }
+
+    /**
+    * * Field Name: RecipientAddress
+    * * Display Name: Recipient Address
+    * * SQL Data Type: nvarchar(320)
+    * * Description: Address as sent, kept even if the endpoint row later changes.
+    */
+    get RecipientAddress(): string | null {
+        return this.Get('RecipientAddress');
+    }
+    set RecipientAddress(value: string | null) {
+        this.Set('RecipientAddress', value);
+    }
+
+    /**
+    * * Field Name: CommunicationSenderID
+    * * Display Name: Communication Sender ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Senders (vwCommunicationSenders.ID)
+    * * Description: Sender the message went out on behalf of. Scopes any unsubscribe or complaint the message triggers.
+    */
+    get CommunicationSenderID(): string | null {
+        return this.Get('CommunicationSenderID');
+    }
+    set CommunicationSenderID(value: string | null) {
+        this.Set('CommunicationSenderID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationPreferenceID
+    * * Display Name: Communication Preference ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Preferences (vwCommunicationPreferences.ID)
+    * * Description: Preference the message was sent under. Scopes a one-click unsubscribe.
+    */
+    get CommunicationPreferenceID(): string | null {
+        return this.Get('CommunicationPreferenceID');
+    }
+    set CommunicationPreferenceID(value: string | null) {
+        this.Set('CommunicationPreferenceID', value);
+    }
+
+    /**
+    * * Field Name: MessageClass
+    * * Display Name: Message Class
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Marketing
+    *   * Operational
+    *   * Transactional
+    * * Description: Transactional, Operational or Marketing. NULL for messages logged before Communications V2.
+    */
+    get MessageClass(): 'Marketing' | 'Operational' | 'Transactional' | null {
+        return this.Get('MessageClass');
+    }
+    set MessageClass(value: 'Marketing' | 'Operational' | 'Transactional' | null) {
+        this.Set('MessageClass', value);
+    }
+
+    /**
+    * * Field Name: ScheduledAt
+    * * Display Name: Scheduled At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Requested send time (SendAt), or the deferral time the compliance gate set (for example after quiet hours).
+    */
+    get ScheduledAt(): Date | null {
+        return this.Get('ScheduledAt');
+    }
+    set ScheduledAt(value: Date | null) {
+        this.Set('ScheduledAt', value);
+    }
+
+    /**
+    * * Field Name: ProviderMessageID
+    * * Display Name: Provider Message ID
+    * * SQL Data Type: nvarchar(200)
+    * * Description: The provider's ID for the message (for example SendGrid X-Message-Id). Set once handed off; the send handler skips logs that already have one.
+    */
+    get ProviderMessageID(): string | null {
+        return this.Get('ProviderMessageID');
+    }
+    set ProviderMessageID(value: string | null) {
+        this.Set('ProviderMessageID', value);
+    }
+
+    /**
+    * * Field Name: UnsubscribeToken
+    * * Display Name: Unsubscribe Token
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newid()
+    * * Description: Non-enumerable random UUIDv4 capability token used in one-click unsubscribe and preference center links.
+    */
+    get UnsubscribeToken(): string | null {
+        return this.Get('UnsubscribeToken');
+    }
+    set UnsubscribeToken(value: string | null) {
+        this.Set('UnsubscribeToken', value);
+    }
+
+    /**
+    * * Field Name: TrackingToken
+    * * Display Name: Tracking Token
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newid()
+    * * Description: Separate random UUIDv4 token for open-tracking pixels so image-proxy logs never hold unsubscribe capability.
+    */
+    get TrackingToken(): string | null {
+        return this.Get('TrackingToken');
+    }
+    set TrackingToken(value: string | null) {
+        this.Set('TrackingToken', value);
+    }
+
+    /**
+    * * Field Name: CorrelationData
+    * * Display Name: Correlation Data
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Caller-supplied JSON echoed into provider tracking metadata and back on every activity event (for example a campaign or sequence step ID).
+    */
+    get CorrelationData(): string | null {
+        return this.Get('CorrelationData');
+    }
+    set CorrelationData(value: string | null) {
+        this.Set('CorrelationData', value);
+    }
+
+    /**
+    * * Field Name: ComplianceDecision
+    * * Display Name: Compliance Decision
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON record of the gate's decision: applicable regimes and jurisdictions, resolved rules, obligations injected. Evidence of why the message was allowed.
+    */
+    get ComplianceDecision(): string | null {
+        return this.Get('ComplianceDecision');
+    }
+    set ComplianceDecision(value: string | null) {
+        this.Set('ComplianceDecision', value);
+    }
+
+    /**
     * * Field Name: CommunicationProvider
     * * Display Name: Communication Provider
     * * SQL Data Type: nvarchar(255)
@@ -39611,6 +41347,895 @@ export class MJCommunicationLogEntity extends BaseEntity<MJCommunicationLogEntit
     */
     get CommunicationRun(): string | null {
         return this.Get('CommunicationRun');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string | null {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: CommunicationSender
+    * * Display Name: Communication Sender
+    * * SQL Data Type: nvarchar(200)
+    */
+    get CommunicationSender(): string | null {
+        return this.Get('CommunicationSender');
+    }
+
+    /**
+    * * Field Name: CommunicationPreference
+    * * Display Name: Communication Preference
+    * * SQL Data Type: nvarchar(200)
+    */
+    get CommunicationPreference(): string | null {
+        return this.Get('CommunicationPreference');
+    }
+}
+
+
+/**
+ * MJ: Communication Preferences - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CommunicationPreference
+ * * Base View: vwCommunicationPreferences
+ * * @description A preference people can opt into or out of, such as Weekly Newsletter or Event Reminders. Also the scope an unsubscribe writes. Can be shared across senders or owned by one.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Communication Preferences')
+export class MJCommunicationPreferenceEntity extends BaseEntity<MJCommunicationPreferenceEntityType> {
+    /**
+    * Loads the MJ: Communication Preferences record from the database
+    * @param ID: string - primary key value to load the MJ: Communication Preferences record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCommunicationPreferenceEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationSenderID
+    * * Display Name: Communication Sender ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Senders (vwCommunicationSenders.ID)
+    * * Description: Owning sender. NULL means the preference is shared across senders; non-NULL means the preference is owned by that specific sender.
+    */
+    get CommunicationSenderID(): string | null {
+        return this.Get('CommunicationSenderID');
+    }
+    set CommunicationSenderID(value: string | null) {
+        this.Set('CommunicationSenderID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Name shown in the preference center. Unique per sender.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Explanation shown in the preference center.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Category
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Optional grouping heading in the preference center.
+    */
+    get Category(): string | null {
+        return this.Get('Category');
+    }
+    set Category(value: string | null) {
+        this.Set('Category', value);
+    }
+
+    /**
+    * * Field Name: MessageClass
+    * * Display Name: Message Class
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Marketing
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Marketing
+    *   * Operational
+    *   * Transactional
+    * * Description: Transactional, Operational or Marketing. Decides which suppression reasons and regime rules apply to messages sent under this preference.
+    */
+    get MessageClass(): 'Marketing' | 'Operational' | 'Transactional' {
+        return this.Get('MessageClass');
+    }
+    set MessageClass(value: 'Marketing' | 'Operational' | 'Transactional') {
+        this.Set('MessageClass', value);
+    }
+
+    /**
+    * * Field Name: DefaultState
+    * * Display Name: Default State
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Opted In
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Opted In
+    *   * Opted Out
+    * * Description: State assumed when a principal has no Principal Preference row. An applicable opt-in regime overrides Opted In for Marketing: explicit consent is then required.
+    */
+    get DefaultState(): 'Opted In' | 'Opted Out' {
+        return this.Get('DefaultState');
+    }
+    set DefaultState(value: 'Opted In' | 'Opted Out') {
+        this.Set('DefaultState', value);
+    }
+
+    /**
+    * * Field Name: BaseMessageTypeID
+    * * Display Name: Base Message Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Base Message Types (vwCommunicationBaseMessageTypes.ID)
+    * * Description: Channel this preference applies to. NULL means all channels.
+    */
+    get BaseMessageTypeID(): string | null {
+        return this.Get('BaseMessageTypeID');
+    }
+    set BaseMessageTypeID(value: string | null) {
+        this.Set('BaseMessageTypeID', value);
+    }
+
+    /**
+    * * Field Name: IsUserVisible
+    * * Display Name: Is User Visible
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 0, the preference is internal and hidden from the preference center.
+    */
+    get IsUserVisible(): boolean {
+        return this.Get('IsUserVisible');
+    }
+    set IsUserVisible(value: boolean) {
+        this.Set('IsUserVisible', value);
+    }
+
+    /**
+    * * Field Name: DisplayOrder
+    * * Display Name: Display Order
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Order in the preference center.
+    */
+    get DisplayOrder(): number {
+        return this.Get('DisplayOrder');
+    }
+    set DisplayOrder(value: number) {
+        this.Set('DisplayOrder', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Active or Disabled. Sends naming a disabled preference are refused.
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CommunicationSender
+    * * Display Name: Communication Sender
+    * * SQL Data Type: nvarchar(200)
+    */
+    get CommunicationSender(): string | null {
+        return this.Get('CommunicationSender');
+    }
+
+    /**
+    * * Field Name: BaseMessageType
+    * * Display Name: Base Message Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get BaseMessageType(): string | null {
+        return this.Get('BaseMessageType');
+    }
+}
+
+
+/**
+ * MJ: Communication Principal Preferences - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CommunicationPrincipalPreference
+ * * Base View: vwCommunicationPrincipalPreferences
+ * * @description One principal record's choice for one preference, with consent evidence. Each preference is either shared or owned by one sender; absence of a row means no explicit permission or denial.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Communication Principal Preferences')
+export class MJCommunicationPrincipalPreferenceEntity extends BaseEntity<MJCommunicationPrincipalPreferenceEntityType> {
+    /**
+    * Loads the MJ: Communication Principal Preferences record from the database
+    * @param ID: string - primary key value to load the MJ: Communication Principal Preferences record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCommunicationPrincipalPreferenceEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Entity of the principal record.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(450)
+    * * Description: Primary key of the principal record (polymorphic, paired with EntityID).
+    */
+    get RecordID(): string {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string) {
+        this.Set('RecordID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationPreferenceID
+    * * Display Name: Communication Preference ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Preferences (vwCommunicationPreferences.ID)
+    * * Description: The preference this choice is for.
+    */
+    get CommunicationPreferenceID(): string {
+        return this.Get('CommunicationPreferenceID');
+    }
+    set CommunicationPreferenceID(value: string) {
+        this.Set('CommunicationPreferenceID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationSenderID
+    * * Display Name: Communication Sender ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Senders (vwCommunicationSenders.ID)
+    * * Description: Sender this choice applies to (and its descendants). NULL means every sender.
+    */
+    get CommunicationSenderID(): string | null {
+        return this.Get('CommunicationSenderID');
+    }
+    set CommunicationSenderID(value: string | null) {
+        this.Set('CommunicationSenderID', value);
+    }
+
+    /**
+    * * Field Name: State
+    * * Display Name: State
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Opted In
+    *   * Opted Out
+    *   * Pending
+    * * Description: Pending (awaiting double opt-in confirmation), Opted In or Opted Out.
+    */
+    get State(): 'Opted In' | 'Opted Out' | 'Pending' {
+        return this.Get('State');
+    }
+    set State(value: 'Opted In' | 'Opted Out' | 'Pending') {
+        this.Set('State', value);
+    }
+
+    /**
+    * * Field Name: OptInMethod
+    * * Display Name: Opt In Method
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Double
+    *   * Single
+    * * Description: Whether consent was captured via Single or Double opt-in. Preserved after Pending transitions to Opted In.
+    */
+    get OptInMethod(): 'Double' | 'Single' | null {
+        return this.Get('OptInMethod');
+    }
+    set OptInMethod(value: 'Double' | 'Single' | null) {
+        this.Set('OptInMethod', value);
+    }
+
+    /**
+    * * Field Name: ConfirmedAt
+    * * Display Name: Confirmed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When double opt-in confirmation was completed. NULL for single opt-in or while still Pending.
+    */
+    get ConfirmedAt(): Date | null {
+        return this.Get('ConfirmedAt');
+    }
+    set ConfirmedAt(value: Date | null) {
+        this.Set('ConfirmedAt', value);
+    }
+
+    /**
+    * * Field Name: ConfirmationToken
+    * * Display Name: Confirmation Token
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Random UUIDv4 token used in double opt-in confirmation links, separate from UnsubscribeToken.
+    */
+    get ConfirmationToken(): string | null {
+        return this.Get('ConfirmationToken');
+    }
+    set ConfirmationToken(value: string | null) {
+        this.Set('ConfirmationToken', value);
+    }
+
+    /**
+    * * Field Name: ConsentSource
+    * * Display Name: Consent Source
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * API
+    *   * Admin
+    *   * Import
+    *   * One-Click Header
+    *   * Preference Center
+    *   * Provider Webhook
+    *   * Signup Form
+    * * Description: Where the choice was captured.
+    */
+    get ConsentSource(): 'API' | 'Admin' | 'Import' | 'One-Click Header' | 'Preference Center' | 'Provider Webhook' | 'Signup Form' {
+        return this.Get('ConsentSource');
+    }
+    set ConsentSource(value: 'API' | 'Admin' | 'Import' | 'One-Click Header' | 'Preference Center' | 'Provider Webhook' | 'Signup Form') {
+        this.Set('ConsentSource', value);
+    }
+
+    /**
+    * * Field Name: ConsentAt
+    * * Display Name: Consent At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: When the choice was made.
+    */
+    get ConsentAt(): Date {
+        return this.Get('ConsentAt');
+    }
+    set ConsentAt(value: Date) {
+        this.Set('ConsentAt', value);
+    }
+
+    /**
+    * * Field Name: ConsentText
+    * * Display Name: Consent Text
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The exact wording the person agreed to, kept as consent evidence where a regime requires it.
+    */
+    get ConsentText(): string | null {
+        return this.Get('ConsentText');
+    }
+    set ConsentText(value: string | null) {
+        this.Set('ConsentText', value);
+    }
+
+    /**
+    * * Field Name: ExpiresAt
+    * * Display Name: Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When implied consent lapses (for example under a ConsentExpiry rule). NULL means no expiry.
+    */
+    get ExpiresAt(): Date | null {
+        return this.Get('ExpiresAt');
+    }
+    set ExpiresAt(value: Date | null) {
+        this.Set('ExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: CommunicationLogID
+    * * Display Name: Communication Log ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Logs (vwCommunicationLogs.ID)
+    * * Description: Message whose link or header produced this choice, when applicable.
+    */
+    get CommunicationLogID(): string | null {
+        return this.Get('CommunicationLogID');
+    }
+    set CommunicationLogID(value: string | null) {
+        this.Set('CommunicationLogID', value);
+    }
+
+    /**
+    * * Field Name: IPAddress
+    * * Display Name: IP Address
+    * * SQL Data Type: nvarchar(45)
+    * * Description: IP address of the request that made the choice.
+    */
+    get IPAddress(): string | null {
+        return this.Get('IPAddress');
+    }
+    set IPAddress(value: string | null) {
+        this.Set('IPAddress', value);
+    }
+
+    /**
+    * * Field Name: UserAgent
+    * * Display Name: User Agent
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: User agent of the request that made the choice.
+    */
+    get UserAgent(): string | null {
+        return this.Get('UserAgent');
+    }
+    set UserAgent(value: string | null) {
+        this.Set('UserAgent', value);
+    }
+
+    /**
+    * * Field Name: ChangedByUserID
+    * * Display Name: Changed By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: MJ user who made the change on the person's behalf (admin or API). NULL for self-service.
+    */
+    get ChangedByUserID(): string | null {
+        return this.Get('ChangedByUserID');
+    }
+    set ChangedByUserID(value: string | null) {
+        this.Set('ChangedByUserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string | null {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: CommunicationPreference
+    * * Display Name: Communication Preference
+    * * SQL Data Type: nvarchar(200)
+    */
+    get CommunicationPreference(): string | null {
+        return this.Get('CommunicationPreference');
+    }
+
+    /**
+    * * Field Name: CommunicationSender
+    * * Display Name: Communication Sender
+    * * SQL Data Type: nvarchar(200)
+    */
+    get CommunicationSender(): string | null {
+        return this.Get('CommunicationSender');
+    }
+
+    /**
+    * * Field Name: CommunicationLog
+    * * Display Name: Communication Log
+    * * SQL Data Type: datetimeoffset
+    */
+    get CommunicationLog(): Date | null {
+        return this.Get('CommunicationLog');
+    }
+
+    /**
+    * * Field Name: ChangedByUser
+    * * Display Name: Changed By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ChangedByUser(): string | null {
+        return this.Get('ChangedByUser');
+    }
+}
+
+
+/**
+ * MJ: Communication Principals - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CommunicationPrincipal
+ * * Base View: vwCommunicationPrincipals
+ * * @description Registers an entity whose records can receive communication (People, Organizations, Horseman, MJ Users). Nothing can be sent to a record of an entity that is not registered here, except transactional sends to a bare address.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Communication Principals')
+export class MJCommunicationPrincipalEntity extends BaseEntity<MJCommunicationPrincipalEntityType> {
+    /**
+    * Loads the MJ: Communication Principals record from the database
+    * @param ID: string - primary key value to load the MJ: Communication Principals record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCommunicationPrincipalEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: The entity registered as a principal. One registration per entity.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Display name shown in the principal selector, for example People or Organizations. The selector is hidden when only one principal is active.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What this principal represents and which app registered it.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(200)
+    * * Description: ClassFactory key of a BaseCommunicationPrincipal subclass. NULL uses the metadata-only base class.
+    */
+    get DriverClass(): string | null {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string | null) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON slot mapping, for example {"Slots":{"FullName":"FullName","Jurisdiction":"Addresses.CountryISO2","Timezone":"Timezone","PreferredLanguage":"Language"}}. Slots may traverse relationships. Address slots live in Entity Communication Fields.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: DisplayOrder
+    * * Display Name: Display Order
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Order of principals in pickers.
+    */
+    get DisplayOrder(): number {
+        return this.Get('DisplayOrder');
+    }
+    set DisplayOrder(value: number) {
+        this.Set('DisplayOrder', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Active principals can be sent to; Disabled principals are refused by the engine.
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string | null {
+        return this.Get('Entity');
+    }
+}
+
+
+/**
+ * MJ: Communication Provider Events - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CommunicationProviderEvent
+ * * Base View: vwCommunicationProviderEvents
+ * * @description Deduplication ledger for inbound provider webhook events, active regardless of whether CommunicationActivity storage is enabled. Rows older than 7 days are purged.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Communication Provider Events')
+export class MJCommunicationProviderEventEntity extends BaseEntity<MJCommunicationProviderEventEntityType> {
+    /**
+    * Loads the MJ: Communication Provider Events record from the database
+    * @param ID: string - primary key value to load the MJ: Communication Provider Events record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCommunicationProviderEventEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationProviderID
+    * * Display Name: Communication Provider ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Providers (vwCommunicationProviders.ID)
+    * * Description: Provider that delivered the webhook event.
+    */
+    get CommunicationProviderID(): string {
+        return this.Get('CommunicationProviderID');
+    }
+    set CommunicationProviderID(value: string) {
+        this.Set('CommunicationProviderID', value);
+    }
+
+    /**
+    * * Field Name: ProviderEventID
+    * * Display Name: Provider Event ID
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Provider's unique event ID (for example SendGrid sg_event_id).
+    */
+    get ProviderEventID(): string {
+        return this.Get('ProviderEventID');
+    }
+    set ProviderEventID(value: string) {
+        this.Set('ProviderEventID', value);
+    }
+
+    /**
+    * * Field Name: ReceivedAt
+    * * Display Name: Received At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: When MJ processed the event, used by the 7-day retention purge.
+    */
+    get ReceivedAt(): Date {
+        return this.Get('ReceivedAt');
+    }
+    set ReceivedAt(value: Date) {
+        this.Set('ReceivedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CommunicationProvider
+    * * Display Name: Communication Provider
+    * * SQL Data Type: nvarchar(255)
+    */
+    get CommunicationProvider(): string {
+        return this.Get('CommunicationProvider');
     }
 }
 
@@ -40085,6 +42710,20 @@ export class MJCommunicationProviderEntity extends BaseEntity<MJCommunicationPro
     }
 
     /**
+    * * Field Name: RequireVerifiedDomain
+    * * Display Name: Require Verified Domain
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, sends through this provider require a Verified Communication Sending Domain matching the sender's domain and credential.
+    */
+    get RequireVerifiedDomain(): boolean {
+        return this.Get('RequireVerifiedDomain');
+    }
+    set RequireVerifiedDomain(value: boolean) {
+        this.Set('RequireVerifiedDomain', value);
+    }
+
+    /**
     * * Field Name: DefaultCredential
     * * Display Name: Default Credential
     * * SQL Data Type: nvarchar(200)
@@ -40263,6 +42902,1465 @@ export class MJCommunicationRunEntity extends BaseEntity<MJCommunicationRunEntit
     */
     get User(): string | null {
         return this.Get('User');
+    }
+}
+
+
+/**
+ * MJ: Communication Sender Permissions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CommunicationSenderPermission
+ * * Base View: vwCommunicationSenderPermissions
+ * * @description Who may view, send as, or manage a sender. Grants to a role or a single user, optionally inherited by child senders. Lets one instance host several companies or brands with separate teams.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Communication Sender Permissions')
+export class MJCommunicationSenderPermissionEntity extends BaseEntity<MJCommunicationSenderPermissionEntityType> {
+    /**
+    * Loads the MJ: Communication Sender Permissions record from the database
+    * @param ID: string - primary key value to load the MJ: Communication Sender Permissions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCommunicationSenderPermissionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationSenderID
+    * * Display Name: Communication Sender ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Senders (vwCommunicationSenders.ID)
+    * * Description: The sender the grant applies to.
+    */
+    get CommunicationSenderID(): string {
+        return this.Get('CommunicationSenderID');
+    }
+    set CommunicationSenderID(value: string) {
+        this.Set('CommunicationSenderID', value);
+    }
+
+    /**
+    * * Field Name: RoleID
+    * * Display Name: Role ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+    * * Description: Role granted the permission. Exactly one of RoleID and UserID is set.
+    */
+    get RoleID(): string | null {
+        return this.Get('RoleID');
+    }
+    set RoleID(value: string | null) {
+        this.Set('RoleID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: User granted the permission. Exactly one of RoleID and UserID is set.
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: PermissionLevel
+    * * Display Name: Permission Level
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Manage
+    *   * Send
+    *   * View
+    * * Description: View: see activity and reports. Send: send as this sender. Manage: also edit the sender, its preferences and its suppressions. Each level includes the ones before it.
+    */
+    get PermissionLevel(): 'Manage' | 'Send' | 'View' {
+        return this.Get('PermissionLevel');
+    }
+    set PermissionLevel(value: 'Manage' | 'Send' | 'View') {
+        this.Set('PermissionLevel', value);
+    }
+
+    /**
+    * * Field Name: AppliesToChildSenders
+    * * Display Name: Applies To Child Senders
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, the grant also applies to every descendant sender.
+    */
+    get AppliesToChildSenders(): boolean {
+        return this.Get('AppliesToChildSenders');
+    }
+    set AppliesToChildSenders(value: boolean) {
+        this.Set('AppliesToChildSenders', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CommunicationSender
+    * * Display Name: Communication Sender
+    * * SQL Data Type: nvarchar(200)
+    */
+    get CommunicationSender(): string | null {
+        return this.Get('CommunicationSender');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Role(): string | null {
+        return this.Get('Role');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
+    }
+}
+
+
+/**
+ * MJ: Communication Sender Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CommunicationSenderType
+ * * Base View: vwCommunicationSenderTypes
+ * * @description Registers a kind of sender, usually backed by an entity, the way Communication Principal registers recipients. Default: Company over MJ: Companies. BCSaaS can register tenants, Rasa newsletters, and so on.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Communication Sender Types')
+export class MJCommunicationSenderTypeEntity extends BaseEntity<MJCommunicationSenderTypeEntityType> {
+    /**
+    * Loads the MJ: Communication Sender Types record from the database
+    * @param ID: string - primary key value to load the MJ: Communication Sender Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCommunicationSenderTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique name, for example Company, Brand, Tenant or Newsletter.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What this sender type represents.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Entity whose records back senders of this type, for example MJ: Companies. NULL for senders defined only in Communication Senders (for example a brand with no source record).
+    */
+    get EntityID(): string | null {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string | null) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(200)
+    * * Description: ClassFactory key of a BaseCommunicationSender subclass for custom resolution, templating context or permission checks. NULL uses the metadata-only base class.
+    */
+    get DriverClass(): string | null {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string | null) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON slot mapping from the backing entity, for example {"Slots":{"Name":"Name","SendingDomain":"Domain","LogoURL":"LogoURL","Website":"Website"}}. Values set on a Communication Sender row override mapped values.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Active or Disabled.
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string | null {
+        return this.Get('Entity');
+    }
+}
+
+
+/**
+ * MJ: Communication Senders - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CommunicationSender
+ * * Base View: vwCommunicationSenders
+ * * @description A concrete sender: a company, brand, tenant or newsletter that communications go out on behalf of. Scopes suppression, preferences, permissions, templating and sending identity. Senders form a hierarchy through ParentSenderID; a block on a sender covers its descendants.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Communication Senders')
+export class MJCommunicationSenderEntity extends BaseEntity<MJCommunicationSenderEntityType> {
+    /**
+    * Loads the MJ: Communication Senders record from the database
+    * @param ID: string - primary key value to load the MJ: Communication Senders record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCommunicationSenderEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationSenderTypeID
+    * * Display Name: Communication Sender Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Sender Types (vwCommunicationSenderTypes.ID)
+    * * Description: The sender type this sender belongs to.
+    */
+    get CommunicationSenderTypeID(): string {
+        return this.Get('CommunicationSenderTypeID');
+    }
+    set CommunicationSenderTypeID(value: string) {
+        this.Set('CommunicationSenderTypeID', value);
+    }
+
+    /**
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(450)
+    * * Description: Primary key of the backing record in the sender type's entity (for example an MJ: Companies ID). NULL when the sender has no backing record.
+    */
+    get RecordID(): string | null {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string | null) {
+        this.Set('RecordID', value);
+    }
+
+    /**
+    * * Field Name: ParentSenderID
+    * * Display Name: Parent Sender ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Senders (vwCommunicationSenders.ID)
+    * * Description: Parent sender, for example the company a brand or newsletter belongs to. Suppressions, preferences and permissions on a parent apply to its descendants.
+    */
+    get ParentSenderID(): string | null {
+        return this.Get('ParentSenderID');
+    }
+    set ParentSenderID(value: string | null) {
+        this.Set('ParentSenderID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Display name used in the preference center and reports.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What this sender is and who manages it.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Is Default
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, this sender is used for sends that name no sender. At most one default sender per instance.
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: FromEmail
+    * * Display Name: From Email
+    * * SQL Data Type: nvarchar(320)
+    * * Description: Default From address for email sent by this sender.
+    */
+    get FromEmail(): string | null {
+        return this.Get('FromEmail');
+    }
+    set FromEmail(value: string | null) {
+        this.Set('FromEmail', value);
+    }
+
+    /**
+    * * Field Name: FromName
+    * * Display Name: From Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Default From display name.
+    */
+    get FromName(): string | null {
+        return this.Get('FromName');
+    }
+    set FromName(value: string | null) {
+        this.Set('FromName', value);
+    }
+
+    /**
+    * * Field Name: ReplyToEmail
+    * * Display Name: Reply To Email
+    * * SQL Data Type: nvarchar(320)
+    * * Description: Default Reply-To address.
+    */
+    get ReplyToEmail(): string | null {
+        return this.Get('ReplyToEmail');
+    }
+    set ReplyToEmail(value: string | null) {
+        this.Set('ReplyToEmail', value);
+    }
+
+    /**
+    * * Field Name: FromPhone
+    * * Display Name: From Phone
+    * * SQL Data Type: nvarchar(32)
+    * * Description: Default sending phone number or short code for SMS, in E.164 form.
+    */
+    get FromPhone(): string | null {
+        return this.Get('FromPhone');
+    }
+    set FromPhone(value: string | null) {
+        this.Set('FromPhone', value);
+    }
+
+    /**
+    * * Field Name: SendingDomain
+    * * Display Name: Sending Domain
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Authenticated sending domain (SPF/DKIM/DMARC). Also a rate-limiting key for the send queue.
+    */
+    get SendingDomain(): string | null {
+        return this.Get('SendingDomain');
+    }
+    set SendingDomain(value: string | null) {
+        this.Set('SendingDomain', value);
+    }
+
+    /**
+    * * Field Name: PostalAddress
+    * * Display Name: Postal Address
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: Physical postal address injected into footers when a regime's SenderIdentification rule requires it.
+    */
+    get PostalAddress(): string | null {
+        return this.Get('PostalAddress');
+    }
+    set PostalAddress(value: string | null) {
+        this.Set('PostalAddress', value);
+    }
+
+    /**
+    * * Field Name: JurisdictionID
+    * * Display Name: Jurisdiction ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Jurisdictions (vwJurisdictions.ID)
+    * * Description: Where the sender is established. Regimes whose AppliesBy includes Sender apply based on this jurisdiction.
+    */
+    get JurisdictionID(): string | null {
+        return this.Get('JurisdictionID');
+    }
+    set JurisdictionID(value: string | null) {
+        this.Set('JurisdictionID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationProviderID
+    * * Display Name: Communication Provider ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Providers (vwCommunicationProviders.ID)
+    * * Description: Default provider for this sender's sends, overriding the instance default.
+    */
+    get CommunicationProviderID(): string | null {
+        return this.Get('CommunicationProviderID');
+    }
+    set CommunicationProviderID(value: string | null) {
+        this.Set('CommunicationProviderID', value);
+    }
+
+    /**
+    * * Field Name: CredentialID
+    * * Display Name: Credential ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    * * Description: Provider credential for this sender (for example a per-tenant SendGrid subuser key). Secrets live only in MJ: Credentials.
+    */
+    get CredentialID(): string | null {
+        return this.Get('CredentialID');
+    }
+    set CredentialID(value: string | null) {
+        this.Set('CredentialID', value);
+    }
+
+    /**
+    * * Field Name: PreferenceCenterURL
+    * * Display Name: Preference Center URL
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: Public preference center URL for this sender. Used as the redirect after one-click unsubscribe and in footers.
+    */
+    get PreferenceCenterURL(): string | null {
+        return this.Get('PreferenceCenterURL');
+    }
+    set PreferenceCenterURL(value: string | null) {
+        this.Set('PreferenceCenterURL', value);
+    }
+
+    /**
+    * * Field Name: TemplateContext
+    * * Display Name: Template Context
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON brand variables exposed to templates and callers as Sender.*, for example {"LogoURL":"...","PrimaryColor":"#0B5394","FooterText":"..."}. Merged down the sender hierarchy: a child's values override its parent's.
+    */
+    get TemplateContext(): string | null {
+        return this.Get('TemplateContext');
+    }
+    set TemplateContext(value: string | null) {
+        this.Set('TemplateContext', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Driver-specific JSON settings for this sender.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: EnforcementMode
+    * * Display Name: Enforcement Mode
+    * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Enforce
+    *   * Off
+    *   * Shadow
+    * * Description: Per-sender override of the instance compliance enforcement mode (Off, Shadow or Enforce). NULL uses the instance setting.
+    */
+    get EnforcementMode(): 'Enforce' | 'Off' | 'Shadow' | null {
+        return this.Get('EnforcementMode');
+    }
+    set EnforcementMode(value: 'Enforce' | 'Off' | 'Shadow' | null) {
+        this.Set('EnforcementMode', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Suspended
+    * * Description: Active senders can send; Suspended senders are paused (for example a reputation problem); Disabled senders are retired.
+    */
+    get Status(): 'Active' | 'Disabled' | 'Suspended' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled' | 'Suspended') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CommunicationSenderType
+    * * Display Name: Communication Sender Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CommunicationSenderType(): string | null {
+        return this.Get('CommunicationSenderType');
+    }
+
+    /**
+    * * Field Name: ParentSender
+    * * Display Name: Parent Sender
+    * * SQL Data Type: nvarchar(200)
+    */
+    get ParentSender(): string | null {
+        return this.Get('ParentSender');
+    }
+
+    /**
+    * * Field Name: Jurisdiction
+    * * Display Name: Jurisdiction
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Jurisdiction(): string | null {
+        return this.Get('Jurisdiction');
+    }
+
+    /**
+    * * Field Name: CommunicationProvider
+    * * Display Name: Communication Provider
+    * * SQL Data Type: nvarchar(255)
+    */
+    get CommunicationProvider(): string | null {
+        return this.Get('CommunicationProvider');
+    }
+
+    /**
+    * * Field Name: Credential
+    * * Display Name: Credential
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Credential(): string | null {
+        return this.Get('Credential');
+    }
+}
+
+
+/**
+ * MJ: Communication Sending Domains - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CommunicationSendingDomain
+ * * Base View: vwCommunicationSendingDomains
+ * * @description Authenticated sending domains (SPF, DKIM, DMARC) per provider and credential. Multiple senders sharing a domain and credential share one record.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Communication Sending Domains')
+export class MJCommunicationSendingDomainEntity extends BaseEntity<MJCommunicationSendingDomainEntityType> {
+    /**
+    * Loads the MJ: Communication Sending Domains record from the database
+    * @param ID: string - primary key value to load the MJ: Communication Sending Domains record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCommunicationSendingDomainEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationProviderID
+    * * Display Name: Communication Provider ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Providers (vwCommunicationProviders.ID)
+    * * Description: Provider that authenticates the domain (for example SendGrid).
+    */
+    get CommunicationProviderID(): string {
+        return this.Get('CommunicationProviderID');
+    }
+    set CommunicationProviderID(value: string) {
+        this.Set('CommunicationProviderID', value);
+    }
+
+    /**
+    * * Field Name: CredentialID
+    * * Display Name: Credential ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    * * Description: MJ: Credential (account or subuser) owning this domain authentication. NULL uses default environment credentials.
+    */
+    get CredentialID(): string | null {
+        return this.Get('CredentialID');
+    }
+    set CredentialID(value: string | null) {
+        this.Set('CredentialID', value);
+    }
+
+    /**
+    * * Field Name: Domain
+    * * Display Name: Domain
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Authenticated sending domain (for example mail.example.org).
+    */
+    get Domain(): string {
+        return this.Get('Domain');
+    }
+    set Domain(value: string) {
+        this.Set('Domain', value);
+    }
+
+    /**
+    * * Field Name: ProviderDomainID
+    * * Display Name: Provider Domain ID
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Provider's domain-authentication record ID (for example SendGrid whitelabel domain ID).
+    */
+    get ProviderDomainID(): string | null {
+        return this.Get('ProviderDomainID');
+    }
+    set ProviderDomainID(value: string | null) {
+        this.Set('ProviderDomainID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Failed
+    *   * Pending
+    *   * Revoked
+    *   * Verified
+    * * Description: Pending, Verified, Failed or Revoked.
+    */
+    get Status(): 'Failed' | 'Pending' | 'Revoked' | 'Verified' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Failed' | 'Pending' | 'Revoked' | 'Verified') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: DNSRecords
+    * * Display Name: DNS Records
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of required DNS records (Type, Purpose, Host, Value, Validated, LastError) returned by the provider.
+    */
+    get DNSRecords(): string | null {
+        return this.Get('DNSRecords');
+    }
+    set DNSRecords(value: string | null) {
+        this.Set('DNSRecords', value);
+    }
+
+    /**
+    * * Field Name: LastVerifiedAt
+    * * Display Name: Last Verified At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When DNS validation was last checked.
+    */
+    get LastVerifiedAt(): Date | null {
+        return this.Get('LastVerifiedAt');
+    }
+    set LastVerifiedAt(value: Date | null) {
+        this.Set('LastVerifiedAt', value);
+    }
+
+    /**
+    * * Field Name: VerifiedAt
+    * * Display Name: Verified At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the domain first reached Verified status.
+    */
+    get VerifiedAt(): Date | null {
+        return this.Get('VerifiedAt');
+    }
+    set VerifiedAt(value: Date | null) {
+        this.Set('VerifiedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CommunicationProvider
+    * * Display Name: Communication Provider
+    * * SQL Data Type: nvarchar(255)
+    */
+    get CommunicationProvider(): string | null {
+        return this.Get('CommunicationProvider');
+    }
+
+    /**
+    * * Field Name: Credential
+    * * Display Name: Credential
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Credential(): string | null {
+        return this.Get('Credential');
+    }
+}
+
+
+/**
+ * MJ: Communication Suppression Policies - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CommunicationSuppressionPolicy
+ * * Base View: vwCommunicationSuppressionPolicies
+ * * @description Automatic suppression rules evaluated on activity, for example three spam complaints across any senders within 90 days becomes a global block. Protects shared sending reputation in multi-tenant use.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Communication Suppression Policies')
+export class MJCommunicationSuppressionPolicyEntity extends BaseEntity<MJCommunicationSuppressionPolicyEntityType> {
+    /**
+    * Loads the MJ: Communication Suppression Policies record from the database
+    * @param ID: string - primary key value to load the MJ: Communication Suppression Policies record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCommunicationSuppressionPolicyEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Unique policy name.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What the policy protects against.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(200)
+    * * Description: ClassFactory key of a BaseCommunicationSuppressionPolicy subclass.
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: Parameters
+    * * Display Name: Parameters
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Driver parameters as JSON, for example {"Signal":"Spam Complaint","Threshold":3,"WindowDays":90,"Scope":"Global"}.
+    */
+    get Parameters(): string | null {
+        return this.Get('Parameters');
+    }
+    set Parameters(value: string | null) {
+        this.Set('Parameters', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Active or Disabled.
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Communication Suppressions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CommunicationSuppression
+ * * Base View: vwCommunicationSuppressions
+ * * @description Hard blocks on sending. Many rows per endpoint or principal accumulate over time, one per scope. Scope = sender (NULL = every sender) x preference (NULL = all) x channel (NULL = all). Rows are never deleted; they are revoked or expire.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Communication Suppressions')
+export class MJCommunicationSuppressionEntity extends BaseEntity<MJCommunicationSuppressionEntityType> {
+    /**
+    * Loads the MJ: Communication Suppressions record from the database
+    * @param ID: string - primary key value to load the MJ: Communication Suppressions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCommunicationSuppressionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationEndpointID
+    * * Display Name: Communication Endpoint ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Endpoints (vwCommunicationEndpoints.ID)
+    * * Description: Blocked address. Address-level rows protect every principal that shares the address. At least one of endpoint or principal is set.
+    */
+    get CommunicationEndpointID(): string | null {
+        return this.Get('CommunicationEndpointID');
+    }
+    set CommunicationEndpointID(value: string | null) {
+        this.Set('CommunicationEndpointID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Entity of the blocked principal record, when the block is principal-level.
+    */
+    get EntityID(): string | null {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string | null) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(450)
+    * * Description: Primary key of the blocked principal record (polymorphic, paired with EntityID).
+    */
+    get RecordID(): string | null {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string | null) {
+        this.Set('RecordID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationSenderID
+    * * Display Name: Communication Sender ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Senders (vwCommunicationSenders.ID)
+    * * Description: Sender the block applies to, including its descendants. NULL = global: every sender. Hard bounces and invalid addresses are always global.
+    */
+    get CommunicationSenderID(): string | null {
+        return this.Get('CommunicationSenderID');
+    }
+    set CommunicationSenderID(value: string | null) {
+        this.Set('CommunicationSenderID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationPreferenceID
+    * * Display Name: Communication Preference ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Preferences (vwCommunicationPreferences.ID)
+    * * Description: Preference the block applies to. NULL = all preferences of the classes the reason covers.
+    */
+    get CommunicationPreferenceID(): string | null {
+        return this.Get('CommunicationPreferenceID');
+    }
+    set CommunicationPreferenceID(value: string | null) {
+        this.Set('CommunicationPreferenceID', value);
+    }
+
+    /**
+    * * Field Name: BaseMessageTypeID
+    * * Display Name: Base Message Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Base Message Types (vwCommunicationBaseMessageTypes.ID)
+    * * Description: Channel the block applies to. NULL = all channels.
+    */
+    get BaseMessageTypeID(): string | null {
+        return this.Get('BaseMessageTypeID');
+    }
+    set BaseMessageTypeID(value: string | null) {
+        this.Set('BaseMessageTypeID', value);
+    }
+
+    /**
+    * * Field Name: Reason
+    * * Display Name: Reason
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Admin Block
+    *   * Hard Bounce
+    *   * Invalid Address
+    *   * Policy
+    *   * Spam Complaint
+    *   * User Unsubscribe
+    * * Description: Why the block exists. Hard Bounce and Invalid Address block every class; Spam Complaint and Admin Block block Operational and Marketing; User Unsubscribe and Policy block Marketing, or only the named preference when one is set.
+    */
+    get Reason(): 'Admin Block' | 'Hard Bounce' | 'Invalid Address' | 'Policy' | 'Spam Complaint' | 'User Unsubscribe' {
+        return this.Get('Reason');
+    }
+    set Reason(value: 'Admin Block' | 'Hard Bounce' | 'Invalid Address' | 'Policy' | 'Spam Complaint' | 'User Unsubscribe') {
+        this.Set('Reason', value);
+    }
+
+    /**
+    * * Field Name: Source
+    * * Display Name: Source
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * API
+    *   * Admin
+    *   * Import
+    *   * One-Click Header
+    *   * Policy
+    *   * Preference Center
+    *   * Provider Webhook
+    * * Description: Where the signal came from.
+    */
+    get Source(): 'API' | 'Admin' | 'Import' | 'One-Click Header' | 'Policy' | 'Preference Center' | 'Provider Webhook' {
+        return this.Get('Source');
+    }
+    set Source(value: 'API' | 'Admin' | 'Import' | 'One-Click Header' | 'Policy' | 'Preference Center' | 'Provider Webhook') {
+        this.Set('Source', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Expired
+    *   * Revoked
+    * * Description: Active rows block. Revoked rows were lifted (for example the person resubscribed). Expired rows passed ExpiresAt.
+    */
+    get Status(): 'Active' | 'Expired' | 'Revoked' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Expired' | 'Revoked') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: EffectiveAt
+    * * Display Name: Effective At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: When the block took effect.
+    */
+    get EffectiveAt(): Date {
+        return this.Get('EffectiveAt');
+    }
+    set EffectiveAt(value: Date) {
+        this.Set('EffectiveAt', value);
+    }
+
+    /**
+    * * Field Name: ExpiresAt
+    * * Display Name: Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional automatic end, for example a cooling-off block after soft bounces. NULL = until revoked.
+    */
+    get ExpiresAt(): Date | null {
+        return this.Get('ExpiresAt');
+    }
+    set ExpiresAt(value: Date | null) {
+        this.Set('ExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: RevokedAt
+    * * Display Name: Revoked At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the block was lifted. Set exactly when Status is Revoked.
+    */
+    get RevokedAt(): Date | null {
+        return this.Get('RevokedAt');
+    }
+    set RevokedAt(value: Date | null) {
+        this.Set('RevokedAt', value);
+    }
+
+    /**
+    * * Field Name: RevokedByUserID
+    * * Display Name: Revoked By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: MJ user who lifted the block, when it was not the person themselves.
+    */
+    get RevokedByUserID(): string | null {
+        return this.Get('RevokedByUserID');
+    }
+    set RevokedByUserID(value: string | null) {
+        this.Set('RevokedByUserID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationLogID
+    * * Display Name: Communication Log ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Logs (vwCommunicationLogs.ID)
+    * * Description: The message that triggered the block (one-click unsubscribe, bounce, complaint). Also identifies the sender for sender-scoped blocks.
+    */
+    get CommunicationLogID(): string | null {
+        return this.Get('CommunicationLogID');
+    }
+    set CommunicationLogID(value: string | null) {
+        this.Set('CommunicationLogID', value);
+    }
+
+    /**
+    * * Field Name: CommunicationSuppressionPolicyID
+    * * Display Name: Communication Suppression Policy ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Suppression Policies (vwCommunicationSuppressionPolicies.ID)
+    * * Description: Suppression policy that created the block. Required when Reason is Policy.
+    */
+    get CommunicationSuppressionPolicyID(): string | null {
+        return this.Get('CommunicationSuppressionPolicyID');
+    }
+    set CommunicationSuppressionPolicyID(value: string | null) {
+        this.Set('CommunicationSuppressionPolicyID', value);
+    }
+
+    /**
+    * * Field Name: IPAddress
+    * * Display Name: IP Address
+    * * SQL Data Type: nvarchar(45)
+    * * Description: IP address of the request that created the block.
+    */
+    get IPAddress(): string | null {
+        return this.Get('IPAddress');
+    }
+    set IPAddress(value: string | null) {
+        this.Set('IPAddress', value);
+    }
+
+    /**
+    * * Field Name: UserAgent
+    * * Display Name: User Agent
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: User agent of the request that created the block.
+    */
+    get UserAgent(): string | null {
+        return this.Get('UserAgent');
+    }
+    set UserAgent(value: string | null) {
+        this.Set('UserAgent', value);
+    }
+
+    /**
+    * * Field Name: Notes
+    * * Display Name: Notes
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Free-text notes, for example why an admin added the block.
+    */
+    get Notes(): string | null {
+        return this.Get('Notes');
+    }
+    set Notes(value: string | null) {
+        this.Set('Notes', value);
+    }
+
+    /**
+    * * Field Name: CreatedByUserID
+    * * Display Name: Created By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: MJ user who created the block (admin or API). NULL for provider- or recipient-originated blocks.
+    */
+    get CreatedByUserID(): string | null {
+        return this.Get('CreatedByUserID');
+    }
+    set CreatedByUserID(value: string | null) {
+        this.Set('CreatedByUserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string | null {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: CommunicationSender
+    * * Display Name: Communication Sender
+    * * SQL Data Type: nvarchar(200)
+    */
+    get CommunicationSender(): string | null {
+        return this.Get('CommunicationSender');
+    }
+
+    /**
+    * * Field Name: CommunicationPreference
+    * * Display Name: Communication Preference
+    * * SQL Data Type: nvarchar(200)
+    */
+    get CommunicationPreference(): string | null {
+        return this.Get('CommunicationPreference');
+    }
+
+    /**
+    * * Field Name: BaseMessageType
+    * * Display Name: Base Message Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get BaseMessageType(): string | null {
+        return this.Get('BaseMessageType');
+    }
+
+    /**
+    * * Field Name: RevokedByUser
+    * * Display Name: Revoked By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get RevokedByUser(): string | null {
+        return this.Get('RevokedByUser');
+    }
+
+    /**
+    * * Field Name: CommunicationLog
+    * * Display Name: Communication Log
+    * * SQL Data Type: datetimeoffset
+    */
+    get CommunicationLog(): Date | null {
+        return this.Get('CommunicationLog');
+    }
+
+    /**
+    * * Field Name: CommunicationSuppressionPolicy
+    * * Display Name: Communication Suppression Policy
+    * * SQL Data Type: nvarchar(200)
+    */
+    get CommunicationSuppressionPolicy(): string | null {
+        return this.Get('CommunicationSuppressionPolicy');
+    }
+
+    /**
+    * * Field Name: CreatedByUser
+    * * Display Name: Created By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CreatedByUser(): string | null {
+        return this.Get('CreatedByUser');
     }
 }
 
@@ -62648,11 +66746,25 @@ export class MJEntityCommunicationMessageTypeEntity extends BaseEntity<MJEntityC
     }
 
     /**
+    * * Field Name: CommunicationPrincipalID
+    * * Display Name: Communication Principal ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Communication Principals (vwCommunicationPrincipals.ID)
+    * * Description: The principal this channel mapping belongs to. NULL for rows created before Communications V2; the engine falls back to matching EntityID.
+    */
+    get CommunicationPrincipalID(): string | null {
+        return this.Get('CommunicationPrincipalID');
+    }
+    set CommunicationPrincipalID(value: string | null) {
+        this.Set('CommunicationPrincipalID', value);
+    }
+
+    /**
     * * Field Name: Entity
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string | null {
+    get Entity(): string {
         return this.Get('Entity');
     }
 
@@ -62661,8 +66773,17 @@ export class MJEntityCommunicationMessageTypeEntity extends BaseEntity<MJEntityC
     * * Display Name: Base Message Type
     * * SQL Data Type: nvarchar(100)
     */
-    get BaseMessageType(): string | null {
+    get BaseMessageType(): string {
         return this.Get('BaseMessageType');
+    }
+
+    /**
+    * * Field Name: CommunicationPrincipal
+    * * Display Name: Communication Principal
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CommunicationPrincipal(): string | null {
+        return this.Get('CommunicationPrincipal');
     }
 }
 
@@ -77991,6 +82112,280 @@ export class MJInteractionEntity extends BaseEntity<MJInteractionEntityType> {
     */
     get PhoneNumber(): string | null {
         return this.Get('PhoneNumber');
+    }
+}
+
+
+/**
+ * MJ: Jurisdiction Members - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: JurisdictionMember
+ * * Base View: vwJurisdictionMembers
+ * * @description Containment between jurisdictions: EU contains FR, US contains US-CA. Groups can nest. Resolution expands a code to every jurisdiction that contains it.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Jurisdiction Members')
+export class MJJurisdictionMemberEntity extends BaseEntity<MJJurisdictionMemberEntityType> {
+    /**
+    * Loads the MJ: Jurisdiction Members record from the database
+    * @param ID: string - primary key value to load the MJ: Jurisdiction Members record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJJurisdictionMemberEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: GroupJurisdictionID
+    * * Display Name: Group Jurisdiction ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Jurisdictions (vwJurisdictions.ID)
+    * * Description: The containing jurisdiction, for example EU or US.
+    */
+    get GroupJurisdictionID(): string {
+        return this.Get('GroupJurisdictionID');
+    }
+    set GroupJurisdictionID(value: string) {
+        this.Set('GroupJurisdictionID', value);
+    }
+
+    /**
+    * * Field Name: MemberJurisdictionID
+    * * Display Name: Member Jurisdiction ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Jurisdictions (vwJurisdictions.ID)
+    * * Description: The contained jurisdiction, for example FR or US-CA.
+    */
+    get MemberJurisdictionID(): string {
+        return this.Get('MemberJurisdictionID');
+    }
+    set MemberJurisdictionID(value: string) {
+        this.Set('MemberJurisdictionID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: GroupJurisdiction
+    * * Display Name: Group Jurisdiction
+    * * SQL Data Type: nvarchar(200)
+    */
+    get GroupJurisdiction(): string {
+        return this.Get('GroupJurisdiction');
+    }
+
+    /**
+    * * Field Name: MemberJurisdiction
+    * * Display Name: Member Jurisdiction
+    * * SQL Data Type: nvarchar(200)
+    */
+    get MemberJurisdiction(): string {
+        return this.Get('MemberJurisdiction');
+    }
+}
+
+
+/**
+ * MJ: Jurisdictions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Jurisdiction
+ * * Base View: vwJurisdictions
+ * * @description A legal jurisdiction: a country (ISO 3166-1), a subdivision (ISO 3166-2, for example US-CA or CA-QC) or a named group such as EU or EEA. Generic core table; communications compliance is the first consumer.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Jurisdictions')
+export class MJJurisdictionEntity extends BaseEntity<MJJurisdictionEntityType> {
+    /**
+    * Loads the MJ: Jurisdictions record from the database
+    * @param ID: string - primary key value to load the MJ: Jurisdictions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJJurisdictionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Code
+    * * Display Name: Code
+    * * SQL Data Type: nvarchar(20)
+    * * Description: Unique code: ISO 3166-1 alpha-2 for countries (US, FR), ISO 3166-2 for subdivisions (US-CA), or a short group code (EU, EEA).
+    */
+    get Code(): string {
+        return this.Get('Code');
+    }
+    set Code(value: string) {
+        this.Set('Code', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Display name, for example France, California or European Union.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Notes on the jurisdiction and what it covers.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Country
+    *   * Group
+    *   * Subdivision
+    * * Description: Country, Subdivision or Group. Groups contain other jurisdictions through Jurisdiction Members.
+    */
+    get Type(): 'Country' | 'Group' | 'Subdivision' {
+        return this.Get('Type');
+    }
+    set Type(value: 'Country' | 'Group' | 'Subdivision') {
+        this.Set('Type', value);
+    }
+
+    /**
+    * * Field Name: CountryID
+    * * Display Name: Country ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Countries (vwCountries.ID)
+    * * Description: For Country and Subdivision jurisdictions, the matching row in MJ: Countries.
+    */
+    get CountryID(): string | null {
+        return this.Get('CountryID');
+    }
+    set CountryID(value: string | null) {
+        this.Set('CountryID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Active jurisdictions are used in resolution; Disabled ones are ignored.
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Country
+    * * Display Name: Country
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Country(): string | null {
+        return this.Get('Country');
     }
 }
 

@@ -11,6 +11,8 @@ export interface PublishRequest<TPayload extends WorkJson = WorkJson> {
     DeduplicationKey?: string;
     /** Default: topic DefaultDeduplicationTTLSeconds. */
     DeduplicationTTLSeconds?: number;
+    /** Optional earliest delivery time; deliveries remain deferred until ScheduledAt. */
+    ScheduledAt?: Date;
 }
 
 export type PublishStatus = 'Accepted' | 'Duplicate' | 'Rejected';

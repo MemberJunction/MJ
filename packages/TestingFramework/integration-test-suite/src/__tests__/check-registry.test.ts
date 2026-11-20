@@ -122,6 +122,10 @@ import { AgentHandoffChecks } from '../checks/agent-handoff.checks';
 import { VideoDataSnapshotChecks } from '../checks/video-data-snapshot.checks';
 import { VideoGenerationCostChecks } from '../checks/video-generation-cost.checks';
 import { VideoStudioHandoffChecks } from '../checks/video-studio-handoff.checks';
+import { CommsV2CoreChecks } from '../checks/comms-v2-core.checks';
+import { CommsV2ComplianceChecks } from '../checks/comms-v2-compliance.checks';
+import { CommsV2SendChecks } from '../checks/comms-v2-send.checks';
+import { CommsV2ActivityChecks } from '../checks/comms-v2-activity.checks';
 import { VideoStudioProductionChecks } from '../checks/video-studio-production.checks';
 import { VideoStudioLiveSmokeChecks } from '../checks/video-studio-live-smoke.checks';
 import { SemanticGraphChecks } from '../checks/semantic-graph.checks';
@@ -212,6 +216,10 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['list-refresh', ListRefreshChecks, 7], // LR1-LR7 source fingerprint, routine, approval (IT175)
         ['list-from-query', ListFromQueryChecks, 5], // LQ1-LQ5 conversation SQL saved Pending, list linked, refresh, edit stops it (IT179)
         ['open-app-local-source', OpenAppLocalSourceChecks, 10], // OLS1-OLS10 install, upgrade and remove from a local folder (IT178)
+        ['comms-v2-core', CommsV2CoreChecks, 3], // CV2C1-CV2C3 Comms V2 schema, seeds, endpoint resolution (IT183)
+        ['comms-v2-compliance', CommsV2ComplianceChecks, 4], // CV2G1-CV2G4 Comms V2 compliance gate & jurisdiction rollup (IT184)
+        ['comms-v2-send', CommsV2SendChecks, 3], // CV2S1-CV2S3 Comms V2 send pipeline, chunking, templated delivery (IT185)
+        ['comms-v2-activity', CommsV2ActivityChecks, 4], // CV2A1-CV2A4 Comms V2 activity worker, soft bounce policy, GDPR erasure, HTTP->worker seam (IT186)
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 18],
         ['chief-of-staff', ChiefOfStaffChecks, 8], // COS1-COS8 ownership guards, run-now, policy cache, email approval-before-transport (IT157)
@@ -412,6 +420,10 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'cloudflare-clef': 6,
         'codegen-determinism': 6,
         'communication': 5,
+        'comms-v2-activity': 4,
+        'comms-v2-compliance': 4,
+        'comms-v2-core': 3,
+        'comms-v2-send': 3,
         'concurrency-conflict-client': 5,
         'concurrent': 2,
         'content-pipeline': 21,

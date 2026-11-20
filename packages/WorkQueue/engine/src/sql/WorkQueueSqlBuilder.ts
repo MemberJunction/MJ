@@ -21,6 +21,8 @@ export interface PublishSqlBuilder {
     SelectMessage(messageID: string): SqlStatement;
     /** One Pending delivery per row, at most `DELIVERY_INSERT_CHUNK` per call. */
     InsertDeliveries(rows: DeliveryInsertRow[]): SqlStatement;
+    /** Sets VisibleAt on Pending deliveries for a scheduled message (when ScheduledAt is supplied). */
+    ScheduleDeliveriesVisibleAt(messageID: string, visibleAtIso: string): SqlStatement;
     /** Takes a free or expired key, or re-takes this MessageID's own Reserved row; rows `ReservationRow` it now owns (0–1). */
     ReserveDeduplication(topicID: string, key: string, messageID: string, reserveSeconds: number): SqlStatement;
     /** rows `ReservationRow` (0–1). */
@@ -51,6 +53,8 @@ export interface ConsumeSqlBuilder {
     RetryDelivery(deliveryID: string, leaseToken: string, delaySeconds: number, error: string): SqlStatement;
     DeadLetterDelivery(deliveryID: string, leaseToken: string, reason: string, error: string | null): SqlStatement;
     ReleaseDelivery(deliveryID: string, leaseToken: string): SqlStatement;
+    /** Sets VisibleAt forward on a Pending delivery after releasing it for rate-limit deferral. */
+    SetDeliveryVisibleAt(deliveryID: string, delaySeconds: number): SqlStatement;
     /** Token-fenced and requires CancelRequestedAt: the cancelled delivery becomes Discarded now (03 §7, F2). */
     AcknowledgeCancel(deliveryID: string, leaseToken: string): SqlStatement;
     /** Test-only raw UPDATE (not a procedure — never grantable to a runtime role); the conformance harness ages rows. */

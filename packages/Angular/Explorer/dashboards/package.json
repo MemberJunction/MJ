@@ -133,6 +133,7 @@
     "@memberjunction/ai-core-plus": "6.3.0-edge.1",
     "@memberjunction/ai-engine-base": "6.3.0-edge.1",
     "@memberjunction/api-keys-base": "6.3.0-edge.1",
+    "@memberjunction/communication-types": "6.3.0-edge.1",
     "@memberjunction/core": "6.3.0-edge.1",
     "@memberjunction/core-entities": "6.3.0-edge.1",
     "@memberjunction/credentials": "6.3.0-edge.1",

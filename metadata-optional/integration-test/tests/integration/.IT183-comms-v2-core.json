@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT183 - Comms V2 Schema, Seeds and Endpoint Resolution",
+    "Description": "Verifies all 20 Comms V2 entities in Metadata, starter metadata seeds, and V2SendService.ResolveEndpoints endpoint creation and deduplication against live SQL Server.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "All 20 Comms V2 entities and starter seeds exist and ResolveEndpoints deduplicates case-varied addresses."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "comms-v2-core"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "EAE0FFF2-00D3-497F-A4CD-DDDCECD6B2B7"
+  },
+  "sync": {
+    "lastModified": "2026-11-19T19:30:43.230Z",
+    "checksum": "b058aa9834b2876bb225293dc68dd5bab16d5c0229670793e054ffc8b0359d3a"
+  }
+}

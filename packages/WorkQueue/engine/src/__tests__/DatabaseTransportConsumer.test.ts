@@ -269,4 +269,24 @@ describe('DatabaseTransportConsumer settles', () => {
         const source = new RecordingExecutor().QueueError(new Error('connection reset'));
         expect(await Consumer(source).Retry(Delivery(), 30, 'boom')).toEqual({ Kind: 'Failed', DeliveryID: CLAIMED.DeliveryID, Error: 'connection reset' });
     });
+
+    it('defers a rate-limited delivery by releasing without consuming an attempt and shifting VisibleAt', async () => {
+        const source = new RecordingExecutor()
+            .QueueRows([{ AffectedRows: 1 }])
+            .QueueRows([{ AffectedRows: 1 }]);
+        const result = await Consumer(source).Defer(Delivery(), 15, 'Rate limit exceeded');
+        expect(result).toEqual({ Kind: 'Settled', DeliveryID: CLAIMED.DeliveryID, Status: 'Pending' });
+        expect(source.Calls).toHaveLength(2);
+        expect(source.Calls[0].SQL).toContain('[spWorkQueueReleaseDelivery]');
+        expect(source.Calls[1].SQL).toContain('UPDATE [__mj].[WorkQueueDelivery]');
+        expect(source.Calls[1].Params).toEqual([CLAIMED.DeliveryID, 15]);
+        expect(source.Events).toEqual(['independent', 'begin', 'commit', 'release']);
+    });
+
+    it('returns LeaseLost and rolls back when Defer loses the lease', async () => {
+        const source = new RecordingExecutor().QueueRows([{ AffectedRows: 0 }]);
+        const result = await Consumer(source).Defer(Delivery(), 15, 'Rate limit exceeded');
+        expect(result).toEqual({ Kind: 'LeaseLost', DeliveryID: CLAIMED.DeliveryID });
+        expect(source.Events).toEqual(['independent', 'begin', 'rollback', 'release']);
+    });
 });

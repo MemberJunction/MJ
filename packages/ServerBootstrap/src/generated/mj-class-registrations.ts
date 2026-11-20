@@ -247,7 +247,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (500 classes)
+// @memberjunction/core-entities (520 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -396,11 +396,29 @@ import {
     MJCollectionPermissionEntityExtended,
     MJCommentEntity,
     MJCommentTypeEntity,
+    MJCommunicationActivityEntity,
     MJCommunicationBaseMessageTypeEntity,
+    MJCommunicationComplianceRegimeEntity,
+    MJCommunicationComplianceRegimeJurisdictionEntity,
+    MJCommunicationComplianceRegimeRuleEntity,
+    MJCommunicationComplianceRuleTypeEntity,
+    MJCommunicationConsentAuditLogEntity,
+    MJCommunicationEndpointEntity,
+    MJCommunicationEndpointPrincipalEntity,
     MJCommunicationLogEntity,
+    MJCommunicationPreferenceEntity,
+    MJCommunicationPrincipalEntity,
+    MJCommunicationPrincipalPreferenceEntity,
     MJCommunicationProviderEntity,
+    MJCommunicationProviderEventEntity,
     MJCommunicationProviderMessageTypeEntity,
     MJCommunicationRunEntity,
+    MJCommunicationSenderEntity,
+    MJCommunicationSenderPermissionEntity,
+    MJCommunicationSenderTypeEntity,
+    MJCommunicationSendingDomainEntity,
+    MJCommunicationSuppressionEntity,
+    MJCommunicationSuppressionPolicyEntity,
     MJCompanyEntity,
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
@@ -554,6 +572,8 @@ import {
     MJInteractionEventEntity,
     MJInteractionLinkEntity,
     MJInteractionOfferEntity,
+    MJJurisdictionEntity,
+    MJJurisdictionMemberEntity,
     MJKnowledgeHubSavedSearchEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
@@ -863,6 +883,31 @@ import {
     ApolloSearchPeopleAction,
 } from '@memberjunction/actions-apollo';
 
+// @memberjunction/actions-bizapps-accounting (21 classes)
+import {
+    CreateBusinessCentralJournalEntryAction,
+    CreateJournalEntryAction,
+    CreateQuickBooksJournalEntryAction,
+    GetAccountBalancesAction,
+    GetBudgetAction,
+    GetBusinessCentralAccountBalancesAction,
+    GetBusinessCentralCustomersAction,
+    GetBusinessCentralDimensionsAction,
+    GetBusinessCentralGLAccountsAction,
+    GetBusinessCentralGeneralLedgerEntriesAction,
+    GetBusinessCentralSalesInvoicesAction,
+    GetChartOfAccountsAction,
+    GetCustomersAction,
+    GetDimensionsAction,
+    GetGLEntriesAction,
+    GetQuickBooksAccountBalancesAction,
+    GetQuickBooksDimensionsAction,
+    GetQuickBooksGLCodesAction,
+    GetQuickBooksTransactionsAction,
+    GetSalesInvoicesAction,
+    GetVendorBillsAction,
+} from '@memberjunction/actions-bizapps-accounting';
+
 // @memberjunction/actions-bizapps-crm (4 classes)
 import {
     AssociateContactToCompanyAction,
@@ -1116,36 +1161,6 @@ import {
     SchemaMigrationParityProbe,
 } from '@memberjunction/health';
 
-// @memberjunction/integration-engine (1 classes)
-import {
-    MemberJunctionConnector,
-} from '@memberjunction/integration-engine';
-
-// @memberjunction/actions-bizapps-accounting (21 classes)
-import {
-    CreateBusinessCentralJournalEntryAction,
-    CreateJournalEntryAction,
-    CreateQuickBooksJournalEntryAction,
-    GetAccountBalancesAction,
-    GetBudgetAction,
-    GetBusinessCentralAccountBalancesAction,
-    GetBusinessCentralCustomersAction,
-    GetBusinessCentralDimensionsAction,
-    GetBusinessCentralGLAccountsAction,
-    GetBusinessCentralGeneralLedgerEntriesAction,
-    GetBusinessCentralSalesInvoicesAction,
-    GetChartOfAccountsAction,
-    GetCustomersAction,
-    GetDimensionsAction,
-    GetGLEntriesAction,
-    GetQuickBooksAccountBalancesAction,
-    GetQuickBooksDimensionsAction,
-    GetQuickBooksGLCodesAction,
-    GetQuickBooksTransactionsAction,
-    GetSalesInvoicesAction,
-    GetVendorBillsAction,
-} from '@memberjunction/actions-bizapps-accounting';
-
 // @memberjunction/integration-actions (1 classes)
 import {
     RunSyncAction,
@@ -1268,6 +1283,21 @@ import {
     DecisionThenPromptReasoningProvider,
     PromptReasoningProvider,
 } from '@memberjunction/ai-vector-dupe';
+
+// @memberjunction/communication-engine (11 classes)
+import {
+    ConsentEvidenceRuleDriver,
+    ConsentExpiryRuleDriver,
+    ConsentModelRuleDriver,
+    DefaultCommunicationPrincipal,
+    QuietHoursRuleDriver,
+    RequireDoubleOptInRuleDriver,
+    SenderIdentificationRuleDriver,
+    SoftBounceThresholdPolicy,
+    TrackingConsentRuleDriver,
+    UnsubscribeHonorWindowRuleDriver,
+    UnsubscribeMechanismRuleDriver,
+} from '@memberjunction/communication-engine';
 
 // @memberjunction/content-autotagging (7 classes)
 import {
@@ -1462,11 +1492,10 @@ import {
     PredictiveStudioTrainModelServerOperation,
 } from '@memberjunction/predictive-studio';
 
-// @memberjunction/task-graph (17 classes)
+// @memberjunction/task-graph (16 classes)
 import {
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
-    TaskGraphCompleteWaitingStepServerOperation,
     TaskGraphForceCompleteTaskServerOperation,
     TaskGraphGetStatusServerOperation,
     TaskGraphOverrideEdgeServerOperation,
@@ -1670,7 +1699,7 @@ import {
     WebSearchQueryServerOperation,
 } from '@memberjunction/web-search-engine';
 
-// @memberjunction/core-actions (193 classes)
+// @memberjunction/core-actions (192 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1702,7 +1731,6 @@ import {
     CreateGovernedArtifactAction,
     CreateInteractiveFormAction,
     CreateListAction,
-    CreateListFromQueryAction,
     CreateMermaidDiagramAction,
     CreateRecordAction,
     CreateRuntimeActionAction,
@@ -2171,11 +2199,29 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJCollectionPermissionEntityExtended,
     MJCommentEntity,
     MJCommentTypeEntity,
+    MJCommunicationActivityEntity,
     MJCommunicationBaseMessageTypeEntity,
+    MJCommunicationComplianceRegimeEntity,
+    MJCommunicationComplianceRegimeJurisdictionEntity,
+    MJCommunicationComplianceRegimeRuleEntity,
+    MJCommunicationComplianceRuleTypeEntity,
+    MJCommunicationConsentAuditLogEntity,
+    MJCommunicationEndpointEntity,
+    MJCommunicationEndpointPrincipalEntity,
     MJCommunicationLogEntity,
+    MJCommunicationPreferenceEntity,
+    MJCommunicationPrincipalEntity,
+    MJCommunicationPrincipalPreferenceEntity,
     MJCommunicationProviderEntity,
+    MJCommunicationProviderEventEntity,
     MJCommunicationProviderMessageTypeEntity,
     MJCommunicationRunEntity,
+    MJCommunicationSenderEntity,
+    MJCommunicationSenderPermissionEntity,
+    MJCommunicationSenderTypeEntity,
+    MJCommunicationSendingDomainEntity,
+    MJCommunicationSuppressionEntity,
+    MJCommunicationSuppressionPolicyEntity,
     MJCompanyEntity,
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
@@ -2329,6 +2375,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJInteractionEventEntity,
     MJInteractionLinkEntity,
     MJInteractionOfferEntity,
+    MJJurisdictionEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
+    MJJurisdictionMemberEntity,
     MJKnowledgeHubSavedSearchEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
@@ -2348,10 +2400,6 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMCPToolFavoriteEntity,
     MJMLAlgorithmEntity,
     MJMLAlgorithmUseCaseEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
@@ -2532,6 +2580,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJEntityActionEntityExtended,
     LiveKitBridge,
     RingCentralBridge,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     TeamsBridge,
     TwilioBridge,
     VonageBridge,
@@ -2552,10 +2604,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     TimePerHourPriceUnitType,
     TimePerMinutePriceUnitType,
     RexRecommendationsProvider,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     MJCommunicationProviderEntityExtended,
     LoopbackBridge,
     OpenAISipBridge,
@@ -2576,6 +2624,27 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ApolloMoveListAccountsAction,
     ApolloMoveListContactsAction,
     ApolloSearchPeopleAction,
+    CreateBusinessCentralJournalEntryAction,
+    CreateJournalEntryAction,
+    CreateQuickBooksJournalEntryAction,
+    GetAccountBalancesAction,
+    GetBudgetAction,
+    GetBusinessCentralAccountBalancesAction,
+    GetBusinessCentralCustomersAction,
+    GetBusinessCentralDimensionsAction,
+    GetBusinessCentralGLAccountsAction,
+    GetBusinessCentralGeneralLedgerEntriesAction,
+    GetBusinessCentralSalesInvoicesAction,
+    GetChartOfAccountsAction,
+    GetCustomersAction,
+    GetDimensionsAction,
+    GetGLEntriesAction,
+    GetQuickBooksAccountBalancesAction,
+    GetQuickBooksDimensionsAction,
+    GetQuickBooksGLCodesAction,
+    GetQuickBooksTransactionsAction,
+    GetSalesInvoicesAction,
+    GetVendorBillsAction,
     AssociateContactToCompanyAction,
     GetActivitiesByContactAction,
     LogActivityAction,
@@ -2715,6 +2784,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ExcelAddinServerExtension,
     ExternalDataSourceReadRouterImpl,
     DatabricksExternalDataSourceDriver,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     MongoExternalDataSourceDriver,
     MySQLExternalDataSourceDriver,
     OracleExternalDataSourceDriver,
@@ -2741,32 +2814,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     OpenAppFleetStatusProbe,
     QueueWorkerHeartbeatProbe,
     SchemaMigrationParityProbe,
-    MemberJunctionConnector,
-    CreateBusinessCentralJournalEntryAction,
-    CreateJournalEntryAction,
-    CreateQuickBooksJournalEntryAction,
-    GetAccountBalancesAction,
-    GetBudgetAction,
-    GetBusinessCentralAccountBalancesAction,
-    GetBusinessCentralCustomersAction,
-    GetBusinessCentralDimensionsAction,
-    GetBusinessCentralGLAccountsAction,
-    GetBusinessCentralGeneralLedgerEntriesAction,
-    GetBusinessCentralSalesInvoicesAction,
-    GetChartOfAccountsAction,
-    GetCustomersAction,
-    GetDimensionsAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
-    GetGLEntriesAction,
-    GetQuickBooksAccountBalancesAction,
-    GetQuickBooksDimensionsAction,
-    GetQuickBooksGLCodesAction,
-    GetQuickBooksTransactionsAction,
-    GetSalesInvoicesAction,
-    GetVendorBillsAction,
     RunSyncAction,
     AIActionQueue,
     EntityAIActionQueue,
@@ -2814,6 +2861,17 @@ const CLASS_REGISTRATIONS_4: any[] = [
     DecisionReasoningProvider,
     DecisionThenPromptReasoningProvider,
     PromptReasoningProvider,
+    ConsentEvidenceRuleDriver,
+    ConsentExpiryRuleDriver,
+    ConsentModelRuleDriver,
+    DefaultCommunicationPrincipal,
+    QuietHoursRuleDriver,
+    RequireDoubleOptInRuleDriver,
+    SenderIdentificationRuleDriver,
+    SoftBounceThresholdPolicy,
+    TrackingConsentRuleDriver,
+    UnsubscribeHonorWindowRuleDriver,
+    UnsubscribeMechanismRuleDriver,
     AutotagBaseEngine,
     AutotagCloudStorage,
     AutotagEntity,
@@ -2930,6 +2988,10 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ManagedPromptConceptSynthesizer,
     ManifestExtractor,
     NoOpStage,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     PdfExtractor,
     PlainTextExtractor,
     SegmentStage,
@@ -2957,13 +3019,8 @@ const CLASS_REGISTRATIONS_4: any[] = [
     PredictiveStudioTrainModelServerOperation,
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
-    TaskGraphCompleteWaitingStepServerOperation,
     TaskGraphForceCompleteTaskServerOperation,
     TaskGraphGetStatusServerOperation,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     TaskGraphOverrideEdgeServerOperation,
     TaskGraphPauseServerOperation,
     TaskGraphResumeServerOperation,
@@ -3135,6 +3192,10 @@ const CLASS_REGISTRATIONS_5: any[] = [
     CalculateExpressionAction,
     CensusDataLookupAction,
     CheckUserPermissionAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_6: any[] = [
     CloneRecordAction,
     CloneRecordsAction,
     ColorConverterAction,
@@ -3149,7 +3210,6 @@ const CLASS_REGISTRATIONS_5: any[] = [
     CreateGovernedArtifactAction,
     CreateInteractiveFormAction,
     CreateListAction,
-    CreateListFromQueryAction,
     CreateMermaidDiagramAction,
     CreateRecordAction,
     CreateRuntimeActionAction,
@@ -3164,10 +3224,6 @@ const CLASS_REGISTRATIONS_5: any[] = [
     DataMapperAction,
     DelayAction,
     DeleteDirectoryAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_6: any[] = [
     DeleteObjectAction,
     DeleteRecordAction,
     DirectoryExistsAction,
@@ -3340,6 +3396,10 @@ const CLASS_REGISTRATIONS_6: any[] = [
     MJEntityPermissionEntityServer,
     MJTenantFilterMiddleware,
     RateLimitMiddleware,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_7: any[] = [
     RedisStreamBroadcastProvider,
     RevokeGuestShareLinkServerOperation,
     SequencedRoleBucketBroadcastProvider,
@@ -3371,13 +3431,14 @@ export const CLASS_REGISTRATIONS: any[] = [
     ...CLASS_REGISTRATIONS_4,
     ...CLASS_REGISTRATIONS_5,
     ...CLASS_REGISTRATIONS_6,
+    ...CLASS_REGISTRATIONS_7,
 ];
 
 /** Marker constant indicating the manifest has been loaded. */
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1392;
+export const CLASS_REGISTRATIONS_COUNT = 1420;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -3439,6 +3500,7 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/doc-utils',
     '@memberjunction/actions',
     '@memberjunction/actions-apollo',
+    '@memberjunction/actions-bizapps-accounting',
     '@memberjunction/actions-bizapps-crm',
     '@memberjunction/actions-bizapps-formbuilders',
     '@memberjunction/actions-bizapps-lms',
@@ -3461,8 +3523,6 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/feature-pipelines',
     '@memberjunction/geo-core',
     '@memberjunction/health',
-    '@memberjunction/integration-engine',
-    '@memberjunction/actions-bizapps-accounting',
     '@memberjunction/integration-actions',
     '@memberjunction/queue',
     '@memberjunction/generic-database-provider',
@@ -3482,6 +3542,7 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-reranker',
     '@memberjunction/ai-segmentation',
     '@memberjunction/ai-vector-dupe',
+    '@memberjunction/communication-engine',
     '@memberjunction/content-autotagging',
     '@memberjunction/rubrics',
     '@memberjunction/search-engine',

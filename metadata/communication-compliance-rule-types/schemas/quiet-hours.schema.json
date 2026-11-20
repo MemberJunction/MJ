@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["windows"],
+  "properties": {
+    "windows": {
+      "type": "array",
+      "description": "Blocked local-time windows during which messages are deferred.",
+      "items": {
+        "type": "object",
+        "required": ["startHour", "endHour"],
+        "properties": {
+          "startHour": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 23
+          },
+          "endHour": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 23
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -28,6 +28,8 @@ export interface SqsSendRequest {
     Attributes?: Record<string, string>;
     MessageGroupId?: string;
     MessageDeduplicationId?: string;
+    /** Optional per-message delivery delay in seconds (SQS clamps to 0–900). */
+    DelaySeconds?: number;
 }
 
 export interface SqsGateway {

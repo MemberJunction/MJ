@@ -10,6 +10,19 @@ export type DeliveryStatus = 'Pending' | 'InFlight' | 'Completed' | 'DeadLettere
  */
 export type ExhaustionBehavior = 'DeadLetter' | 'Discard';
 
+export interface RateLimitConfig {
+    /** Maximum number of deliveries allowed per window per key. */
+    MaxPerWindow: number;
+    /** Sliding window duration in milliseconds. */
+    WindowMs: number;
+    /**
+     * Optional key path to extract the grouping key from `Attributes` or `Payload`
+     * (e.g. `'CredentialID'`, `'SendingDomain'`, `'CommunicationSenderID'`).
+     * Falls back to `Message.PartitionKey`, then `'__default__'`.
+     */
+    KeyPath?: string;
+}
+
 export interface SubscriptionPolicy {
     SubscriptionName: string;
     TopicName: string;
@@ -27,6 +40,8 @@ export interface SubscriptionPolicy {
     MaxProcessingSeconds?: number;
     /** default 'DeadLetter' */
     ExhaustionBehavior?: ExhaustionBehavior;
+    /** Optional per-key sliding-window rate limit enforced by the consumer runtime. */
+    RateLimit?: RateLimitConfig;
 }
 
 /** Column defaults from spec 03 §6.3, for callers that build policies outside the database. */

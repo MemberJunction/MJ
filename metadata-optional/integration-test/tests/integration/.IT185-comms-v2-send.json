@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT185 - Comms V2 Send Pipeline and Templated Delivery",
+    "Description": "Exercises V2SendService.Send (DryRun, tracking tokens, HMAC signatures, chunked comms.dispatch) and TemplatedCommunicationService.RenderAndSend against live SQL Server.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "V2SendService.Send persists runs/logs with tracking tokens, chunks above AsyncThreshold, and TemplatedCommunicationService renders and sends DryRun."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "comms-v2-send"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "AFCC0785-E8B7-48C8-BF72-A09309521751"
+  },
+  "sync": {
+    "lastModified": "2026-11-19T19:30:43.244Z",
+    "checksum": "4ff41e14650de7b804c15826775d82f73807290d4f82e9c01f49fd73580308fe"
+  }
+}
