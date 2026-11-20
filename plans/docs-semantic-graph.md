@@ -221,7 +221,7 @@ regardless (decision §9.2). The separate `Contradicts` edge policy was dropped:
 | Library inbox and graph view | **Not built.** | |
 | Agent tool | **Not built as a new tool.** | The existing "Get Graph Context" action already serves `Subgraph` + `DescribeForPrompt` under the same policies. |
 
-**Verification:** IT182 (`docs-semantic-graph`, checks DSG1–DSG6) passes against a private database
+**Verification:** IT183 (`docs-semantic-graph`, checks DSG1–DSG6) passes against a private database
 built from migrations: indexing, chunk and concept creation, link reconciliation, artifact-ACL
 agreement for items and chunks, retraction and teardown leaving no rows behind.
 

@@ -1770,7 +1770,18 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT182 - MJ Docs in the Semantic Graph",
+            "TestID": "@lookup:MJ: Tests.Name=IT182 - Archive Runs Page Through Every Eligible Row",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5941BA01-ECFA-40CF-8B53-4D817EBAC6C2"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT183 - MJ Docs in the Semantic Graph",
             "Sequence": 49,
             "Status": "Active"
           },

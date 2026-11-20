@@ -107,6 +107,7 @@ import { SqlPipeMatrixChecks, SqlPipeMatrixCrossChecks } from '../checks/sqlpipe
 import { SqlPipeMatrixClientChecks } from '../checks/sqlpipe-matrix-client.checks';
 import { CiphertextCacheChecks } from '../checks/ciphertext-cache.checks';
 import { RecordChangeSnapshotChecks } from '../checks/record-change-snapshot.checks';
+import { ArchivePagingChecks } from '../checks/archive-paging.checks';
 import { ConcurrencyConflictClientChecks } from '../checks/concurrency-conflict-client.checks';
 import { QueryMetadataClientChecks } from '../checks/query-metadata-client.checks';
 import { MetadataPayloadClientChecks } from '../checks/metadata-payload-client.checks';
@@ -308,10 +309,11 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['task-graph-security', TaskGraphSecurityChecks, 10], // TGS1-TGS10 envelope on every row and immutable, one compensation per step, A2A store row boundary, dispatcher taint gate & compensation, the real action runner's taint gate, a person's review clears taint, a server-answered request clears nothing, an early settle clears nothing, only the service makes workflows, REST edits ordinary tasks (IT168)
         ['docs-slides-sheets-library', DocsSlidesSheetsLibraryChecks, 10], // DSL1-DSL10 Collaborative Docs, Slides, Sheets, Yjs working states, delegated OLE permissions, NW-2/NW-5 ACL & synthesis, and engine security guards (IT170)
         ['docs-slides-sheets-library-client', DocsSlidesSheetsLibraryClientChecks, 14], // DSLC1-DSLC14 Client-transport GraphQL, Remote Ops, Pre-auth Guest Share, Collaboration Resolver, WS meta/lock rejection, API-key scope, ClientClauseScreen, Collection ACL, Realtime IDOR, B4 default-off guest share refusal, and R1/R2 count_only + stored queries (IT171)
-        ['docs-semantic-graph', DocsSemanticGraphChecks, 6], // DSG1-DSG6 MJ Docs in the semantic graph: seeded source and graph, artifact indexing, [[links]], artifact-ACL agreement, shared concepts and redaction, evidence retraction (IT182)
+        ['docs-semantic-graph', DocsSemanticGraphChecks, 6], // DSG1-DSG6 MJ Docs in the semantic graph: seeded source and graph, artifact indexing, [[links]], artifact-ACL agreement, shared concepts and redaction, evidence retraction (IT183)
         ['runview-features', RunViewFeatureChecks, 12], // RVF1-RVF12 RunView cross-feature edges and RunViewParams.Parameters wire binding (IT32)
         ['work-bus-core', WorkBusCoreChecks, 10], // WBC1-WBC10 Conversation Types, Comments IS-A Conversation, Comment Types, Field Suggestions IS-A Comment, SubtypeSelector AutoEnsureOnSave/Refuse, PostSaveHook superseding, and Workstream wakes (IT164)
         ['record-change-snapshot', RecordChangeSnapshotChecks, 4], // RCS1-RCS4 Record Change snapshots record the stored row: server-set values, another writer's change, apostrophes, ciphertext (IT169)
+        ['archive-paging', ArchivePagingChecks, 3], // ARP1-ARP3 one archive run strips (ARP1) or deletes (ARP3) every row past the cutoff page by page; a second run loads nothing (IT182)
         ['query-metadata-client', QueryMetadataClientChecks, 3], // QM1-QM3 a client leaves the saved-query metadata items unread, the server reports none of their rows, a saved query leaves the client current (IT177)
         ['metadata-payload-client', MetadataPayloadClientChecks, 3], // MP1-MP3 entity, field and application rows reach a client without nested child collections (IT176)
         ['transaction-group-concurrency-client', TransactionGroupConcurrencyClientChecks, 4], // TGC1-TGC4 optimistic concurrency for transaction groups across two GraphQL sessions: a stale overlapping update refuses the group, non-overlapping and converging updates commit, SkipOldValuesCheck is honored (IT173)
@@ -398,6 +400,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'api-keys': 3,
         'app-behavioral': 3,
         'app-wiring': 11,
+        'archive-paging': 3,
         'auth-validation': 7,
         'binary-fields': 6,
         'cache-architecture': 11,
@@ -639,7 +642,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(252);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(253);
     });
 });
 
@@ -680,6 +683,9 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'actions-pipeline.AP2',
         'app-behavioral.AB1',
         'app-behavioral.AB2',
+        'archive-paging.ARP1',
+        'archive-paging.ARP2',
+        'archive-paging.ARP3',
         'binary-fields.BF4',
         'binary-fields.BF6',
         'cache-architecture.CA10',

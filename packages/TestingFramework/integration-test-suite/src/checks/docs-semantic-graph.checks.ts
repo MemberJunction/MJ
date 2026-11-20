@@ -1,5 +1,5 @@
 /**
- * @fileoverview Integration check bundle `'docs-semantic-graph'` (IT182) — MJ Docs in the semantic graph,
+ * @fileoverview Integration check bundle `'docs-semantic-graph'` (IT183) — MJ Docs in the semantic graph,
  * against a live database: the seeded "MJ Docs" content source and "Library Knowledge" graph, artifact
  * indexing (`ArtifactGraphIndexer`, `ContentUploadIngestor.IngestText`), `[[Name]]` links, the shared-concept
  * edge provider, the provenance access policies, and graph-evidence retraction. Server transport.
@@ -267,7 +267,7 @@ export const DocsSemanticGraphChecks: NamedCheck[] = [
             const f = requireFixture();
             const result = await index(ctx, f.A);
             Assert(result.Links != null, 'links are reconciled for an indexed artifact');
-            AssertEqual(result.Links!.Unresolved.join(','), `__IT182 Missing ${f.A.Name.slice(-8)}`, 'an unknown [[name]] stays unresolved');
+            AssertEqual(result.Links!.Unresolved.join(','), `__IT183 Missing ${f.A.Name.slice(-8)}`, 'an unknown [[name]] stays unresolved');
             const links = await readRows<{ TargetRecordID: string }>(ctx, 'MJ: Record Links', `SourceRecordID = '${EscapeSQLString(f.A.ID)}' AND LinkType = 'LinksTo'`, ['TargetRecordID']);
             AssertEqual(links.length, 1, 'exactly one LinksTo record link from A');
             Assert(UUIDsEqual(links[0].TargetRecordID, f.B.ID), 'the link points at B');
@@ -311,7 +311,7 @@ export const DocsSemanticGraphChecks: NamedCheck[] = [
             const f = requireFixture();
             const a = await indexedItem(ctx, f.A.ID);
             const b = await indexedItem(ctx, f.B.ID);
-            const concept = await conceptSourcedFrom(ctx, `__IT182 Shared ${randomUUID().slice(0, 8)}`, [a.Chunks[0], b.Chunks[0]]);
+            const concept = await conceptSourcedFrom(ctx, `__IT183 Shared ${randomUUID().slice(0, 8)}`, [a.Chunks[0], b.Chunks[0]]);
             const engine = await configuredGraphEngine(ctx);
             const edges = await engine.GetEdges(GRAPH, ref(ARTIFACTS, f.A.ID), { Direction: 'Both', EdgeTypes: ['SharesConceptWith'], IncludeProposed: true }, ctx.User);
             const shared = edges.find((e) => e.TypeName === 'SharesConceptWith' && (UUIDsEqual(e.Target.RecordID, f.B.ID) || UUIDsEqual(e.Source.RecordID, f.B.ID)));
@@ -337,8 +337,8 @@ export const DocsSemanticGraphChecks: NamedCheck[] = [
             const f = requireFixture();
             const before = await indexedItem(ctx, f.A.ID);
             const b = await indexedItem(ctx, f.B.ID);
-            const orphan = await conceptSourcedFrom(ctx, `__IT182 Orphan ${randomUUID().slice(0, 8)}`, [before.Chunks[0]]);
-            const survivor = await conceptSourcedFrom(ctx, `__IT182 Survivor ${randomUUID().slice(0, 8)}`, [before.Chunks[0], b.Chunks[0]]);
+            const orphan = await conceptSourcedFrom(ctx, `__IT183 Orphan ${randomUUID().slice(0, 8)}`, [before.Chunks[0]]);
+            const survivor = await conceptSourcedFrom(ctx, `__IT183 Survivor ${randomUUID().slice(0, 8)}`, [before.Chunks[0], b.Chunks[0]]);
 
             f.Versions.push(await saveVersion(ctx, f.A, 2, `# ${f.A.Name}\n\nRewritten. Still see [[${f.B.Name}]].`));
             const result = await index(ctx, f.A);
@@ -371,8 +371,8 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
         }
         const suffix = randomUUID().slice(0, 8);
         const peer = await loadPeer(ctx);
-        const B = await saveArtifact(ctx, `__IT182 Discount Rules ${suffix}`, types[0].ID, envs[0].ID);
-        const A = await saveArtifact(ctx, `__IT182 Pricing Policy ${suffix}`, types[0].ID, envs[0].ID);
+        const B = await saveArtifact(ctx, `__IT183 Discount Rules ${suffix}`, types[0].ID, envs[0].ID);
+        const A = await saveArtifact(ctx, `__IT183 Pricing Policy ${suffix}`, types[0].ID, envs[0].ID);
         const share = await ctx.Provider.GetEntityObject<MJArtifactPermissionEntity>('MJ: Artifact Permissions', ctx.User);
         share.NewRecord();
         share.ArtifactID = B.ID;
@@ -385,7 +385,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
         fixture = { SourceID: sources[0].ID, GraphID: sources[0].GraphID, Peer: peer, A, B, Versions: [], PeerShare: share, Concepts: [] };
         fixture.Versions.push(await saveVersion(ctx, B, 1, `# Discount Rules\n\nVolume discounts apply above 100 seats. Partners get 20 percent.\n\nDiscounts never stack.`));
         fixture.Versions.push(
-            await saveVersion(ctx, A, 1, `# Pricing Policy\n\nAll prices are net of tax. See [[${B.Name}]] for discounts and [[__IT182 Missing ${suffix}]] for history.\n\nPrices change once a year.`),
+            await saveVersion(ctx, A, 1, `# Pricing Policy\n\nAll prices are net of tax. See [[${B.Name}]] for discounts and [[__IT183 Missing ${suffix}]] for history.\n\nPrices change once a year.`),
         );
         for (const art of [B, A]) {
             const result = await index(ctx, art);

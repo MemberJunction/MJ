@@ -298,7 +298,7 @@ other surface or agent tool can call it the same way.
 
 ### Tests
 
-- IT182 `docs-semantic-graph` (DSG1–DSG6): indexing, links, artifact-ACL agreement, retraction and
+- IT183 `docs-semantic-graph` (DSG1–DSG6): indexing, links, artifact-ACL agreement, retraction and
   clean teardown against a live database.
 - Unit: `ArtifactGraphIndexer.test.ts`, `GraphEvidenceRetractor.test.ts`, `ContentUploadIngestor.test.ts`
   (content-pipeline engine), `SharedConceptEdgeProvider.test.ts`, `RecordRelations.test.ts`,
