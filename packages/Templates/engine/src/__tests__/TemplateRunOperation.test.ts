@@ -155,3 +155,22 @@ describe('Template.Run render user', () => {
         expect(render.mock.calls[0][5]).toEqual({ ContextUser: caller });
     });
 });
+
+describe('Template.Run template ID', () => {
+    it('refuses a template ID that is not a well-formed UUID before any content query runs', async () => {
+        const provider = new RenderingProvider(readableEverywhere());
+        vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue(provider as unknown as IMetadataProvider);
+        const contentQuery = vi.fn(async () => ({ Success: true, Results: [{ ID: 'content-1', TemplateText: 'x' }] }));
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({ RunView: contentQuery } as unknown as RunView);
+        vi.spyOn(TemplateEngineServer.Instance, 'Config').mockResolvedValue(undefined);
+        vi.spyOn(TemplateEngineServer.Instance, 'RenderTemplate').mockResolvedValue({ Success: true, Output: 'ok', Message: undefined });
+
+        const result = await new TemplateRunServerOperation().ExecuteServer(
+            { templateID: `${TEMPLATE_ID}' AND '1'='1` },
+            { provider: provider as unknown as IMetadataProvider, user: makeUser([UI_ROLE_ID]), emitProgress: () => undefined },
+        );
+
+        expect(result).toMatchObject({ Success: false });
+        expect(contentQuery).not.toHaveBeenCalled();
+    });
+});

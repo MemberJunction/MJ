@@ -755,3 +755,46 @@ describe('ResourceUrlsEquivalent with prototype-key query names (#4589)', () => 
     expect(({} as Record<string, unknown>)['a']).toBeUndefined();
   });
 });
+
+describe('ToWhereClause field names and values', () => {
+  it.each([
+    ['ID IS NOT NULL AND ID'],
+    ['ID=1 OR ID'],
+    ["Na'me"],
+    ['ID)'],
+    ['ID--'],
+    ['1ID'],
+    [''],
+    ['[ID]] OR [x]'],
+    ['"ID"" OR "x"'],
+    ['ID.'],
+    ['@@VERSION'],
+    ['@p'],
+    ['#t'],
+    ['[a"b]'],
+    ["[a'b]"],
+    ['"a]b"'],
+    ["\"a'b\""],
+    ['[a`b]'],
+    ['[a\u0001b]'],
+    ['ʼX'],
+    ['aʼb'],
+    ['aˆb'],
+    ['a²'],
+  ])('refuses the field name %s before any text is built', (fieldName) => {
+    const key = new CompositeKey();
+    key.KeyValuePairs = [{ FieldName: fieldName, Value: 'x' }];
+    expect(() => key.ToWhereClause()).toThrow('Invalid field name in key');
+  });
+
+  it.each([
+    ['an array', ['a', 'b']],
+    ['an object', { a: 1 }],
+    ['NaN', Number.NaN],
+    ['Infinity', Number.POSITIVE_INFINITY],
+  ])('refuses %s as a key value', (_label, value) => {
+    const key = new CompositeKey();
+    key.KeyValuePairs = [{ FieldName: 'ID', Value: value }];
+    expect(() => key.ToWhereClause()).toThrow('Invalid value in key');
+  });
+});

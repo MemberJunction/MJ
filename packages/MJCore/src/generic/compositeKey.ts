@@ -28,6 +28,28 @@ export class KeyValuePair {
     }
 }
 
+/** A character a `[bracketed]` or `"quoted"` key field name part may hold: not a bracket, a quote mark, a backtick or a control character. */
+const KEY_FIELD_NAME_DELIMITED_CHAR = String.raw`[^\[\]"'\x60\p{Cc}]`;
+/** One part of a key field name: a plain identifier, a `[bracketed]` name, or a `"quoted"` name. */
+const KEY_FIELD_NAME_PART = String.raw`(?:[\p{Lu}\p{Ll}\p{Lt}\p{Lo}_][\p{Lu}\p{Ll}\p{Lt}\p{Lo}\p{M}\p{Nd}_@#$]*|\[` + KEY_FIELD_NAME_DELIMITED_CHAR + String.raw`+\]|"` + KEY_FIELD_NAME_DELIMITED_CHAR + String.raw`+")`;
+const KEY_FIELD_NAME = new RegExp(`^${KEY_FIELD_NAME_PART}(?:\\.${KEY_FIELD_NAME_PART})*$`, 'u');
+
+/** Throws when a key field name is not an identifier that {@link FieldValueCollection.ToWhereClause} may write as SQL text. */
+function assertKeyFieldName(fieldName: unknown): void {
+    if (typeof fieldName !== 'string' || !KEY_FIELD_NAME.test(fieldName)) {
+        throw new Error('Invalid field name in key');
+    }
+}
+
+/** Throws when a key value is not a string, Date, finite number, bigint, boolean, null or undefined. */
+function assertKeyValue(value: unknown): void {
+    const valid = value === null || value === undefined || typeof value === 'string' || typeof value === 'bigint'
+        || typeof value === 'boolean' || value instanceof Date || (typeof value === 'number' && Number.isFinite(value));
+    if (!valid) {
+        throw new Error('Invalid value in key');
+    }
+}
+
 /**
  * Base class for tracking a collection of field name(key)/value pair combinations with utility methods for working with them.
  */
@@ -124,12 +146,24 @@ export class FieldValueCollection {
 
     /**
      * Utility function to return a string representation of the composite key in the format "FieldName=Value AND FieldName=Value"
+     *
+     * Each field name must be one or more parts joined by `.`. A part is a plain name that starts
+     * with a letter or `_` and then holds letters, combining marks, decimal digits, `_`, `@`, `#` or `$`
+     * (a letter is Unicode `Lu`, `Ll`, `Lt` or `Lo`, so modifier letters and non-decimal number
+     * characters are refused); or a `[bracketed]`
+     * or `"quoted"` name that holds none of `[`, `]`, `"`, `'`, a backtick, or a control character. Each value must be a string or Date (quoted and escaped),
+     * a finite number, a bigint, a boolean, null or undefined. Any other field name or value throws
+     * before any text is built.
      * @param useIsNull if true, will return "FieldName IS NULL" for any key value pair that has a null or undefined value, if false, will return "FieldName=Value"
      * @param quoteString is either 'single' or 'double' and will determine if the string values are quoted with single or double quotes. Quotes are only applied to values that are of type string or Date.
      * @returns a string representation of the composite key in the format "FieldName=Value AND FieldName=Value"
      * @example "ID=1 AND Name='John'"
      */
     ToWhereClause(useIsNull: boolean = true, quoteStyle: 'single' | 'double' = 'single'): string {
+        for (const keyValue of this.KeyValuePairs) {
+            assertKeyFieldName(keyValue.FieldName);
+            assertKeyValue(keyValue.Value);
+        }
         return this.KeyValuePairs.map((keyValue: KeyValuePair) => {
             let value = keyValue.Value;
             if (useIsNull && (value === null || value === undefined)) {

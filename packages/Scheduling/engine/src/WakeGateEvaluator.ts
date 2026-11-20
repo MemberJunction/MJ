@@ -19,7 +19,7 @@
  * @module @memberjunction/scheduling-engine
  */
 
-import { LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { EntityInfo, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     MJUserRoutineEntity,
     MJUserRoutineEntity_IRoutineWakeConfiguration,
@@ -66,6 +66,8 @@ export interface EntityWatermarkSnapshot {
     recordChangeCount: number;
     /** Up to 10 sample changed record summaries for Tier 1 / Tier 2 / Tier 3 context. */
     sampleRecords: Record<string, string | number | boolean | null>[];
+    /** True when the rule's `extraFilter` was refused by the client clause screen, so the entity was not queried. */
+    filterRefused?: boolean;
 }
 
 /**
@@ -112,6 +114,15 @@ export interface WakeGateEvaluatorDependencies {
 
 type SampleRecordRow = Record<string, string | number | boolean | Date | null | undefined>;
 
+/** A data provider that screens caller SQL clauses for the acting user. */
+interface ClauseScreeningProvider {
+    ScreenClientClause(clause: string, label: string, contextUser?: UserInfo, entityInfo?: EntityInfo): void;
+}
+
+function canScreenClauses(provider: IMetadataProvider | undefined): provider is IMetadataProvider & ClauseScreeningProvider {
+    return !!provider && 'ScreenClientClause' in provider && typeof provider.ScreenClientClause === 'function';
+}
+
 const DEFAULT_DECISION_PROMPT_NAME = 'Default Decision';
 const DEFAULT_TIER2_THRESHOLD = 0.7;
 const MAX_WATERMARK_SAMPLE_RECORDS = 10;
@@ -132,6 +143,19 @@ export class WakeGateEvaluator {
         routine: MJUserRoutineEntity,
         contextUser: UserInfo,
         now: Date = new Date()
+    ): Promise<WakeGateEvaluationResult> {
+        const result = await this.evaluateGate(routine, contextUser, now);
+        const refused = Object.entries(result.watermarks).filter(([, w]) => w.filterRefused).map(([key]) => key);
+        if (refused.length === 0) {
+            return result;
+        }
+        return { ...result, reason: `${result.reason} Watched filter refused and not queried for: ${refused.join(', ')}.` };
+    }
+
+    private async evaluateGate(
+        routine: MJUserRoutineEntity,
+        contextUser: UserInfo,
+        now: Date
     ): Promise<WakeGateEvaluationResult> {
         const config = this.resolveWakeConfiguration(routine);
         if (!config) {
@@ -376,6 +400,9 @@ export class WakeGateEvaluator {
         sinceDate: Date | null,
         contextUser: UserInfo
     ): Promise<EntityWatermarkSnapshot> {
+        if (!this.isWatchedFilterAllowed(rule, contextUser)) {
+            return { ...this.emptyWatermark(rule.entityName), filterRefused: true };
+        }
         const rv = new RunView(); // global-provider-ok: server-global scheduled task
         const baseFilter = rule.extraFilter?.trim() ? `(${rule.extraFilter.trim()})` : '';
         const sinceIso = sinceDate ? sinceDate.toISOString() : null;
@@ -457,6 +484,35 @@ export class WakeGateEvaluator {
             recordChangeCount,
             sampleRecords,
         };
+    }
+
+    /**
+     * True when the rule has no `extraFilter`, or when the data provider's client clause screen
+     * accepts it for `contextUser` (the routine owner). Refuses when the provider cannot screen.
+     */
+    private isWatchedFilterAllowed(rule: RoutineWatchedEntityRule, contextUser: UserInfo): boolean {
+        const clause = rule.extraFilter?.trim();
+        if (!clause) {
+            return true;
+        }
+        const provider = Metadata.Provider; // global-provider-ok: server-global scheduled task, same provider as the RunView below
+        const entityInfo = provider?.EntityByName(rule.entityName);
+        if (!canScreenClauses(provider) || !entityInfo) {
+            LogError(`WakeGateEvaluator: watched filter on '${rule.entityName}' refused: the data provider cannot screen it`);
+            return false;
+        }
+        try {
+            provider.ScreenClientClause(clause, 'watchedEntities.extraFilter', contextUser, entityInfo);
+            return true;
+        } catch (error) {
+            LogError(`WakeGateEvaluator: watched filter on '${rule.entityName}' refused: ${error instanceof Error ? error.message : String(error)}`);
+            return false;
+        }
+    }
+
+    /** A watermark with no matches, used when a watched entity is not queried. */
+    private emptyWatermark(entityName: string): EntityWatermarkSnapshot {
+        return { entityName, changedCount: 0, totalMatchingCount: 0, maxUpdatedAt: null, recordChangeCount: 0, sampleRecords: [] };
     }
 
     /** Keep only scalar fields in sample records so Tier 2 / Tier 3 state stays compact. */

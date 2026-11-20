@@ -141,7 +141,9 @@ describe('ListOperations I/O paths (mocked core)', () => {
       });
       mockRunViewImpl.mockResolvedValueOnce({ Success: false, Results: [], RowCount: 0, ErrorMessage: 'boom' });
       const ops = new ListOperations(CTX_USER as never);
-      await expect(ops.ResolveSource({ kind: 'list', listId: 'list-1' })).rejects.toThrow(/boom/);
+      const error = await ops.ResolveSource({ kind: 'list', listId: 'list-1' }).then(() => null, (e: Error) => e);
+      expect(error?.message).toBe("Failed to load list members for 'list-1'");
+      expect(error?.message).not.toContain('boom');
     });
   });
 

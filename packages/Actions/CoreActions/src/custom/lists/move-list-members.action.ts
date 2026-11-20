@@ -1,7 +1,7 @@
 import { BaseAction } from '@memberjunction/actions';
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { Metadata, RunView } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { IsValidUUID, RegisterClass } from '@memberjunction/global';
 import type { MJListDetailEntity } from '@memberjunction/core-entities';
 import { ListOperations } from '@memberjunction/lists';
 
@@ -35,6 +35,9 @@ export class MoveListMembersAction extends BaseAction {
     const recordIds = GetJsonParam<string[]>(params, 'RecordIDs');
     if (!sourceListId) return MissingParam('SourceListID');
     if (!targetListId) return MissingParam('TargetListID');
+    if (!IsValidUUID(sourceListId) || !IsValidUUID(targetListId)) {
+      return { Success: false, ResultCode: 'INVALID_PARAMETER', Message: 'SourceListID and TargetListID must be UUIDs' };
+    }
     if (!recordIds || !Array.isArray(recordIds) || recordIds.length === 0) {
       return {
         Success: false,

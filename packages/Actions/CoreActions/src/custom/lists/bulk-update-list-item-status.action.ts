@@ -1,7 +1,7 @@
 import { BaseAction } from '@memberjunction/actions';
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
-import { Metadata, RunView } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { LogError, Metadata, RunView } from '@memberjunction/core';
+import { IsValidUUID, RegisterClass } from '@memberjunction/global';
 import type { MJListDetailEntity } from '@memberjunction/core-entities';
 
 import {
@@ -33,6 +33,9 @@ export class BulkUpdateListItemStatusAction extends BaseAction {
     const newStatus = GetStringParam(params, 'NewStatus') as ListDetailStatus | undefined;
 
     if (!listId) return MissingParam('ListID');
+    if (!IsValidUUID(listId)) {
+      return { Success: false, ResultCode: 'INVALID_PARAMETER', Message: 'ListID must be a UUID' };
+    }
     if (!recordIds || !Array.isArray(recordIds) || recordIds.length === 0) {
       return {
         Success: false,
@@ -58,10 +61,11 @@ export class BulkUpdateListItemStatusAction extends BaseAction {
     }, params.ContextUser);
 
     if (!lookup.Success) {
+      LogError(`Bulk Update List Item Status: failed to load list details: ${lookup.ErrorMessage}`);
       return {
         Success: false,
         ResultCode: 'UNEXPECTED_ERROR',
-        Message: `Failed to load list details: ${lookup.ErrorMessage}`,
+        Message: 'Failed to load list details',
       };
     }
 

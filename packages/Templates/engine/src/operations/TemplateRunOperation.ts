@@ -7,7 +7,7 @@
  * resolver (which remains as a deprecated backcompat shim).
  * @module @memberjunction/templates
  */
-import { RegisterClass } from '@memberjunction/global';
+import { EscapeSQLString, IsValidUUID, RegisterClass } from '@memberjunction/global';
 import { BaseRemotableOperation, IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { MJTemplateContentEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
 import { TemplateRunOperation, type TemplateRunInput, type TemplateRunOutput } from '@memberjunction/core-entities';
@@ -29,6 +29,9 @@ export class TemplateRunServerOperation extends TemplateRunOperation {
         if (!input?.templateID) {
             throw new Error('templateID is required');
         }
+        if (!IsValidUUID(input.templateID)) {
+            throw new Error('templateID must be a valid UUID');
+        }
         const startTime = Date.now();
 
         const templateEntity = await provider.GetEntityObject<MJTemplateEntityExtended>('MJ: Templates', user);
@@ -40,7 +43,7 @@ export class TemplateRunServerOperation extends TemplateRunOperation {
         // Highest-priority content for the template.
         const contentResult = await RunView.FromMetadataProvider(provider).RunView<MJTemplateContentEntity>({
             EntityName: 'MJ: Template Contents',
-            ExtraFilter: `TemplateID = '${input.templateID}'`,
+            ExtraFilter: `TemplateID = '${EscapeSQLString(templateEntity.ID)}'`,
             OrderBy: 'Priority ASC',
             MaxRows: 1,
             SkipTotalRowCount: true,

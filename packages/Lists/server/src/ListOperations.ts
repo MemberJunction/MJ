@@ -9,7 +9,7 @@ import {
   UserInfo,
 } from '@memberjunction/core';
 import { MJListDetailEntity, MJListEntity, MJUserRoutineEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 
 import {
   ComputeSourceSignature,
@@ -614,13 +614,14 @@ export class ListOperations {
     const rv = this.runView();
     const result = await rv.RunView<MJListDetailEntity>({
       EntityName: 'MJ: List Details',
-      ExtraFilter: `ListID='${listId}'`,
+      ExtraFilter: `ListID='${EscapeSQLString(list.ID)}'`,
       Fields: ['RecordID'],
       ResultType: 'simple',
     }, this.contextUser);
 
     if (!result.Success) {
-      throw new Error(`Failed to load list members for '${listId}': ${result.ErrorMessage}`);
+      LogError(`resolveListSource list=${list.ID}: ${result.ErrorMessage}`);
+      throw new Error(`Failed to load list members for '${list.ID}'`);
     }
 
     return {
@@ -1007,16 +1008,17 @@ export class ListOperations {
   private async removeDeltaRecords(targetListId: string, recordIds: string[]): Promise<string[]> {
     if (recordIds.length === 0) return [];
     const rv = this.runView();
-    const filterIds = recordIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(',');
+    const filterIds = recordIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
     const result = await rv.RunView<MJListDetailEntity>({
       EntityName: 'MJ: List Details',
-      ExtraFilter: `ListID='${targetListId}' AND RecordID IN (${filterIds})`,
+      ExtraFilter: `ListID='${EscapeSQLString(targetListId)}' AND RecordID IN (${filterIds})`,
       ResultType: 'entity_object',
     }, this.contextUser);
 
     const errors: string[] = [];
     if (!result.Success) {
-      return recordIds.map((id) => `Lookup failed for '${id}': ${result.ErrorMessage}`);
+      LogError(`removeDeltaRecords list=${targetListId}: ${result.ErrorMessage}`);
+      return recordIds.map((id) => `Lookup failed for '${id}'`);
     }
 
     await this.forEachConcurrent(result.Results ?? [], ListOperations.WRITE_CONCURRENCY, async (detail) => {

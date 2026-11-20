@@ -40,7 +40,7 @@ vi.mock('@memberjunction/actions', () => ({ BaseAction: class BaseAction {} }));
 import { GetListRecordsAction } from '../custom/lists/get-list-records.action';
 
 const entityInfo = EmployeeEntityInfo();
-const LIST_ID = 'list-1';
+const LIST_ID = 'aaaaaaaa-0000-0000-0000-000000000001';
 
 /**
  * A provider that serves full-width rows. `buildAs` decides which user the member entity objects

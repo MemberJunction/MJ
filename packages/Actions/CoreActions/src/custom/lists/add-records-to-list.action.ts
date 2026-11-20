@@ -1,5 +1,5 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
-import { RegisterClass } from "@memberjunction/global";
+import { EscapeSQLString, IsValidUUID, RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { Metadata, RunView } from "@memberjunction/core";
 import { MJListEntity, MJListDetailEntity } from "@memberjunction/core-entities";
@@ -40,6 +40,9 @@ export class AddRecordsToListAction extends BaseAction {
           Message: 'ListID is required'
         };
       }
+      if (!IsValidUUID(listId)) {
+        return { Success: false, ResultCode: 'INVALID_PARAMETER', Message: 'ListID must be a UUID' };
+      }
 
       if (!recordIds || recordIds.length === 0) {
         return {
@@ -70,7 +73,7 @@ export class AddRecordsToListAction extends BaseAction {
       // Get existing memberships if skipping duplicates
       let existingRecordIds = new Set<string>();
       if (skipDuplicates) {
-        const recordIdFilter = recordIds.map((id: string) => `'${id}'`).join(',');
+        const recordIdFilter = recordIds.map((id: string) => `'${EscapeSQLString(String(id))}'`).join(',');
         const existingResult = await rv.RunView<MJListDetailEntity>({
           EntityName: 'MJ: List Details',
           ExtraFilter: `ListID = '${listId}' AND RecordID IN (${recordIdFilter})`,

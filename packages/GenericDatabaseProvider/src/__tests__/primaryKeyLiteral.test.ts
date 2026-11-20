@@ -48,6 +48,24 @@ describe('GenericDatabaseProvider primary key literals', () => {
         expect(literals.RenderPrimaryKeyLiteral(textKey, "O'Brien", 'Widgets')).toBe("'O''Brien'");
     });
 
+    describe('UUID keys', () => {
+        const uuidKey = { Name: 'ID', CodeName: 'ID', NeedsQuotes: true, IsUniqueIdentifier: true } as EntityFieldInfo;
+        const uuid = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+
+        it.each([[`${uuid}' AND '1'='1`], [`${uuid}x`], ['not-a-uuid'], [''], [null], [5]])(
+            'refuses %s for a UUID key',
+            (value) => {
+                expect(() => literals.RenderPrimaryKeyLiteral(uuidKey, value, 'Widgets')).toThrow(
+                    'Invalid UUID value provided for key field ID on entity Widgets'
+                );
+            }
+        );
+
+        it('refuses a UUID key with text after it before any WHERE predicate is built', () => {
+            expect(() => whereFor(uuidKey, `${uuid}' AND '1'='1`)).toThrow('Invalid UUID value');
+        });
+    });
+
     it('builds the WHERE predicate through the same check', () => {
         expect(whereFor(numericKey, 7)).toBe('[ID]=7');
         expect(whereFor(textKey, "a'b")).toBe("[Code]='a''b'");

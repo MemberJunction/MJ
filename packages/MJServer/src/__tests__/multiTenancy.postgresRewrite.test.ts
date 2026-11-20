@@ -1,10 +1,10 @@
 /**
  * The tenant PreRunView hook checks the caller's ExtraFilter and builds
- * `(<ExtraFilter>) AND (<tenant predicate>)`. On PostgreSQL the provider then rewrites the whole
- * filter (identifier quoting, T-SQL date functions, boolean literals), and that rewrite can change
- * the caller's part after the hook checked it. These tests run the real hook, the real PostgreSQL
- * rewrite and the real view query builder, with only ExecuteSQL recorded, and pin that the tenant
- * predicate stays a separate AND term whatever the rewrite does to the caller's term. The last
+ * `(<ExtraFilter>) AND (<tenant predicate>)`. On PostgreSQL the provider then rewrites the filter
+ * (identifier quoting, T-SQL date functions, boolean literals) in code only: string literals stay
+ * as written. These tests run the real hook, the real PostgreSQL rewrite and the real view query
+ * builder, with only ExecuteSQL recorded, and pin that the tenant predicate stays a separate
+ * top-level AND term and that a caller's string literal reaches the WHERE as written. The last
  * block runs the same path with no hook and pins that the per-term rewrite keeps a SQL Server
  * bracket name whole.
  */
@@ -23,7 +23,10 @@ import { IsBalancedSQLFragment, SplitTopLevelAndTerms } from '@memberjunction/sq
 import { CreateTenantPreRunViewHook } from '../multiTenancy/index.js';
 import type { MultiTenancyConfig } from '../config.js';
 
-const TENANT_TERM = `(("OrganizationID" = 't1'))`;
+/** The tenant predicate as the hook writes it. */
+const TENANT_PREDICATE = `("OrganizationID" = 't1')`;
+/** The tenant predicate after the provider rewrites and wraps each AND term on its own. */
+const TENANT_TERM = `(${TENANT_PREDICATE})`;
 
 /** The real PostgreSQL provider over one entity fixture, with every executed statement recorded. */
 class RecordingPostgreSQLProvider extends PostgreSQLDataProvider {
@@ -89,13 +92,19 @@ function whereOf(provider: RecordingPostgreSQLProvider): string {
 }
 
 /**
- * Whether `term` is one of the top-level AND terms inside the one pair of parentheses around
- * `where`. Only then does it narrow every row the query returns.
+ * The top-level AND terms inside the one pair of parentheses around `where`, or null when `where`
+ * is not one balanced parenthesized group. Only a top-level AND term narrows every row the query
+ * returns.
  */
-function isTopLevelAndTerm(where: string, term: string, dialect: SQLParserDialect): boolean {
+function topLevelAndTerms(where: string, dialect: SQLParserDialect): string[] | null {
     const inner = where.slice(1, -1);
     const wrapped = where.startsWith('(') && where.endsWith(')') && IsBalancedSQLFragment(inner, dialect).IsBalanced;
-    return wrapped && (SplitTopLevelAndTerms(inner, dialect) ?? []).some((t) => t.trim() === term);
+    return wrapped ? (SplitTopLevelAndTerms(inner, dialect) ?? []).map((t) => t.trim()) : null;
+}
+
+/** Whether `term` is one of the top-level AND terms of `where`. */
+function isTopLevelAndTerm(where: string, term: string, dialect: SQLParserDialect): boolean {
+    return (topLevelAndTerms(where, dialect) ?? []).includes(term);
 }
 
 describe('Multi-tenancy on PostgreSQL — the provider rewrite cannot reach the tenant predicate', () => {
@@ -118,33 +127,27 @@ describe('Multi-tenancy on PostgreSQL — the provider rewrite cannot reach the 
         Metadata.Provider = savedProvider;
     });
 
-    it('keeps the tenant predicate a separate AND term when the rewrite changes the caller term', async () => {
-        // The rewrite turns the caller's quoted text into boolean literals and changes where its
-        // parentheses close. Each term is rewritten and wrapped on its own, so that change stays
-        // inside the caller's term.
-        const result = await provider.RunView({ EntityName: 'Customers', ExtraFilter: `"IsActive" = '1) AND ("IsActive" = 1'` }, user);
-
-        expect(result.Success).toBe(true);
-        expect(whereOf(provider)).toBe(`((("IsActive" = TRUE) AND ("IsActive" = TRUE)) AND ${TENANT_TERM})`);
-    });
-
-    it('keeps the tenant predicate its own AND term after a quote the boolean rewrite drops, followed by a top-level OR', async () => {
-        // The rewrite drops the quote, so text the hook read inside a string literal becomes code
-        // with a top-level OR. The tenant predicate must still narrow every row.
-        const result = await provider.RunView({ EntityName: 'Customers', ExtraFilter: `"IsActive" = '1) OR (1=1) OR ("IsActive" = 1'` }, user);
+    /** Runs `callerFilter` through the hook and the provider and checks the WHERE it ran. */
+    async function expectCallerLiteralKept(callerFilter: string): Promise<void> {
+        const result = await provider.RunView({ EntityName: 'Customers', ExtraFilter: callerFilter }, user);
 
         expect(result.Success).toBe(true);
         const where = whereOf(provider);
-        expect(isTopLevelAndTerm(where, TENANT_TERM, provider.Dialect), `tenant predicate is not a top-level AND term of ${where}`).toBe(true);
-        expect(where).toBe(`((("IsActive" = TRUE) OR (1=1) OR ("IsActive" = TRUE)) AND ${TENANT_TERM})`);
+        expect(where).toBe(`((${callerFilter}) AND ${TENANT_PREDICATE})`);
+        expect(topLevelAndTerms(where, provider.Dialect)).toEqual([`(${callerFilter})`, TENANT_PREDICATE]);
+        expect(isTopLevelAndTerm(where, TENANT_PREDICATE, provider.Dialect), `tenant predicate is not a top-level AND term of ${where}`).toBe(true);
+    }
+
+    it('keeps a string literal that holds a closing parenthesis and AND as written, with the tenant predicate its own AND term', async () => {
+        await expectCallerLiteralKept(`"IsActive" = '1) AND ("IsActive" = 1'`);
     });
 
-    it('refuses a caller term that the rewrite leaves unbalanced, and runs no SQL', async () => {
-        const result = await provider.RunView({ EntityName: 'Customers', ExtraFilter: `"IsActive" = '1) AND (1 = 1'` }, user);
+    it('keeps a string literal that holds OR text as written, with the tenant predicate its own AND term', async () => {
+        await expectCallerLiteralKept(`"IsActive" = '1) OR (1=1) OR ("IsActive" = 1'`);
+    });
 
-        expect(provider.ExecutedSQL).toEqual([]);
-        expect(result.Success).toBe(false);
-        expect(result.ErrorMessage).toMatch(/ExtraFilter/);
+    it('runs a filter whose string literal holds unbalanced parentheses, with the literal as written', async () => {
+        await expectCallerLiteralKept(`"IsActive" = '1) AND (1 = 1'`);
     });
 
     it('leaves an ordinary filter and the tenant predicate as written, each in its own term', async () => {

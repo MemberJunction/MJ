@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
-import { RegisterClass } from '@memberjunction/global';
+import { IsValidUUID, RegisterClass } from '@memberjunction/global';
 import { BaseAction } from '@memberjunction/actions';
-import { RunView } from '@memberjunction/core';
+import { LogError, RunView } from '@memberjunction/core';
 import { MJScheduledJobEntity } from '@memberjunction/core-entities';
 import { BaseJobAction } from './BaseJobAction';
 
@@ -59,6 +59,14 @@ export class QueryScheduledJobsAction extends BaseJobAction {
                 };
             }
 
+            if (jobTypeId && !IsValidUUID(jobTypeId)) {
+                return {
+                    Success: false,
+                    ResultCode: 'VALIDATION_ERROR',
+                    Message: 'JobTypeID must be a UUID'
+                };
+            }
+
             // Parse IsActive
             let isActive: boolean | undefined;
             if (isActiveStr !== undefined && isActiveStr !== null) {
@@ -86,10 +94,11 @@ export class QueryScheduledJobsAction extends BaseJobAction {
 
             // Check for query errors
             if (!result.Success) {
+                LogError(`Query Scheduled Jobs: query failed: ${result.ErrorMessage}`);
                 return {
                     Success: false,
                     ResultCode: 'FAILED',
-                    Message: `Failed to query scheduled jobs: ${result.ErrorMessage}`
+                    Message: 'Failed to query scheduled jobs'
                 };
             }
 

@@ -12,7 +12,18 @@ import {
     StripServerOnlyRunQueryParams,
     UserInfo
 } from '@memberjunction/core';
-import { BaseSingleton, EscapeSQLString, IndexByUUID, MJGlobal, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import {
+    BaseSingleton,
+    EscapeSQLString,
+    IndexByUUID,
+    MJGlobal,
+    NormalizeUUID,
+    RegisterClass,
+    ScanSQLForScreening,
+    SQL_SCREENING_DIALECTS,
+    SQLScreeningSpan,
+    UUIDsEqual
+} from '@memberjunction/global';
 import { ArtifactPermissionEngine } from './ArtifactPermissionDelegate';
 import { QueryEngine } from '../engines/QueryEngine';
 import type { MJQueryEntityExtended } from './MJQueryEntityExtended';
@@ -655,7 +666,8 @@ export class EntityViewDocumentBlock extends BaseDocumentBlock {
 
         const viewResult = await rv.RunView<BlockRecord>(runParams, user);
         if (!viewResult.Success) {
-            return buildErrorResult(spec, viewResult.ErrorMessage || `Failed to run view on ${entityInfo.Name}.`);
+            LogError(`DocumentLiveBlockEngine: view on ${entityInfo.Name} failed: ${viewResult.ErrorMessage ?? 'unknown error'}`);
+            return buildErrorResult(spec, `Failed to run view on ${entityInfo.Name}.`);
         }
 
         const rawRows = viewResult.Results ?? [];
@@ -2754,11 +2766,49 @@ function hasQualifiedSqlIdentifier(maskedSql: string): boolean {
     return false;
 }
 
+/** Start and end of each string literal span. */
+function stringSpanKeys(spans: SQLScreeningSpan[]): string {
+    return spans
+        .filter((s) => s.Kind === 'string')
+        .map((s) => `${s.Start}:${s.End}`)
+        .join(',');
+}
+
+/**
+ * Reads the filter with the shared scanner under every SQL dialect. Returns an error message when a
+ * dialect cannot read it, it has a comment, its string literals differ between dialects (as with
+ * PostgreSQL `$$` or `E''` strings), or it has a quoted identifier other than SQL Server `[...]`.
+ * Returns null when every dialect reads the filter the way the block validator does.
+ */
+function screenExtraFilterReading(extraFilter: string): string | null {
+    let stringSpans: string | null = null;
+    for (const dialect of SQL_SCREENING_DIALECTS) {
+        const scan = ScanSQLForScreening(extraFilter, dialect);
+        if (!scan.Classified || scan.CommentCount > 0) {
+            return 'ExtraFilter must be plain SQL with no comments.';
+        }
+        const otherIdentifier = scan.Spans.some((s) => s.Kind === 'identifier' && extraFilter[s.Start] !== '[');
+        if (otherIdentifier) {
+            return 'Only [bracketed] identifiers are permitted in ExtraFilter.';
+        }
+        const keys = stringSpanKeys(scan.Spans);
+        if (stringSpans !== null && keys !== stringSpans) {
+            return "Only '...' and N'...' string literals are permitted in ExtraFilter.";
+        }
+        stringSpans = keys;
+    }
+    return null;
+}
+
 function validateEntityViewExtraFilter(
     extraFilter: string,
     entityInfo?: EntityInfo,
     deniedFields: ReadonlySet<string> = new Set<string>()
 ): { Valid: boolean; ErrorMessage?: string } {
+    const readingError = screenExtraFilterReading(extraFilter);
+    if (readingError) {
+        return { Valid: false, ErrorMessage: readingError };
+    }
     // Character-by-character scan to mask bracketed column identifiers (`[First Name]`),
     // Unicode string literals (`N'Renée'`), and standard single-quoted literals (`'Ada'`),
     // verifying balanced quotes and brackets before inspecting SQL tokens (`R7-9`).
