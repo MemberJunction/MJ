@@ -10,6 +10,11 @@
  * other task-graph control verb uses, applied per matched step. A correlation-key signal can match
  * steps in many runs; the ones the caller may not complete are reported, never silently skipped.
  *
+ * **Never a provider-raised Human step.** That step asks a person in another app (an approval, a
+ * review), and only its provider may complete it, in process, when that person decides. Through this
+ * operation the run's owner — usually the person asking for the approval — could complete it with
+ * any payload and approve their own request.
+ *
  * Registered directly on `BaseRemotableOperation`, like the debug verbs; the metadata row ships in
  * `metadata/remote-operations/.remote-operations.json`.
  *
@@ -19,6 +24,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseRemotableOperation, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { MJTaskEntity } from '@memberjunction/core-entities';
 import { TaskGraphWaitingSteps, type CompleteWaitingStepResult } from '../TaskGraphWaitingSteps';
+import { IsProviderHumanTask, type WaitingStepRow } from '../waiting-steps';
 import { AuthorizeGraphControl } from './TaskGraphDebugOperations';
 
 /** Input for `TaskGraph.CompleteWaitingStep`. Exactly one of `taskID` / `correlationKey`. */
@@ -78,8 +84,20 @@ export class TaskGraphCompleteWaitingStepServerOperation extends BaseRemotableOp
     }
 }
 
-/** The run's owner or an Owner-type user may complete a step; anyone else is refused for that step. */
+/** Refusal when the step is a provider-raised Human step; null otherwise. Exported for tests. */
+export function ProviderHumanStepRefusal(task: WaitingStepRow): string | null {
+    return IsProviderHumanTask(task)
+        ? 'That step is waiting on a person in another app; it completes when they decide there, not from here.'
+        : null;
+}
+
+/**
+ * The run's owner or an Owner-type user may complete a step; anyone else is refused for that step.
+ * A provider-raised Human step is refused for everyone ({@link ProviderHumanStepRefusal}).
+ */
 async function authorizeStep(task: MJTaskEntity, provider: IMetadataProvider, user: UserInfo): Promise<string | null> {
+    const providerStep = ProviderHumanStepRefusal(task);
+    if (providerStep) return providerStep;
     if (!task.ParentID) return 'That task is not a step of a workflow run.';
     return AuthorizeGraphControl(task.ParentID, provider, user);
 }
