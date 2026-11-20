@@ -30,7 +30,7 @@ import { UserCache } from '@memberjunction/generic-database-provider';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import {
   EvaluationProtocolVersioning, GateContexts, LifecycleGate, MetadataEntityFactory, MonitoringJobs, MonitoringPeriods, PredictionUnitVersioning,
-  PredictiveStudioModelMonitoringJobDriver, PredictiveStudioScoringStartup, ProtocolDefaults, ProviderAssemblyMetadata, RunViewDataAccess,
+  PredictiveStudioModelMonitoringJobDriver, PredictiveStudioRegistryCheckJobDriver, PredictiveStudioScoringStartup, ProtocolDefaults, ProviderAssemblyMetadata, RunViewDataAccess,
   RunViewPredictionUnitStore, ScoringBindings, ScoringService, type GateContext, type MonitoringContext, type MonitoringPeriod,
 } from '@memberjunction/predictive-studio';
 import {
@@ -499,5 +499,28 @@ describe('M6.9 harness', () => {
       expect(entries.every((m) => { const b = bounds(m); return b.lower !== null && b.upper !== null && b.lower <= b.upper; })).toBe(true);
     }, CASE_TIMEOUT_MS);
   });
-});
 
+  // ------------------------------------------------------------------------------- registry check (M6.4 Step 5) ----
+
+  describe('registry check — a Published row set by SQL outside the gate', () => {
+    it('one registry run archives it through the gate and rolls the pipeline back to its last gate-published model, with one rollback record', async () => {
+      const [published] = await rows<{ ID: string }>('MJ: ML Models', `PipelineID='${EscapeSQLString(d1c.Pipeline.ID)}' AND Status='Published'`, ['ID']);
+      if (!published) throw new Error('the D1c pipeline has no Published model');
+      const gate = new LifecycleGate();
+      const archived = await gate.Archive(published.ID, `${TAG}: retired before the intruder`, human(), gateCtx());
+      expect(archived).toMatchObject({ Ok: true });
+      const intruder = await train(d1c.Pipeline);
+      await gate.Evaluate({ modelId: intruder.ID }, human(), gateCtx());
+      // Adversary (a status write outside the gate, by direct SQL): the intruder Published, with a Delivery like a gate publish's.
+      await pool.request().input('ID', sql.UniqueIdentifier, intruder.ID).input('From', sql.UniqueIdentifier, published.ID)
+        .query(`UPDATE ${t('MJ: ML Models')} SET Status = 'Published', Delivery = (SELECT Delivery FROM ${t('MJ: ML Models')} WHERE ID = @From) WHERE ID = @ID`);
+      const before = await rows<{ ID: string }>('MJ: ML Model Publish Records', `ModelID='${EscapeSQLString(published.ID)}' AND Kind='publish' AND Purpose='rollback'`, ['ID']);
+      const findings = await new PredictiveStudioRegistryCheckJobDriver().RunChecks(
+        PredictiveStudioRegistryCheckJobDriver.ReadConfiguration(null), { kind: 'human', userId: server.User.ID }, gateCtx());
+      expect(findings).toEqual(expect.arrayContaining([expect.objectContaining({ Finding: 'a', SubjectID: expect.stringMatching(new RegExp(intruder.ID, 'i')), Outcome: 'remediated' })]));
+      expect([await statusOf(intruder.ID), await statusOf(published.ID)]).toEqual(['Archived', 'Published']);
+      const after = await rows<{ ID: string }>('MJ: ML Model Publish Records', `ModelID='${EscapeSQLString(published.ID)}' AND Kind='publish' AND Purpose='rollback'`, ['ID']);
+      expect(after.length - before.length).toBe(1);
+    }, CASE_TIMEOUT_MS);
+  });
+});

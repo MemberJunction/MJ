@@ -134,6 +134,13 @@ export class MonitoringFixture {
     return { ModelID: trained.ModelID, PipelineID: pipeline.ID, BindingID: binding, Dataset: dataset, Calendar: o.Calendar, Arriving: arriving };
   }
 
+  /** How many of the dataset's rows are dated `day` (`T`), the rows a period's binding run scored. */
+  public static async RowsDatedAt(h: Pick<TruthHarness, 'Provider' | 'User'>, dataset: LoadedDataset, day: string): Promise<number> {
+    const r = await RunView.FromMetadataProvider(h.Provider).RunView<{ ID: string }>({ EntityName: dataset.Entity.Name, ExtraFilter: `T = '${EscapeSQLString(day)}'`, Fields: ['ID'], ResultType: 'simple', IgnoreMaxRows: true }, h.User);
+    if (!r.Success) throw new Error(`reading ${dataset.Entity.Name} rows dated ${day} failed: ${r.ErrorMessage}`);
+    return r.Results.length;
+  }
+
   /** Runs `PredictiveStudio.RunModelMonitoring` for each period in order and reads each period's row back. */
   public static async RunPeriods(h: TruthHarness, model: MonitoredGateModel, periods: readonly number[]): Promise<MonitoredGatePeriod[]> {
     const out: MonitoredGatePeriod[] = [];

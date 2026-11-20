@@ -23,9 +23,16 @@ export const PsGateD1cS81Checks: NamedCheck[] = [
       const periods = await MonitoringFixture.RunPeriods(h, model, [3, 4, 5]);
       const closed = periods.reduce((s, p) => s + p.ClosedWindowPredictions, 0);
       const joined = periods.reduce((s, p) => s + p.JoinedRows, 0);
+      // The prediction as of each period: a period joins exactly the predictions stored for its own rows (scored as of
+      // its first day), never another period's — the latest row of a record would pull every period's rows into each.
+      const scoredPerPeriod = await Promise.all([3, 4, 5].map((p) => MonitoringFixture.RowsDatedAt(h, d1c, MonitoringFixture.PeriodStart(YEARS, p))));
+      const asOfEachPeriod = periods.every((p, i) => p.ScoredRows === scoredPerPeriod[i]);
       PsGate.Assert({
-        Passed: closed > 0 && joined === closed && periods.every((p) => p.State === 'evaluated'),
-        Measured: { closedWindowPredictions: closed, joined, states: periods.map((p) => p.State).join(' '), firstError: periods.find((p) => p.ErrorMessage)?.ErrorMessage || null },
+        Passed: closed > 0 && joined === closed && asOfEachPeriod && periods.every((p) => p.State === 'evaluated'),
+        Measured: {
+          closedWindowPredictions: closed, joined, scored: periods.map((p) => p.ScoredRows).join(' '), scoredForPeriod: scoredPerPeriod.join(' '),
+          states: periods.map((p) => p.State).join(' '), firstError: periods.find((p) => p.ErrorMessage)?.ErrorMessage || null,
+        },
         Detail: `${joined} of ${closed} closed-window predictions have a joined outcome`,
       });
     },
