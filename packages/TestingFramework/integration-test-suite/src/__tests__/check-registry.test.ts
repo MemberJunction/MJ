@@ -208,7 +208,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['concurrent', ConcurrentChecks, 2],
         ['agent-runner', AgentRunnerChecks, 1],
         ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3],
-        ['lists', ListsChecks, 3],
+        ['lists', ListsChecks, 4],
         ['list-refresh', ListRefreshChecks, 7], // LR1-LR7 source fingerprint, routine, approval (IT175)
         ['list-from-query', ListFromQueryChecks, 5], // LQ1-LQ5 conversation SQL saved Pending, list linked, refresh, edit stops it (IT179)
         ['open-app-local-source', OpenAppLocalSourceChecks, 10], // OLS1-OLS10 install, upgrade and remove from a local folder (IT178)
@@ -454,7 +454,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'layered-base-views': 6,
         'list-from-query': 5,
         'list-refresh': 7,
-        'lists': 3,
+        'lists': 4,
         'livekit-room': 1,
         'materialized-entity-read': 2,
         'materialized-read': 3,

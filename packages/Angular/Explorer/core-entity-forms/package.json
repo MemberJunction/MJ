@@ -40,6 +40,7 @@
     "@memberjunction/feature-pipelines": "6.3.0-edge.1",
     "@memberjunction/global": "6.3.0-edge.1",
     "@memberjunction/graphql-dataprovider": "6.3.0-edge.1",
+    "@memberjunction/lists-base": "6.3.0-edge.1",
     "@memberjunction/ng-action-gallery": "6.3.0-edge.1",
     "@memberjunction/ng-actions": "6.3.0-edge.1",
     "@memberjunction/ng-agents": "6.3.0-edge.1",

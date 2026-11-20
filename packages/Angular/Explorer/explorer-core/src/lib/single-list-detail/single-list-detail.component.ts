@@ -1,12 +1,15 @@
 import { Component, Input, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, HostListener, ElementRef } from '@angular/core';
-import { BaseEntity, CompositeKey, EntityInfo, ListMembershipFilter, LogError, LogErrorEx, LogStatus, Metadata, RunView, RunViewResult } from '@memberjunction/core';
-import { MJListDetailEntity, MJListDetailEntityExtended, MJListEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
+import { BaseEntity, CompositeKey, EntityInfo, ListMembershipFilter, LogError, Metadata, RunView, RunViewResult } from '@memberjunction/core';
+import { MJListEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ListDetailGridComponent, ListGridRowClickedEvent } from '@memberjunction/ng-list-detail-grid';
 import { GridToolbarConfig } from '@memberjunction/ng-entity-viewer';
 import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
-import { CapabilitiesForLevel, type ListCapabilities, type ListDelta, type ListRefreshMode, type SharePermissionLevel } from '@memberjunction/lists-base';
-import { ListSharingService, GetRecordDisplayField, IsTextSearchableField, FormatRecordDisplayValue } from '@memberjunction/ng-list-management';
+import { CapabilitiesForLevel, type ApplyResult, type ListCapabilities, type ListDelta, type ListRefreshMode, type SharePermissionLevel } from '@memberjunction/lists-base';
+import {
+  ListSharingService, GetRecordDisplayField, IsTextSearchableField, FormatRecordDisplayValue,
+  CreateListsClient, ListChangeApplied, ListChangeFailureMessage, RecordCountText,
+} from '@memberjunction/ng-list-management';
 import { ExportService } from '@memberjunction/ng-export-service';
 import { Subject, debounceTime, takeUntil } from 'rxjs';
 import { NewItemOption } from '../../generic/Item.types';
@@ -612,14 +615,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
   public set addFromViewTotal(value: number) {
     this.AddFromViewTotal = value;
   }
-  /**
-   * Stored percent (0–100) for the progress bar. Backed instead of computed
-   * via getter because the original getter recomputed on every Angular CD
-   * read and the async save loop mutated addFromViewProgress between the
-   * initial check and dev-mode re-check — producing NG0100
-   * ExpressionChangedAfterItHasBeenCheckedError floods in the console.
-   * Updated via setAddFromViewProgress(...) at controlled points.
-   */
+  /** Stored percent (0–100) of the add-from-view progress. */
   public AddFromViewProgressPercent: number = 0;
 
   /** @deprecated Use {@link AddFromViewProgressPercent}. */
@@ -1017,16 +1013,6 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     return this.AddProgressPercent;
   }
 
-  /** Update progress + recompute the stored percent atomically. Call this
-   *  from inside the save loop so the bound value is set in lockstep with
-   *  the underlying counter (avoids NG0100). */
-  private setAddFromViewProgress(progress: number): void {
-    this.AddFromViewProgress = progress;
-    this.AddFromViewProgressPercent = this.AddFromViewTotal > 0
-      ? Math.round((progress / this.AddFromViewTotal) * 100)
-      : 0;
-  }
-
   OnRefreshClick(): void {
     this.RefreshGrid();
   }
@@ -1261,74 +1247,16 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     return clauses.length > 0 ? clauses.join(' OR ') : '1=0';
   }
 
-  /**
-   * Apply the chosen status to all selected list-detail rows. Re-uses
-   * the existing extract-record-id-from-composite-key logic to map
-   * `selectedKeys` to the actual `MJ: List Detail.RecordID` values.
-   */
+  /** Sets the chosen status on the selected list members with one server call. */
   public async ApplyBulkStatus(): Promise<void> {
     if (!this.ListRecord || this.SelectedKeys.length === 0 || !this.BulkStatus) return;
     this.IsApplyingBulkStatus = true;
     this.cdr.detectChanges();
     try {
-      const md = this.ProviderToUse;
-      const rv = RunView.FromMetadataProvider(md);
-      const entityInfo = md.EntityByID(this.ListRecord.EntityID);
-      const recordIds = this.SelectedKeys.map((key) => {
-        if (entityInfo && entityInfo.PrimaryKeys.length === 1) {
-          const ck = new CompositeKey();
-          ck.LoadFromConcatenatedString(key);
-          return ck.KeyValuePairs[0]?.Value || key;
-        }
-        return key;
-      });
-      const filter = `ListID='${this.ListRecord.ID}' AND RecordID IN (${recordIds.map((id) => `'${String(id).replace(/'/g, "''")}'`).join(',')})`;
-      // Two-step: fetch just the IDs via a 'simple' RunView, then load each
-      // entity through GetEntityObject(..., CurrentUser) so the entity is
-      // born with the user context that Save() requires. RunView with
-      // 'entity_object' returns entities WITHOUT a CurrentUser bound — fine
-      // for read-only use, broken for Save (`ContextCurrentUser cannot be
-      // null`).
-      const idResult = await rv.RunView<{ ID: string }>({
-        EntityName: 'MJ: List Details',
-        ExtraFilter: filter,
-        Fields: ['ID'],
-        ResultType: 'simple',
-      });
-      if (!idResult.Success) {
-        this.sharedService.CreateSimpleNotification(`Failed to load list details: ${idResult.ErrorMessage}`, 'error', 4000);
-        return;
-      }
-      let updated = 0;
-      let failed = 0;
-      const failureMessages: string[] = [];
-      for (const row of idResult.Results ?? []) {
-        const detail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', md.CurrentUser);
-        const loaded = await detail.Load(row.ID);
-        if (!loaded) {
-          failed++;
-          const reason = detail.LatestResult?.CompleteMessage ?? 'load failed';
-          if (failureMessages.length < 3) failureMessages.push(reason);
-          continue;
-        }
-        detail.Status = this.BulkStatus as never;
-        const ok = await detail.Save();
-        if (ok) {
-          updated++;
-        } else {
-          failed++;
-          const reason = detail.LatestResult?.CompleteMessage ?? 'unknown error';
-          if (failureMessages.length < 3) failureMessages.push(reason);
-          LogError(`Bulk status update failed for List Detail ${row.ID}: ${reason}`);
-        }
-      }
-      this.sharedService.CreateSimpleNotification(
-        failed === 0
-          ? `Updated ${updated} item(s) to '${this.BulkStatus}'`
-          : `Updated ${updated}, ${failed} failed: ${failureMessages.join(' | ')}`,
-        failed === 0 ? 'success' : 'warning',
-        failed === 0 ? 3000 : 8000,
-      );
+      const client = CreateListsClient(this.ProviderToUse);
+      const result = await client.SetRecordStatus(this.ListRecord.ID, this.extractSelectedRecordIds(), this.BulkStatus);
+      this.notifyBulkStatusResult(result);
+      if (!ListChangeApplied(result)) return;
       this.BulkStatus = '';
       // Defer the grid refresh to the next microtask — see comment in
       // confirmRemoveFromList for why running it synchronously here
@@ -1342,6 +1270,17 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     } finally {
       this.IsApplyingBulkStatus = false;
       this.cdr.detectChanges();
+    }
+  }
+
+  private notifyBulkStatusResult(result: ApplyResult): void {
+    const updated = result.Counts?.Updated ?? 0;
+    if (result.Success) {
+      this.sharedService.CreateSimpleNotification(`Updated ${updated} item(s) to '${this.BulkStatus}'`, 'success', 3000);
+    } else if (result.ResultCode === 'PARTIAL_SUCCESS') {
+      this.sharedService.CreateSimpleNotification(`Updated ${updated}, ${ListChangeFailureMessage(result, '')}`, 'warning', 8000);
+    } else {
+      this.sharedService.CreateSimpleNotification(`Bulk update failed: ${ListChangeFailureMessage(result, 'unknown error')}`, 'error', 5000);
     }
   }
 
@@ -1360,8 +1299,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
   // delta-confirm dialog: the user must ack the removal before the
   // mutation runs. We build a synthetic ListDelta locally because we
   // already know the exact ToAdd / ToRemove sets — no server round-trip
-  // needed for the preview. Apply step uses direct entity Save/Delete
-  // inside a single TransactionGroup (same pattern as Remove).
+  // needed for the preview. The apply step is one CopyRecordsToList call.
   // ==========================================
 
   public OpenMoveDialog(): void { this.openMoveCopyDialog('move'); }
@@ -1450,7 +1388,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
       // Filter to same EntityID + exclude the current list. UserID filter
       // would over-restrict (Shared-With-Me lists should be valid targets
       // when the user has Edit there); the server enforces the real
-      // permission on the per-row Save, so listing extra entries is fine.
+      // permission on the copy, so listing extra entries is fine.
       const filter = `EntityID='${this.ListRecord.EntityID}' AND ID<>'${this.ListRecord.ID}'`;
       const result = await rv.RunView<MJListEntity>({
         EntityName: 'MJ: Lists',
@@ -1546,10 +1484,10 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
 
   /**
    * Build a synthetic ListDelta for the Move-confirm dialog. Token is
-   * a sentinel — we never call server-side ApplyDelta for this flow,
-   * the mutations run client-side inside a transaction group. The
-   * delta-confirm component only reads counts + ToAdd/ToRemove + Warnings;
-   * the token round-trips through the (Confirm) emit but is unused.
+   * a sentinel — the move runs through `CopyRecordsToList`, not
+   * `ApplyDelta`. The delta-confirm component only reads counts +
+   * ToAdd/ToRemove + Warnings; the token round-trips through the
+   * (Confirm) emit but is unused.
    */
   private buildMoveDelta(recordIds: string[]): ListDelta {
     const removeCount = recordIds.length;
@@ -1577,14 +1515,11 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
   }
 
   /**
-   * Execute the move/copy. Insert all records into the target, and for
-   * Move also delete the matching MJ: List Details from the source. All
-   * mutations run in a single TransactionGroup so partial failures don't
-   * leave records duplicated in both lists.
+   * Copies the selected records to the target list with one server call. A move also removes
+   * them from this list, but only when every add succeeded.
    */
   private async applyMoveCopy(isMove: boolean): Promise<void> {
     if (!this.ListRecord || !this.MoveCopySelectedTarget) return;
-    const source = this.ListRecord;
     const target = this.MoveCopySelectedTarget;
     const recordIds = this.extractSelectedRecordIds();
     if (recordIds.length === 0) return;
@@ -1594,79 +1529,16 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     this.MoveCopyProgress = 0;
     this.cdr.detectChanges();
 
-    const md = this.ProviderToUse;
-    const rv = RunView.FromMetadataProvider(md);
-
     try {
-      // Dedupe against the target: skip records already present so a
-      // partially-completed previous run can be re-tried cleanly.
-      const filterIds = recordIds.map((id) => `'${String(id).replace(/'/g, "''")}'`).join(',');
-      const existingTarget = await rv.RunView<{ RecordID: string }>({
-        EntityName: 'MJ: List Details',
-        ExtraFilter: `ListID='${target.ID}' AND RecordID IN (${filterIds})`,
-        Fields: ['RecordID'],
-        ResultType: 'simple',
+      const result = await CreateListsClient(this.ProviderToUse).CopyRecordsToList({
+        SourceListId: this.ListRecord.ID,
+        TargetListId: target.ID,
+        RecordIds: recordIds,
+        RemoveFromSource: isMove,
       });
-      const alreadyInTarget = new Set(
-        (existingTarget.Results ?? []).map((r) => String((r as { RecordID: string }).RecordID))
-      );
-      const toAdd = recordIds.filter((id) => !alreadyInTarget.has(id));
-
-      // For Move, look up the source-side ListDetail rows to delete.
-      let sourceRows: MJListDetailEntity[] = [];
-      if (isMove) {
-        const lookup = await rv.RunView<MJListDetailEntity>({
-          EntityName: 'MJ: List Details',
-          ExtraFilter: `ListID='${source.ID}' AND RecordID IN (${filterIds})`,
-          ResultType: 'entity_object',
-        });
-        if (!lookup.Success) {
-          throw new Error(`Failed to load source rows: ${lookup.ErrorMessage}`);
-        }
-        sourceRows = lookup.Results ?? [];
-      }
-
-      const tg = await md.CreateTransactionGroup();
-
-      // Queue inserts into target.
-      for (const recordId of toAdd) {
-        const newDetail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', md.CurrentUser);
-        newDetail.NewRecord();
-        newDetail.ListID = target.ID;
-        newDetail.RecordID = recordId;
-        newDetail.Sequence = 0;
-        newDetail.TransactionGroup = tg;
-        await newDetail.Save();
-      }
-
-      // Queue source-side deletes for Move only.
-      if (isMove) {
-        for (const row of sourceRows) {
-          row.TransactionGroup = tg;
-          await row.Delete();
-        }
-      }
-
-      const ok = await tg.Submit();
       this.MoveCopyProgress = this.MoveCopyTotal;
-
-      if (!ok) {
-        this.sharedService.CreateSimpleNotification(
-          `${isMove ? 'Move' : 'Copy'} partially failed — some changes may not have applied`,
-          'error',
-          5000,
-        );
-        return;
-      }
-
-      const skippedNote = alreadyInTarget.size > 0
-        ? ` (${alreadyInTarget.size} already in target — skipped)`
-        : '';
-      this.sharedService.CreateSimpleNotification(
-        `${isMove ? 'Moved' : 'Copied'} ${toAdd.length} record(s) to "${target.Name}"${skippedNote}`,
-        'success',
-        3000,
-      );
+      this.notifyMoveCopyResult(result, isMove, target.Name, recordIds.length);
+      if (!result.Success) return;
 
       // Same NG0100 pattern as confirmRemoveFromList — defer cleanup +
       // refresh by a microtask so the dialog/visibility flips happen in
@@ -1688,6 +1560,21 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
       this.IsApplyingMoveCopy = false;
       this.cdr.detectChanges();
     }
+  }
+
+  private notifyMoveCopyResult(result: ApplyResult, isMove: boolean, targetName: string, requested: number): void {
+    const verb = isMove ? 'Move' : 'Copy';
+    if (!result.Success) {
+      const sourceNote = isMove && result.ResultCode === 'PARTIAL_SUCCESS' ? ' — nothing was removed from this list' : '';
+      this.sharedService.CreateSimpleNotification(
+        `${verb} failed: ${ListChangeFailureMessage(result, 'unknown error')}${sourceNote}`, 'error', 5000);
+      return;
+    }
+    const added = result.Counts?.Added ?? 0;
+    const skipped = requested - added;
+    const skippedNote = skipped > 0 ? ` (${skipped} already in target — skipped)` : '';
+    this.sharedService.CreateSimpleNotification(
+      `${isMove ? 'Moved' : 'Copied'} ${added} record(s) to "${targetName}"${skippedNote}`, 'success', 3000);
   }
 
   // ==========================================
@@ -1726,59 +1613,12 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     this.RemoveTotal = this.SelectedKeys.length;
     this.RemoveProgress = 0;
 
-    const md = this.ProviderToUse;
-    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-    const entityInfo = md.EntityByID(this.ListRecord.EntityID);
+    const result = await this.runListChange(() =>
+      CreateListsClient(this.ProviderToUse).RemoveRecordsFromList(this.ListRecord!.ID, this.extractSelectedRecordIds()));
+    this.notifyRemoveResult(result);
 
-    // selectedKeys from grid are in concatenated format (ID|value)
-    // For single PK entities, RecordID in DB is just the raw value
-    // For composite PK entities, RecordID in DB is the concatenated format
-    // Extract the appropriate format for the query
-    const selectedRecordIds = this.SelectedKeys.map(key => {
-      if (entityInfo && entityInfo.PrimaryKeys.length === 1) {
-        // Single PK: extract just the value from concatenated format
-        const compositeKey = new CompositeKey();
-        compositeKey.LoadFromConcatenatedString(key);
-        return compositeKey.KeyValuePairs[0]?.Value || key;
-      } else {
-        // Composite PK: use full concatenated format as-is
-        return key;
-      }
-    });
-
-    const listDetailsFilter = `ListID = '${this.ListRecord.ID}' AND RecordID IN (${selectedRecordIds.map(id => `'${id}'`).join(',')})`;
-
-    const listDetailsResult = await rv.RunView<MJListDetailEntity>({
-      EntityName: 'MJ: List Details',
-      ExtraFilter: listDetailsFilter,
-      ResultType: 'entity_object'
-    }, md.CurrentUser);
-
-    if (!listDetailsResult.Success) {
-      LogError("Error loading list details for removal", undefined, listDetailsResult.ErrorMessage);
-      this.sharedService.CreateSimpleNotification("Failed to remove records", 'error', 2500);
-      this.IsRemoving = false;
-      return;
-    }
-
-    // Use transaction group for bulk delete
-    const tg = await md.CreateTransactionGroup();
-    const listDetails = listDetailsResult.Results;
-
-    for (const listDetail of listDetails) {
-      listDetail.TransactionGroup = tg;
-      await listDetail.Delete();
-    }
-
-    const success = await tg.Submit();
-
-    if (success) {
+    if (ListChangeApplied(result)) {
       this.RemoveProgress = this.RemoveTotal;
-      this.sharedService.CreateSimpleNotification(
-        `Removed ${listDetails.length} record${listDetails.length !== 1 ? 's' : ''} from list`,
-        'success',
-        2500
-      );
       // Defer cleanup + refresh to the next microtask. Running these
       // synchronously inside the current change-detection cycle
       // triggers NG0100 (`@if (showRemoveDialog)` flips false while
@@ -1792,9 +1632,41 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
       this.bumpStatsRefresh();
       this.cdr.detectChanges();
     } else {
-      LogError("Error removing records from list");
-      this.sharedService.CreateSimpleNotification("Failed to remove some records", 'error', 2500);
       this.IsRemoving = false;
+    }
+  }
+
+  /** Runs a server list change and turns a thrown error into a failed result. */
+  private async runListChange(call: () => Promise<ApplyResult>): Promise<ApplyResult> {
+    try {
+      return await call();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return { Success: false, ResultCode: 'UNEXPECTED_ERROR', Message: message };
+    }
+  }
+
+  private notifyRemoveResult(result: ApplyResult): void {
+    const removedText = `Removed ${RecordCountText(result.Counts?.Removed ?? 0)} from list`;
+    if (result.Success) {
+      this.sharedService.CreateSimpleNotification(removedText, 'success', 2500);
+    } else if (result.ResultCode === 'PARTIAL_SUCCESS') {
+      this.sharedService.CreateSimpleNotification(`${removedText}; ${ListChangeFailureMessage(result, '')}`, 'warning', 5000);
+    } else {
+      LogError(`Error removing records from list: ${result.Message}`);
+      this.sharedService.CreateSimpleNotification(ListChangeFailureMessage(result, 'Failed to remove records'), 'error', 5000);
+    }
+  }
+
+  private notifyAddResult(result: ApplyResult): void {
+    const addedText = `Added ${RecordCountText(result.Counts?.Added ?? 0)} to list`;
+    if (result.Success) {
+      this.sharedService.CreateSimpleNotification(addedText, 'success', 2500);
+    } else if (result.ResultCode === 'PARTIAL_SUCCESS') {
+      this.sharedService.CreateSimpleNotification(`${addedText}; ${ListChangeFailureMessage(result, '')}`, 'warning', 5000);
+    } else {
+      LogError(`Error adding records to list: ${result.Message}`);
+      this.sharedService.CreateSimpleNotification(ListChangeFailureMessage(result, 'Failed to add records'), 'error', 5000);
     }
   }
 
@@ -1980,44 +1852,15 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     if (recordsToAdd.length === 0 || !this.ListRecord) return;
 
     this.AddDialogSaving = true;
-    // Reserve 20% of progress for tg.Submit()
     this.AddTotal = recordsToAdd.length;
     this.AddProgress = 0;
-    const progressPerRecord = 0.8 / recordsToAdd.length; // 80% for individual saves
 
-    const md = this.ProviderToUse;
+    const result = await this.runListChange(() =>
+      CreateListsClient(this.ProviderToUse).AddRecordsToList(this.ListRecord!.ID, recordsToAdd.map(r => r.ID)));
+    this.notifyAddResult(result);
 
-    // Use transaction group for bulk insert
-    const tg = await md.CreateTransactionGroup();
-
-    for (let i = 0; i < recordsToAdd.length; i++) {
-      const record = recordsToAdd[i];
-      const listDetail = await md.GetEntityObject<MJListDetailEntityExtended>("MJ: List Details", md.CurrentUser);
-      listDetail.ListID = this.ListRecord.ID;
-      listDetail.RecordID = record.ID;
-      listDetail.TransactionGroup = tg;
-      const result = await listDetail.Save();
-      if (!result) {
-        LogErrorEx({
-          message: listDetail.LatestResult?.CompleteMessage
-        });
-      }
-      // Update progress (0-80%)
-      this.AddProgress = Math.round((i + 1) * progressPerRecord * this.AddTotal);
-    }
-
-    // Show 80% complete before submit
-    this.AddProgress = Math.round(this.AddTotal * 0.8);
-
-    const success = await tg.Submit();
-
-    if (success) {
+    if (ListChangeApplied(result)) {
       this.AddProgress = this.AddTotal;
-      this.sharedService.CreateSimpleNotification(
-        `Added ${recordsToAdd.length} record${recordsToAdd.length !== 1 ? 's' : ''} to list`,
-        'success',
-        2500
-      );
       // Defer dialog close + grid refresh to the next microtask. See
       // confirmRemoveFromList for the NG0100 background.
       await Promise.resolve();
@@ -2026,8 +1869,6 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
       this.bumpStatsRefresh();
       this.cdr.detectChanges();
     } else {
-      LogError("Error adding records to list");
-      this.sharedService.CreateSimpleNotification("Failed to add some records", 'error', 2500);
       this.AddDialogSaving = false;
     }
   }
@@ -2062,7 +1903,8 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     this.userViewsToAddIds.clear();
     this.ShowAddFromViewLoader = false;
     this.AddFromViewTotal = 0;
-    this.setAddFromViewProgress(0);
+    this.AddFromViewProgress = 0;
+    this.AddFromViewProgressPercent = 0;
   }
 
   /** @deprecated Use {@link CloseAddFromViewDialog}. */
@@ -2126,87 +1968,16 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     this.FetchingRecordsToSave = true;
     this.cdr.detectChanges();
 
-    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-    const md = this.ProviderToUse;
-
-    // Collect all unique record IDs from selected views.
-    // Batch every selected view into a single RunViews call rather than issuing a
-    // sequential RunView per view (N round-trips → 1). Each view has a distinct ViewID,
-    // so this can't collapse to one query, but RunViews parallelizes the round trips.
-    const recordIdSet = new Set<string>();
-
-    const viewResults = await rv.RunViews(
-      this.UserViewsToAdd.map(userView => ({
-        ViewID: userView.ID,
-        ViewEntity: userView,
-        Fields: ["ID"]
-      })),
-      md.CurrentUser
-    );
-
-    for (const runViewResult of viewResults) {
-      if (runViewResult.Success) {
-        const records = runViewResult.Results as Array<Record<string, string>>;
-        records.forEach(r => recordIdSet.add(NormalizeUUID(r.ID)));
-      }
-    }
-
-    // Filter out records already in the list
-    await this.loadExistingListDetailIds();
-    const recordsToAdd = [...recordIdSet].filter(id => !this.ExistingListDetailIds.has(id));
-
-    this.AddFromViewTotal = recordsToAdd.length;
-    this.setAddFromViewProgress(0);
+    const result = await this.addViewResults(this.ListRecord.ID);
     this.FetchingRecordsToSave = false;
-    this.cdr.detectChanges();
-    const progressPerRecord = 0.8 / Math.max(recordsToAdd.length, 1); // 80% for individual saves
 
-    if (recordsToAdd.length === 0) {
+    if (result.Success && (result.Counts?.Added ?? 0) === 0) {
       this.sharedService.CreateSimpleNotification("All records already in list", 'info', 2500);
-      this.ShowAddFromViewLoader = false;
-      this.cdr.detectChanges();
-      return;
+    } else {
+      this.notifyAddResult(result);
     }
 
-    LogStatus(`Adding ${recordsToAdd.length} records to list`);
-
-    // Use transaction group for bulk insert
-    const tg = await md.CreateTransactionGroup();
-
-    for (let i = 0; i < recordsToAdd.length; i++) {
-      const recordID = recordsToAdd[i];
-      const listDetail = await md.GetEntityObject<MJListDetailEntityExtended>("MJ: List Details", md.CurrentUser);
-      listDetail.ListID = this.ListRecord.ID;
-      listDetail.RecordID = recordID;
-      listDetail.TransactionGroup = tg;
-      const result = await listDetail.Save();
-      if (!result) {
-        LogErrorEx({
-          message: listDetail.LatestResult?.CompleteMessage
-        });
-      }
-      // Update progress (0-80%) via the helper so both the counter and the
-      // bound percent move in lockstep, then detectChanges() to close the
-      // CD cycle on this iteration. Without detectChanges() the next await
-      // can yield in the middle of a cycle and Angular's dev-mode re-check
-      // catches the percent changing → NG0100 flood.
-      this.setAddFromViewProgress(Math.round((i + 1) * progressPerRecord * this.AddFromViewTotal));
-      this.cdr.detectChanges();
-    }
-
-    // Show 80% complete before submit
-    this.setAddFromViewProgress(Math.round(this.AddFromViewTotal * 0.8));
-    this.cdr.detectChanges();
-
-    const success = await tg.Submit();
-
-    if (success) {
-      this.setAddFromViewProgress(this.AddFromViewTotal);
-      this.sharedService.CreateSimpleNotification(
-        `Added ${recordsToAdd.length} record${recordsToAdd.length !== 1 ? 's' : ''} to list`,
-        'success',
-        2500
-      );
+    if (ListChangeApplied(result)) {
       // Defer dialog close + grid refresh to the next microtask. See
       // confirmRemoveFromList for the NG0100 background.
       await Promise.resolve();
@@ -2215,10 +1986,32 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
       this.bumpStatsRefresh();
       this.cdr.detectChanges();
     } else {
-      LogError("Error adding records from view to list");
-      this.sharedService.CreateSimpleNotification("Failed to add some records", 'error', 2500);
       this.ShowAddFromViewLoader = false;
+      this.cdr.detectChanges();
     }
+  }
+
+  /** Adds the results of every selected view to the list, one server call per view, and sums the counts. */
+  private async addViewResults(listId: string): Promise<ApplyResult> {
+    const client = CreateListsClient(this.ProviderToUse);
+    const total: ApplyResult = { Success: true, ResultCode: 'SUCCESS', Message: '', Counts: { Added: 0, Removed: 0, Failed: 0 }, Errors: [] };
+    for (const view of this.UserViewsToAdd) {
+      const result = await this.runListChange(() => client.AddViewResultsToList(view.ID, listId));
+      this.mergeViewResult(total, result);
+    }
+    return total;
+  }
+
+  private mergeViewResult(total: ApplyResult, result: ApplyResult): void {
+    total.Counts!.Added += result.Counts?.Added ?? 0;
+    total.Counts!.Failed += result.Counts?.Failed ?? 0;
+    total.Errors!.push(...(result.Errors ?? []));
+    if (result.Success) return;
+    const anyAdded = total.Counts!.Added > 0;
+    total.Success = false;
+    total.ResultCode = anyAdded || result.ResultCode === 'PARTIAL_SUCCESS' ? 'PARTIAL_SUCCESS' : result.ResultCode;
+    total.Message = result.Message;
+    if (!result.Counts) total.Errors!.push(result.Message);
   }
 
   /** @deprecated Use {@link ConfirmAddFromView}. */
