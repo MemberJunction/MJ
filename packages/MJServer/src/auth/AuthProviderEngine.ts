@@ -23,6 +23,7 @@ import {
 import { MJAuthenticationProviderEntity } from '@memberjunction/core-entities';
 import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import { CredentialEngine } from '@memberjunction/credentials';
+import { RecordRequireVerifiedEmailSetting } from './tokenEmailScreen.js';
 
 /**
  * Subsystem label used when this engine asks CredentialEngine to decrypt secret material,
@@ -101,7 +102,9 @@ export class AuthProviderEngine extends BaseEngine<AuthProviderEngine> {
     for (const row of this.Providers) {
       try {
         const config = await this.buildProviderConfig(row, contextUser);
-        factory.register(AuthProviderFactory.createProvider(config));
+        const provider = AuthProviderFactory.createProvider(config);
+        RecordRequireVerifiedEmailSetting(provider, config);
+        factory.register(provider);
         registered++;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);

@@ -547,6 +547,32 @@ Providers are registered via `@RegisterClass(BaseAuthProvider, 'type-key')` and 
 
 Configure providers in `mj.config.cjs` under `authProviders` or via environment variables (see Configuration section).
 
+#### Verified email addresses
+
+The server finds the MJ user by the email address in the token. It always refuses a token whose `email_verified` claim is `false` (the boolean or the text `"false"`). This check runs before the user lookup and before automatic user creation.
+
+Each provider entry also accepts `requireVerifiedEmail` (default `false`). When it is `true`:
+
+- The token must have `email_verified` set to `true` (the boolean or the text `"true"`).
+- Only the `email` claim is used to find the user. Fallback claims such as `preferred_username` or `cognito:username` are not used.
+
+```javascript
+authProviders: [
+  {
+    name: 'auth0',
+    type: 'auth0',
+    issuer: 'https://tenant.auth0.com/',
+    audience: 'your-client-id',
+    jwksUri: 'https://tenant.auth0.com/.well-known/jwks.json',
+    clientId: 'your-client-id',
+    domain: 'tenant.auth0.com',
+    requireVerifiedEmail: true,
+  },
+]
+```
+
+Turn it on for providers that let people sign up with an address that is not verified (for example Auth0 database connections, Okta self-service registration, Cognito). Leave it off for providers that do not send `email_verified` (for example Microsoft Entra ID), because then every sign-in is refused. For providers in the `MJ: Authentication Providers` table, put `"requireVerifiedEmail": true` in `AdditionalConfiguration`.
+
 ### API Key Authentication
 
 The server supports two types of API key authentication:

@@ -164,6 +164,12 @@ const authProviderSchema = z.object({
   clientSecret: z.string().optional(),
   tenantId: z.string().optional(),
   domain: z.string().optional(),
+  /**
+   * When true, sign-in needs the token's `email_verified` claim to be true, and only its `email`
+   * claim is used to find the user. Off by default because some providers (for example Microsoft
+   * Entra ID) do not send `email_verified`. A token with `email_verified: false` is refused either way.
+   */
+  requireVerifiedEmail: z.boolean().optional(),
 }).passthrough(); // Allow additional provider-specific fields
 
 const componentRegistrySchema = z.object({

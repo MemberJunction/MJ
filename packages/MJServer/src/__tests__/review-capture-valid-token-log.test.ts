@@ -29,7 +29,7 @@ vi.mock('../auth/index.js', () => ({
 
 vi.mock('@memberjunction/auth-providers', () => ({
   TokenExpiredError: class extends Error {},
-  AuthProviderFactory: { Instance: { getByIssuer: vi.fn(() => ({})) } },
+  AuthProviderFactory: { Instance: { getByIssuer: vi.fn(() => ({})), getAllByIssuer: vi.fn(() => []) } },
 }));
 
 vi.mock('../logging/StartupLogger.js', () => ({
