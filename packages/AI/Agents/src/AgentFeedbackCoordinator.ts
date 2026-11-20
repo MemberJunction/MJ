@@ -31,6 +31,7 @@ import {
     AgentResponseForm,
     BaseAgentNextStep,
     ExecuteAgentParams,
+    HumanTaskProviderDefaults,
     ListAssignmentMode,
     MJAIAgentRunEntityExtended,
     MJAIAgentRunStepEntityExtended,
@@ -39,6 +40,7 @@ import {
 import { AIEngine } from '@memberjunction/aiengine';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { EscapeSQLString, GroupByUUID, IndexByUUID, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { RaiseAgentRequestThroughProvider } from './agent-request-human-task';
 
 /**
  * Injectable random-integer generator returning an integer in `[0, maxExclusive)`.
@@ -427,6 +429,9 @@ export class AgentFeedbackCoordinator {
             if (expirationMinutes != null && expirationMinutes > 0) {
                 request.ExpiresAt = new Date(nowMs + expirationMinutes * 60_000);
             }
+            // Named before the save, so an answer the provider sends back at once is recognised.
+            const humanTaskProvider = this.defaultHumanTaskProviderFor(stepEntity, saveUser);
+            request.HumanTaskProvider = humanTaskProvider;
 
             const saved = await request.Save();
             if (saved) {
@@ -435,6 +440,17 @@ export class AgentFeedbackCoordinator {
                     true,
                     params
                 );
+                if (humanTaskProvider && saveUser) {
+                    await RaiseAgentRequestThroughProvider({
+                        Request: request,
+                        ProviderKey: humanTaskProvider,
+                        AgentName: params.agent.Name ?? 'Agent',
+                        ResponseForm: previousDecision.responseForm,
+                        OwnerUserID: agentRun?.UserID ?? params.contextUser?.ID ?? null,
+                        ContextUser: saveUser,
+                        Provider: provider,
+                    });
+                }
                 return request.ID;
             }
 
@@ -447,6 +463,21 @@ export class AgentFeedbackCoordinator {
             LogError(`Error creating feedback request: ${message}`);
             return null;
         }
+    }
+
+    /**
+     * The install's default human-task provider, when this request goes to one: a Chat step's question
+     * does, a Plan step's approval does not (the reviewer edits the plan, which the provider contract
+     * cannot carry). None when no default is configured, or nobody to raise it as.
+     */
+    private defaultHumanTaskProviderFor(
+        stepEntity: MJAIAgentRunStepEntityExtended,
+        saveUser: UserInfo | undefined
+    ): string | null {
+        if (stepEntity.StepType === 'Plan' || !saveUser) {
+            return null;
+        }
+        return HumanTaskProviderDefaults.Instance.EffectiveKey;
     }
 
     /**

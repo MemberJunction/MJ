@@ -45,6 +45,7 @@ export * from './task-graph/condition-roots';
 export * from './task-graph/decision-conditions';
 export * from './task-graph/decision-answers';
 export * from './task-graph/task-graph-spec';
+export * from './human-task-provider';
 export * from './task-graph/task-graph-validator';
 export * from './task-graph/flow-decision-step';
 export * from './task-graph/flow-graph-compiler';
