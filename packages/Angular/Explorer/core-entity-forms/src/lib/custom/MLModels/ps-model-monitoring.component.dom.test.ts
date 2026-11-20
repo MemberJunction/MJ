@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { CreateFakeProvider, renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
 import { PredictiveStudioRunModelMonitoringOperation, type MJMLModelEntity, type MJMLMonitoringResultEntity } from '@memberjunction/core-entities';
+import type { RunViewParams, RunViewResult } from '@memberjunction/core';
 import { PSModelMonitoringComponent } from './ps-model-monitoring.component';
 
 try {
@@ -54,10 +55,16 @@ const RolledBack = (record: { ID: string }): MJMLMonitoringResultEntity['Rollbac
 /** A Registry Check job run whose `Details` records `findings` (and, optionally, step (g)'s record). */
 interface RegistryRunDouble { ID: string; StartedAt: Date; Details: string }
 
-async function RenderMonitoring(opts: { periods: PeriodDouble[]; registryRuns?: RegistryRunDouble[] }) {
-  const provider = CreateFakeProvider({
-    runViewResults: (p) => (p.EntityName === 'MJ: ML Monitoring Results' ? opts.periods : p.EntityName === 'MJ: Scheduled Job Runs' ? opts.registryRuns || [] : []),
-  });
+async function RenderMonitoring(opts: { periods: PeriodDouble[]; registryRuns?: RegistryRunDouble[]; failRegistryRuns?: string }) {
+  const rowsOf = (p: RunViewParams): unknown[] => (p.EntityName === 'MJ: ML Monitoring Results' ? opts.periods : p.EntityName === 'MJ: Scheduled Job Runs' ? opts.registryRuns || [] : []);
+  const provider = CreateFakeProvider({ runViewResults: rowsOf });
+  const failure = opts.failRegistryRuns;
+  if (failure !== undefined) {
+    const failed = (p: RunViewParams): RunViewResult => p.EntityName === 'MJ: Scheduled Job Runs'
+      ? { Success: false, ErrorMessage: failure, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0 }
+      : { Success: true, ErrorMessage: '', Results: rowsOf(p), RowCount: rowsOf(p).length, TotalRowCount: rowsOf(p).length, ExecutionTime: 0 };
+    Object.assign(provider, { RunViews: async (all: RunViewParams[]): Promise<RunViewResult[]> => all.map(failed) });
+  }
   const f = renderComponentFixture(PSModelMonitoringComponent, { inputs: { Provider: provider } });
   f.componentInstance.Model = { ID: 'M-1' } as unknown as MJMLModelEntity;
   await f.componentInstance.Reload();
@@ -98,6 +105,14 @@ describe('PSModelMonitoringComponent (DOM)', () => {
     expect(Count(f, 'ps-monitoring-challenger')).toBe(1);
     expect(Link(f, 'ps-monitoring-challenger-record', 0)).toBe('PR-CH-1');
     expect(Text(f, 'ps-monitoring-challenger')).toContain('published');
+  });
+
+  it('a failed read of the registry check runs is logged with its reason and shown as an error, never as no findings', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const f = await RenderMonitoring({ periods: [P(0)], failRegistryRuns: 'the job runs read was refused' });
+    expect(Text(f, 'ps-monitoring-error')).toContain('the job runs read was refused');
+    expect(logged.mock.calls.flat().map(String).some((m) => m.includes('the job runs read was refused'))).toBe(true);
+    logged.mockRestore();
   });
 
   it('a period whose label window is open is listed but not plotted', async () => {

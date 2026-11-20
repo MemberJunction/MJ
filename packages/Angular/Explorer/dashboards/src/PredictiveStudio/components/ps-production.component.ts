@@ -4,7 +4,7 @@ import { Subscription } from 'rxjs';
 import { AngularSplitModule } from 'angular-split';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
-import { CompositeKey, RunView } from '@memberjunction/core';
+import { CompositeKey, LogError, RunView } from '@memberjunction/core';
 import { EscapeSQLString, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { MJMLModelEntity, MJMLModelPublishRecordEntity, MJMLModelScoringBindingEntity, MJProcessRunDetailEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -210,6 +210,12 @@ interface RunDetailVM {
                   </div>
                   @if (!IsDeploymentCollapsed) {
                     <div class="ps-card-body">
+                      @if (AutoTrainOutcomeError && Selected.processCount > 0) {
+                        <div class="ps-callout warn ps-small" data-testid="ps-auto-train-outcome-error">
+                          <i class="fa-solid fa-triangle-exclamation"></i>
+                          <div>The last auto-train outcome could not be read: {{ AutoTrainOutcomeError }}</div>
+                        </div>
+                      }
                       @if (Selected.autoTrainOutcome) {
                         <div class="ps-small ps-muted" data-testid="ps-auto-train-outcome" style="margin-bottom:8px">
                           <i class="fa-solid fa-robot"></i> Last auto-train: {{ Selected.autoTrainOutcome }}
@@ -559,6 +565,8 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
 
   /** Each production model's last auto-train outcome, by model ID (filled asynchronously). */
   private autoTrainOutcomes = new UUIDMap<string>();
+  /** Why the last auto-train outcomes could not be read, or null when they were (shown in place of the outcome line). */
+  public AutoTrainOutcomeError: string | null = null;
 
   /**
    * Why a model with `status` cannot score, or null when it can: a missing artifact, one whose bytes fail its registered
@@ -584,8 +592,12 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
     if (ids.length === 0) return;
     try {
       this.autoTrainOutcomes = await this.LoadAutoTrainOutcomes(ids);
-    } catch {
-      // the outcome line is informational; a failed read leaves it out rather than blocking the view
+      this.AutoTrainOutcomeError = null;
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : String(e);
+      LogError(`Predictive Studio production: reading the last auto-train outcomes failed: ${reason}`);
+      this.AutoTrainOutcomeError = reason;
+      this.cdr.detectChanges();
       return;
     }
     this.Models = this.Models.map((vm) => ({ ...vm, autoTrainOutcome: this.autoTrainOutcomes.Get(vm.modelId) || null }));
@@ -595,6 +607,8 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
   /**
    * The last auto-train outcome of each model's pipeline: the newest `MJ: ML Model Publish Records` row, over the
    * pipeline's models, whose `Initiator` is auto-train — "published", or "withheld: <reason>" (one batched `RunView`).
+   *
+   * @throws Error with the read's message when the publish records cannot be read
    */
   protected async LoadAutoTrainOutcomes(modelIds: readonly string[]): Promise<UUIDMap<string>> {
     const pipelineOf = new UUIDMap<string>();
@@ -614,8 +628,9 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
         ResultType: 'entity_object',
       },
     ]);
+    if (!result || !result.Success) throw new Error(result?.ErrorMessage || 'the publish records read returned no result');
     const newestByPipeline = new UUIDMap<string>();
-    for (const r of result?.Success ? result.Results : []) {
+    for (const r of result.Results) {
       const initiator = r.InitiatorObject;
       const pipeline = r.ModelID ? pipelineOf.Get(r.ModelID) : undefined;
       if (!pipeline || newestByPipeline.Has(pipeline) || initiator.kind !== 'system' || initiator.component !== 'auto-train') continue;
