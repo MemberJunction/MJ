@@ -354,7 +354,25 @@ export class V2SendService {
       }
     }
 
-    const run = await CommunicationEngineBase.Instance.StartRun();
+    let run: MJCommunicationRunEntity | undefined;
+    if (params.CommunicationRunID) {
+      const rv = new RunView();
+      const existingRun = await rv.RunView<MJCommunicationRunEntity>(
+        {
+          EntityName: 'MJ: Communication Runs',
+          ExtraFilter: `ID='${EscapeSQLString(params.CommunicationRunID)}'`,
+          MaxRows: 1,
+          ResultType: 'entity_object',
+        },
+        contextUser,
+      );
+      if (existingRun.Success && existingRun.Results.length > 0) {
+        run = existingRun.Results[0];
+      }
+    }
+    if (!run) {
+      run = await CommunicationEngineBase.Instance.StartRun();
+    }
     if (!run) {
       return {
         Success: false,
@@ -369,7 +387,7 @@ export class V2SendService {
 
     const asyncThreshold = this.config.AsyncThreshold ?? DEFAULT_ASYNC_THRESHOLD;
     const chunkSize = this.config.ChunkSize ?? DEFAULT_CHUNK_SIZE;
-    if (this.config.EnqueueWork && params.Recipients.length > asyncThreshold) {
+    if (!params.CommunicationRunID && this.config.EnqueueWork && params.Recipients.length > asyncThreshold) {
       for (let i = 0; i < params.Recipients.length; i += chunkSize) {
         const chunk = params.Recipients.slice(i, i + chunkSize);
         await this.config.EnqueueWork('comms.dispatch', {
@@ -1061,6 +1079,21 @@ export class V2SendService {
     contextUser: UserInfo,
   ): Promise<MJCommunicationLogEntity | undefined> {
     if (!pmtID) return undefined;
+    if (params.CommunicationRunID) {
+      const rv = new RunView();
+      const existingRes = await rv.RunView<MJCommunicationLogEntity>(
+        {
+          EntityName: 'MJ: Communication Logs',
+          ExtraFilter: `CommunicationRunID='${EscapeSQLString(runID)}' AND CommunicationEndpointID='${EscapeSQLString(target.Endpoint.CommunicationEndpointID)}'`,
+          MaxRows: 1,
+          ResultType: 'entity_object',
+        },
+        contextUser,
+      );
+      if (existingRes.Success && existingRes.Results.length > 0) {
+        return existingRes.Results[0];
+      }
+    }
     const md = CommunicationEngineBase.Instance.ProviderToUse;
     const log = await md.GetEntityObject<MJCommunicationLogEntity>(
       'MJ: Communication Logs',

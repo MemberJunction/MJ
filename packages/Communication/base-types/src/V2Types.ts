@@ -70,6 +70,8 @@ export interface SendToPrincipalsParams {
   Envelope: SendingEnvelope;
   Payload?: MessagePayload;
   Recipients: RecipientSendTarget[];
+  /** Optional existing CommunicationRun ID (used by comms.dispatch chunk workers to avoid creating duplicate runs). */
+  CommunicationRunID?: string;
 }
 
 export interface ResolvedEndpoint {

@@ -23,6 +23,9 @@ const mocks = vi.hoisted(() => ({
   providersList: [] as Array<{ ID: string; Name: string }>,
   runViewResults: [] as unknown[],
   entityById: new Map<string, Record<string, unknown>>(),
+  credConfig: vi.fn().mockResolvedValue(undefined),
+  getCredentialById: vi.fn(),
+  getCredential: vi.fn(),
 }));
 
 vi.mock('../util.js', () => ({
@@ -55,6 +58,16 @@ vi.mock('@memberjunction/core', async () => {
   };
 });
 
+vi.mock('@memberjunction/credentials', () => ({
+  CredentialEngine: {
+    Instance: {
+      Config: mocks.credConfig,
+      getCredentialById: mocks.getCredentialById,
+      GetCredential: mocks.getCredential,
+    },
+  },
+}));
+
 vi.mock('@memberjunction/communication-engine', async () => {
   const actual = await vi.importActual<typeof import('@memberjunction/communication-engine')>(
     '@memberjunction/communication-engine',
@@ -77,7 +90,7 @@ vi.mock('@memberjunction/communication-engine', async () => {
 import { CommsAdminResolver } from '../resolvers/CommsAdminResolver.js';
 
 describe('CommsAdminResolver', () => {
-  const user = { ID: 'user-1', Email: 'admin@example.com' };
+  const user = { ID: 'user-1', Email: 'admin@example.com', Type: 'Owner', UserRoles: [{ Role: 'Administrator' }] };
   const context = {
     userPayload: { userRecord: user },
     providers: [],
@@ -133,8 +146,37 @@ describe('CommsAdminResolver', () => {
     expect(res.Success).toBe(true);
     expect(res.ProviderDomainID).toBe('sg-dom-42');
     expect(res.Status).toBe('Pending');
-    expect(createDomainAuth).toHaveBeenCalledWith({ Domain: 'mail.example.com' });
+    expect(createDomainAuth).toHaveBeenCalledWith({ Domain: 'mail.example.com' }, undefined);
     expect(domainEntity.Save).toHaveBeenCalled();
+  });
+
+  it('CreateCommsSendingDomain resolves domain.CredentialID and passes credentials to provider', async () => {
+    const domainEntity = {
+      ID: 'dom-2',
+      Domain: 'sub.example.com',
+      CommunicationProviderID: 'prov-sg',
+      CredentialID: 'cred-42',
+      Status: 'Pending',
+      ProviderDomainID: null as string | null,
+      DNSRecords: null as string | null,
+      Save: vi.fn(async () => true),
+    };
+    mocks.runViewResults = [domainEntity];
+    mocks.getCredentialById.mockReturnValue({ ID: 'cred-42', Name: 'SendGrid Subaccount' });
+    mocks.getCredential.mockResolvedValue({ values: { apiKey: 'SG.subaccount-key' } });
+
+    const createDomainAuth = vi.fn(async () => ({
+      Success: true,
+      ProviderDomainID: 'sg-dom-99',
+      DNSRecords: [],
+    }));
+    mocks.getProvider.mockReturnValue({ CreateDomainAuthentication: createDomainAuth });
+
+    const resolver = new CommsAdminResolver();
+    const res = await resolver.CreateCommsSendingDomain('dom-2', context);
+
+    expect(res.Success).toBe(true);
+    expect(createDomainAuth).toHaveBeenCalledWith({ Domain: 'sub.example.com' }, { apiKey: 'SG.subaccount-key' });
   });
 
   it('VerifyCommsSendingDomain marks domain Verified when provider confirms validation', async () => {
@@ -165,10 +207,13 @@ describe('CommsAdminResolver', () => {
     expect(res.Verified).toBe(true);
     expect(res.Status).toBe('Verified');
     expect(domainEntity.VerifiedAt).toBeInstanceOf(Date);
-    expect(verifyDomainAuth).toHaveBeenCalledWith({
-      ProviderDomainID: 'sg-dom-42',
-      Domain: 'mail.example.com',
-    });
+    expect(verifyDomainAuth).toHaveBeenCalledWith(
+      {
+        ProviderDomainID: 'sg-dom-42',
+        Domain: 'mail.example.com',
+      },
+      undefined,
+    );
   });
 
   it('RevokeCommsSuppression revokes locally, writes audit log, and calls SendGrid RemoveSuppression', async () => {
@@ -235,5 +280,56 @@ describe('CommsAdminResolver', () => {
     expect(res.Decision).toBe('Allowed');
     const parsed = JSON.parse(res.ResultJSON!) as { Decision: string };
     expect(parsed.Decision).toBe('Allowed');
+  });
+
+  it('rejects non-Administrator users on CommsAdminResolver operations', async () => {
+    const nonAdminContext = {
+      userPayload: { userRecord: { ID: 'user-2', Email: 'user@example.com', Type: 'User', UserRoles: [{ Role: 'UI' }] } },
+      providers: [],
+    } as unknown as AppContext;
+
+    const resolver = new CommsAdminResolver();
+    const res = await resolver.CreateCommsSendingDomain('dom-1', nonAdminContext);
+    expect(res.Success).toBe(false);
+    expect(res.ErrorMessage).toContain('Administrator role required');
+  });
+
+  it('RevokeCommsSuppression does not clear downstream SendGrid lists for internal Admin Block', async () => {
+    const suppEntity = {
+      ID: 'supp-admin',
+      CommunicationEndpointID: 'ep-1',
+      CommunicationSenderID: 'sender-1',
+      Reason: 'Admin Block',
+      Status: 'Active',
+      RevokedAt: null as Date | null,
+      Save: vi.fn(async () => true),
+    };
+    const epEntity = { ID: 'ep-1', NormalizedValue: 'blocked@example.com' };
+    const senderEntity = { ID: 'sender-1', CommunicationProviderID: 'prov-sg' };
+    const auditSave = vi.fn(async () => true);
+
+    mocks.getReadWriteProvider.mockReturnValue({
+      GetEntityObject: vi.fn(async (entityName: string) => {
+        if (entityName === 'MJ: Communication Suppressions') {
+          return Object.assign(suppEntity, { Load: vi.fn(async () => true) });
+        }
+        if (entityName === 'MJ: Communication Endpoints') {
+          return Object.assign(epEntity, { Load: vi.fn(async () => true) });
+        }
+        if (entityName === 'MJ: Communication Senders') {
+          return Object.assign(senderEntity, { Load: vi.fn(async () => true) });
+        }
+        return { Save: auditSave };
+      }),
+    });
+
+    const removeSuppression = vi.fn(async () => ({ Success: true }));
+    mocks.getProvider.mockReturnValue({ RemoveSuppression: removeSuppression });
+
+    const resolver = new CommsAdminResolver();
+    const res = await resolver.RevokeCommsSuppression('supp-admin', context);
+
+    expect(res.Success).toBe(true);
+    expect(removeSuppression).not.toHaveBeenCalled();
   });
 });

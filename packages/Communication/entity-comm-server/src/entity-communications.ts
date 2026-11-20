@@ -483,16 +483,16 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
                 ...(sendResult.Outcomes ?? []).map((o) => {
                     const msg = new ProcessedMessageServer(params.Message);
                     msg.To = o.Endpoint?.RawValue ?? '';
-                    const isSkipped = o.Status === 'Blocked';
+                    const isSkipped = o.Status === 'Blocked' || o.Status === 'Deferred';
                     return {
                         RecipientData: { To: o.Endpoint?.RawValue, ContextData: {} },
                         Message: isSkipped ? undefined : msg,
                         Skipped: isSkipped ? true : undefined,
-                        SkipReason: isSkipped ? o.Reason : undefined,
+                        SkipReason: isSkipped ? (o.Reason ?? o.Status) : undefined,
                     };
                 }),
             ];
-            const hasDeliverable = sendResult.QueuedCount > 0 || sendResult.DeferredCount > 0;
+            const hasDeliverable = sendResult.QueuedCount > 0;
             return {
                 Success: sendResult.Success && hasDeliverable,
                 ErrorMessage: sendResult.ErrorMessage ?? '',
@@ -558,17 +558,17 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
             ...(sendResult.Outcomes ?? []).map((o) => {
                 const msg = new ProcessedMessageServer(params.Message);
                 msg.To = o.Endpoint?.RawValue ?? '';
-                const isSkipped = o.Status === 'Blocked';
+                const isSkipped = o.Status === 'Blocked' || o.Status === 'Deferred';
                 return {
                     RecipientData: { To: o.Endpoint?.RawValue, ContextData: {} },
                     Message: isSkipped ? undefined : msg,
                     Skipped: isSkipped ? true : undefined,
-                    SkipReason: isSkipped ? o.Reason : undefined,
+                    SkipReason: isSkipped ? (o.Reason ?? o.Status) : undefined,
                 };
             }),
         ];
 
-        const hasDeliverable = sendResult.QueuedCount > 0 || sendResult.DeferredCount > 0;
+        const hasDeliverable = sendResult.QueuedCount > 0;
         return {
             Success: sendResult.Success && hasDeliverable,
             ErrorMessage: sendResult.ErrorMessage ?? '',

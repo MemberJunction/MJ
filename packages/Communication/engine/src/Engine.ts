@@ -302,19 +302,26 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
                             ? rawClass
                             : 'Transactional';
 
-                    if (channelID && message.To && effectiveUser) {
-                        const gateResult = await this.CheckV1ComplianceGate(
-                            channelID,
-                            message.To,
-                            messageClass,
-                            effectiveUser,
-                        );
-                        if (!gateResult.Allowed) {
-                            const blockMsg = gateResult.Detail ?? gateResult.Reason ?? 'Blocked by compliance gate';
-                            log.Status = 'Failed';
-                            log.ErrorMessage = blockMsg;
-                            await log.Save();
-                            return { Success: false, Error: blockMsg, Message: processedMessage };
+                    if (channelID && effectiveUser) {
+                        const recipientsToCheck = [
+                            ...(message.To ? [message.To] : []),
+                            ...(message.CCRecipients ?? []),
+                            ...(message.BCCRecipients ?? []),
+                        ];
+                        for (const addr of recipientsToCheck) {
+                            const gateResult = await this.CheckV1ComplianceGate(
+                                channelID,
+                                addr,
+                                messageClass,
+                                effectiveUser,
+                            );
+                            if (!gateResult.Allowed) {
+                                const blockMsg = gateResult.Detail ?? gateResult.Reason ?? 'Blocked by compliance gate';
+                                log.Status = 'Failed';
+                                log.ErrorMessage = blockMsg;
+                                await log.Save();
+                                return { Success: false, Error: blockMsg, Message: processedMessage };
+                            }
                         }
                     }
 

@@ -19,11 +19,8 @@ import {
   MJJurisdictionEntity,
   MJJurisdictionMemberEntity,
 } from '@memberjunction/core-entities';
-import {
-  CommunicationEngine,
-  ComplianceGate,
-  JurisdictionResolver,
-} from '@memberjunction/communication-engine';
+import { CommunicationEngine, ComplianceGate, JurisdictionResolver } from '@memberjunction/communication-engine';
+import { CredentialEngine } from '@memberjunction/credentials';
 import type {
   BaseMessageResult,
   MessageClass,
@@ -121,6 +118,16 @@ function hasRemoveSuppression(provider: object): provider is SuppressionRemovabl
   );
 }
 
+function requireCommsAdmin(user: UserInfo | undefined): string | null {
+  if (!user) {
+    return 'Authentication required';
+  }
+  const isAdmin =
+    user.Type === 'Owner' ||
+    (user.UserRoles ?? []).some((ur) => ur.Role.trim().toLowerCase() === 'administrator');
+  return isAdmin ? null : 'Administrator role required for Communications Admin operations';
+}
+
 function mapReasonToSuppressionType(reason: MJCommunicationSuppressionEntity['Reason']): string | undefined {
   switch (reason) {
     case 'Hard Bounce':
@@ -143,10 +150,11 @@ export class CommsAdminResolver {
     @Arg('Input') input: CommsGateSimulationInput,
     @Ctx() context: AppContext,
   ): Promise<CommsGateSimulationResult> {
-    const user = context.userPayload?.userRecord;
-    if (!user) {
-      return { Success: false, ErrorMessage: 'Authentication required' };
+    const authError = requireCommsAdmin(context.userPayload?.userRecord);
+    if (authError) {
+      return { Success: false, ErrorMessage: authError };
     }
+    const user = context.userPayload!.userRecord!;
 
     const mdProvider = GetReadWriteProvider(context.providers) as IMetadataProvider;
     await CommunicationEngine.Instance.Config(false, user, mdProvider);
@@ -296,10 +304,11 @@ export class CommsAdminResolver {
     @Arg('DomainID') domainId: string,
     @Ctx() context: AppContext,
   ): Promise<CommsSendingDomainAuthResult> {
-    const user = context.userPayload?.userRecord;
-    if (!user) {
-      return { Success: false, ErrorMessage: 'Authentication required' };
+    const authError = requireCommsAdmin(context.userPayload?.userRecord);
+    if (authError) {
+      return { Success: false, ErrorMessage: authError };
     }
+    const user = context.userPayload!.userRecord!;
 
     const mdProvider = GetReadWriteProvider(context.providers) as IMetadataProvider;
     await CommunicationEngine.Instance.Config(false, user, mdProvider);
@@ -317,7 +326,8 @@ export class CommsAdminResolver {
     }
 
     const provider = CommunicationEngine.Instance.GetProvider(providerEntity.Name);
-    const result = await provider.CreateDomainAuthentication({ Domain: domain.Domain });
+    const credentials = await this.resolveDomainCredentials(domain, user);
+    const result = await provider.CreateDomainAuthentication({ Domain: domain.Domain }, credentials);
     if (!result.Success) {
       return {
         Success: false,
@@ -351,10 +361,11 @@ export class CommsAdminResolver {
     @Arg('DomainID') domainId: string,
     @Ctx() context: AppContext,
   ): Promise<CommsSendingDomainAuthResult> {
-    const user = context.userPayload?.userRecord;
-    if (!user) {
-      return { Success: false, ErrorMessage: 'Authentication required' };
+    const authError = requireCommsAdmin(context.userPayload?.userRecord);
+    if (authError) {
+      return { Success: false, ErrorMessage: authError };
     }
+    const user = context.userPayload!.userRecord!;
 
     const mdProvider = GetReadWriteProvider(context.providers) as IMetadataProvider;
     await CommunicationEngine.Instance.Config(false, user, mdProvider);
@@ -380,10 +391,14 @@ export class CommsAdminResolver {
     }
 
     const provider = CommunicationEngine.Instance.GetProvider(providerEntity.Name);
-    const result = await provider.VerifyDomainAuthentication({
-      ProviderDomainID: domain.ProviderDomainID,
-      Domain: domain.Domain,
-    });
+    const credentials = await this.resolveDomainCredentials(domain, user);
+    const result = await provider.VerifyDomainAuthentication(
+      {
+        ProviderDomainID: domain.ProviderDomainID,
+        Domain: domain.Domain,
+      },
+      credentials,
+    );
 
     const now = new Date();
     domain.LastVerifiedAt = now;
@@ -421,10 +436,11 @@ export class CommsAdminResolver {
     @Arg('DomainID') domainId: string,
     @Ctx() context: AppContext,
   ): Promise<CommsAdminMutationResult> {
-    const user = context.userPayload?.userRecord;
-    if (!user) {
-      return { Success: false, ErrorMessage: 'Authentication required' };
+    const authError = requireCommsAdmin(context.userPayload?.userRecord);
+    if (authError) {
+      return { Success: false, ErrorMessage: authError };
     }
+    const user = context.userPayload!.userRecord!;
 
     const mdProvider = GetReadWriteProvider(context.providers) as IMetadataProvider;
     await CommunicationEngine.Instance.Config(false, user, mdProvider);
@@ -440,9 +456,11 @@ export class CommsAdminResolver {
       );
       if (providerEntity) {
         const provider = CommunicationEngine.Instance.GetProvider(providerEntity.Name);
-        const delRes = await provider.DeleteDomainAuthentication({
-          ProviderDomainID: domain.ProviderDomainID,
-        });
+        const credentials = await this.resolveDomainCredentials(domain, user);
+        const delRes = await provider.DeleteDomainAuthentication(
+          { ProviderDomainID: domain.ProviderDomainID },
+          credentials,
+        );
         if (!delRes.Success) {
           return { Success: false, ErrorMessage: delRes.ErrorMessage ?? 'Provider failed to delete domain' };
         }
@@ -464,10 +482,11 @@ export class CommsAdminResolver {
     @Arg('SuppressionID') suppressionId: string,
     @Ctx() context: AppContext,
   ): Promise<CommsAdminMutationResult> {
-    const user = context.userPayload?.userRecord;
-    if (!user) {
-      return { Success: false, ErrorMessage: 'Authentication required' };
+    const authError = requireCommsAdmin(context.userPayload?.userRecord);
+    if (authError) {
+      return { Success: false, ErrorMessage: authError };
     }
+    const user = context.userPayload!.userRecord!;
 
     const mdProvider = GetReadWriteProvider(context.providers) as IMetadataProvider;
     await CommunicationEngine.Instance.Config(false, user, mdProvider);
@@ -523,6 +542,10 @@ export class CommsAdminResolver {
 
     const providerEntities = await this.resolveProvidersForSuppression(mdProvider, supp, user);
     const suppressionType = mapReasonToSuppressionType(supp.Reason);
+    if (!suppressionType) {
+      // Internal MJ suppressions (Admin Block, Policy) must not clear genuine provider bounce/spam lists
+      return undefined;
+    }
     const warnings: string[] = [];
 
     for (const pe of providerEntities) {
@@ -572,6 +595,26 @@ export class CommsAdminResolver {
       user,
     );
     return res.Success ? res.Results : [];
+  }
+
+  private async resolveDomainCredentials(
+    domain: MJCommunicationSendingDomainEntity,
+    user: UserInfo,
+  ): Promise<ProviderCredentialsBase | undefined> {
+    if (!domain.CredentialID) {
+      return undefined;
+    }
+    await CredentialEngine.Instance.Config(false, user);
+    const cred = CredentialEngine.Instance.getCredentialById(domain.CredentialID);
+    if (!cred) {
+      return undefined;
+    }
+    const resolved = await CredentialEngine.Instance.GetCredential<{ apiKey?: string; APIKey?: string }>(
+      cred.Name,
+      { contextUser: user, subsystem: 'CommsAdmin' },
+    );
+    const apiKey = resolved.values.apiKey ?? resolved.values.APIKey;
+    return apiKey ? ({ apiKey } as ProviderCredentialsBase) : (resolved.values as ProviderCredentialsBase);
   }
 
   private async loadSendingDomain(

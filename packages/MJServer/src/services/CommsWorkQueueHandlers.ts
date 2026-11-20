@@ -67,13 +67,21 @@ export function ConfigureCommsV2WorkQueue(
         BaseTrackingURL: baseTrackingUrl,
         TrackingHMACSecret: resolvedSecret,
         EnqueueWork: async (taskType, payload) => {
-            await WorkQueueEngine.Instance.Publish(taskType, [{ Payload: payload as WorkJson }]);
+            const results = await WorkQueueEngine.Instance.Publish(taskType, [{ Payload: payload as WorkJson }]);
+            const rejected = results.find((r) => r.Status === 'Rejected');
+            if (rejected) {
+                throw new Error(`WorkQueue publish rejected for '${taskType}' (${rejected.Error?.Code ?? 'Unknown'}): ${rejected.Error?.Message ?? ''}`);
+            }
         },
     });
 
     TemplatedCommunicationService.Instance.Configure({
         EnqueueWork: async (taskType, payload) => {
-            await WorkQueueEngine.Instance.Publish(taskType, [{ Payload: payload as unknown as WorkJson }]);
+            const results = await WorkQueueEngine.Instance.Publish(taskType, [{ Payload: payload as unknown as WorkJson }]);
+            const rejected = results.find((r) => r.Status === 'Rejected');
+            if (rejected) {
+                throw new Error(`WorkQueue publish rejected for '${taskType}' (${rejected.Error?.Code ?? 'Unknown'}): ${rejected.Error?.Message ?? ''}`);
+            }
         },
     });
 }
@@ -91,6 +99,7 @@ export class CommsDispatchWorkHandler extends BaseWorkHandler<CommsDispatchWorkP
         await CommunicationEngine.Instance.Config(false, this.ContextUser);
         const result = await CommunicationEngine.Instance.Send(
             {
+                CommunicationRunID: payload.CommunicationRunID,
                 Envelope: payload.Envelope,
                 Payload: payload.Payload,
                 Recipients: payload.Recipients,
@@ -98,7 +107,9 @@ export class CommsDispatchWorkHandler extends BaseWorkHandler<CommsDispatchWorkP
             this.ContextUser,
         );
         if (!result.Success) {
-            context.Log.Warn(`comms.dispatch completed with failure: ${result.ErrorMessage ?? 'unknown'}`);
+            const reason = result.ErrorMessage ?? 'comms.dispatch send failed';
+            context.Log.Warn(`comms.dispatch failed and will retry: ${reason}`);
+            return Outcome.Retry(reason);
         }
         return Outcome.Complete();
     }
