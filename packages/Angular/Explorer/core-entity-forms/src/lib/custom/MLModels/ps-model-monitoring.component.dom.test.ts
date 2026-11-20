@@ -115,6 +115,11 @@ describe('PSModelMonitoringComponent (DOM)', () => {
     logged.mockRestore();
   });
 
+  it('a period is labelled by its UTC first day in every time zone (a period starting Jan 1 never reads Dec 31)', async () => {
+    const f = await RenderMonitoring({ periods: [P(0)] });
+    expect(Text(f, 'ps-monitoring-period')).toContain('Jan 1, 2026');
+  });
+
   it('a period whose label window is open is listed but not plotted', async () => {
     const open: PeriodDouble = { ...P(6), State: 'window-open', JoinedRows: 0, PrimaryValue: null, PrimaryLower: null, PrimaryUpper: null };
     const f = await RenderMonitoring({ periods: [P(5), open] });

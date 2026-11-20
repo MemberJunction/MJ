@@ -140,7 +140,7 @@ const CHART_PAD = 16;
         @for (period of Periods; track period.ID) {
           <div class="ps-mon-row" data-testid="ps-monitoring-period">
             <div class="ps-mon-line">
-              <strong>{{ period.Period | date: 'mediumDate' }}</strong>
+              <strong>{{ period.Period | date: 'mediumDate' : 'UTC' }}</strong>
               <span class="ps-mon-state">{{ period.State }}</span>
               @if (period.PrimaryValue !== null) {
                 <span class="ps-mon-mono">{{ period.PrimaryValue | number: '1.3-3' }} [{{ period.PrimaryLower | number: '1.3-3' }}, {{ period.PrimaryUpper | number: '1.3-3' }}]</span>
