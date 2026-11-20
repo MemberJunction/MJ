@@ -3,6 +3,12 @@
  * column of the parent and of every child (S9), and refuses an envelope it could not read back.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
+
+// Action authorization has its own tests; here every action is runnable.
+vi.mock('@memberjunction/actions-base', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/actions-base')>()),
+    CheckActionRunAuthorization: async () => null,
+}));
 import { RunView, type IMetadataProvider, type RunViewParams, type UserInfo } from '@memberjunction/core';
 import {
     ParseTaskSecurityEnvelope,

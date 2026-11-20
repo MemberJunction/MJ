@@ -2,7 +2,7 @@ import { Resolver, Mutation, Arg, Ctx } from "type-graphql";
 import { ActionEngineServer } from "@memberjunction/actions";
 import { EntityActionEngineServer } from "@memberjunction/actions";
 import { Metadata, UserInfo, BaseEntity, CompositeKey, KeyValuePair, LogError, RunView, DatabaseProviderBase, EntityInfo, IMetadataProvider } from "@memberjunction/core";
-import { ActionParam, ActionResult, MJActionEntityExtended, ProjectActionParamValuesForUser } from "@memberjunction/actions-base";
+import { ActionParam, ActionResult, EvaluateActionRunAuthorization, IsOwner, MJActionEntityExtended, ProjectActionParamValuesForUser } from "@memberjunction/actions-base";
 import { UserCache } from "@memberjunction/generic-database-provider";
 import { Field, InputType, ObjectType } from "type-graphql";
 import { KeyValuePairInput } from "../generic/KeyValuePairInput.js";
@@ -11,7 +11,6 @@ import { CopyScalarsAndArrays, EscapeSQLString, IndexByUUID, UUIDsEqual } from "
 import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IsScopeLimitedPrincipal } from "../auth/scopeLimitedPrincipal.js";
-import { EvaluateActionRunAuthorization, IsOwner } from "../auth/actionAuthorization.js";
 import { EntityObjectDataBinding, ProjectActionParamsForCaller } from "../generic/actionOutputFieldSecurity.js";
 import type { EntityActionResult } from "@memberjunction/actions-base";
 

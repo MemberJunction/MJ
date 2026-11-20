@@ -3,6 +3,12 @@
  * a node is refused for, who it runs as, and how taint flows from node to node.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
+
+// Action authorization has its own tests; here every action is runnable.
+vi.mock('@memberjunction/actions-base', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/actions-base')>()),
+    CheckActionRunAuthorization: async () => null,
+}));
 import { RunView, ServerOperationScopeManager, type IMetadataProvider, type TenantContext, type UserInfo } from '@memberjunction/core';
 import type { MJTaskEntity } from '@memberjunction/core-entities';
 import {

@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AuthorizationInfo, AuthorizationRoleInfo, Metadata, UserInfo, UserRoleInfo } from '@memberjunction/core';
-import { EvaluateActionRunAuthorization, IsOwner, type AuthorizationMetadata } from '../auth/actionAuthorization.js';
+import { EvaluateActionRunAuthorization, IsOwner, type AuthorizationMetadata } from '../ActionRunAuthorization';
 
 const ANALYST_ROLE = 'A11C0000-0000-4000-8000-0000000000F1';
 const AUDITOR_ROLE = 'A11C0000-0000-4000-8000-0000000000F2';

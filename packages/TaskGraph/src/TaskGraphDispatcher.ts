@@ -63,6 +63,7 @@ import {
 import { DatabaseProviderBase, IMetadataProvider, IRunQueryProvider, LogError, LogStatus, LogWarning, RunView, ServerOperationScopeManager, UserInfo } from '@memberjunction/core';
 import { EscapeSQLString, GroupByUUID, IShutdownable, IndexByUUID, IsValidUUID, ShutdownRegistry, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity, MJAIAgentRequestEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
+import { ActionRunAuthorizer } from './ActionRunAuthorizer';
 import type { MJActionExecutionLogEntity, MJRecordChangeEntity } from '@memberjunction/core-entities';
 import type { MJTaskEntity_ITaskStepConfiguration, MJTaskEntity_ITaskLoopIteration } from '@memberjunction/core-entities';
 import { TaskClaimStore, TERMINAL_PARENT_STATUSES, TERMINAL_PARENT_STATUS_SQL } from './TaskClaimStore';
@@ -263,6 +264,7 @@ import {
     ProviderFactory,
     type ReconciliationEvent,
     TaskActionRunner,
+    type TaskActionRunParams,
     type TaskActionRunResult,
     TaskAgentRunner,
     TaskPromptRunner,
@@ -357,6 +359,11 @@ type GraphContext = {
     Security: NodeSecurity;
     /** The graph's steps record their taint (`TaskGraphParentMetadata.recordsTaint`); true when its parent cannot be read. */
     RecordsTaint: boolean;
+    /**
+     * Decides which actions `ExecutionUser` may run in this graph: the ones the user is authorized for,
+     * and the ones bound to the submitting agent run or durable entity-action binding.
+     */
+    ActionAuthorizer: ActionRunAuthorizer;
 };
 
 /**
@@ -2119,6 +2126,7 @@ export class TaskGraphDispatcher implements IShutdownable {
     ): Promise<GraphContext> {
         let depth = 0;
         let submittingAgentRunID: string | null = null;
+        let entityActionID: string | null = null;
         let invocation: { data?: unknown; context?: unknown } = {};
         let submittedByUserID: string | null | undefined = task.UserID;
         let parentAgentHierarchy: string[] | undefined = undefined;
@@ -2136,6 +2144,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 : ParseTaskGraphParentMetadata(parent?.InputPayload ?? null);
             depth = meta.reinvokeDepth + 1;
             submittingAgentRunID = parent?.AgentRunID ?? meta.submittedByAgentRunID ?? null;
+            entityActionID = meta.submittedByEntityActionID ?? null;
             parentAgentHierarchy = meta.parentAgentHierarchy;
             invocation = { data: meta.invocation?.data, context: meta.invocation?.context };
             submittedByUserID = meta.submittedByUserID ?? parent?.UserID ?? task.UserID;
@@ -2151,6 +2160,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
                     depth = meta.reinvokeDepth + 1;
                     submittingAgentRunID = parent.AgentRunID;
+                    entityActionID = meta.submittedByEntityActionID ?? null;
                     parentAgentHierarchy = meta.parentAgentHierarchy;
                     invocation = { data: meta.invocation?.data, context: meta.invocation?.context };
                     submittedByUserID = meta.submittedByUserID ?? parent.UserID ?? task.UserID;
@@ -2174,14 +2184,21 @@ export class TaskGraphDispatcher implements IShutdownable {
         // user), which every other task shares: the caller's tenant goes on a per-task clone, never
         // on that instance (see CloneUserWithTenantContext).
         const tenant = 'Envelope' in security ? security.Envelope?.CallerTenantContext : undefined;
+        const executionUser = tenant ? CloneUserWithTenantContext(submitter, tenant, provider) : submitter;
         return {
             Depth: depth,
             SubmittingAgentRunID: submittingAgentRunID,
             ParentAgentHierarchy: parentAgentHierarchy,
             Invocation: invocation,
-            ExecutionUser: tenant ? CloneUserWithTenantContext(submitter, tenant, provider) : submitter,
+            ExecutionUser: executionUser,
             Security: security,
             RecordsTaint: recordsTaint,
+            ActionAuthorizer: new ActionRunAuthorizer(
+                { AgentRunID: submittingAgentRunID, EntityActionID: entityActionID },
+                executionUser,
+                provider,
+                this.contextUser,
+            ),
         };
     }
 
@@ -4328,7 +4345,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     provider,
                     effectiveInput,
                     dependencyOutputs,
-                    context.ExecutionUser,
+                    context,
                     onProgress,
                     effectiveEnvelope,
                 ),
@@ -4359,20 +4376,34 @@ export class TaskGraphDispatcher implements IShutdownable {
         provider: IMetadataProvider,
         effectiveInput: Record<string, unknown>,
         dependencyOutputs: Map<string, unknown>,
-        executionUser: UserInfo,
+        context: Pick<GraphContext, 'ExecutionUser' | 'ActionAuthorizer'>,
         onProgress?: TaskRunProgressCallback,
         effectiveEnvelope?: TaskSecurityEnvelope,
     ): Promise<TaskActionRunResult> {
-        return this.actionRunner!.RunActionForTask({
+        return this.runAuthorizedAction({
             TaskID: task.ID,
             ActionID: task.ActionID!,
             InputPayload: effectiveInput,
             DependencyOutputs: dependencyOutputs,
             Provider: provider,
-            ContextUser: executionUser,
+            ContextUser: context.ExecutionUser,
             OnProgress: onProgress,
             ...(effectiveEnvelope ? { SecurityEnvelope: effectiveEnvelope } : {}),
-        });
+        }, context.ActionAuthorizer);
+    }
+
+    /**
+     * Runs one action through the action runner when `authorizer` allows it; otherwise returns a
+     * failed result and runs nothing. Every action step, loop body and loop step runs through here.
+     */
+    private async runAuthorizedAction(params: TaskActionRunParams, authorizer: ActionRunAuthorizer): Promise<TaskActionRunResult> {
+        const refusal = await authorizer.Refusal([params.ActionID]);
+        if (refusal) {
+            const message = `Action ${refusal.ActionID} was not run: ${refusal.Reason}`;
+            LogError(`[TaskGraphDispatcher] Task ${params.TaskID}: ${message}`);
+            return { Success: false, ErrorMessage: message };
+        }
+        return this.actionRunner!.RunActionForTask(params);
     }
 
     /**
@@ -5110,6 +5141,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     dependencyOutputs,
                     provider: executionProvider,
                     executionUser: graphContext.ExecutionUser,
+                    actionAuthorizer: graphContext.ActionAuthorizer,
                     invocation: graphContext.Invocation,
                     iterationTrace,
                     budget,
@@ -5218,7 +5250,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             }
 
             if (task.ActionID) {
-                return absorb(await this.actionRunner!.RunActionForTask({
+                return absorb(await this.runAuthorizedAction({
                     TaskID: task.ID,
                     ActionID: task.ActionID,
                     InputPayload: resolved,
@@ -5226,7 +5258,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     Provider: executionProvider,
                     ContextUser: graphContext.ExecutionUser,
                     ...(envelope ? { SecurityEnvelope: envelope } : {}),
-                }), resolved);
+                }, graphContext.ActionAuthorizer), resolved);
             }
 
             const agentInput = Object.keys(resolved).length > 0 ? resolved : iterationPayload;
@@ -5357,6 +5389,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         dependencyOutputs: Map<string, unknown>;
         provider: IMetadataProvider;
         executionUser: UserInfo;
+        actionAuthorizer: ActionRunAuthorizer;
         invocation: { data?: unknown; context?: unknown };
         iterationTrace: MJTaskEntity_ITaskLoopIteration[];
         budget: IterationPayloadBudget;
@@ -5366,7 +5399,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         const {
             task, op, steps, stepActionIds, index, bindings,
             getLivePayload, setLivePayload, deferLivePayloadFold, deferredFoldsByIndex,
-            dependencyOutputs, provider, executionUser, invocation, iterationTrace, budget,
+            dependencyOutputs, provider, executionUser, actionAuthorizer, invocation, iterationTrace, budget,
             securityEnvelope, onIterationTainted,
         } = args;
 
@@ -5455,7 +5488,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 };
             }
 
-            const actionOutcome = await this.actionRunner!.RunActionForTask({
+            const actionOutcome = await this.runAuthorizedAction({
                 TaskID: task.ID,
                 ActionID: actionId,
                 InputPayload: resolvedParams,
@@ -5463,7 +5496,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 Provider: provider,
                 ContextUser: executionUser,
                 ...(stepEnvelope ? { SecurityEnvelope: stepEnvelope } : {}),
-            });
+            }, actionAuthorizer);
             if (actionOutcome.ActionLogID) {
                 lastActionLogID = actionOutcome.ActionLogID;
             }

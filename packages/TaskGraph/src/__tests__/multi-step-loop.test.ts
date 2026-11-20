@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+
+// Action authorization has its own tests; here every action is runnable.
+vi.mock('@memberjunction/actions-base', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/actions-base')>()),
+    CheckActionRunAuthorization: async () => null,
+}));
 import { RunView, type IMetadataProvider, type RunViewParams, type UserInfo } from '@memberjunction/core';
 import type { ActionResult, MJActionEntityExtended } from '@memberjunction/actions-base';
 import type { MJTaskEntity, MJTaskEntity_ITaskLoopIteration } from '@memberjunction/core-entities';

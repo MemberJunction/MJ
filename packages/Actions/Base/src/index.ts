@@ -7,6 +7,7 @@ export * from './ParamRedaction';
 export * from './ActionParamFieldSecurity';
 export * from './EntityActionScopeResolver';
 export * from './MJActionEntityExtended';
+export * from './ActionRunAuthorization';
 
 export * from './EntityActionEngine-Base';
 export * from './MJEntityActionEntityExtended';

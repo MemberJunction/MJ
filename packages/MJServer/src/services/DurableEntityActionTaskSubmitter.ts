@@ -62,10 +62,13 @@ export class DurableEntityActionTaskSubmitter implements DurableEntityActionSubm
             const provider: IMetadataProvider = isMetadataProvider(request.Provider)
                 ? request.Provider
                 : await this.providerFactory.CreateProvider();
+            // The binding's own action runs for any user whose save fires it, so it needs no
+            // authorization of the saving user; every other action in the graph still does.
             const result = await new TaskGraphService().Submit(spec, {
                 EnvironmentID: this.environmentID,
                 ContextUser: request.ContextUser,
                 Provider: provider,
+                EntityActionID: request.EntityActionID,
             });
 
             return result.Success

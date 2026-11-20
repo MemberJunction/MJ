@@ -1,4 +1,4 @@
-import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { ActionParam, ActionResultSimple, CheckActionRunAuthorization, IsOwner, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { LogError, Metadata } from '@memberjunction/core';
@@ -13,10 +13,13 @@ import { ActionEngineServer } from '@memberjunction/actions';
  *
  * The action being tested can be:
  *   - An existing Runtime action record (identified by ActionID or Name)
+ *     that the caller is authorized to run (`CheckActionRunAuthorization`)
  *   - A freshly-generated code payload that hasn't been persisted yet
  *     (Code + RuntimeActionConfiguration passed directly, no DB record
- *     required). This path uses a throwaway in-memory MJActionEntity with
- *     CodeApprovalStatus='Approved' so the executor permits it.
+ *     required). This path uses a throwaway in-memory MJActionEntity and runs
+ *     only for an Owner-type caller; anyone else gets OWNER_REQUIRED. The
+ *     `allowAny*` permissions of the supplied configuration are always
+ *     turned off.
  *
  * Test cases are evaluated in sequence; expected outputs (if provided) are
  * compared to actual outputs with structural deep equality.
@@ -52,7 +55,12 @@ export class TestRuntimeActionAction extends BaseAction {
                         `No action matches ${actionId ? `ID '${actionId}'` : `Name '${actionName}'`}.`
                     );
                 }
+                const refusal = await this.refuseExistingAction(params, actionRecord);
+                if (refusal) return refusal;
             } else if (inlineCode && inlineConfig) {
+                if (!IsOwner(params.ContextUser)) {
+                    return fail('OWNER_REQUIRED', 'Inline code can be tested only by an Owner. Ask an Owner to run this test.');
+                }
                 actionRecord = await this.buildEphemeralAction(
                     params,
                     inlineCode,
@@ -143,10 +151,23 @@ export class TestRuntimeActionAction extends BaseAction {
     }
 
     /**
+     * Why the existing action may not be tested, or null when it may: it must be a Runtime action that
+     * the caller is authorized to run.
+     */
+    private async refuseExistingAction(params: RunActionParams, action: MJActionEntity): Promise<ActionResultSimple | null> {
+        if (action.Type !== 'Runtime') {
+            return fail('NOT_RUNTIME_ACTION', `Action '${action.Name}' is not a Runtime action, so it cannot be tested here.`);
+        }
+        const provider = params.Provider ?? Metadata.Provider;
+        const refusal = await CheckActionRunAuthorization([action.ID], params.ContextUser, provider);
+        return refusal ? fail('NOT_AUTHORIZED', `You are not authorized to run action '${action.Name}'. ${refusal.Reason}`) : null;
+    }
+
+    /**
      * Builds an in-memory MJActionEntity instance pre-populated with the
-     * supplied inline code + config, flagged as Approved so the executor's
-     * approval gate lets it through. This record is NOT saved — it only
-     * exists for the duration of this action.
+     * supplied inline code + config, Approved, with the config's `allowAny*`
+     * permissions turned off. Call it only for an Owner-type caller.
+     * This record is NOT saved — it only exists for the duration of this action.
      */
     private async buildEphemeralAction(
         params: RunActionParams,
@@ -167,7 +188,7 @@ export class TestRuntimeActionAction extends BaseAction {
         entity.Status = 'Active';
         entity.CodeApprovalStatus = 'Approved';
         // Typed accessor handles JSON serialization.
-        entity.RuntimeActionConfigurationObject = config as never;
+        entity.RuntimeActionConfigurationObject = withoutAllowAnyPermissions(config) as never;
         return entity;
     }
 
@@ -288,6 +309,18 @@ interface CaseResult {
     output: Record<string, unknown>;
     expectedOutput: Record<string, unknown> | null;
     elapsedMs: number;
+}
+
+/** A copy of the configuration whose `allowAnyEntity`, `allowAnyAction` and `allowAnyAgent` permissions are off. */
+function withoutAllowAnyPermissions(config: Record<string, unknown>): Record<string, unknown> {
+    const permissions = config.permissions;
+    if (!permissions || typeof permissions !== 'object' || Array.isArray(permissions)) {
+        return config;
+    }
+    return {
+        ...config,
+        permissions: { ...(permissions as Record<string, unknown>), allowAnyEntity: false, allowAnyAction: false, allowAnyAgent: false },
+    };
 }
 
 function fail(resultCode: string, message: string): ActionResultSimple {
