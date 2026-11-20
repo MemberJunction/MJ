@@ -53,6 +53,94 @@ const RERENDER_INPUTS = new Set([
 ]);
 
 /**
+ * Linear O(N) non-regex CommonMark fence scanner that reports whether `markdown`
+ * ends inside an unclosed fenced `mermaid` code block (e.g. mid-stream before the
+ * closing ```` ``` ```` or `~~~` arrives). Used to avoid rendering and error-flashing
+ * half-streamed Mermaid diagrams on every streamed chunk.
+ */
+export function HasUnclosedTrailingMermaidFence(markdown: string): boolean {
+  if (!markdown || (!markdown.includes('`') && !markdown.includes('~'))) {
+    return false;
+  }
+
+  let inFence = false;
+  let fenceChar = 0; // 96 ('`') or 126 ('~')
+  let fenceLen = 0;
+  let fenceLang = '';
+
+  const len = markdown.length;
+  let lineStart = 0;
+
+  while (lineStart < len) {
+    const nlIdx = markdown.indexOf('\n', lineStart);
+    const rawLineEnd = nlIdx === -1 ? len : nlIdx;
+    const lineEnd = rawLineEnd > lineStart && markdown.charCodeAt(rawLineEnd - 1) === 13 ? rawLineEnd - 1 : rawLineEnd;
+
+    // CommonMark allows 0–3 leading spaces before a code fence (4+ is an indented code block)
+    let pos = lineStart;
+    let spaces = 0;
+    while (pos < lineEnd && markdown.charCodeAt(pos) === 32 && spaces < 4) {
+      pos++;
+      spaces++;
+    }
+
+    if (spaces < 4 && pos < lineEnd) {
+      const ch = markdown.charCodeAt(pos);
+      if (!inFence) {
+        if (ch === 96 || ch === 126) {
+          let run = 0;
+          while (pos + run < lineEnd && markdown.charCodeAt(pos + run) === ch) {
+            run++;
+          }
+          if (run >= 3) {
+            const info = markdown.slice(pos + run, lineEnd);
+            // CommonMark §4.5: backtick fence info strings cannot contain backticks
+            if (ch !== 96 || !info.includes('`')) {
+              inFence = true;
+              fenceChar = ch;
+              fenceLen = run;
+              const trimmedInfo = info.trim();
+              let langEnd = 0;
+              while (langEnd < trimmedInfo.length && trimmedInfo.charCodeAt(langEnd) > 32) {
+                langEnd++;
+              }
+              fenceLang = trimmedInfo.slice(0, langEnd).toLowerCase();
+            }
+          }
+        }
+      } else if (ch === fenceChar) {
+        let run = 0;
+        while (pos + run < lineEnd && markdown.charCodeAt(pos + run) === fenceChar) {
+          run++;
+        }
+        if (run >= fenceLen) {
+          let trailing = pos + run;
+          while (
+            trailing < lineEnd &&
+            (markdown.charCodeAt(trailing) === 32 || markdown.charCodeAt(trailing) === 9)
+          ) {
+            trailing++;
+          }
+          if (trailing === lineEnd) {
+            inFence = false;
+            fenceChar = 0;
+            fenceLen = 0;
+            fenceLang = '';
+          }
+        }
+      }
+    }
+
+    if (nlIdx === -1) {
+      break;
+    }
+    lineStart = nlIdx + 1;
+  }
+
+  return inFence && fenceLang === 'mermaid';
+}
+
+/**
  * Angular component for rendering markdown content.
  *
  * Features:
@@ -374,6 +462,13 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   @Input() OpenLinksInNewTab: boolean = false;
 
   /**
+   * Indicates that `Data` is actively streaming in chunks. While `true`, an unclosed trailing
+   * ```` ```mermaid ```` fence is held as calm source code instead of being fed half-written to
+   * Mermaid on every chunk (which otherwise flickers between partial SVGs and error banners).
+   */
+  @Input() IsStreaming: boolean = false;
+
+  /**
    * Emitted when rendering is complete
    */
   @Output() Rendered = new EventEmitter<MarkdownRenderEvent>();
@@ -469,6 +564,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   private prefixHeadingTexts: Set<string> = new Set<string>();
   private currentHeadingList: HeadingInfo[] = [];
   private streamingFallbackForced: boolean = false;
+  private deferredStreamingMermaid: boolean = false;
   private containerElement: HTMLElement | null = null;
   private pendingRenderMarkdown: string | null = null;
 
@@ -495,6 +591,18 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
         this.resetStreamingState();
       }
       this.render();
+    } else if (changes['IsStreaming'] && !this.IsStreaming && this.deferredStreamingMermaid) {
+      // Streaming ended while a trailing mermaid fence was still unclosed — release the guard
+      // so the final block renders (or shows its diagnostic) without waiting for another Data change.
+      this.deferredStreamingMermaid = false;
+      const container = this.getContainer();
+      if (container) {
+        container.querySelectorAll('[data-mermaid-streaming="true"]').forEach((el) => {
+          el.removeAttribute('data-mermaid-streaming');
+        });
+        const seq = ++this.renderSeq;
+        Promise.resolve().then(() => this.postRenderProcessing(seq));
+      }
     }
   }
 
@@ -544,6 +652,37 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     this.prefixHeadingTexts.clear();
     this.currentHeadingList = [];
     this.streamingFallbackForced = false;
+    this.deferredStreamingMermaid = false;
+  }
+
+  /**
+   * Marks an unclosed trailing Mermaid fence as still streaming (so Mermaid does not render
+   * half-written syntax or flash error banners mid-stream) and synchronously swaps any already-cached
+   * completed Mermaid SVGs into the DOM before the browser paints.
+   */
+  private prepareMermaidBlocksForPaint(container: HTMLElement, markdown: string, isIncrementalFrame: boolean): void {
+    if (!this.EnableMermaid || !this.hasMermaid) {
+      this.deferredStreamingMermaid = false;
+      return;
+    }
+
+    const shouldDeferTrailing =
+      (this.IsStreaming || isIncrementalFrame) && HasUnclosedTrailingMermaidFence(markdown);
+    this.deferredStreamingMermaid = shouldDeferTrailing;
+
+    if (shouldDeferTrailing) {
+      const blocks = container.querySelectorAll('pre > code.language-mermaid');
+      if (blocks.length > 0) {
+        const lastBlock = blocks[blocks.length - 1];
+        lastBlock.setAttribute('data-mermaid-streaming', 'true');
+        lastBlock.parentElement?.setAttribute('data-mermaid-streaming', 'true');
+      }
+    }
+
+    // Swap any already-rendered closed Mermaid blocks synchronously from the LRU cache so
+    // full re-renders (e.g. stream completion enabling collapsible headings, or virtualized
+    // message remount on scroll) never flash back to raw `<pre><code>` for a frame.
+    this.markdownService.ApplyCachedMermaid(container);
   }
 
   private buildConfig(): MarkdownConfig {
@@ -797,6 +936,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
       this.RenderedContent = this.sanitizer.bypassSecurityTrustHtml(html);
     }
 
+    this.prepareMermaidBlocksForPaint(container, markdown, false);
     this.lastRenderedMarkdown = markdown;
     this.cdr.markForCheck();
     Promise.resolve().then(() => this.postRenderProcessing(seq));
@@ -901,6 +1041,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
 
     const fullHtml = this.committedPrefixHtml + tailHtml;
     this.updateContentFlags(fullHtml);
+    this.prepareMermaidBlocksForPaint(container, markdown, true);
     this.RenderedContent = this.sanitizer.bypassSecurityTrustHtml(fullHtml);
     this.lastRenderedMarkdown = markdown;
 

@@ -343,4 +343,36 @@ describe('MessageListComponent — DOM unmount', () => {
     expect(unsubscribed.length).toBeGreaterThanOrEqual(20 * 20);
   });
 
+  it('skips updateMessages completely on scroll frames when the mounted window has not moved', () => {
+    const messages = Array.from({ length: 12 }, (_, i) => detail(`d-${i}`, i + 1));
+    const h = createHarness(messages);
+
+    // Mount all 12 items initially
+    h.open['computeMountedRange'] = (t: unknown[]) => ({ start: 0, end: t.length - 1 });
+    invokePrivate(h.component, 'updateMessages', messages);
+
+    const updateSpy = vi.fn();
+    h.open['updateMessages'] = updateSpy;
+
+    // Scrolling within the mounted window must be a complete no-op (no 60fps detectChanges storm)
+    invokePrivate(h.component, 'syncMountedWindowOnScroll');
+    invokePrivate(h.component, 'syncMountedWindowOnScroll');
+    expect(updateSpy).not.toHaveBeenCalled();
+
+    // Once the computed range shifts so an item needs to unmount into a spacer, updateMessages runs
+    h.open['computeMountedRange'] = () => ({ start: 4, end: 11 });
+    invokePrivate(h.component, 'syncMountedWindowOnScroll');
+    expect(updateSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps message-item mj-markdown streaming-friendly by disabling collapsible headings and forwarding IsStreaming while in progress', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const { dirname, resolve } = await import('node:path');
+    const dir = dirname(fileURLToPath(import.meta.url));
+    const html = readFileSync(resolve(dir, '../lib/components/message/message-item.component.html'), 'utf8');
+    expect(html).toContain('[IsStreaming]="IsStreaming || IsInProgressAIMessage"');
+    expect(html).toContain('[enableCollapsibleHeadings]="!IsStreaming && !IsInProgressAIMessage"');
+  });
+
 });

@@ -229,6 +229,75 @@ describe('MarkdownService (DOM)', () => {
       expect(renderedHtml).not.toContain('javascript:');
       expect(renderedHtml).toContain('OK');
     });
+
+    it('caches sanitized Mermaid SVGs by theme + code and applies them synchronously via ApplyCachedMermaid', async () => {
+      let renderCalls = 0;
+      const fakeMermaid: Partial<Mermaid> = {
+        initialize: vi.fn(),
+        render: async (_id, code) => {
+          renderCalls++;
+          return { svg: `<svg data-call="${renderCalls}"><text>${code.trim()}</text></svg>`, diagramType: 'flowchart' };
+        },
+      };
+      stubLoader(async () => fakeMermaid as Mermaid);
+
+      const first = containerWith('<pre><code class="language-mermaid">flowchart TD\nA-->B</code></pre>');
+      expect(await service.RenderMermaid(first)).toBe(true);
+      expect(renderCalls).toBe(1);
+      expect(first.querySelector('.mermaid-diagram svg')?.getAttribute('data-call')).toBe('1');
+
+      // Second container with the exact same diagram swaps synchronously without invoking mermaid.render again
+      const second = containerWith('<pre><code class="language-mermaid">flowchart TD\nA-->B</code></pre>');
+      const hasUncached = service.ApplyCachedMermaid(second);
+      expect(hasUncached).toBe(false);
+      expect(second.querySelector('.mermaid-diagram svg')?.getAttribute('data-call')).toBe('1');
+      expect(second.querySelector('pre')).toBeNull();
+      expect(renderCalls).toBe(1);
+
+      // Switching theme misses the cached entry and re-renders for the new theme
+      service.ConfigureMarked({ mermaidTheme: 'dark' });
+      const darkContainer = containerWith('<pre><code class="language-mermaid">flowchart TD\nA-->B</code></pre>');
+      expect(service.ApplyCachedMermaid(darkContainer)).toBe(true);
+      expect(await service.RenderMermaid(darkContainer)).toBe(true);
+      expect(renderCalls).toBe(2);
+      expect(darkContainer.querySelector('.mermaid-diagram svg')?.getAttribute('data-call')).toBe('2');
+    });
+
+    it('skips blocks marked data-mermaid-streaming="true" without loading mermaid or flashing errors', async () => {
+      let loads = 0;
+      stubLoader(async () => {
+        loads++;
+        throw new Error('must not load mermaid for streaming unclosed fence');
+      });
+
+      const container = containerWith(
+        '<pre data-mermaid-streaming="true"><code class="language-mermaid" data-mermaid-streaming="true">flowchart TD\nA --></code></pre>',
+      );
+      expect(service.ApplyCachedMermaid(container)).toBe(false);
+      expect(await service.RenderMermaid(container)).toBe(false);
+      expect(loads).toBe(0);
+      expect(container.querySelector('.mermaid-error')).toBeNull();
+    });
+
+    it('discards stale async mermaid results when the target block was replaced while rendering', async () => {
+      let resolveRender!: (value: { svg: string; diagramType: string }) => void;
+      const fakeMermaid: Partial<Mermaid> = {
+        initialize: vi.fn(),
+        render: () => new Promise((resolve) => { resolveRender = resolve; }),
+      };
+      stubLoader(async () => fakeMermaid as Mermaid);
+
+      const container = containerWith('<pre><code class="language-mermaid">flowchart TD\nA-->B</code></pre>');
+      const pending = service.RenderMermaid(container);
+
+      // Simulate a newer streamed chunk replacing the container DOM while mermaid.render() is in flight
+      await Promise.resolve();
+      container.innerHTML = '<p>Updated chunk</p>';
+      resolveRender({ svg: '<svg><text>Stale</text></svg>', diagramType: 'flowchart' });
+      await pending;
+
+      expect(container.innerHTML).toBe('<p>Updated chunk</p>');
+    });
   });
 
   describe('RenderMath', () => {

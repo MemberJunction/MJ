@@ -3,7 +3,9 @@ import { Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
-import { MarkdownComponent, type ImageClickedEventArgs } from './markdown.component';
+import { MarkdownComponent, HasUnclosedTrailingMermaidFence, type ImageClickedEventArgs } from './markdown.component';
+import { MarkdownService } from '../services/markdown.service';
+import type { Mermaid } from 'mermaid';
 import { MarkdownModule } from '../markdown.module';
 import { MarkdownRenderEvent } from '@memberjunction/markdown-core';
 
@@ -782,6 +784,112 @@ describe('MarkdownComponent (DOM)', () => {
       await Promise.resolve();
 
       expect(container(streamFixture).innerHTML.trim()).toBe(container(fullFixture).innerHTML.trim());
+    });
+
+    it('HasUnclosedTrailingMermaidFence detects unclosed mermaid fences without false positives', () => {
+      expect(HasUnclosedTrailingMermaidFence('')).toBe(false);
+      expect(HasUnclosedTrailingMermaidFence('```mermaid\nflowchart TD\n  A-->B\n```')).toBe(false);
+      expect(HasUnclosedTrailingMermaidFence('```mermaid\nflowchart TD\n  A-->B')).toBe(true);
+      expect(HasUnclosedTrailingMermaidFence('```Mermaid\nflowchart TD\n  A -->')).toBe(true);
+      expect(HasUnclosedTrailingMermaidFence('~~~mermaid\nflowchart TD\n  A-->B')).toBe(true);
+      expect(HasUnclosedTrailingMermaidFence('```ts\nconst x = 1;')).toBe(false);
+      expect(HasUnclosedTrailingMermaidFence('    ```mermaid\nflowchart TD\nA-->B')).toBe(false);
+      expect(
+        HasUnclosedTrailingMermaidFence('```mermaid\nflowchart TD\nA-->B\n```\n\n```mermaid\nflowchart LR\nC-->'),
+      ).toBe(true);
+      expect(
+        HasUnclosedTrailingMermaidFence('````markdown\n```mermaid\nflowchart TD\nA-->B\n````'),
+      ).toBe(false);
+    });
+
+    it('holds an unclosed streaming mermaid flowchart without flickering, renders once on close, and stays flicker-free across trailing stream chunks and stream-end re-render', async () => {
+      const f = render({ data: '', IsStreaming: true, enableCollapsibleHeadings: false });
+      const service = TestBed.inject(MarkdownService);
+      let renderCalls = 0;
+      const fakeMermaid: Partial<Mermaid> = {
+        initialize: vi.fn(),
+        render: async (_id, code) => {
+          renderCalls++;
+          return { svg: `<svg data-flow="${renderCalls}"><text>${code.trim()}</text></svg>`, diagramType: 'flowchart' };
+        },
+      };
+      (service as unknown as { loadMermaid: () => Promise<Mermaid> }).loadMermaid = async () => fakeMermaid as Mermaid;
+
+      const c = container(f);
+
+      // Chunk 1: Opening mermaid flowchart (unclosed) — must NOT call mermaid.render or flash .mermaid-error
+      f.componentRef.setInput('data', '# Workflow\n\n```mermaid\nflowchart TD\n  A[Start] --> B[Check]');
+      f.detectChanges();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(renderCalls).toBe(0);
+      expect(c.querySelector('.mermaid-error')).toBeNull();
+      expect(c.querySelector('pre[data-mermaid-streaming="true"]')).not.toBeNull();
+
+      // Chunk 2: Mid-edge incomplete syntax — still must NOT call mermaid.render or flash .mermaid-error
+      f.componentRef.setInput('data', '# Workflow\n\n```mermaid\nflowchart TD\n  A[Start] --> B[Check]\n  B -->');
+      f.detectChanges();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(renderCalls).toBe(0);
+      expect(c.querySelector('.mermaid-error')).toBeNull();
+
+      // Chunk 3: Closing fence arrives — renders ONCE cleanly
+      const closedFlow = '# Workflow\n\n```mermaid\nflowchart TD\n  A[Start] --> B[Check]\n  B --> C[Done]\n```';
+      f.componentRef.setInput('data', closedFlow);
+      f.detectChanges();
+      await vi.waitFor(() => expect(c.querySelector('.mermaid-diagram svg')).not.toBeNull());
+      expect(renderCalls).toBe(1);
+
+      // Chunk 4: Trailing prose begins streaming — flowchart graduates to committed prefix with ZERO flash
+      f.componentRef.setInput('data', `${closedFlow}\n\nNext steps:`);
+      f.detectChanges();
+      // Synchronously present BEFORE any microtask flush!
+      const stableDiagram = c.querySelector('.mermaid-diagram');
+      expect(stableDiagram).not.toBeNull();
+      expect(c.querySelector('pre code.language-mermaid')).toBeNull();
+
+      // Chunk 5: More prose streams — committed flowchart DOM node is strictly === identical
+      f.componentRef.setInput('data', `${closedFlow}\n\nNext steps: review and approve.`);
+      f.detectChanges();
+      expect(c.querySelector('.mermaid-diagram')).toBe(stableDiagram);
+      expect(renderCalls).toBe(1);
+
+      // Stream ends: IsStreaming -> false, enableCollapsibleHeadings -> true (triggers full render)
+      // Cached SVG MUST already be in DOM synchronously before microtask flush — ZERO flash back to <pre><code>!
+      f.componentRef.setInput('IsStreaming', false);
+      f.componentRef.setInput('enableCollapsibleHeadings', true);
+      f.detectChanges();
+      expect(c.querySelector('.mermaid-diagram svg')).not.toBeNull();
+      expect(c.querySelector('pre code.language-mermaid')).toBeNull();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(renderCalls).toBe(1);
+    });
+
+    it('releases the streaming deferral when IsStreaming turns false on an unclosed mermaid block', async () => {
+      const f = render({ data: '```mermaid\nflowchart TD\n  A-->B', IsStreaming: true });
+      const service = TestBed.inject(MarkdownService);
+      let renderCalls = 0;
+      const fakeMermaid: Partial<Mermaid> = {
+        initialize: vi.fn(),
+        render: async () => {
+          renderCalls++;
+          return { svg: '<svg><text>Final</text></svg>', diagramType: 'flowchart' };
+        },
+      };
+      (service as unknown as { loadMermaid: () => Promise<Mermaid> }).loadMermaid = async () => fakeMermaid as Mermaid;
+
+      const c = container(f);
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(renderCalls).toBe(0);
+
+      // Stream finishes even without closing fence -> now renders
+      f.componentRef.setInput('IsStreaming', false);
+      f.detectChanges();
+      await vi.waitFor(() => expect(c.querySelector('.mermaid-diagram svg')).not.toBeNull());
+      expect(renderCalls).toBe(1);
     });
   });
 });
