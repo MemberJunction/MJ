@@ -10870,6 +10870,10 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
 - **D4-263 · M8 lists two open deferrals, not four** (M8 final pass). Task M8.5's exit-test line "four deferrals
   listed with their expiries" predates D4-69, which removed OF4-1, OF4-2 and OF4-4 from D4-50's list; §10 lists OF4-5
   (expiry PR 6) and OF4-3 (out of scope, no deferred work), and Task M8.4 Step 4's `grep -c "expiry"` → 1 holds.
+- **D4-264 · The harness's failed-counts pattern is bounded; no gate suite re-runs for it** (M8 final pass, CodeQL on
+  PR #6517). `HarnessScoring.FAILED_COUNTS` is linear now (each count at most ten digits after a non-digit); every
+  message the scoring service writes (`N of M records failed`, counts far below ten digits) parses as before, so per
+  D4-87/D-084 the gate chain already running on the final head is not restarted; the DB lane and the harness run after.
 - **D-086 · Program process ruling (owner, 2026-11-16).** Fix rounds are capped at two per task, Minor/Nit findings are
   parked and fixed in one batch at the milestone exit self-audit (Important at once); no scoped re-review for nit-only
   rounds; reviewers verify by reading and targeted runs (the DB-lane case, the mutation, the runtime proof) and do not
@@ -13404,6 +13408,10 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   → PR body edited, `gen:head` `8ac973c228`; `npm run check:changeset` → exit 0 (minor, 1 changeset); `changeset-file`
   ok in milestone-exit; `gen:gates` **29**, `gen:checks` **29**; the PR body's `Mutation` count 1, `expiry` count 1, and
   its five generated values equal §10's.
+- CI on `614a1d8bd6`: CodeQL red, one high alert `js/polynomial-redos` at `TruthSuite/src/harness/score.ts:72`
+  (`HarnessScoring.FAILED_COUNTS`, `/(\d+) of (\d+) records failed/` over a server message). Test first
+  (`harness/__tests__/score-attempt.test.ts`: a 200 000-digit message took 23 610 ms, red) → the counts are
+  `(?<!\d)(\d{1,10})` → 3/3 green in 3 ms; TruthSuite 28/190 (D4-264).
 
 ## 12. Refresh log (append-only)
 

@@ -143,8 +143,11 @@ export class HarnessScoring {
 
   /** The scoring run a refusal's message names (`… (scoring run <id>…`). */
   private static readonly RUN_IN_MESSAGE = /scoring run ([0-9A-Fa-f-]{36})/;
-  /** A failed run's counts in its message (`<failed> of <total> records failed`). */
-  private static readonly FAILED_COUNTS = /(\d+) of (\d+) records failed/;
+  /**
+   * A failed run's counts in its message (`<failed> of <total> records failed`). Each count is at most ten digits and
+   * starts after a non-digit, so the match stays linear on a message holding a long digit run (CodeQL js/polynomial-redos).
+   */
+  private static readonly FAILED_COUNTS = /(?<!\d)(\d{1,10}) of (\d{1,10}) records failed/;
 
   /** Create an on-demand scoring Record Process, run it now, and read back all `MJ: Process Run Details` rows. */
   public static async ScoreViaRecordProcess(
