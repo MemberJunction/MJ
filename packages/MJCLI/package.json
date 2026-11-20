@@ -95,6 +95,7 @@
     "fs-extra": "^11.3.3",
     "mssql": "^11.0.1",
     "ora-classic": "^5.4.2",
+    "parse5": "^8.0.0",
     "pg": "^8.13.1",
     "pg-query-stream": "~4.8.0",
     "recast": "^0.23.11",
