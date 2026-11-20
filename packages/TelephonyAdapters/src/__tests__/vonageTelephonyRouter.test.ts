@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
 import type { IncomingMessage } from 'node:http';
 import type { Request, Response } from 'express';
@@ -15,9 +15,12 @@ vi.mock('../telephony/runAsIdentity.js', () => ({ ResolveInboundContext: vi.fn()
 import { LogError } from '@memberjunction/core';
 import { ComputeVonageSignature } from '@memberjunction/ai-bridge-vonage';
 import { ResolveInboundContext } from '../telephony/runAsIdentity.js';
+import { SendAndAwaitClose, StartMediaSocketHarness, type MediaSocketHarness } from './mediaSocketHarness.js';
 import {
+    CreateVonageTelephonyHandler,
     HandleVonageCallEvent,
     HandleVonageInboundAnswer,
+    VONAGE_MEDIA_WSS_PATH,
     WireVonageMediaSocket,
     type VonageTelephonyServiceLike,
 } from '../telephony/VonageTelephonyRouter.js';
@@ -289,5 +292,54 @@ describe('media websocket (WireVonageMediaSocket)', () => {
         WireVonageMediaSocket(socket, upgrade(`call_uuid=CALL-1&mj_token=${TOKEN}`), registry);
         socket.emit('close');
         expect(registry.HasCall('CALL-1')).toBe(false);
+    });
+
+    describe('logged call id', () => {
+        const RAW_CALL_ID = `A\u001b[2J\nB${'x'.repeat(500)}`;
+        const query = `call_uuid=${encodeURIComponent(RAW_CALL_ID)}&mj_token=wrong`;
+
+        /** The logged text that follows `for call `, up to the next ':'. */
+        function loggedCallId(line: string): string {
+            return line.slice(line.indexOf('for call ') + 'for call '.length).split(':')[0];
+        }
+
+        it('logs only printable ASCII, cut to 100 characters, when it refuses a socket', () => {
+            WireVonageMediaSocket(fakeSocket(), upgrade(query), new VonageCallMediaRegistry());
+            const id = loggedCallId(String(vi.mocked(LogError).mock.calls[0][0]));
+            expect(id).toMatch(/^[\x20-\x7E]*$/);
+            expect(id.length).toBeLessThanOrEqual(100);
+        });
+
+        it('logs only printable ASCII, cut to 100 characters, on a socket error', () => {
+            const socket = fakeSocket();
+            WireVonageMediaSocket(socket, upgrade(query), new VonageCallMediaRegistry());
+            vi.mocked(LogError).mockClear();
+            socket.emit('error', new Error('bad frame'));
+            const id = loggedCallId(String(vi.mocked(LogError).mock.calls[0][0]));
+            expect(id).toMatch(/^[\x20-\x7E]*$/);
+            expect(id.length).toBeLessThanOrEqual(100);
+        });
+    });
+});
+
+describe('media socket server (CreateVonageTelephonyHandler)', () => {
+    const MEDIA_TOKEN = 't'.repeat(64);
+    let harness: MediaSocketHarness;
+
+    beforeEach(async () => {
+        const handler = CreateVonageTelephonyHandler('https://api.acme.com', CONFIG);
+        handler.registry.ExpectCall('CALL-1', MEDIA_TOKEN);
+        handler.attachMediaStreamServer();
+        harness = await StartMediaSocketHarness();
+    });
+
+    afterEach(async () => {
+        await harness.Close();
+    });
+
+    it('closes an attached socket with 1009 when a message is larger than 64 KiB', async () => {
+        const url = harness.Url(`${VONAGE_MEDIA_WSS_PATH}?call_uuid=CALL-1&mj_token=${MEDIA_TOKEN}`);
+        const result = await SendAndAwaitClose(url, Buffer.alloc(64 * 1024 + 1, 0x61));
+        expect(result).toBe(1009);
     });
 });

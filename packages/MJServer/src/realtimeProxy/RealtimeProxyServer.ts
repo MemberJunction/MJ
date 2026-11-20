@@ -49,8 +49,11 @@ const MAX_LOGGED_ORIGIN_CHARS = 200;
 export class RealtimeProxyServer extends BaseSingleton<RealtimeProxyServer> implements IShutdownable {
     public readonly ShutdownName = 'RealtimeProxyServer';
 
-    /** `noServer` so THIS server never binds its own upgrade listener — MJServer routes upgrades to it by path. */
-    private readonly wss = new WebSocketServer({ noServer: true });
+    /**
+     * `noServer` so THIS server never binds its own upgrade listener — MJServer routes upgrades to it by path.
+     * It applies the relay's client frame cap, enforced while a frame is read.
+     */
+    private readonly wss = new WebSocketServer({ noServer: true, maxPayload: REALTIME_RELAY_MAX_CLIENT_FRAME_BYTES });
 
     /** The relay's upgrade server: the same routing, plus the client frame cap, enforced while a frame is read. */
     private readonly relayWss = new WebSocketServer({ noServer: true, maxPayload: REALTIME_RELAY_MAX_CLIENT_FRAME_BYTES });

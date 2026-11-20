@@ -46,7 +46,7 @@
     "whatwg-encoding": "^3.1.1",
     "whatwg-mimetype": "^5.0.0",
     "whatwg-url": "^16.0.0",
-    "ws": "^8.19.0",
+    "ws": "^8.22.2",
     "xml-name-validator": "^5.0.0"
   },
   "repository": {

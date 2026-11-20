@@ -218,7 +218,8 @@
         "@modelcontextprotocol/sdk>zod": "^3.24",
         "zod-to-json-schema>zod": "^3.24",
         "openai>zod": "^3.24",
-        "@anthropic-ai/sdk>zod": "^3.24"
+        "@anthropic-ai/sdk>zod": "^3.24",
+        "isomorphic-ws>ws": "5"
       }
     },
     "overrides": {
@@ -248,7 +249,12 @@
       "@codemirror/view": "6.43.8",
       "@codemirror/language": "6.12.4",
       "@codemirror/commands": "6.10.4",
-      "jsdom": "26.1.0"
+      "jsdom": "26.1.0",
+      "body-parser@>=2.0.0 <2.4.0": "2.4.0",
+      "body-parser@>=1.0.0 <1.20.9": "1.20.9",
+      "ws@>=8.0.0 <8.22.2": "8.22.2",
+      "express-rate-limit@>=8.0.0 <8.2.2": "8.2.2",
+      "@modelcontextprotocol/sdk@>=1.0.0 <1.32.2": "1.32.2"
     },
     "patchedDependencies": {
       "type-graphql@2.0.0-beta.3": "patches/type-graphql@2.0.0-beta.3.patch"
