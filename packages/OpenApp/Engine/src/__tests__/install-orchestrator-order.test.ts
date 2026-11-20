@@ -159,7 +159,7 @@ describe('InstallApp dependency orchestration', () => {
         vi.mocked(SchemaExists).mockResolvedValue(false);
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
-        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
         vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
@@ -340,7 +340,7 @@ describe('HandleMigrations — platform-aware dialect directory', () => {
         vi.mocked(SchemaExists).mockResolvedValue(false);
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true, MigrationsApplied: 1, AppliedFiles: ['V1__x.sql'] });
-        vi.mocked(AddAppPackages).mockReturnValue({ Success: true } as never);
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] } as never);
         vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true } as never);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
         vi.mocked(AddEntityPackageMapping).mockReturnValue({ Success: true });
@@ -736,7 +736,7 @@ describe('InstallApp — post-install summary (#4238: no CodeGen step for a sche
         vi.mocked(SchemaExists).mockResolvedValue(false);
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
-        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
         vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
@@ -782,7 +782,7 @@ describe('InstallApp — reinstall over a prior install (B17: Error apps are rei
         vi.mocked(SchemaExists).mockResolvedValue(false);
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
-        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
         vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
@@ -840,7 +840,7 @@ describe('InstallApp — npm-install failure disables the app AND its dynamicPac
         vi.mocked(SchemaExists).mockResolvedValue(false);
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
-        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
         // npm install fails AFTER package.json was updated → app finalizes Disabled.
         vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: false, ErrorMessage: 'peer dep conflict' });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
@@ -891,7 +891,7 @@ describe('InstallApp — schema rollback tracks actual creation (B18)', () => {
         installSequence.length = 0;
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(DropAppSchema).mockResolvedValue({ Success: true });
-        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
         vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
@@ -1233,7 +1233,7 @@ describe('UpgradeApp — repairs a drifted OpenApp.SchemaName', () => {
         vi.mocked(SetAppStatus).mockResolvedValue(undefined);
         vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
-        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
         vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
@@ -1307,7 +1307,7 @@ describe('reserved-schema guard on the adopt-an-existing-schema path', () => {
         // would succeed if the reserved-name guard under test did not stop it first.
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
-        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
         vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
@@ -1424,7 +1424,7 @@ describe('reserved-schema guard on the UPGRADE path', () => {
         installSequence.length = 0;
         vi.mocked(SchemaExists).mockResolvedValue(true);
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
-        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
         vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
@@ -1521,7 +1521,7 @@ describe('adopting a schema another installed app already owns', () => {
         vi.mocked(SchemaExists).mockResolvedValue(true);   // the schema is live — adopt path
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
-        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
         vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
@@ -1580,7 +1580,7 @@ describe('creating the app schema — core schema owner (#4756)', () => {
         vi.mocked(SchemaExists).mockResolvedValue(false);   // schema absent → CreateAppSchema runs
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
-        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
         vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });

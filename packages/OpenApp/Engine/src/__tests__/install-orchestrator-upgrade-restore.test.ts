@@ -84,7 +84,7 @@ import { SchemaExists } from '../install/schema-manager.js';
 import { RunAppMigrations } from '../install/migration-runner.js';
 import { AddAppPackages, RunPackageInstallAsync } from '../install/package-manager.js';
 import { AddServerDynamicPackages, AddClientDynamicPackages, AddEntityPackageMapping, ToggleServerDynamicPackages, PruneDynamicPackagesNotInManifest } from '../install/config-manager.js';
-import { RecordInstallHistoryEntry, SetAppStatus, FindInstalledApp, UpdateAppRecord } from '../install/history-recorder.js';
+import { RecordInstallHistoryEntry, SetAppStatus, FindInstalledApp, UpdateAppRecord, ListInstalledApps } from '../install/history-recorder.js';
 
 
 
@@ -262,6 +262,65 @@ describe('UpgradeApp — a failed package install restores the package files (#5
         const message = DescribeRestoredUpgrade({ AppName: 'app-x', PreviousVersion: '1.0.0', TargetVersion: '2.0.0', ExplicitVersion: '2.0.0', Detail: 'x' });
         expect(message).toContain("'mj app upgrade app-x --version 2.0.0'");
         expect(message).not.toContain('schema is at');
+    });
+});
+
+describe('UpgradeApp — hands the previous version\'s packages to the package step (#6789)', () => {
+    const packages = {
+        server: [{ name: '@test/app-x-server', role: 'bootstrap', startupExport: 'Load' }],
+        client: [{ name: '@test/app-x-client', role: 'bootstrap', startupExport: 'LoadClient' }],
+        shared: [{ name: '@test/app-x-actions', role: 'library' }],
+    };
+    const manifest = (version: string, pkgs: object): string => JSON.stringify({
+        manifestVersion: 1, name: 'app-x', displayName: 'app-x', description: 'app-x test app description',
+        version, publisher: { name: 'Test' }, repository: 'https://github.com/test/app-x',
+        mjVersionRange: '>=5.0.0 <6.0.0', packages: pkgs, dependencies: {},
+    });
+    const installed = (manifestJSON: string) => ({
+        ID: 'app-x-id', Name: 'app-x', Version: '1.0.0', Status: 'Active',
+        RepositoryURL: 'https://github.com/test/app-x', ManifestJSON: manifestJSON,
+    }) as unknown as Awaited<ReturnType<typeof FindInstalledApp>>;
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        vi.mocked(SetAppStatus).mockResolvedValue(undefined);
+        vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
+        vi.mocked(GetLatestVersion).mockResolvedValue('2.0.0' as unknown as Awaited<ReturnType<typeof GetLatestVersion>>);
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: ['@test/app-x-actions'] });
+        vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true, Added: [], Removed: [] });
+        vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true } as ReturnType<typeof AddServerDynamicPackages>);
+        vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true } as ReturnType<typeof AddClientDynamicPackages>);
+        vi.mocked(PruneDynamicPackagesNotInManifest).mockReturnValue({ Success: true } as ReturnType<typeof PruneDynamicPackagesNotInManifest>);
+        serveManifests({ 'https://github.com/test/app-x': manifest('2.0.0', { server: packages.server, client: packages.client }) });
+    });
+
+    it('passes the installed manifest\'s packages and every package another app declares', async () => {
+        vi.mocked(FindInstalledApp).mockResolvedValue(installed(manifest('1.0.0', packages)));
+        vi.mocked(ListInstalledApps).mockResolvedValue([
+            { Name: 'app-x', Status: 'Active', ManifestJSON: manifest('1.0.0', packages) },
+            { Name: 'app-y', Status: 'Active', ManifestJSON: manifest('3.0.0', { client: [{ name: '@test/shared-lib', role: 'library' }] }) },
+            { Name: 'app-z', Status: 'Removed', ManifestJSON: manifest('1.0.0', { client: [{ name: '@test/gone-lib', role: 'library' }] }) },
+        ] as unknown as Awaited<ReturnType<typeof ListInstalledApps>>);
+
+        const result = await UpgradeApp({ AppName: 'app-x' }, context);
+
+        expect(result.Success).toBe(true);
+        expect(vi.mocked(AddAppPackages)).toHaveBeenCalledWith(expect.objectContaining({
+            PreviousPackages: { Server: packages.server, Client: packages.client, Shared: packages.shared },
+            RetainPackages: ['@test/shared-lib'],
+        }));
+    });
+
+    it('warns and removes nothing when the installed manifest cannot be parsed', async () => {
+        vi.mocked(FindInstalledApp).mockResolvedValue(installed('{not json'));
+        const warnings: string[] = [];
+        const warnContext = { ...context, Callbacks: { OnWarn: (_phase: string, message: string) => warnings.push(message) } } as unknown as OrchestratorContext;
+
+        const result = await UpgradeApp({ AppName: 'app-x' }, warnContext);
+
+        expect(result.Success).toBe(true);
+        expect(vi.mocked(AddAppPackages).mock.calls[0][0].PreviousPackages).toBeUndefined();
+        expect(warnings.some((w) => w.includes('package pins'))).toBe(true);
     });
 });
 

@@ -24,7 +24,7 @@ import { OfferTemplateUser } from './template-user.js';
 import { ExtractApplicationIds } from './migration-application-ids.js';
 import { CreateAppTempDir } from './temp-dir.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
-import { AddAppPackages, RemoveAppPackages, RunPackageInstallAsync, BumpPrefixedDependencies, PreflightAppPackages, ListPackageStepFiles, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
+import { AddAppPackages, RemoveAppPackages, RunPackageInstallAsync, BumpPrefixedDependencies, PreflightAppPackages, ListPackageStepFiles, type PackageManagerOptions, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
 import { RestoreFileSnapshot, SnapshotFiles } from './file-snapshot.js';
 import { CheckWorkspacePackages } from './workspace-packages.js';
 import { BuildHookResolutionBases, ResolveHookModule } from './hook-module-resolver.js';
@@ -1031,7 +1031,10 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
           PackageManager: context.PackageManager,
         }),
       );
-      const pkgResult = await HandlePackageInstallation(manifest, context, effectiveUpgradeVersion, effectiveUpgradeStrategy, options.Verbose);
+      // The record still holds the previous version's manifest here (it is rewritten in Step 9),
+      // also on a resumed attempt, so its pins can be told apart from the host's own deps.
+      const replaced = await ResolveReplacedPackages(existingApp, context);
+      const pkgResult = await HandlePackageInstallation(manifest, context, effectiveUpgradeVersion, effectiveUpgradeStrategy, options.Verbose, replaced);
       if (!pkgResult.Success) {
         const restore = pkgResult.PackageJsonUpdated ? RestoreFileSnapshot(packageFiles) : null;
         if (restore !== null && restore.Failed.length === 0) {
@@ -2429,11 +2432,44 @@ export function DescribeRestoredUpgrade(info: RestoredUpgradeInfo): string {
   );
 }
 
+/** What an upgrade's package step needs to remove the replaced version's stale pins (#6789). */
+type ReplacedPackages = Required<Pick<PackageManagerOptions, 'PreviousPackages' | 'RetainPackages'>>;
+
+/**
+ * The installed version's packages, read from the persisted `ManifestJSON` (the documented source
+ * of truth), plus every package another installed app declares, which must keep its pin. Returns
+ * undefined, after a warning, when that manifest cannot be parsed: the upgrade then only adds, as
+ * it did before, and never fails over an unreadable historical record.
+ */
+async function ResolveReplacedPackages(existingApp: InstalledAppInfo, context: OrchestratorContext): Promise<ReplacedPackages | undefined> {
+  let previous: MJAppManifest;
+  try {
+    previous = JSON.parse(existingApp.ManifestJSON) as MJAppManifest;
+  } catch {
+    context.Callbacks?.OnWarn?.(
+      'Packages',
+      `Could not parse the previously-installed manifest for '${existingApp.Name}', so package pins the new version no longer ` +
+        `lists were not removed. Check the server and client package.json files for old ${existingApp.Name} packages.`,
+    );
+    return undefined;
+  }
+  if (!previous.packages) return undefined;
+  return {
+    PreviousPackages: {
+      Server: previous.packages.server ?? [],
+      Client: previous.packages.client ?? [],
+      Shared: previous.packages.shared ?? [],
+    },
+    RetainPackages: ListDeclaredPackageNames(await ListOtherAppManifests(existingApp.Name, context)),
+  };
+}
+
 /**
  * Adds app npm packages to the appropriate workspace package.json files and runs npm install.
  *
  * @param packageVersion - The version string to write (may differ from manifest.version when an explicit version is requested)
  * @param versionStrategy - Override for version strategy (e.g., 'exact' when explicit version is requested)
+ * @param replaced - Upgrade only: the replaced version's packages, whose pins the new manifest no longer places are removed
  */
 async function HandlePackageInstallation(
   manifest: MJAppManifest,
@@ -2441,6 +2477,7 @@ async function HandlePackageInstallation(
   packageVersion?: string,
   versionStrategy?: VersionStrategy,
   verbose?: boolean,
+  replaced?: ReplacedPackages,
 ): Promise<InternalResult> {
   if (!manifest.packages) {
     return { Success: true };
@@ -2458,10 +2495,15 @@ async function HandlePackageInstallation(
     PackageManager: context.PackageManager,
     VersionStrategy: versionStrategy ?? context.VersionStrategy,
     AdditionalTargets: context.AdditionalTargets,
+    PreviousPackages: replaced?.PreviousPackages,
+    RetainPackages: replaced?.RetainPackages,
   });
 
   if (!addResult.Success) {
     return { Success: false, ErrorMessage: addResult.ErrorMessage };
+  }
+  if (addResult.Removed.length > 0) {
+    context.Callbacks?.OnProgress?.('Packages', `Removed pins the new version no longer places in that workspace: ${addResult.Removed.join(', ')}`);
   }
 
   // If the manifest declares a package prefix, bump ALL matching dependencies
