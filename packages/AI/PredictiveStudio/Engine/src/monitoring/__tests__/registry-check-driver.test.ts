@@ -278,6 +278,36 @@ describe('PredictiveStudioRegistryCheckJobDriver', () => {
     expect(findings.map((f) => f.Finding)).toEqual(['i']);
   });
 
+  describe('Configuration.ArtifactHealth / AuditComparison (M4)', () => {
+    it('ArtifactHealth.Enabled false skips (c) and the run\'s Details record the skip', async () => {
+      const published = await Published();
+      storage.Objects.delete(`artifacts/${String(store.Row('MJ: ML Models', published.ID)?.['ArtifactFileID'])}`);
+      const result = await driver.Execute(await JobContext(JSON.stringify({ ArtifactHealth: { Enabled: false } })));
+      expect(store.Status(published.ID)).toBe('Published');
+      expect(result.Details?.['Skipped']).toEqual([expect.objectContaining({ Step: 'c', Reason: expect.stringContaining('ArtifactHealth.Enabled is false') })]);
+    });
+
+    it('AuditComparison.Enabled false skips (b), (h) and (a)\'s no-record check, and records the skip', async () => {
+      const demoted = await Published();
+      store.SetStatus(demoted.ID, 'Validated');
+      const intruder = world.Model('Validated', 'model');
+      store.SetStatus(intruder.ID, 'Published');
+      const result = await driver.Execute(await JobContext(JSON.stringify({ AuditComparison: { Enabled: false } })));
+      expect([store.Status(intruder.ID), store.Status(demoted.ID)]).toEqual(['Published', 'Validated']);
+      expect(result.Details?.['Skipped']).toEqual(expect.arrayContaining([
+        expect.objectContaining({ Step: 'a', Reason: expect.stringContaining('AuditComparison.Enabled is false') }),
+        expect.objectContaining({ Step: 'b' }), expect.objectContaining({ Step: 'h' }),
+      ]));
+    });
+
+    it('both settings default to enabled, and a non-boolean Enabled fails validation', async () => {
+      const config = PredictiveStudioRegistryCheckJobDriver.ReadConfiguration(null);
+      expect([config.ArtifactHealth, config.AuditComparison]).toEqual([true, true]);
+      const ctxBad = await JobContext(JSON.stringify({ ArtifactHealth: { Enabled: 'no' } }));
+      expect(driver.ValidateConfiguration(ctxBad.Schedule).Success).toBe(false);
+    });
+  });
+
   describe('the job\'s user and its notifications (D4-18, I1)', () => {
     it('with no job owner, each model finding is notified to the owner of that model\'s monitoring job', async () => {
       const published = await Published();

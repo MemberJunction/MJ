@@ -70,6 +70,19 @@ export interface RegistryCheckConfiguration {
   readonly StaleScoringRunHours: number;
   /** Step (g)'s limits, from `Configuration.migration` (`{ batchSize, retrainPerRun }`, D4-22). */
   readonly Migration: PreChangeMigrationConfig;
+  /** `Configuration.ArtifactHealth.Enabled` (default true): false skips step (c). */
+  readonly ArtifactHealth: boolean;
+  /**
+   * `Configuration.AuditComparison.Enabled` (default true): false skips the comparison of status changes with publish
+   * records (§5.7 R6): (a)'s Published-without-a-record check, (b) and (h). (a)'s more-than-one-Published invariant runs.
+   */
+  readonly AuditComparison: boolean;
+}
+
+/** A step the run's `Configuration` turned off, recorded in the run's `Details` under `Skipped`. */
+export interface SkippedStep {
+  readonly Step: RegistryFinding['Finding'];
+  readonly Reason: string;
 }
 
 /** One finding and what the job did about it. */
@@ -136,6 +149,8 @@ type RegistryModel = Pick<MJMLModelEntity, 'ID' | 'PipelineID' | 'Version' | 'St
 /** Runs the registry check. */
 @RegisterClass(BaseScheduledJob, 'PredictiveStudioRegistryCheckJobDriver')
 export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
+  /** The `Configuration` sections whose `Enabled` turns steps off. */
+  public static readonly STEP_SETTINGS = ['ArtifactHealth', 'AuditComparison'] as const;
   /** The default `StaleScoringRunHours`. */
   public static readonly DEFAULT_STALE_HOURS = 6;
   private static readonly MS_PER_HOUR = 3_600_000;
@@ -178,19 +193,24 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
     const migration = await this.MigratePreChangeModels(config, context.Run.ID, ctx);
     const findings = [...migration.Findings, ...(await this.RunChecks(config, initiator, ctx))];
     const unnotified = await this.notify(context.Schedule.OwnerUserID, findings, ctx);
+    const skipped = PredictiveStudioRegistryCheckJobDriver.SkippedSteps(config);
     const failed = findings.filter((f) => f.Outcome === 'retry' && f.Action.startsWith('the step failed'));
     return {
       Success: failed.length === 0,
       ErrorMessage: failed.length === 0 ? undefined : failed.map((f) => f.Detail).join('; '),
       Details: {
         Findings: findings,
+        ...(skipped.length > 0 ? { Skipped: skipped } : {}),
         ...(unnotified.length > 0 ? { Unnotified: unnotified } : {}),
         ...(migration.Details === null ? {} : { [PreGateModelMigration.DetailsKey]: migration.Details }),
       },
     };
   }
 
-  /** Checks the `Configuration`: `StaleScoringRunHours`, when present, is a positive number. */
+  /**
+   * Checks the `Configuration`: `StaleScoringRunHours`, when present, is a positive number; `ArtifactHealth.Enabled` and
+   * `AuditComparison.Enabled`, when present, are booleans.
+   */
   public ValidateConfiguration(schedule: MJScheduledJobEntity): ValidationResult {
     const result = new ValidationResult();
     const json = JsonParse.ParseJsonText(schedule.Configuration || '{}', 'Configuration');
@@ -199,6 +219,12 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
       const hours = JsonParse.JsonNumber(json.Value, 'StaleScoringRunHours');
       if ('StaleScoringRunHours' in json.Value && (hours === null || hours <= 0)) {
         result.Errors.push(new ValidationErrorInfo('Configuration.StaleScoringRunHours', 'must be a positive number of hours', schedule.Configuration, ValidationErrorType.Failure));
+      }
+      for (const setting of PredictiveStudioRegistryCheckJobDriver.STEP_SETTINGS) {
+        const section = JsonParse.JsonObjectField(json.Value, setting);
+        if (section !== null && 'Enabled' in section && JsonParse.JsonBoolean(section, 'Enabled') === null) {
+          result.Errors.push(new ValidationErrorInfo(`Configuration.${setting}.Enabled`, 'must be true or false', schedule.Configuration, ValidationErrorType.Failure));
+        }
       }
     }
     result.Success = result.Errors.length === 0;
@@ -219,16 +245,38 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
     const json = JsonParse.ParseJsonText(text || '{}', 'Configuration');
     const root = json.Ok && JsonParse.IsJsonObject(json.Value) ? json.Value : null;
     const hours = root === null ? null : JsonParse.JsonNumber(root, 'StaleScoringRunHours');
+    const enabled = (setting: string): boolean => {
+      const section = root === null ? null : JsonParse.JsonObjectField(root, setting);
+      return section === null || JsonParse.JsonBoolean(section, 'Enabled') !== false;
+    };
     return {
       StaleScoringRunHours: hours !== null && hours > 0 ? hours : PredictiveStudioRegistryCheckJobDriver.DEFAULT_STALE_HOURS,
       Migration: PreGateModelMigration.ConfigFrom(root === null ? null : JsonParse.JsonObjectField(root, 'migration')),
+      ArtifactHealth: enabled('ArtifactHealth'),
+      AuditComparison: enabled('AuditComparison'),
     };
   }
 
-  /** Every step in order; a step that throws becomes one `retry` finding. */
+  /** The steps the `Configuration` turned off, each with the setting that did it. Pure. */
+  public static SkippedSteps(config: RegistryCheckConfiguration): SkippedStep[] {
+    const audit = 'Configuration.AuditComparison.Enabled is false';
+    return [
+      ...(config.AuditComparison ? [] : [
+        { Step: 'a' as const, Reason: `${audit}: the Published-without-a-publish-record check is off (the more-than-one-Published invariant still runs)` },
+        { Step: 'b' as const, Reason: audit }, { Step: 'h' as const, Reason: audit },
+      ]),
+      ...(config.ArtifactHealth ? [] : [{ Step: 'c' as const, Reason: 'Configuration.ArtifactHealth.Enabled is false' }]),
+    ];
+  }
+
+  /**
+   * Every step in order, less those the `Configuration` turned off ({@link SkippedSteps}); a step that throws becomes one
+   * `retry` finding.
+   */
   public async RunChecks(config: RegistryCheckConfiguration, initiator: Actor, ctx: GateContext): Promise<RegistryFinding[]> {
-    const steps: { readonly Letter: RegistryFinding['Finding']; readonly Run: () => Promise<RegistryFinding[]> }[] = [
-      { Letter: 'a', Run: () => this.ArchiveOutsideGatePublishes(initiator, ctx) },
+    const off = new Set(PredictiveStudioRegistryCheckJobDriver.SkippedSteps(config).filter((s) => s.Step !== 'a').map((s) => s.Step));
+    const all: { readonly Letter: RegistryFinding['Finding']; readonly Run: () => Promise<RegistryFinding[]> }[] = [
+      { Letter: 'a', Run: () => this.ArchiveOutsideGatePublishes(initiator, ctx, config.AuditComparison) },
       { Letter: 'b', Run: () => this.RestoreOutsideGateDemotions(initiator, ctx) },
       { Letter: 'c', Run: () => this.RemediateArtifactHealth(initiator, ctx) },
       { Letter: 'd', Run: () => this.ResyncScoringActions(ctx) },
@@ -237,6 +285,7 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
       { Letter: 'h', Run: () => this.RecordOrphanPublishRecords(ctx) },
       { Letter: 'i', Run: () => this.ReattachViewGate(ctx) },
     ];
+    const steps = all.filter((step) => !off.has(step.Letter));
     const findings: RegistryFinding[] = [];
     for (const step of steps) {
       try {
@@ -265,13 +314,14 @@ export class PredictiveStudioRegistryCheckJobDriver extends BaseScheduledJob {
   }
 
   /**
-   * (a) A Published model with no publish record is archived `status-written-outside-gate`; of a pipeline's surplus
-   * Published models the one with the newest publish record stays and the rest are archived; then the rollback rule.
+   * (a) A Published model with no publish record is archived `status-written-outside-gate` (the audit comparison, off
+   * when `auditComparison` is false); of a pipeline's surplus Published models the one with the newest publish record
+   * stays and the rest are archived; then the rollback rule.
    */
-  protected async ArchiveOutsideGatePublishes(initiator: Actor, ctx: GateContext): Promise<RegistryFinding[]> {
+  protected async ArchiveOutsideGatePublishes(initiator: Actor, ctx: GateContext, auditComparison = true): Promise<RegistryFinding[]> {
     const out: RegistryFinding[] = [];
     const touched = new Set<string>();
-    for (const row of await this.query(REGISTRY_CHECK_QUERIES.PublishedWithoutRecord, {}, ctx)) {
+    for (const row of auditComparison ? await this.query(REGISTRY_CHECK_QUERIES.PublishedWithoutRecord, {}, ctx) : []) {
       const modelId = String(row['ModelID']);
       const archived = await this.resolved.Gate.Archive(modelId, 'status-written-outside-gate: the model was set Published without a publish record', initiator, ctx);
       out.push(PredictiveStudioRegistryCheckJobDriver.archiveFinding('a', modelId, 'Published with no publish record (set outside the lifecycle gate)', archived));
