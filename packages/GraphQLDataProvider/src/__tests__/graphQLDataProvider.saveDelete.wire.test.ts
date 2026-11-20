@@ -1431,6 +1431,32 @@ describe("GraphQLDataProvider rehydrates a refusal's validationErrors extension"
         expect(entity.LatestResult.Errors).toEqual([]);
     });
 
+    it('Save: reports a concurrency refusal as LatestResult.ConcurrencyConflict, as a server-side save does', async () => {
+        const entity = loaded();
+        entity.Set('Name', 'New Name');
+        GraphQLWire.EnqueueError(new FakeGraphQLResponseError(
+            'Concurrent modification conflict on Customers for field(s): Name. Reload the record and retry your changes.',
+            'CONCURRENT_MODIFICATION_CONFLICT',
+            { entityName: 'Customers', conflictingFields: ['Name'] },
+        ));
+
+        const result = await provider.Save(entity, user, new EntitySaveOptions());
+
+        expect(result).toBeNull();
+        expect(entity.LatestResult.Success).toBe(false);
+        expect(entity.LatestResult.ConcurrencyConflict).toEqual({ ConflictingFields: ['Name'] });
+    });
+
+    it('Save: any other refusal carries no ConcurrencyConflict', async () => {
+        const entity = loaded();
+        entity.Set('Name', 'New Name');
+        GraphQLWire.EnqueueError(new FakeGraphQLResponseError('Timeout expired while saving.', 'SAVE_ENTITY_ERROR', { conflictingFields: ['Name'] }));
+
+        await provider.Save(entity, user, new EntitySaveOptions());
+
+        expect(entity.LatestResult.ConcurrencyConflict).toBeUndefined();
+    });
+
     it('Save: tolerates a malformed extension — garbage yields no errors, never a throw', async () => {
         const entity = loaded();
         entity.Set('Name', 'New Name');

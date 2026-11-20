@@ -9,7 +9,7 @@
     <!-- Header Summary -->
     <div class="summary-header">
       <div class="mode-badge">
-        <i class="fas" [ngClass]="modeIcon"></i>
+        <i class="fa-solid" [ngClass]="modeIcon"></i>
         <span>{{ modeLabel }}</span>
       </div>
       <div class="stats">
@@ -36,7 +36,7 @@
     @if (description) {
       <div class="description-section">
         <h4 class="description-title">
-          <i class="fas fa-info-circle"></i>
+          <i class="fa-solid fa-info-circle"></i>
           Overview
         </h4>
         <div class="description-content">
@@ -53,7 +53,7 @@
     @if (entities.length > 0) {
       <div class="section entities-section">
         <h3 class="section-title">
-          <i class="fas fa-table"></i>
+          <i class="fa-solid fa-table"></i>
           Entities
         </h3>
         <div class="cards-container">
@@ -62,7 +62,7 @@
               <div class="card-header" (click)="toggleEntity(entity.name)">
                 <div class="card-title-row">
                   <div class="card-icon">
-                    <i class="fas fa-table"></i>
+                    <i class="fa-solid fa-table"></i>
                   </div>
                   <div class="card-title-info">
                     <h4 class="card-title">{{ entity.name }}</h4>
@@ -71,14 +71,14 @@
                     }
                   </div>
                   <div class="expand-icon">
-                    <i class="fas" [ngClass]="isEntityExpanded(entity.name) ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                    <i class="fa-solid" [ngClass]="isEntityExpanded(entity.name) ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                   </div>
                 </div>
                 <div class="card-meta">
                   <div class="permissions-row">
                     @for (perm of entity.permissionLevelNeeded; track perm) {
                       <span class="permission-badge" [style.background-color]="getPermissionColor(perm)">
-                        <i class="fas" [ngClass]="getPermissionIcon(perm)"></i>
+                        <i class="fa-solid" [ngClass]="getPermissionIcon(perm)"></i>
                         {{ perm }}
                       </span>
                     }
@@ -91,7 +91,7 @@
                 <div class="card-body">
                   @if (entity.usageContext) {
                     <div class="usage-context">
-                      <i class="fas fa-info-circle"></i>
+                      <i class="fa-solid fa-info-circle"></i>
                       <span>{{ entity.usageContext }}</span>
                     </div>
                   }
@@ -110,7 +110,7 @@
                         @for (field of entity.fieldMetadata; track field.name) {
                           <div class="field-row">
                             <span class="field-col name-col">
-                              <i class="fas" [ngClass]="getFieldTypeIcon(field.type)" [style.color]="getFieldTypeColor(field.type)"></i>
+                              <i class="fa-solid" [ngClass]="getFieldTypeIcon(field.type)" [style.color]="getFieldTypeColor(field.type)"></i>
                               <span class="field-name">{{ field.name }}</span>
                               @if (!field.allowsNull) {
                                 <span class="required-indicator" title="Required">*</span>
@@ -144,7 +144,7 @@
     @if (queries.length > 0) {
       <div class="section queries-section">
         <h3 class="section-title">
-          <i class="fas fa-database"></i>
+          <i class="fa-solid fa-database"></i>
           Queries
         </h3>
         <div class="cards-container">
@@ -153,14 +153,14 @@
               <div class="card-header" (click)="toggleQuery(getQueryKey(query))">
                 <div class="card-title-row">
                   <div class="card-icon query-icon">
-                    <i class="fas fa-code"></i>
+                    <i class="fa-solid fa-code"></i>
                   </div>
                   <div class="card-title-info">
                     <div class="title-with-badge">
                       <h4 class="card-title">{{ query.name }}</h4>
                       @if (query.isNew) {
                         <span class="new-query-badge" title="This query was newly created for this component">
-                          <i class="fas fa-sparkles"></i>
+                          <i class="fa-solid fa-sparkles"></i>
                           NEW
                         </span>
                       }
@@ -171,7 +171,7 @@
                     }
                   </div>
                   <div class="expand-icon">
-                    <i class="fas" [ngClass]="isQueryExpanded(getQueryKey(query)) ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                    <i class="fa-solid" [ngClass]="isQueryExpanded(getQueryKey(query)) ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                   </div>
                 </div>
                 <div class="card-meta">
@@ -179,7 +179,7 @@
                     <div class="entity-badges">
                       @for (entityName of query.entityNames; track entityName) {
                         <span class="entity-badge">
-                          <i class="fas fa-table"></i>
+                          <i class="fa-solid fa-table"></i>
                           {{ entityName }}
                         </span>
                       }
@@ -195,7 +195,7 @@
                   @if (query.parameters && query.parameters.length > 0) {
                     <div class="parameters-section">
                       <h5 class="parameters-title">
-                        <i class="fas fa-sliders-h"></i>
+                        <i class="fa-solid fa-sliders-h"></i>
                         Parameters
                       </h5>
                       <div class="parameters-list">
@@ -240,7 +240,7 @@
                         @for (field of query.fields; track field.name) {
                           <div class="field-row">
                             <span class="field-col name-col">
-                              <i class="fas" [ngClass]="getFieldTypeIcon(field.type)" [style.color]="getFieldTypeColor(field.type)"></i>
+                              <i class="fa-solid" [ngClass]="getFieldTypeIcon(field.type)" [style.color]="getFieldTypeColor(field.type)"></i>
                               <span class="field-name">{{ field.name }}</span>
                             </span>
                             <span class="field-col type-col">
@@ -259,7 +259,7 @@
                   @if (query.newQuerySQL) {
                     <div class="sql-section">
                       <h5 class="sql-title">
-                        <i class="fas fa-terminal"></i>
+                        <i class="fa-solid fa-terminal"></i>
                         Query SQL
                       </h5>
                       <pre class="sql-code">{{ query.newQuerySQL }}</pre>

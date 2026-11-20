@@ -3,15 +3,12 @@ import {
   Component,
   ElementRef,
   EventEmitter,
-  HostListener,
   Input,
   NgZone,
   OnInit,
-  OnChanges,
   OnDestroy,
   Output,
   Renderer2,
-  SimpleChanges,
   ChangeDetectorRef,
   Type,
   ViewChild,
@@ -35,6 +32,7 @@ import {
   SpreadsheetEngine,
   ParseCellAddress,
   ParseRangeAddress,
+  ParseSparklineValue,
   FormatCellAddress,
   ColumnIndexToLetter,
   type WorkbookSpec,
@@ -56,6 +54,8 @@ import {
   type SpreadsheetValidationRuleSpec,
   type SpreadsheetConditionalFormatRuleSpec,
   type SpreadsheetProtectedRangeSpec,
+  type SpreadsheetNamedRangeSpec,
+  type ParsedSparklineValue,
   type DocumentBlockSpec,
   type DocumentBlockExecutionResult,
 } from '@memberjunction/core-entities';
@@ -73,12 +73,28 @@ import {
   type SheetsContextMenuCommand,
   type SheetsContextMenuTarget,
 } from './context-menus/sheets-context-menu.helper';
-import { BaseArtifactViewerPluginComponent, IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
+import {
+  ArtifactNavigationAnchor,
+  ArtifactViewerViewMode,
+  BaseArtifactViewerPluginComponent,
+  IArtifactVersionDiffViewer,
+  type PreVerifiedFrozenSnapshotEntry,
+} from '../base-artifact-viewer.component';
+import { ResolvePreVerifiedFrozenSnapshotState } from '../../utils/frozen-snapshot-verification.util';
+import {
+  BuildCanonicalSpreadsheetSuggestionRecord,
+  NormalizeSpreadsheetSuggestion,
+  ParseSuggestionsFromConfiguration,
+  ReadArtifactVersionConfigurationSafe,
+  UpsertArtifactSuggestionInVersionConfiguration,
+} from '../../utils/artifact-suggestion-normalizer.util';
+import { MJ_EMBEDDED_ARTIFACT_ANCESTORS, MJ_MAX_EMBED_DEPTH } from '../artifact-type-plugin-viewer.component';
 import { CaptureThumbnailForDriverIfAllowed } from '../../utils/artifact-dom-capture';
 import { SpreadsheetVersionDiffComponent } from '../version-diff/spreadsheet-version-diff.component';
 import { ArtifactFileService } from '../../services/artifact-file.service';
 import { ARTIFACT_AI_ASSISTANT_ENABLED, RequestArtifactAiAssistant } from '../../services/artifact-ai-assistant-bridge';
 import { FetchArrayBuffer } from '../previews/office-preview.logic';
+import type { ArtifactCommandPaletteItem } from './artifact-command-palette.component';
 import {
   DocumentCollaborationService,
   DocumentCollaborationSession,
@@ -87,6 +103,7 @@ import {
   type CollaboratorPresence,
   type CollaborationConnectionStatus,
   type CollaborationMergeConflictEvent,
+  type CollaborationResetConflictDraft,
   type DocumentAnchoredThread,
   type DocumentDiffResult,
   type VerifiedArtifactPermissions,
@@ -124,25 +141,55 @@ export type SheetsToolbarItemKey =
   | 'diff-mode'
   | 'ask-ai'
   | 'run-ai-formulas'
-  | 'protect-range';
+  | 'protect-range'
+  | 'merge-cells'
+  | 'unmerge-cells'
+  | 'data-validation'
+  | 'conditional-format'
+  | 'named-ranges';
 
 export const DEFAULT_PINNED_SHEETS_TOOLBAR_ACTIONS: readonly SheetsToolbarItemKey[] = [
-  'bold',
   'currency',
-  'insert-row',
-  'insert-col',
-  'sort-asc',
   'add-chart',
 ];
 
 export const SHEETS_CHART_SERIES_COLORS: readonly string[] = [
-  'var(--mj-brand-primary, #3b82f6)',
-  '#10b981',
-  '#f59e0b',
-  '#8b5cf6',
-  '#ec4899',
-  '#06b6d4',
+  'var(--mj-brand-primary)',
+  'var(--mj-status-success)',
+  'var(--mj-status-warning)',
+  'var(--mj-status-info)',
+  'var(--mj-status-error)',
+  'var(--mj-text-secondary)',
 ];
+
+export interface SpreadsheetCellSuggestionSpec {
+  SuggestionID: string;
+  SheetID: string;
+  Range: string;
+  ProposedValue: string;
+  CurrentDisplayValue: string;
+  Rationale: string;
+  AuthorName: string;
+  AuthorUserID: string;
+  IsAgent: boolean;
+  CreatedAt: string;
+  Status: 'pending' | 'accepted' | 'rejected';
+}
+
+export interface SpreadsheetLiveTableDriftSummary {
+  TableID: string;
+  Title: string;
+  FrozenRowCount: number;
+  LiveRowCount: number;
+  RowDelta: number;
+  SummaryText: string;
+}
+
+export interface SpreadsheetChartDomain {
+  MinValue: number;
+  MaxValue: number;
+  ZeroY: number;
+}
 
 export interface ActiveChartSeriesItem {
   Index: number;
@@ -245,10 +292,12 @@ export interface ResolvedSheetsToolbarItem {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div
-      class="mj-sheets-shell"
+      class="mj-sheets-shell mj-sheets-root"
+      tabindex="-1"
+      (keydown)="OnViewerKeydown($event)"
       data-testid="mj-sheets-shell"
     >
-      <!-- Top Workbook Toolbar -->
+      <!-- Top Workbook Toolbar (Calm Single-Row Option A Header) -->
       <div class="mj-sheets-toolbar" data-testid="sheets-toolbar">
         <div class="mj-sheets-toolbar-group">
           <input
@@ -260,18 +309,6 @@ export interface ResolvedSheetsToolbarItem {
             aria-label="Workbook Title"
             data-testid="sheet-workbook-title"
           />
-
-          <div class="mj-sheets-mode-pills" role="tablist" aria-label="Spreadsheet workspace mode">
-            <button
-              type="button"
-              class="mj-sheets-mode-pill"
-              [class.active]="WorkspaceMode === 'grid'"
-              (click)="SetWorkspaceMode('grid')"
-              data-testid="sheets-mode-grid"
-            >
-              <i class="fa-solid fa-table-cells"></i> Grid
-            </button>
-          </div>
 
           @if ((WorkspaceMode === 'source' && !IsToolbarItemShownOnBar('source-mode')) || (WorkspaceMode === 'diff' && !IsToolbarItemShownOnBar('diff-mode'))) {
             <button
@@ -335,7 +372,7 @@ export interface ResolvedSheetsToolbarItem {
           </div>
         }
 
-        <!-- Right-side Pinned Actions, Save, Comments, Tools & View Menu, Presence -->
+        <!-- Right-side Calm Status, AI, Comments, Cmd+K, More -->
         <div class="mj-sheets-toolbar-group mj-sheets-toolbar-right">
           @for (item of PinnedRightToolbarItems; track item.Key) {
             <button
@@ -354,45 +391,6 @@ export interface ResolvedSheetsToolbarItem {
             </button>
           }
 
-          @if (CanEdit && WorkspaceMode === 'grid') {
-            @if (PendingAiFormulaCount > 0) {
-              <button
-                type="button"
-                class="mj-sheets-tool-btn active"
-                [disabled]="IsEvaluatingAiFormulas"
-                (click)="RunAiFormulas()"
-                title="Evaluate opt-in =MJ.AI formulas in this workbook"
-                data-testid="sheets-run-ai-formulas-btn"
-              >
-                <i class="fa-solid" [ngClass]="IsEvaluatingAiFormulas ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles'"></i>
-                <span>Run AI Formulas ({{ PendingAiFormulaCount }})</span>
-              </button>
-            }
-            <button
-              type="button"
-              class="mj-sheets-tool-btn"
-              [class.active]="IsSelectedRangeProtected"
-              (click)="ToggleSelectedRangeProtection()"
-              [title]="IsSelectedRangeProtected ? 'Remove range protection' : 'Protect selected range (' + SelectedRange + ')'"
-              data-testid="sheets-protect-range-quick-btn"
-            >
-              <i class="fa-solid" [ngClass]="IsSelectedRangeProtected ? 'fa-lock' : 'fa-lock-open'"></i>
-              <span>{{ IsSelectedRangeProtected ? 'Protected' : 'Protect' }}</span>
-            </button>
-            @if (IsAiAssistantEnabled) {
-              <button
-                type="button"
-                class="mj-sheets-tool-btn mj-sheets-save-btn"
-                (click)="OpenAskAiForSpreadsheet()"
-                title="Open slide-in AI Assistant for this spreadsheet selection"
-                data-testid="sheets-ask-ai-quick-btn"
-              >
-                <i class="fa-solid fa-wand-magic-sparkles"></i>
-                <span>Ask AI</span>
-              </button>
-            }
-          }
-
           @if (CanEdit) {
             <input
               #fileInput
@@ -404,14 +402,33 @@ export interface ResolvedSheetsToolbarItem {
             />
             <button
               type="button"
-              class="mj-sheets-tool-btn mj-sheets-save-btn"
+              class="mj-sheets-tool-btn"
+              [class.mj-sheets-save-btn]="HasUnsavedChanges"
+              [class.mj-sheets-save-quiet]="!HasUnsavedChanges"
               (click)="SaveNewArtifactVersion()"
               [disabled]="IsSavingVersion || !HasUnsavedChanges"
-              [title]="HasUnsavedChanges ? 'Save changes as a new version' : 'No unsaved changes to save'"
+              [title]="HasUnsavedChanges ? 'Save changes as a new version' : 'All changes synced — no unsaved changes'"
               data-testid="sheet-save-version-btn"
             >
-              <i class="fa-solid fa-floppy-disk"></i>
-              <span>{{ !HasUnsavedChanges && LastSavedVersionNumber ? 'Saved v' + LastSavedVersionNumber : 'Save Version' }}</span>
+              @if (HasUnsavedChanges) {
+                <i class="fa-solid fa-floppy-disk"></i>
+              } @else {
+                <span class="mj-sheets-saved-dot" aria-hidden="true"></span>
+              }
+              <span>{{ !HasUnsavedChanges && LastSavedVersionNumber ? 'Saved v' + LastSavedVersionNumber : (HasUnsavedChanges ? 'Save Version' : 'Saved') }}</span>
+            </button>
+          }
+
+          @if (CanEdit && WorkspaceMode === 'grid' && IsAiAssistantEnabled) {
+            <button
+              type="button"
+              class="mj-sheets-tool-btn mj-sheets-ai-pill"
+              (click)="OpenAskAiForSpreadsheet()"
+              title="Ask AI about selected cells (/ai)"
+              data-testid="sheets-ask-ai-quick-btn"
+            >
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <span>AI</span>
             </button>
           }
 
@@ -420,11 +437,23 @@ export interface ResolvedSheetsToolbarItem {
             class="mj-sheets-tool-btn"
             [class.active]="ShowCommentsDrawer"
             (click)="ToggleCommentsDrawer()"
-            title="Toggle Cell & Range Comments"
+            [title]="'Toggle Cell & Range Comments (' + OpenThreadCount + ')'"
             data-testid="sheet-toggle-comments-btn"
           >
             <i class="fa-regular fa-comments"></i>
-            <span>Comments ({{ OpenThreadCount }})</span>
+            @if (OpenThreadCount > 0) {
+              <span class="mj-sheets-count-badge">{{ OpenThreadCount }}</span>
+            }
+          </button>
+
+          <button
+            type="button"
+            class="mj-sheets-tool-btn mj-sheets-cmdk-btn"
+            (click)="OpenCommandPalette()"
+            title="Search all spreadsheet actions, freeze, protect & export (Cmd/Ctrl+K)"
+            data-testid="sheets-cmdk-btn"
+          >
+            <span class="mj-sheets-kbd-tag">⌘K</span>
           </button>
 
           <div class="mj-sheets-more-anchor" #moreToolsAnchor>
@@ -588,12 +617,137 @@ export interface ResolvedSheetsToolbarItem {
         </div>
       }
 
+      @if (PendingResetConflictDraft) {
+        <div
+          class="mj-sheets-status-banner mj-sheets-status-banner--warning"
+          role="alert"
+          data-testid="sheets-reset-conflict-banner"
+        >
+          <i class="fa-solid fa-code-branch"></i>
+          <span>
+            Collaborative room history was reset while you had local unsaved edits.
+          </span>
+          <button
+            type="button"
+            class="mj-sheets-mini-btn"
+            data-testid="sheets-apply-reset-draft-btn"
+            (click)="ApplyPendingResetConflictDraft()"
+          >
+            <i class="fa-solid fa-check"></i> Apply Local Draft
+          </button>
+          <button
+            type="button"
+            class="mj-sheets-mini-btn"
+            data-testid="sheets-dismiss-reset-draft-btn"
+            (click)="DismissPendingResetConflictDraft()"
+          >
+            Dismiss
+          </button>
+        </div>
+      }
+
       @if (WorkspaceMode === 'grid') {
+        <!-- NW-1 Live-vs-Frozen Drift Governance Banner -->
+        @let frozenTables = FrozenLiveTablesOnActiveSheet;
+        @if (frozenTables.length > 0) {
+          <div class="mj-sheets-drift-banner" data-testid="sheets-frozen-drift-banner">
+            <div class="mj-sheets-drift-banner-main">
+              <i class="fa-solid fa-snowflake"></i>
+              <span>
+                <strong>{{ frozenTables.length }} Frozen Live Table(s)</strong>
+              </span>
+              @for (ft of frozenTables; track ft.TableID) {
+                @let isVerified = IsLiveTableSnapshotVerified(ft);
+                @let preVerifiedChip = GetLiveTablePreVerifiedSnapshot(ft);
+                <span class="mj-sheets-frozen-chip" [attr.data-testid]="'sheets-frozen-chip-' + ft.TableID">
+                  <i
+                    class="fa-solid"
+                    [class.fa-shield-halved]="isVerified"
+                    [class.fa-triangle-exclamation]="!isVerified"
+                    [title]="isVerified ? 'HMAC snapshot verified' : 'Snapshot signature unverified'"
+                  ></i>
+                  <span>{{ ft.Title }}</span>
+                  @if (isVerified && (ft.FrozenSnapshot?.FrozenByUserName || preVerifiedChip?.FrozenByUserName || ft.FrozenSnapshot?.FrozenByUserID)) {
+                    <span class="mj-sheets-frozen-meta">
+                      signed by {{ ft.FrozenSnapshot?.FrozenByUserName || preVerifiedChip?.FrozenByUserName || ft.FrozenSnapshot?.FrozenByUserID }}
+                      @if (ft.FrozenSnapshot?.FrozenAt || preVerifiedChip?.FrozenAt) {
+                        · {{ (ft.FrozenSnapshot?.FrozenAt || preVerifiedChip?.FrozenAt) | date:'short' }}
+                      }
+                    </span>
+                  }
+                </span>
+              }
+            </div>
+            <div class="mj-sheets-drift-actions">
+              <button
+                type="button"
+                class="mj-sheets-mini-btn"
+                data-testid="sheets-compare-frozen-live-btn"
+                (click)="CompareFrozenTablesWithLive()"
+              >
+                <i class="fa-solid fa-scale-balanced"></i> Compare with Live
+              </button>
+              @if (CanEdit && CanManageDocumentLocks) {
+                <button
+                  type="button"
+                  class="mj-sheets-mini-btn"
+                  data-testid="sheets-refreeze-all-btn"
+                  (click)="RefreezeAllFrozenTables()"
+                >
+                  <i class="fa-solid fa-rotate"></i> Re-Freeze All
+                </button>
+                <button
+                  type="button"
+                  class="mj-sheets-mini-btn"
+                  data-testid="sheets-switch-all-live-btn"
+                  (click)="SwitchAllFrozenTablesToLive()"
+                >
+                  <i class="fa-solid fa-bolt"></i> Switch All to Live
+                </button>
+              }
+            </div>
+            @if (FrozenDriftComparisonResults.length > 0) {
+              <div class="mj-sheets-drift-popover" data-testid="sheets-drift-comparison-popover">
+                <div class="mj-sheets-drift-popover-header">
+                  <strong>Live vs. Frozen Drift Delta</strong>
+                  <button
+                    type="button"
+                    class="mj-sheets-banner-close"
+                    (click)="FrozenDriftComparisonResults = []"
+                    aria-label="Close comparison"
+                  >
+                    <i class="fa-solid fa-xmark"></i>
+                  </button>
+                </div>
+                @for (d of FrozenDriftComparisonResults; track d.TableID) {
+                  <div class="mj-sheets-drift-row" [attr.data-testid]="'sheets-drift-row-' + d.TableID">
+                    <strong>{{ d.Title }}</strong>
+                    <span>{{ d.SummaryText }}</span>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+
         <!-- Formula & Range Bar -->
         <div class="mj-sheets-formula-bar" data-testid="sheets-formula-bar">
           <div class="mj-sheets-cell-coord-box" data-testid="sheet-active-cell-address">
             {{ ActiveCellAddress }}
           </div>
+          <select
+            class="mj-sheets-named-range-select"
+            [ngModel]="ActiveNamedRangeSelection"
+            (ngModelChange)="OnNamedRangeSelected($event)"
+            aria-label="Named Ranges"
+            title="Jump to Named Range"
+            data-testid="sheet-named-range-select"
+          >
+            <option value="">Named Ranges ({{ WorkbookNamedRanges.length }})</option>
+            @for (nr of WorkbookNamedRanges; track nr.Name) {
+              <option [value]="nr.Name">{{ nr.Name }} ({{ nr.Range }})</option>
+            }
+          </select>
           <input
             type="text"
             class="mj-sheets-range-input"
@@ -604,16 +758,37 @@ export interface ResolvedSheetsToolbarItem {
             data-testid="sheet-selected-range-input"
           />
           <span class="mj-sheets-fx-label">fx</span>
-          <input
-            type="text"
-            class="mj-sheets-formula-input"
-            [(ngModel)]="FormulaBarInput"
-            [readonly]="!CanEdit"
-            (keydown.enter)="CommitFormulaBarInput()"
-            placeholder="Enter value, formula (=SUM(B2:B9)), or =MJ.QUERY(&quot;Query Name&quot;, param)"
-            aria-label="Formula Bar Input"
-            data-testid="sheet-formula-input"
-          />
+          <div class="mj-sheets-formula-input-wrap">
+            <input
+              type="text"
+              class="mj-sheets-formula-input"
+              [(ngModel)]="FormulaBarInput"
+              (ngModelChange)="OnFormulaBarInputChange($event)"
+              [readonly]="!CanEdit"
+              (keydown)="OnFormulaBarKeyDown($event)"
+              (keydown.enter)="CommitFormulaBarInput()"
+              (blur)="OnFormulaBarBlur()"
+              placeholder="Enter value, formula (=SUM(B2:B9), =SPARKLINE(B2:E2)), or =MJ.QUERY(&quot;Query Name&quot;, param)"
+              aria-label="Formula Bar Input"
+              data-testid="sheet-formula-input"
+            />
+            @if (ShowFormulaAutocomplete && FormulaAutocompleteSuggestions.length > 0 && CanEdit) {
+              <div class="mj-sheets-formula-autocomplete" role="listbox" data-testid="sheet-formula-autocomplete">
+                @for (item of FormulaAutocompleteSuggestions; track item.Name; let idx = $index) {
+                  <button
+                    type="button"
+                    class="mj-sheets-autocomplete-item"
+                    [class.active]="idx === FormulaAutocompleteSelectedIndex"
+                    (mousedown)="$event.preventDefault(); ApplyFormulaAutocomplete(item)"
+                    [attr.data-testid]="'formula-suggestion-' + item.Name"
+                  >
+                    <span class="mj-sheets-ac-sig">{{ item.Signature }}</span>
+                    <span class="mj-sheets-ac-desc">{{ item.Summary }}</span>
+                  </button>
+                }
+              </div>
+            }
+          </div>
           @if (CanEdit) {
             <button
               type="button"
@@ -622,6 +797,87 @@ export interface ResolvedSheetsToolbarItem {
               data-testid="sheet-formula-apply-btn"
             >
               <i class="fa-solid fa-check"></i> Apply
+            </button>
+            @if (PendingAiFormulaCount > 0) {
+              <button
+                type="button"
+                class="mj-sheets-tool-btn active"
+                [disabled]="IsEvaluatingAiFormulas"
+                (click)="RunAiFormulas()"
+                title="Evaluate opt-in =MJ.AI formulas in this workbook"
+                data-testid="sheets-run-ai-formulas-btn"
+              >
+                <i class="fa-solid" [ngClass]="IsEvaluatingAiFormulas ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles'"></i>
+                <span>Run AI ({{ PendingAiFormulaCount }})</span>
+              </button>
+            }
+            <div class="mj-sheets-freeze-anchor">
+              <button
+                type="button"
+                class="mj-sheets-tool-btn"
+                [class.active]="ActiveSheet.FrozenRows > 0 || ActiveSheet.FrozenColumns > 0"
+                (click)="ToggleFreezePanesMenu()"
+                aria-haspopup="menu"
+                [attr.aria-expanded]="ShowFreezePanesMenu"
+                title="Freeze Rows & Columns"
+                data-testid="sheets-freeze-panes-btn"
+              >
+                <i class="fa-solid fa-snowflake"></i>
+                <span>
+                  @if (ActiveSheet.FrozenRows > 0 || ActiveSheet.FrozenColumns > 0) {
+                    {{ ActiveSheet.FrozenRows }}R/{{ ActiveSheet.FrozenColumns }}C
+                  } @else {
+                    Freeze
+                  }
+                </span>
+                <i class="fa-solid fa-caret-down"></i>
+              </button>
+              @if (ShowFreezePanesMenu) {
+                <div class="mj-sheets-freeze-menu" role="menu" data-testid="sheets-freeze-panes-menu">
+                  <button
+                    type="button"
+                    class="mj-sheets-freeze-menu-item"
+                    (click)="FreezeTopRow()"
+                    data-testid="freeze-top-row-option"
+                  >
+                    Freeze Top Row (Row 1)
+                  </button>
+                  <button
+                    type="button"
+                    class="mj-sheets-freeze-menu-item"
+                    (click)="FreezeFirstColumn()"
+                    data-testid="freeze-first-col-option"
+                  >
+                    Freeze First Column (Col A)
+                  </button>
+                  <button
+                    type="button"
+                    class="mj-sheets-freeze-menu-item"
+                    (click)="FreezeToActiveCell()"
+                    data-testid="freeze-selection-option"
+                  >
+                    Freeze Up to {{ ActiveCellAddress }}
+                  </button>
+                  <button
+                    type="button"
+                    class="mj-sheets-freeze-menu-item"
+                    (click)="UnfreezePanes()"
+                    data-testid="unfreeze-panes-option"
+                  >
+                    Unfreeze Panes
+                  </button>
+                </div>
+              }
+            </div>
+            <button
+              type="button"
+              class="mj-sheets-tool-btn"
+              [class.active]="IsSelectedRangeProtected"
+              (click)="ToggleSelectedRangeProtection()"
+              [title]="IsSelectedRangeProtected ? 'Remove range protection' : 'Protect selected range (' + SelectedRange + ')'"
+              data-testid="sheets-protect-range-quick-btn"
+            >
+              <i class="fa-solid" [ngClass]="IsSelectedRangeProtected ? 'fa-lock' : 'fa-lock-open'"></i>
             </button>
           }
           @if (ActiveCellSpec?.FormulaStable) {
@@ -731,13 +987,19 @@ export interface ResolvedSheetsToolbarItem {
                       </td>
                       @for (col of VisibleColumns; track col.ColumnID) {
                         @let addr = col.Letter + row.Index;
+                        @let mergeSpan = GetMergedCellSpan(row.Index, col.Index);
+                        @if (!mergeSpan.isCovered) {
                         @let cell = ActiveSheet.Cells[addr];
+                        @let listRule = GetCellListValidationRule(addr);
                         @let condTone = GetConditionalTone(cell);
                         @let peerColor = GetCellCollaboratorBorderColor(row.Index, col.Index);
                         @let peerBadge = GetCellPrimaryCollaboratorBadge(row.Index, col.Index);
                         @let cellComments = GetCellCommentThreads(row.Index, col.Index);
                         <td
                           class="mj-sheets-cell"
+                          [attr.colspan]="mergeSpan.colspan > 1 ? mergeSpan.colspan : null"
+                          [attr.rowspan]="mergeSpan.rowspan > 1 ? mergeSpan.rowspan : null"
+                          [class.merged]="mergeSpan.colspan > 1 || mergeSpan.rowspan > 1"
                           [class.active]="addr === ActiveCellAddress"
                           [class.in-range]="IsAddressInSelectedRange(row.Index, col.Index)"
                           [class.mj-sheets-frozen-col]="col.Index <= ActiveSheet.FrozenColumns"
@@ -809,6 +1071,50 @@ export interface ResolvedSheetsToolbarItem {
                                 >
                                   <i class="fa-solid fa-lock"></i> #MJ_ACCESS_DENIED!
                                 </span>
+                              } @else if (listRule && CanEdit && addr === ActiveCellAddress) {
+                                <select
+                                  class="mj-sheets-validation-select"
+                                  [ngModel]="cell?.RawValue ?? ''"
+                                  (ngModelChange)="OnValidationDropdownChanged(row.Index, col.Index, $event)"
+                                  (mousedown)="$event.stopPropagation()"
+                                  (click)="$event.stopPropagation()"
+                                  [attr.data-testid]="'sheet-validation-select-' + addr"
+                                >
+                                  <option value="">-- Select --</option>
+                                  @for (opt of listRule.AllowedValues ?? []; track opt) {
+                                    <option [value]="opt">{{ opt }}</option>
+                                  }
+                                </select>
+                              } @else if (TryParseSparklineCell(cell); as spark) {
+                                <svg
+                                  class="mj-sheets-sparkline"
+                                  [attr.viewBox]="'0 0 ' + spark.Width + ' ' + spark.Height"
+                                  [attr.data-spark-type]="spark.Type"
+                                  [attr.aria-label]="'Sparkline (' + spark.Count + ' points)'"
+                                  data-testid="sheet-cell-sparkline"
+                                >
+                                  @if (spark.Type === 'bar' || spark.Type === 'winloss') {
+                                    @for (bar of spark.Bars; track $index) {
+                                      <rect
+                                        [attr.x]="bar.X"
+                                        [attr.y]="bar.Y"
+                                        [attr.width]="bar.W"
+                                        [attr.height]="bar.H"
+                                        [attr.fill]="bar.Positive ? 'var(--mj-brand-primary, #4f46e5)' : 'var(--mj-status-error, #dc2626)'"
+                                        rx="1"
+                                      ></rect>
+                                    }
+                                  } @else {
+                                    <polyline
+                                      fill="none"
+                                      stroke="var(--mj-brand-primary, #4f46e5)"
+                                      stroke-width="1.6"
+                                      stroke-linecap="round"
+                                      stroke-linejoin="round"
+                                      [attr.points]="spark.PolylinePoints"
+                                    ></polyline>
+                                  }
+                                </svg>
                               } @else {
                                 <span class="mj-sheets-cell-text">{{ GetCellDisplayText(cell) }}</span>
                               }
@@ -824,6 +1130,15 @@ export interface ResolvedSheetsToolbarItem {
                                 </span>
                               }
                             </div>
+                            @if (addr === ActiveCellAddress && CanEdit) {
+                              <span
+                                class="mj-sheets-fill-handle"
+                                title="Drag to auto-fill series or formulas"
+                                [attr.data-testid]="'sheet-fill-handle-' + addr"
+                                (mousedown)="StartFillHandleDrag($event)"
+                                (click)="$event.stopPropagation()"
+                              ></span>
+                            }
                             @if (cellComments.length > 0) {
                               <span
                                 class="mj-sheets-comment-corner"
@@ -858,6 +1173,7 @@ export interface ResolvedSheetsToolbarItem {
                             }
                           }
                         </td>
+                        }
                       }
                     </tr>
                   }
@@ -963,17 +1279,20 @@ export interface ResolvedSheetsToolbarItem {
 
                           @if (table.Mode === 'Frozen' && table.FrozenSnapshot) {
                             @if (IsLiveTableSnapshotVerified(table)) {
+                              @let preVerifiedTable = GetLiveTablePreVerifiedSnapshot(table);
                               <div
                                 class="mj-sheets-table-provenance"
                                 [attr.data-testid]="'sheet-frozen-provenance-' + table.TableID"
                               >
                                 <i class="fa-solid fa-shield-halved"></i>
                                 <span>
-                                  Frozen snapshot captured at {{ table.FrozenSnapshot.FrozenAt }}
-                                  @if (table.FrozenSnapshot.FrozenByUserName || table.FrozenSnapshot.FrozenByUserID) {
+                                  Frozen snapshot captured at {{ table.FrozenSnapshot.FrozenAt || preVerifiedTable?.FrozenAt }}
+                                  @if (table.FrozenSnapshot.FrozenByUserName || preVerifiedTable?.FrozenByUserName || table.FrozenSnapshot.FrozenByUserID) {
                                     by
                                     <strong>{{
-                                      table.FrozenSnapshot.FrozenByUserName || table.FrozenSnapshot.FrozenByUserID
+                                      table.FrozenSnapshot.FrozenByUserName ||
+                                        preVerifiedTable?.FrozenByUserName ||
+                                        table.FrozenSnapshot.FrozenByUserID
                                     }}</strong>
                                   }
                                 </span>
@@ -1082,7 +1401,7 @@ export interface ResolvedSheetsToolbarItem {
                     </div>
                     <div class="mj-sheets-cards-row">
                       @for (emb of ActiveSheet.EmbeddedArtifacts; track emb.EmbedID) {
-                        @let childVer = EmbeddedArtifactVersions[emb.ArtifactID];
+                        @let childVer = EmbeddedArtifactVersions[emb.EmbedID];
                         @let isEditingEmb = IsEditingEmbeddedArtifact(emb);
                         <div
                           class="mj-sheets-object-card mj-sheets-ole-card"
@@ -1140,6 +1459,7 @@ export interface ResolvedSheetsToolbarItem {
                                 [artifactVersion]="childVer"
                                 [ArtifactTypeName]="emb.ArtifactTypeName"
                                 [readonly]="!isEditingEmb"
+                                [AncestorArtifactIDs]="EffectiveAncestorArtifactIDs"
                                 (ContentCommitted)="OnEmbeddedArtifactCommitted(emb, $event)"
                               ></mj-artifact-type-plugin-viewer>
                             } @else if (embError) {
@@ -1276,6 +1596,74 @@ export interface ResolvedSheetsToolbarItem {
               }
 
               <div class="mj-sheets-threads-list" data-testid="sheet-threads-list">
+                @if (CellSuggestions.length > 0 || CanComment) {
+                  <div class="mj-sheets-suggestions-section" data-testid="sheet-suggestions-section">
+                    <div class="mj-sheets-suggestions-header">
+                      <strong>
+                        <i class="fa-solid fa-code-pull-request"></i>
+                        Cell Suggestions ({{ PendingSuggestionCount }})
+                      </strong>
+                      @if (CanComment) {
+                        <button
+                          type="button"
+                          class="mj-sheets-mini-btn"
+                          data-testid="sheet-open-propose-suggestion-btn"
+                          (click)="OpenProposeSuggestionModal(SelectedRange || ActiveCellAddress)"
+                        >
+                          <i class="fa-solid fa-plus"></i> Suggest Edit
+                        </button>
+                      }
+                    </div>
+                    @for (sug of CellSuggestions; track sug.SuggestionID) {
+                      <div
+                        class="mj-sheets-suggestion-card"
+                        [attr.data-status]="sug.Status"
+                        [attr.data-testid]="'sheet-suggestion-card-' + sug.SuggestionID"
+                      >
+                        <div class="mj-sheets-suggestion-meta">
+                          <span class="mj-sheets-thread-anchor" (click)="FocusRangeFromAnchorKey(sug.SheetID + ':' + sug.Range)">
+                            {{ sug.Range }}
+                          </span>
+                          <span>
+                            @if (sug.IsAgent) {
+                              <i class="fa-solid fa-robot"></i>
+                            }
+                            {{ sug.AuthorName }} · {{ sug.Status | titlecase }}
+                          </span>
+                        </div>
+                        <div class="mj-sheets-suggestion-diff">
+                          <span class="mj-sheets-diff-del">{{ sug.CurrentDisplayValue || '(empty)' }}</span>
+                          <i class="fa-solid fa-arrow-right"></i>
+                          <span class="mj-sheets-diff-add">{{ sug.ProposedValue }}</span>
+                        </div>
+                        @if (sug.Rationale) {
+                          <p class="mj-sheets-suggestion-rationale">{{ sug.Rationale }}</p>
+                        }
+                        @if (sug.Status === 'pending' && CanEdit) {
+                          <div class="mj-sheets-suggestion-actions">
+                            <button
+                              type="button"
+                              class="mj-sheets-mini-btn mj-sheets-btn-accept"
+                              [attr.data-testid]="'sheet-accept-suggestion-' + sug.SuggestionID"
+                              (click)="AcceptCellSuggestion(sug)"
+                            >
+                              <i class="fa-solid fa-check"></i> Accept
+                            </button>
+                            <button
+                              type="button"
+                              class="mj-sheets-mini-btn mj-sheets-btn-reject"
+                              [attr.data-testid]="'sheet-reject-suggestion-' + sug.SuggestionID"
+                              (click)="RejectCellSuggestion(sug)"
+                            >
+                              <i class="fa-solid fa-xmark"></i> Reject
+                            </button>
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+
                 @for (thread of AnchoredThreads; track thread.ConversationID) {
                   <div
                     class="mj-sheets-thread-card"
@@ -1296,7 +1684,19 @@ export interface ResolvedSheetsToolbarItem {
                           Resolve
                         </button>
                       } @else {
-                        <span class="mj-sheets-resolved-label">Resolved</span>
+                        <div class="mj-sheets-resolved-row">
+                          <span class="mj-sheets-resolved-label">Resolved</span>
+                          @if (CanComment) {
+                            <button
+                              type="button"
+                              class="mj-sheets-mini-btn"
+                              (click)="ReopenAnchoredThread(thread)"
+                              [attr.data-testid]="'sheet-reopen-thread-' + thread.ConversationID"
+                            >
+                              Reopen
+                            </button>
+                          }
+                        </div>
                       }
                     </div>
                     @for (msg of thread.Messages; track msg.DetailID) {
@@ -1306,6 +1706,28 @@ export interface ResolvedSheetsToolbarItem {
                           <span>{{ msg.Role }}</span>
                         </div>
                         <p class="mj-sheets-msg-body">{{ msg.Message }}</p>
+                      </div>
+                    }
+                    @if (CanComment) {
+                      <div class="mj-sheets-thread-reply-box">
+                        <input
+                          type="text"
+                          class="mj-sheets-reply-input"
+                          [ngModel]="ThreadReplyDrafts[thread.ConversationID] || ''"
+                          (ngModelChange)="ThreadReplyDrafts[thread.ConversationID] = $event"
+                          (keydown.enter)="ReplyToAnchoredThread(thread)"
+                          placeholder="Reply or @Agent..."
+                          [attr.data-testid]="'sheet-reply-input-' + thread.ConversationID"
+                        />
+                        <button
+                          type="button"
+                          class="mj-sheets-mini-btn"
+                          [disabled]="!(ThreadReplyDrafts[thread.ConversationID] || '').trim()"
+                          (click)="ReplyToAnchoredThread(thread)"
+                          [attr.data-testid]="'sheet-reply-submit-' + thread.ConversationID"
+                        >
+                          <i class="fa-solid fa-reply"></i> Reply
+                        </button>
                       </div>
                     }
                   </div>
@@ -1635,10 +2057,6 @@ export interface ResolvedSheetsToolbarItem {
                   [class.active]="IsChartSeriesSelected(chart, dataset, sIdx)"
                   (click)="SetChartSeriesSelection(chart.ChartID, sIdx)"
                 >
-                  <span
-                    class="mj-sheets-series-dot"
-                    [style.background]="GetChartSeriesColor(sIdx)"
-                  ></span>
                   <span>{{ s.Name }}</span>
                 </button>
               }
@@ -1646,7 +2064,7 @@ export interface ResolvedSheetsToolbarItem {
           }
 
           <div
-            class="mj-sheets-chart-Stage"
+            class="mj-sheets-chart-stage"
             [attr.data-testid]="'sheet-chart-svg-' + chart.ChartID"
           >
             <ng-container
@@ -1667,13 +2085,14 @@ export interface ResolvedSheetsToolbarItem {
 
       <ng-template #chartSvgTpl let-chart="chart" let-dataset="dataset">
         @let activeSeries = GetActiveChartSeries(chart, dataset);
-        @let maxVal = GetChartMaxValueForSeries(activeSeries);
+        @let chartDomain = GetChartDomain(activeSeries);
+        @let maxVal = chartDomain.MaxValue;
         <svg viewBox="0 0 380 180" class="mj-sheets-chart-svg">
           @if (chart.ChartType === 'pie') {
             @let pieSlices = GetChartPieSlices(chart, dataset, activeSeries);
             @if (pieSlices.length === 0) {
               <text x="190" y="92" text-anchor="middle" font-size="11" fill="var(--mj-text-secondary)">
-                All values are 0 in this series.
+                All values are 0 or non-positive in this series.
               </text>
             } @else {
               @for (slice of pieSlices; track slice.Index) {
@@ -1690,7 +2109,7 @@ export interface ResolvedSheetsToolbarItem {
                   @if (slice.Index < 7) {
                     <rect
                       x="174"
-                      [attr.y]="22 + slice.Index * 21"
+                      [attr.y]="22 + slice.Index * 20"
                       width="9"
                       height="9"
                       rx="2"
@@ -1698,7 +2117,7 @@ export interface ResolvedSheetsToolbarItem {
                     />
                     <text
                       x="188"
-                      [attr.y]="30 + slice.Index * 21"
+                      [attr.y]="30 + slice.Index * 20"
                       font-size="9.5"
                       fill="var(--mj-text-primary)"
                     >
@@ -1707,24 +2126,30 @@ export interface ResolvedSheetsToolbarItem {
                   }
                 </g>
               }
+              @if (pieSlices.length > 7) {
+                <text x="188" y="168" font-size="9" fill="var(--mj-text-secondary)" data-testid="sheet-pie-more-legend">
+                  +{{ pieSlices.length - 7 }} more
+                </text>
+              }
             }
           } @else {
             <!-- Cartesian gridlines and Y-axis ticks -->
             <line x1="44" y1="18" x2="366" y2="18" stroke="var(--mj-border-subtle)" stroke-dasharray="2,2" />
             <line x1="44" y1="79" x2="366" y2="79" stroke="var(--mj-border-subtle)" stroke-dasharray="2,2" />
-            <line x1="44" y1="140" x2="366" y2="140" stroke="var(--mj-border-default)" />
+            <line x1="44" [attr.y1]="chartDomain.ZeroY" x2="366" [attr.y2]="chartDomain.ZeroY" stroke="var(--mj-border-default)" />
+            <line x1="44" y1="140" x2="366" y2="140" stroke="var(--mj-border-subtle)" />
             <text x="40" y="21" text-anchor="end" font-size="8.5" fill="var(--mj-text-secondary)">
-              {{ FormatChartValue(maxVal) }}
+              {{ FormatChartValue(chartDomain.MaxValue) }}
             </text>
             <text x="40" y="82" text-anchor="end" font-size="8.5" fill="var(--mj-text-secondary)">
-              {{ FormatChartValue(maxVal / 2) }}
+              {{ FormatChartValue((chartDomain.MaxValue + chartDomain.MinValue) / 2) }}
             </text>
             <text x="40" y="143" text-anchor="end" font-size="8.5" fill="var(--mj-text-secondary)">
-              0
+              {{ FormatChartValue(chartDomain.MinValue) }}
             </text>
 
             @if (chart.ChartType === 'line' || chart.ChartType === 'area') {
-              @let lineSeries = GetChartLineSeries(dataset, activeSeries, maxVal, chart);
+              @let lineSeries = GetChartLineSeries(dataset, activeSeries, maxVal, chart, chartDomain);
               @for (ls of lineSeries; track ls.SeriesIndex) {
                 <g>
                   @if (chart.ChartType === 'area' && ls.AreaPath) {
@@ -1783,7 +2208,7 @@ export interface ResolvedSheetsToolbarItem {
               }
             } @else {
               <!-- Bar Chart -->
-              @let bars = GetChartBarRects(chart, dataset, activeSeries, maxVal);
+              @let bars = GetChartBarRects(chart, dataset, activeSeries, maxVal, chartDomain);
               @for (bar of bars; track bar.Key) {
                 <g>
                   <rect
@@ -2072,7 +2497,7 @@ export interface ResolvedSheetsToolbarItem {
                   <span>{{ EditingChartDraft.SourceRange }} · {{ EditingChartDraft.ChartType | uppercase }}</span>
                 </div>
                 @if (previewDataset && previewDataset.Categories.length > 0 && previewDataset.Series.length > 0) {
-                  <div class="mj-sheets-chart-Stage" data-testid="chart-editor-preview-svg">
+                  <div class="mj-sheets-chart-stage" data-testid="chart-editor-preview-svg">
                     <ng-container
                       [ngTemplateOutlet]="chartSvgTpl"
                       [ngTemplateOutletContext]="{ chart: EditingChartDraft, dataset: previewDataset }"
@@ -2166,6 +2591,303 @@ export interface ResolvedSheetsToolbarItem {
         </div>
       }
 
+      <!-- NW-4: Data Validation Rule Modal -->
+      @if (ShowValidationDrawer) {
+        <div
+          class="mj-sheets-modal-backdrop"
+          data-testid="sheets-validation-modal"
+          (click)="ShowValidationDrawer = false"
+        >
+          <div
+            class="mj-sheets-modal-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Data validation rules"
+            (click)="$event.stopPropagation()"
+          >
+            <div class="mj-sheets-modal-header">
+              <i class="fa-solid fa-list-check"></i>
+              <h3>Data Validation ({{ ActiveSheet.Name }})</h3>
+            </div>
+            <div class="mj-sheets-modal-body">
+              <div class="mj-sheets-form-row">
+                <label>Target Range (A1)</label>
+                <input type="text" class="mj-sheets-modal-input" [(ngModel)]="NewValidationRange" data-testid="validation-range-input" />
+              </div>
+              <div class="mj-sheets-form-row">
+                <label>Rule Type</label>
+                <select class="mj-sheets-modal-input" [(ngModel)]="NewValidationRuleType" data-testid="validation-type-select">
+                  <option value="list">List of Values</option>
+                  <option value="numberRange">Number Range</option>
+                  <option value="notEmpty">Required (Not Empty)</option>
+                </select>
+              </div>
+              @if (NewValidationRuleType === 'list') {
+                <div class="mj-sheets-form-row">
+                  <label>Allowed Values (comma-separated)</label>
+                  <input type="text" class="mj-sheets-modal-input" [(ngModel)]="NewValidationAllowedCsv" placeholder="Open, In Progress, Closed" data-testid="validation-allowed-input" />
+                </div>
+              }
+              @if (NewValidationRuleType === 'numberRange') {
+                <div class="mj-sheets-two-col-row">
+                  <div class="mj-sheets-form-row">
+                    <label>Min Value</label>
+                    <input type="number" class="mj-sheets-modal-input" [(ngModel)]="NewValidationMin" data-testid="validation-min-input" />
+                  </div>
+                  <div class="mj-sheets-form-row">
+                    <label>Max Value</label>
+                    <input type="number" class="mj-sheets-modal-input" [(ngModel)]="NewValidationMax" data-testid="validation-max-input" />
+                  </div>
+                </div>
+              }
+              <div class="mj-sheets-form-row">
+                <label>Error Message (optional)</label>
+                <input type="text" class="mj-sheets-modal-input" [(ngModel)]="NewValidationErrorMessage" placeholder="Invalid entry" />
+              </div>
+              @if (ActiveSheet.ValidationRules && ActiveSheet.ValidationRules.length > 0) {
+                <div class="mj-sheets-rule-list">
+                  @for (rule of ActiveSheet.ValidationRules; track rule.RuleID) {
+                    <div class="mj-sheets-rule-row">
+                      <span><strong>{{ rule.Range }}</strong> · {{ rule.RuleType }}</span>
+                      @if (CanEdit) {
+                        <button type="button" class="mj-sheets-mini-btn" (click)="RemoveValidationRule(rule.RuleID)">
+                          <i class="fa-solid fa-trash"></i>
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+            <div class="mj-sheets-modal-footer">
+              @if (CanEdit) {
+                <button
+                  type="button"
+                  class="mj-sheets-tool-btn mj-sheets-save-btn"
+                  data-testid="validation-save-btn"
+                  (click)="ConfirmAddValidationRule()"
+                >
+                  <i class="fa-solid fa-check"></i> Add Rule
+                </button>
+              }
+              <button type="button" class="mj-sheets-tool-btn" (click)="ShowValidationDrawer = false">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- NW-4: Conditional Formatting Modal -->
+      @if (ShowConditionalFormatDrawer) {
+        <div
+          class="mj-sheets-modal-backdrop"
+          data-testid="sheets-conditional-format-modal"
+          (click)="ShowConditionalFormatDrawer = false"
+        >
+          <div
+            class="mj-sheets-modal-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Conditional formatting rules"
+            (click)="$event.stopPropagation()"
+          >
+            <div class="mj-sheets-modal-header">
+              <i class="fa-solid fa-wand-sparkles"></i>
+              <h3>Conditional Formatting ({{ ActiveSheet.Name }})</h3>
+            </div>
+            <div class="mj-sheets-modal-body">
+              <div class="mj-sheets-form-row">
+                <label>Range (A1)</label>
+                <input type="text" class="mj-sheets-modal-input" [(ngModel)]="NewCondFormatRange" data-testid="condfmt-range-input" />
+              </div>
+              <div class="mj-sheets-two-col-row">
+                <div class="mj-sheets-form-row">
+                  <label>Operator</label>
+                  <select class="mj-sheets-modal-input" [(ngModel)]="NewCondFormatOperator" data-testid="condfmt-operator-select">
+                    <option value="gt">Greater Than (&gt;)</option>
+                    <option value="lt">Less Than (&lt;)</option>
+                    <option value="eq">Equals (=)</option>
+                    <option value="between">Between</option>
+                    <option value="contains">Contains Text</option>
+                  </select>
+                </div>
+                <div class="mj-sheets-form-row">
+                  <label>Highlight Tone</label>
+                  <select class="mj-sheets-modal-input" [(ngModel)]="NewCondFormatTone" data-testid="condfmt-tone-select">
+                    <option value="success">Success</option>
+                    <option value="warning">Warning</option>
+                    <option value="danger">Danger</option>
+                    <option value="info">Info</option>
+                  </select>
+                </div>
+              </div>
+              <div class="mj-sheets-two-col-row">
+                <div class="mj-sheets-form-row">
+                  <label>Value 1</label>
+                  <input type="text" class="mj-sheets-modal-input" [(ngModel)]="NewCondFormatValue1" data-testid="condfmt-val1-input" />
+                </div>
+                @if (NewCondFormatOperator === 'between') {
+                  <div class="mj-sheets-form-row">
+                    <label>Value 2</label>
+                    <input type="number" class="mj-sheets-modal-input" [(ngModel)]="NewCondFormatValue2" data-testid="condfmt-val2-input" />
+                  </div>
+                }
+              </div>
+              @if (ActiveSheet.ConditionalFormats && ActiveSheet.ConditionalFormats.length > 0) {
+                <div class="mj-sheets-rule-list">
+                  @for (rule of ActiveSheet.ConditionalFormats; track rule.RuleID) {
+                    <div class="mj-sheets-rule-row">
+                      <span><strong>{{ rule.Range }}</strong> · {{ rule.Operator }} {{ rule.Value1 }} ({{ rule.HighlightTone }})</span>
+                      @if (CanEdit) {
+                        <button type="button" class="mj-sheets-mini-btn" (click)="RemoveConditionalFormatRule(rule.RuleID)">
+                          <i class="fa-solid fa-trash"></i>
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+            <div class="mj-sheets-modal-footer">
+              @if (CanEdit) {
+                <button
+                  type="button"
+                  class="mj-sheets-tool-btn mj-sheets-save-btn"
+                  data-testid="condfmt-save-btn"
+                  (click)="ConfirmAddConditionalFormatRule()"
+                >
+                  <i class="fa-solid fa-check"></i> Add Rule
+                </button>
+              }
+              <button type="button" class="mj-sheets-tool-btn" (click)="ShowConditionalFormatDrawer = false">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- NW-4: Named Ranges Modal -->
+      @if (ShowNamedRangeModal) {
+        <div
+          class="mj-sheets-modal-backdrop"
+          data-testid="sheets-named-range-modal"
+          (click)="ShowNamedRangeModal = false"
+        >
+          <div
+            class="mj-sheets-modal-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Named ranges manager"
+            (click)="$event.stopPropagation()"
+          >
+            <div class="mj-sheets-modal-header">
+              <i class="fa-solid fa-tag"></i>
+              <h3>Named Ranges</h3>
+            </div>
+            <div class="mj-sheets-modal-body">
+              <div class="mj-sheets-two-col-row">
+                <div class="mj-sheets-form-row">
+                  <label>Name (identifier)</label>
+                  <input type="text" class="mj-sheets-modal-input" [(ngModel)]="NewNamedRangeName" placeholder="e.g. TaxRate" data-testid="named-range-name-input" />
+                </div>
+                <div class="mj-sheets-form-row">
+                  <label>Range (A1)</label>
+                  <input type="text" class="mj-sheets-modal-input" [(ngModel)]="NewNamedRangeRef" placeholder="e.g. B2:B10" data-testid="named-range-ref-input" />
+                </div>
+              </div>
+              @if (WorkbookNamedRanges.length > 0) {
+                <div class="mj-sheets-rule-list">
+                  @for (nr of WorkbookNamedRanges; track nr.Name) {
+                    <div class="mj-sheets-rule-row">
+                      <span><strong>{{ nr.Name }}</strong> → {{ nr.Range }}</span>
+                      @if (CanEdit) {
+                        <button type="button" class="mj-sheets-mini-btn" (click)="DeleteNamedRange(nr.Name)">
+                          <i class="fa-solid fa-trash"></i>
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+            <div class="mj-sheets-modal-footer">
+              @if (CanEdit) {
+                <button
+                  type="button"
+                  class="mj-sheets-tool-btn mj-sheets-save-btn"
+                  data-testid="named-range-save-btn"
+                  (click)="ConfirmSaveNamedRange()"
+                >
+                  <i class="fa-solid fa-check"></i> Save Name
+                </button>
+              }
+              <button type="button" class="mj-sheets-tool-btn" (click)="ShowNamedRangeModal = false">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- NW-3: Propose Cell Suggestion Modal -->
+      @if (ShowProposeSuggestionModal) {
+        <div
+          class="mj-sheets-modal-backdrop"
+          data-testid="sheets-suggestion-modal"
+          (click)="ShowProposeSuggestionModal = false"
+        >
+          <div
+            class="mj-sheets-modal-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Propose cell suggestion"
+            (click)="$event.stopPropagation()"
+          >
+            <div class="mj-sheets-modal-header">
+              <i class="fa-solid fa-code-pull-request"></i>
+              <h3>Suggest Edit on {{ PendingSuggestionRange }}</h3>
+            </div>
+            <div class="mj-sheets-modal-body">
+              <div class="mj-sheets-form-row">
+                <label>Proposed Value or Formula</label>
+                <input
+                  type="text"
+                  class="mj-sheets-modal-input"
+                  [(ngModel)]="PendingSuggestionValue"
+                  placeholder="Value or =FORMULA(...)"
+                  data-testid="suggestion-value-input"
+                />
+              </div>
+              <div class="mj-sheets-form-row">
+                <label>Rationale (optional)</label>
+                <input
+                  type="text"
+                  class="mj-sheets-modal-input"
+                  [(ngModel)]="PendingSuggestionRationale"
+                  placeholder="Why this change?"
+                  data-testid="suggestion-rationale-input"
+                />
+              </div>
+            </div>
+            <div class="mj-sheets-modal-footer">
+              <button
+                type="button"
+                class="mj-sheets-tool-btn mj-sheets-save-btn"
+                data-testid="suggestion-submit-btn"
+                (click)="SubmitCellSuggestion()"
+              >
+                <i class="fa-solid fa-check"></i> Submit Suggestion
+              </button>
+              <button type="button" class="mj-sheets-tool-btn" (click)="ShowProposeSuggestionModal = false">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
       <mj-context-menu
         [IsOpen]="ContextMenuOpen"
         [AnchorX]="ContextMenuX"
@@ -2176,6 +2898,15 @@ export interface ResolvedSheetsToolbarItem {
         (ItemSelected)="OnContextMenuCommand($event)"
         (Closed)="CloseContextMenu()"
       ></mj-context-menu>
+
+      <mj-artifact-command-palette
+        [Open]="ShowCommandPalette"
+        Title="Spreadsheet Commands"
+        Placeholder="Search formatting, freeze panes, protect, charts, export..."
+        [Commands]="SheetsCommandPaletteItems"
+        (Execute)="ExecuteSheetPaletteCommand($event)"
+        (Closed)="ShowCommandPalette = false"
+      ></mj-artifact-command-palette>
     </div>
   `,
   styles: [
@@ -2201,22 +2932,74 @@ export interface ResolvedSheetsToolbarItem {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        flex-wrap: wrap;
-        gap: 8px;
-        padding: 8px 12px;
-        background: var(--mj-bg-surface-card);
+        flex-wrap: nowrap;
+        gap: 6px;
+        min-height: 40px;
+        padding: 4px 10px;
+        background: var(--mj-bg-surface);
         border-bottom: 1px solid var(--mj-border-default);
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .mj-sheets-toolbar::-webkit-scrollbar {
+        display: none;
       }
 
       .mj-sheets-toolbar-group {
         display: flex;
         align-items: center;
-        flex-wrap: wrap;
-        gap: 6px;
+        flex-wrap: nowrap;
+        gap: 5px;
+        flex-shrink: 0;
       }
 
       .mj-sheets-toolbar-right {
         margin-left: auto;
+      }
+
+      .mj-sheets-save-quiet {
+        border-color: transparent;
+        background: transparent;
+        color: var(--mj-text-muted);
+      }
+
+      .mj-sheets-save-quiet:hover:not(:disabled) {
+        background: var(--mj-bg-surface-hover);
+        color: var(--mj-text-primary);
+      }
+
+      .mj-sheets-saved-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--mj-status-success);
+        display: inline-block;
+      }
+
+      .mj-sheets-ai-pill {
+        background: color-mix(in srgb, var(--mj-text-violet) 10%, var(--mj-bg-surface));
+        border-color: color-mix(in srgb, var(--mj-text-violet) 28%, transparent);
+        color: var(--mj-text-violet);
+      }
+
+      .mj-sheets-cmdk-btn {
+        padding: 3px 7px;
+        background: var(--mj-bg-surface-sunken);
+      }
+
+      .mj-sheets-kbd-tag {
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--mj-text-muted);
+      }
+
+      .mj-sheets-count-badge {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 1px 5px;
+        border-radius: 999px;
+        background: var(--mj-brand-primary);
+        color: var(--mj-brand-on-primary);
       }
 
       .mj-sheets-undo-group {
@@ -2390,14 +3173,22 @@ export interface ResolvedSheetsToolbarItem {
       }
 
       .mj-sheets-title-input {
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 600;
         color: var(--mj-text-primary);
-        background: var(--mj-bg-surface);
-        border: 1px solid var(--mj-border-subtle);
+        background: transparent;
+        border: 1px solid transparent;
         border-radius: 6px;
-        padding: 5px 10px;
-        min-width: 180px;
+        padding: 4px 8px;
+        min-width: 110px;
+        max-width: 165px;
+        text-overflow: ellipsis;
+        transition: border-color 120ms ease, background-color 120ms ease;
+      }
+      .mj-sheets-title-input:hover:not([readonly]),
+      .mj-sheets-title-input:focus:not([readonly]) {
+        background: var(--mj-bg-surface);
+        border-color: var(--mj-border-default);
       }
 
       .mj-sheets-mode-pills {
@@ -2630,8 +3421,15 @@ export interface ResolvedSheetsToolbarItem {
         color: var(--mj-text-muted);
       }
 
+      .mj-sheets-formula-input-wrap {
+        position: relative;
+        flex: 1;
+        display: flex;
+      }
+
       .mj-sheets-formula-input {
         flex: 1;
+        width: 100%;
         font-family: var(--mj-font-family-mono, monospace);
         font-size: 12px;
         padding: 5px 10px;
@@ -2639,6 +3437,85 @@ export interface ResolvedSheetsToolbarItem {
         border: 1px solid var(--mj-border-default);
         background: var(--mj-bg-surface);
         color: var(--mj-text-primary);
+      }
+
+      .mj-sheets-formula-autocomplete {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        min-width: 340px;
+        max-width: 520px;
+        z-index: 40;
+        background: var(--mj-bg-surface-card);
+        border: 1px solid var(--mj-border-default);
+        border-radius: 8px;
+        box-shadow: var(--mj-shadow-lg, 0 12px 28px rgba(15, 23, 42, 0.16));
+        padding: 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .mj-sheets-autocomplete-item {
+        border: none;
+        background: transparent;
+        text-align: left;
+        padding: 6px 8px;
+        border-radius: 5px;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .mj-sheets-autocomplete-item:hover,
+      .mj-sheets-autocomplete-item.active {
+        background: var(--mj-bg-surface-hover);
+      }
+      .mj-sheets-ac-sig {
+        font-family: var(--mj-font-family-mono, monospace);
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--mj-brand-primary);
+      }
+      .mj-sheets-ac-desc {
+        font-size: 11px;
+        color: var(--mj-text-muted);
+      }
+      .mj-sheets-freeze-anchor {
+        position: relative;
+        display: inline-flex;
+      }
+      .mj-sheets-freeze-menu {
+        position: absolute;
+        top: calc(100% + 4px);
+        right: 0;
+        min-width: 210px;
+        z-index: 45;
+        background: var(--mj-bg-surface-card);
+        border: 1px solid var(--mj-border-default);
+        border-radius: 8px;
+        box-shadow: var(--mj-shadow-lg, 0 12px 28px rgba(15, 23, 42, 0.16));
+        padding: 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .mj-sheets-freeze-menu-item {
+        border: none;
+        background: transparent;
+        text-align: left;
+        padding: 6px 10px;
+        border-radius: 5px;
+        font-size: 12px;
+        color: var(--mj-text-primary);
+        cursor: pointer;
+      }
+      .mj-sheets-freeze-menu-item:hover {
+        background: var(--mj-bg-surface-hover);
+      }
+      .mj-sheets-sparkline {
+        width: 84px;
+        height: 20px;
+        display: block;
       }
 
       .mj-sheets-stable-formula-badge {
@@ -2760,7 +3637,7 @@ export interface ResolvedSheetsToolbarItem {
         position: sticky;
         top: 0;
         left: 0;
-        z-index: 3;
+        z-index: 8;
       }
 
       .mj-sheets-col-header {
@@ -2768,7 +3645,7 @@ export interface ResolvedSheetsToolbarItem {
         text-align: center;
         position: sticky;
         top: 0;
-        z-index: 2;
+        z-index: 6;
         cursor: pointer;
       }
 
@@ -2803,7 +3680,7 @@ export interface ResolvedSheetsToolbarItem {
         padding: 4px;
         position: sticky;
         left: 0;
-        z-index: 1;
+        z-index: 2;
         cursor: pointer;
         user-select: none;
       }
@@ -2862,7 +3739,7 @@ export interface ResolvedSheetsToolbarItem {
 
       .mj-sheets-frozen-row > td {
         position: sticky;
-        z-index: 2;
+        z-index: 3;
         border-bottom: 2px solid var(--mj-brand-primary);
       }
 
@@ -2870,7 +3747,12 @@ export interface ResolvedSheetsToolbarItem {
         z-index: 4;
       }
 
-      .mj-sheets-col-header.mj-sheets-frozen-col,
+      .mj-sheets-col-header.mj-sheets-frozen-col {
+        position: sticky;
+        z-index: 7;
+        border-right: 2px solid var(--mj-brand-primary);
+      }
+
       .mj-sheets-cell.mj-sheets-frozen-col {
         position: sticky;
         z-index: 3;
@@ -2989,7 +3871,7 @@ export interface ResolvedSheetsToolbarItem {
         width: 0;
         height: 0;
         border-left: 8px solid transparent;
-        border-top: 8px solid var(--mj-status-warning, #f59e0b);
+        border-top: 8px solid var(--mj-status-warning);
         z-index: 3;
         cursor: pointer;
       }
@@ -3004,7 +3886,7 @@ export interface ResolvedSheetsToolbarItem {
         background: var(--mj-bg-surface-elevated, var(--mj-bg-surface));
         color: var(--mj-text-primary);
         border: 1px solid var(--mj-border-default);
-        border-left: 3px solid var(--mj-status-warning, #f59e0b);
+        border-left: 3px solid var(--mj-status-warning);
         border-radius: 6px;
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
         padding: 8px 10px;
@@ -3047,7 +3929,7 @@ export interface ResolvedSheetsToolbarItem {
       }
 
       .mj-sheets-comment-bubble-author i {
-        color: var(--mj-status-warning, #f59e0b);
+        color: var(--mj-status-warning);
       }
 
       .mj-sheets-comment-bubble-anchor {
@@ -3831,20 +4713,283 @@ export interface ResolvedSheetsToolbarItem {
         flex-wrap: wrap;
         padding-top: 4px;
       }
+
+      .mj-sheets-drift-banner {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding: 6px 12px;
+        background: color-mix(in srgb, var(--mj-status-info) 12%, var(--mj-bg-surface));
+        border-bottom: 1px solid var(--mj-border-subtle);
+        font-size: 12px;
+        color: var(--mj-text-primary);
+      }
+
+      .mj-sheets-drift-banner-main {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .mj-sheets-frozen-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        font-size: 11px;
+      }
+
+      .mj-sheets-frozen-meta {
+        color: var(--mj-text-secondary);
+      }
+
+      .mj-sheets-drift-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+
+      .mj-sheets-drift-popover {
+        width: 100%;
+        margin-top: 4px;
+        padding: 8px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .mj-sheets-drift-popover-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 12px;
+      }
+
+      .mj-sheets-drift-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 11.5px;
+        color: var(--mj-text-secondary);
+      }
+
+      .mj-sheets-named-range-select {
+        max-width: 150px;
+        padding: 4px 6px;
+        border-radius: 5px;
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-primary);
+        font-size: 11.5px;
+      }
+
+      .mj-sheets-validation-select {
+        width: 100%;
+        border: none;
+        background: transparent;
+        color: var(--mj-text-primary);
+        font-size: 12px;
+        outline: none;
+      }
+
+      .mj-sheets-fill-handle {
+        position: absolute;
+        right: -3px;
+        bottom: -3px;
+        width: 7px;
+        height: 7px;
+        background: var(--mj-brand-primary);
+        border: 1px solid var(--mj-bg-surface);
+        cursor: crosshair;
+        z-index: 5;
+      }
+
+      .mj-sheets-cell.merged {
+        background: color-mix(in srgb, var(--mj-brand-primary) 4%, var(--mj-bg-surface));
+      }
+
+      .mj-sheets-suggestions-section {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 10px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--mj-border-subtle);
+      }
+
+      .mj-sheets-suggestions-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 12px;
+      }
+
+      .mj-sheets-suggestion-card {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        padding: 8px;
+        border-radius: 6px;
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        font-size: 12px;
+      }
+
+      .mj-sheets-suggestion-meta {
+        display: flex;
+        justify-content: space-between;
+        gap: 6px;
+        font-size: 11px;
+        color: var(--mj-text-secondary);
+      }
+
+      .mj-sheets-suggestion-diff {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--mj-font-family-mono, monospace);
+        font-size: 11.5px;
+      }
+
+      .mj-sheets-diff-del {
+        color: var(--mj-status-error);
+        text-decoration: line-through;
+      }
+
+      .mj-sheets-diff-add {
+        color: var(--mj-status-success);
+        font-weight: 600;
+      }
+
+      .mj-sheets-suggestion-rationale {
+        margin: 0;
+        font-size: 11.5px;
+        color: var(--mj-text-secondary);
+      }
+
+      .mj-sheets-suggestion-actions {
+        display: flex;
+        gap: 6px;
+      }
+
+      .mj-sheets-thread-reply-box {
+        display: flex;
+        gap: 6px;
+        margin-top: 6px;
+      }
+
+      .mj-sheets-reply-input {
+        flex: 1;
+        min-width: 0;
+        padding: 4px 8px;
+        border-radius: 5px;
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-primary);
+        font-size: 12px;
+      }
+
+      .mj-sheets-resolved-row {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .mj-sheets-rule-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 6px;
+        max-height: 150px;
+        overflow-y: auto;
+      }
+
+      .mj-sheets-rule-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 5px 8px;
+        border-radius: 5px;
+        border: 1px solid var(--mj-border-subtle);
+        background: var(--mj-bg-surface);
+        font-size: 12px;
+      }
     `,
   ],
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'SpreadsheetArtifactViewerPlugin')
 export class SpreadsheetArtifactViewerComponent
   extends BaseArtifactViewerPluginComponent
-  implements OnInit, OnChanges, OnDestroy
+  implements OnInit, OnDestroy
 {
   public readonly IsAiAssistantEnabled = ARTIFACT_AI_ASSISTANT_ENABLED;
+  private _collaborationWsUrl: string | null = null;
+  private hasInitialized = false;
+  private readonly inheritedAncestors = inject(MJ_EMBEDDED_ARTIFACT_ANCESTORS, { optional: true });
+  private pendingTimers = new Set<ReturnType<typeof setTimeout>>();
+  private saveVersionTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
+
   /**
    * Optional WebSocket URL (or base URL) override for `/collaboration/yjs` real-time Yjs room sync (§ 3.2).
    * When omitted, `DocumentCollaborationService` mints a single-use ticket via `GraphQLDataProvider`.
    */
-  @Input() public CollaborationWsUrl: string | null = null;
+  @Input()
+  public get CollaborationWsUrl(): string | null {
+    return this._collaborationWsUrl;
+  }
+  public set CollaborationWsUrl(value: string | null) {
+    if (this._collaborationWsUrl === value) {
+      return;
+    }
+    this._collaborationWsUrl = value;
+    if (this.hasInitialized) {
+      void this.initializeWorkbookSession();
+    }
+  }
+
+  @Input() public AncestorArtifactIDs?: ReadonlySet<string> | null;
+
+  constructor() {
+    super();
+    let backingArtifactVersion = this.artifactVersion;
+    Object.defineProperty(this, 'artifactVersion', {
+      configurable: true,
+      enumerable: true,
+      get: (): MJArtifactVersionEntity => backingArtifactVersion,
+      set: (value: MJArtifactVersionEntity): void => {
+        const changed = backingArtifactVersion !== value;
+        backingArtifactVersion = value;
+        if (changed && this.hasInitialized) {
+          void this.initializeWorkbookSession();
+        }
+      },
+    });
+    let backingReadonly = this.readonly;
+    Object.defineProperty(this, 'readonly', {
+      configurable: true,
+      enumerable: true,
+      get: (): boolean => backingReadonly,
+      set: (value: boolean): void => {
+        const changed = backingReadonly !== value;
+        backingReadonly = value;
+        if (changed && (this.hasInitialized || this.CollaborationSession !== null)) {
+          this.syncReadonlyInputState();
+        }
+      },
+    });
+  }
   @Output() public OpenEntityRecord = new EventEmitter<{
     entityName: string;
     compositeKey: CompositeKey;
@@ -3885,7 +5030,8 @@ export class SpreadsheetArtifactViewerComponent
   @ViewChild('moreToolsAnchor') private moreToolsAnchorRef?: ElementRef<HTMLElement>;
   @ViewChild('sheetsGridContainer') private sheetsGridContainerRef?: ElementRef<HTMLElement>;
 
-  public readonly MaxPinnedToolbarActions = 6;
+  public readonly MaxPinnedToolbarActions = 4;
+  public ShowCommandPalette = false;
   public ShowMoreToolsMenu = false;
   private _localToolbarPins: SheetsToolbarItemKey[] | null = null;
   private _serverToolbarPinsRaw: string | null = null;
@@ -3909,6 +5055,10 @@ export class SpreadsheetArtifactViewerComponent
   public SyntheticAgentPresence: CollaboratorPresence | null = null;
   private syntheticAgentTimer: ReturnType<typeof setTimeout> | null = null;
   public FormulaBarInput = '';
+  public ShowFormulaAutocomplete = false;
+  public FormulaAutocompleteSuggestions: readonly SpreadsheetFormulaSuggestion[] = [];
+  public FormulaAutocompleteSelectedIndex = 0;
+  public ShowFreezePanesMenu = false;
   public InlineEditingAddress: string | null = null;
   public InlineEditValue = '';
 
@@ -3928,10 +5078,41 @@ export class SpreadsheetArtifactViewerComponent
   public Permissions: VerifiedArtifactPermissions | null = null;
   public AccessRevoked = false;
   public PermissionVerifyError = false;
+  public PendingResetConflictDraft: CollaborationResetConflictDraft | null = null;
 
   public ShowCommentsDrawer = false;
   public NewCommentText = '';
   public AnchoredThreads: DocumentAnchoredThread[] = [];
+  public ThreadReplyDrafts: Record<string, string> = {};
+  public CellSuggestions: SpreadsheetCellSuggestionSpec[] = [];
+  public ShowProposeSuggestionModal = false;
+  public PendingSuggestionRange = '';
+  public PendingSuggestionValue = '';
+  public PendingSuggestionRationale = '';
+  public FrozenDriftComparisonResults: SpreadsheetLiveTableDriftSummary[] = [];
+
+  public ShowValidationDrawer = false;
+  public NewValidationRange = '';
+  public NewValidationRuleType: 'list' | 'numberRange' | 'notEmpty' = 'list';
+  public NewValidationAllowedCsv = '';
+  public NewValidationMin: number | null = 0;
+  public NewValidationMax: number | null = 100;
+  public NewValidationErrorMessage = '';
+
+  public ShowConditionalFormatDrawer = false;
+  public NewCondFormatRange = '';
+  public NewCondFormatOperator: 'gt' | 'lt' | 'eq' | 'between' | 'contains' = 'gt';
+  public NewCondFormatValue1 = '0';
+  public NewCondFormatValue2: number | null = 100;
+  public NewCondFormatTone: 'success' | 'warning' | 'danger' | 'info' = 'success';
+
+  public ShowNamedRangeModal = false;
+  public NewNamedRangeName = '';
+  public NewNamedRangeRef = '';
+  public ActiveNamedRangeSelection = '';
+
+  public IsDraggingFillHandle = false;
+  public FillHandleTargetRange: string | null = null;
   private persistedThreadConversations = new Map<string, MJConversationEntity>();
 
   public PendingFreezeTable: SpreadsheetLiveTableSpec | null = null;
@@ -3983,6 +5164,9 @@ export class SpreadsheetArtifactViewerComponent
     if (!this.lastSavedComparableJson) {
       return false;
     }
+    if (this.hasDirtyPendingInputs()) {
+      return true;
+    }
     if (this.cachedUnsavedChanges !== null) {
       return this.cachedUnsavedChanges;
     }
@@ -3998,12 +5182,173 @@ export class SpreadsheetArtifactViewerComponent
     return dirty;
   }
 
+  private getExpectedFormulaBarValueForActiveCell(): string {
+    const cell = this.ActiveCellSpec;
+    if (!cell) return '';
+    if (cell.Formula) return cell.Formula;
+    if (cell.RawValue !== null && cell.RawValue !== undefined) return String(cell.RawValue);
+    return '';
+  }
+
+  private hasDirtyPendingInputs(): boolean {
+    if (!this.CanEdit) return false;
+    if (this.InlineEditingAddress) {
+      return true;
+    }
+    if (this.RenamingSheetID) {
+      return true;
+    }
+    if (this.WorkspaceMode === 'grid' && this.FormulaBarInput !== this.getExpectedFormulaBarValueForActiveCell()) {
+      return true;
+    }
+    if (
+      this.WorkspaceMode === 'source' &&
+      this.SourceJsonText !== SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook)
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Flushes any uncommitted formula bar edit, inline cell edit, worksheet rename, or dirty Source JSON
+   * before saving, switching modes/worksheets/cells, or performing undo/redo (`P0-20`).
+   * Returns `false` if dirty Source JSON fails validation and blocks transition.
+   */
+  public FlushPendingEdits(): boolean {
+    if (!this.CanEdit) return true;
+    if (this.InlineEditingAddress) {
+      this.CommitInlineCellEdit();
+    }
+    if (this.RenamingSheetID) {
+      this.CommitRenameWorksheetTab();
+    }
+    if (
+      this.WorkspaceMode === 'grid' &&
+      this.FormulaBarInput !== this.getExpectedFormulaBarValueForActiveCell()
+    ) {
+      this.CommitFormulaBarInput();
+    }
+    if (
+      this.WorkspaceMode === 'source' &&
+      this.SourceJsonText !== SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook)
+    ) {
+      return this.applySourceJsonInternal(false);
+    }
+    return true;
+  }
+
+  public get EffectiveAncestorArtifactIDs(): ReadonlySet<string> {
+    const combined = new Set<string>();
+    if (this.inheritedAncestors) {
+      for (const id of this.inheritedAncestors) {
+        if (id) combined.add(id.toLowerCase());
+      }
+    }
+    if (this.AncestorArtifactIDs) {
+      for (const id of this.AncestorArtifactIDs) {
+        if (id) combined.add(id.toLowerCase());
+      }
+    }
+    const selfId = this.artifactVersion?.ArtifactID || this.Workbook?.WorkbookID;
+    if (selfId) {
+      combined.add(selfId.toLowerCase());
+    }
+    return combined;
+  }
+
+  public get IsArtifactOwner(): boolean {
+    const userId = this.resolveCurrentUser()?.ID ?? null;
+    if (!userId) return false;
+    if (this.Permissions?.Source === 'Owner') return true;
+    const ownerId = this.resolveArtifactOwnerUserId(userId);
+    return Boolean(ownerId && UUIDsEqual(userId, ownerId));
+  }
+
+  public get CanManageDocumentLocks(): boolean {
+    if (!this.CanEdit) return false;
+    const extended = this.Permissions as
+      | (VerifiedArtifactPermissions & { CanManageDocumentLocks?: boolean })
+      | null;
+    if (extended && typeof extended.CanManageDocumentLocks === 'boolean') {
+      return extended.CanManageDocumentLocks;
+    }
+    if (this.Permissions && this.Permissions.Source !== 'Owner') {
+      return false;
+    }
+    if (this.artifactVersion?.ArtifactID) {
+      return this.IsArtifactOwner;
+    }
+    return true;
+  }
+
+  private getScopedUserInfoEngine(): UserInfoEngine | null {
+    const provider = this.getSafeProvider();
+    try {
+      return provider
+        ? (UserInfoEngine.GetProviderInstance<UserInfoEngine>(provider, UserInfoEngine) as UserInfoEngine)
+        : UserInfoEngine.Instance;
+    } catch {
+      return UserInfoEngine.Instance;
+    }
+  }
+
+  private getScopedArtifactMetadataEngine(): ArtifactMetadataEngine | null {
+    const provider = this.getSafeProvider();
+    try {
+      return provider
+        ? (ArtifactMetadataEngine.GetProviderInstance<ArtifactMetadataEngine>(
+            provider,
+            ArtifactMetadataEngine,
+          ) as ArtifactMetadataEngine)
+        : ArtifactMetadataEngine.Instance;
+    } catch {
+      return ArtifactMetadataEngine.Instance;
+    }
+  }
+
+  private getScopedArtifactPermissionEngine(): ArtifactPermissionEngine {
+    return ArtifactPermissionEngine.Instance;
+  }
+
+  private scheduleManagedTimeout(fn: () => void, delayMs: number): ReturnType<typeof setTimeout> {
+    const handle = setTimeout(() => {
+      this.pendingTimers.delete(handle);
+      if (this.isComponentDestroyed) return;
+      fn();
+    }, delayMs);
+    this.pendingTimers.add(handle);
+    return handle;
+  }
+
   private getComparableWorkbookJson(wb: WorkbookSpec): string {
     const normalized: WorkbookSpec = {
       ...wb,
       UpdatedAt: '',
     };
     return JSON.stringify(normalized);
+  }
+
+  private parseWorkbookPreservingMergeRanges(rawJson: string, configJson?: string | null): WorkbookSpec {
+    const parsed = SpreadsheetEngine.Instance.ParseWorkbook(rawJson, configJson);
+    if (!rawJson || !rawJson.trim().startsWith('{')) {
+      return parsed;
+    }
+    const rawWb = SafeJSONParse<{ Worksheets?: Array<{ SheetID?: string; MergeRanges?: string[] }> }>(rawJson);
+    if (rawWb && Array.isArray(rawWb.Worksheets)) {
+      for (const ws of parsed.Worksheets) {
+        if (!ws.MergeRanges || ws.MergeRanges.length === 0) {
+          const rawWs = rawWb.Worksheets.find((r) => r.SheetID === ws.SheetID);
+          if (rawWs && Array.isArray(rawWs.MergeRanges)) {
+            const validRanges = rawWs.MergeRanges.filter((m) => typeof m === 'string');
+            if (validRanges.length > 0) {
+              ws.MergeRanges = validRanges;
+            }
+          }
+        }
+      }
+    }
+    return parsed;
   }
 
   public get ActiveSheet(): WorksheetSpec {
@@ -4161,6 +5506,7 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public async ngOnInit(): Promise<void> {
+    this.hasInitialized = true;
     this.bindDelegatedCellMouseOver();
     this.bindTouchPointerListenersOutsideZone();
     await this.initializeWorkbookSession();
@@ -4208,42 +5554,32 @@ export class SpreadsheetArtifactViewerComponent
     };
   }
 
-  public ngOnChanges(changes: SimpleChanges): void {
-    if (changes['artifactVersion'] && !changes['artifactVersion'].firstChange) {
-      void this.initializeWorkbookSession();
-      return;
-    }
-    if (changes['CollaborationWsUrl'] && !changes['CollaborationWsUrl'].firstChange) {
-      void this.initializeWorkbookSession();
-      return;
-    }
-    if (changes['readonly']) {
-      if (
-        !this.readonly &&
-        this.ConnectionStatus === 'readonly' &&
-        !this.AccessRevoked &&
-        !this.PermissionVerifyError &&
-        !this.LiveSyncUnavailable
-      ) {
-        if (!this.artifactVersion?.ArtifactID || this.Permissions?.CanEdit === true) {
-          this.ConnectionStatus =
-            this.CollaborationSession?.Status && this.CollaborationSession.Status !== 'readonly'
-              ? this.CollaborationSession.Status
-              : 'local';
-        }
+  private syncReadonlyInputState(): void {
+    if (
+      !this.readonly &&
+      this.ConnectionStatus === 'readonly' &&
+      !this.AccessRevoked &&
+      !this.PermissionVerifyError &&
+      !this.LiveSyncUnavailable
+    ) {
+      if (!this.artifactVersion?.ArtifactID || this.Permissions?.CanEdit === true) {
+        this.ConnectionStatus =
+          this.CollaborationSession?.Status && this.CollaborationSession.Status !== 'readonly'
+            ? this.CollaborationSession.Status
+            : 'local';
       }
-      const nextCanEdit =
-        !this.readonly &&
-        this.FallbackXlsxBytes === null &&
-        this.ConnectionStatus !== 'revoked' &&
-        !this.LiveSyncUnavailable &&
-        (!this.artifactVersion?.ArtifactID || this.Permissions?.CanEdit === true);
-      this.CollaborationSession?.SetCanEdit(nextCanEdit);
-      if (this.CollaborationSession) {
-        this.ConnectionStatus = this.CollaborationSession.Status;
-      }
-      this.cdr.markForCheck();
     }
+    const nextCanEdit =
+      !this.readonly &&
+      this.FallbackXlsxBytes === null &&
+      this.ConnectionStatus !== 'revoked' &&
+      !this.LiveSyncUnavailable &&
+      (!this.artifactVersion?.ArtifactID || this.Permissions?.CanEdit === true);
+    this.CollaborationSession?.SetCanEdit(nextCanEdit);
+    if (this.CollaborationSession) {
+      this.ConnectionStatus = this.CollaborationSession.Status;
+    }
+    this.cdr.markForCheck();
   }
 
   public ngOnDestroy(): void {
@@ -4257,6 +5593,13 @@ export class SpreadsheetArtifactViewerComponent
     this.teardownSession();
   }
 
+  private clearSaveVersionTimeout(): void {
+    if (this.saveVersionTimeoutHandle) {
+      clearTimeout(this.saveVersionTimeoutHandle);
+      this.saveVersionTimeoutHandle = null;
+    }
+  }
+
   private teardownSession(): void {
     this.stopMoreMenuDocumentListeners();
     this.stopResizeDocumentListeners();
@@ -4265,7 +5608,14 @@ export class SpreadsheetArtifactViewerComponent
       clearTimeout(this.syntheticAgentTimer);
       this.syntheticAgentTimer = null;
     }
+    for (const handle of this.pendingTimers) {
+      clearTimeout(handle);
+    }
+    this.pendingTimers.clear();
+    this.clearSaveVersionTimeout();
+    this.IsSavingVersion = false;
     this.SyntheticAgentPresence = null;
+    this.PendingResetConflictDraft = null;
     for (const s of this.subs) {
       s.unsubscribe();
     }
@@ -4317,7 +5667,7 @@ export class SpreadsheetArtifactViewerComponent
     this.EditingEmbeddedArtifactIDs.clear();
 
     const rawContent = this.artifactVersion?.Content ?? '';
-    const configJson = this.artifactVersion?.Configuration ?? null;
+    const configJson = ReadArtifactVersionConfigurationSafe(this.artifactVersion);
     const title = this.artifactVersion?.Name || 'Workbook';
 
     if (
@@ -4328,7 +5678,7 @@ export class SpreadsheetArtifactViewerComponent
     ) {
       let downloadedBuffer: ArrayBuffer | null = null;
       try {
-        const downloadUrl = await this.artifactFileService.getDownloadUrl(this.artifactVersion.ID);
+        const downloadUrl = await this.artifactFileService.GetDownloadUrl(this.artifactVersion.ID, false, this.Provider);
         if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
           return;
         }
@@ -4354,7 +5704,7 @@ export class SpreadsheetArtifactViewerComponent
         );
       }
     } else {
-      this.Workbook = SpreadsheetEngine.Instance.ParseWorkbook(rawContent, configJson);
+      this.Workbook = this.parseWorkbookPreservingMergeRanges(rawContent, configJson);
     }
     if (title && (!this.Workbook.Title || this.Workbook.Title === 'Untitled Workbook')) {
       this.Workbook.Title = title;
@@ -4366,12 +5716,18 @@ export class SpreadsheetArtifactViewerComponent
     this.SourceJsonText = serialized;
     this.lastSavedComparableJson = this.getComparableWorkbookJson(this.Workbook);
     this.syncFormulaBarFromActiveCell();
+    if (this.SyncViewMode !== undefined) {
+      this.onViewerViewModeChanged(this.SyncViewMode);
+    }
+    if (this.NavigationAnchor) {
+      this.onNavigationAnchorChanged(this.NavigationAnchor);
+    }
 
     const artifactId = this.artifactVersion?.ArtifactID || this.Workbook.WorkbookID;
     const provider = this.getSafeProvider();
     const currentUser = this.resolveCurrentUser();
 
-    if (this.artifactVersion?.ArtifactID) {
+    if (!this.isGuestSnapshotMode && this.artifactVersion?.ArtifactID) {
       if (provider && currentUser) {
         try {
           this.Permissions = await this.collaborationService.ResolvePermissionsFromServer(
@@ -4430,30 +5786,47 @@ export class SpreadsheetArtifactViewerComponent
         if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
           return;
         }
-        this.permissionsUnsubscribe = ArtifactPermissionEngine.Instance.OnPermissionsChanged(
-          async (evt) => {
-            if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
-              return;
-            }
-            if (UUIDsEqual(evt.ArtifactID, this.artifactVersion.ArtifactID)) {
-              await this.refreshPermissionsAndAnchoredThreads(gen);
-            }
-          },
-        );
+        const permEngine = this.getScopedArtifactPermissionEngine();
+        if (permEngine) {
+          this.permissionsUnsubscribe = permEngine.OnPermissionsChanged(
+            async (evt) => {
+              if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+                return;
+              }
+              if (UUIDsEqual(evt.ArtifactID, this.artifactVersion.ArtifactID)) {
+                await this.refreshPermissionsAndAnchoredThreads(gen);
+              }
+            },
+          );
+        }
       } else {
         this.Permissions = null;
         this.ConnectionStatus = 'readonly';
       }
+    } else if (this.isGuestSnapshotMode) {
+      this.Permissions = null;
+      this.AccessRevoked = false;
+      this.PermissionVerifyError = false;
+      this.ConnectionStatus = 'readonly';
     }
 
     if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
       return;
     }
 
-    const hasRemoteBackend = this.collaborationService.HasCollaborationBackend(
-      provider,
-      this.CollaborationWsUrl,
-    );
+    if (this.SyncViewMode !== undefined) {
+      this.onViewerViewModeChanged(this.SyncViewMode);
+    }
+    if (this.NavigationAnchor) {
+      this.onNavigationAnchorChanged(this.NavigationAnchor);
+    }
+
+    const hasRemoteBackend =
+      !this.isGuestSnapshotMode &&
+      this.collaborationService.HasCollaborationBackend(
+        provider,
+        this.CollaborationWsUrl,
+      );
     const session = this.collaborationService.CreateSession(
       artifactId,
       serialized,
@@ -4506,13 +5879,15 @@ export class SpreadsheetArtifactViewerComponent
           ...(this.ActiveSheet?.Cells ?? {}),
         };
         const prevSheetId = this.ActiveSheet?.SheetID;
-        this.Workbook = SpreadsheetEngine.Instance.ParseWorkbook(nextContent);
+        this.Workbook = this.parseWorkbookPreservingMergeRanges(nextContent);
         SpreadsheetEngine.Instance.EvaluateWorkbook(this.Workbook);
         this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
         this.syncFormulaBarFromActiveCell();
-        this.verifyFrozenLiveTablesOnServer(this.Workbook);
-        if (this.workbookHasLiveDataOrMjFunctions(this.Workbook)) {
-          void this.RefreshAllLiveData(false);
+        if (!this.isGuestSnapshotMode) {
+          this.verifyFrozenLiveTablesOnServer(this.Workbook);
+          if (this.workbookHasLiveDataOrMjFunctions(this.Workbook)) {
+            void this.RefreshAllLiveData(false);
+          }
         }
 
         // Compare changed cells on active sheet to surface synthetic agent selection only when real Yjs agent awareness is not present
@@ -4566,6 +5941,12 @@ export class SpreadsheetArtifactViewerComponent
       session.StatusChanged$.subscribe((status: CollaborationConnectionStatus) => {
         if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
         this.ConnectionStatus = status;
+        if (status === 'error' || status === 'revoked' || status === 'readonly' || status === 'local') {
+          if (this.IsSavingVersion) {
+            this.clearSaveVersionTimeout();
+            this.IsSavingVersion = false;
+          }
+        }
         this.cdr.detectChanges();
       }),
       session.CollaboratorsChanged$.subscribe((collabs: CollaboratorPresence[]) => {
@@ -4575,6 +5956,7 @@ export class SpreadsheetArtifactViewerComponent
       }),
       session.VersionSaved$.subscribe((saved: { versionId: string; versionNumber: number }) => {
         if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
+        this.clearSaveVersionTimeout();
         const isNewSavedVersion = saved.versionNumber > (this.LastSavedVersionNumber ?? 0);
         this.lastSavedComparableJson = this.getComparableWorkbookJson(this.Workbook);
         this.LastSavedVersionNumber = saved.versionNumber;
@@ -4592,25 +5974,41 @@ export class SpreadsheetArtifactViewerComponent
         if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
         this.handleCollaborationMergeConflict(conflictEvt);
       }),
+      session.RoomResetConflict$.subscribe((draft: CollaborationResetConflictDraft | null) => {
+        if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
+        this.PendingResetConflictDraft = draft;
+        this.cdr.markForCheck();
+      }),
+      session.SuggestionsChanged$.subscribe(() => {
+        if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
+        this.syncSuggestionsFromSession();
+        this.cdr.markForCheck();
+      }),
     );
+    this.PendingResetConflictDraft = session.PendingResetConflictDraft ?? null;
+    this.syncSuggestionsFromSession();
 
     if (hasRemoteBackend) {
       void session.Connect(this.CollaborationWsUrl, provider);
     }
 
-    this.verifyFrozenLiveTablesOnServer(this.Workbook);
-    await this.RefreshAllLiveData(false);
-    if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
-      return;
+    if (!this.isGuestSnapshotMode) {
+      this.verifyFrozenLiveTablesOnServer(this.Workbook);
+      await this.RefreshAllLiveData(false);
+      if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+        return;
+      }
     }
     this.lastSavedComparableJson = this.getComparableWorkbookJson(this.Workbook);
-    await this.hydrateEmbeddedArtifactVersions();
-    if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
-      return;
-    }
-    await this.loadPersistedSheetRangeComments();
-    if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
-      return;
+    if (!this.isGuestSnapshotMode) {
+      await this.hydrateEmbeddedArtifactVersions();
+      if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+        return;
+      }
+      await this.loadPersistedSheetRangeComments();
+      if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+        return;
+      }
     }
     this.cdr.markForCheck();
   }
@@ -4642,6 +6040,14 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   private async refreshPermissionsAndAnchoredThreads(gen = this.sessionInitGeneration): Promise<void> {
+    if (this.isGuestSnapshotMode) {
+      this.Permissions = null;
+      this.AccessRevoked = false;
+      this.PermissionVerifyError = false;
+      this.ConnectionStatus = 'readonly';
+      this.cdr.markForCheck();
+      return;
+    }
     const provider = this.getSafeProvider();
     const user = this.resolveCurrentUser();
     if (!provider || !user || !this.artifactVersion?.ArtifactID) return;
@@ -4724,6 +6130,9 @@ export class SpreadsheetArtifactViewerComponent
 
   public SelectCell(rowIndex: number, colIndex: number, event?: MouseEvent): void {
     const nextAddr = FormatCellAddress(rowIndex, colIndex);
+    if (nextAddr !== this.ActiveCellAddress) {
+      this.FlushPendingEdits();
+    }
 
     if (event?.metaKey || event?.ctrlKey) {
       const existingIdx = this.SelectedRanges.indexOf(nextAddr);
@@ -4756,6 +6165,11 @@ export class SpreadsheetArtifactViewerComponent
 
     this.syncFormulaBarFromActiveCell();
     this.broadcastSelectionPresence();
+    this.SelectionChanged.emit({
+      domain: 'spreadsheet',
+      sheet: this.ActiveSheet?.Name,
+      range: this.SelectedRange,
+    });
     this.cdr.detectChanges();
   }
 
@@ -4771,6 +6185,10 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public OnCellMouseEnter(rowIndex: number, colIndex: number): void {
+    if (this.IsDraggingFillHandle) {
+      this.updateFillHandleTarget(rowIndex, colIndex);
+      return;
+    }
     if (!this.IsDraggingSelection || !this.DragAnchorAddress) return;
     const hoverAddr = FormatCellAddress(rowIndex, colIndex);
     const rangeSegment =
@@ -4788,6 +6206,9 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public OnCellMouseUp(): void {
+    if (this.IsDraggingFillHandle) {
+      this.commitFillHandleDrag();
+    }
     if (this.IsDraggingSelection) {
       this.IsDraggingSelection = false;
       this.isCtrlMultiSelectDrag = false;
@@ -4828,6 +6249,7 @@ export class SpreadsheetArtifactViewerComponent
     if (!this.CanUndo || !this.CollaborationSession) {
       return;
     }
+    this.FlushPendingEdits();
     if (this.CollaborationSession.Undo()) {
       this.cdr.detectChanges();
     }
@@ -4837,23 +6259,55 @@ export class SpreadsheetArtifactViewerComponent
     if (!this.CanRedo || !this.CollaborationSession) {
       return;
     }
+    this.FlushPendingEdits();
     if (this.CollaborationSession.Redo()) {
       this.cdr.detectChanges();
     }
   }
 
-  @HostListener('document:keydown', ['$event'])
   public OnViewerKeydown(event: KeyboardEvent): void {
     const target = event.target as HTMLElement | null;
     if (
       target &&
-      (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')
+      (target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable ||
+        Boolean(target.closest?.('[contenteditable="true"], .mj-sheets-ole-host, .mj-sheets-modal-dialog')))
+    ) {
+      return;
+    }
+    const hostEl = this.hostElementRef?.nativeElement;
+    if (
+      hostEl instanceof HTMLElement &&
+      (hostEl.hidden ||
+        hostEl.getAttribute('aria-hidden') === 'true' ||
+        hostEl.style.display === 'none' ||
+        Boolean(hostEl.closest?.('.plugin-hidden, [hidden], [aria-hidden="true"]')))
+    ) {
+      return;
+    }
+    if (
+      this.ShowAddLiveTableModal ||
+      this.PendingFreezeTable ||
+      this.EditingChartDraft ||
+      this.PendingDimensionPrompt ||
+      this.ShowValidationDrawer ||
+      this.ShowConditionalFormatDrawer ||
+      this.ShowNamedRangeModal ||
+      this.ShowProposeSuggestionModal
     ) {
       return;
     }
     const isMod = event.metaKey || event.ctrlKey;
     if (isMod && !event.altKey) {
       const key = event.key.toLowerCase();
+      if (key === 'k') {
+        event.preventDefault();
+        event.stopPropagation();
+        this.OpenCommandPalette();
+        return;
+      }
       if (key === 'z' && !event.shiftKey) {
         if (this.CanUndo) {
           event.preventDefault();
@@ -4984,19 +6438,34 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public MoveActiveCell(deltaRow: number, deltaCol: number, extendSelection: boolean): void {
-    const maxRow = Math.max(1, this.VisibleRows.length);
-    const maxCol = Math.max(1, this.VisibleColumns.length);
-    let nextRow = Math.max(1, Math.min(maxRow, this.ActiveRowIndex + deltaRow));
-    let nextCol = Math.max(1, Math.min(maxCol, this.ActiveColumnIndex + deltaCol));
+    const visibleRows = this.VisibleRows;
+    const visibleCols = this.VisibleColumns;
+    if (visibleRows.length === 0 || visibleCols.length === 0) {
+      return;
+    }
+
+    let rowPos = visibleRows.findIndex((r) => r.Index >= this.ActiveRowIndex);
+    if (rowPos < 0) rowPos = visibleRows.length - 1;
+    let colPos = visibleCols.findIndex((c) => c.Index >= this.ActiveColumnIndex);
+    if (colPos < 0) colPos = visibleCols.length - 1;
+
+    let nextRowPos = Math.max(0, Math.min(visibleRows.length - 1, rowPos + deltaRow));
+    let nextColPos = Math.max(0, Math.min(visibleCols.length - 1, colPos + deltaCol));
 
     if (!extendSelection && deltaRow === 0 && deltaCol !== 0) {
-      if (this.ActiveColumnIndex + deltaCol > maxCol && this.ActiveRowIndex < maxRow) {
-        nextCol = 1;
-        nextRow = this.ActiveRowIndex + 1;
-      } else if (this.ActiveColumnIndex + deltaCol < 1 && this.ActiveRowIndex > 1) {
-        nextCol = maxCol;
-        nextRow = this.ActiveRowIndex - 1;
+      if (colPos + deltaCol >= visibleCols.length && rowPos < visibleRows.length - 1) {
+        nextColPos = 0;
+        nextRowPos = rowPos + 1;
+      } else if (colPos + deltaCol < 0 && rowPos > 0) {
+        nextColPos = visibleCols.length - 1;
+        nextRowPos = rowPos - 1;
       }
+    }
+
+    const nextRow = visibleRows[nextRowPos].Index;
+    const nextCol = visibleCols[nextColPos].Index;
+    if (nextRow !== this.ActiveRowIndex || nextCol !== this.ActiveColumnIndex) {
+      this.FlushPendingEdits();
     }
 
     this.ActiveRowIndex = nextRow;
@@ -5024,33 +6493,69 @@ export class SpreadsheetArtifactViewerComponent
 
     this.syncFormulaBarFromActiveCell();
     this.broadcastSelectionPresence();
+    this.SelectionChanged.emit({
+      domain: 'spreadsheet',
+      sheet: this.ActiveSheet?.Name,
+      range: this.SelectedRange,
+    });
     this.cdr.detectChanges();
+  }
+
+  private clampRangeBoundsToSafeWindow(
+    bounds: { minR: number; maxR: number; minC: number; maxC: number },
+    sheet: WorksheetSpec = this.ActiveSheet,
+    maxCells = 10_000,
+  ): { minR: number; maxR: number; minC: number; maxC: number } {
+    const maxSheetRow = Math.max(1, sheet?.Rows?.length ?? 100);
+    const maxSheetCol = Math.max(1, sheet?.Columns?.length ?? 26);
+    const minR = Math.max(1, Math.min(bounds.minR, maxSheetRow));
+    let maxR = Math.max(minR, Math.min(bounds.maxR, maxSheetRow));
+    const minC = Math.max(1, Math.min(bounds.minC, maxSheetCol));
+    let maxC = Math.max(minC, Math.min(bounds.maxC, maxSheetCol));
+    const colSpan = Math.max(1, maxC - minC + 1);
+    const maxAllowedRows = Math.max(1, Math.floor(maxCells / colSpan));
+    if (maxR - minR + 1 > maxAllowedRows) {
+      maxR = minR + maxAllowedRows - 1;
+    }
+    if ((maxR - minR + 1) * (maxC - minC + 1) > maxCells) {
+      maxC = minC + Math.max(0, Math.floor(maxCells / Math.max(1, maxR - minR + 1)) - 1);
+    }
+    return { minR, maxR, minC, maxC };
   }
 
   public ClearSelectedRange(): void {
     if (!this.CanEdit) return;
+    const sheet = this.ActiveSheet;
     const ranges = this.SelectedRanges.length > 0 ? this.SelectedRanges : [this.SelectedRange];
     const deletes: Array<{ rowId: string; colId: string }> = [];
+    const seenDeletes = new Set<string>();
     const editContext = this.buildCellEditContext();
     try {
       for (const rng of ranges) {
         const bounds = this.parseRangeBounds(rng);
         if (!bounds) continue;
-        for (let r = bounds.minR; r <= bounds.maxR; r++) {
-          const rowSpec = this.ActiveSheet.Rows.find((row) => row.Index === r);
-          if (!rowSpec) continue;
-          for (let c = bounds.minC; c <= bounds.maxC; c++) {
-            const colSpec = this.ActiveSheet.Columns.find((col) => col.Index === c);
-            if (!colSpec) continue;
-            const addr = FormatCellAddress(r, c);
-            if (this.ActiveSheet.Cells[addr]) {
-              deletes.push({ rowId: rowSpec.RowID, colId: colSpec.ColumnID });
+        // Iterate populated cells within bounds instead of a full cartesian O(R*C) scan
+        for (const [addr, cell] of Object.entries(sheet.Cells)) {
+          const pos = ParseCellAddress(addr);
+          if (!pos) continue;
+          if (
+            pos.row >= bounds.minR &&
+            pos.row <= bounds.maxR &&
+            pos.col >= bounds.minC &&
+            pos.col <= bounds.maxC &&
+            cell.RowID &&
+            cell.ColumnID
+          ) {
+            const key = `${cell.RowID}::${cell.ColumnID}`;
+            if (!seenDeletes.has(key)) {
+              seenDeletes.add(key);
+              deletes.push({ rowId: cell.RowID, colId: cell.ColumnID });
             }
           }
         }
         SpreadsheetEngine.Instance.ClearRange(
           this.Workbook,
-          this.ActiveSheet.SheetID,
+          sheet.SheetID,
           rng,
           true,
           editContext,
@@ -5063,7 +6568,7 @@ export class SpreadsheetArtifactViewerComponent
       return;
     }
     this.CollaborationSession?.BatchUpdateSpreadsheetCells(
-      this.ActiveSheet.SheetID,
+      sheet.SheetID,
       [],
       deletes,
       this.Workbook,
@@ -5106,16 +6611,39 @@ export class SpreadsheetArtifactViewerComponent
     const lines = normalized.endsWith('\n') ? normalized.slice(0, -1).split('\n') : normalized.split('\n');
     if (lines.length === 0) return;
 
-    const updatedCells: SpreadsheetCellSpec[] = [];
+    const sheet = this.ActiveSheet;
     const startRow = this.ActiveRowIndex;
     const startCol = this.ActiveColumnIndex;
+    let maxColCount = 1;
+    const parsedGrid: string[][] = lines.map((line) => {
+      const cols = line.split('\t');
+      maxColCount = Math.max(maxColCount, cols.length);
+      return cols;
+    });
+
+    // Atomic pre-flight check against ProtectedRanges across the full paste footprint
+    const protectedReason = this.findProtectedReasonInRange(
+      sheet,
+      startRow,
+      startRow + parsedGrid.length - 1,
+      startCol,
+      startCol + maxColCount - 1,
+    );
+    if (protectedReason) {
+      this.notifyError(protectedReason);
+      return;
+    }
+
+    const prevRowCount = sheet.Rows.length;
+    const prevColCount = sheet.Columns.length;
+    const updatedCells: SpreadsheetCellSpec[] = [];
     let maxRowWritten = startRow;
     let maxColWritten = startCol;
 
     const editContext = this.buildCellEditContext();
     try {
-      for (let rOffset = 0; rOffset < lines.length; rOffset++) {
-        const cols = lines[rOffset].split('\t');
+      for (let rOffset = 0; rOffset < parsedGrid.length; rOffset++) {
+        const cols = parsedGrid[rOffset];
         for (let cOffset = 0; cOffset < cols.length; cOffset++) {
           const targetRow = startRow + rOffset;
           const targetCol = startCol + cOffset;
@@ -5124,7 +6652,7 @@ export class SpreadsheetArtifactViewerComponent
           const parsed = this.parseRawCellInputValue(cellText);
           const updated = SpreadsheetEngine.Instance.SetCell(
             this.Workbook,
-            this.ActiveSheet.SheetID,
+            sheet.SheetID,
             addr,
             parsed,
             true,
@@ -5138,21 +6666,28 @@ export class SpreadsheetArtifactViewerComponent
         }
       }
     } catch (err) {
-      this.StatusBannerMessage =
-        err instanceof Error ? err.message : 'Paste blocked by a protected cell range.';
-      this.cdr.markForCheck();
+      this.notifyError(
+        err instanceof Error ? err.message : 'Paste blocked by a protected cell range.',
+      );
       if (updatedCells.length === 0) {
         return;
       }
     }
 
     if (updatedCells.length > 0) {
-      this.CollaborationSession?.BatchUpdateSpreadsheetCells(
-        this.ActiveSheet.SheetID,
-        updatedCells,
-        [],
-        this.Workbook,
-      );
+      const structureExpanded =
+        sheet.Rows.length !== prevRowCount || sheet.Columns.length !== prevColCount;
+      this.withLocalSessionSync(() => {
+        if (structureExpanded) {
+          this.CollaborationSession?.UpdateWorksheetStructure(sheet, this.Workbook);
+        }
+        this.CollaborationSession?.BatchUpdateSpreadsheetCells(
+          sheet.SheetID,
+          updatedCells,
+          [],
+          this.Workbook,
+        );
+      });
       const startAddr = FormatCellAddress(startRow, startCol);
       const endAddr = FormatCellAddress(maxRowWritten, maxColWritten);
       const nextRange = startAddr === endAddr ? startAddr : `${startAddr}:${endAddr}`;
@@ -5190,12 +6725,13 @@ export class SpreadsheetArtifactViewerComponent
 
   private buildSelectedRangeClipboardPayloads(): { tsv: string; html: string } {
     const primaryRange = this.SelectedRanges[0] ?? this.SelectedRange;
-    const bounds = this.parseRangeBounds(primaryRange) ?? {
+    const rawBounds = this.parseRangeBounds(primaryRange) ?? {
       minR: this.ActiveRowIndex,
       maxR: this.ActiveRowIndex,
       minC: this.ActiveColumnIndex,
       maxC: this.ActiveColumnIndex,
     };
+    const bounds = this.clampRangeBoundsToSafeWindow(rawBounds);
     const tsvRows: string[] = [];
     const htmlRows: string[] = [];
     for (let r = bounds.minR; r <= bounds.maxR; r++) {
@@ -5324,7 +6860,7 @@ export class SpreadsheetArtifactViewerComponent
     if (this._localToolbarPins !== null) {
       return [...this._localToolbarPins];
     }
-    const engine = UserInfoEngine.Instance;
+    const engine = this.getScopedUserInfoEngine();
     const raw = engine?.GetSetting(SHEETS_TOOLBAR_PINS_SETTING_KEY) ?? null;
     if (raw) {
       const parsed = SafeJSONParse<string[]>(raw);
@@ -5340,7 +6876,7 @@ export class SpreadsheetArtifactViewerComponent
     const trimmed = pins.slice(0, this.MaxPinnedToolbarActions);
     this._localToolbarPins = [...trimmed];
     const json = JSON.stringify(trimmed);
-    const engine = UserInfoEngine.Instance;
+    const engine = this.getScopedUserInfoEngine();
     this._serverToolbarPinsRaw = engine?.GetSetting(SHEETS_TOOLBAR_PINS_SETTING_KEY) ?? null;
     engine?.SetSettingDebounced(SHEETS_TOOLBAR_PINS_SETTING_KEY, json);
   }
@@ -5666,6 +7202,67 @@ export class SpreadsheetArtifactViewerComponent
         Placement: 'right',
         TestId: 'sheets-protect-range-btn',
         Active: this.IsSelectedRangeProtected,
+        Disabled: !this.CanManageDocumentLocks,
+        Visible: canGridEdit,
+      },
+      {
+        Key: 'merge-cells',
+        Label: 'Merge Cells',
+        ShortLabel: 'Merge',
+        Description: 'Merge selected cell range',
+        Icon: 'fa-object-group',
+        Category: 'Structure',
+        Placement: 'left',
+        TestId: 'sheets-merge-cells-btn',
+        Active: false,
+        Visible: canGridEdit,
+      },
+      {
+        Key: 'unmerge-cells',
+        Label: 'Unmerge Cells',
+        ShortLabel: 'Unmerge',
+        Description: 'Unmerge selected cells',
+        Icon: 'fa-object-ungroup',
+        Category: 'Structure',
+        Placement: 'left',
+        TestId: 'sheets-unmerge-cells-btn',
+        Active: false,
+        Visible: canGridEdit,
+      },
+      {
+        Key: 'data-validation',
+        Label: 'Data Validation',
+        ShortLabel: 'Validate',
+        Description: 'Configure dropdown & numeric validation rules',
+        Icon: 'fa-list-check',
+        Category: 'Insert & Data',
+        Placement: 'right',
+        TestId: 'sheets-data-validation-btn',
+        Active: false,
+        Visible: canGridEdit,
+      },
+      {
+        Key: 'conditional-format',
+        Label: 'Conditional Formatting',
+        ShortLabel: 'Cond Fmt',
+        Description: 'Add highlight rules based on cell values',
+        Icon: 'fa-wand-sparkles',
+        Category: 'Format',
+        Placement: 'right',
+        TestId: 'sheets-conditional-format-btn',
+        Active: false,
+        Visible: canGridEdit,
+      },
+      {
+        Key: 'named-ranges',
+        Label: 'Named Ranges',
+        ShortLabel: 'Names',
+        Description: 'Define and manage workbook Named Ranges',
+        Icon: 'fa-tag',
+        Category: 'Insert & Data',
+        Placement: 'right',
+        TestId: 'sheets-named-ranges-btn',
+        Active: false,
         Visible: canGridEdit,
       },
     ];
@@ -5780,6 +7377,21 @@ export class SpreadsheetArtifactViewerComponent
       case 'protect-range':
         this.ToggleSelectedRangeProtection();
         break;
+      case 'merge-cells':
+        this.MergeSelectedRange();
+        break;
+      case 'unmerge-cells':
+        this.UnmergeSelectedRange();
+        break;
+      case 'data-validation':
+        this.OpenValidationDrawer(this.SelectedRange || this.ActiveCellAddress);
+        break;
+      case 'conditional-format':
+        this.OpenConditionalFormatDrawer(this.SelectedRange || this.ActiveCellAddress);
+        break;
+      case 'named-ranges':
+        this.OpenNamedRangeModal(this.SelectedRange || this.ActiveCellAddress);
+        break;
     }
   }
 
@@ -5852,10 +7464,10 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public SelectRowHeader(rowIndex: number, event?: MouseEvent): void {
+    this.FlushPendingEdits();
+    const cols = this.ActiveSheet?.Columns ?? [];
     const lastColLetter =
-      this.VisibleColumns.length > 0
-        ? this.VisibleColumns[this.VisibleColumns.length - 1].Letter
-        : 'Z';
+      cols.length > 0 ? cols[cols.length - 1].Letter : 'Z';
     const rowRange = `A${rowIndex}:${lastColLetter}${rowIndex}`;
     this.ActiveRowIndex = rowIndex;
     this.ActiveColumnIndex = 1;
@@ -5888,8 +7500,10 @@ export class SpreadsheetArtifactViewerComponent
       const first = this.SelectedRanges[0].split(':')[0];
       const parsed = ParseCellAddress(first);
       if (parsed) {
-        this.ActiveRowIndex = parsed.row;
-        this.ActiveColumnIndex = parsed.col;
+        const maxR = Math.max(1, this.ActiveSheet?.Rows?.length ?? 1);
+        const maxC = Math.max(1, this.ActiveSheet?.Columns?.length ?? 1);
+        this.ActiveRowIndex = Math.max(1, Math.min(maxR, parsed.row));
+        this.ActiveColumnIndex = Math.max(1, Math.min(maxC, parsed.col));
         this.syncFormulaBarFromActiveCell();
       }
     }
@@ -5921,7 +7535,7 @@ export class SpreadsheetArtifactViewerComponent
         : '';
     this.cdr.markForCheck();
     if (typeof document !== 'undefined') {
-      setTimeout(() => {
+      this.scheduleManagedTimeout(() => {
         if (this.InlineEditingAddress !== addr || this.isComponentDestroyed) return;
         const hostEl =
           this.hostElementRef?.nativeElement instanceof HTMLElement
@@ -5957,8 +7571,17 @@ export class SpreadsheetArtifactViewerComponent
     this.writeCellAndBroadcast(this.ActiveCellAddress, this.FormulaBarInput);
   }
 
+  public OnFormulaBarBlur(): void {
+    if (!this.CanEdit) return;
+    if (this.FormulaBarInput !== this.getExpectedFormulaBarValueForActiveCell()) {
+      this.CommitFormulaBarInput();
+    }
+  }
+
   private writeCellAndBroadcast(address: string, rawInput: string): void {
     const sheet = this.ActiveSheet;
+    const prevRowCount = sheet.Rows.length;
+    const prevColCount = sheet.Columns.length;
     const trimmed = rawInput.trim();
     const isFormula = trimmed.startsWith('=');
     const parsedScalar = this.parseRawInputScalar(trimmed);
@@ -5989,8 +7612,15 @@ export class SpreadsheetArtifactViewerComponent
       void this.RefreshAllLiveData(true);
     }
 
+    const structureExpanded =
+      sheet.Rows.length !== prevRowCount || sheet.Columns.length !== prevColCount;
     if (updatedCell && this.CollaborationSession) {
-      this.CollaborationSession.UpdateSpreadsheetCell(sheet.SheetID, updatedCell, this.Workbook);
+      this.withLocalSessionSync(() => {
+        if (structureExpanded) {
+          this.CollaborationSession?.UpdateWorksheetStructure(sheet, this.Workbook);
+        }
+        this.CollaborationSession?.UpdateSpreadsheetCell(sheet.SheetID, updatedCell, this.Workbook);
+      });
     }
     this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
     this.syncFormulaBarFromActiveCell();
@@ -6029,24 +7659,33 @@ export class SpreadsheetArtifactViewerComponent
     const addr = this.ActiveCellAddress;
     const existing = this.ActiveSheet.Cells[addr];
     const nextBold = !existing?.Style?.Bold;
-    const updated = SpreadsheetEngine.Instance.SetCell(
-      this.Workbook,
-      this.ActiveSheet.SheetID,
-      addr,
-      {
-        Value: existing?.RawValue ?? null,
-        Formula: existing?.Formula ?? null,
-        Style: {
-          ...existing?.Style,
-          Bold: nextBold,
-        },
-      },
-    );
-    if (updated) {
-      this.CollaborationSession?.UpdateSpreadsheetCell(
-        this.ActiveSheet.SheetID,
-        updated,
+    try {
+      const updated = SpreadsheetEngine.Instance.SetCell(
         this.Workbook,
+        this.ActiveSheet.SheetID,
+        addr,
+        {
+          Value: existing?.RawValue ?? null,
+          Formula: existing?.Formula ?? null,
+          Style: {
+            ...existing?.Style,
+            Bold: nextBold,
+          },
+        },
+        true,
+        this.buildCellEditContext(),
+      );
+      if (updated) {
+        this.CollaborationSession?.UpdateSpreadsheetCell(
+          this.ActiveSheet.SheetID,
+          updated,
+          this.Workbook,
+        );
+      }
+      this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+    } catch (err) {
+      this.notifyError(
+        err instanceof Error ? err.message : `Cell ${addr} is protected and cannot be formatted.`,
       );
     }
     this.cdr.markForCheck();
@@ -6057,25 +7696,34 @@ export class SpreadsheetArtifactViewerComponent
     const addr = this.ActiveCellAddress;
     const existing = this.ActiveSheet.Cells[addr];
     const pattern = SpreadsheetEngine.Instance.DefaultPatternForFormatType(formatType);
-    const updated = SpreadsheetEngine.Instance.SetCell(
-      this.Workbook,
-      this.ActiveSheet.SheetID,
-      addr,
-      {
-        Value: existing?.RawValue ?? null,
-        Formula: existing?.Formula ?? null,
-        Style: {
-          ...existing?.Style,
-          FormatType: formatType,
-          NumberFormatPattern: pattern,
-        },
-      },
-    );
-    if (updated) {
-      this.CollaborationSession?.UpdateSpreadsheetCell(
-        this.ActiveSheet.SheetID,
-        updated,
+    try {
+      const updated = SpreadsheetEngine.Instance.SetCell(
         this.Workbook,
+        this.ActiveSheet.SheetID,
+        addr,
+        {
+          Value: existing?.RawValue ?? null,
+          Formula: existing?.Formula ?? null,
+          Style: {
+            ...existing?.Style,
+            FormatType: formatType,
+            NumberFormatPattern: pattern,
+          },
+        },
+        true,
+        this.buildCellEditContext(),
+      );
+      if (updated) {
+        this.CollaborationSession?.UpdateSpreadsheetCell(
+          this.ActiveSheet.SheetID,
+          updated,
+          this.Workbook,
+        );
+      }
+      this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+    } catch (err) {
+      this.notifyError(
+        err instanceof Error ? err.message : `Cell ${addr} is protected and cannot be formatted.`,
       );
     }
     this.cdr.markForCheck();
@@ -6091,13 +7739,28 @@ export class SpreadsheetArtifactViewerComponent
 
   public SortActiveColumn(direction: 'asc' | 'desc'): void {
     if (!this.CanEdit) return;
-    SpreadsheetEngine.Instance.SortWorksheet(this.Workbook, this.ActiveSheet.SheetID, {
-      ColumnLetter: this.ActiveColumnLetter,
-      Direction: direction,
-      HeaderRows: 1,
-    });
-    this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
-    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+    try {
+      const before = this.snapshotWorkbookCells();
+      SpreadsheetEngine.Instance.SortWorksheet(
+        this.Workbook,
+        this.ActiveSheet.SheetID,
+        {
+          ColumnLetter: this.ActiveColumnLetter,
+          Direction: direction,
+          HeaderRows: 1,
+        },
+        this.buildCellEditContext(),
+      );
+      this.withLocalSessionSync(() => {
+        this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
+        this.syncWorkbookCellDiffsToSession(before, true);
+      });
+      this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+    } catch (err) {
+      this.notifyError(
+        err instanceof Error ? err.message : 'Sort blocked by a protected cell range.',
+      );
+    }
     this.cdr.markForCheck();
   }
 
@@ -6108,16 +7771,224 @@ export class SpreadsheetArtifactViewerComponent
     this.cdr.markForCheck();
   }
 
+  public OpenCommandPalette(): void {
+    this.ShowMoreToolsMenu = false;
+    this.ShowFreezePanesMenu = false;
+    this.ShowCommandPalette = true;
+    this.cdr.markForCheck();
+  }
+
+  public get SheetsCommandPaletteItems(): ArtifactCommandPaletteItem[] {
+    const items: ArtifactCommandPaletteItem[] = [
+      {
+        Id: 'freeze-top-row',
+        Label: 'Freeze Top Row (Row 1)',
+        Category: 'Freeze',
+        Icon: 'fa-snowflake',
+        Disabled: !this.CanEdit,
+      },
+      {
+        Id: 'freeze-first-col',
+        Label: 'Freeze First Column (Col A)',
+        Category: 'Freeze',
+        Icon: 'fa-snowflake',
+        Disabled: !this.CanEdit,
+      },
+      {
+        Id: 'freeze-active-cell',
+        Label: `Freeze Panes up to ${this.ActiveCellAddress}`,
+        Category: 'Freeze',
+        Icon: 'fa-snowflake',
+        Disabled: !this.CanEdit,
+      },
+      {
+        Id: 'unfreeze-panes',
+        Label: 'Unfreeze Panes',
+        Category: 'Freeze',
+        Icon: 'fa-border-none',
+        Disabled: !this.CanEdit,
+      },
+      {
+        Id: 'toggle-protect',
+        Label: this.IsSelectedRangeProtected
+          ? `Unprotect Range (${this.SelectedRange})`
+          : `Protect Selected Range (${this.SelectedRange})`,
+        Category: 'Permissions',
+        Icon: this.IsSelectedRangeProtected ? 'fa-lock-open' : 'fa-lock',
+        Disabled: !this.CanEdit,
+      },
+      {
+        Id: 'comments',
+        Label: `Toggle Cell Comments (${this.OpenThreadCount})`,
+        Category: 'Review',
+        Icon: 'fa-comments',
+      },
+    ];
+
+    for (const item of this.AllToolbarItems) {
+      items.push({
+        Id: `tb:${item.Key}`,
+        Label: item.Label,
+        Category: item.Category,
+        Icon: item.Icon,
+        Description: item.Description,
+        Active: item.Active,
+        Disabled: item.Disabled,
+      });
+    }
+    return items;
+  }
+
+  public ExecuteSheetPaletteCommand(commandId: string): void {
+    if (commandId === 'freeze-top-row') {
+      this.FreezeTopRow();
+      return;
+    }
+    if (commandId === 'freeze-first-col') {
+      this.FreezeFirstColumn();
+      return;
+    }
+    if (commandId === 'freeze-active-cell') {
+      this.FreezeToActiveCell();
+      return;
+    }
+    if (commandId === 'unfreeze-panes') {
+      this.UnfreezePanes();
+      return;
+    }
+    if (commandId === 'toggle-protect') {
+      this.ToggleSelectedRangeProtection();
+      return;
+    }
+    if (commandId === 'comments') {
+      this.ToggleCommentsDrawer();
+      return;
+    }
+    if (commandId.startsWith('tb:')) {
+      const key = commandId.slice(3) as SheetsToolbarItemKey;
+      const found = this.AllToolbarItems.find((i) => i.Key === key);
+      if (found) {
+        this.ExecuteToolbarItem(found, false);
+      }
+    }
+  }
+
+  public ToggleFreezePanesMenu(): void {
+    this.ShowFreezePanesMenu = !this.ShowFreezePanesMenu;
+    this.cdr.markForCheck();
+  }
+
+  public FreezeTopRow(): void {
+    this.ShowFreezePanesMenu = false;
+    if (!this.CanEdit) return;
+    this.ActiveSheet.FrozenRows = 1;
+    this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+    this.cdr.markForCheck();
+  }
+
+  public FreezeFirstColumn(): void {
+    this.ShowFreezePanesMenu = false;
+    if (!this.CanEdit) return;
+    this.ActiveSheet.FrozenColumns = 1;
+    this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+    this.cdr.markForCheck();
+  }
+
+  public FreezeToActiveCell(): void {
+    this.ShowFreezePanesMenu = false;
+    if (!this.CanEdit) return;
+    this.ActiveSheet.FrozenRows = Math.max(1, this.ActiveRowIndex - 1);
+    this.ActiveSheet.FrozenColumns = Math.max(0, this.ActiveColumnIndex - 1);
+    this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+    this.cdr.markForCheck();
+  }
+
+  public UnfreezePanes(): void {
+    this.ShowFreezePanesMenu = false;
+    if (!this.CanEdit) return;
+    this.ActiveSheet.FrozenRows = 0;
+    this.ActiveSheet.FrozenColumns = 0;
+    this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+    this.cdr.markForCheck();
+  }
+
+  public OnFormulaBarInputChange(val: string): void {
+    const trimmed = (val ?? '').trimStart();
+    if (!trimmed.startsWith('=')) {
+      this.ShowFormulaAutocomplete = false;
+      this.FormulaAutocompleteSuggestions = [];
+      return;
+    }
+    const tokenMatch = /(?:=|[(,+\-*/:])\s*(MJ\.[A-Za-z0-9_]*|[A-Za-z][A-Za-z0-9_.]*)$/i.exec(trimmed);
+    if (!tokenMatch) {
+      this.ShowFormulaAutocomplete = false;
+      this.FormulaAutocompleteSuggestions = [];
+      return;
+    }
+    const prefix = tokenMatch[1].toUpperCase();
+    const matches = SPREADSHEET_FORMULA_CATALOG.filter((f) => f.Name.startsWith(prefix)).slice(0, 7);
+    this.FormulaAutocompleteSuggestions = matches;
+    this.FormulaAutocompleteSelectedIndex = 0;
+    this.ShowFormulaAutocomplete = matches.length > 0;
+    this.cdr.markForCheck();
+  }
+
+  public OnFormulaBarKeyDown(event: KeyboardEvent): void {
+    if (!this.ShowFormulaAutocomplete || this.FormulaAutocompleteSuggestions.length === 0) {
+      return;
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      this.FormulaAutocompleteSelectedIndex =
+        (this.FormulaAutocompleteSelectedIndex + 1) % this.FormulaAutocompleteSuggestions.length;
+      this.cdr.markForCheck();
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      const len = this.FormulaAutocompleteSuggestions.length;
+      this.FormulaAutocompleteSelectedIndex = (this.FormulaAutocompleteSelectedIndex - 1 + len) % len;
+      this.cdr.markForCheck();
+    } else if (event.key === 'Tab') {
+      event.preventDefault();
+      const chosen = this.FormulaAutocompleteSuggestions[this.FormulaAutocompleteSelectedIndex];
+      if (chosen) {
+        this.ApplyFormulaAutocomplete(chosen);
+      }
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      this.ShowFormulaAutocomplete = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  public ApplyFormulaAutocomplete(item: SpreadsheetFormulaSuggestion): void {
+    const current = this.FormulaBarInput ?? '';
+    const tokenStart = findTrailingFormulaIdentifierStart(current);
+    const replaced = tokenStart >= 0 ? `${current.slice(0, tokenStart)}${item.Name}(` : current;
+    this.FormulaBarInput = replaced.startsWith('=') ? replaced : `=${item.Name}(`;
+    this.ShowFormulaAutocomplete = false;
+    this.FormulaAutocompleteSuggestions = [];
+    this.cdr.markForCheck();
+  }
+
   // ---------------------------------------------------------------------------
   // Worksheet Tabs Management
   // ---------------------------------------------------------------------------
 
   public SelectWorksheet(sheetId: string): void {
+    if (this.Workbook.ActiveSheetID !== sheetId) {
+      this.FlushPendingEdits();
+    }
     this.Workbook.ActiveSheetID = sheetId;
     this.ActiveRowIndex = 1;
     this.ActiveColumnIndex = 1;
     this.SelectedRange = 'A1';
+    this.SelectedRanges = ['A1'];
     this.syncFormulaBarFromActiveCell();
+    this.SelectionChanged.emit({
+      domain: 'spreadsheet',
+      sheet: this.ActiveSheet?.Name,
+      range: this.SelectedRange,
+    });
     this.cdr.markForCheck();
   }
 
@@ -6166,6 +8037,42 @@ export class SpreadsheetArtifactViewerComponent
 
   public async ConfirmAddLiveTable(): Promise<void> {
     if (!this.CanEdit) return;
+    const anchorStr = this.NewLiveTableAnchorCell.trim() || 'A1';
+    const anchorParsed = ParseCellAddress(anchorStr) ?? { row: 1, col: 1 };
+    const anchorReason = this.findProtectedReasonInRange(
+      this.ActiveSheet,
+      anchorParsed.row,
+      anchorParsed.row,
+      anchorParsed.col,
+      anchorParsed.col,
+    );
+    if (anchorReason) {
+      this.notifyError(anchorReason);
+      return;
+    }
+
+    const editingId = this.EditingLiveTableID;
+    const existingIdx = editingId
+      ? (this.ActiveSheet.LiveTables ?? []).findIndex((t) => t.TableID === editingId)
+      : -1;
+    const existingTable = existingIdx >= 0 ? this.ActiveSheet.LiveTables?.[existingIdx] : undefined;
+    if (existingTable) {
+      const existingBounds = this.parseRangeBounds(this.computeLiveTableRangeA1(existingTable));
+      if (existingBounds) {
+        const existingReason = this.findProtectedReasonInRange(
+          this.ActiveSheet,
+          existingBounds.minR,
+          existingBounds.maxR,
+          existingBounds.minC,
+          existingBounds.maxC,
+        );
+        if (existingReason) {
+          this.notifyError(existingReason);
+          return;
+        }
+      }
+    }
+
     const calcCols: SpreadsheetCalculatedColumnSpec[] = [];
     if (this.NewLiveTableCalcHeader.trim() && this.NewLiveTableCalcFormula.trim()) {
       calcCols.push({
@@ -6178,12 +8085,6 @@ export class SpreadsheetArtifactViewerComponent
     if (!this.ActiveSheet.LiveTables) {
       this.ActiveSheet.LiveTables = [];
     }
-
-    const editingId = this.EditingLiveTableID;
-    const existingIdx = editingId
-      ? this.ActiveSheet.LiveTables.findIndex((t) => t.TableID === editingId)
-      : -1;
-    const existingTable = existingIdx >= 0 ? this.ActiveSheet.LiveTables[existingIdx] : undefined;
 
     const tableSpec: SpreadsheetLiveTableSpec = {
       ...(existingTable ?? {}),
@@ -6202,7 +8103,7 @@ export class SpreadsheetArtifactViewerComponent
         this.NewLiveTableSourceType === 'SavedQuery'
           ? this.NewLiveTableQueryName.trim()
           : undefined,
-      AnchorCell: this.NewLiveTableAnchorCell.trim() || 'A1',
+      AnchorCell: anchorStr,
       IncludeHeaders: existingTable?.IncludeHeaders ?? true,
       Mode: existingTable?.Mode ?? 'Live',
       CalculatedColumns: calcCols,
@@ -6249,6 +8150,7 @@ export class SpreadsheetArtifactViewerComponent
   private syncWorkbookCellDiffsToSession(
     beforeSnapshots: Map<string, Record<string, string>>,
     syncStructure = false,
+    skipProtectedRollback = false,
   ): void {
     if (!this.CanEdit || !this.CollaborationSession) {
       return;
@@ -6259,8 +8161,29 @@ export class SpreadsheetArtifactViewerComponent
       const updates: SpreadsheetCellSpec[] = [];
       const deletes: Array<{ rowId: string; colId: string }> = [];
       const activeCoordKeys = new Set<string>();
+      const hasRules =
+        !skipProtectedRollback && Array.isArray(ws.ProtectedRanges) && ws.ProtectedRanges.length > 0;
 
       for (const [addr, cell] of Object.entries(currCells)) {
+        if (hasRules) {
+          const parsed = ParseCellAddress(addr);
+          if (
+            parsed &&
+            this.findProtectedReasonInRange(ws, parsed.row, parsed.row, parsed.col, parsed.col)
+          ) {
+            const prevJson = beforeMap[addr];
+            if (prevJson) {
+              const prevCell = SafeJSONParse<SpreadsheetCellSpec>(prevJson);
+              if (prevCell) {
+                currCells[addr] = prevCell;
+              }
+            } else {
+              delete currCells[addr];
+            }
+            activeCoordKeys.add(`${cell.RowID}::${cell.ColumnID}`);
+            continue;
+          }
+        }
         activeCoordKeys.add(`${cell.RowID}::${cell.ColumnID}`);
         const serialized = JSON.stringify(cell);
         if (beforeMap[addr] !== serialized) {
@@ -6269,13 +8192,23 @@ export class SpreadsheetArtifactViewerComponent
       }
 
       const seenDeletes = new Set<string>();
-      for (const prevJson of Object.values(beforeMap)) {
+      for (const [addr, prevJson] of Object.entries(beforeMap)) {
         const prevCell = SafeJSONParse<SpreadsheetCellSpec>(prevJson);
         if (
           prevCell?.RowID &&
           prevCell?.ColumnID &&
           !activeCoordKeys.has(`${prevCell.RowID}::${prevCell.ColumnID}`)
         ) {
+          if (hasRules) {
+            const parsed = ParseCellAddress(addr);
+            if (
+              parsed &&
+              this.findProtectedReasonInRange(ws, parsed.row, parsed.row, parsed.col, parsed.col)
+            ) {
+              currCells[addr] = prevCell;
+              continue;
+            }
+          }
           const coordKey = `${prevCell.RowID}::${prevCell.ColumnID}`;
           if (!seenDeletes.has(coordKey)) {
             seenDeletes.add(coordKey);
@@ -6299,6 +8232,9 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public async RefreshAllLiveData(bypassCache = false): Promise<void> {
+    if (this.isGuestSnapshotMode) {
+      return;
+    }
     const user = this.resolveCurrentUser();
     if (!user) return;
     this.IsRefreshingData = true;
@@ -6334,8 +8270,27 @@ export class SpreadsheetArtifactViewerComponent
 
   public get IsSelectedRangeProtected(): boolean {
     const active = this.ActiveSheet;
-    if (!active) return false;
-    return Boolean(SpreadsheetEngine.Instance.GetProtectedRangeForCell(active, this.ActiveCellAddress));
+    if (!active || !Array.isArray(active.ProtectedRanges) || active.ProtectedRanges.length === 0) {
+      return false;
+    }
+    const ranges = this.SelectedRanges.length > 0 ? this.SelectedRanges : [this.ActiveCellAddress];
+    for (const seg of ranges) {
+      const bounds = this.parseRangeBounds(seg);
+      if (!bounds) continue;
+      for (const rule of active.ProtectedRanges) {
+        const rb = ParseRangeAddress(rule.Range, 1_048_576, 16_384);
+        if (!rb) continue;
+        if (
+          rb.startRow <= bounds.maxR &&
+          rb.endRow >= bounds.minR &&
+          rb.startCol <= bounds.maxC &&
+          rb.endCol >= bounds.minC
+        ) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   private async resolveArtifactOwnerFromProvider(
@@ -6426,34 +8381,59 @@ export class SpreadsheetArtifactViewerComponent
    * Protects or unprotects the currently selected cell or range (`§6.2`).
    */
   public ToggleSelectedRangeProtection(): void {
+    if (!this.CanManageDocumentLocks) {
+      this.notifyError('Document lock permissions are required to protect or unprotect ranges.');
+      return;
+    }
     const user = this.resolveCurrentUser();
     const sheet = this.ActiveSheet;
     if (!user || !sheet || !this.CanEdit) {
       return;
     }
-    const existing = SpreadsheetEngine.Instance.GetProtectedRangeForCell(
-      sheet,
-      this.ActiveCellAddress,
-    );
-    if (existing) {
-      const removed = SpreadsheetEngine.Instance.RemoveProtectedRange(
-        this.Workbook,
-        sheet.SheetID,
-        existing.RangeID,
-        this.buildCellEditContext(),
+    const rangeTarget = this.SelectedRange || this.ActiveCellAddress || 'A1';
+    const targetBounds = this.parseRangeBounds(rangeTarget);
+    const overlappingRules = (sheet.ProtectedRanges ?? []).filter((rule) => {
+      if (!targetBounds) return false;
+      const rb = ParseRangeAddress(rule.Range, 1_048_576, 16_384);
+      if (!rb) return false;
+      return (
+        rb.startRow <= targetBounds.maxR &&
+        rb.endRow >= targetBounds.minR &&
+        rb.startCol <= targetBounds.maxC &&
+        rb.endCol >= targetBounds.minC
       );
-      if (!removed) {
-        this.StatusBannerMessage = `Only ${existing.LockedByUserID} or the artifact owner can unlock ${existing.Range}.`;
-        this.cdr.markForCheck();
+    });
+    if (overlappingRules.length > 0) {
+      const editCtx = this.buildCellEditContext();
+      let removedCount = 0;
+      let blockedRule: { LockedByUserID: string; Range: string } | null = null;
+      for (const existing of overlappingRules) {
+        const removed = SpreadsheetEngine.Instance.RemoveProtectedRange(
+          this.Workbook,
+          sheet.SheetID,
+          existing.RangeID,
+          editCtx,
+        );
+        if (removed) {
+          removedCount++;
+        } else if (!blockedRule) {
+          blockedRule = existing;
+        }
+      }
+      if (removedCount === 0 && blockedRule) {
+        this.notifyError(
+          `Only ${blockedRule.LockedByUserID} or the artifact owner can unlock ${blockedRule.Range}.`,
+        );
         return;
       }
       this.CollaborationSession?.UpdateWorksheetStructure(sheet, this.Workbook);
       this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
-      this.StatusBannerMessage = `Removed protection on ${sheet.Name}!${existing.Range}.`;
+      this.StatusBannerMessage = blockedRule
+        ? `Removed ${removedCount} protection rule(s); ${blockedRule.Range} could only be unlocked by ${blockedRule.LockedByUserID} or the artifact owner.`
+        : `Removed protection on ${sheet.Name}!${overlappingRules.map((r) => r.Range).join(', ')}.`;
       this.cdr.markForCheck();
       return;
     }
-    const rangeTarget = this.SelectedRange || this.ActiveCellAddress || 'A1';
     SpreadsheetEngine.Instance.AddProtectedRange(this.Workbook, sheet.SheetID, {
       RangeID: `prot-${Date.now()}`,
       Range: rangeTarget,
@@ -6517,6 +8497,23 @@ export class SpreadsheetArtifactViewerComponent
 
   public async RefreshSingleLiveTable(table: SpreadsheetLiveTableSpec): Promise<void> {
     if (!this.CanEdit || table.Mode === 'Frozen') return;
+    const sheet = this.ActiveSheet;
+    if (sheet) {
+      const tableBounds = this.parseRangeBounds(this.computeLiveTableRangeA1(table));
+      if (tableBounds) {
+        const reason = this.findProtectedReasonInRange(
+          sheet,
+          tableBounds.minR,
+          tableBounds.maxR,
+          tableBounds.minC,
+          tableBounds.maxC,
+        );
+        if (reason) {
+          this.notifyError(reason);
+          return;
+        }
+      }
+    }
     const user = this.resolveCurrentUser();
     if (!user) return;
     const beforeSnapshots = this.snapshotWorkbookCells();
@@ -6557,23 +8554,44 @@ export class SpreadsheetArtifactViewerComponent
     };
   }
 
+  public GetLiveTablePreVerifiedSnapshot(
+    table: SpreadsheetLiveTableSpec | null | undefined,
+  ): PreVerifiedFrozenSnapshotEntry | null {
+    if (!table) {
+      return null;
+    }
+    return ResolvePreVerifiedFrozenSnapshotState(this.PreVerifiedFrozenSnapshots, [table.TableID]);
+  }
+
   public IsLiveTableSnapshotVerified(table: SpreadsheetLiveTableSpec | null | undefined): boolean {
     if (!table) {
       return false;
     }
+    const preVerified = ResolvePreVerifiedFrozenSnapshotState(this.PreVerifiedFrozenSnapshots, [table.TableID]);
+    if (preVerified !== null) {
+      return preVerified.Verified;
+    }
     return this.collaborationService.IsFrozenSnapshotVerified(
       this.liveTableToBlockSpec(table),
       this.lastTableResults[table.TableID],
+      this.artifactVersion?.ArtifactID,
     );
   }
 
   private verifyFrozenLiveTablesOnServer(workbook: WorkbookSpec): void {
+    if (this.isGuestSnapshotMode) {
+      return;
+    }
     const provider = this.getSafeProvider();
     for (const sheet of workbook.Worksheets ?? []) {
       for (const table of sheet.LiveTables ?? []) {
         if (table.Mode === 'Frozen' && table.FrozenSnapshot) {
           void this.collaborationService
-            .VerifyFrozenSnapshotOnServer(this.liveTableToBlockSpec(table), provider)
+            .VerifyFrozenSnapshotOnServer(
+              this.liveTableToBlockSpec(table),
+              this.artifactVersion?.ArtifactID ?? '',
+              provider,
+            )
             .then(() => {
               if (!this.isComponentDestroyed) {
                 this.cdr.markForCheck();
@@ -6585,6 +8603,24 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public PromptFreezeLiveTable(table: SpreadsheetLiveTableSpec): void {
+    if (!this.CanEdit || !this.CanManageDocumentLocks) {
+      this.notifyError('Document lock permissions are required to freeze live tables.');
+      return;
+    }
+    const tableBounds = this.parseRangeBounds(this.computeLiveTableRangeA1(table));
+    if (this.ActiveSheet && tableBounds) {
+      const reason = this.findProtectedReasonInRange(
+        this.ActiveSheet,
+        tableBounds.minR,
+        tableBounds.maxR,
+        tableBounds.minC,
+        tableBounds.maxC,
+      );
+      if (reason) {
+        this.notifyError(reason);
+        return;
+      }
+    }
     this.PendingFreezeTable = table;
     this.FreezeConfirmedChecked = false;
     this.cdr.markForCheck();
@@ -6598,6 +8634,12 @@ export class SpreadsheetArtifactViewerComponent
 
   public async ConfirmFreezeLiveTable(): Promise<void> {
     if (!this.PendingFreezeTable || !this.FreezeConfirmedChecked) return;
+    if (!this.CanEdit || !this.CanManageDocumentLocks) {
+      this.PendingFreezeTable = null;
+      this.FreezeConfirmedChecked = false;
+      this.notifyError('Document lock permissions are required to freeze live tables.');
+      return;
+    }
     const user = this.resolveCurrentUser();
     if (!user) return;
     const provider = this.getSafeProvider();
@@ -6607,6 +8649,23 @@ export class SpreadsheetArtifactViewerComponent
     }
 
     const target = this.PendingFreezeTable;
+    const targetBounds = this.parseRangeBounds(this.computeLiveTableRangeA1(target));
+    if (this.ActiveSheet && targetBounds) {
+      const reason = this.findProtectedReasonInRange(
+        this.ActiveSheet,
+        targetBounds.minR,
+        targetBounds.maxR,
+        targetBounds.minC,
+        targetBounds.maxC,
+      );
+      if (reason) {
+        this.PendingFreezeTable = null;
+        this.FreezeConfirmedChecked = false;
+        this.notifyError(reason);
+        return;
+      }
+    }
+
     this.PendingFreezeTable = null;
     this.FreezeConfirmedChecked = false;
 
@@ -6643,6 +8702,7 @@ export class SpreadsheetArtifactViewerComponent
         },
       };
 
+      const beforeSnapshots = this.snapshotWorkbookCells();
       SpreadsheetEngine.Instance.FreezeLiveTable(
         this.Workbook,
         this.ActiveSheet.SheetID,
@@ -6653,7 +8713,10 @@ export class SpreadsheetArtifactViewerComponent
         signedSnapshot,
       );
       this.lastTableResults[target.TableID] = execResult;
-      this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
+      this.withLocalSessionSync(() => {
+        this.syncWorkbookCellDiffsToSession(beforeSnapshots, true);
+        this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
+      });
       this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
       this.StatusBannerMessage = `Froze snapshot of "${target.Title}" under current viewer permissions.`;
       this.cdr.markForCheck();
@@ -6664,13 +8727,35 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public async UnfreezeLiveTable(table: SpreadsheetLiveTableSpec): Promise<void> {
+    if (!this.CanEdit || !this.CanManageDocumentLocks) {
+      this.notifyError('Document lock permissions are required to unfreeze live tables.');
+      return;
+    }
+    const tableBounds = this.parseRangeBounds(this.computeLiveTableRangeA1(table));
+    if (this.ActiveSheet && tableBounds) {
+      const reason = this.findProtectedReasonInRange(
+        this.ActiveSheet,
+        tableBounds.minR,
+        tableBounds.maxR,
+        tableBounds.minC,
+        tableBounds.maxC,
+      );
+      if (reason) {
+        this.notifyError(reason);
+        return;
+      }
+    }
+    const beforeSnapshots = this.snapshotWorkbookCells();
     SpreadsheetEngine.Instance.UnfreezeLiveTable(
       this.Workbook,
       this.ActiveSheet.SheetID,
       table.TableID,
     );
     await this.RefreshSingleLiveTable(table);
-    this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
+    this.withLocalSessionSync(() => {
+      this.syncWorkbookCellDiffsToSession(beforeSnapshots, true);
+      this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
+    });
     this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
     this.cdr.markForCheck();
   }
@@ -6707,7 +8792,8 @@ export class SpreadsheetArtifactViewerComponent
     ) {
       return Math.max(140, Math.min(760, Math.round(this.localObjectsPaneHeightPx)));
     }
-    const savedRaw = UserInfoEngine.Instance?.GetSetting(SHEETS_OBJECTS_PANE_HEIGHT_SETTING_KEY) ?? null;
+    const savedRaw =
+      this.getScopedUserInfoEngine()?.GetSetting(SHEETS_OBJECTS_PANE_HEIGHT_SETTING_KEY) ?? null;
     if (savedRaw) {
       const savedNum = Number(savedRaw);
       if (Number.isFinite(savedNum) && savedNum > 0) {
@@ -6742,7 +8828,7 @@ export class SpreadsheetArtifactViewerComponent
       },
       () => {
         if (this.localObjectsPaneHeightPx !== null) {
-          UserInfoEngine.Instance?.SetSettingDebounced(
+          this.getScopedUserInfoEngine()?.SetSettingDebounced(
             SHEETS_OBJECTS_PANE_HEIGHT_SETTING_KEY,
             String(this.localObjectsPaneHeightPx),
           );
@@ -6754,7 +8840,7 @@ export class SpreadsheetArtifactViewerComponent
 
   public ResetObjectsPaneHeight(): void {
     this.localObjectsPaneHeightPx = 270;
-    UserInfoEngine.Instance?.SetSettingDebounced(SHEETS_OBJECTS_PANE_HEIGHT_SETTING_KEY, '');
+    this.getScopedUserInfoEngine()?.SetSettingDebounced(SHEETS_OBJECTS_PANE_HEIGHT_SETTING_KEY, '');
     this.cdr.markForCheck();
   }
 
@@ -7221,6 +9307,7 @@ export class SpreadsheetArtifactViewerComponent
       this.Workbook,
       chart.SheetID || this.ActiveSheet.SheetID,
       chart.ChartID || chart.SourceRange,
+      chart,
     );
   }
 
@@ -7316,7 +9403,7 @@ export class SpreadsheetArtifactViewerComponent
     let max = 0;
     for (const s of dataset.Series) {
       for (const v of s.Values) {
-        if (v > max) max = v;
+        if (Number.isFinite(v) && v > max) max = v;
       }
     }
     return max > 0 ? max : 1;
@@ -7326,10 +9413,37 @@ export class SpreadsheetArtifactViewerComponent
     let max = 0;
     for (const s of seriesList) {
       for (const v of s.Values) {
-        if (v > max) max = v;
+        if (Number.isFinite(v) && v > max) max = v;
       }
     }
     return max > 0 ? max : 1;
+  }
+
+  public GetChartDomain(seriesList: ActiveChartSeriesItem[]): SpreadsheetChartDomain {
+    const plotTop = 18;
+    const plotBottom = 140;
+    const plotHeight = plotBottom - plotTop;
+    let minVal = 0;
+    let maxVal = 0;
+    for (const s of seriesList) {
+      for (const v of s.Values) {
+        if (!Number.isFinite(v)) continue;
+        if (v < minVal) minVal = v;
+        if (v > maxVal) maxVal = v;
+      }
+    }
+    if (minVal > 0) minVal = 0;
+    if (maxVal < 0) maxVal = 0;
+    if (maxVal === minVal) {
+      maxVal = 1;
+    }
+    const span = maxVal - minVal;
+    const zeroY = span > 0 ? plotTop + (maxVal / span) * plotHeight : plotBottom;
+    return {
+      MinValue: minVal,
+      MaxValue: maxVal,
+      ZeroY: Math.round(zeroY * 10) / 10,
+    };
   }
 
   public FormatChartValue(value: number): string {
@@ -7376,13 +9490,16 @@ export class SpreadsheetArtifactViewerComponent
     chart: SpreadsheetChartSpec,
     dataset: SpreadsheetChartDataset,
     activeSeries: ActiveChartSeriesItem[],
-    maxVal: number,
+    _maxVal: number,
+    domain?: SpreadsheetChartDomain,
   ): ChartBarRect[] {
     const categories = dataset.Categories;
     const catCount = categories.length;
     const seriesCount = activeSeries.length;
     if (catCount === 0 || seriesCount === 0) return [];
 
+    const resolvedDomain = domain ?? this.GetChartDomain(activeSeries);
+    const span = Math.max(1e-9, resolvedDomain.MaxValue - resolvedDomain.MinValue);
     const plotLeft = 48;
     const plotRight = 362;
     const plotTop = 18;
@@ -7400,11 +9517,18 @@ export class SpreadsheetArtifactViewerComponent
       const groupStartX = plotLeft + cIdx * groupWidth + groupPadding;
       for (let sIdx = 0; sIdx < seriesCount; sIdx++) {
         const s = activeSeries[sIdx];
-        const val = s.Values[cIdx] ?? 0;
-        const clamped = Math.max(0, val);
-        const height = maxVal > 0 ? (clamped / maxVal) * plotHeight : 0;
+        const raw = s.Values[cIdx] ?? 0;
+        const val = Number.isFinite(raw) ? raw : 0;
         const x = groupStartX + sIdx * (barWidth + barGap);
-        const y = plotBottom - height;
+        let y: number;
+        let height: number;
+        if (val >= 0) {
+          height = (val / span) * plotHeight;
+          y = resolvedDomain.ZeroY - height;
+        } else {
+          height = (Math.abs(val) / span) * plotHeight;
+          y = resolvedDomain.ZeroY;
+        }
         rects.push({
           Key: `${chart.ChartID}-${s.Index}-${cIdx}`,
           SeriesIndex: sIdx,
@@ -7427,13 +9551,16 @@ export class SpreadsheetArtifactViewerComponent
   public GetChartLineSeries(
     dataset: SpreadsheetChartDataset,
     activeSeries: ActiveChartSeriesItem[],
-    maxVal: number,
+    _maxVal: number,
     chart?: SpreadsheetChartSpec,
+    domain?: SpreadsheetChartDomain,
   ): ChartLineSeriesItem[] {
     const categories = dataset.Categories;
     const catCount = categories.length;
     if (catCount === 0 || activeSeries.length === 0) return [];
 
+    const resolvedDomain = domain ?? this.GetChartDomain(activeSeries);
+    const span = Math.max(1e-9, resolvedDomain.MaxValue - resolvedDomain.MinValue);
     const plotLeft = 48;
     const plotRight = 362;
     const plotTop = 18;
@@ -7444,12 +9571,14 @@ export class SpreadsheetArtifactViewerComponent
 
     return activeSeries.map((s, sIdx) => {
       const points: ChartLinePoint[] = categories.map((cat, idx) => {
-        const val = s.Values[idx] ?? 0;
-        const clamped = Math.max(0, val);
-        const ratio = maxVal > 0 ? clamped / maxVal : 0;
+        const raw = s.Values[idx] ?? 0;
+        const val = Number.isFinite(raw) ? raw : 0;
+        const ratio = (resolvedDomain.MaxValue - val) / span;
         const x = plotLeft + slotWidth * idx + slotWidth / 2;
-        const y = plotBottom - ratio * plotHeight;
-        const labelY = y - 7 >= 12 ? y - 7 : y + 12;
+        const y = plotTop + ratio * plotHeight;
+        const labelY = val < 0
+          ? (y + 12 <= 156 ? y + 12 : y - 7)
+          : (y - 7 >= 12 ? y - 7 : y + 12);
         return {
           Index: idx,
           X: Math.round(x * 10) / 10,
@@ -7466,12 +9595,12 @@ export class SpreadsheetArtifactViewerComponent
       if (points.length >= 2) {
         const first = points[0];
         const last = points[points.length - 1];
-        areaPath = `M ${first.X} ${plotBottom} ` +
+        areaPath = `M ${first.X} ${resolvedDomain.ZeroY} ` +
           points.map((p) => `L ${p.X} ${p.Y}`).join(' ') +
-          ` L ${last.X} ${plotBottom} Z`;
+          ` L ${last.X} ${resolvedDomain.ZeroY} Z`;
       } else if (points.length === 1) {
         const p = points[0];
-        areaPath = `M ${p.X - 12} ${plotBottom} L ${p.X - 12} ${p.Y} L ${p.X + 12} ${p.Y} L ${p.X + 12} ${plotBottom} Z`;
+        areaPath = `M ${p.X - 12} ${resolvedDomain.ZeroY} L ${p.X - 12} ${p.Y} L ${p.X + 12} ${p.Y} L ${p.X + 12} ${resolvedDomain.ZeroY} Z`;
       }
 
       return {
@@ -7499,12 +9628,16 @@ export class SpreadsheetArtifactViewerComponent
     const targetSeries = activeSeries[0];
     if (!targetSeries || dataset.Categories.length === 0) return [];
 
-    const positiveValues = dataset.Categories.map((cat, idx) => ({
-      Category: cat,
-      Value: Math.max(0, targetSeries.Values[idx] ?? 0),
-    }));
+    const positiveValues = dataset.Categories.map((cat, idx) => {
+      const raw = targetSeries.Values[idx] ?? 0;
+      const safe = Number.isFinite(raw) ? raw : 0;
+      return {
+        Category: cat,
+        Value: Math.max(0, safe),
+      };
+    });
     const total = positiveValues.reduce((sum, item) => sum + item.Value, 0);
-    if (total <= 0) return [];
+    if (!Number.isFinite(total) || total <= 0) return [];
 
     const nonZeroCount = positiveValues.filter((item) => item.Value > 0).length;
     const cx = 96;
@@ -7588,9 +9721,10 @@ export class SpreadsheetArtifactViewerComponent
     typeName: string,
     user: UserInfo,
   ): Promise<string | undefined> {
+    const metadataEngine = this.getScopedArtifactMetadataEngine();
     const cachedType =
-      ArtifactMetadataEngine.Instance.FindArtifactType(typeName) ??
-      ArtifactMetadataEngine.Instance.ArtifactTypes?.find(
+      metadataEngine?.FindArtifactType(typeName) ??
+      metadataEngine?.ArtifactTypes?.find(
         (t) => t.Name.trim().toLowerCase() === typeName.trim().toLowerCase(),
       );
     if (cachedType?.ID) {
@@ -7694,10 +9828,11 @@ export class SpreadsheetArtifactViewerComponent
         return;
       }
 
-      this.EmbeddedArtifactVersions[childArt.ID] = childVer;
+      const embedId = `emb-${Date.now()}-${(this.ActiveSheet.EmbeddedArtifacts?.length ?? 0) + 1}`;
+      this.EmbeddedArtifactVersions[embedId] = childVer;
 
       const embedSpec: SpreadsheetEmbeddedArtifactSpec = {
-        EmbedID: `emb-${(this.ActiveSheet.EmbeddedArtifacts?.length ?? 0) + 1}`,
+        EmbedID: embedId,
         ArtifactID: childArt.ID,
         ArtifactVersionID: childVer.ID,
         ArtifactTypeName: 'Whiteboard',
@@ -7723,23 +9858,54 @@ export class SpreadsheetArtifactViewerComponent
     }
   }
 
+  private buildInlineFallbackArtifactVersion(
+    emb: SpreadsheetEmbeddedArtifactSpec,
+  ): MJArtifactVersionEntity {
+    const version = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+    Object.defineProperties(version, {
+      ID: { value: emb.ArtifactVersionID || emb.EmbedID, configurable: true, writable: true, enumerable: true },
+      ArtifactID: { value: emb.ArtifactID, configurable: true, writable: true, enumerable: true },
+      Name: { value: emb.Title, configurable: true, writable: true, enumerable: true },
+      Content: { value: emb.InlineContentJSON || '', configurable: true, writable: true, enumerable: true },
+      ContentMode: { value: 'Text', configurable: true, writable: true, enumerable: true },
+    });
+    return version;
+  }
+
   private async hydrateEmbeddedArtifactVersions(): Promise<void> {
+    if (this.isGuestSnapshotMode) {
+      return;
+    }
+    const gen = this.sessionInitGeneration;
     this.EmbeddedArtifactErrors = {};
     const embeds: SpreadsheetEmbeddedArtifactSpec[] = [];
     for (const ws of this.Workbook.Worksheets) {
       for (const emb of ws.EmbeddedArtifacts ?? []) {
-        if (emb.ArtifactID && !this.EmbeddedArtifactVersions[emb.ArtifactID]) {
+        if (emb.ArtifactID && !this.EmbeddedArtifactVersions[emb.EmbedID]) {
           embeds.push(emb);
         }
       }
     }
     if (embeds.length === 0) return;
 
+    const ancestors = this.EffectiveAncestorArtifactIDs;
     const validEmbeds: SpreadsheetEmbeddedArtifactSpec[] = [];
     for (const emb of embeds) {
+      if (ancestors.size >= MJ_MAX_EMBED_DEPTH) {
+        this.EmbeddedArtifactErrors[emb.EmbedID] = `Maximum embed depth reached (${MJ_MAX_EMBED_DEPTH}).`;
+        continue;
+      }
+      if (ancestors.has(emb.ArtifactID.toLowerCase())) {
+        this.EmbeddedArtifactErrors[emb.EmbedID] = 'Circular embedded artifact reference blocked.';
+        continue;
+      }
       if (!IsValidUUID(emb.ArtifactID)) {
-        this.EmbeddedArtifactErrors[emb.EmbedID] =
-          `Embedded artifact reference "${emb.ArtifactID}" is not a valid artifact UUID.`;
+        if (emb.InlineContentJSON) {
+          this.EmbeddedArtifactVersions[emb.EmbedID] = this.buildInlineFallbackArtifactVersion(emb);
+        } else {
+          this.EmbeddedArtifactErrors[emb.EmbedID] =
+            `Embedded artifact reference "${emb.ArtifactID}" is not a valid artifact UUID.`;
+        }
         continue;
       }
       if (emb.ArtifactVersionID && !IsValidUUID(emb.ArtifactVersionID)) {
@@ -7756,11 +9922,26 @@ export class SpreadsheetArtifactViewerComponent
 
     const provider = this.getSafeProvider();
     const user = this.resolveCurrentUser();
-    if (!provider || !user || validEmbeds.length === 0) return;
+    if (!provider || !user) {
+      for (const emb of validEmbeds) {
+        if (emb.InlineContentJSON) {
+          this.EmbeddedArtifactVersions[emb.EmbedID] = this.buildInlineFallbackArtifactVersion(emb);
+        } else {
+          this.EmbeddedArtifactErrors[emb.EmbedID] =
+            `Unable to load embedded ${emb.ArtifactTypeName} "${emb.Title}" (offline).`;
+        }
+      }
+      this.cdr.markForCheck();
+      return;
+    }
+    if (validEmbeds.length === 0) return;
 
     try {
       const rv = RunView.FromMetadataProvider(provider);
       for (const emb of validEmbeds) {
+        if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+          return;
+        }
         const filter = emb.ArtifactVersionID
           ? `ID = '${EscapeSQLString(emb.ArtifactVersionID)}' AND ArtifactID = '${EscapeSQLString(emb.ArtifactID)}'`
           : `ArtifactID = '${EscapeSQLString(emb.ArtifactID)}'`;
@@ -7774,8 +9955,13 @@ export class SpreadsheetArtifactViewerComponent
           },
           user,
         );
+        if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+          return;
+        }
         if (res.Success && res.Results && res.Results.length > 0) {
-          this.EmbeddedArtifactVersions[emb.ArtifactID] = res.Results[0];
+          this.EmbeddedArtifactVersions[emb.EmbedID] = res.Results[0];
+        } else if (emb.InlineContentJSON) {
+          this.EmbeddedArtifactVersions[emb.EmbedID] = this.buildInlineFallbackArtifactVersion(emb);
         } else {
           this.EmbeddedArtifactErrors[emb.EmbedID] =
             res.ErrorMessage || `Unable to load embedded ${emb.ArtifactTypeName} "${emb.Title}".`;
@@ -7784,6 +9970,12 @@ export class SpreadsheetArtifactViewerComponent
       this.cdr.markForCheck();
     } catch (err) {
       LogError(err);
+      for (const emb of validEmbeds) {
+        if (!this.EmbeddedArtifactVersions[emb.EmbedID] && emb.InlineContentJSON) {
+          this.EmbeddedArtifactVersions[emb.EmbedID] = this.buildInlineFallbackArtifactVersion(emb);
+        }
+      }
+      this.cdr.markForCheck();
     }
   }
 
@@ -7842,7 +10034,7 @@ export class SpreadsheetArtifactViewerComponent
       }
 
       embed.InlineContentJSON = nextContent;
-      this.EmbeddedArtifactVersions[embed.ArtifactID] = nextVer;
+      this.EmbeddedArtifactVersions[embed.EmbedID] = nextVer;
       if (embed.ArtifactVersionID) {
         embed.ArtifactVersionID = nextVer.ID;
       }
@@ -7865,7 +10057,11 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   private async loadPersistedSheetRangeComments(): Promise<void> {
+    if (this.isGuestSnapshotMode) {
+      return;
+    }
     if (!this.artifactVersion?.ArtifactID) return;
+    const gen = this.sessionInitGeneration;
     const md = this.getSafeProvider();
     const user = this.resolveCurrentUser();
     if (!md || !user) return;
@@ -7884,12 +10080,41 @@ export class SpreadsheetArtifactViewerComponent
         },
         user,
       );
-      if (!convResult.Success) return;
+      if (this.isComponentDestroyed || gen !== this.sessionInitGeneration || !convResult.Success) {
+        return;
+      }
 
       const allConvs = convResult.Results ?? [];
       const filteredCandidates = await FilterReadableAnchoredConversations(md, user, allConvs);
+      if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+        return;
+      }
       const allowedIds = new Set(filteredCandidates.map((c) => c.ID).filter(Boolean));
-      const readableConvs = allConvs.filter((c) => allowedIds.has(c.ID));
+      const readableConvs = allConvs.filter((c) => c.ID && allowedIds.has(c.ID));
+
+      const detailsByConvId = new Map<string, MJConversationDetailEntity[]>();
+      const convIds = readableConvs.map((c) => c.ID).filter((id): id is string => Boolean(id));
+      if (convIds.length > 0) {
+        const inClause = convIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+        const detailsRes = await rv.RunView<MJConversationDetailEntity>(
+          {
+            EntityName: 'MJ: Conversation Details',
+            ExtraFilter: `ConversationID IN (${inClause})`,
+            OrderBy: '__mj_CreatedAt ASC',
+            ResultType: 'entity_object',
+          },
+          user,
+        );
+        if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
+          return;
+        }
+        for (const d of detailsRes.Results ?? []) {
+          if (!d.ConversationID) continue;
+          const bucket = detailsByConvId.get(d.ConversationID) ?? [];
+          bucket.push(d);
+          detailsByConvId.set(d.ConversationID, bucket);
+        }
+      }
 
       const threads: DocumentAnchoredThread[] = [];
       this.persistedThreadConversations.clear();
@@ -7897,21 +10122,15 @@ export class SpreadsheetArtifactViewerComponent
       for (const conv of readableConvs) {
         if (!conv.ID) continue;
         this.persistedThreadConversations.set(conv.ID, conv);
-        const detailsRes = await rv.RunView<MJConversationDetailEntity>(
-          {
-            EntityName: 'MJ: Conversation Details',
-            ExtraFilter: `ConversationID = '${EscapeSQLString(conv.ID)}'`,
-            OrderBy: '__mj_CreatedAt ASC',
-            ResultType: 'entity_object',
-          },
-          user,
-        );
-        const messages = (detailsRes.Results ?? []).map((d) => ({
+        const rawDetails = detailsByConvId.get(conv.ID) ?? [];
+        const messages = rawDetails.map((d) => ({
           DetailID: d.ID,
           UserName: d.User || (d.Role === 'AI' ? 'AI Assistant' : 'Unknown User'),
           Role: (d.Role === 'AI' ? 'Agent' : 'User') as 'User' | 'Agent',
           Message: d.Message,
-          CreatedAt: new Date().toISOString(),
+          CreatedAt: d.__mj_CreatedAt
+            ? new Date(d.__mj_CreatedAt).toISOString()
+            : new Date().toISOString(),
           Mentions: ExtractAnchoredCommentMentions(d.Message ?? ''),
         }));
 
@@ -7922,7 +10141,9 @@ export class SpreadsheetArtifactViewerComponent
           QuotedText: '',
           Status: conv.IsResolved ? 'Resolved' : 'Open',
           AgentMode: 'edit',
-          CreatedAt: new Date().toISOString(),
+          CreatedAt: conv.__mj_CreatedAt
+            ? new Date(conv.__mj_CreatedAt).toISOString()
+            : new Date().toISOString(),
           Messages: messages,
         });
       }
@@ -8062,6 +10283,320 @@ export class SpreadsheetArtifactViewerComponent
     this.cdr.markForCheck();
   }
 
+  public async ReopenAnchoredThread(thread: DocumentAnchoredThread): Promise<void> {
+    const previousStatus = thread.Status;
+    thread.Status = 'Open';
+    const conv = this.persistedThreadConversations.get(thread.ConversationID);
+    if (conv) {
+      try {
+        conv.IsResolved = false;
+        const ok = await conv.Save();
+        if (!ok) {
+          thread.Status = previousStatus;
+          conv.IsResolved = previousStatus === 'Resolved';
+          const msg = conv.LatestResult?.Message || 'Failed to reopen anchored thread.';
+          LogError(msg);
+          this.notifyError(msg);
+        }
+      } catch (err) {
+        thread.Status = previousStatus;
+        conv.IsResolved = previousStatus === 'Resolved';
+        LogError(err);
+        this.notifyError(err instanceof Error ? err.message : 'Failed to reopen anchored thread.');
+      }
+    }
+    this.cdr.markForCheck();
+  }
+
+  public async ReplyToAnchoredThread(thread: DocumentAnchoredThread): Promise<void> {
+    if (!this.CanComment) return;
+    const raw = this.ThreadReplyDrafts[thread.ConversationID] ?? '';
+    const body = raw.trim();
+    if (!body) return;
+
+    const user = this.resolveCurrentUser();
+    const mentions = ExtractAnchoredCommentMentions(body);
+    let detailId = `msg-${Date.now()}`;
+    const md = this.getSafeProvider();
+
+    if (this.artifactVersion?.ArtifactID && md && user && !thread.ConversationID.startsWith('sheet-conv-')) {
+      try {
+        const detail = await md.GetEntityObject<MJConversationDetailEntity>(
+          'MJ: Conversation Details',
+          user,
+        );
+        detail.NewRecord();
+        detail.ConversationID = thread.ConversationID;
+        detail.UserID = user.ID;
+        detail.Role = 'User';
+        detail.Message = body;
+        const ok = await detail.Save();
+        if (!ok) {
+          this.notifyError(detail.LatestResult?.Message || 'Failed to save reply.');
+          return;
+        }
+        if (detail.ID) {
+          detailId = detail.ID;
+        }
+      } catch (err) {
+        LogError(err);
+        this.notifyError(err instanceof Error ? err.message : 'Failed to save reply.');
+        return;
+      }
+    }
+
+    const nowIso = new Date().toISOString();
+    thread.Messages = [
+      ...thread.Messages,
+      {
+        DetailID: detailId,
+        UserName: user?.Name || 'Collaborator',
+        Role: 'User',
+        Message: body,
+        CreatedAt: nowIso,
+        Mentions: mentions,
+      },
+    ];
+    this.ThreadReplyDrafts[thread.ConversationID] = '';
+    this.cdr.markForCheck();
+
+    if (mentions.length > 0 && this.artifactVersion?.ArtifactID) {
+      try {
+        const agentRes = await this.collaborationService.DispatchAnchoredCommentAgentMention(
+          this.artifactVersion.ArtifactID,
+          mentions[0],
+          thread.AgentMode || 'edit',
+          body,
+          thread.AnchorLabel,
+          md,
+          thread.ConversationID,
+        );
+        if (!this.isComponentDestroyed && agentRes.Success) {
+          const replyText = agentRes.ReplyBody || agentRes.ReplyMessage;
+          if (replyText) {
+            thread.Messages = [
+              ...thread.Messages,
+              {
+                DetailID: `agent-${Date.now()}`,
+                UserName: `@${mentions[0]}`,
+                Role: 'Agent',
+                Message: replyText,
+                CreatedAt: new Date().toISOString(),
+                Mentions: [],
+              },
+            ];
+          }
+          this.cdr.markForCheck();
+        }
+      } catch (err) {
+        LogError(err);
+      }
+    }
+  }
+
+  public get PendingSuggestionCount(): number {
+    return this.CellSuggestions.filter((s) => s.Status === 'pending').length;
+  }
+
+  private persistSpreadsheetSuggestion(sug: SpreadsheetCellSuggestionSpec, sheetName?: string): void {
+    const userId = this.resolveCurrentUser()?.ID;
+    const canonical = BuildCanonicalSpreadsheetSuggestionRecord(
+      sug,
+      sheetName,
+      this.artifactVersion?.ArtifactID,
+      sug.Status === 'pending'
+        ? undefined
+        : { ReviewedByUserID: userId, ReviewedAt: new Date().toISOString() },
+    );
+    UpsertArtifactSuggestionInVersionConfiguration(this.artifactVersion, canonical);
+    if (this.CollaborationSession) {
+      this.CollaborationSession.SetSharedSuggestionRaw(sug.SuggestionID, JSON.stringify(canonical));
+      this.syncSuggestionsFromSession();
+    } else {
+      const idx = this.CellSuggestions.findIndex((item) => item.SuggestionID === sug.SuggestionID);
+      this.CellSuggestions =
+        idx >= 0
+          ? this.CellSuggestions.map((item) => (item.SuggestionID === sug.SuggestionID ? sug : item))
+          : [sug, ...this.CellSuggestions];
+    }
+  }
+
+  private syncSuggestionsFromSession(): void {
+    const rawMap = this.CollaborationSession?.GetSharedSuggestionsRaw() ?? new Map<string, string>();
+    const configSuggestions = ParseSuggestionsFromConfiguration(
+      ReadArtifactVersionConfigurationSafe(this.artifactVersion),
+      'spreadsheet',
+    );
+    const shouldSeedSession =
+      Boolean(this.CollaborationSession) && rawMap.size === 0 && configSuggestions.length > 0;
+    const byId = new Map<string, SpreadsheetCellSuggestionSpec>();
+    for (const [id, rawJson] of rawMap.entries()) {
+      const item = NormalizeSpreadsheetSuggestion(rawJson, id);
+      if (item) {
+        byId.set(item.SuggestionID, item);
+      }
+    }
+    for (const cfgItem of configSuggestions) {
+      if (byId.has(cfgItem.SuggestionID)) {
+        continue;
+      }
+      const item = NormalizeSpreadsheetSuggestion(cfgItem, cfgItem.SuggestionID);
+      if (item) {
+        byId.set(item.SuggestionID, item);
+        if (shouldSeedSession && this.CollaborationSession) {
+          this.CollaborationSession.SetSharedSuggestionRaw(
+            cfgItem.SuggestionID,
+            JSON.stringify(cfgItem),
+          );
+        }
+      }
+    }
+    if (rawMap.size === 0 && configSuggestions.length === 0 && !this.CollaborationSession) {
+      return;
+    }
+    const parsed = Array.from(byId.values()).sort((a, b) =>
+      (b.CreatedAt || '').localeCompare(a.CreatedAt || ''),
+    );
+    this.CellSuggestions = parsed;
+    this.cdr.markForCheck();
+  }
+
+  public OpenProposeSuggestionModal(rangeA1?: string): void {
+    if (!this.CanComment) return;
+    const targetRange = (rangeA1 || this.SelectedRange || this.ActiveCellAddress || 'A1').trim();
+    const firstAddr = targetRange.split(',')[0].split(':')[0].trim() || this.ActiveCellAddress;
+    const currentCell = this.ActiveSheet?.Cells?.[firstAddr];
+    this.PendingSuggestionRange = targetRange;
+    this.PendingSuggestionValue = currentCell ? this.GetCellDisplayText(currentCell) : '';
+    this.PendingSuggestionRationale = '';
+    this.ShowCommentsDrawer = true;
+    this.ShowProposeSuggestionModal = true;
+    this.cdr.markForCheck();
+  }
+
+  public SubmitCellSuggestion(): void {
+    if (!this.CanComment) return;
+    const sheet = this.ActiveSheet;
+    if (!sheet) return;
+    const range = (this.PendingSuggestionRange || this.ActiveCellAddress || 'A1').trim();
+    const firstAddr = range.split(',')[0].split(':')[0].trim() || 'A1';
+    const currentCell = sheet.Cells?.[firstAddr];
+    const currentDisplay = currentCell ? this.GetCellDisplayText(currentCell) : '';
+    const user = this.resolveCurrentUser();
+
+    const suggestion: SpreadsheetCellSuggestionSpec = {
+      SuggestionID: `sug-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      SheetID: sheet.SheetID,
+      Range: range,
+      ProposedValue: this.PendingSuggestionValue,
+      CurrentDisplayValue: currentDisplay,
+      Rationale: this.PendingSuggestionRationale.trim(),
+      AuthorName: user?.Name || user?.Email || 'Collaborator',
+      AuthorUserID: user?.ID || 'anonymous',
+      IsAgent: false,
+      CreatedAt: new Date().toISOString(),
+      Status: 'pending',
+    };
+
+    this.persistSpreadsheetSuggestion(suggestion, sheet.Name);
+    this.ShowProposeSuggestionModal = false;
+    this.PendingSuggestionValue = '';
+    this.PendingSuggestionRationale = '';
+    this.StatusBannerMessage = `Submitted edit suggestion on ${sheet.Name}!${range}.`;
+    this.cdr.markForCheck();
+  }
+
+  public AcceptCellSuggestion(sug: SpreadsheetCellSuggestionSpec): void {
+    if (!this.CanEdit || sug.Status !== 'pending') return;
+    const rawSheetKey = (sug.SheetID ?? '').trim();
+    const targetSheet = rawSheetKey
+      ? this.Workbook.Worksheets.find(
+          (w) =>
+            w.SheetID === rawSheetKey ||
+            w.Name.trim().toLowerCase() === rawSheetKey.toLowerCase(),
+        )
+      : this.ActiveSheet;
+    if (!targetSheet) {
+      if (rawSheetKey) {
+        this.notifyError(`Worksheet "${rawSheetKey}" not found for suggestion.`);
+      }
+      return;
+    }
+    const cellAddr = sug.Range.split(',')[0].split(':')[0].trim().toUpperCase() || 'A1';
+    const parsed = ParseCellAddress(cellAddr);
+    if (parsed) {
+      const protReason = this.findProtectedReasonInRange(
+        targetSheet,
+        parsed.row,
+        parsed.row,
+        parsed.col,
+        parsed.col,
+      );
+      if (protReason) {
+        this.notifyError(protReason);
+        return;
+      }
+    }
+
+    try {
+      const prevRowCount = targetSheet.Rows.length;
+      const prevColCount = targetSheet.Columns.length;
+      const trimmed = (sug.ProposedValue ?? '').trim();
+      const isFormula = trimmed.startsWith('=');
+      const parsedScalar = this.parseRawInputScalar(trimmed);
+      const cell = SpreadsheetEngine.Instance.SetCell(
+        this.Workbook,
+        targetSheet.SheetID,
+        cellAddr,
+        {
+          Value: isFormula ? null : parsedScalar,
+          Formula: isFormula ? trimmed : null,
+          Style: targetSheet.Cells[cellAddr]?.Style,
+        },
+        true,
+        this.buildCellEditContext(),
+      );
+      if (this.CollaborationSession) {
+        this.withLocalSessionSync(() => {
+          if (targetSheet.Rows.length !== prevRowCount || targetSheet.Columns.length !== prevColCount) {
+            this.CollaborationSession?.UpdateWorksheetStructure(targetSheet, this.Workbook);
+          }
+          this.CollaborationSession?.UpdateSpreadsheetCell(
+            targetSheet.SheetID,
+            cell,
+            this.Workbook,
+          );
+        });
+      }
+      const updated: SpreadsheetCellSuggestionSpec = { ...sug, Status: 'accepted' };
+      this.persistSpreadsheetSuggestion(updated, targetSheet.Name);
+      this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+      if (targetSheet.SheetID === this.ActiveSheet.SheetID) {
+        this.syncFormulaBarFromActiveCell();
+      }
+      this.StatusBannerMessage = `Accepted suggestion on ${targetSheet.Name}!${cellAddr}.`;
+      this.cdr.markForCheck();
+    } catch (err) {
+      this.notifyError(err instanceof Error ? err.message : 'Failed to apply cell suggestion.');
+    }
+  }
+
+  public RejectCellSuggestion(sug: SpreadsheetCellSuggestionSpec): void {
+    if (!this.CanEdit || sug.Status !== 'pending') return;
+    const rawSheetKey = (sug.SheetID ?? '').trim();
+    const targetSheet = rawSheetKey
+      ? this.Workbook.Worksheets.find(
+          (w) =>
+            w.SheetID === rawSheetKey ||
+            w.Name.trim().toLowerCase() === rawSheetKey.toLowerCase(),
+        )
+      : undefined;
+    const updated: SpreadsheetCellSuggestionSpec = { ...sug, Status: 'rejected' };
+    this.persistSpreadsheetSuggestion(updated, targetSheet?.Name);
+    this.StatusBannerMessage = `Rejected suggestion on ${sug.Range}.`;
+    this.cdr.markForCheck();
+  }
+
   public FocusRangeFromAnchorKey(anchorKey: string): void {
     const parsed = this.ParseCollaboratorSheetRanges(anchorKey);
     if (parsed.SheetID && this.Workbook.Worksheets.some((w) => w.SheetID === parsed.SheetID)) {
@@ -8116,6 +10651,18 @@ export class SpreadsheetArtifactViewerComponent
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file || !this.CanEdit) return;
+    if (!this.IsArtifactOwner && !this.CanManageDocumentLocks) {
+      const hasLockedSheet = this.Workbook.Worksheets.some(
+        (ws) => Array.isArray(ws.ProtectedRanges) && ws.ProtectedRanges.length > 0,
+      );
+      if (hasLockedSheet) {
+        input.value = '';
+        this.notifyError(
+          'Cannot import over a workbook containing protected ranges locked by another user.',
+        );
+        return;
+      }
+    }
 
     try {
       const buffer = await file.arrayBuffer();
@@ -8144,6 +10691,12 @@ export class SpreadsheetArtifactViewerComponent
 
       SpreadsheetEngine.Instance.EvaluateWorkbook(this.Workbook);
       this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
+      for (const ws of this.Workbook.Worksheets) {
+        this.CollaborationSession?.UpdateWorksheetStructure(ws, this.Workbook);
+      }
+      this.EmbeddedArtifactVersions = {};
+      void this.hydrateEmbeddedArtifactVersions();
+      this.verifyFrozenLiveTablesOnServer(this.Workbook);
       this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
       this.syncFormulaBarFromActiveCell();
       this.StatusBannerMessage = `Imported "${file.name}" (${this.Workbook.Worksheets.length} sheet(s), ${this.FormulaCellCount} formula(s)).`;
@@ -8205,9 +10758,12 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public async SaveNewArtifactVersion(): Promise<void> {
-    if (!this.CanEdit || this.IsSavingVersion || !this.HasUnsavedChanges) return;
+    if (!this.CanEdit || this.IsSavingVersion) return;
+    if (!this.FlushPendingEdits()) return;
+    if (!this.HasUnsavedChanges) return;
     this.IsSavingVersion = true;
     this.cdr.markForCheck();
+    let keepSavingUntilWsAck = false;
 
     try {
       const serialized = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
@@ -8216,10 +10772,22 @@ export class SpreadsheetArtifactViewerComponent
       const { Policy, CapturedThumbnailDataUrl } = await CaptureThumbnailForDriverIfAllowed(
         'SpreadsheetArtifactViewerPlugin',
         this.resolveCaptureRootElement(),
+        null,
+        this.Provider,
       );
 
       const sentViaWs = this.CollaborationSession?.RequestSaveVersion(CapturedThumbnailDataUrl) ?? false;
       if (sentViaWs) {
+        keepSavingUntilWsAck = true;
+        this.clearSaveVersionTimeout();
+        this.saveVersionTimeoutHandle = this.scheduleManagedTimeout(() => {
+          this.saveVersionTimeoutHandle = null;
+          if (this.IsSavingVersion) {
+            this.IsSavingVersion = false;
+            this.notifyError('Save timed out waiting for collaboration server confirmation.');
+            this.cdr.markForCheck();
+          }
+        }, 30_000);
         this.StatusBannerMessage = 'Saving collaborative workbook version…';
         return;
       }
@@ -8320,16 +10888,82 @@ export class SpreadsheetArtifactViewerComponent
       LogError(err);
       this.notifyError(err instanceof Error ? err.message : 'Failed to save workbook version.');
     } finally {
-      this.IsSavingVersion = false;
+      if (!keepSavingUntilWsAck) {
+        this.IsSavingVersion = false;
+      }
       this.cdr.markForCheck();
     }
   }
 
   // ---------------------------------------------------------------------------
-  // Workspace Mode & Source / Diff Helpers
+  // Workspace Mode & Source / Diff / Reset Conflict / NW-1 Drift Helpers
   // ---------------------------------------------------------------------------
 
+  /**
+   * Maps host-synchronized {@link ArtifactViewerViewMode} (`NW-6`) onto Sheets workspace modes & comments/suggestions drawer.
+   */
+  protected override onViewerViewModeChanged(mode: ArtifactViewerViewMode): void {
+    switch (mode) {
+      case 'diff':
+        this.SetWorkspaceMode('diff');
+        break;
+      case 'suggest':
+        this.SetWorkspaceMode('grid');
+        this.ShowCommentsDrawer = true;
+        this.cdr.markForCheck();
+        break;
+      case 'edit':
+      case 'present':
+        this.SetWorkspaceMode('grid');
+        break;
+    }
+  }
+
+  /**
+   * Switches worksheet and/or selects target cell range when {@link NavigationAnchor} updates (`NW-6`).
+   */
+  protected override onNavigationAnchorChanged(anchor: ArtifactNavigationAnchor): void {
+    let switchedSheet = false;
+    if (anchor.Sheet) {
+      const normalized = anchor.Sheet.trim().toLowerCase();
+      const targetSheet = (this.Workbook.Worksheets ?? []).find(
+        (w) => UUIDsEqual(w.SheetID, anchor.Sheet) || w.Name.trim().toLowerCase() === normalized,
+      );
+      if (targetSheet && !UUIDsEqual(this.Workbook.ActiveSheetID, targetSheet.SheetID)) {
+        this.Workbook.ActiveSheetID = targetSheet.SheetID;
+        switchedSheet = true;
+      }
+    }
+    if (anchor.Range) {
+      const bounds = ParseRangeAddress(anchor.Range, 1_048_576, 16_384);
+      if (bounds) {
+        this.SelectCell(bounds.startRow, bounds.startCol);
+        if (bounds.startRow !== bounds.endRow || bounds.startCol !== bounds.endCol) {
+          this.SelectedRange = anchor.Range;
+          this.SelectedRanges = [anchor.Range];
+          this.cdr.markForCheck();
+        }
+        return;
+      }
+    }
+    if (switchedSheet && this.ActiveSheet) {
+      this.SelectWorksheet(this.ActiveSheet.SheetID);
+    }
+  }
+
+  /**
+   * Refreshes view when server-verified snapshot provenance map changes (`NW-1`).
+   */
+  protected override onPreVerifiedFrozenSnapshotsChanged(): void {
+    this.cdr.markForCheck();
+  }
+
   public SetWorkspaceMode(mode: SpreadsheetWorkspaceMode): void {
+    if (this.WorkspaceMode !== mode) {
+      if (!this.FlushPendingEdits()) {
+        return;
+      }
+    }
     this.WorkspaceMode = mode;
     const currentJson = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
     this.SourceJsonText = currentJson;
@@ -8343,12 +10977,292 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public ApplySourceJsonChanges(): void {
-    if (!this.CanEdit) return;
-    this.Workbook = SpreadsheetEngine.Instance.ParseWorkbook(this.SourceJsonText);
+    this.applySourceJsonInternal(true);
+  }
+
+  private applySourceJsonInternal(switchToGrid = true): boolean {
+    if (!this.CanEdit) return false;
+    const parsedRaw = SafeJSONParse<Partial<WorkbookSpec>>(this.SourceJsonText);
+    if (!parsedRaw || !Array.isArray(parsedRaw.Worksheets) || parsedRaw.Worksheets.length === 0) {
+      this.notifyError('Invalid workbook JSON: missing non-empty Worksheets array.');
+      return false;
+    }
+
+    let nextWorkbook: WorkbookSpec;
+    try {
+      nextWorkbook = this.parseWorkbookPreservingMergeRanges(this.SourceJsonText);
+    } catch (err) {
+      this.notifyError(err instanceof Error ? err.message : 'Invalid workbook JSON.');
+      return false;
+    }
+
+    if (!this.IsArtifactOwner && !this.CanManageDocumentLocks) {
+      const editCtx = this.buildCellEditContext();
+      const userId = editCtx.UserID;
+      for (const prevSheet of this.Workbook.Worksheets) {
+        const lockedRules = (prevSheet.ProtectedRanges ?? []).filter(
+          (r) => !userId || r.LockedByUserID !== userId,
+        );
+        if (lockedRules.length === 0) continue;
+        const nextSheet = nextWorkbook.Worksheets.find((w) => w.SheetID === prevSheet.SheetID);
+        if (!nextSheet) {
+          this.notifyError(`Cannot delete protected worksheet "${prevSheet.Name}" via Source JSON.`);
+          return false;
+        }
+        const nextRules = nextSheet.ProtectedRanges ?? [];
+        for (const rule of lockedRules) {
+          const preserved = nextRules.some(
+            (nr) =>
+              nr.Range === rule.Range &&
+              nr.LockedByUserID === rule.LockedByUserID &&
+              Boolean(nr.AllowEditors) === Boolean(rule.AllowEditors),
+          );
+          if (!preserved) {
+            this.notifyError(
+              `Cannot remove or weaken protected range "${rule.Range}" on "${prevSheet.Name}" via Source JSON.`,
+            );
+            return false;
+          }
+        }
+        const allAddrs = new Set<string>([
+          ...Object.keys(prevSheet.Cells ?? {}),
+          ...Object.keys(nextSheet.Cells ?? {}),
+        ]);
+        for (const addr of allAddrs) {
+          const parsedAddr = ParseCellAddress(addr);
+          if (!parsedAddr) continue;
+          const protReason = this.findProtectedReasonInRange(
+            prevSheet,
+            parsedAddr.row,
+            parsedAddr.row,
+            parsedAddr.col,
+            parsedAddr.col,
+          );
+          if (protReason) {
+            const prevJson = JSON.stringify(prevSheet.Cells?.[addr] ?? null);
+            const nextJson = JSON.stringify(nextSheet.Cells?.[addr] ?? null);
+            if (prevJson !== nextJson) {
+              this.notifyError(protReason);
+              return false;
+            }
+          }
+        }
+      }
+    }
+
+    this.Workbook = nextWorkbook;
     SpreadsheetEngine.Instance.EvaluateWorkbook(this.Workbook);
     this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
-    this.WorkspaceMode = 'grid';
+    for (const ws of this.Workbook.Worksheets) {
+      this.CollaborationSession?.UpdateWorksheetStructure(ws, this.Workbook);
+    }
+    this.EmbeddedArtifactVersions = {};
+    void this.hydrateEmbeddedArtifactVersions();
+    this.verifyFrozenLiveTablesOnServer(this.Workbook);
+
+    const active = this.ActiveSheet;
+    if (active) {
+      this.ActiveRowIndex = Math.max(1, Math.min(this.ActiveRowIndex, active.Rows.length || 1));
+      this.ActiveColumnIndex = Math.max(
+        1,
+        Math.min(this.ActiveColumnIndex, active.Columns.length || 1),
+      );
+      const clampedAddr = FormatCellAddress(this.ActiveRowIndex, this.ActiveColumnIndex);
+      this.SelectedRange = clampedAddr;
+      this.SelectedRanges = [clampedAddr];
+    }
+
+    if (switchToGrid) {
+      this.WorkspaceMode = 'grid';
+    }
+    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
     this.syncFormulaBarFromActiveCell();
+    this.cdr.markForCheck();
+    return true;
+  }
+
+  public ApplyPendingResetConflictDraft(): void {
+    if (!this.PendingResetConflictDraft || !this.CollaborationSession) return;
+    if (this.CollaborationSession.ApplyResetConflictDraft()) {
+      this.PendingResetConflictDraft = null;
+      this.StatusBannerMessage = 'Restored local unsynced changes into current workbook.';
+      this.cdr.markForCheck();
+    }
+  }
+
+  public DismissPendingResetConflictDraft(): void {
+    this.CollaborationSession?.DismissResetConflictDraft();
+    this.PendingResetConflictDraft = null;
+    this.cdr.markForCheck();
+  }
+
+  public get FrozenLiveTablesOnActiveSheet(): SpreadsheetLiveTableSpec[] {
+    return (this.ActiveSheet?.LiveTables ?? []).filter((t) => t.Mode === 'Frozen');
+  }
+
+  public async CompareFrozenTablesWithLive(): Promise<void> {
+    const frozenTables = this.FrozenLiveTablesOnActiveSheet;
+    if (frozenTables.length === 0) {
+      this.FrozenDriftComparisonResults = [];
+      return;
+    }
+    const user = this.resolveCurrentUser();
+    if (!user) return;
+    const provider = this.getSafeProvider();
+    const summaries: SpreadsheetLiveTableDriftSummary[] = [];
+
+    for (const table of frozenTables) {
+      const frozenRowCount =
+        table.FrozenSnapshot?.TotalRowCount ??
+        table.FrozenSnapshot?.Rows?.length ??
+        table.LastRowCount ??
+        0;
+      let liveRowCount = frozenRowCount;
+      try {
+        const tableClone: SpreadsheetLiveTableSpec = {
+          ...(JSON.parse(JSON.stringify(table)) as SpreadsheetLiveTableSpec),
+          Mode: 'Live',
+        };
+        const tempWorkbook = SpreadsheetEngine.Instance.CreateEmptyWorkbook(this.Workbook.Title);
+        tempWorkbook.Worksheets[0].LiveTables = [tableClone];
+        const liveResults = await SpreadsheetEngine.Instance.RefreshLiveTables(
+          tempWorkbook,
+          user,
+          provider ?? undefined,
+          {
+            TableID: table.TableID,
+            ForceRefreshFrozen: true,
+          },
+        );
+        const res = liveResults[table.TableID];
+        if (res?.Success) {
+          liveRowCount = res.TotalRowCount ?? res.Rows?.length ?? frozenRowCount;
+        }
+      } catch {
+        // Fallback to cached count when live query cannot execute
+      }
+      const delta = liveRowCount - frozenRowCount;
+      const summaryText =
+        delta === 0
+          ? `No row drift (${frozenRowCount} rows match live query).`
+          : delta > 0
+            ? `+${delta} new live row(s) (${frozenRowCount} frozen -> ${liveRowCount} live).`
+            : `${delta} row(s) (${frozenRowCount} frozen -> ${liveRowCount} live).`;
+      summaries.push({
+        TableID: table.TableID,
+        Title: table.Title,
+        FrozenRowCount: frozenRowCount,
+        LiveRowCount: liveRowCount,
+        RowDelta: delta,
+        SummaryText: summaryText,
+      });
+    }
+
+    this.FrozenDriftComparisonResults = summaries;
+    this.cdr.markForCheck();
+  }
+
+  public async RefreezeAllFrozenTables(): Promise<void> {
+    if (!this.CanEdit || !this.CanManageDocumentLocks) {
+      this.notifyError('Document lock permissions are required to re-freeze live tables.');
+      return;
+    }
+    const user = this.resolveCurrentUser();
+    const provider = this.getSafeProvider();
+    if (!user || !provider) {
+      this.notifyError('Cannot re-freeze live tables: user or provider context unavailable.');
+      return;
+    }
+    const frozenTables = this.FrozenLiveTablesOnActiveSheet;
+    if (frozenTables.length === 0) return;
+
+    const beforeSnapshots = this.snapshotWorkbookCells();
+    let updatedCount = 0;
+    for (const table of frozenTables) {
+      const tb = this.parseRangeBounds(this.computeLiveTableRangeA1(table));
+      if (
+        tb &&
+        this.findProtectedReasonInRange(this.ActiveSheet, tb.minR, tb.maxR, tb.minC, tb.maxC)
+      ) {
+        continue;
+      }
+      const res = await this.collaborationService.FreezeLiveBlock(
+        this.liveTableToBlockSpec(table, 'Live'),
+        true,
+        this.artifactVersion?.ArtifactID,
+        provider,
+      );
+      if (res.Success && res.UpdatedSpec?.FrozenSnapshot) {
+        const snap = res.UpdatedSpec.FrozenSnapshot;
+        const execResult: DocumentBlockExecutionResult = {
+          BlockID: table.TableID,
+          Kind: table.SourceType,
+          Mode: 'Frozen',
+          Success: true,
+          Columns: snap.Columns,
+          Rows: snap.Rows,
+          TotalRowCount: snap.TotalRowCount,
+          FrozenMetadata: {
+            FrozenAt: snap.FrozenAt,
+            FrozenByUserID: snap.FrozenByUserID,
+            FrozenByUserName: snap.FrozenByUserName,
+            SnapshotVerified: true,
+          },
+        };
+        SpreadsheetEngine.Instance.FreezeLiveTable(
+          this.Workbook,
+          this.ActiveSheet.SheetID,
+          table.TableID,
+          execResult,
+          user,
+          true,
+          snap,
+        );
+        this.lastTableResults[table.TableID] = execResult;
+        updatedCount++;
+      }
+    }
+    this.withLocalSessionSync(() => {
+      this.syncWorkbookCellDiffsToSession(beforeSnapshots, true);
+      this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
+    });
+    this.FrozenDriftComparisonResults = [];
+    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+    this.StatusBannerMessage = `Re-froze ${updatedCount} live table snapshot(s).`;
+    this.cdr.markForCheck();
+  }
+
+  public async SwitchAllFrozenTablesToLive(): Promise<void> {
+    if (!this.CanEdit || !this.CanManageDocumentLocks) {
+      this.notifyError('Document lock permissions are required to unfreeze live tables.');
+      return;
+    }
+    const frozenTables = [...this.FrozenLiveTablesOnActiveSheet];
+    if (frozenTables.length === 0) return;
+
+    const beforeSnapshots = this.snapshotWorkbookCells();
+    for (const table of frozenTables) {
+      const tb = this.parseRangeBounds(this.computeLiveTableRangeA1(table));
+      if (
+        tb &&
+        this.findProtectedReasonInRange(this.ActiveSheet, tb.minR, tb.maxR, tb.minC, tb.maxC)
+      ) {
+        continue;
+      }
+      SpreadsheetEngine.Instance.UnfreezeLiveTable(
+        this.Workbook,
+        this.ActiveSheet.SheetID,
+        table.TableID,
+      );
+      await this.RefreshSingleLiveTable(table);
+    }
+    this.withLocalSessionSync(() => {
+      this.syncWorkbookCellDiffsToSession(beforeSnapshots, true);
+      this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
+    });
+    this.FrozenDriftComparisonResults = [];
+    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+    this.StatusBannerMessage = `Switched ${frozenTables.length} frozen table(s) back to Live mode.`;
     this.cdr.markForCheck();
   }
 
@@ -8363,6 +11277,55 @@ export class SpreadsheetArtifactViewerComponent
     }
     const val = cell.ComputedValue ?? cell.RawValue;
     return SpreadsheetEngine.Instance.FormatCellValue(val, cell.Style);
+  }
+
+  public TryParseSparklineCell(cell?: SpreadsheetCellSpec): SparklineSvgViewModel | null {
+    if (!cell) return null;
+    const parsed: ParsedSparklineValue | null = ParseSparklineValue(cell.ComputedValue ?? cell.RawValue);
+    if (!parsed || parsed.Values.length === 0) return null;
+    const width = 84;
+    const height = 20;
+    const pad = 2;
+    const vals = parsed.Values;
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    const span = max - min || 1;
+    if (parsed.Type === 'bar' || parsed.Type === 'winloss') {
+      const slotW = (width - pad * 2) / vals.length;
+      const barW = Math.max(1.5, slotW - 1.2);
+      const bars = vals.map((v, i) => {
+        if (parsed.Type === 'winloss') {
+          const positive = v >= 0;
+          const h = Math.round((height - pad * 2) / 2);
+          return {
+            X: Number((pad + i * slotW).toFixed(2)),
+            Y: positive ? pad : Math.round(height / 2),
+            W: Number(barW.toFixed(2)),
+            H: h,
+            Positive: positive,
+          };
+        }
+        const norm = (v - min) / span;
+        const h = Math.max(2, Math.round(norm * (height - pad * 2)));
+        return {
+          X: Number((pad + i * slotW).toFixed(2)),
+          Y: Number((height - pad - h).toFixed(2)),
+          W: Number(barW.toFixed(2)),
+          H: h,
+          Positive: v >= 0,
+        };
+      });
+      return { Type: parsed.Type, Width: width, Height: height, Count: vals.length, PolylinePoints: '', Bars: bars };
+    }
+    const stepX = vals.length > 1 ? (width - pad * 2) / (vals.length - 1) : 0;
+    const pts = vals
+      .map((v, i) => {
+        const x = pad + (vals.length > 1 ? i * stepX : (width - pad * 2) / 2);
+        const y = height - pad - ((v - min) / span) * (height - pad * 2);
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      })
+      .join(' ');
+    return { Type: 'line', Width: width, Height: height, Count: vals.length, PolylinePoints: pts, Bars: [] };
   }
 
   public IsNumericOrRightAligned(cell?: SpreadsheetCellSpec): boolean {
@@ -8441,19 +11404,20 @@ export class SpreadsheetArtifactViewerComponent
   ): void {
     if (this.syntheticAgentTimer) {
       clearTimeout(this.syntheticAgentTimer);
+      this.pendingTimers.delete(this.syntheticAgentTimer);
       this.syntheticAgentTimer = null;
     }
     this.SyntheticAgentPresence = {
       ClientID: -999,
       UserID: 'ai-agent',
       Name: agentName,
-      Color: '#8b5cf6',
+      Color: 'var(--mj-brand-primary)',
       ActiveBlockID: `${sheetId}:${boundingRange}`,
       CanEdit: true,
       IsAgent: true,
     };
     this.cdr.markForCheck();
-    this.syntheticAgentTimer = setTimeout(() => {
+    this.syntheticAgentTimer = this.scheduleManagedTimeout(() => {
       this.SyntheticAgentPresence = null;
       this.syntheticAgentTimer = null;
       this.cdr.markForCheck();
@@ -8786,6 +11750,33 @@ export class SpreadsheetArtifactViewerComponent
       bounds.maxC,
     );
 
+    const hasMergedCells = this.doesBoundsIntersectMergeRange(
+      sheet,
+      bounds.minR,
+      bounds.maxR,
+      bounds.minC,
+      bounds.maxC,
+    );
+    const overlappingProtectionRules = (sheet.ProtectedRanges ?? []).filter((rule) => {
+      const rb = ParseRangeAddress(rule.Range, 1_048_576, 16_384);
+      if (!rb) return false;
+      return (
+        rb.startRow <= bounds.maxR &&
+        rb.endRow >= bounds.minR &&
+        rb.startCol <= bounds.maxC &&
+        rb.endCol >= bounds.minC
+      );
+    });
+    const isRangeProtected = overlappingProtectionRules.length > 0;
+    const currentUserId = (this.resolveCurrentUser()?.ID ?? '').trim();
+    const canUnlockRange =
+      this.CanManageDocumentLocks &&
+      (!isRangeProtected ||
+        this.IsArtifactOwner ||
+        overlappingProtectionRules.every(
+          (r) => currentUserId && r.LockedByUserID && UUIDsEqual(currentUserId, r.LockedByUserID),
+        ));
+
     const target: SheetsContextMenuTarget = {
       Kind: 'cell',
       SheetID: sheet.SheetID,
@@ -8802,6 +11793,9 @@ export class SpreadsheetArtifactViewerComponent
       SpilledFromA1: spilledFromA1,
       SpillRangeA1: spillRangeA1,
       IntersectsLiveOrChartBlock: intersectsLiveOrChartBlock,
+      HasMergedCells: hasMergedCells,
+      IsRangeProtected: isRangeProtected,
+      CanUnlockRange: canUnlockRange,
       CurrentFormat: this.ActiveCellFormatType,
       IsBold: Boolean(cell?.Style?.Bold),
       IsItalic: Boolean(cell?.Style?.Italic),
@@ -8974,13 +11968,21 @@ export class SpreadsheetArtifactViewerComponent
     event.preventDefault();
     event.stopPropagation();
 
+    const rangeA1 = this.computeLiveTableRangeA1(table);
+    const tb = this.parseRangeBounds(rangeA1);
+    const protectedReason =
+      this.ActiveSheet && tb
+        ? this.findProtectedReasonInRange(this.ActiveSheet, tb.minR, tb.maxR, tb.minC, tb.maxC)
+        : null;
+
     const target: SheetsContextMenuTarget = {
       Kind: 'live-table',
       SheetID: this.ActiveSheet.SheetID,
       TableID: table.TableID,
       Title: table.Title,
       Mode: table.Mode,
-      RangeA1: this.computeLiveTableRangeA1(table),
+      RangeA1: rangeA1,
+      ProtectedReason: protectedReason,
     };
 
     const restoreEl = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
@@ -9043,6 +12045,7 @@ export class SpreadsheetArtifactViewerComponent
       Target: target,
       CanEdit: this.CanEdit,
       CanComment: this.CanComment,
+      CanManageDocumentLocks: this.CanManageDocumentLocks,
       HasClipboardData: Boolean(this.SheetsClipboardBuffer && this.SheetsClipboardBuffer.Cells.length > 0),
       ClipboardSourceRangeA1: this.SheetsClipboardBuffer?.SourceRangeA1 ?? null,
       IsMac: isMac,
@@ -9162,14 +12165,27 @@ export class SpreadsheetArtifactViewerComponent
         break;
       case 'sort-col':
         if (this.CanEdit) {
-          SpreadsheetEngine.Instance.SortWorksheet(this.Workbook, this.ActiveSheet.SheetID, {
-            ColumnLetter: command.ColumnLetter,
-            Direction: command.Direction,
-            HeaderRows: 1,
-          });
-          this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
-          this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
-          this.cdr.markForCheck();
+          try {
+            const beforeSort = this.snapshotWorkbookCells();
+            SpreadsheetEngine.Instance.SortWorksheet(
+              this.Workbook,
+              this.ActiveSheet.SheetID,
+              {
+                ColumnLetter: command.ColumnLetter,
+                Direction: command.Direction,
+                HeaderRows: 1,
+              },
+              this.buildCellEditContext(),
+            );
+            this.withLocalSessionSync(() => {
+              this.syncWorkbookCellDiffsToSession(beforeSort, true);
+              this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
+            });
+            this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+            this.cdr.markForCheck();
+          } catch (err) {
+            this.notifyError(err instanceof Error ? err.message : 'Sort blocked by protected range.');
+          }
         }
         break;
       case 'set-col-width':
@@ -9278,10 +12294,39 @@ export class SpreadsheetArtifactViewerComponent
         this.selectEmbeddedAnchor(command.EmbedID);
         break;
       case 'refresh-embedded-artifact':
+        delete this.EmbeddedArtifactVersions[command.EmbedID];
+        delete this.EmbeddedArtifactErrors[command.EmbedID];
         void this.hydrateEmbeddedArtifactVersions();
         break;
       case 'delete-embedded-artifact':
         this.deleteEmbeddedArtifact(command.EmbedID);
+        break;
+      case 'merge-cells':
+        this.selectRangeString(command.RangeA1);
+        this.MergeSelectedRange();
+        break;
+      case 'unmerge-cells':
+        this.selectRangeString(command.RangeA1);
+        this.UnmergeSelectedRange();
+        break;
+      case 'open-validation-drawer':
+        this.selectRangeString(command.RangeA1);
+        this.OpenValidationDrawer();
+        break;
+      case 'open-conditional-format-drawer':
+        this.selectRangeString(command.RangeA1);
+        this.OpenConditionalFormatDrawer();
+        break;
+      case 'open-named-range-modal':
+        this.selectRangeString(command.RangeA1);
+        this.OpenNamedRangeModal();
+        break;
+      case 'toggle-range-protection':
+        this.selectRangeString(command.RangeA1);
+        this.ToggleSelectedRangeProtection();
+        break;
+      case 'propose-suggestion':
+        this.OpenProposeSuggestionModal(command.RangeA1);
         break;
     }
   }
@@ -9307,12 +12352,11 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   private selectRowRange(startRow: number, endRow: number): void {
+    this.FlushPendingEdits();
     const minRow = Math.max(1, Math.min(startRow, endRow));
     const maxRow = Math.max(minRow, Math.max(startRow, endRow));
-    const lastColLetter =
-      this.VisibleColumns.length > 0
-        ? this.VisibleColumns[this.VisibleColumns.length - 1].Letter
-        : 'Z';
+    const cols = this.ActiveSheet?.Columns ?? [];
+    const lastColLetter = cols.length > 0 ? cols[cols.length - 1].Letter : 'Z';
     const rowRange = `A${minRow}:${lastColLetter}${maxRow}`;
     this.ActiveRowIndex = minRow;
     this.ActiveColumnIndex = 1;
@@ -9325,6 +12369,7 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   private selectColumnRange(startCol: number, endCol: number): void {
+    this.FlushPendingEdits();
     const minCol = Math.max(1, Math.min(startCol, endCol));
     const maxCol = Math.max(minCol, Math.max(startCol, endCol));
     const startLetter = ColumnIndexToLetter(minCol);
@@ -9358,7 +12403,7 @@ export class SpreadsheetArtifactViewerComponent
     this.RenameSheetDraftName = ws.Name;
     this.cdr.markForCheck();
     if (typeof document !== 'undefined') {
-      setTimeout(() => {
+      this.scheduleManagedTimeout(() => {
         const input = this.queryHostElement<HTMLInputElement>('[data-testid="sheet-tab-rename-input"]');
         if (input) {
           input.focus();
@@ -9396,12 +12441,13 @@ export class SpreadsheetArtifactViewerComponent
     const sheet = this.ActiveSheet;
     if (!sheet) return;
     const primaryRange = this.SelectedRanges[0] ?? this.SelectedRange ?? this.ActiveCellAddress;
-    const bounds = this.parseRangeBounds(primaryRange) ?? {
+    const rawBounds = this.parseRangeBounds(primaryRange) ?? {
       minR: this.ActiveRowIndex,
       maxR: this.ActiveRowIndex,
       minC: this.ActiveColumnIndex,
       maxC: this.ActiveColumnIndex,
     };
+    const bounds = this.clampRangeBoundsToSafeWindow(rawBounds, sheet);
     const cells: SheetsClipboardCellEntry[] = [];
     for (let r = bounds.minR; r <= bounds.maxR; r++) {
       for (let c = bounds.minC; c <= bounds.maxC; c++) {
@@ -9469,12 +12515,13 @@ export class SpreadsheetArtifactViewerComponent
     const sheet = this.ActiveSheet;
     if (!sheet) return;
     const primaryRange = this.SelectedRanges[0] ?? this.SelectedRange ?? this.ActiveCellAddress;
-    const bounds = this.parseRangeBounds(primaryRange) ?? {
+    const rawBounds = this.parseRangeBounds(primaryRange) ?? {
       minR: this.ActiveRowIndex,
       maxR: this.ActiveRowIndex,
       minC: this.ActiveColumnIndex,
       maxC: this.ActiveColumnIndex,
     };
+    const bounds = this.clampRangeBoundsToSafeWindow(rawBounds, sheet);
 
     let text = '';
     if (kind === 'formula') {
@@ -9512,7 +12559,7 @@ export class SpreadsheetArtifactViewerComponent
         const cols: string[] = [];
         for (let c = bounds.minC; c <= bounds.maxC; c++) {
           const cell = sheet.Cells[FormatCellAddress(r, c)];
-          const val = String(cell?.DisplayValue ?? cell?.ComputedValue ?? cell?.RawValue ?? '').replace(/\|/g, '\\|');
+          const val = String(cell?.DisplayValue ?? cell?.ComputedValue ?? cell?.RawValue ?? '').replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
           cols.push(val);
         }
         mdRows.push(`| ${cols.join(' | ')} |`);
@@ -9560,17 +12607,44 @@ export class SpreadsheetArtifactViewerComponent
     }
 
     const sheet = this.ActiveSheet;
-    const editContext = this.buildCellEditContext();
+    const destMinR = this.ActiveRowIndex;
+    const destMaxR = this.ActiveRowIndex + Math.max(0, buf.RowCount - 1);
+    const destMinC = this.ActiveColumnIndex;
+    const destMaxC = this.ActiveColumnIndex + Math.max(0, buf.ColCount - 1);
+    const destProtReason = this.findProtectedReasonInRange(sheet, destMinR, destMaxR, destMinC, destMaxC);
+    if (destProtReason) {
+      this.StatusBannerMessage = destProtReason;
+      this.cdr.markForCheck();
+      return;
+    }
+    const sourceSheetForCut =
+      buf.Mode === 'cut' && kind === 'all'
+        ? this.Workbook.Worksheets.find((w) => w.SheetID === buf.SourceSheetID)
+        : undefined;
     const srcBounds = this.parseRangeBounds(buf.SourceRangeA1);
+    if (sourceSheetForCut && srcBounds) {
+      const srcProtReason = this.findProtectedReasonInRange(
+        sourceSheetForCut,
+        srcBounds.minR,
+        srcBounds.maxR,
+        srcBounds.minC,
+        srcBounds.maxC,
+      );
+      if (srcProtReason) {
+        this.StatusBannerMessage = srcProtReason;
+        this.cdr.markForCheck();
+        return;
+      }
+    }
+
+    const prevRowCount = sheet.Rows.length;
+    const prevColCount = sheet.Columns.length;
+    const editContext = this.buildCellEditContext();
     const rowDelta = srcBounds ? this.ActiveRowIndex - srcBounds.minR : 0;
     const colDelta = srcBounds ? this.ActiveColumnIndex - srcBounds.minC : 0;
     const updatedCells: SpreadsheetCellSpec[] = [];
     const sameSheetDeletes: Array<{ rowId: string; colId: string }> = [];
     const crossSheetDeletes: Array<{ rowId: string; colId: string }> = [];
-    const sourceSheetForCut =
-      buf.Mode === 'cut' && kind === 'all'
-        ? this.Workbook.Worksheets.find((w) => w.SheetID === buf.SourceSheetID)
-        : undefined;
     const sourceCellsBeforeCut = new Map<string, { rowId: string; colId: string }>();
     if (sourceSheetForCut) {
       for (const [addr, cell] of Object.entries(sourceSheetForCut.Cells)) {
@@ -9667,10 +12741,6 @@ export class SpreadsheetArtifactViewerComponent
       if (buf.Mode === 'cut' && kind === 'all') {
         const destStart = FormatCellAddress(this.ActiveRowIndex, this.ActiveColumnIndex);
         if (buf.SourceSheetID !== sheet.SheetID || destStart !== buf.SourceRangeA1.split(':')[0]) {
-          const destMinR = this.ActiveRowIndex;
-          const destMaxR = this.ActiveRowIndex + buf.RowCount - 1;
-          const destMinC = this.ActiveColumnIndex;
-          const destMaxC = this.ActiveColumnIndex + buf.ColCount - 1;
           const sameSheetOverlap =
             buf.SourceSheetID === sheet.SheetID &&
             srcBounds != null &&
@@ -9741,6 +12811,10 @@ export class SpreadsheetArtifactViewerComponent
       return;
     }
 
+    if (sheet.Rows.length !== prevRowCount || sheet.Columns.length !== prevColCount) {
+      this.CollaborationSession?.UpdateWorksheetStructure(sheet, this.Workbook);
+    }
+
     if (crossSheetDeletes.length > 0 && buf.SourceSheetID !== sheet.SheetID) {
       this.CollaborationSession?.BatchUpdateSpreadsheetCells(
         buf.SourceSheetID,
@@ -9779,15 +12853,37 @@ export class SpreadsheetArtifactViewerComponent
   private insertRowsAt(position: 'above' | 'below', count: number, atRowIndex: number): void {
     if (!this.CanEdit) return;
     const insertAt = position === 'below' ? atRowIndex + 1 : atRowIndex;
+    const protectedReason = this.findProtectedReasonInRange(
+      this.ActiveSheet,
+      insertAt,
+      insertAt,
+      1,
+      16_384,
+    );
+    if (protectedReason) {
+      this.StatusBannerMessage = protectedReason;
+      this.cdr.markForCheck();
+      return;
+    }
     const before = this.snapshotWorkbookCells();
-    SpreadsheetEngine.Instance.InsertRows(this.Workbook, this.ActiveSheet.SheetID, insertAt, count);
-    this.withLocalSessionSync(() => {
-      this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
-      this.syncWorkbookCellDiffsToSession(before);
-    });
-    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
-    this.syncFormulaBarFromActiveCell();
-    this.cdr.markForCheck();
+    try {
+      SpreadsheetEngine.Instance.InsertRows(
+        this.Workbook,
+        this.ActiveSheet.SheetID,
+        insertAt,
+        count,
+        { ...this.buildCellEditContext(), BypassProtection: true },
+      );
+      this.withLocalSessionSync(() => {
+        this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+        this.syncWorkbookCellDiffsToSession(before, false, true);
+      });
+      this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+      this.syncFormulaBarFromActiveCell();
+      this.cdr.markForCheck();
+    } catch (err) {
+      this.notifyError(err instanceof Error ? err.message : 'Insert rows blocked by protected range.');
+    }
   }
 
   private deleteRowsAt(startRowIndex: number, count: number): void {
@@ -9806,28 +12902,60 @@ export class SpreadsheetArtifactViewerComponent
       return;
     }
     const before = this.snapshotWorkbookCells();
-    SpreadsheetEngine.Instance.DeleteRows(this.Workbook, this.ActiveSheet.SheetID, startRowIndex, count);
-    this.withLocalSessionSync(() => {
-      this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
-      this.syncWorkbookCellDiffsToSession(before);
-    });
-    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
-    this.syncFormulaBarFromActiveCell();
-    this.cdr.markForCheck();
+    try {
+      SpreadsheetEngine.Instance.DeleteRows(
+        this.Workbook,
+        this.ActiveSheet.SheetID,
+        startRowIndex,
+        count,
+        { ...this.buildCellEditContext(), BypassProtection: true },
+      );
+      this.withLocalSessionSync(() => {
+        this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+        this.syncWorkbookCellDiffsToSession(before, false, true);
+      });
+      this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+      this.syncFormulaBarFromActiveCell();
+      this.cdr.markForCheck();
+    } catch (err) {
+      this.notifyError(err instanceof Error ? err.message : 'Delete rows blocked by protected range.');
+    }
   }
 
   private insertColsAt(position: 'left' | 'right', count: number, atColIndex: number): void {
     if (!this.CanEdit) return;
     const insertAt = position === 'right' ? atColIndex + 1 : atColIndex;
+    const protectedReason = this.findProtectedReasonInRange(
+      this.ActiveSheet,
+      1,
+      1_048_576,
+      insertAt,
+      insertAt,
+    );
+    if (protectedReason) {
+      this.StatusBannerMessage = protectedReason;
+      this.cdr.markForCheck();
+      return;
+    }
     const before = this.snapshotWorkbookCells();
-    SpreadsheetEngine.Instance.InsertColumns(this.Workbook, this.ActiveSheet.SheetID, insertAt, count);
-    this.withLocalSessionSync(() => {
-      this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
-      this.syncWorkbookCellDiffsToSession(before);
-    });
-    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
-    this.syncFormulaBarFromActiveCell();
-    this.cdr.markForCheck();
+    try {
+      SpreadsheetEngine.Instance.InsertColumns(
+        this.Workbook,
+        this.ActiveSheet.SheetID,
+        insertAt,
+        count,
+        { ...this.buildCellEditContext(), BypassProtection: true },
+      );
+      this.withLocalSessionSync(() => {
+        this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+        this.syncWorkbookCellDiffsToSession(before, false, true);
+      });
+      this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+      this.syncFormulaBarFromActiveCell();
+      this.cdr.markForCheck();
+    } catch (err) {
+      this.notifyError(err instanceof Error ? err.message : 'Insert columns blocked by protected range.');
+    }
   }
 
   private deleteColsAt(startColIndex: number, count: number): void {
@@ -9846,14 +12974,24 @@ export class SpreadsheetArtifactViewerComponent
       return;
     }
     const before = this.snapshotWorkbookCells();
-    SpreadsheetEngine.Instance.DeleteColumns(this.Workbook, this.ActiveSheet.SheetID, startColIndex, count);
-    this.withLocalSessionSync(() => {
-      this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
-      this.syncWorkbookCellDiffsToSession(before);
-    });
-    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
-    this.syncFormulaBarFromActiveCell();
-    this.cdr.markForCheck();
+    try {
+      SpreadsheetEngine.Instance.DeleteColumns(
+        this.Workbook,
+        this.ActiveSheet.SheetID,
+        startColIndex,
+        count,
+        { ...this.buildCellEditContext(), BypassProtection: true },
+      );
+      this.withLocalSessionSync(() => {
+        this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+        this.syncWorkbookCellDiffsToSession(before, false, true);
+      });
+      this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+      this.syncFormulaBarFromActiveCell();
+      this.cdr.markForCheck();
+    } catch (err) {
+      this.notifyError(err instanceof Error ? err.message : 'Delete columns blocked by protected range.');
+    }
   }
 
   private clearRangeByKind(kind: 'contents' | 'formatting' | 'all', rangeA1: string): void {
@@ -9894,8 +13032,9 @@ export class SpreadsheetArtifactViewerComponent
             }
           }
         } else {
-          const bounds = this.parseRangeBounds(seg);
-          if (!bounds) continue;
+          const rawBounds = this.parseRangeBounds(seg);
+          if (!rawBounds) continue;
+          const bounds = this.clampRangeBoundsToSafeWindow(rawBounds, sheet);
           for (let r = bounds.minR; r <= bounds.maxR; r++) {
             for (let c = bounds.minC; c <= bounds.maxC; c++) {
               const addr = FormatCellAddress(r, c);
@@ -9965,12 +13104,13 @@ export class SpreadsheetArtifactViewerComponent
 
     try {
       for (const seg of segments) {
-        const bounds = this.parseRangeBounds(seg) ?? {
+        const rawBounds = this.parseRangeBounds(seg) ?? {
           minR: this.ActiveRowIndex,
           maxR: this.ActiveRowIndex,
           minC: this.ActiveColumnIndex,
           maxC: this.ActiveColumnIndex,
         };
+        const bounds = this.clampRangeBoundsToSafeWindow(rawBounds, sheet);
         for (let r = bounds.minR; r <= bounds.maxR; r++) {
           for (let c = bounds.minC; c <= bounds.maxC; c++) {
             const addr = FormatCellAddress(r, c);
@@ -10034,7 +13174,7 @@ export class SpreadsheetArtifactViewerComponent
       Value: current,
     };
     this.cdr.markForCheck();
-    setTimeout(() => {
+    this.scheduleManagedTimeout(() => {
       const input = this.queryHostElement<HTMLInputElement>('[data-testid="sheet-dimension-input"]');
       input?.focus();
       input?.select();
@@ -10108,7 +13248,7 @@ export class SpreadsheetArtifactViewerComponent
       Value: current,
     };
     this.cdr.markForCheck();
-    setTimeout(() => {
+    this.scheduleManagedTimeout(() => {
       const input = this.queryHostElement<HTMLInputElement>('[data-testid="sheet-dimension-input"]');
       input?.focus();
       input?.select();
@@ -10296,7 +13436,9 @@ export class SpreadsheetArtifactViewerComponent
 
     this.Workbook.ActiveSheetID = created.SheetID;
     SpreadsheetEngine.Instance.EvaluateWorkbook(this.Workbook);
-    this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
+    this.withLocalSessionSync(() => {
+      this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
+    });
     this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
     this.cdr.markForCheck();
   }
@@ -10518,7 +13660,7 @@ export class SpreadsheetArtifactViewerComponent
     this.ShowCommentsDrawer = true;
     this.cdr.markForCheck();
     if (focusComposer && typeof document !== 'undefined') {
-      setTimeout(() => {
+      this.scheduleManagedTimeout(() => {
         const input = this.queryHostElement<HTMLTextAreaElement>('[data-testid="sheet-comment-input"]');
         input?.focus();
       }, 0);
@@ -10739,4 +13881,693 @@ export class SpreadsheetArtifactViewerComponent
     if (minC <= maxC) return { startCol: minC, endCol: maxC };
     return { startCol: fallbackCol, endCol: fallbackCol };
   }
+
+  // ---------------------------------------------------------------------------
+  // NW-4: Merge Cells, Data Validation, Conditional Formatting, Named Ranges & Fill Handle
+  // ---------------------------------------------------------------------------
+
+  private doesBoundsIntersectMergeRange(
+    sheet: WorksheetSpec,
+    minR: number,
+    maxR: number,
+    minC: number,
+    maxC: number,
+  ): boolean {
+    const merges = sheet.MergeRanges;
+    if (!Array.isArray(merges) || merges.length === 0) return false;
+    for (const rangeStr of merges) {
+      const b = this.parseRangeBounds(rangeStr);
+      if (b && !(b.maxR < minR || b.minR > maxR || b.maxC < minC || b.minC > maxC)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  public GetMergedCellSpan(
+    rowIndex: number,
+    colIndex: number,
+  ): { colspan: number; rowspan: number; isCovered: boolean } {
+    const merges = this.ActiveSheet?.MergeRanges;
+    if (!Array.isArray(merges) || merges.length === 0) {
+      return { colspan: 1, rowspan: 1, isCovered: false };
+    }
+    for (const rangeStr of merges) {
+      const b = this.parseRangeBounds(rangeStr);
+      if (!b) continue;
+      if (rowIndex >= b.minR && rowIndex <= b.maxR && colIndex >= b.minC && colIndex <= b.maxC) {
+        if (rowIndex === b.minR && colIndex === b.minC) {
+          return {
+            colspan: b.maxC - b.minC + 1,
+            rowspan: b.maxR - b.minR + 1,
+            isCovered: false,
+          };
+        }
+        return { colspan: 1, rowspan: 1, isCovered: true };
+      }
+    }
+    return { colspan: 1, rowspan: 1, isCovered: false };
+  }
+
+  public MergeSelectedRange(): void {
+    if (!this.CanEdit) return;
+    const sheet = this.ActiveSheet;
+    if (!sheet) return;
+    const rangeStr = (this.SelectedRanges[0] ?? this.SelectedRange ?? this.ActiveCellAddress).trim();
+    const bounds = this.parseRangeBounds(rangeStr);
+    if (!bounds || (bounds.minR === bounds.maxR && bounds.minC === bounds.maxC)) {
+      this.StatusBannerMessage = 'Select at least 2 cells to merge.';
+      this.cdr.markForCheck();
+      return;
+    }
+    const protectedReason = this.findProtectedReasonInRange(
+      sheet,
+      bounds.minR,
+      bounds.maxR,
+      bounds.minC,
+      bounds.maxC,
+    );
+    if (protectedReason) {
+      this.notifyError(protectedReason);
+      return;
+    }
+
+    const canonical = `${FormatCellAddress(bounds.minR, bounds.minC)}:${FormatCellAddress(bounds.maxR, bounds.maxC)}`;
+    const existingMerges = sheet.MergeRanges ?? [];
+    const filtered = existingMerges.filter((m) => {
+      const mb = this.parseRangeBounds(m);
+      if (!mb) return true;
+      return mb.maxR < bounds.minR || mb.minR > bounds.maxR || mb.maxC < bounds.minC || mb.minC > bounds.maxC;
+    });
+    sheet.MergeRanges = [...filtered, canonical];
+    this.withLocalSessionSync(() => {
+      this.CollaborationSession?.UpdateWorksheetStructure(sheet, this.Workbook);
+    });
+    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+    this.StatusBannerMessage = `Merged cells ${canonical}.`;
+    this.cdr.markForCheck();
+  }
+
+  public UnmergeSelectedRange(): void {
+    if (!this.CanEdit) return;
+    const sheet = this.ActiveSheet;
+    if (!sheet || !Array.isArray(sheet.MergeRanges) || sheet.MergeRanges.length === 0) return;
+    const rangeStr = (this.SelectedRanges[0] ?? this.SelectedRange ?? this.ActiveCellAddress).trim();
+    const bounds = this.parseRangeBounds(rangeStr) ?? {
+      minR: this.ActiveRowIndex,
+      maxR: this.ActiveRowIndex,
+      minC: this.ActiveColumnIndex,
+      maxC: this.ActiveColumnIndex,
+    };
+    const protectedReason = this.findProtectedReasonInRange(
+      sheet,
+      bounds.minR,
+      bounds.maxR,
+      bounds.minC,
+      bounds.maxC,
+    );
+    if (protectedReason) {
+      this.notifyError(protectedReason);
+      return;
+    }
+
+    const beforeCount = sheet.MergeRanges.length;
+    sheet.MergeRanges = sheet.MergeRanges.filter((m) => {
+      const mb = this.parseRangeBounds(m);
+      if (!mb) return true;
+      return mb.maxR < bounds.minR || mb.minR > bounds.maxR || mb.maxC < bounds.minC || mb.minC > bounds.maxC;
+    });
+    if (sheet.MergeRanges.length !== beforeCount) {
+      this.withLocalSessionSync(() => {
+        this.CollaborationSession?.UpdateWorksheetStructure(sheet, this.Workbook);
+      });
+      this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+      this.StatusBannerMessage = 'Unmerged selected cell range.';
+      this.cdr.markForCheck();
+    }
+  }
+
+  public GetCellListValidationRule(addr: string): SpreadsheetValidationRuleSpec | null {
+    const sheet = this.ActiveSheet;
+    if (!sheet || !Array.isArray(sheet.ValidationRules) || sheet.ValidationRules.length === 0) {
+      return null;
+    }
+    const pos = ParseCellAddress(addr);
+    if (!pos) return null;
+    for (const rule of sheet.ValidationRules) {
+      if (rule.RuleType !== 'list' || !Array.isArray(rule.AllowedValues) || rule.AllowedValues.length === 0) {
+        continue;
+      }
+      if (this.isCellInsideRangeString(pos.row, pos.col, rule.Range)) {
+        return rule;
+      }
+    }
+    return null;
+  }
+
+  public OnValidationDropdownChanged(rowIndex: number, colIndex: number, nextValue: string): void {
+    if (!this.CanEdit) return;
+    const addr = FormatCellAddress(rowIndex, colIndex);
+    this.writeCellAndBroadcast(addr, nextValue);
+  }
+
+  public OpenValidationDrawer(rangeA1?: string): void {
+    this.NewValidationRange = (rangeA1 || this.SelectedRange || this.ActiveCellAddress || 'A1').trim();
+    this.NewValidationRuleType = 'list';
+    this.NewValidationAllowedCsv = '';
+    this.NewValidationMin = 0;
+    this.NewValidationMax = 100;
+    this.NewValidationErrorMessage = '';
+    this.ShowValidationDrawer = true;
+    this.cdr.markForCheck();
+  }
+
+  public ConfirmAddValidationRule(): void {
+    if (!this.CanEdit) return;
+    const sheet = this.ActiveSheet;
+    if (!sheet) return;
+    const range = (this.NewValidationRange || this.SelectedRange || this.ActiveCellAddress || 'A1').trim();
+    const bounds = this.parseRangeBounds(range);
+    if (!bounds) {
+      this.notifyError(`Invalid validation target range "${range}".`);
+      return;
+    }
+    const protReason = this.findProtectedReasonInRange(
+      sheet,
+      bounds.minR,
+      bounds.maxR,
+      bounds.minC,
+      bounds.maxC,
+    );
+    if (protReason) {
+      this.notifyError(protReason);
+      return;
+    }
+
+    const rule: SpreadsheetValidationRuleSpec = {
+      RuleID: `val-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      Range: range,
+      RuleType: this.NewValidationRuleType,
+      ErrorMessage: this.NewValidationErrorMessage.trim() || undefined,
+    };
+    if (this.NewValidationRuleType === 'list') {
+      rule.AllowedValues = this.NewValidationAllowedCsv.split(',')
+        .map((v) => v.trim())
+        .filter((v) => v.length > 0);
+      if (rule.AllowedValues.length === 0) {
+        this.notifyError('Provide at least one allowed option for list validation.');
+        return;
+      }
+    } else if (this.NewValidationRuleType === 'numberRange') {
+      if (typeof this.NewValidationMin === 'number' && Number.isFinite(this.NewValidationMin)) {
+        rule.MinValue = this.NewValidationMin;
+      }
+      if (typeof this.NewValidationMax === 'number' && Number.isFinite(this.NewValidationMax)) {
+        rule.MaxValue = this.NewValidationMax;
+      }
+    }
+
+    if (!sheet.ValidationRules) {
+      sheet.ValidationRules = [];
+    }
+    sheet.ValidationRules = [...sheet.ValidationRules, rule];
+    SpreadsheetEngine.Instance.EvaluateWorkbook(this.Workbook);
+    this.withLocalSessionSync(() => {
+      this.CollaborationSession?.UpdateWorksheetStructure(sheet, this.Workbook);
+    });
+    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+    this.ShowValidationDrawer = false;
+    this.StatusBannerMessage = `Added ${rule.RuleType} validation on ${range}.`;
+    this.cdr.markForCheck();
+  }
+
+  public RemoveValidationRule(ruleId: string): void {
+    if (!this.CanEdit || !this.ActiveSheet?.ValidationRules) return;
+    const rule = this.ActiveSheet.ValidationRules.find((r) => r.RuleID === ruleId);
+    if (!rule) return;
+    const bounds = this.parseRangeBounds(rule.Range);
+    if (bounds) {
+      const protReason = this.findProtectedReasonInRange(
+        this.ActiveSheet,
+        bounds.minR,
+        bounds.maxR,
+        bounds.minC,
+        bounds.maxC,
+      );
+      if (protReason) {
+        this.notifyError(protReason);
+        return;
+      }
+    }
+    this.ActiveSheet.ValidationRules = this.ActiveSheet.ValidationRules.filter(
+      (r) => r.RuleID !== ruleId,
+    );
+    SpreadsheetEngine.Instance.EvaluateWorkbook(this.Workbook);
+    this.withLocalSessionSync(() => {
+      this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+    });
+    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+    this.cdr.markForCheck();
+  }
+
+  public OpenConditionalFormatDrawer(rangeA1?: string): void {
+    this.NewCondFormatRange = (rangeA1 || this.SelectedRange || this.ActiveCellAddress || 'A1').trim();
+    this.NewCondFormatOperator = 'gt';
+    this.NewCondFormatTone = 'success';
+    this.NewCondFormatValue1 = '0';
+    this.NewCondFormatValue2 = 100;
+    this.ShowConditionalFormatDrawer = true;
+    this.cdr.markForCheck();
+  }
+
+  public ConfirmAddConditionalFormatRule(): void {
+    if (!this.CanEdit) return;
+    const sheet = this.ActiveSheet;
+    if (!sheet) return;
+    const range = (this.NewCondFormatRange || this.SelectedRange || this.ActiveCellAddress || 'A1').trim();
+    const bounds = this.parseRangeBounds(range);
+    if (!bounds) {
+      this.notifyError(`Invalid conditional format range "${range}".`);
+      return;
+    }
+    const protReason = this.findProtectedReasonInRange(
+      sheet,
+      bounds.minR,
+      bounds.maxR,
+      bounds.minC,
+      bounds.maxC,
+    );
+    if (protReason) {
+      this.notifyError(protReason);
+      return;
+    }
+
+    const rawVal1 = this.NewCondFormatValue1.trim();
+    const numericVal1 = Number(rawVal1);
+    const val1: string | number =
+      this.NewCondFormatOperator !== 'contains' && rawVal1 !== '' && Number.isFinite(numericVal1)
+        ? numericVal1
+        : rawVal1;
+
+    const rule: SpreadsheetConditionalFormatRuleSpec = {
+      RuleID: `cf-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      Range: range,
+      Operator: this.NewCondFormatOperator,
+      Value1: val1,
+      Value2:
+        this.NewCondFormatOperator === 'between' &&
+        typeof this.NewCondFormatValue2 === 'number' &&
+        Number.isFinite(this.NewCondFormatValue2)
+          ? this.NewCondFormatValue2
+          : undefined,
+      HighlightTone: this.NewCondFormatTone,
+    };
+
+    if (!sheet.ConditionalFormats) {
+      sheet.ConditionalFormats = [];
+    }
+    sheet.ConditionalFormats = [...sheet.ConditionalFormats, rule];
+    this.withLocalSessionSync(() => {
+      this.CollaborationSession?.UpdateWorksheetStructure(sheet, this.Workbook);
+    });
+    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+    this.ShowConditionalFormatDrawer = false;
+    this.StatusBannerMessage = `Added conditional formatting rule on ${range}.`;
+    this.cdr.markForCheck();
+  }
+
+  public RemoveConditionalFormatRule(ruleId: string): void {
+    if (!this.CanEdit || !this.ActiveSheet?.ConditionalFormats) return;
+    const rule = this.ActiveSheet.ConditionalFormats.find((r) => r.RuleID === ruleId);
+    if (!rule) return;
+    const bounds = this.parseRangeBounds(rule.Range);
+    if (bounds) {
+      const protReason = this.findProtectedReasonInRange(
+        this.ActiveSheet,
+        bounds.minR,
+        bounds.maxR,
+        bounds.minC,
+        bounds.maxC,
+      );
+      if (protReason) {
+        this.notifyError(protReason);
+        return;
+      }
+    }
+    this.ActiveSheet.ConditionalFormats = this.ActiveSheet.ConditionalFormats.filter(
+      (r) => r.RuleID !== ruleId,
+    );
+    this.withLocalSessionSync(() => {
+      this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+    });
+    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+    this.cdr.markForCheck();
+  }
+
+  public get WorkbookNamedRanges(): SpreadsheetNamedRangeSpec[] {
+    return this.Workbook?.NamedRanges ?? [];
+  }
+
+  public OnNamedRangeSelected(name: string): void {
+    this.ActiveNamedRangeSelection = name;
+    if (!name) return;
+    const found = this.WorkbookNamedRanges.find((nr) => nr.Name === name);
+    if (!found) return;
+    if (found.SheetID && this.Workbook.Worksheets.some((w) => w.SheetID === found.SheetID)) {
+      this.Workbook.ActiveSheetID = found.SheetID;
+    }
+    this.selectRangeString(found.Range);
+  }
+
+  public OpenNamedRangeModal(rangeA1?: string): void {
+    this.NewNamedRangeName = '';
+    this.NewNamedRangeRef = (rangeA1 || this.SelectedRange || this.ActiveCellAddress || 'A1').trim();
+    this.ShowNamedRangeModal = true;
+    this.cdr.markForCheck();
+  }
+
+  public ConfirmSaveNamedRange(): void {
+    if (!this.CanEdit) return;
+    const rawName = this.NewNamedRangeName.trim().replace(/\s+/g, '_');
+    const rawRef = (this.NewNamedRangeRef || this.SelectedRange || this.ActiveCellAddress || 'A1').trim();
+    if (!rawName || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(rawName)) {
+      this.notifyError('Named range must start with a letter or underscore and contain no spaces.');
+      return;
+    }
+    if (!this.parseRangeBounds(rawRef)) {
+      this.notifyError(`Invalid range "${rawRef}" for named range.`);
+      return;
+    }
+
+    const spec: SpreadsheetNamedRangeSpec = {
+      Name: rawName,
+      SheetID: this.ActiveSheet.SheetID,
+      Range: rawRef.toUpperCase(),
+    };
+    const existing = this.Workbook.NamedRanges ?? [];
+    const idx = existing.findIndex((nr) => nr.Name.toLowerCase() === rawName.toLowerCase());
+    if (idx >= 0) {
+      existing[idx] = spec;
+      this.Workbook.NamedRanges = [...existing];
+    } else {
+      this.Workbook.NamedRanges = [...existing, spec];
+    }
+    this.ActiveNamedRangeSelection = rawName;
+    SpreadsheetEngine.Instance.EvaluateWorkbook(this.Workbook);
+    this.withLocalSessionSync(() => {
+      this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
+    });
+    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+    this.ShowNamedRangeModal = false;
+    this.StatusBannerMessage = `Saved named range "${rawName}" -> ${spec.Range}.`;
+    this.cdr.markForCheck();
+  }
+
+  public DeleteNamedRange(name: string): void {
+    if (!this.CanEdit || !this.Workbook.NamedRanges) return;
+    this.Workbook.NamedRanges = this.Workbook.NamedRanges.filter(
+      (nr) => nr.Name.toLowerCase() !== name.toLowerCase(),
+    );
+    if (this.ActiveNamedRangeSelection === name) {
+      this.ActiveNamedRangeSelection = '';
+    }
+    SpreadsheetEngine.Instance.EvaluateWorkbook(this.Workbook);
+    this.withLocalSessionSync(() => {
+      this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
+    });
+    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+    this.cdr.markForCheck();
+  }
+
+  public StartFillHandleDrag(event: MouseEvent): void {
+    if (!this.CanEdit) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const sheet = this.ActiveSheet;
+    if (!sheet) return;
+    const primary = this.SelectedRanges[0] ?? this.SelectedRange ?? this.ActiveCellAddress;
+    const b = this.parseRangeBounds(primary) ?? {
+      minR: this.ActiveRowIndex,
+      maxR: this.ActiveRowIndex,
+      minC: this.ActiveColumnIndex,
+      maxC: this.ActiveColumnIndex,
+    };
+    this.IsDraggingFillHandle = true;
+    this.FillHandleTargetRange = `${FormatCellAddress(b.minR, b.minC)}:${FormatCellAddress(b.maxR, b.maxC)}`;
+    this.cdr.markForCheck();
+  }
+
+  private updateFillHandleTarget(rowIndex: number, colIndex: number): void {
+    const primary = this.SelectedRanges[0] ?? this.SelectedRange ?? this.ActiveCellAddress;
+    const src = this.parseRangeBounds(primary) ?? {
+      minR: this.ActiveRowIndex,
+      maxR: this.ActiveRowIndex,
+      minC: this.ActiveColumnIndex,
+      maxC: this.ActiveColumnIndex,
+    };
+    const rowExt = Math.abs(rowIndex - src.maxR);
+    const colExt = Math.abs(colIndex - src.maxC);
+    if (colExt > rowExt && colIndex > src.maxC) {
+      this.FillHandleTargetRange = `${FormatCellAddress(src.minR, src.minC)}:${FormatCellAddress(src.maxR, colIndex)}`;
+    } else if (rowIndex > src.maxR) {
+      this.FillHandleTargetRange = `${FormatCellAddress(src.minR, src.minC)}:${FormatCellAddress(rowIndex, src.maxC)}`;
+    } else if (colIndex >= src.minC && rowIndex >= src.minR) {
+      this.FillHandleTargetRange = `${FormatCellAddress(src.minR, src.minC)}:${FormatCellAddress(Math.max(src.maxR, rowIndex), Math.max(src.maxC, colIndex))}`;
+    }
+    this.cdr.markForCheck();
+  }
+
+  private commitFillHandleDrag(): void {
+    const targetRange = this.FillHandleTargetRange;
+    this.IsDraggingFillHandle = false;
+    this.FillHandleTargetRange = null;
+    if (!this.CanEdit || !targetRange) {
+      this.cdr.markForCheck();
+      return;
+    }
+
+    const sheet = this.ActiveSheet;
+    const primary = this.SelectedRanges[0] ?? this.SelectedRange ?? this.ActiveCellAddress;
+    const src = this.parseRangeBounds(primary);
+    const dst = this.parseRangeBounds(targetRange);
+    if (!sheet || !src || !dst) {
+      this.cdr.markForCheck();
+      return;
+    }
+
+    const isVerticalFill = dst.maxR > src.maxR;
+    const isHorizontalFill = !isVerticalFill && dst.maxC > src.maxC;
+    if (!isVerticalFill && !isHorizontalFill) {
+      this.cdr.markForCheck();
+      return;
+    }
+
+    const fillMinR = isVerticalFill ? src.maxR + 1 : dst.minR;
+    const fillMaxR = dst.maxR;
+    const fillMinC = isHorizontalFill ? src.maxC + 1 : dst.minC;
+    const fillMaxC = dst.maxC;
+    const protReason = this.findProtectedReasonInRange(sheet, fillMinR, fillMaxR, fillMinC, fillMaxC);
+    if (protReason) {
+      this.notifyError(protReason);
+      this.cdr.markForCheck();
+      return;
+    }
+
+    const editCtx = this.buildCellEditContext();
+    const updatedCells: SpreadsheetCellSpec[] = [];
+    const srcRows = Math.max(1, src.maxR - src.minR + 1);
+    const srcCols = Math.max(1, src.maxC - src.minC + 1);
+
+    try {
+      if (isVerticalFill) {
+        for (let c = src.minC; c <= src.maxC; c++) {
+          const firstCell = sheet.Cells[FormatCellAddress(src.minR, c)];
+          const secondCell = srcRows >= 2 ? sheet.Cells[FormatCellAddress(src.minR + 1, c)] : undefined;
+          const firstNum = typeof firstCell?.RawValue === 'number' ? firstCell.RawValue : null;
+          const secondNum = typeof secondCell?.RawValue === 'number' ? secondCell.RawValue : null;
+          const numericStep =
+            srcRows >= 2 && firstNum !== null && secondNum !== null
+              ? secondNum - firstNum
+              : firstNum !== null && srcRows === 1
+                ? 0
+                : null;
+
+          for (let r = src.maxR + 1; r <= dst.maxR; r++) {
+            const offset = r - src.minR;
+            const srcRow = src.minR + (offset % srcRows);
+            const srcCell = sheet.Cells[FormatCellAddress(srcRow, c)];
+            const targetAddr = FormatCellAddress(r, c);
+            if (srcCell?.Formula) {
+              const shifted = SpreadsheetEngine.Instance.ShiftFormulaReferences(
+                srcCell.Formula,
+                r - srcRow,
+                0,
+              );
+              const updated = SpreadsheetEngine.Instance.SetCell(
+                this.Workbook,
+                sheet.SheetID,
+                targetAddr,
+                { Value: null, Formula: shifted, Style: srcCell.Style },
+                false,
+                editCtx,
+              );
+              if (updated) updatedCells.push(updated);
+            } else if (numericStep !== null && firstNum !== null) {
+              const nextNum = firstNum + numericStep * offset;
+              const updated = SpreadsheetEngine.Instance.SetCell(
+                this.Workbook,
+                sheet.SheetID,
+                targetAddr,
+                { Value: nextNum, Formula: null, Style: srcCell?.Style },
+                false,
+                editCtx,
+              );
+              if (updated) updatedCells.push(updated);
+            } else if (srcCell) {
+              const updated = SpreadsheetEngine.Instance.SetCell(
+                this.Workbook,
+                sheet.SheetID,
+                targetAddr,
+                { Value: srcCell.RawValue ?? null, Formula: null, Style: srcCell.Style },
+                false,
+                editCtx,
+              );
+              if (updated) updatedCells.push(updated);
+            }
+          }
+        }
+      } else {
+        for (let r = src.minR; r <= src.maxR; r++) {
+          const firstCell = sheet.Cells[FormatCellAddress(r, src.minC)];
+          const secondCell = srcCols >= 2 ? sheet.Cells[FormatCellAddress(r, src.minC + 1)] : undefined;
+          const firstNum = typeof firstCell?.RawValue === 'number' ? firstCell.RawValue : null;
+          const secondNum = typeof secondCell?.RawValue === 'number' ? secondCell.RawValue : null;
+          const numericStep =
+            srcCols >= 2 && firstNum !== null && secondNum !== null
+              ? secondNum - firstNum
+              : firstNum !== null && srcCols === 1
+                ? 0
+                : null;
+
+          for (let c = src.maxC + 1; c <= dst.maxC; c++) {
+            const offset = c - src.minC;
+            const srcCol = src.minC + (offset % srcCols);
+            const srcCell = sheet.Cells[FormatCellAddress(r, srcCol)];
+            const targetAddr = FormatCellAddress(r, c);
+            if (srcCell?.Formula) {
+              const shifted = SpreadsheetEngine.Instance.ShiftFormulaReferences(
+                srcCell.Formula,
+                0,
+                c - srcCol,
+              );
+              const updated = SpreadsheetEngine.Instance.SetCell(
+                this.Workbook,
+                sheet.SheetID,
+                targetAddr,
+                { Value: null, Formula: shifted, Style: srcCell.Style },
+                false,
+                editCtx,
+              );
+              if (updated) updatedCells.push(updated);
+            } else if (numericStep !== null && firstNum !== null) {
+              const nextNum = firstNum + numericStep * offset;
+              const updated = SpreadsheetEngine.Instance.SetCell(
+                this.Workbook,
+                sheet.SheetID,
+                targetAddr,
+                { Value: nextNum, Formula: null, Style: srcCell?.Style },
+                false,
+                editCtx,
+              );
+              if (updated) updatedCells.push(updated);
+            } else if (srcCell) {
+              const updated = SpreadsheetEngine.Instance.SetCell(
+                this.Workbook,
+                sheet.SheetID,
+                targetAddr,
+                { Value: srcCell.RawValue ?? null, Formula: null, Style: srcCell.Style },
+                false,
+                editCtx,
+              );
+              if (updated) updatedCells.push(updated);
+            }
+          }
+        }
+      }
+      SpreadsheetEngine.Instance.EvaluateWorkbook(this.Workbook);
+    } catch (err) {
+      this.notifyError(err instanceof Error ? err.message : 'Fill blocked by protected cell range.');
+      this.cdr.markForCheck();
+      return;
+    }
+
+    if (updatedCells.length > 0) {
+      this.withLocalSessionSync(() => {
+        this.CollaborationSession?.BatchUpdateSpreadsheetCells(
+          sheet.SheetID,
+          updatedCells,
+          [],
+          this.Workbook,
+        );
+      });
+      const canonical = `${FormatCellAddress(dst.minR, dst.minC)}:${FormatCellAddress(dst.maxR, dst.maxC)}`;
+      this.SelectedRanges = [canonical];
+      this.SelectedRange = canonical;
+      this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+      this.syncFormulaBarFromActiveCell();
+    }
+    this.cdr.markForCheck();
+  }
+}
+
+export interface SpreadsheetFormulaSuggestion {
+  Name: string;
+  Signature: string;
+  Summary: string;
+}
+
+export interface SparklineSvgViewModel {
+  Type: 'line' | 'bar' | 'winloss';
+  Width: number;
+  Height: number;
+  Count: number;
+  PolylinePoints: string;
+  Bars: Array<{ X: number; Y: number; W: number; H: number; Positive: boolean }>;
+}
+
+export const SPREADSHEET_FORMULA_CATALOG: readonly SpreadsheetFormulaSuggestion[] = [
+  { Name: 'SUM', Signature: 'SUM(range)', Summary: 'Add all numeric values in a range' },
+  { Name: 'AVERAGE', Signature: 'AVERAGE(range)', Summary: 'Compute arithmetic mean across numbers' },
+  { Name: 'COUNT', Signature: 'COUNT(range)', Summary: 'Count numeric cells in a range' },
+  { Name: 'IF', Signature: 'IF(condition, when_true, when_false)', Summary: 'Conditional value branch' },
+  { Name: 'XLOOKUP', Signature: 'XLOOKUP(lookup, lookup_range, return_range)', Summary: 'Exact or fallback key lookup across ranges' },
+  { Name: 'SUMIFS', Signature: 'SUMIFS(sum_range, criteria_range, criteria)', Summary: 'Sum values matching one or more conditions' },
+  { Name: 'FILTER', Signature: 'FILTER(range, condition)', Summary: 'Dynamic array filter returning matching rows' },
+  { Name: 'UNIQUE', Signature: 'UNIQUE(range)', Summary: 'Return distinct values from a range' },
+  { Name: 'SORT', Signature: 'SORT(range, sort_index, ascending)', Summary: 'Sort a range dynamically' },
+  { Name: 'SPARKLINE', Signature: 'SPARKLINE(range, ["line"|"bar"|"winloss"])', Summary: 'Render an inline SVG trend chart inside the cell' },
+  { Name: 'MJ.QUERY', Signature: 'MJ.QUERY("Query Name", param)', Summary: 'Run a governed MemberJunction Saved Query' },
+  { Name: 'MJ.VIEW', Signature: 'MJ.VIEW("Entity Name", filter, fields)', Summary: 'Fetch viewer-scoped Entity View records' },
+  { Name: 'MJ.IMPORTRANGE', Signature: 'MJ.IMPORTRANGE(artifactId, "Sheet!A1:D10")', Summary: 'Live cross-workbook range import' },
+  { Name: 'MJ.AI', Signature: 'MJ.AI(prompt, range_context)', Summary: 'Opt-in AI evaluation over cell context' },
+];
+
+function isAsciiLetter(ch: string): boolean {
+  return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z');
+}
+
+function isFormulaIdentifierChar(ch: string): boolean {
+  return isAsciiLetter(ch) || (ch >= '0' && ch <= '9') || ch === '_' || ch === '.';
+}
+
+/** Finds the start index of a trailing formula identifier token using a linear scan. */
+function findTrailingFormulaIdentifierStart(input: string): number {
+  let runStart = input.length;
+  while (runStart > 0 && isFormulaIdentifierChar(input[runStart - 1])) {
+    runStart--;
+  }
+  while (runStart < input.length && !isAsciiLetter(input[runStart])) {
+    runStart++;
+  }
+  return runStart < input.length ? runStart : -1;
 }

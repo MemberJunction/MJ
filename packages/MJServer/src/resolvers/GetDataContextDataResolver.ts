@@ -174,7 +174,7 @@ export class GetDataContextDataResolver extends ResolverBase {
             return { Provider: null, Refusals: refusals };
         }
         const user: UserInfo | undefined = appCtx.userPayload?.userRecord;
-        const provider = GetReadOnlyProvider(appCtx.providers, { allowFallbackToReadWrite: false });
+        const provider = GetReadOnlyProvider(appCtx.providers, { allowFallbackToReadWrite: false, purpose: 'adhoc' });
         for (const item of sqlItems) {
             const refusal = this.sqlItemRefusal(item, ownerID, user, provider);
             if (refusal !== null) {

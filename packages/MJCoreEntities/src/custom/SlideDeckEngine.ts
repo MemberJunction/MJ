@@ -1,11 +1,19 @@
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
+    BuildBlockIdentityBinding,
+    ComputeFrozenSnapshotHash,
     DocumentBlockExecutionResult,
     DocumentBlockSpec,
     DocumentLiveBlockEngine,
     FrozenBlockSnapshot
 } from './DocumentLiveBlockEngine.js';
+import {
+    ExportDeckToPptxBytesInternal,
+    ImportDeckFromPptxBytesInternal,
+    SlideDeckPptxExportOptions
+} from './SlideDeckPptxEngine.js';
+export type { SlideDeckPptxExportOptions } from './SlideDeckPptxEngine.js';
 
 /**
  * Canonical slide layout types supported by MJ Slides (`plans/docs-slides-sheets.md § 5.1`).
@@ -24,7 +32,21 @@ export type SlideLayoutKind =
     | 'Quote'
     | 'BigNumber'
     | 'FullBleedImage'
-    | 'Blank';
+    | 'Blank'
+    | 'KpiStrip'
+    | 'Timeline'
+    | 'BentoGrid'
+    | 'Quadrant'
+    | 'MetricComparison';
+
+/** Visual transition style when advancing to a slide in Present mode. */
+export type SlideTransitionKind = 'none' | 'fade' | 'slide' | 'zoom';
+
+/** Background surface styling mode for a slide deck theme. */
+export type SlideBackgroundStyle = 'solid' | 'gradient' | 'mesh' | 'accent-strip';
+
+/** Card surface elevation treatment for slide regions. */
+export type SlideCardElevation = 'flat' | 'soft' | 'glass';
 
 /**
  * Content kind hosted inside a single structured {@link SlideRegionSpec}.
@@ -66,6 +88,14 @@ export interface SlideDeckThemeSpec {
     BodyFont: string;
     /** Optional organization brand kit ID or seed label from which tokens were derived. */
     BrandSeedSource?: string;
+    /** Optional secondary stop color for gradient/mesh stage backdrops. */
+    SecondaryGradientColor?: string;
+    /** Background treatment for slide stages (default `'accent-strip'`). */
+    BackgroundStyle?: SlideBackgroundStyle;
+    /** Corner radius (in CSS px, 0–32) for structured cards and panels. */
+    CardRadiusPx?: number;
+    /** Visual elevation treatment for content cards (`'flat' | 'soft' | 'glass'`). */
+    CardElevation?: SlideCardElevation;
 }
 
 /**
@@ -144,6 +174,11 @@ export interface SlideRegionSpec {
     LockedByUserID?: string;
     /** When true, artifact editors (not only the owner/locker) may still edit this locked region. */
     AllowEditors?: boolean;
+    /**
+     * Optional 1-based progressive reveal step during Full-Screen Present mode.
+     * Regions without a RevealStep (or `<= 0`) appear immediately with the slide.
+     */
+    RevealStep?: number;
 }
 
 /**
@@ -165,7 +200,7 @@ export interface SlideSpec {
     /** Presenter speaker notes (Markdown / plain text) shown in the Speaker Notes bar and Presenter View. */
     SpeakerNotes: string;
     /** Visual transition when advancing to this slide in Present mode. */
-    Transition?: 'none' | 'fade' | 'slide';
+    Transition?: SlideTransitionKind;
     /** Whether this slide is skipped during full-screen Present mode. */
     Hidden?: boolean;
     /** When true, edits/deletions on this slide are locked to its locker/owner (`§6.2`). */
@@ -315,6 +350,41 @@ export const SLIDE_LAYOUT_CATALOG: ReadonlyArray<SlideLayoutMetadata> = [
         Description: 'Full-bleed region ideal for an interactive embedded OLE Whiteboard canvas.',
         Icon: 'fa-solid fa-chalkboard',
         DefaultRegionCount: 1
+    },
+    {
+        Kind: 'KpiStrip',
+        Label: 'KPI Metric Strip',
+        Description: 'Three executive headline KPI cards arranged across a scannable horizontal strip.',
+        Icon: 'fa-solid fa-gauge-high',
+        DefaultRegionCount: 3
+    },
+    {
+        Kind: 'Timeline',
+        Label: 'Roadmap Timeline',
+        Description: 'Three sequential milestone phases connected cleanly from left to right.',
+        Icon: 'fa-solid fa-timeline',
+        DefaultRegionCount: 3
+    },
+    {
+        Kind: 'BentoGrid',
+        Label: 'Bento Spotlight Grid',
+        Description: 'Asymmetric 4-card editorial bento showcase with a wide featured hero card.',
+        Icon: 'fa-solid fa-table-cells-large',
+        DefaultRegionCount: 4
+    },
+    {
+        Kind: 'Quadrant',
+        Label: '2×2 Strategic Quadrant',
+        Description: 'Structured 2×2 matrix for positioning, prioritization, or architectural tradeoffs.',
+        Icon: 'fa-solid fa-border-all',
+        DefaultRegionCount: 4
+    },
+    {
+        Kind: 'MetricComparison',
+        Label: 'Before / After Metrics',
+        Description: 'Twin headline metric scorecards paired with a full-width synthesis takeaway.',
+        Icon: 'fa-solid fa-code-compare',
+        DefaultRegionCount: 3
     }
 ];
 
@@ -333,7 +403,11 @@ export const SLIDE_DECK_THEME_PRESETS: ReadonlyArray<SlideDeckThemeSpec> = [
         MutedTextColor: '#475569',
         HeadingFont: 'Inter, system-ui, sans-serif',
         BodyFont: 'Inter, system-ui, sans-serif',
-        BrandSeedSource: 'MJ Default Design Tokens'
+        BrandSeedSource: 'MJ Default Design Tokens',
+        SecondaryGradientColor: '#eef2ff',
+        BackgroundStyle: 'accent-strip',
+        CardRadiusPx: 14,
+        CardElevation: 'soft'
     },
     {
         ThemeID: 'executive-slate',
@@ -346,7 +420,11 @@ export const SLIDE_DECK_THEME_PRESETS: ReadonlyArray<SlideDeckThemeSpec> = [
         MutedTextColor: '#cbd5e1',
         HeadingFont: 'Inter, system-ui, sans-serif',
         BodyFont: 'Inter, system-ui, sans-serif',
-        BrandSeedSource: 'Executive Dark Suite'
+        BrandSeedSource: 'Executive Dark Suite',
+        SecondaryGradientColor: '#1e1b4b',
+        BackgroundStyle: 'mesh',
+        CardRadiusPx: 16,
+        CardElevation: 'glass'
     },
     {
         ThemeID: 'emerald-growth',
@@ -359,7 +437,11 @@ export const SLIDE_DECK_THEME_PRESETS: ReadonlyArray<SlideDeckThemeSpec> = [
         MutedTextColor: '#374151',
         HeadingFont: 'Inter, system-ui, sans-serif',
         BodyFont: 'Inter, system-ui, sans-serif',
-        BrandSeedSource: 'Emerald Brand Kit'
+        BrandSeedSource: 'Emerald Brand Kit',
+        SecondaryGradientColor: '#ecfdf5',
+        BackgroundStyle: 'gradient',
+        CardRadiusPx: 14,
+        CardElevation: 'soft'
     },
     {
         ThemeID: 'crimson-bold',
@@ -372,7 +454,79 @@ export const SLIDE_DECK_THEME_PRESETS: ReadonlyArray<SlideDeckThemeSpec> = [
         MutedTextColor: '#4b5563',
         HeadingFont: 'Georgia, serif',
         BodyFont: 'Inter, system-ui, sans-serif',
-        BrandSeedSource: 'Crimson Brand Kit'
+        BrandSeedSource: 'Crimson Brand Kit',
+        SecondaryGradientColor: '#fffbeb',
+        BackgroundStyle: 'accent-strip',
+        CardRadiusPx: 12,
+        CardElevation: 'soft'
+    },
+    {
+        ThemeID: 'cobalt-editorial',
+        Name: 'Cobalt Studio Dark',
+        PrimaryColor: '#60a5fa',
+        AccentColor: '#34d399',
+        BackgroundColor: '#090d16',
+        SurfaceColor: '#111827',
+        TextColor: '#f9fafb',
+        MutedTextColor: '#9ca3af',
+        HeadingFont: '"Plus Jakarta Sans", Inter, system-ui, sans-serif',
+        BodyFont: 'Inter, system-ui, sans-serif',
+        BrandSeedSource: 'Cobalt Dark Studio',
+        SecondaryGradientColor: '#0f172a',
+        BackgroundStyle: 'mesh',
+        CardRadiusPx: 16,
+        CardElevation: 'glass'
+    },
+    {
+        ThemeID: 'ivory-luxury',
+        Name: 'Warm Ivory Editorial',
+        PrimaryColor: '#7c2d12',
+        AccentColor: '#d97706',
+        BackgroundColor: '#fdfbf7',
+        SurfaceColor: '#f5f0e8',
+        TextColor: '#1c1917',
+        MutedTextColor: '#57534e',
+        HeadingFont: 'Georgia, "Times New Roman", serif',
+        BodyFont: 'Inter, system-ui, sans-serif',
+        BrandSeedSource: 'Editorial Magazine Suite',
+        SecondaryGradientColor: '#fef3c7',
+        BackgroundStyle: 'gradient',
+        CardRadiusPx: 10,
+        CardElevation: 'flat'
+    },
+    {
+        ThemeID: 'carbon-mono',
+        Name: 'Carbon Monochrome',
+        PrimaryColor: '#f4f4f5',
+        AccentColor: '#a1a1aa',
+        BackgroundColor: '#09090b',
+        SurfaceColor: '#18181b',
+        TextColor: '#fafafa',
+        MutedTextColor: '#a1a1aa',
+        HeadingFont: 'Inter, system-ui, sans-serif',
+        BodyFont: 'Inter, system-ui, sans-serif',
+        BrandSeedSource: 'Carbon Minimal Dark',
+        SecondaryGradientColor: '#27272a',
+        BackgroundStyle: 'solid',
+        CardRadiusPx: 12,
+        CardElevation: 'glass'
+    },
+    {
+        ThemeID: 'nordic-mint',
+        Name: 'Nordic Teal & Mint',
+        PrimaryColor: '#0f766e',
+        AccentColor: '#14b8a6',
+        BackgroundColor: '#f8fafc',
+        SurfaceColor: '#ffffff',
+        TextColor: '#0f172a',
+        MutedTextColor: '#475569',
+        HeadingFont: 'Inter, system-ui, sans-serif',
+        BodyFont: 'Inter, system-ui, sans-serif',
+        BrandSeedSource: 'Nordic Light Palette',
+        SecondaryGradientColor: '#ccfbf1',
+        BackgroundStyle: 'gradient',
+        CardRadiusPx: 16,
+        CardElevation: 'soft'
     }
 ];
 
@@ -432,6 +586,22 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
         }
         // 4. Safe gradients: linear-gradient(...) or radial-gradient(...) with only color/angle/stop tokens
         if (/^(?:linear|radial)-gradient\(\s*[#a-z0-9.%,\s()-]+\s*\)$/i.test(trimmed)) {
+            // Verify balanced parentheses (reject unbalanced ')' that could break out of CSS declarations)
+            let parenDepth = 0;
+            for (let i = 0; i < trimmed.length; i++) {
+                const ch = trimmed.charAt(i);
+                if (ch === '(') {
+                    parenDepth++;
+                } else if (ch === ')') {
+                    parenDepth--;
+                    if (parenDepth < 0) {
+                        return fallback;
+                    }
+                }
+            }
+            if (parenDepth !== 0) {
+                return fallback;
+            }
             // Ensure the only nested functions inside a gradient are rgb/rgba/hsl/hsla
             const innerFns = trimmed
                 .replace(/^(?:linear|radial)-gradient\(/i, '')
@@ -450,6 +620,36 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
     }
 
     /**
+     * Validates an image or logo URL for slides (`ImageUrl` / `Master.LogoUrl`).
+     * Allows `https://`, `http://`, same-origin relative `/...` paths (not `//`), and
+     * raster `data:image/(png|jpeg|jpg|webp|gif);base64,...` data URLs.
+     * Rejects `javascript:`, `vbscript:`, `data:text/html`, `data:image/svg+xml`, and control chars.
+     */
+    public SanitizeImageUrl(raw: string | undefined | null): string | undefined {
+        const trimmed = String(raw ?? '').trim();
+        if (!trimmed || trimmed.length > 1_048_576) {
+            return undefined;
+        }
+        if (/[\u0000-\u001F\u007F]/.test(trimmed)) {
+            return undefined;
+        }
+        if (/^(?:javascript|vbscript|file):/i.test(trimmed)) {
+            return undefined;
+        }
+        if (/^data:/i.test(trimmed)) {
+            const safeRasterDataUrl = /^data:image\/(?:png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/=]+$/i;
+            return safeRasterDataUrl.test(trimmed) ? trimmed : undefined;
+        }
+        if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
+            return trimmed;
+        }
+        if (/^https?:\/\/[^\s"'<>]+$/i.test(trimmed)) {
+            return trimmed;
+        }
+        return undefined;
+    }
+
+    /**
      * Renders a standalone printable HTML document for `deck` with sanitized CSS theme tokens.
      */
     public RenderPrintHtml(deck: SlideDeckSpec): string {
@@ -460,6 +660,137 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#39;');
+        const renderInlineMarkdown = (raw: string): string => {
+            const escaped = escapeHtml(raw);
+            return escaped
+                .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+                .replace(/`([^`]+)`/g, '<code>$1</code>');
+        };
+        const renderBlockHtml = (region: SlideRegionSpec, block: DocumentBlockSpec): string => {
+            const snap = block.FrozenSnapshot;
+            const titleText = escapeHtml(block.Title || region.Label || block.Kind);
+            if (snap && Array.isArray(snap.Columns) && snap.Columns.length > 0 && Array.isArray(snap.Rows)) {
+                const headers = snap.Columns.map((col) => `<th>${escapeHtml(col.DisplayName || col.Name)}</th>`).join('');
+                const bodyRows = snap.Rows.slice(0, 100)
+                    .map((row) => {
+                        const cells = snap.Columns.map((col) => {
+                            const cellVal = row[col.Name];
+                            return `<td>${escapeHtml(cellVal === null || cellVal === undefined ? '' : String(cellVal))}</td>`;
+                        }).join('');
+                        return `<tr>${cells}</tr>`;
+                    })
+                    .join('');
+                return `<div class="slide-block" data-block-id="${escapeHtml(block.BlockID)}"><div class="slide-block-title">${titleText}</div><table class="slide-block-table"><thead><tr>${headers}</tr></thead><tbody>${bodyRows}</tbody></table></div>`;
+            }
+            if (snap?.ArtifactContentSnapshot) {
+                return `<div class="slide-block" data-block-id="${escapeHtml(block.BlockID)}"><div class="slide-block-title">${titleText}</div><div class="slide-block-meta">${escapeHtml(snap.ArtifactTypeSnapshot || block.ArtifactType || 'Artifact')} snapshot</div></div>`;
+            }
+            return `<div class="slide-block slide-block-live" data-block-id="${escapeHtml(block.BlockID)}"><div class="slide-block-title">${titleText}</div><div class="slide-block-meta">${escapeHtml(block.Kind)} (${escapeHtml(block.Mode)})</div></div>`;
+        };
+        const renderMarkdownContentHtml = (md: string): string => {
+            const lines = String(md ?? '').replace(/\r\n/g, '\n').split('\n');
+            const out: string[] = [];
+            let inList = false;
+            const closeList = (): void => {
+                if (inList) {
+                    out.push('</ul>');
+                    inList = false;
+                }
+            };
+            for (let i = 0; i < lines.length; i++) {
+                const trimmed = lines[i].trim();
+                if (!trimmed) {
+                    closeList();
+                    continue;
+                }
+                if (/^[-*]\s+/.test(trimmed)) {
+                    if (!inList) {
+                        out.push('<ul>');
+                        inList = true;
+                    }
+                    out.push(`<li>${renderInlineMarkdown(trimmed.replace(/^[-*]\s+/, ''))}</li>`);
+                    continue;
+                }
+                closeList();
+                const headingMatch = /^(#{1,4})\s+(.+)$/.exec(trimmed);
+                if (headingMatch) {
+                    const level = Math.min(4, headingMatch[1].length + 1);
+                    out.push(`<h${level}>${renderInlineMarkdown(headingMatch[2])}</h${level}>`);
+                    continue;
+                }
+                if (trimmed.startsWith('|')) {
+                    const tableLines: string[] = [trimmed];
+                    while (i + 1 < lines.length && lines[i + 1].trim().startsWith('|')) {
+                        i++;
+                        tableLines.push(lines[i].trim());
+                    }
+                    const parseRow = (rowLine: string): string[] =>
+                        rowLine
+                            .replace(/^\|/, '')
+                            .replace(/\|$/, '')
+                            .split('|')
+                            .map((c) => c.trim());
+                    const rows = tableLines
+                        .filter((tl) => !/^\|[\s:|-]+\|$/.test(tl))
+                        .map(parseRow);
+                    if (rows.length > 0) {
+                        const head = rows[0].map((c) => `<th>${renderInlineMarkdown(c)}</th>`).join('');
+                        const body = rows
+                            .slice(1)
+                            .map((r) => `<tr>${r.map((c) => `<td>${renderInlineMarkdown(c)}</td>`).join('')}</tr>`)
+                            .join('');
+                        out.push(`<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`);
+                        continue;
+                    }
+                }
+                out.push(`<p>${renderInlineMarkdown(trimmed)}</p>`);
+            }
+            closeList();
+            return out.join('');
+        };
+        const renderRegionHtml = (r: SlideRegionSpec): string => {
+            const block = r.BlockSpec ?? this.parseFirstBlockFromMarkdown(r.MarkdownContent);
+            if (r.Kind === 'mj-block' || block) {
+                const contentHtml = block
+                    ? renderBlockHtml(r, block)
+                    : `<div class="slide-block-meta">${escapeHtml(r.Label)}</div>`;
+                return `<div class="slide-region" data-region-id="${escapeHtml(r.RegionID)}" data-region-kind="mj-block">${contentHtml}</div>`;
+            }
+            if (r.Kind === 'big-number') {
+                const valueHtml = r.BigNumberValue
+                    ? `<div class="big-number-value">${escapeHtml(r.BigNumberValue)}</div>`
+                    : '';
+                const labelHtml = r.BigNumberLabel
+                    ? `<div class="big-number-label">${escapeHtml(r.BigNumberLabel)}</div>`
+                    : '';
+                const deltaHtml = r.BigNumberDelta
+                    ? `<div class="big-number-delta">${escapeHtml(r.BigNumberDelta)}</div>`
+                    : '';
+                const fallbackMd = !r.BigNumberValue && r.MarkdownContent
+                    ? `<div class="big-number-body">${renderMarkdownContentHtml(r.MarkdownContent)}</div>`
+                    : '';
+                return `<div class="slide-region slide-big-number" data-region-id="${escapeHtml(r.RegionID)}">${valueHtml}${labelHtml}${deltaHtml}${fallbackMd}</div>`;
+            }
+            if (r.Kind === 'quote') {
+                const quoteBody = r.MarkdownContent ? `<blockquote>${renderMarkdownContentHtml(r.MarkdownContent)}</blockquote>` : '';
+                const attrHtml = r.QuoteAttribution
+                    ? `<cite class="quote-attribution">${escapeHtml(r.QuoteAttribution)}</cite>`
+                    : '';
+                return `<div class="slide-region slide-quote" data-region-id="${escapeHtml(r.RegionID)}">${quoteBody}${attrHtml}</div>`;
+            }
+            if (r.Kind === 'image') {
+                const safeSrc = this.SanitizeImageUrl(r.ImageUrl);
+                const altText = escapeHtml(r.ImageAlt || r.Label || '');
+                const imgHtml = safeSrc
+                    ? `<img class="slide-image" src="${escapeHtml(safeSrc)}" alt="${altText}"/>`
+                    : `<div class="slide-image-placeholder">${altText || 'Image'}</div>`;
+                const captionHtml = r.MarkdownContent ? `<div class="slide-image-caption">${renderMarkdownContentHtml(r.MarkdownContent)}</div>` : '';
+                return `<div class="slide-region slide-image-region" data-region-id="${escapeHtml(r.RegionID)}">${imgHtml}${captionHtml}</div>`;
+            }
+            return `<div class="slide-region" data-region-id="${escapeHtml(r.RegionID)}" data-region-kind="${escapeHtml(r.Kind)}">${renderMarkdownContentHtml(r.MarkdownContent)}</div>`;
+        };
+
         const primary = this.SanitizeCssValue(deck.Theme?.PrimaryColor, '#4f46e5');
         const accent = this.SanitizeCssValue(deck.Theme?.AccentColor, '#0ea5e9');
         const bg = this.SanitizeCssValue(deck.Theme?.BackgroundColor, '#ffffff');
@@ -468,21 +799,43 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
         const muted = this.SanitizeCssValue(deck.Theme?.MutedTextColor, '#475569');
         const headingFont = this.SanitizeCssValue(deck.Theme?.HeadingFont, 'Inter, system-ui, sans-serif');
         const bodyFont = this.SanitizeCssValue(deck.Theme?.BodyFont, 'Inter, system-ui, sans-serif');
+        const secondaryBg = this.SanitizeCssValue(deck.Theme?.SecondaryGradientColor, surface);
+        const cardRadius = Math.max(0, Math.min(32, Number(deck.Theme?.CardRadiusPx ?? 14)));
 
-        const slideBlocks = (deck.Slides ?? [])
-            .filter((s) => !s.Hidden)
-            .map((slide) => {
-                const regionsHtml = (slide.Regions ?? [])
-                    .map(
-                        (r) =>
-                            `<div class="slide-region" data-region-id="${escapeHtml(r.RegionID)}">${escapeHtml(r.MarkdownContent)}</div>`
-                    )
-                    .join('');
-                return `<section class="slide-page" data-slide-id="${escapeHtml(slide.SlideID)}"><h1>${escapeHtml(slide.Title)}</h1>${
+        const safeLogoUrl = this.SanitizeImageUrl(deck.Master?.LogoUrl);
+        const visibleSlides = (deck.Slides ?? []).filter((s) => !s.Hidden);
+        const dateLabel = deck.Master?.ShowDate ? new Date().toISOString().slice(0, 10) : '';
+
+        const slideBlocks = visibleSlides
+            .map((slide, visibleIdx) => {
+                const regionsHtml = (slide.Regions ?? []).map(renderRegionHtml).join('');
+                const headerParts: string[] = [];
+                if (safeLogoUrl) {
+                    headerParts.push(`<img class="slide-master-logo" src="${escapeHtml(safeLogoUrl)}" alt="${escapeHtml(deck.Master?.OrganizationName || 'Logo')}"/>`);
+                }
+                if (deck.Master?.OrganizationName) {
+                    headerParts.push(`<span class="slide-master-org">${escapeHtml(deck.Master.OrganizationName)}</span>`);
+                }
+                if (deck.Master?.HeaderText) {
+                    headerParts.push(`<span class="slide-master-header-text">${escapeHtml(deck.Master.HeaderText)}</span>`);
+                }
+                const headerHtml = headerParts.length > 0 ? `<header class="slide-master-header">${headerParts.join('')}</header>` : '';
+
+                const footerParts: string[] = [];
+                if (deck.Master?.FooterText) {
+                    footerParts.push(`<span class="slide-master-footer-text">${escapeHtml(deck.Master.FooterText)}</span>`);
+                }
+                if (dateLabel) {
+                    footerParts.push(`<span class="slide-master-date">${escapeHtml(dateLabel)}</span>`);
+                }
+                if (deck.Master?.ShowSlideNumbers) {
+                    footerParts.push(`<span class="slide-master-number">Slide ${visibleIdx + 1} of ${visibleSlides.length}</span>`);
+                }
+                const footerHtml = footerParts.length > 0 ? `<footer class="slide-master-footer">${footerParts.join(' ')}</footer>` : '';
+
+                return `<section class="slide-page" data-slide-id="${escapeHtml(slide.SlideID)}">${headerHtml}<h1>${escapeHtml(slide.Title)}</h1>${
                     slide.Subtitle ? `<h2>${escapeHtml(slide.Subtitle)}</h2>` : ''
-                }<div class="slide-regions">${regionsHtml}</div>${
-                    deck.Master?.FooterText ? `<footer>${escapeHtml(deck.Master.FooterText)}</footer>` : ''
-                }</section>`;
+                }<div class="slide-regions">${regionsHtml}</div>${footerHtml}</section>`;
             })
             .join('\n');
 
@@ -491,10 +844,16 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
             '<html><head><meta charset="utf-8"/>',
             `<title>${escapeHtml(deck.Title)}</title>`,
             '<style>',
-            `:root { --slide-primary: ${primary}; --slide-accent: ${accent}; --slide-bg: ${bg}; --slide-surface: ${surface}; --slide-text: ${text}; --slide-muted: ${muted}; --slide-heading-font: ${headingFont}; --slide-body-font: ${bodyFont}; }`,
+            `:root { --slide-primary: ${primary}; --slide-accent: ${accent}; --slide-bg: ${bg}; --slide-surface: ${surface}; --slide-secondary-bg: ${secondaryBg}; --slide-card-radius: ${cardRadius}px; --slide-text: ${text}; --slide-muted: ${muted}; --slide-heading-font: ${headingFont}; --slide-body-font: ${bodyFont}; }`,
             'body { margin: 0; background: var(--slide-bg); color: var(--slide-text); font-family: var(--slide-body-font); }',
             'h1, h2 { font-family: var(--slide-heading-font); color: var(--slide-primary); }',
             '.slide-page { page-break-after: always; padding: 32px; background: var(--slide-bg); }',
+            '.slide-master-header, .slide-master-footer { display: flex; justify-content: space-between; align-items: center; color: var(--slide-muted); font-size: 12px; }',
+            '.big-number-value { font-size: 48px; font-weight: 700; color: var(--slide-primary); }',
+            '.big-number-label { font-size: 16px; color: var(--slide-muted); }',
+            '.big-number-delta { font-size: 14px; color: var(--slide-accent); }',
+            '.slide-block-table, table { width: 100%; border-collapse: collapse; margin: 12px 0; }',
+            'th, td { border: 1px solid var(--slide-muted); padding: 6px 8px; text-align: left; font-size: 13px; }',
             '</style></head>',
             `<body>${slideBlocks}</body></html>`
         ].join('\n');
@@ -523,7 +882,11 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
             MutedTextColor: muted,
             HeadingFont: this.SanitizeCssValue(seeds.HeadingFont, 'Inter, system-ui, sans-serif'),
             BodyFont: this.SanitizeCssValue(seeds.BodyFont, 'Inter, system-ui, sans-serif'),
-            BrandSeedSource: seeds.BrandSeedSource || seeds.OrganizationName || 'Organization Brand Seeds'
+            BrandSeedSource: seeds.BrandSeedSource || seeds.OrganizationName || 'Organization Brand Seeds',
+            SecondaryGradientColor: surface,
+            BackgroundStyle: 'accent-strip',
+            CardRadiusPx: 14,
+            CardElevation: isDarkBg ? 'glass' : 'soft'
         };
     }
 
@@ -537,6 +900,8 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
     ): SlideRegionSpec[] {
         const firstExisting = existingRegions[0];
         const secondExisting = existingRegions[1];
+        const thirdExisting = existingRegions[2];
+        const fourthExisting = existingRegions[3];
 
         switch (layout) {
             case 'Title':
@@ -698,6 +1063,172 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                     })
                 ];
 
+            case 'KpiStrip':
+                return [
+                    this.mergeOrCreateRegion(firstExisting, {
+                        RegionID: 'kpi-1',
+                        Label: 'Primary KPI',
+                        Kind: firstExisting?.Kind || 'big-number',
+                        BigNumberValue: firstExisting?.BigNumberValue || '$14.8M',
+                        BigNumberLabel: firstExisting?.BigNumberLabel || 'Annual Recurring Revenue',
+                        BigNumberDelta: firstExisting?.BigNumberDelta || '+24% YoY',
+                        MarkdownContent: firstExisting?.MarkdownContent || 'ARR growth led by enterprise expansion.'
+                    }),
+                    this.mergeOrCreateRegion(secondExisting, {
+                        RegionID: 'kpi-2',
+                        Label: 'Efficiency KPI',
+                        Kind: secondExisting?.Kind || 'big-number',
+                        BigNumberValue: secondExisting?.BigNumberValue || '98.4%',
+                        BigNumberLabel: secondExisting?.BigNumberLabel || 'Net Dollar Retention',
+                        BigNumberDelta: secondExisting?.BigNumberDelta || '+4.2 pts',
+                        MarkdownContent: secondExisting?.MarkdownContent || 'High adoption across core workspaces.'
+                    }),
+                    this.mergeOrCreateRegion(thirdExisting, {
+                        RegionID: 'kpi-3',
+                        Label: 'Velocity KPI',
+                        Kind: thirdExisting?.Kind || 'big-number',
+                        BigNumberValue: thirdExisting?.BigNumberValue || '3.4x',
+                        BigNumberLabel: thirdExisting?.BigNumberLabel || 'Faster Reporting Cycle',
+                        BigNumberDelta: thirdExisting?.BigNumberDelta || '-18 hrs / wk',
+                        MarkdownContent: thirdExisting?.MarkdownContent || 'Automated live queries replace manual prep.'
+                    })
+                ];
+
+            case 'Timeline':
+                return [
+                    this.mergeOrCreateRegion(firstExisting, {
+                        RegionID: 'step-1',
+                        Label: 'Phase 1 · Foundation',
+                        Kind: firstExisting?.Kind || 'rich-text',
+                        MarkdownContent:
+                            firstExisting?.MarkdownContent ||
+                            '### Q1 · Foundation\n- Unified metadata schema & RLS governance\n- Live data bindings & co-editing rooms'
+                    }),
+                    this.mergeOrCreateRegion(secondExisting, {
+                        RegionID: 'step-2',
+                        Label: 'Phase 2 · Scale',
+                        Kind: secondExisting?.Kind || 'rich-text',
+                        MarkdownContent:
+                            secondExisting?.MarkdownContent ||
+                            '### Q2 · Acceleration\n- Automated AI brief & deck synthesis\n- Cross-artifact OLE embeds & exports'
+                    }),
+                    this.mergeOrCreateRegion(thirdExisting, {
+                        RegionID: 'step-3',
+                        Label: 'Phase 3 · Optimization',
+                        Kind: thirdExisting?.Kind || 'rich-text',
+                        MarkdownContent:
+                            thirdExisting?.MarkdownContent ||
+                            '### Q3 · Autonomous Ops\n- Executive board packs refreshed on schedule\n- Zero-drift metric signoff workflows'
+                    })
+                ];
+
+            case 'BentoGrid':
+                return [
+                    this.mergeOrCreateRegion(firstExisting, {
+                        RegionID: 'bento-hero',
+                        Label: 'Featured Spotlight',
+                        Kind: firstExisting?.Kind || 'callout',
+                        CalloutTone: firstExisting?.CalloutTone || 'IMPORTANT',
+                        MarkdownContent:
+                            firstExisting?.MarkdownContent ||
+                            '### Strategic Breakthrough\nPair governed enterprise data with executive visual storytelling in one shared workspace.'
+                    }),
+                    this.mergeOrCreateRegion(secondExisting, {
+                        RegionID: 'bento-2',
+                        Label: 'Customer Proof',
+                        Kind: secondExisting?.Kind || 'big-number',
+                        BigNumberValue: secondExisting?.BigNumberValue || '420+',
+                        BigNumberLabel: secondExisting?.BigNumberLabel || 'Active Teams',
+                        BigNumberDelta: secondExisting?.BigNumberDelta || '+38% QoQ',
+                        MarkdownContent: secondExisting?.MarkdownContent || 'Enterprise adoption metric'
+                    }),
+                    this.mergeOrCreateRegion(thirdExisting, {
+                        RegionID: 'bento-3',
+                        Label: 'Key Driver',
+                        Kind: thirdExisting?.Kind || 'rich-text',
+                        MarkdownContent:
+                            thirdExisting?.MarkdownContent ||
+                            '### Security First\nRow-level security travels automatically with every live block.'
+                    }),
+                    this.mergeOrCreateRegion(fourthExisting, {
+                        RegionID: 'bento-4',
+                        Label: 'Next Milestone',
+                        Kind: fourthExisting?.Kind || 'rich-text',
+                        MarkdownContent:
+                            fourthExisting?.MarkdownContent ||
+                            '### Q4 Rollout\nAll regional teams onboarded with zero manual migrations.'
+                    })
+                ];
+
+            case 'Quadrant':
+                return [
+                    this.mergeOrCreateRegion(firstExisting, {
+                        RegionID: 'q1',
+                        Label: 'High Impact · Quick Wins',
+                        Kind: firstExisting?.Kind || 'callout',
+                        CalloutTone: firstExisting?.CalloutTone || 'TIP',
+                        MarkdownContent:
+                            firstExisting?.MarkdownContent ||
+                            '### Quick Wins\n- Automated live query decks\n- One-click executive styling'
+                    }),
+                    this.mergeOrCreateRegion(secondExisting, {
+                        RegionID: 'q2',
+                        Label: 'High Impact · Strategic Bets',
+                        Kind: secondExisting?.Kind || 'callout',
+                        CalloutTone: secondExisting?.CalloutTone || 'IMPORTANT',
+                        MarkdownContent:
+                            secondExisting?.MarkdownContent ||
+                            '### Strategic Bets\n- Real-time multi-agent co-authoring\n- Cross-system governance ledger'
+                    }),
+                    this.mergeOrCreateRegion(thirdExisting, {
+                        RegionID: 'q3',
+                        Label: 'Incremental · Hygiene',
+                        Kind: thirdExisting?.Kind || 'rich-text',
+                        MarkdownContent:
+                            thirdExisting?.MarkdownContent ||
+                            '### Operational Hygiene\n- Template library curation\n- Consistent chart labeling'
+                    }),
+                    this.mergeOrCreateRegion(fourthExisting, {
+                        RegionID: 'q4',
+                        Label: 'Deprioritize / Reassess',
+                        Kind: fourthExisting?.Kind || 'rich-text',
+                        MarkdownContent:
+                            fourthExisting?.MarkdownContent ||
+                            '### Defer\n- Static screenshot imports\n- Unverifiable manual spreadsheets'
+                    })
+                ];
+
+            case 'MetricComparison':
+                return [
+                    this.mergeOrCreateRegion(firstExisting, {
+                        RegionID: 'before-metric',
+                        Label: 'Baseline Period',
+                        Kind: firstExisting?.Kind || 'big-number',
+                        BigNumberValue: firstExisting?.BigNumberValue || '18 hrs',
+                        BigNumberLabel: firstExisting?.BigNumberLabel || 'Weekly Deck Preparation',
+                        BigNumberDelta: firstExisting?.BigNumberDelta || 'Manual exports',
+                        MarkdownContent: firstExisting?.MarkdownContent || 'Legacy static workflow'
+                    }),
+                    this.mergeOrCreateRegion(secondExisting, {
+                        RegionID: 'after-metric',
+                        Label: 'Current Performance',
+                        Kind: secondExisting?.Kind || 'big-number',
+                        BigNumberValue: secondExisting?.BigNumberValue || '12 min',
+                        BigNumberLabel: secondExisting?.BigNumberLabel || 'With Live MJ Slides',
+                        BigNumberDelta: secondExisting?.BigNumberDelta || '98% faster',
+                        MarkdownContent: secondExisting?.MarkdownContent || 'Live governed workflow'
+                    }),
+                    this.mergeOrCreateRegion(thirdExisting, {
+                        RegionID: 'synthesis',
+                        Label: 'Executive Takeaway',
+                        Kind: thirdExisting?.Kind || 'callout',
+                        CalloutTone: thirdExisting?.CalloutTone || 'NOTE',
+                        MarkdownContent:
+                            thirdExisting?.MarkdownContent ||
+                            'Reclaimed analyst bandwidth shifts focus from data wrangling to strategic decision-making.'
+                    })
+                ];
+
             case 'TitleAndBody':
             default:
                 return [
@@ -821,14 +1352,21 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
         const lines = normalizedMd.split('\n');
         const sections: Array<{ level: number; heading: string; bodyLines: string[] }> = [];
         let currentSection: { level: number; heading: string; bodyLines: string[] } | null = null;
-        let inFence = false;
+        let inBacktickFence = false;
+        let inColonFence = false;
 
         for (const line of lines) {
             const trimmedLine = line.trim();
-            if (trimmedLine.startsWith('```') || trimmedLine.startsWith(':::')) {
-                inFence = !inFence;
+            if (!inColonFence && trimmedLine.startsWith('```')) {
+                inBacktickFence = !inBacktickFence;
+            } else if (!inBacktickFence && trimmedLine.startsWith(':::')) {
+                if (!inColonFence && /^:::[a-zA-Z0-9_-]+/.test(trimmedLine)) {
+                    inColonFence = true;
+                } else if (inColonFence && trimmedLine === ':::') {
+                    inColonFence = false;
+                }
             }
-            const headingMatch = !inFence ? /^(#{1,3})\s+(.+)$/.exec(trimmedLine) : null;
+            const headingMatch = !inBacktickFence && !inColonFence ? /^(#{1,3})\s+(.+)$/.exec(trimmedLine) : null;
             if (headingMatch) {
                 if (currentSection) {
                     sections.push(currentSection);
@@ -898,9 +1436,28 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
 
             if (parsedBlocks.length > 0) {
                 const firstBlock = parsedBlocks[0].BlockSpec;
-                const blockDirective = DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(firstBlock);
-                const strippedNarrative = cleanedBody.replace(parsedBlocks[0].RawText, () => '').trim();
+                let strippedNarrative = cleanedBody;
+                for (const blockSeg of parsedBlocks) {
+                    strippedNarrative = strippedNarrative.replace(blockSeg.RawText, () => '');
+                }
+                strippedNarrative = strippedNarrative.trim();
                 const isWhiteboard = firstBlock.Kind === 'Artifact' && firstBlock.ArtifactType === 'Whiteboard';
+
+                const regions: SlideRegionSpec[] = parsedBlocks.map((blockSeg, bIdx) => ({
+                    RegionID: bIdx === 0 ? 'data' : `data-${bIdx + 1}`,
+                    Label: blockSeg.BlockSpec.Title || (bIdx === 0 ? 'Embedded MJ Block' : `Embedded MJ Block ${bIdx + 1}`),
+                    Kind: 'mj-block',
+                    MarkdownContent: DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(blockSeg.BlockSpec),
+                    BlockSpec: blockSeg.BlockSpec
+                }));
+                regions.push({
+                    RegionID: 'narrative',
+                    Label: 'Key Insights',
+                    Kind: 'rich-text',
+                    MarkdownContent:
+                        strippedNarrative ||
+                        `- Live ${firstBlock.Kind} block integrated from source document\n- Viewer-scoped permissions enforced`
+                });
 
                 return {
                     SlideID: slideId,
@@ -908,23 +1465,7 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                     Layout: isWhiteboard ? 'ChartAndText' : 'LiveDataSlide',
                     Title: sec.heading,
                     Subtitle: firstBlock.Title || `${firstBlock.Kind} Slide`,
-                    Regions: [
-                        {
-                            RegionID: 'data',
-                            Label: firstBlock.Title || 'Embedded MJ Block',
-                            Kind: 'mj-block',
-                            MarkdownContent: blockDirective,
-                            BlockSpec: firstBlock
-                        },
-                        {
-                            RegionID: 'narrative',
-                            Label: 'Key Insights',
-                            Kind: 'rich-text',
-                            MarkdownContent:
-                                strippedNarrative ||
-                                `- Live ${firstBlock.Kind} block integrated from source document\n- Viewer-scoped permissions enforced`
-                        }
-                    ],
+                    Regions: regions,
                     SpeakerNotes: noteLines.join('\n') || `Discuss ${firstBlock.Title || sec.heading}.`,
                     Transition: 'slide'
                 };
@@ -1217,7 +1758,7 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
             Subtitle?: string;
             Layout?: SlideLayoutKind;
             SpeakerNotes?: string;
-            Transition?: 'none' | 'fade' | 'slide';
+            Transition?: SlideTransitionKind;
             Hidden?: boolean;
         },
         lockContext?: { ActorUserID?: string | null; OwnerUserID?: string | null; IsEditor?: boolean; BypassLock?: boolean }
@@ -1236,6 +1777,24 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                 );
                 if (!check.Allowed) {
                     throw new Error(check.Reason);
+                }
+                if (patch.Layout && patch.Layout !== slide.Layout) {
+                    for (const region of slide.Regions) {
+                        if (region.Locked) {
+                            const regionCheck = this.CanActorEditRegion(
+                                slide,
+                                region,
+                                lockContext?.ActorUserID,
+                                lockContext?.OwnerUserID,
+                                lockContext?.IsEditor
+                            );
+                            if (!regionCheck.Allowed) {
+                                throw new Error(
+                                    `Cannot change layout on slide '${slide.SlideID}' because region '${region.RegionID}' is locked (owner-only protection).`
+                                );
+                            }
+                        }
+                    }
                 }
             }
             const nextLayout = patch.Layout ?? slide.Layout;
@@ -1323,7 +1882,15 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                     Label: regionPatch.Label ?? current.Label,
                     Kind: regionPatch.Kind ?? current.Kind,
                     MarkdownContent:
-                        regionPatch.MarkdownContent !== undefined ? regionPatch.MarkdownContent : current.MarkdownContent
+                        regionPatch.MarkdownContent !== undefined ? regionPatch.MarkdownContent : current.MarkdownContent,
+                    QuoteAttribution: regionPatch.QuoteAttribution ?? current.QuoteAttribution,
+                    CalloutTone: regionPatch.CalloutTone ?? current.CalloutTone,
+                    ImageUrl:
+                        regionPatch.ImageUrl !== undefined
+                            ? this.SanitizeImageUrl(regionPatch.ImageUrl)
+                            : this.SanitizeImageUrl(current.ImageUrl),
+                    ImageAlt: regionPatch.ImageAlt !== undefined ? regionPatch.ImageAlt : current.ImageAlt,
+                    RevealStep: regionPatch.RevealStep !== undefined ? regionPatch.RevealStep : current.RevealStep
                 };
                 if (merged.BlockSpec && regionPatch.MarkdownContent === undefined) {
                     merged.MarkdownContent = DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(
@@ -1349,8 +1916,9 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                     BigNumberDelta: regionPatch.BigNumberDelta,
                     QuoteAttribution: regionPatch.QuoteAttribution,
                     CalloutTone: regionPatch.CalloutTone,
-                    ImageUrl: regionPatch.ImageUrl,
-                    ImageAlt: regionPatch.ImageAlt
+                    ImageUrl: this.SanitizeImageUrl(regionPatch.ImageUrl),
+                    ImageAlt: regionPatch.ImageAlt,
+                    RevealStep: regionPatch.RevealStep
                 };
                 if (created.BlockSpec && !created.MarkdownContent) {
                     created.MarkdownContent = DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(
@@ -1405,6 +1973,20 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
             );
             if (!check.Allowed) {
                 throw new Error(check.Reason);
+            }
+            for (const region of target.Regions) {
+                if (region.Locked) {
+                    const regionCheck = this.CanActorEditRegion(
+                        target,
+                        region,
+                        lockContext?.ActorUserID,
+                        lockContext?.OwnerUserID,
+                        lockContext?.IsEditor
+                    );
+                    if (!regionCheck.Allowed) {
+                        throw new Error(regionCheck.Reason);
+                    }
+                }
             }
         }
         const filtered = deck.Slides.filter((s) => s.SlideID !== target.SlideID);
@@ -1498,13 +2080,186 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
     }
 
     /**
+     * Applies a visual design preset (theme ID and optional slide-level transition across
+     * unlocked slides) to `deck` in one atomic operation.
+     */
+    public ApplyDesignPreset(
+        deck: SlideDeckSpec,
+        themeOrSeeds: string | SlideDeckThemeSpec | OrganizationBrandThemeSeeds,
+        options?: {
+            Transition?: SlideTransitionKind;
+            CardElevation?: SlideCardElevation;
+            BackgroundStyle?: SlideBackgroundStyle;
+        }
+    ): SlideDeckSpec {
+        let updated = this.ApplyTheme(deck, themeOrSeeds);
+        if (options?.CardElevation || options?.BackgroundStyle) {
+            updated = {
+                ...updated,
+                Theme: {
+                    ...updated.Theme,
+                    ...(options.CardElevation ? { CardElevation: options.CardElevation } : {}),
+                    ...(options.BackgroundStyle ? { BackgroundStyle: options.BackgroundStyle } : {})
+                }
+            };
+        }
+        if (options?.Transition) {
+            const transition = options.Transition;
+            updated = {
+                ...updated,
+                Slides: updated.Slides.map((s) => (s.Locked ? s : { ...s, Transition: transition }))
+            };
+        }
+        return updated;
+    }
+
+    /**
+     * Deterministically polishes a slide's typography, visual pacing, progressive reveal steps,
+     * and layout structure without losing content or embedded MJ blocks (`#2`).
+     */
+    public BeautifySlide(
+        deck: SlideDeckSpec,
+        slideId: string,
+        lockContext?: { ActorUserID?: string | null; OwnerUserID?: string | null; IsEditor?: boolean; BypassLock?: boolean }
+    ): { Deck: SlideDeckSpec; UpdatedSlide: SlideSpec | null; Improvements: string[] } {
+        let updatedSlide: SlideSpec | null = null;
+        const improvements: string[] = [];
+
+        const nextSlides = deck.Slides.map((slide) => {
+            if (slide.SlideID !== slideId && !UUIDsEqual(slide.SlideID, slideId)) {
+                return slide;
+            }
+            if (!lockContext?.BypassLock) {
+                const check = this.CanActorEditSlide(
+                    slide,
+                    lockContext?.ActorUserID,
+                    lockContext?.OwnerUserID,
+                    lockContext?.IsEditor
+                );
+                if (!check.Allowed) {
+                    throw new Error(check.Reason);
+                }
+            }
+
+            let nextTransition: SlideTransitionKind = slide.Transition || 'fade';
+            if (nextTransition === 'none') {
+                nextTransition = slide.Layout === 'Title' || slide.Layout === 'SectionHeader' ? 'fade' : 'slide';
+                improvements.push(`Set smooth '${nextTransition}' slide transition`);
+            }
+
+            // Normalize bullet formatting and bold lead-ins in unlocked text/callout regions
+            const hasExistingRevealSteps = slide.Regions.some((r) => typeof r.RevealStep === 'number' && r.RevealStep > 0);
+            const shouldAssignRevealSteps = !hasExistingRevealSteps && slide.Regions.length >= 2;
+            let formattedRegionsCount = 0;
+
+            const nextRegions = slide.Regions.map((region, idx) => {
+                const regionEditable =
+                    lockContext?.BypassLock ||
+                    this.CanActorEditRegion(
+                        slide,
+                        region,
+                        lockContext?.ActorUserID,
+                        lockContext?.OwnerUserID,
+                        lockContext?.IsEditor
+                    ).Allowed;
+
+                if (!regionEditable) {
+                    return { ...region };
+                }
+
+                let nextMarkdown = region.MarkdownContent ?? '';
+                if (region.Kind === 'rich-text' || region.Kind === 'callout') {
+                    const polished = polishMarkdownBullets(nextMarkdown);
+                    if (polished !== nextMarkdown) {
+                        nextMarkdown = polished;
+                        formattedRegionsCount++;
+                    }
+                }
+
+                const nextRevealStep = shouldAssignRevealSteps ? idx + 1 : region.RevealStep;
+                return {
+                    ...region,
+                    MarkdownContent: nextMarkdown,
+                    ...(nextRevealStep !== undefined ? { RevealStep: nextRevealStep } : {})
+                };
+            });
+
+            if (formattedRegionsCount > 0) {
+                improvements.push(`Formatted scannable bullet hierarchy across ${formattedRegionsCount} region(s)`);
+            }
+            if (shouldAssignRevealSteps) {
+                improvements.push(`Enabled ${nextRegions.length}-step progressive reveal for Presenter mode`);
+            }
+
+            // If single-region TitleAndBody contains >= 3 clear KPI metric bullets ("Label: $14.8M (+24%)"),
+            // upgrade cleanly to KpiStrip while preserving text.
+            let finalLayout: SlideLayoutKind = slide.Layout;
+            let finalRegions = nextRegions;
+            if (slide.Layout === 'TitleAndBody' && nextRegions.length === 1 && nextRegions[0].Kind === 'rich-text') {
+                const extractedKpis = tryExtractThreeKpiCards(nextRegions[0].MarkdownContent);
+                if (extractedKpis) {
+                    finalLayout = 'KpiStrip';
+                    finalRegions = extractedKpis.map((kpi, idx) => ({
+                        RegionID: `kpi-${idx + 1}`,
+                        Label: kpi.Label,
+                        Kind: 'big-number' as const,
+                        BigNumberValue: kpi.Value,
+                        BigNumberLabel: kpi.Label,
+                        BigNumberDelta: kpi.Delta,
+                        MarkdownContent: kpi.Notes,
+                        RevealStep: idx + 1
+                    }));
+                    improvements.push('Upgraded bullet metrics into 3-card KpiStrip layout');
+                }
+            }
+
+            if (improvements.length === 0) {
+                improvements.push('Verified typography cadence and visual card alignment');
+            }
+
+            updatedSlide = {
+                ...slide,
+                Layout: finalLayout,
+                Transition: nextTransition,
+                Regions: finalRegions
+            };
+            return updatedSlide;
+        });
+
+        if (!updatedSlide) {
+            return { Deck: deck, UpdatedSlide: null, Improvements: [] };
+        }
+
+        // Ensure deck theme carries modern elevation/background defaults if unset
+        const polishedTheme: SlideDeckThemeSpec = {
+            ...deck.Theme,
+            BackgroundStyle: deck.Theme.BackgroundStyle ?? 'accent-strip',
+            CardRadiusPx: deck.Theme.CardRadiusPx ?? 14,
+            CardElevation: deck.Theme.CardElevation ?? 'soft',
+            SecondaryGradientColor: deck.Theme.SecondaryGradientColor ?? deck.Theme.SurfaceColor
+        };
+
+        return {
+            Deck: {
+                ...deck,
+                Theme: polishedTheme,
+                Slides: nextSlides,
+                UpdatedAt: new Date().toISOString()
+            },
+            UpdatedSlide: updatedSlide,
+            Improvements: improvements
+        };
+    }
+
+    /**
      * Freezes all live MJ blocks across `deck` using the viewer's current rendered results (`O6` & `Accept #2`).
      * Used when entering Presentation Mode (`O6`) and when generating a `.pptx` export (`Accept #2`).
      */
     public FreezeDeckLiveBlocksForPresentation(
         deck: SlideDeckSpec,
         blockResultsByBlockId: ReadonlyMap<string, DocumentBlockExecutionResult>,
-        user?: Pick<UserInfo, 'ID' | 'Name'> | null
+        user?: Pick<UserInfo, 'ID' | 'Name'> | null,
+        options?: { SigningSecret?: string; RequireSignature?: boolean; ForceRefreshFrozen?: boolean; ArtifactID?: string }
     ): SlideDeckSpec {
         const frozenAt = new Date().toISOString();
         const frozenByUserId = user?.ID ?? 'presenter';
@@ -1513,7 +2268,11 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
         const nextSlides = deck.Slides.map((slide) => {
             const nextRegions = slide.Regions.map((region) => {
                 const block = this.ExtractRegionBlockSpec(region);
-                if (!block || block.Kind === 'Artifact') {
+                if (!block) {
+                    return { ...region };
+                }
+                // Preserve existing Frozen snapshots verbatim; never silently resign already-frozen blocks (`S3`).
+                if (block.Mode === 'Frozen' && !options?.ForceRefreshFrozen) {
                     return { ...region };
                 }
                 const result = blockResultsByBlockId.get(block.BlockID);
@@ -1527,12 +2286,26 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                     Columns: result.Columns,
                     Rows: result.Rows,
                     TotalRowCount: result.TotalRowCount,
-                    SecurityWarningAcknowledged: true
+                    ...(result.ArtifactContent !== undefined ? { ArtifactContentSnapshot: result.ArtifactContent } : {}),
+                    ...(result.ArtifactType !== undefined ? { ArtifactTypeSnapshot: result.ArtifactType } : {}),
+                    SecurityWarningAcknowledged: true,
+                    Binding: BuildBlockIdentityBinding(block, options?.ArtifactID)
                 };
+                let snapshotContentHash: string | undefined;
+                try {
+                    snapshotContentHash = ComputeFrozenSnapshotHash(snapshotBase, options?.SigningSecret);
+                } catch (err) {
+                    if (options?.RequireSignature) {
+                        throw err;
+                    }
+                }
+                const signedSnapshot: FrozenBlockSnapshot = snapshotContentHash
+                    ? { ...snapshotBase, SnapshotContentHash: snapshotContentHash }
+                    : snapshotBase;
                 const frozenBlock: DocumentBlockSpec = {
                     ...block,
                     Mode: 'Frozen',
-                    FrozenSnapshot: snapshotBase
+                    FrozenSnapshot: signedSnapshot
                 };
                 return {
                     ...region,
@@ -1552,6 +2325,25 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
             Slides: nextSlides,
             UpdatedAt: frozenAt
         };
+    }
+
+    /**
+     * Headlessly exports `deck` to ECMA-376 `.pptx` archive bytes (`NW-4`) with valid DrawingML theme/charts,
+     * stripped XML control chars, hidden-slide filtering, and `4:3` / `16:9` aspect ratio support.
+     */
+    public ExportDeckToPptxBytes(deck: SlideDeckSpec, options?: SlideDeckPptxExportOptions): Uint8Array {
+        return ExportDeckToPptxBytesInternal(deck, {
+            ...options,
+            SanitizeImageUrl: (raw) => this.SanitizeImageUrl(raw)
+        });
+    }
+
+    /**
+     * Headlessly imports `.pptx` archive bytes into a normalized {@link SlideDeckSpec} (`NW-4`).
+     */
+    public ImportDeckFromPptxBytes(pptxBytes: Uint8Array, fallbackTitle = 'Imported Presentation'): SlideDeckSpec {
+        const parsed = ImportDeckFromPptxBytesInternal(pptxBytes, fallbackTitle);
+        return this.normalizeDeckSpec(parsed, parsed.Title, parsed.DeckID);
     }
 
     /**
@@ -1772,11 +2564,12 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                           BigNumberDelta: r.BigNumberDelta,
                           QuoteAttribution: r.QuoteAttribution,
                           CalloutTone: r.CalloutTone,
-                          ImageUrl: r.ImageUrl,
+                          ImageUrl: this.SanitizeImageUrl(r.ImageUrl),
                           ImageAlt: r.ImageAlt,
                           Locked: r.Locked,
                           LockedByUserID: r.LockedByUserID,
-                          AllowEditors: r.AllowEditors
+                          AllowEditors: r.AllowEditors,
+                          RevealStep: typeof r.RevealStep === 'number' && r.RevealStep >= 0 ? r.RevealStep : undefined
                       };
                   })
                 : this.BuildRegionsForLayout(layout);
@@ -1815,7 +2608,16 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                       MutedTextColor: this.SanitizeCssValue(raw.Theme.MutedTextColor, defaultTheme.MutedTextColor),
                       HeadingFont: this.SanitizeCssValue(raw.Theme.HeadingFont, defaultTheme.HeadingFont),
                       BodyFont: this.SanitizeCssValue(raw.Theme.BodyFont, defaultTheme.BodyFont),
-                      BrandSeedSource: raw.Theme.BrandSeedSource
+                      BrandSeedSource: raw.Theme.BrandSeedSource,
+                      SecondaryGradientColor: raw.Theme.SecondaryGradientColor
+                          ? this.SanitizeCssValue(raw.Theme.SecondaryGradientColor, defaultTheme.SurfaceColor)
+                          : undefined,
+                      BackgroundStyle: raw.Theme.BackgroundStyle,
+                      CardRadiusPx:
+                          typeof raw.Theme.CardRadiusPx === 'number'
+                              ? Math.max(0, Math.min(32, raw.Theme.CardRadiusPx))
+                              : undefined,
+                      CardElevation: raw.Theme.CardElevation
                   }
                 : { ...defaultTheme },
             Master: {
@@ -1824,7 +2626,7 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
                 ShowSlideNumbers: raw.Master?.ShowSlideNumbers ?? true,
                 ShowDate: raw.Master?.ShowDate ?? true,
                 OrganizationName: raw.Master?.OrganizationName ?? 'MemberJunction',
-                LogoUrl: raw.Master?.LogoUrl
+                LogoUrl: this.SanitizeImageUrl(raw.Master?.LogoUrl)
             },
             Slides: normalizedSlides.length > 0 ? normalizedSlides : this.CreateDefaultDeck(fallbackTitle, fallbackDeckId).Slides,
             UpdatedAt: raw.UpdatedAt || new Date().toISOString()
@@ -1834,6 +2636,90 @@ export class SlideDeckEngine extends BaseSingleton<SlideDeckEngine> {
 
 function normalizedSlidesRegions(regions: SlideRegionSpec[]): SlideRegionSpec[] {
     return regions.map((r) => ({ ...r }));
+}
+
+/** Normalizes bullet markers and bolds `"Label: value"` lead-ins using linear string scanning. */
+function polishMarkdownBullets(markdown: string): string {
+    return markdown
+        .split('\n')
+        .map((rawLine) => {
+            const trimmedEnd = rawLine.trimEnd();
+            const trimmedStart = trimmedEnd.trimStart();
+            const indent = trimmedEnd.slice(0, trimmedEnd.length - trimmedStart.length);
+            let normalized = trimmedEnd;
+            if (trimmedStart.length >= 3 && (trimmedStart[0] === '*' || trimmedStart[0] === '+')) {
+                const afterMarkerRaw = trimmedStart.slice(1);
+                const afterMarker = afterMarkerRaw.trimStart();
+                if (afterMarker.length < afterMarkerRaw.length && afterMarker.length > 0) {
+                    normalized = `${indent}- ${afterMarker}`;
+                }
+            }
+            return boldLeadInLabel(normalized);
+        })
+        .join('\n')
+        .trim();
+}
+
+/** Bolds plain `"Label: value"` bullet lead-ins without regular expression backtracking. */
+function boldLeadInLabel(line: string): string {
+    const trimmedStart = line.trimStart();
+    if (!trimmedStart.startsWith('-')) {
+        return line;
+    }
+    const afterDashRaw = trimmedStart.slice(1);
+    const afterDash = afterDashRaw.trimStart();
+    const dashSpaceLen = afterDashRaw.length - afterDash.length;
+    if (dashSpaceLen === 0 || afterDash.length < 3 || afterDash.startsWith('**')) {
+        return line;
+    }
+    const first = afterDash[0];
+    const isUpperOrDigit = (first >= 'A' && first <= 'Z') || (first >= '0' && first <= '9');
+    if (!isUpperOrDigit) {
+        return line;
+    }
+    const colonIdx = afterDash.indexOf(':');
+    if (colonIdx < 2 || colonIdx > 37) {
+        return line;
+    }
+    const label = afterDash.slice(0, colonIdx);
+    if (label.includes('*')) {
+        return line;
+    }
+    const afterColonRaw = afterDash.slice(colonIdx + 1);
+    const value = afterColonRaw.trimStart();
+    if (value.length === 0 || value.length === afterColonRaw.length) {
+        return line;
+    }
+    const indent = line.slice(0, line.length - trimmedStart.length);
+    const dashPrefix = `-${afterDashRaw.slice(0, dashSpaceLen)}`;
+    return `${indent}${dashPrefix}**${label.trim()}:** ${value}`;
+}
+
+function tryExtractThreeKpiCards(
+    markdown: string
+): Array<{ Label: string; Value: string; Delta: string; Notes: string }> | null {
+    const lines = markdown
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => /^[-*]\s+/.test(l));
+    if (lines.length < 3 || lines.length > 4) {
+        return null;
+    }
+    const cards: Array<{ Label: string; Value: string; Delta: string; Notes: string }> = [];
+    for (const line of lines) {
+        const clean = line.replace(/^[-*]\s+/, '').replace(/\*\*/g, '');
+        const match = /^([^:]{2,40}):\s*([$€£]?\d[\d.,]*[%xMkKmMbB+]?)(?:\s*\(([^)]+)\))?(.*)$/.exec(clean);
+        if (!match) {
+            return null;
+        }
+        cards.push({
+            Label: match[1].trim(),
+            Value: match[2].trim(),
+            Delta: match[3]?.trim() || 'Tracked KPI',
+            Notes: match[4]?.replace(/^[\s—-]+/, '').trim() || match[1].trim()
+        });
+    }
+    return cards.length === 3 ? cards : null;
 }
 
 function generateRandomUuid(): string {

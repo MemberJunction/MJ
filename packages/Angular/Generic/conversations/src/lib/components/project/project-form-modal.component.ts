@@ -11,6 +11,7 @@ import {
   ResourcePermissionEngine
 } from '@memberjunction/core-entities';
 import { UserInfo, Metadata, RunView, EntityPermissionType } from '@memberjunction/core';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 export interface FolderSharePermission {
   permissionId: string | null;
@@ -1042,7 +1043,7 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
     } catch (error) {
       console.error('Error saving project:', error);
       const reason = error instanceof Error ? error.message : String(error);
-      alert(`Failed to save folder.\n\n${reason}`);
+      MJNotificationService.Instance.CreateSimpleNotification(`Failed to save folder: ${reason}`, 'error', 5000);
     }
   }
 

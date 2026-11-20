@@ -8,7 +8,7 @@ import type { GitTextDiffResult } from '../../services/artifact-version-diff.ser
   template: `
     @if (!Diff || Diff.IsIdentical) {
       <div class="mj-git-diff-empty" data-testid="git-diff-identical">
-        <i class="fas fa-circle-check"></i>
+        <i class="fa-solid fa-circle-check"></i>
         <span>{{ EmptyMessage }}</span>
       </div>
     } @else {
@@ -52,7 +52,7 @@ import type { GitTextDiffResult } from '../../services/artifact-version-diff.ser
                   class="mj-git-ContextExpander"
                   (click)="ExpandGroup(grp.GroupID)"
                 >
-                  <i class="fas fa-arrows-up-down"></i>
+                  <i class="fa-solid fa-arrows-up-down"></i>
                   <span>Show {{ grp.UnifiedLines.length }} unchanged lines</span>
                 </button>
               } @else {
@@ -82,7 +82,7 @@ import type { GitTextDiffResult } from '../../services/artifact-version-diff.ser
                   class="mj-git-ContextExpander"
                   (click)="ExpandGroup(grp.GroupID)"
                 >
-                  <i class="fas fa-arrows-up-down"></i>
+                  <i class="fa-solid fa-arrows-up-down"></i>
                   <span>Show {{ grp.SplitRows.length }} unchanged lines</span>
                 </button>
               } @else {

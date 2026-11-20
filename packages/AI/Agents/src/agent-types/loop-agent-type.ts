@@ -23,8 +23,8 @@ import type { ChatToolCall } from '@memberjunction/ai';
 import { GetToolCallingDecision } from '@memberjunction/ai-prompts';
 
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams, AgentConfiguration, AgentAction, AgentClientToolInvocation, AgentPayloadChangeRequest,
-         FormatValidationErrors, ValidateTaskGraphSpec, type TaskGraphSpec,
-    ConfigOf, AgentResponseForm, AgentFinishIf, type AgentHandoffRequest } from '@memberjunction/ai-core-plus';
+         FormatValidationErrors, ValidateTaskGraphSpec, MAX_TASKS_PER_AGENT_GRAPH, type TaskGraphSpec,
+    ConfigOf, AgentResponseForm, AgentFinishIf, type AgentHandoffRequest, type ArtifactDirective, type ArtifactJsonValue } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatusEx } from '@memberjunction/core';
 import { MJAIPromptEntityExtended, type AgentToolCallRequest } from '@memberjunction/ai-core-plus';
 import { LoopAgentResponse, LOOP_NEXT_STEP_TYPES } from './loop-agent-response-type';
@@ -216,8 +216,9 @@ export class LoopAgentType extends BaseAgentType {
 
         // The same validator the server runs at submission (D16), so a graph that passes here
         // cannot fail a different check later. Every failure is reported at once — a model fixing a
-        // malformed graph should not discover the problems one round-trip at a time.
-        const validation = ValidateTaskGraphSpec(spec);
+        // malformed graph should not discover the problems one round-trip at a time. The model-output
+        // cap applies here, and only here: it bounds what a model may emit, not what a workflow may be.
+        const validation = ValidateTaskGraphSpec(spec, { MaxTasks: MAX_TASKS_PER_AGENT_GRAPH });
         if (!validation.Valid) {
             retVal.step = 'Retry';
             retVal.message =
@@ -691,12 +692,46 @@ export class LoopAgentType extends BaseAgentType {
             return this.createRetryStep('complete_task.payloadChangeRequest must be an object (newElements / updateElements / replaceElements / removeElements), or be omitted.'
                 + ` Problem: ${decoded.error}`);
         }
+        const directiveDecoded = this.decodeArtifactDirectiveArgument(
+            complete.call.arguments?.artifactDirective as ArtifactJsonValue | ArtifactDirective | undefined
+        );
+        if ('error' in directiveDecoded) {
+            return this.createRetryStep('complete_task.artifactDirective must be an object ({ behavior, targetArtifactId?, name?, description? }), or be omitted.'
+                + ` Problem: ${directiveDecoded.error}`);
+        }
         const payloadChangeRequest = decoded.payloadChangeRequest;
         return this.createSuccessStep({
             ...(message ? { message } : {}),
             payloadChangeRequest,
+            ...(directiveDecoded.artifactDirective ? { artifactDirective: directiveDecoded.artifactDirective } : {}),
             payloadToolCallId: complete.call.id
         });
+    }
+
+    /**
+     * Reads `complete_task.artifactDirective`: undefined when absent, or validated `ArtifactDirective`.
+     */
+    private decodeArtifactDirectiveArgument(
+        value: ArtifactJsonValue | ArtifactDirective | undefined
+    ): { artifactDirective?: ArtifactDirective } | { error: string } {
+        if (value === undefined || value === null) {
+            return {};
+        }
+        if (typeof value === 'string' && (value.trim() === '' || value.trim() === 'null')) {
+            return {};
+        }
+        let candidate: ArtifactJsonValue | ArtifactDirective | undefined = value;
+        if (typeof value === 'string') {
+            const decoded = DecodeJSONArgument(value);
+            if ('Error' in decoded) {
+                return { error: decoded.Error };
+            }
+            candidate = decoded.Value as ArtifactJsonValue;
+        }
+        if (candidate === null || typeof candidate !== 'object' || Array.isArray(candidate)) {
+            return { error: 'the value is not a JSON object' };
+        }
+        return { artifactDirective: candidate as ArtifactDirective };
     }
 
     /**

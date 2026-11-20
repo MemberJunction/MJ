@@ -15,3 +15,5 @@ export * from './chart-kit.js';
 export * from './data-literals.js';
 export * from './generated-asset-disclosure.js';
 
+export * from './audio-mix.js';
+export * from './narration-cues.js';

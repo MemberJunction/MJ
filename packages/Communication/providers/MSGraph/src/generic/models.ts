@@ -25,4 +25,10 @@ export type GetMessagesContextDataParams = {
      * Number of messages to return, defaults to 10.
      */
     Top?: number;
+    /**
+     * An OData `$expand`, sent as given, for example
+     * `singleValueExtendedProperties($filter=id eq 'String 0x1042')` to read the In-Reply-To header with
+     * the messages. Absent or blank, nothing is expanded.
+     */
+    Expand?: string;
 };

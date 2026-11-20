@@ -24,8 +24,9 @@ describe('EmbeddingWorkerHost', () => {
   });
 
   it('returns the vectors the worker computed, one per text, in order', async () => {
-    const vectors = await embed(['a', 'abcd', 'ab']);
-    expect(vectors.map((v) => Array.from(v))).toEqual([[1], [4], [2]]);
+    const { Vectors, Tokens } = await embed(['a', 'abcd', 'ab']);
+    expect(Vectors.map((v) => Array.from(v))).toEqual([[1], [4], [2]]);
+    expect(Tokens).toBe(7);
   });
 
   it("keeps the caller's event loop free while the worker computes", async () => {

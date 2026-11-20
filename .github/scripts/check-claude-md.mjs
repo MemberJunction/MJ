@@ -8,11 +8,13 @@
  * Checks:
  *   1. COMPLETENESS   every pre-refactor section has a destination; every destination exists;
  *                     every deletion carries a reason. This is the "we lost nothing" evidence.
- *   2. BUDGET         root CLAUDE.md stays under its committed line/byte ceiling.
- *   3. REFERENCES     every markdown link + backticked path in every instruction file resolves.
- *   4. ROUTING        every CLAUDE.md on disk appears in root's routing table.
+ *   2. BUDGET         root CLAUDE.md and AGENTS.md stay under their line/byte ceilings; GEMINI.md
+ *                     stays a lightweight @./AGENTS.md import; .agents/skills.json mounts .claude/skills.
+ *   3. REFERENCES     every markdown link + heading anchor in every instruction file resolves.
+ *   4. ROUTING        every nested CLAUDE.md (and .claude/rules/*.md) appears in root routing tables.
  *   5. RULES          every .claude/rules/*.md has valid frontmatter and live globs.
  *   6. GUIDES         every guide on disk is indexed in guides/README.md.
+ *   7. INBOUND REFS   every link anywhere in the repo targeting an instruction file resolves.
  *
  * Usage:  node .github/scripts/check-claude-md.mjs [--root <dir>] [--quiet]
  * Exit:   0 = all checks pass, 1 = at least one failure.
@@ -96,7 +98,7 @@ if (manifest) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. BUDGET — prevent regrowth
+// 2. BUDGET & MULTI-AGENT PARITY — prevent regrowth and cross-harness drift
 // ─────────────────────────────────────────────────────────────────────────────
 if (exists('CLAUDE.md') && manifest?.budget) {
   const txt = read('CLAUDE.md');
@@ -111,7 +113,69 @@ if (exists('CLAUDE.md') && manifest?.budget) {
     fail('budget', `root CLAUDE.md is ${bytes} bytes, over the ${maxBytes}-byte ceiling.`);
   }
   const pct = manifest.baseline?.bytes ? Math.round((1 - bytes / manifest.baseline.bytes) * 100) : null;
-  log(`  budget:       ${lines}/${maxLines} lines, ${bytes}/${maxBytes} bytes` + (pct !== null ? ` (${pct}% below the ${manifest.baseline.lines}-line baseline)` : ''));
+  log(`  budget:       CLAUDE.md ${lines}/${maxLines} lines, ${bytes}/${maxBytes} bytes` + (pct !== null ? ` (${pct}% below the ${manifest.baseline.lines}-line baseline)` : ''));
+}
+
+if (manifest?.agentsMd) {
+  const { maxLines, maxBytes, maxGeminiMdBytes = 1000 } = manifest.agentsMd;
+
+  if (!exists('AGENTS.md')) {
+    fail('agents-md', 'AGENTS.md is missing — required for Antigravity, Gemini CLI, Codex, and other non-Claude agents.');
+  } else {
+    const txt = read('AGENTS.md');
+    const lines = txt.split('\n').length;
+    const bytes = Buffer.byteLength(txt, 'utf8');
+    if (maxLines && lines > maxLines) {
+      fail('agents-md', `root AGENTS.md is ${lines} lines, over the ${maxLines}-line ceiling. Route new guidance to .claude/rules/, nested CLAUDE.md, or guides/.`);
+    }
+    if (maxBytes && bytes > maxBytes) {
+      fail('agents-md', `root AGENTS.md is ${bytes} bytes, over the ${maxBytes}-byte ceiling (Antigravity truncates rule files over 24,000 bytes).`);
+    }
+    log(`  agents-md:    AGENTS.md ${lines}/${maxLines} lines, ${bytes}/${maxBytes} bytes`);
+  }
+
+  if (!exists('GEMINI.md')) {
+    fail('agents-md', 'GEMINI.md is missing — standalone gemini-cli reads GEMINI.md by default.');
+  } else {
+    const geminiTxt = read('GEMINI.md');
+    const geminiBytes = Buffer.byteLength(geminiTxt, 'utf8');
+    if (geminiBytes > maxGeminiMdBytes) {
+      fail('agents-md', `root GEMINI.md is ${geminiBytes} bytes, over the ${maxGeminiMdBytes}-byte ceiling. Keep GEMINI.md as a lightweight @./AGENTS.md import so Antigravity does not inject duplicate copies.`);
+    }
+    if (!/^@\.\/AGENTS\.md\s*$/m.test(geminiTxt)) {
+      fail('agents-md', 'GEMINI.md must contain "@./AGENTS.md" on its own line so standalone gemini-cli expands AGENTS.md automatically.');
+    }
+  }
+
+  if (!exists('.agents/skills.json')) {
+    fail('agents-md', '.agents/skills.json is missing — required so Antigravity discovers .claude/skills without duplicate files.');
+  } else {
+    try {
+      const skillsCfg = JSON.parse(read('.agents/skills.json'));
+      const entries = Array.isArray(skillsCfg?.entries) ? skillsCfg.entries : [];
+      const paths = entries.map((e) => e?.path).filter(Boolean);
+      if (!paths.includes('.claude/skills')) {
+        fail('agents-md', '.agents/skills.json must include { "path": ".claude/skills" } in entries.');
+      }
+      for (const p of paths) {
+        if (!exists(p)) fail('agents-md', `.agents/skills.json entry "${p}" does not exist.`);
+      }
+    } catch (e) {
+      fail('agents-md', `.agents/skills.json is not valid JSON: ${e.message}`);
+    }
+  }
+
+  // Any duplicate directory in .agents/skills/<name> shadows .claude/skills/<name> in Antigravity
+  // and silently drifts out of date. Keep shared skills solely in .claude/skills/.
+  const claudeSkillNames = new Set(
+    globSync('.claude/skills/*/SKILL.md', { cwd: ROOT }).map((p) => p.split('/')[2]),
+  );
+  for (const agentSkill of globSync('.agents/skills/*/SKILL.md', { cwd: ROOT })) {
+    const name = agentSkill.split('/')[2];
+    if (claudeSkillNames.has(name)) {
+      fail('agents-md', `.agents/skills/${name} duplicates and shadows .claude/skills/${name}. Remove the duplicate so .agents/skills.json serves the single source of truth.`);
+    }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -122,8 +186,11 @@ if (exists('CLAUDE.md') && manifest?.budget) {
 // orphans the cross-references INTO it, and those live mostly in guides/.
 const instructionFiles = [
   ...findClaudeMds(),
+  'AGENTS.md',
+  'GEMINI.md',
   ...globSync('.claude/rules/*.md', { cwd: ROOT }),
   ...globSync('.claude/skills/*/SKILL.md', { cwd: ROOT }),
+  ...globSync('.agents/skills/*/SKILL.md', { cwd: ROOT }),
   ...globSync('guides/*.md', { cwd: ROOT }),
 ].filter(exists);
 
@@ -199,30 +266,41 @@ for (const f of instructionFiles) {
 
   // Prose references to root are not machine-checkable, but after this refactor root is
   // small and most such references now point at relocated content. Surface them for review.
-  if (f !== 'CLAUDE.md' && /root (\[`?)?CLAUDE\.md|root project guide/i.test(body)) {
+  if (f !== 'CLAUDE.md' && f !== 'AGENTS.md' && f !== 'GEMINI.md' && /root (\[`?)?CLAUDE\.md|root project guide/i.test(body)) {
     notes.push(`${f}: refers to root CLAUDE.md in prose — confirm the content it means still lives there.`);
   }
 }
 log(`  references:   ${refsChecked} links + ${anchorsChecked} anchors checked across ${instructionFiles.length} instruction files`);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. ROUTING — every CLAUDE.md is discoverable from root
+// 4. ROUTING — every nested CLAUDE.md (and .claude/rules/*.md) is discoverable from root
 // ─────────────────────────────────────────────────────────────────────────────
-if (exists('CLAUDE.md')) {
-  const rootTxt = read('CLAUDE.md');
-  const nested = findClaudeMds().filter((p) => p !== 'CLAUDE.md');
+const ruleFiles = globSync('.claude/rules/*.md', { cwd: ROOT });
+const nested = findClaudeMds().filter((p) => p !== 'CLAUDE.md');
+
+for (const rootFile of ['CLAUDE.md', 'AGENTS.md']) {
+  if (!exists(rootFile)) continue;
+  const rootTxt = read(rootFile);
   for (const p of nested) {
     if (!rootTxt.includes(p)) {
-      fail('routing', `${p} is not listed in root CLAUDE.md's routing table — it will only ever load by accident.`);
+      fail('routing', `${p} is not listed in root ${rootFile}'s routing table — non-Claude agents cannot discover it at all, and Claude will only load it by accident.`);
     }
   }
-  log(`  routing:      ${nested.length} nested CLAUDE.md files, all listed`);
+  if (manifest?.agentsMd?.requireRuleRouting) {
+    for (const r of ruleFiles) {
+      if (!rootTxt.includes(r)) {
+        fail('routing', `${r} is not listed in root ${rootFile}'s routing table — non-Claude agents rely on this table to know which path-scoped rules exist.`);
+      }
+    }
+  }
+}
+if (exists('CLAUDE.md')) {
+  log(`  routing:      ${nested.length} nested CLAUDE.md files` + (manifest?.agentsMd?.requireRuleRouting ? ` + ${ruleFiles.length} path-scoped rules` : '') + ', all listed');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 5. RULES — frontmatter parses and globs are live
 // ─────────────────────────────────────────────────────────────────────────────
-const ruleFiles = globSync('.claude/rules/*.md', { cwd: ROOT });
 for (const f of ruleFiles) {
   const txt = read(f);
   if (!txt.startsWith('---\n')) {
@@ -283,7 +361,11 @@ if (exists('guides/README.md')) {
 // ─────────────────────────────────────────────────────────────────────────────
 const isInstructionFile = (absPath) => {
   const p = relative(ROOT, absPath).split('/');
-  return p[p.length - 1] === 'CLAUDE.md' || (p[0] === '.claude' && p[1] === 'rules');
+  return (
+    p[p.length - 1] === 'CLAUDE.md' ||
+    (p.length === 1 && (p[0] === 'AGENTS.md' || p[0] === 'GEMINI.md')) ||
+    (p[0] === '.claude' && p[1] === 'rules')
+  );
 };
 
 let inboundChecked = 0;

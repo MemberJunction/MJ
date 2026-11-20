@@ -57,6 +57,7 @@ import {
   SaveContext,
   RestoreContext,
   CloneContext,
+  SyncContext,
   RecordChangeSource,
   RecordChangePayload,
   EntityDeleteOptions,
@@ -95,6 +96,7 @@ import { BehaviorSubject, Observable, Subject, concatMap, from, catchError, of }
 import { SQLServerTransactionGroup } from './SQLServerTransactionGroup';
 import {
   EXECUTED_VARIABLE_SUFFIX,
+  IsKeptAsInlineLiteral,
   IsSaveParameterList,
   RenderSaveSQL,
   SaveParameterCollector,
@@ -791,6 +793,7 @@ export class SQLServerDataProvider
     );
     cfg.ConcurrencyCheck = this.ConcurrencyCheck;
     cfg.DeltaUpdates = this.DeltaUpdates;
+    cfg.LoadQueryMetadata = this.LoadsQueryMetadata;
     await child.Config(cfg, this);
     return child;
   }
@@ -2151,6 +2154,11 @@ export class SQLServerDataProvider
       ? `,
                                                                                         @Source='Clone',
                                                                                         @ChangeContext=${bind('ChangeContext', `N'${EscapeSQLString(payload.changeContext)}'`)}`
+      : payload.source === 'Sync'
+      ? `,
+                                                                                        @Source='Sync',
+                                                                                        @ChangeContext=${bind('ChangeContext', `N'${EscapeSQLString(payload.changeContext)}'`)}${payload.integrationID ? `,
+                                                                                        @IntegrationID=${bind('IntegrationID', `'${payload.integrationID}'`)}` : ''}`
       : '';
     return `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName=N'${entityName}',
                                                                                         @EntityID='${payload.entityID}',
@@ -2258,6 +2266,19 @@ export class SQLServerDataProvider
    * @param value The value to set
    * @returns SQL value string
    */
+  /**
+   * Renders a value for a numeric field as a SQL number literal, keeping the caller's digits so a
+   * high-precision decimal isn't rounded through a JS number. Throws for anything else: this text
+   * goes into the save statement as written, and a value that isn't a number must not reach it.
+   */
+  protected static RenderNumberLiteral(value: unknown, fieldName: string): string {
+    const raw = String(value).trim();
+    if (!/^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(raw)) {
+      throw new Error(`Invalid non-numeric value provided for numeric field ${fieldName}`);
+    }
+    return raw;
+  }
+
   private generateSetStatementValue(f: EntityFieldInfo, value: any): string {
     if (f.IsBinaryFieldType) return this.FormatBinaryLiteral(f, value);
     let val: any = value;
@@ -2297,7 +2318,10 @@ export class SQLServerDataProvider
         return `'${val}'`;
         
       case EntityFieldTSType.Number:
-        return val.toString();
+        if (f.Type && (IsKeptAsInlineLiteral(f) || f.Type.trim().toLowerCase() === 'sysname')) {
+          return val.toString();
+        }
+        return SQLServerDataProvider.RenderNumberLiteral(val, f.Name);
         
       default:
         // For other types, convert to string and quote if needed
@@ -2442,8 +2466,9 @@ export class SQLServerDataProvider
     wrapRecordIdInQuotes: boolean,
     restoreContext?: RestoreContext | null,
     cloneContext?: CloneContext | null,
+    syncContext?: SyncContext | null,
   ) {
-    return this.renderLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, wrapRecordIdInQuotes, restoreContext, cloneContext);
+    return this.renderLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, wrapRecordIdInQuotes, restoreContext, cloneContext, undefined, syncContext);
   }
 
   /**
@@ -2462,6 +2487,7 @@ export class SQLServerDataProvider
     restoreContext?: RestoreContext | null,
     cloneContext?: CloneContext | null,
     params?: SaveParameterCollector,
+    syncContext?: SyncContext | null,
   ): string | null {
     // Dialect-agnostic payload assembly is hoisted into DatabaseProviderBase
     // so SQL Server and PostgreSQL share one implementation. We only render
@@ -2476,6 +2502,8 @@ export class SQLServerDataProvider
       restoreContext,
       "'",
       cloneContext,
+      false,
+      syncContext,
     );
     if (!payload) return null;
 
@@ -2497,8 +2525,9 @@ export class SQLServerDataProvider
     user: UserInfo,
     restoreContext?: RestoreContext | null,
     cloneContext?: CloneContext | null,
+    syncContext?: SyncContext | null,
   ): { sql: string; parameters?: unknown[] } | null {
-    const sql = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true, restoreContext, cloneContext);
+    const sql = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true, restoreContext, cloneContext, syncContext);
     if (sql) return { sql };
     return null;
   }
@@ -2577,6 +2606,7 @@ export class SQLServerDataProvider
         entity.RestoreContext,
         entity.CloneContext,
         params,
+        entity.SyncContext,
       );
       if (entity.EntityInfo.CascadeDeletes) {
         // A cascading spDelete EXECs other procs (spUpdate* to null references, spDelete* for
@@ -3598,6 +3628,7 @@ export class SQLServerDataProvider
     safeUserId: string,
     source?: RecordChangeSource,
     changeContext?: string | null,
+    integrationID?: string | null,
   ): string {
     const schema = entityInfo.SchemaName || '__mj';
     const view = entityInfo.BaseView;
@@ -3612,6 +3643,11 @@ export class SQLServerDataProvider
       ? `,
         @Source='Clone',
         @ChangeContext=N'${EscapeSQLString(changeContext)}'`
+      : source === 'Sync'
+      ? `,
+        @Source='Sync',
+        @ChangeContext=N'${EscapeSQLString(changeContext)}'${integrationID ? `,
+        @IntegrationID='${EscapeSQLString(integrationID)}'` : ''}`
       : '';
 
     return `

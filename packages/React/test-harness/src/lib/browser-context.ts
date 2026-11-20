@@ -1,4 +1,6 @@
-import { chromium, Browser, BrowserContext, Page } from 'playwright';
+import { chromium, Browser, BrowserContext, Page, Route } from 'playwright';
+import { BROWSER_LAUNCH_ARGS, DISABLE_WEBRTC_SCRIPT, NetworkAccessMode, NetworkAllowlist, RedactUrl } from './network-policy';
+import { AllowlistProxy } from './network-proxy';
 
 /** Environment-variable fallbacks for attaching to an existing browser. */
 const CONNECT_ENV_VAR = 'MJ_REACT_TEST_HARNESS_CONNECT';
@@ -40,8 +42,29 @@ export interface BrowserContextOptions {
    * Note: this breaks per-test isolation — parallel harness instances would share
    * one context. Viewport/locale/userAgent options are ignored when reusing a
    * context (they only apply to contexts the harness creates).
+   *
+   * A reused context is NOT a network sandbox: only the pages the harness opens are routed,
+   * and the context gets neither the allowlisting proxy nor the context-wide route, because
+   * both would filter the user's own tabs. A popup a component opens is not routed at all.
+   * Use it for debugging trusted components only, never for generated code.
    */
   reuseExistingContext?: boolean;
+
+  /**
+   * What the test page may reach on the network. Defaults to `'allowlist'`: only the origins of
+   * the runtime and component-library CDN URLs (fallbacks included), plus `allowedNetworkHosts`.
+   * Requests anywhere else are aborted and reported, WebSockets are closed, service workers are
+   * blocked, WebRTC is removed, and a context the harness creates sends its traffic through an
+   * allowlisting proxy that refuses what routing never sees. `'unrestricted'` turns all of it off;
+   * use it only for local debugging, never for generated code.
+   */
+  networkAccess?: NetworkAccessMode;
+
+  /**
+   * Extra hosts the test page may reach. A URL allows its origin only; a bare host name allows
+   * that host on any port, and 'host:port' that port only.
+   */
+  allowedNetworkHosts?: string[];
 }
 
 /**
@@ -77,6 +100,19 @@ export class BrowserManager {
   private connected = false;
   /** True when WE created the context (so close() is allowed to close it). */
   private ownsContext = false;
+  /** Hosts the test page may reach, shared by every page this manager opens. */
+  private readonly network: NetworkAllowlist;
+  /** The requests each page tried that the allowlist refused, as redacted URLs. */
+  private readonly blockedByPage = new WeakMap<Page, string[]>();
+  /** Origins one page alone may reach, such as the URL {@link NavigateTo} was asked to open. */
+  private readonly allowedByPage = new WeakMap<Page, NetworkAllowlist>();
+  /**
+   * Every origin any page alone was allowed. The proxy cannot tell pages apart, so it allows these
+   * for all of them; routing still keeps each to its own page.
+   */
+  private readonly allowedForSomePage = new NetworkAllowlist();
+  /** The allowlisting proxy of a context the harness created, while it is open. */
+  private proxy: AllowlistProxy | null = null;
 
   constructor(private options: BrowserContextOptions = {}) {
     this.options = {
@@ -84,6 +120,50 @@ export class BrowserManager {
       viewport: { width: 1280, height: 720 },
       ...options
     };
+    this.network = new NetworkAllowlist(this.options.allowedNetworkHosts ?? []);
+  }
+
+  /** True unless the caller turned the network filter off. */
+  private get filtersNetwork(): boolean {
+    return this.options.networkAccess !== 'unrestricted';
+  }
+
+  /** Let the test page reach the host of each URL (runtime and library CDN URLs). */
+  AllowNetworkUrls(urls: readonly string[]): void {
+    this.network.AllowUrls(urls);
+  }
+
+  /** Let `page` alone reach the origin of each URL; other pages keep the shared allowlist. */
+  AllowNetworkUrlsForPage(page: Page, urls: readonly string[]): void {
+    const allowlist = this.allowedByPage.get(page) ?? new NetworkAllowlist();
+    allowlist.AllowUrls(urls);
+    this.allowedByPage.set(page, allowlist);
+    this.allowedForSomePage.AllowUrls(urls);
+  }
+
+  /**
+   * The requests the proxy refused, oldest first, as origin + path. These bypassed request routing
+   * (a Speculation Rules prefetch, a WebRTC TURN connection), so no page is known for them, and
+   * they can include the browser's own background traffic.
+   */
+  GetProxyBlockedRequests(): string[] {
+    return this.proxy?.BlockedRequests ?? [];
+  }
+
+  /** The requests `page` tried that were blocked, as origin + path (query strings dropped). */
+  GetBlockedRequests(page: Page): string[] {
+    return [...(this.blockedByPage.get(page) ?? [])];
+  }
+
+  /** Creates a context the harness owns: with the filter on, its traffic goes through the proxy. */
+  private async createContext(browser: Browser): Promise<BrowserContext> {
+    if (!this.filtersNetwork) {
+      return browser.newContext(this.contextOptions());
+    }
+    this.proxy = new AllowlistProxy(url => this.network.IsAllowed(url) || this.allowedForSomePage.IsAllowed(url));
+    await this.proxy.Start();
+    // Chromium sends loopback traffic around a proxy unless told otherwise; '<-loopback>' says so.
+    return browser.newContext({ ...this.contextOptions(), proxy: { server: this.proxy.Server, bypass: '<-loopback>' } });
   }
 
   /** Options applied when the harness creates its own browser context. */
@@ -93,8 +173,68 @@ export class BrowserManager {
       userAgent: this.options.userAgent,
       deviceScaleFactor: this.options.deviceScaleFactor,
       locale: this.options.locale,
-      timezoneId: this.options.timezoneId
+      timezoneId: this.options.timezoneId,
+      // A service worker's requests bypass request routing, so none may be registered.
+      serviceWorkers: this.filtersNetwork ? 'block' as const : 'allow' as const
     };
+  }
+
+  /**
+   * Context-wide guards for a context the harness created: the WebRTC script reaches every page
+   * in it, popups included, and the route catches requests no page route sees. Never installed on
+   * a reused external context, where they would act on the user's own tabs.
+   */
+  private async guardContext(context: BrowserContext): Promise<void> {
+    if (!this.filtersNetwork) {
+      return;
+    }
+    await context.addInitScript(DISABLE_WEBRTC_SCRIPT);
+    await context.route('**/*', route => this.routeRequest(route, null));
+    await context.routeWebSocket(/.*/, ws => ws.close({ code: 1008, reason: 'Blocked by test harness network policy' }));
+  }
+
+  /** Opens a page whose requests go through the allowlist, recording what it refuses. */
+  private async openPage(): Promise<Page> {
+    const page = await this.context!.newPage();
+    if (this.filtersNetwork) {
+      this.blockedByPage.set(page, []);
+      if (!this.ownsContext) {
+        // A reused context has no context-wide script, so the page gets its own.
+        await page.addInitScript(DISABLE_WEBRTC_SCRIPT);
+      }
+      await page.route('**/*', route => this.routeRequest(route, page));
+      await page.routeWebSocket(/.*/, ws => ws.close({ code: 1008, reason: 'Blocked by test harness network policy' }));
+    }
+    return page;
+  }
+
+  /**
+   * Lets an allowed request through and aborts any other, recording it for the page it came from.
+   * The context-wide route passes no page, so it looks the page up from the request's frame.
+   */
+  private async routeRequest(route: Route, page: Page | null): Promise<void> {
+    const url = route.request().url();
+    const owner = page ?? this.harnessPageOf(route);
+    const allowed = this.network.IsAllowed(url) || (owner !== null && this.allowedByPage.get(owner)?.IsAllowed(url) === true);
+    if (!allowed && owner) {
+      this.blockedByPage.get(owner)?.push(RedactUrl(url));
+    }
+    try {
+      await (allowed ? route.fallback() : route.abort('blockedbyclient'));
+    } catch {
+      // The page or context closed while the request was paused; nothing is left to route.
+    }
+  }
+
+  /** The harness page a request came from, or null for a request no harness page owns. */
+  private harnessPageOf(route: Route): Page | null {
+    try {
+      const page = route.request().frame().page();
+      return this.blockedByPage.has(page) ? page : null;
+    } catch {
+      // Playwright throws when the request has no frame, as for a service worker's.
+      return null;
+    }
   }
 
   /** Resolve whether to reuse the existing context (option → env-var fallback). */
@@ -120,7 +260,10 @@ export class BrowserManager {
         : await chromium.connectOverCDP(endpoint);
       this.connected = true;
     } else {
-      this.browser = await chromium.launch({ headless: this.options.headless });
+      this.browser = await chromium.launch({
+        headless: this.options.headless,
+        args: this.filtersNetwork ? [...BROWSER_LAUNCH_ARGS] : []
+      });
       this.connected = false;
     }
 
@@ -132,15 +275,18 @@ export class BrowserManager {
         this.context = existing[0];
         this.ownsContext = false;
       } else {
-        this.context = await this.browser.newContext(this.contextOptions());
+        this.context = await this.createContext(this.browser);
         this.ownsContext = true;
       }
     } else {
-      this.context = await this.browser.newContext(this.contextOptions());
+      this.context = await this.createContext(this.browser);
       this.ownsContext = true;
     }
 
-    this.page = await this.context.newPage();
+    if (this.ownsContext) {
+      await this.guardContext(this.context);
+    }
+    this.page = await this.openPage();
   }
 
   /** @deprecated Use {@link Initialize}. */
@@ -155,8 +301,7 @@ export class BrowserManager {
     // Always create a fresh page for each test to ensure isolation
     // This prevents issues with page.exposeFunction being called multiple times
     // and ensures each test harness instance has its own clean page
-    const newPage = await this.context!.newPage();
-    return newPage;
+    return this.openPage();
   }
 
   /** @deprecated Use {@link GetPage}. */
@@ -164,9 +309,20 @@ export class BrowserManager {
     return this.GetPage();
   }
 
+  /** Opens a fresh page at `url`. The page alone may reach that URL's origin. */
   async NavigateTo(url: string): Promise<void> {
     const page = await this.GetPage();
+    this.AllowNetworkUrlsForPage(page, [url]);
     await page.goto(url);
+  }
+
+  /**
+   * Closes a page from {@link GetPage}. Its routes are removed first, so a request still paused
+   * in them is dropped rather than failing once the page is gone.
+   */
+  async ClosePage(page: Page): Promise<void> {
+    await page.unrouteAll({ behavior: 'ignoreErrors' }).catch(() => {});
+    await page.close();
   }
 
   /** @deprecated Use {@link NavigateTo}. */
@@ -228,6 +384,10 @@ export class BrowserManager {
         await this.context.close().catch(() => {});
       }
       this.context = null;
+    }
+    if (this.proxy) {
+      await this.proxy.Stop();
+      this.proxy = null;
     }
     if (this.browser) {
       // Only close browsers WE launched. When attached, leave the external

@@ -51,8 +51,10 @@ import {
     type ForEachOperation,
     type WhileOperation,
     ConfigOf,
+    IsDefaultHumanTaskProvider,
 } from '@memberjunction/ai-core-plus';
-import { EscapeSQLString, IsValidUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IsValidUUID, MJGlobal, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { BaseHumanTaskProvider } from './HumanTaskProvider';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentDecisionService } from '@memberjunction/ai-agents';
@@ -427,6 +429,9 @@ export const TASK_TYPE_NAME = TASK_GRAPH_WORKFLOW_TYPE_NAME;
  */
 const DISPATCHABLE_KINDS: ReadonlyArray<TaskGraphSpecNode['kind']> = [
     'Agent', 'Action', 'Human', 'ForEach', 'While', 'Prompt', 'Decision',
+    // Waiting steps: never claimed, completed by a signal (External) or a clock (Wait). The
+    // dispatcher reaches and settles them through WaitingStepRunner.
+    'External', 'Wait',
 ];
 
 /**
@@ -481,13 +486,27 @@ export function BuildStepConfiguration(node: TaskGraphSpecNode): TaskStepConfigu
     // `expiresInHours` as well as instructions: dropping it here is what would leave the deadline in
     // the spec and out of the row the dispatcher actually reads, so the request would be raised with
     // no ExpiresAt and the author's timeout would silently not exist.
+    //
+    // `provider` and `providerConfiguration` for the same reason: dropped, a Human step meant for a
+    // plugged-in provider silently fell back to the built-in inbox, raised an ask nobody watches, and
+    // never reached the provider at all.
     const human = ConfigOf(node, 'Human');
-    if (human?.instructions || human?.expiresInHours) {
-        config.human = { instructions: human.instructions, expiresInHours: human.expiresInHours };
+    if (human?.instructions || human?.expiresInHours || human?.provider || human?.providerConfiguration) {
+        config.human = {
+            instructions: human.instructions,
+            expiresInHours: human.expiresInHours,
+            ...(human.provider ? { provider: human.provider } : {}),
+            ...(human.providerConfiguration ? { providerConfiguration: human.providerConfiguration } : {}),
+        };
     }
 
     const external = ConfigOf(node, 'External');
     if (external) config.external = external;
+
+    // A Wait's moment. Without it the row says "Wait" and nothing else, and the dispatcher can only
+    // fail the step — which it does, by name, rather than continue immediately.
+    const wait = ConfigOf(node, 'Wait');
+    if (wait) config.wait = wait;
 
     // The questions and state, plus the node's tempId: conditions name a decision by the tempId it
     // was submitted under (`decisions.<tempId>.<question>`), and the row keeps no other copy of it.
@@ -627,9 +646,10 @@ export function FindUnrunnableKinds(spec: TaskGraphSpec): string | null {
 
     const detail = offenders.map((t) => `"${t.name}" (${t.kind})`).join(', ');
     return (
-        `"${spec.workflowName}" cannot be run yet: ${detail}. ` +
-        `The dispatcher runs agent, action, person and loop steps. Prompt steps and steps completed ` +
-        `by an outside system are not supported yet — replace them, or split them out of this workflow.`
+        `"${spec.workflowName}" cannot be run: ${detail}. ` +
+        `The dispatcher runs ${DISPATCHABLE_KINDS.join(', ')} steps; this server does not know the ` +
+        `kind named, which usually means it was authored for a newer version. Replace the step, or ` +
+        `update this server.`
     );
 }
 
@@ -661,6 +681,41 @@ export function FindCrossUserAssignments(spec: TaskGraphSpec, submitterUserID: s
         `workflow. Assigning a step to someone else is not available yet (#3524) — a workflow can ` +
         `only ask the person who started it. Remove assignToUserID from those steps.`
     );
+}
+
+/**
+ * Names the Human steps whose `provider` is not registered on this server, or `null` when all are.
+ *
+ * Asked of the SUBMITTING host, which in every MJ deployment loads the same server packages as the
+ * dispatching one. The dispatcher re-checks when it reaches the step, so a host that differs still
+ * fails the step with the provider's name rather than waiting forever.
+ */
+export function FindUnregisteredHumanTaskProviders(spec: TaskGraphSpec): string | null {
+    const missing = new Map<string, string[]>();
+    for (const node of spec.tasks) {
+        const key = ConfigOf(node, 'Human')?.provider?.trim();
+        if (!key || IsDefaultHumanTaskProvider(key)) continue;
+        if (MJGlobal.Instance.ClassFactory.GetRegistration(BaseHumanTaskProvider, key)) continue;
+        missing.set(key, [...(missing.get(key) ?? []), `"${node.name}"`]);
+    }
+    if (missing.size === 0) return null;
+    const detail = [...missing.entries()].map(([key, steps]) => `${steps.join(', ')} → "${key}"`).join('; ');
+    return (
+        `"${spec.workflowName}" was not started: these Human steps name a provider no package on this server ` +
+        `registers: ${detail}. Load the package that registers it, or remove "provider" to use the built-in inbox.`
+    );
+}
+
+/**
+ * The correlation key an External step can be stamped with AT SUBMIT: a literal key. A payload path
+ * is resolved only when the step is reached, so it returns `null` here.
+ *
+ * Stamping a literal key up front is what lets a signal that arrives before the step is reached find
+ * it — and be held on it — rather than missing it because the key column was still empty.
+ */
+export function SubmitTimeCorrelationKey(node: TaskGraphSpecNode): string | null {
+    const key = ConfigOf(node, 'External')?.correlationKey?.trim();
+    return key && !key.startsWith('payload.') ? key : null;
 }
 
 /**
@@ -702,6 +757,7 @@ function isNameValueJson(json: string): boolean {
 export type RetryableTask = Pick<
     MJTaskEntity,
     'Status' | 'StepType' | 'ErrorMessage' | 'StartedAt' | 'CompletedAt' | 'PercentComplete' | 'ClaimedBy' | 'ClaimExpiresAt' | 'OutputPayload'
+    | 'AttemptCount' | 'NextAttemptAt'
 >;
 
 /**
@@ -724,6 +780,10 @@ export function PrepareTaskForRetry(task: RetryableTask): void {
     // Clear any stale claim so the task is immediately claimable.
     task.ClaimedBy = null;
     task.ClaimExpiresAt = null;
+    // A person retrying a step starts its retry budget over, and does not wait out a backoff the
+    // dispatcher scheduled before they stepped in.
+    task.AttemptCount = 0;
+    task.NextAttemptAt = null;
 }
 
 export class TaskGraphService {
@@ -784,6 +844,15 @@ export class TaskGraphService {
         if (misassigned) {
             LogError(`[TaskGraphService] ${misassigned}`);
             return { Success: false, ErrorMessage: misassigned };
+        }
+
+        // 1b-iii. Human-task providers. A Human step handed to a provider nobody registered on this
+        //         server would be reached, fail, and stop the workflow mid-run; refused here instead,
+        //         by name, while the graph is still the author's to fix.
+        const unregistered = FindUnregisteredHumanTaskProviders(spec);
+        if (unregistered) {
+            LogError(`[TaskGraphService] ${unregistered}`);
+            return { Success: false, ErrorMessage: unregistered };
         }
 
         // 1c. Chain depth. A flow that dispatches a graph containing itself recurses without bound,
@@ -2021,6 +2090,14 @@ export class TaskGraphService {
                         // machine task for claiming and reclamation; `StepType` is what routes it to the
                         // decision runner rather than the prompt runner.
                         task.PromptID = promptIDsByName.get(DecisionPromptNameOf(node)!)!;
+                        break;
+                    case 'External':
+                        // Nothing runs it, so no executor column. A literal correlation key is stamped
+                        // now so an early signal can find the step and be held on it.
+                        task.CorrelationKey = SubmitTimeCorrelationKey(node);
+                        break;
+                    case 'Wait':
+                        // Nothing runs it either: the dispatcher stamps its DueAt when it is reached.
                         break;
                     case 'ForEach':
                     case 'While': {

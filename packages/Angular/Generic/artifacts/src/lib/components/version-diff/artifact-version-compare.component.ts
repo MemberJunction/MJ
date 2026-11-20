@@ -4,14 +4,14 @@ import {
   Component,
   EventEmitter,
   Input,
-  OnChanges,
+  OnInit,
   Output,
-  SimpleChanges,
   Type,
   inject,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Metadata, type IMetadataProvider } from '@memberjunction/core';
 import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
@@ -41,7 +41,7 @@ export type UniversalCompareMode = 'visual' | 'json-tree' | 'unified' | 'split';
             data-testid="exit-compare-btn"
             (click)="ExitRequested.emit()"
           >
-            <i class="fas fa-arrow-left"></i>
+            <i class="fa-solid fa-arrow-left"></i>
             <span>Exit Compare</span>
           </button>
 
@@ -53,7 +53,7 @@ export type UniversalCompareMode = 'visual' | 'json-tree' | 'unified' | 'split';
             data-testid="toggle-commit-timeline-btn"
             (click)="ToggleTimeline()"
           >
-            <i class="fas fa-code-branch"></i>
+            <i class="fa-solid fa-code-branch"></i>
           </button>
 
           <div class="mj-vcomp__selectors">
@@ -80,7 +80,7 @@ export type UniversalCompareMode = 'visual' | 'json-tree' | 'unified' | 'split';
               data-testid="swap-compare-versions-btn"
               (click)="SwapVersions()"
             >
-              <i class="fas fa-right-left"></i>
+              <i class="fa-solid fa-right-left"></i>
             </button>
 
             <label class="mj-vcomp__sel-group">
@@ -112,7 +112,7 @@ export type UniversalCompareMode = 'visual' | 'json-tree' | 'unified' | 'split';
                 data-testid="compare-mode-visual"
                 (click)="SetMode('visual')"
               >
-                <i class="fas fa-wand-sparkles"></i> Visual Diff
+                <i class="fa-solid fa-wand-sparkles"></i> Visual Diff
               </button>
             }
             @if (HasJsonTreeTab) {
@@ -124,7 +124,7 @@ export type UniversalCompareMode = 'visual' | 'json-tree' | 'unified' | 'split';
                 data-testid="compare-mode-json"
                 (click)="SetMode('json-tree')"
               >
-                <i class="fas fa-sitemap"></i> JSON Tree
+                <i class="fa-solid fa-sitemap"></i> JSON Tree
                 @if ((JsonDiff?.TotalChanges || 0) > 0) {
                   <span class="mj-vcomp__mode-count">{{ JsonDiff!.TotalChanges }}</span>
                 }
@@ -138,7 +138,7 @@ export type UniversalCompareMode = 'visual' | 'json-tree' | 'unified' | 'split';
               data-testid="compare-mode-unified"
               (click)="SetMode('unified')"
             >
-              <i class="fas fa-bars-staggered"></i> Unified
+              <i class="fa-solid fa-bars-staggered"></i> Unified
             </button>
             <button
               type="button"
@@ -148,7 +148,7 @@ export type UniversalCompareMode = 'visual' | 'json-tree' | 'unified' | 'split';
               data-testid="compare-mode-split"
               (click)="SetMode('split')"
             >
-              <i class="fas fa-columns"></i> Split
+              <i class="fa-solid fa-columns"></i> Split
             </button>
           </div>
 
@@ -161,7 +161,7 @@ export type UniversalCompareMode = 'visual' | 'json-tree' | 'unified' | 'split';
               (click)="RequestRestore()"
               [title]="'Create a new latest version from v' + RestorableVersionNumber"
             >
-              <i class="fas" [ngClass]="IsRestoring ? 'fa-spinner fa-spin' : 'fa-clock-rotate-left'"></i>
+              <i class="fa-solid" [ngClass]="IsRestoring ? 'fa-spinner fa-spin' : 'fa-clock-rotate-left'"></i>
               <span>Restore v{{ RestorableVersionNumber }}</span>
             </button>
           }
@@ -173,7 +173,7 @@ export type UniversalCompareMode = 'visual' | 'json-tree' | 'unified' | 'split';
         @if (ShowTimeline) {
           <aside class="mj-vcomp__timeline" data-testid="git-commit-timeline">
             <div class="mj-vcomp__timeline-hdr">
-              <span><i class="fas fa-code-commit"></i> Version History ({{ Versions.length }})</span>
+              <span><i class="fa-solid fa-code-commit"></i> Version History ({{ Versions.length }})</span>
             </div>
             <div class="mj-vcomp__commits">
               @for (ver of Versions; track ver.ID; let idx = $index) {
@@ -204,11 +204,11 @@ export type UniversalCompareMode = 'visual' | 'json-tree' | 'unified' | 'split';
                       }
                       @if (IsConversationLinked(ver.ID)) {
                         <span class="mj-vcomp__origin" title="Created in conversation turn">
-                          <i class="fas fa-wand-magic-sparkles"></i> Chat
+                          <i class="fa-solid fa-wand-magic-sparkles"></i> Chat
                         </span>
                       } @else {
                         <span class="mj-vcomp__origin" title="Saved directly">
-                          <i class="fas fa-pen-nib"></i> Saved
+                          <i class="fa-solid fa-pen-nib"></i> Saved
                         </span>
                       }
                     </div>
@@ -219,7 +219,7 @@ export type UniversalCompareMode = 'visual' | 'json-tree' | 'unified' | 'split';
 
                     <div class="mj-vcomp__commit-meta">
                       @if (ver.User) {
-                        <span><i class="far fa-user"></i> {{ ver.User }}</span>
+                        <span><i class="fa-regular fa-user"></i> {{ ver.User }}</span>
                       }
                       <span>{{ ver.__mj_CreatedAt | date: 'short' }}</span>
                       @if (ver.ContentHash) {
@@ -256,7 +256,7 @@ export type UniversalCompareMode = 'visual' | 'json-tree' | 'unified' | 'split';
         <main class="mj-vcomp__viewport">
           @if (IsLoadingVersions) {
             <div class="mj-vcomp__loading">
-              <i class="fas fa-spinner fa-spin"></i>
+              <i class="fa-solid fa-spinner fa-spin"></i>
               <span>Loading v{{ BaseVersionNumber }} and v{{ TargetVersionNumber }}…</span>
             </div>
           } @else if (!BaseVersion || !TargetVersion) {
@@ -265,7 +265,7 @@ export type UniversalCompareMode = 'visual' | 'json-tree' | 'unified' | 'split';
             </div>
           } @else if (IsSameUuid(BaseVersion.ID, TargetVersion.ID)) {
             <div class="mj-vcomp__same-notice">
-              <i class="fas fa-circle-info"></i>
+              <i class="fa-solid fa-circle-info"></i>
               <span>Both Base and Target are set to <strong>v{{ BaseVersion.VersionNumber }}</strong>. Pick a different version on the left to inspect changes.</span>
             </div>
           } @else {
@@ -275,7 +275,7 @@ export type UniversalCompareMode = 'visual' | 'json-tree' | 'unified' | 'split';
                   <ng-container
                     *ngComponentOutlet="
                       VisualDiffComponentType;
-                      inputs: { BaseVersion: BaseVersion, TargetVersion: TargetVersion }
+                      inputs: { BaseVersion: BaseVersion, TargetVersion: TargetVersion, Provider: ProviderToUse }
                     "
                   ></ng-container>
                 }
@@ -331,7 +331,7 @@ export type UniversalCompareMode = 'visual' | 'json-tree' | 'unified' | 'split';
 
                     @if (FilteredJsonItems.length === 0) {
                       <div class="mj-vcomp__same-notice">
-                        <i class="fas fa-circle-check"></i>
+                        <i class="fa-solid fa-circle-check"></i>
                         <span>No JSON property changes match the current filter.</span>
                       </div>
                     } @else {
@@ -351,7 +351,7 @@ export type UniversalCompareMode = 'visual' | 'json-tree' | 'unified' | 'split';
                                 <del class="mj-j-old">{{ item.OldFormatted }}</del>
                               } @else {
                                 <del class="mj-j-old">{{ item.OldFormatted }}</del>
-                                <i class="fas fa-arrow-right"></i>
+                                <i class="fa-solid fa-arrow-right"></i>
                                 <span class="mj-j-new">{{ item.NewFormatted }}</span>
                               }
                             </div>
@@ -873,20 +873,77 @@ export type UniversalCompareMode = 'visual' | 'json-tree' | 'unified' | 'split';
     `,
   ],
 })
-export class ArtifactVersionCompareComponent implements OnChanges {
+export class ArtifactVersionCompareComponent implements OnInit {
   private readonly diffService = inject(ArtifactVersionDiffService);
   private readonly cdr = inject(ChangeDetectorRef);
 
+  private initialized = false;
+  private baseVersion: MJArtifactVersionEntity | null = null;
+  private targetVersion: MJArtifactVersionEntity | null = null;
+  private visualDiffComponentType: Type<IArtifactVersionDiffViewer> | null = null;
+
   @Input() Versions: MJArtifactVersionEntity[] = [];
-  @Input() BaseVersion: MJArtifactVersionEntity | null = null;
-  @Input() TargetVersion: MJArtifactVersionEntity | null = null;
+
+  @Input()
+  public get BaseVersion(): MJArtifactVersionEntity | null {
+    return this.baseVersion;
+  }
+  public set BaseVersion(value: MJArtifactVersionEntity | null) {
+    if (this.baseVersion !== value) {
+      this.baseVersion = value;
+      if (this.initialized) {
+        this.recomputeUniversalDiffs();
+      }
+    }
+  }
+
+  @Input()
+  public get TargetVersion(): MJArtifactVersionEntity | null {
+    return this.targetVersion;
+  }
+  public set TargetVersion(value: MJArtifactVersionEntity | null) {
+    if (this.targetVersion !== value) {
+      this.targetVersion = value;
+      if (this.initialized) {
+        this.recomputeUniversalDiffs();
+      }
+    }
+  }
+
   @Input() BaseVersionNumber = 1;
   @Input() TargetVersionNumber = 1;
-  @Input() VisualDiffComponentType: Type<IArtifactVersionDiffViewer> | null = null;
+
+  @Input()
+  public get VisualDiffComponentType(): Type<IArtifactVersionDiffViewer> | null {
+    return this.visualDiffComponentType;
+  }
+  public set VisualDiffComponentType(value: Type<IArtifactVersionDiffViewer> | null) {
+    if (this.visualDiffComponentType !== value) {
+      this.visualDiffComponentType = value;
+      if (value && !this.hasInitializedDefaultMode) {
+        this.ActiveMode = 'visual';
+        this.hasInitializedDefaultMode = true;
+      }
+      if (this.initialized) {
+        this.recomputeUniversalDiffs();
+      }
+    }
+  }
+
+  public ngOnInit(): void {
+    this.initialized = true;
+    this.recomputeUniversalDiffs();
+  }
+
   @Input() MessageLinkedVersionIds: ReadonlySet<string> = new Set<string>();
   @Input() IsLoadingVersions = false;
   @Input() CanEdit = false;
   @Input() IsRestoring = false;
+  @Input() Provider: IMetadataProvider | null = null;
+
+  public get ProviderToUse(): IMetadataProvider {
+    return this.Provider ?? Metadata.Provider;
+  }
 
   @Output() ExitRequested = new EventEmitter<void>();
   @Output() ComparePairChanged = new EventEmitter<{
@@ -947,17 +1004,6 @@ export class ArtifactVersionCompareComponent implements OnChanges {
         item.NewFormatted.toLowerCase().includes(q)
       );
     });
-  }
-
-  ngOnChanges(changes: SimpleChanges): void {
-    if (changes['VisualDiffComponentType'] && this.VisualDiffComponentType && !this.hasInitializedDefaultMode) {
-      this.ActiveMode = 'visual';
-      this.hasInitializedDefaultMode = true;
-    }
-
-    if (changes['BaseVersion'] || changes['TargetVersion'] || changes['VisualDiffComponentType']) {
-      this.recomputeUniversalDiffs();
-    }
   }
 
   public ToggleTimeline(): void {

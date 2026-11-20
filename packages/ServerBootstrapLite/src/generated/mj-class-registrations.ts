@@ -224,7 +224,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (499 classes)
+// @memberjunction/core-entities (500 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -348,6 +348,7 @@ import {
     MJArchiveRunDetailEntity,
     MJArchiveRunEntity,
     MJArtifactEntity,
+    MJArtifactGuestShareLinkEntity,
     MJArtifactPermissionEntity,
     MJArtifactPermissionEntityExtended,
     MJArtifactTypeEntity,
@@ -1046,11 +1047,12 @@ import {
     PromptReasoningProvider,
 } from '@memberjunction/ai-vector-dupe';
 
-// @memberjunction/rubrics (11 classes)
+// @memberjunction/rubrics (12 classes)
 import {
     AgentRubricEvaluator,
     CreateRubricDraftAction,
     DecisionRubricEvaluator,
+    DecisionThenLLMRubricEvaluator,
     DeterministicRubricEvaluator,
     EvaluateRecordAgainstRubricAction,
     GetRubricAction,
@@ -1061,11 +1063,12 @@ import {
     SubmitHumanRubricAction,
 } from '@memberjunction/rubrics';
 
-// @memberjunction/search-engine (16 classes)
+// @memberjunction/search-engine (17 classes)
 import {
     AzureAISearchProvider,
     BGEReRanker,
     CohereReRanker,
+    DecisionReRanker,
     ElasticsearchSearchProvider,
     EntitySearchProvider,
     FullTextSearchProvider,
@@ -1177,10 +1180,11 @@ import {
     PredictiveStudioTrainModelServerOperation,
 } from '@memberjunction/predictive-studio';
 
-// @memberjunction/task-graph (16 classes)
+// @memberjunction/task-graph (17 classes)
 import {
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
+    TaskGraphCompleteWaitingStepServerOperation,
     TaskGraphForceCompleteTaskServerOperation,
     TaskGraphGetStatusServerOperation,
     TaskGraphOverrideEdgeServerOperation,
@@ -1212,7 +1216,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (84 classes)
+// @memberjunction/core-entities-server (91 classes)
 import {
     FieldSuggestionCommentDriver,
     MJAIAgentCoAgentEntityServer,
@@ -1237,9 +1241,15 @@ import {
     MJActionEntityServer,
     MJApplicationEntityServer,
     MJArtifactEntityServer,
+    MJArtifactGuestShareLinkEntityServer,
+    MJArtifactPermissionEntityServer,
+    MJArtifactVersionAttributeEntityServer,
     MJArtifactVersionEntityServer,
     MJArtifactWorkingStateEntityServer,
     MJBrandKitEntityServer,
+    MJCollectionArtifactEntityServer,
+    MJCollectionEntityServer,
+    MJCollectionPermissionEntityServer,
     MJCommentEntityServer,
     MJCompanyIntegrationEntityServer,
     MJComponentEntityServer,
@@ -1284,6 +1294,7 @@ import {
     MJRubricScaleEntityServer,
     MJRubricScaleLevelEntityServer,
     MJRubricVersionEntityServer,
+    MJScheduledJobEntityServer,
     MJScopedNotificationConfigEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
@@ -1300,7 +1311,7 @@ import {
     QueryRefreshExtractionServerOperation,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (192 classes)
+// @memberjunction/core-actions (193 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1332,6 +1343,7 @@ import {
     CreateGovernedArtifactAction,
     CreateInteractiveFormAction,
     CreateListAction,
+    CreateListFromQueryAction,
     CreateMermaidDiagramAction,
     CreateRecordAction,
     CreateRuntimeActionAction,
@@ -1756,6 +1768,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJArchiveRunDetailEntity,
     MJArchiveRunEntity,
     MJArtifactEntity,
+    MJArtifactGuestShareLinkEntity,
     MJArtifactPermissionEntity,
     MJArtifactPermissionEntityExtended,
     MJArtifactTypeEntity,
@@ -1768,11 +1781,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
-    MJBrandKitAssetEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJBrandKitAssetEntity,
     MJBrandKitEntity,
     MJCalendarEventLinkEntity,
     MJCalendarSyncStateEntity,
@@ -1972,11 +1985,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMagicLinkInviteAllowedDomainEntity,
     MJMagicLinkInviteAllowedPathEntity,
     MJMagicLinkInviteApplicationEntity,
-    MJMagicLinkInviteEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJMagicLinkInviteEntity,
     MJMagicLinkInviteRoleEntity,
     MJMagicLinkRedemptionEntity,
     MJMaterializedResultEntity,
@@ -2176,11 +2189,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ApolloMoveListContactsAction,
     ApolloSearchPeopleAction,
     CreateBusinessCentralJournalEntryAction,
-    CreateJournalEntryAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    CreateJournalEntryAction,
     CreateQuickBooksJournalEntryAction,
     GetAccountBalancesAction,
     GetBudgetAction,
@@ -2355,6 +2368,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AgentRubricEvaluator,
     CreateRubricDraftAction,
     DecisionRubricEvaluator,
+    DecisionThenLLMRubricEvaluator,
     DeterministicRubricEvaluator,
     EvaluateRecordAgainstRubricAction,
     GetRubricAction,
@@ -2366,6 +2380,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AzureAISearchProvider,
     BGEReRanker,
     CohereReRanker,
+    DecisionReRanker,
     ElasticsearchSearchProvider,
     EntitySearchProvider,
     FullTextSearchProvider,
@@ -2378,13 +2393,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     TagSearchProvider,
     TypesenseSearchProvider,
     VectorSearchProvider,
-    VoyageReRanker,
-    AISkillExportMarkdownServerOperation,
-    AISkillImportMarkdownServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    VoyageReRanker,
+    AISkillExportMarkdownServerOperation,
+    AISkillImportMarkdownServerOperation,
     ArtifactWorkspaceChannelServer,
     CSVToolLibrary,
     ClientContextChannelServer,
@@ -2457,6 +2472,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     PredictiveStudioTrainModelServerOperation,
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
+    TaskGraphCompleteWaitingStepServerOperation,
     TaskGraphForceCompleteTaskServerOperation,
     TaskGraphGetStatusServerOperation,
     TaskGraphOverrideEdgeServerOperation,
@@ -2505,9 +2521,15 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJActionEntityServer,
     MJApplicationEntityServer,
     MJArtifactEntityServer,
+    MJArtifactGuestShareLinkEntityServer,
+    MJArtifactPermissionEntityServer,
+    MJArtifactVersionAttributeEntityServer,
     MJArtifactVersionEntityServer,
     MJArtifactWorkingStateEntityServer,
     MJBrandKitEntityServer,
+    MJCollectionArtifactEntityServer,
+    MJCollectionEntityServer,
+    MJCollectionPermissionEntityServer,
     MJCommentEntityServer,
     MJCompanyIntegrationEntityServer,
     MJComponentEntityServer,
@@ -2552,6 +2574,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJRubricScaleEntityServer,
     MJRubricScaleLevelEntityServer,
     MJRubricVersionEntityServer,
+    MJScheduledJobEntityServer,
     MJScopedNotificationConfigEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
@@ -2574,6 +2597,10 @@ const CLASS_REGISTRATIONS_4: any[] = [
     AddRecordsToListAction,
     AddViewResultsToListAction,
     AggregateDataAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     AssignUserRolesAction,
     BraveSearchAction,
     BulkUpdateListItemStatusAction,
@@ -2585,10 +2612,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CloneRecordAction,
     CloneRecordsAction,
     ColorConverterAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     ComposeListsAction,
     ConditionalAction,
     ConfigureAgentUserPolicyAction,
@@ -2600,6 +2623,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     CreateGovernedArtifactAction,
     CreateInteractiveFormAction,
     CreateListAction,
+    CreateListFromQueryAction,
     CreateMermaidDiagramAction,
     CreateRecordAction,
     CreateRuntimeActionAction,
@@ -2777,6 +2801,10 @@ const CLASS_REGISTRATIONS_5: any[] = [
     LLMFeaturePipelineDriver,
     StewardFeaturePipelineVersionAction,
     DockerRenderDriver,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_6: any[] = [
     LocalWorkerRenderDriver,
     ProduceVideoAction,
     RemoteRenderDriver,
@@ -2789,10 +2817,6 @@ const CLASS_REGISTRATIONS_5: any[] = [
     VideoStudioSetupHealthServerOperation,
     DatabaseTransportDriverFactory,
     MJWorkQueueDeduplicationEntityServer,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_6: any[] = [
     MJWorkQueueDeliveryEntityServer,
     MJWorkQueueMessageEntityServer,
     MJWorkQueueSubscriptionEntityServer,
@@ -2823,7 +2847,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1213;
+export const CLASS_REGISTRATIONS_COUNT = 1225;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

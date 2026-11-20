@@ -20,6 +20,7 @@ import {
     RunQuerySQLFilterManager,
     RestoreContext,
     CloneContext,
+    SyncContext,
     RecordChangeSource,
     RecordChangePayload,
     EntityDeleteOptions,
@@ -27,6 +28,8 @@ import {
     GetDiagnosticContext,
     IsDiagnosticCaptureSuppressed,
     RunViewWithCacheCheckParams,
+    Metadata,
+    LocalCacheManager,
 } from '@memberjunction/core';
 
 
@@ -97,13 +100,30 @@ export const POSTGRESQL_PROCEDURE_PARAM_LIMIT = 90;
  * - Identifier quoting uses "double quotes" instead of [brackets]
  */
 /**
- * The `ChangeContext` column and its `$n` placeholder for a Record Change insert, or nothing when
- * there is no context. Only clones set it, so every other tracked write keeps working on a database
- * whose RecordChange table doesn't have the column yet (the PostgreSQL migration ships at release).
+ * Optional `ChangeContext` and `IntegrationID` columns and their `$n` placeholders for a Record Change
+ * insert, or nothing when neither is set. Only clones and sync operations set them, so every other
+ * tracked write keeps working on a database whose RecordChange table doesn't have the columns yet.
  */
-function changeContextSQL(changeContext: string | null | undefined, placeholder: number): { column: string; value: string; parameters: string[] } {
-    if (!changeContext) return { column: '', value: '', parameters: [] };
-    return { column: ', "ChangeContext"', value: `, $${placeholder}::text`, parameters: [changeContext] };
+function changeContextSQL(
+    changeContext: string | null | undefined,
+    placeholder: number,
+    integrationID?: string | null,
+): { column: string; value: string; parameters: string[] } {
+    let column = '';
+    let value = '';
+    const parameters: string[] = [];
+    let nextPlaceholder = placeholder;
+    if (changeContext) {
+        column += ', "ChangeContext"';
+        value += `, $${nextPlaceholder++}::text`;
+        parameters.push(changeContext);
+    }
+    if (integrationID) {
+        column += ', "IntegrationID"';
+        value += `, $${nextPlaceholder++}::uuid`;
+        parameters.push(integrationID);
+    }
+    return { column, value, parameters };
 }
 
 export class PostgreSQLDataProvider extends GenericDatabaseProvider implements IColocatedVectorHost {
@@ -217,7 +237,6 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             const fkField = relatedEntityInfo.Fields.find(f => f.Name.trim().toLowerCase() === dep.FieldName?.trim().toLowerCase());
             if (fkField?.EntityIDFieldName && fkField.EntityIDFieldName.trim().length > 0) continue;
 
-            const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
             const pksToProject = relatedEntityInfo.PrimaryKeys?.length ? relatedEntityInfo.PrimaryKeys : entityInfo.PrimaryKeys;
             const pkParts: string[] = [];
             for (const pk of pksToProject) {
@@ -225,8 +244,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             }
             const primaryKeySelectString = pkParts.join(" || '" + CompositeKey.DefaultFieldDelimiter + "' || ");
             const sourceObject = this.resolveDependencySourceObject(relatedEntityInfo, [dep.FieldName]);
-            const rawVal = String(compositeKey.GetValueByIndex(0) ?? '');
-            const escapedVal = quotes.length > 0 ? rawVal.replace(/'/g, "''") : rawVal;
+            const pkLiteral = this.RenderPrimaryKeyLiteral(entityInfo.FirstPrimaryKey, compositeKey.GetValueByIndex(0), entityInfo.Name); // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
 
             if (sSQL.length > 0) sSQL += ' UNION ALL ';
             sSQL += 'SELECT '
@@ -237,7 +255,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
                 + 'false AS "IsSoftLink", '
                 + 'NULL AS "EntityIDFieldName" '
                 + 'FROM ' + pgDialect.QuoteSchema(relatedEntityInfo.SchemaName, sourceObject) + ' '
-                + 'WHERE ' + pgDialect.QuoteIdentifier(dep.FieldName) + ' = ' + quotes + escapedVal + quotes;
+                + 'WHERE ' + pgDialect.QuoteIdentifier(dep.FieldName) + ' = ' + pkLiteral;
         }
         return sSQL;
     }
@@ -373,6 +391,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         );
         cfg.ConcurrencyCheck = this.ConcurrencyCheck;
         cfg.DeltaUpdates = this.DeltaUpdates;
+        cfg.LoadQueryMetadata = this.LoadsQueryMetadata;
         await child.ConfigWithSharedPool(cfg, this.DatabaseConnection);
         return child;
     }
@@ -421,6 +440,36 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             && ka.Database === kb.Database
             && ka.User === kb.User
             && ka.Password === kb.Password;
+    }
+
+    /**
+     * Returns `true` when global metadata and `LocalCacheManager` are warm in memory and `pool`
+     * is non-null so {@link ConfigureFromGlobalSync} can configure a per-request provider without I/O.
+     */
+    public static CanConfigureFromGlobalSync(pool: pg.Pool | null | undefined): boolean {
+        if (!pool || !Metadata.Provider || !LocalCacheManager.Instance.IsInitialized) { // global-provider-ok: fast-path readiness check for global metadata
+            return false;
+        }
+        return (Metadata.Provider.AllMetadata?.AllEntities?.length ?? 0) > 0; // global-provider-ok: verifies global metadata entities are warm
+    }
+
+    /**
+     * Synchronously configures a per-request `PostgreSQLDataProvider` sharing `existingPool` when
+     * global metadata and `LocalCacheManager` are already warm in memory. Returns `false` if any
+     * dependency is not yet warm, allowing callers to fall back to async {@link ConfigWithSharedPool}.
+     */
+    public ConfigureFromGlobalSync(configData: PostgreSQLProviderConfigData, existingPool: pg.Pool): boolean {
+        if (!existingPool) {
+            return false;
+        }
+        if (!this.ConfigureFromGlobalMetadataSync(configData)) {
+            return false;
+        }
+        this._configData = configData;
+        this._schemaName = configData.MJCoreSchemaName || '__mj';
+        this._connectionManager.InitializeWithExistingPool(existingPool, configData.ConnectionConfig);
+        RunQuerySQLFilterManager.Instance.SetPlatform('postgresql');
+        return true;
     }
 
     /**
@@ -1568,7 +1617,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             : bind(payload.fullRecordJSON, 'text');
         const restoredFromIDSQL = bind(payload.restoredFromID, 'uuid');
         const restoreReasonSQL = bind(payload.restoreReason, 'text');
-        const cc = changeContextSQL(payload.changeContext, parameters.length + 1);
+        const cc = changeContextSQL(payload.changeContext, parameters.length + 1, payload.integrationID);
         parameters.push(...cc.parameters);
         const fullSQL = `WITH save_result AS (
     ${saveSQL.sql}
@@ -1665,10 +1714,13 @@ SELECT ${resolvedReturn.finalSelectColumnsSQL} FROM save_result`;
                 user,
                 entity.RestoreContext,
                 "'",
+                entity.CloneContext,
+                false,
+                entity.SyncContext,
             );
             if (payload) {
                 const s = paramValues.length + 1;
-                const cc = changeContextSQL(payload.changeContext, s + 7);
+                const cc = changeContextSQL(payload.changeContext, s + 7, payload.integrationID);
                 paramValues.push(
                     payload.entityID,
                     payload.recordID,
@@ -2010,6 +2062,7 @@ SELECT * FROM delete_result`;
         user: UserInfo,
         restoreContext?: RestoreContext | null,
         cloneContext?: CloneContext | null,
+        syncContext?: SyncContext | null,
     ): { sql: string; parameters?: unknown[] } | null {
         const payload = this.BuildRecordChangePayload(
             newData,
@@ -2021,10 +2074,12 @@ SELECT * FROM delete_result`;
             restoreContext,
             "'",
             cloneContext,
+            false,
+            syncContext,
         );
         if (!payload) return null;
 
-        const cc = changeContextSQL(payload.changeContext, 11);
+        const cc = changeContextSQL(payload.changeContext, 11, payload.integrationID);
         const sql = `INSERT INTO ${this._schemaName}."RecordChange"
             ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason"${cc.column})
             VALUES ($1::uuid, $2::varchar, $3::uuid, $4::varchar, $5::varchar, $6::text, $7::text, $8::text, 'Complete', $9::uuid, $10::text${cc.value})
@@ -2060,6 +2115,7 @@ SELECT * FROM delete_result`;
         safeUserId: string,
         source?: RecordChangeSource,
         changeContext?: string | null,
+        integrationID?: string | null,
     ): string {
         const schema = entityInfo.SchemaName || '__mj';
         const view = entityInfo.BaseView;
@@ -2072,8 +2128,10 @@ SELECT * FROM delete_result`;
 
         const sourceVal = source ?? 'Internal';
         // Named only when set, like the other sites: see changeContextSQL.
-        const changeContextColumn = changeContext ? ', "ChangeContext"' : '';
-        const changeContextValue = changeContext ? `,\n    '${EscapeSQLString(changeContext)}'::text` : '';
+        const changeContextColumn = `${changeContext ? ', "ChangeContext"' : ''}${integrationID ? ', "IntegrationID"' : ''}`;
+        const changeContextValue =
+            `${changeContext ? `,\n    '${EscapeSQLString(changeContext)}'::text` : ''}` +
+            `${integrationID ? `,\n    '${EscapeSQLString(integrationID)}'::uuid` : ''}`;
 
         return `
 INSERT INTO ${this._schemaName}."RecordChange"

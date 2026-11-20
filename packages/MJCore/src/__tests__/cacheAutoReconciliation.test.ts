@@ -27,6 +27,12 @@ import { GetGlobalObjectStore } from '@memberjunction/global';
 
 class MetadataReconcileTestProvider extends ProviderBase {
     private readonly _storage = new InMemoryLocalStorageProvider();
+
+    /** Reads the query items too, so the mismatch below is on an item this provider builds from. */
+    public override get LoadsQueryMetadata(): boolean {
+        return true;
+    }
+
     public MockDatasetResult: DatasetResultType = {
         DatasetID: 'ds-meta',
         DatasetName: 'MJ_Metadata',

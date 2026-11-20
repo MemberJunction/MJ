@@ -10,6 +10,7 @@
 #   check:dynamic-imports                     (import() of a package the importer does not declare)
 #   check-turbo-root-inputs                   (a test reads repo-root data its turbo.json does not declare)
 #   check-explorer-prebundle-exclude          (a joined workspace's scopes in a committed angular.json)
+#   check:regression-suite                    (regression test files ↔ suite members, replay-script references)
 #
 # All of them read source text off disk: no build, no database. Each is run even if an earlier one
 # fails, so one invocation reports every violation. Exits non-zero if any scanner fails.
@@ -53,6 +54,10 @@ node .github/scripts/check-turbo-root-inputs.mjs || status=1
 # workspace's linked scopes are added by `mj dev workspace` and must not be committed.
 node .github/scripts/check-explorer-prebundle-exclude.mjs || status=1
 
+# Regression suite parity: every test file is a suite member, numbers and sequences are unique, and
+# replay-script references resolve. Pure file reads.
+node .github/scripts/check-regression-suite.mjs || status=1
+
 if [ "$status" -ne 0 ]; then
   echo ""
   echo "check:guards failed. The rules behind each scanner:"
@@ -66,6 +71,7 @@ if [ "$status" -ne 0 ]; then
   echo "  undeclared dynamic import       -> declare the package, or load a configured name with ImportFromHost (@memberjunction/dynamic-packages)"
   echo "  root data not a turbo input     -> add \$TURBO_ROOT\$/<dir>/** to the package turbo.json (see the script header)"
   echo "  angular.json prebundle exclude  -> run mj dev workspace clean, or revert the file's prebundle change"
+  echo "  regression suite parity         -> metadata-optional/regression-test/README.md (Adding a New Test)"
 fi
 
 exit "$status"

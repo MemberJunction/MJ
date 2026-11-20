@@ -50,3 +50,14 @@ export const CHAT_TASKS_ROUTE: Route = {
   canMatch: [MovedNavItemGuard('Chat', 'Tasks')],
   children: [{ path: '', pathMatch: 'full', redirectTo: redirectKeepingQueryParams('/app/chat/Agent Activity') }],
 };
+
+/**
+ * A link to Chat's legacy `Collections` nav item opens `Library` in the Chat app (preserving query
+ * parameters like `?collectionId=...&artifactId=...` and fragment) when the move applies.
+ */
+export const CHAT_COLLECTIONS_ROUTE: Route = {
+  path: 'app/chat/Collections',
+  pathMatch: 'full',
+  canMatch: [MovedNavItemGuard('Chat', 'Collections')],
+  children: [{ path: '', pathMatch: 'full', redirectTo: redirectKeepingQueryParams('/app/chat/Library') }],
+};

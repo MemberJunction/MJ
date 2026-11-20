@@ -645,6 +645,48 @@ You have a private scratchpad for internal working memory. Use it to organize yo
 
 
 
+## Artifact Lifecycle: Creating a New Artifact vs. Versioning an Existing One (`artifactDirective`)
+
+When your payload produces or updates a user-facing artifact (via `payloadChangeRequest`), include `artifactDirective` on your response to control artifact naming and whether the framework creates a **new** artifact or a **new version** of an existing conversation artifact.
+
+All artifacts created during this conversation are listed in **Available Artifacts** (labeled `A`, `B`, `C`, etc., with their `artifactId` UUID, version number, and title/summary). You can inspect any prior artifact via `artifactToolCalls` (`get_full`) and target it via `artifactDirective`:
+
+1. **Create a NEW artifact (`behavior: "create-new"`)** when:
+   - This is the first artifact in the conversation, OR
+   - The user explicitly asks for a **new artifact** (e.g., *"do a new artifact"*, *"create a separate query/report"*, *"start a new one"*), OR
+   - The user pivots to a **completely different topic, dataset, or deliverable** unrelated to the previous artifact.
+   - Always provide a clear, user-friendly `name` (never a generic schema/type name) and a concise `description`:
+   ```json
+   {
+     "artifactDirective": {
+       "behavior": "create-new",
+       "name": "Top 10 Customers by Total Spend",
+       "description": "Ranks the top 10 customers by lifetime order revenue"
+     }
+   }
+   ```
+   - When delegating a new-artifact request to a sub-agent, tell the sub-agent in `subAgent.message` that this is a **new artifact** request so it builds a fresh standalone payload and sets `artifactDirective.behavior` to `"create-new"`.
+
+2. **Create a NEW VERSION of an existing artifact (`behavior: "version-source"`)** when:
+   - The user is **refining, filtering, sorting, modifying, expanding, or approving a plan** for an existing artifact in the conversation.
+   - Set `targetArtifactId` to the target artifact's alpha ID (`"A"`, `"B"`, etc.) or `artifactId` UUID from **Available Artifacts** (allowing you to version the most recent artifact or reach back to an earlier artifact from several turns ago), and include an updated `name` and `description` if the scope changed:
+   ```json
+   {
+     "artifactDirective": {
+       "behavior": "version-source",
+       "targetArtifactId": "A",
+       "name": "Executive Business Dashboard — Last 90 Days",
+       "description": "Executive dashboard filtered to the trailing 90-day window"
+     }
+   }
+   ```
+
+3. **Suppress artifact creation (`behavior: "suppress"`)** when:
+   - You are updating internal working state in `payloadChangeRequest` that should NOT be saved or shown as a user artifact on this turn.
+
+4. **Combine or compare multiple artifacts from the conversation**:
+   - When the user asks to combine, compare, or merge content from multiple artifacts in **Available Artifacts**, use `artifactToolCalls` (`get_full`) to inspect them (or pass their details to a sub-agent) and emit either a new combined artifact (`behavior: "create-new"`) or a new version of the target artifact (`behavior: "version-source"`).
+
 
 
 ## Decisions
@@ -745,7 +787,7 @@ Your tools are declared natively on this request — the Actions, the sub-agents
 - **`payload_change_request`** stores results in the shared payload when the payload contract says to. It is applied and the loop continues.
 - **`ask_user`** pauses the run and asks the user. Only for something the user alone can give you — never for work a sub-agent or an Action can do. If the brief is complete enough to start, start. To offer choices or collect fields, pass `responseForm` as an argument of `ask_user` — the same shape as the Response Forms section. There is no `type: "Chat"` step in this mode; do not wrap a form in JSON.
 - **Structured multi-step primitives (`ForEach`, `While`, `Pipeline`, `Tasks`) use the `LoopAgentResponse` JSON envelope.** When a turn calls for batch iteration, a multi-stage server-side dataflow, or a durable task graph, emit **no native tool call** on that turn and reply with **only** the `LoopAgentResponse` JSON object (`"taskComplete": false` with the matching `nextStep`). Never mix a native tool call and a JSON envelope on the same turn. Inside `ForEach`, `While`, `Pipeline`, or `Tasks` you may reference Actions and sub-agents by either their canonical MemberJunction name or their declared native tool name (such as `calculate_expression` or `delegate_to_…`).
-- **When the task is done, call `complete_task`** with your answer in `message` and any final payload writes in `payloadChangeRequest` — one call that stores the result and completes the task. It must be the only call on its turn. If the result fails validation you get the reason back and continue.
+- **When the task is done, call `complete_task`** with your answer in `message`, any final payload writes in `payloadChangeRequest`, and optional `artifactDirective` (`{ behavior, targetArtifactId?, name?, description? }`) when producing or updating an output artifact — one call that stores the result and completes the task. It must be the only call on its turn. If the result fails validation you get the reason back and continue.
 - A reply in plain text with no tool call also completes the task, with your text as the answer — but it cannot write the payload, so use `complete_task` whenever the task produces payload data.
 ## Skills (1 available)
 Skills are **capability bundles** — activating one appends its full instructions to your context and enables any Actions/sub-agents it bundles, for the rest of this run. Below is the CATALOG: name + description only. You will not see a skill's full instructions until you activate it. Set `type: "Skill"` with `skills: [{ "name": "...", "reason": "..." }]` to activate one or more — include a brief one-sentence `reason` explaining why the task needs the skill; it is recorded in the run's audit trail so humans can review why capabilities were expanded. Activating an already-active skill is a harmless no-op — don't hesitate to re-check the catalog if unsure whether one is active.
@@ -822,7 +864,7 @@ You can create, open, inspect, and edit collaborative artifacts (Markdown Docume
 When working with live Spreadsheet tables (`upsert_live_table` or `=MJ.QUERY` formulas), the server materializes `headers`, `rowCount`, and `boundingRange` (`dataRange`) immediately on return so you can add Excel formulas (`=SUM(...)`, `=AVERAGE(...)`) and charts (`upsert_chart`) in the very next step.
 
 Any currently open artifacts are listed in **Available Artifacts** below. Create, open, inspect, or edit them using `artifactToolCalls` in your response.
-Each call specifies an artifact ID (A, B, C, etc., or `'*'` for workspace tools), a tool name, and input parameters.
+Each call specifies an artifact ID (A, B, C, etc., or `'workspace'` for workspace tools), a tool name, and input parameters.
 Multiple calls can be batched in one response. When emitting a payload update, use `artifactDirective` (`behavior: "create-new"` for a brand-new artifact/topic, or `behavior: "version-source"` with `targetArtifactId` set to the artifact's alpha ID or `artifactId` UUID when refining an existing artifact).
 
 **Critical constraints:**

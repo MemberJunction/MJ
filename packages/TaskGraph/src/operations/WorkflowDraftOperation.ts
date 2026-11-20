@@ -28,6 +28,7 @@ import {
     AIPromptParams,
     FormatValidationErrors,
     ValidateTaskGraphSpec,
+    MAX_TASKS_PER_AGENT_GRAPH,
     type TaskGraphSpec,
 } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -113,7 +114,8 @@ export class WorkflowDraftServerOperation extends WorkflowDraftOperation {
         // quietly renaming their workflow is a small betrayal of a field they filled in themselves.
         const graph: TaskGraphSpec = { ...draft, workflowName };
 
-        const validation = ValidateTaskGraphSpec(graph);
+        // A draft is model output, so the model-output cap applies; the author can grow it on the canvas.
+        const validation = ValidateTaskGraphSpec(graph, { MaxTasks: MAX_TASKS_PER_AGENT_GRAPH });
         if (!validation.Valid) {
             return {
                 success: false,
