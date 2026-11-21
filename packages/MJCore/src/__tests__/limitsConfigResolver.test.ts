@@ -323,4 +323,45 @@ describe('LimitsConfigResolver & CODE_FALLBACK_LIMITS', () => {
             'ProgressDetector.AmbiguityLowScoreThreshold',
         ]);
     });
+
+    it('normalizes and resolves ResourceGuards and Tuning categories across precedence tiers', () => {
+        const defaults = LimitsConfigResolver.Resolve();
+        expect(defaults.Limits.ResourceGuards.MaxValidationRetries).toBe(10);
+        expect(defaults.Limits.ResourceGuards.MaxHandoffHops).toBe(3);
+        expect(defaults.Limits.ResourceGuards.PipelineDeadlineMs).toBe(120_000);
+        expect(defaults.Limits.Tuning.QueryCacheDefaultMaxSize).toBe(1000);
+        expect(defaults.Limits.Tuning.QueryCacheDefaultTtlMinutes).toBe(60);
+        expect(defaults.Limits.Tuning.MaxAgentsOfferedInDraft).toBe(40);
+
+        const normalized = NormalizeLimitsInput({
+            resourceGuards: {
+                maxValidationRetries: 4,
+                maxHandoffHops: 2,
+                clientToolTimeoutMs: 15_000,
+            },
+            tuning: {
+                queryCacheDefaultMaxSize: 500,
+                queryCacheDefaultTtlMinutes: 30,
+                maxAgentsOfferedInDraft: 25,
+            },
+        });
+
+        const resolved = LimitsConfigResolver.Resolve({
+            MjConfig: normalized,
+            RunOverride: {
+                ResourceGuards: { MaxValidationRetries: 6 },
+                Tuning: { QueryCacheDefaultMaxSize: 250 },
+            },
+        });
+
+        expect(resolved.Limits.ResourceGuards.MaxValidationRetries).toBe(6);
+        expect(resolved.Provenance['ResourceGuards.MaxValidationRetries'].SourceTier).toBe('RunOverride');
+        expect(resolved.Limits.ResourceGuards.MaxHandoffHops).toBe(2);
+        expect(resolved.Provenance['ResourceGuards.MaxHandoffHops'].SourceTier).toBe('MjConfig');
+        expect(resolved.Limits.Tuning.QueryCacheDefaultMaxSize).toBe(250);
+        expect(resolved.Provenance['Tuning.QueryCacheDefaultMaxSize'].SourceTier).toBe('RunOverride');
+        expect(resolved.Limits.Tuning.QueryCacheDefaultTtlMinutes).toBe(30);
+        expect(resolved.Provenance['Tuning.QueryCacheDefaultTtlMinutes'].SourceTier).toBe('MjConfig');
+        expect(resolved.Limits.Tuning.MaxAgentsOfferedInDraft).toBe(25);
+    });
 });

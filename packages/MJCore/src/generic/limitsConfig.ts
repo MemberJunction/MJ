@@ -122,8 +122,102 @@ export interface MJLimitsProgressDetectorConfig {
 }
 
 /**
+ * Bounded resource, retry, depth, and concurrency guard ceilings resolved at current defaults.
+ */
+export interface MJLimitsResourceGuardsConfig {
+    /** Maximum validation retries before forcing failure. */
+    MaxValidationRetries: number;
+    /** Maximum consecutive failed (non-terminating) steps before forcing termination. */
+    MaxConsecutiveFailedSteps: number;
+    /** Maximum consecutive unproductive retry steps before forcing termination. */
+    MaxConsecutiveUnproductiveRetries: number;
+    /** Maximum identical failing step repetitions before forcing termination. */
+    MaxRepeatedFailingStep: number;
+    /** Maximum consecutive inline read-tool preemptions before honoring terminal step. */
+    MaxConsecutiveReadToolPreemptions: number;
+    /** Maximum retries for final payload schema validation failures. */
+    FinalPayloadValidationMaxRetries: number;
+    /** Maximum ancestor chain hops when validating a run's `lastRunId` lineage. */
+    MaxRunChainLength: number;
+    /** Maximum recursive tree depth loaded for an AI Agent Run tree. */
+    MaxAgentRunTreeDepth: number;
+    /** Maximum agent-to-agent handoffs permitted within a single user turn. */
+    MaxHandoffHops: number;
+    /** Default maximum consultation rounds per parent/sub-agent pair. */
+    MaxSubAgentConsultRounds: number;
+    /** Maximum decision requests answered per agent turn. */
+    MaxDecisionRequestsPerTurn: number;
+    /** Maximum total decision calls executed per agent turn. */
+    MaxDecisionCallsPerTurn: number;
+    /** Maximum conversation tool calls executed per LLM turn. */
+    MaxConversationToolCallsPerTurn: number;
+    /** Maximum consecutive settlement retry passes on a task graph. */
+    MaxSettlementRetryPasses: number;
+    /** Maximum continuation re-invocation depth across task graphs. */
+    MaxReinvokeDepth: number;
+    /** Maximum inline provider signal raise attempts per waiting step. */
+    MaxProviderRaiseAttempts: number;
+    /** Default timeout in milliseconds for client tool executions. */
+    ClientToolTimeoutMs: number;
+    /** Default deadline in milliseconds for pipeline executions. */
+    PipelineDeadlineMs: number;
+    /** Maximum stages permitted in a single pipeline execution. */
+    MaxPipelineStages: number;
+    /** Maximum collection elements expanded by pipeline map stages. */
+    MaxMapElements: number;
+    /** Default maximum concurrency for parallel ForEach loops. */
+    MaxLoopConcurrency: number;
+    /** Default maximum consecutive agent turns in realtime voice rooms. */
+    MaxRealtimeConsecutiveAgentTurns: number;
+}
+
+/**
+ * Operational tuning knobs for caching, compaction, candidate narrowing, and batching.
+ */
+export interface MJLimitsTuningConfig {
+    /** Maximum cached preloaded entries per agent. */
+    MaxPerAgentCacheEntries: number;
+    /** Maximum concurrent client tool sessions tracked in memory. */
+    MaxClientToolSessions: number;
+    /** Maximum tools retained per client tool session. */
+    MaxToolsPerSession: number;
+    /** Fallback model context token limit for conversation compaction. */
+    CompactionDefaultContextTokens: number;
+    /** Default context utilization percentage triggering compaction. */
+    CompactionDefaultTriggerPercent: number;
+    /** Default target context utilization percentage after compaction. */
+    CompactionDefaultTargetPercent: number;
+    /** Minimum projected token gain required before running compaction. */
+    CompactionMinGainTokens: number;
+    /** Minimum message count required before attempting compaction. */
+    CompactionMinMessages: number;
+    /** Maximum character budget for delta messages during compaction. */
+    CompactionMaxDeltaMessageChars: number;
+    /** Default maximum skill decision candidates injected into prompt context. */
+    MaxSkillDecisionCandidates: number;
+    /** Maximum handoff candidates serialized into prompt context. */
+    MaxHandoffCandidates: number;
+    /** Default maximum entries in QueryCache. */
+    QueryCacheDefaultMaxSize: number;
+    /** Default cache TTL in minutes for QueryCache. */
+    QueryCacheDefaultTtlMinutes: number;
+    /** Default maximum tasks retained in an agent scratchpad. */
+    ScratchpadMaxTasks: number;
+    /** Default maximum items processed per decision request. */
+    DecisionsMaxItems: number;
+    /** Maximum initial operations accepted in a single artifact batch request. */
+    MaxInitialArtifactOperations: number;
+    /** Maximum IDs placed in a direct SQL `IN (...)` clause for artifact queries. */
+    MaxDirectInIds: number;
+    /** Maximum assignable agents offered in workflow draft prompts. */
+    MaxAgentsOfferedInDraft: number;
+    /** Maximum waiting steps scanned per signal dispatch. */
+    MaxStepsPerSignal: number;
+}
+
+/**
  * Complete resolved configuration surface for MemberJunction execution limits, backstops,
- * budgets, briefing bounds, and progress detection.
+ * budgets, briefing bounds, progress detection, resource guards, and tuning knobs.
  */
 export interface MJLimitsConfig {
     /** Maximum consecutive agent turns in an Agent Channel before pausing for a human. */
@@ -148,6 +242,10 @@ export interface MJLimitsConfig {
     Budgets: MJLimitsBudgetsConfig;
     /** Deterministic sliding-window progress detector and fast convergence judge thresholds. */
     ProgressDetector: MJLimitsProgressDetectorConfig;
+    /** Bounded resource, retry, depth, and concurrency guard ceilings. */
+    ResourceGuards: MJLimitsResourceGuardsConfig;
+    /** Operational tuning defaults for caching, compaction, candidate caps, and batching. */
+    Tuning: MJLimitsTuningConfig;
 }
 
 /** Partial override for {@link MJLimitsScopeBudget}. */
@@ -193,6 +291,12 @@ export interface MJLimitsProgressDetectorOverride {
     FastJudgeFailureFallback?: FastJudgeFailureFallbackMode;
 }
 
+/** Partial override for {@link MJLimitsResourceGuardsConfig}. */
+export type MJLimitsResourceGuardsOverride = Partial<MJLimitsResourceGuardsConfig>;
+
+/** Partial override for {@link MJLimitsTuningConfig}. */
+export type MJLimitsTuningOverride = Partial<MJLimitsTuningConfig>;
+
 /**
  * Partial override object accepted by any tier of {@link LimitsConfigResolver}.
  */
@@ -208,6 +312,8 @@ export interface MJLimitsOverride {
     BriefingMaxContributorChars?: number;
     Budgets?: MJLimitsBudgetsOverride;
     ProgressDetector?: MJLimitsProgressDetectorOverride;
+    ResourceGuards?: MJLimitsResourceGuardsOverride;
+    Tuning?: MJLimitsTuningOverride;
 }
 
 /**
@@ -257,6 +363,51 @@ export const CODE_FALLBACK_LIMITS: Readonly<MJLimitsConfig> = {
         FastJudgeMaxInputChars: 8192,
         FastJudgeFailureFallback: 'ContinueWithWarning',
     },
+    ResourceGuards: {
+        MaxValidationRetries: 10,
+        MaxConsecutiveFailedSteps: 10,
+        MaxConsecutiveUnproductiveRetries: 10,
+        MaxRepeatedFailingStep: 3,
+        MaxConsecutiveReadToolPreemptions: 3,
+        FinalPayloadValidationMaxRetries: 3,
+        MaxRunChainLength: 1000,
+        MaxAgentRunTreeDepth: 100,
+        MaxHandoffHops: 3,
+        MaxSubAgentConsultRounds: 3,
+        MaxDecisionRequestsPerTurn: 8,
+        MaxDecisionCallsPerTurn: 100,
+        MaxConversationToolCallsPerTurn: 8,
+        MaxSettlementRetryPasses: 20,
+        MaxReinvokeDepth: 5,
+        MaxProviderRaiseAttempts: 3,
+        ClientToolTimeoutMs: 30_000,
+        PipelineDeadlineMs: 120_000,
+        MaxPipelineStages: 20,
+        MaxMapElements: 1000,
+        MaxLoopConcurrency: 10,
+        MaxRealtimeConsecutiveAgentTurns: 8,
+    },
+    Tuning: {
+        MaxPerAgentCacheEntries: 200,
+        MaxClientToolSessions: 1000,
+        MaxToolsPerSession: 200,
+        CompactionDefaultContextTokens: 8000,
+        CompactionDefaultTriggerPercent: 75,
+        CompactionDefaultTargetPercent: 30,
+        CompactionMinGainTokens: 500,
+        CompactionMinMessages: 4,
+        CompactionMaxDeltaMessageChars: 10_000,
+        MaxSkillDecisionCandidates: 30,
+        MaxHandoffCandidates: 20,
+        QueryCacheDefaultMaxSize: 1000,
+        QueryCacheDefaultTtlMinutes: 60,
+        ScratchpadMaxTasks: 50,
+        DecisionsMaxItems: 100,
+        MaxInitialArtifactOperations: 100,
+        MaxDirectInIds: 2500,
+        MaxAgentsOfferedInDraft: 40,
+        MaxStepsPerSignal: 1000,
+    },
 };
 
 /**
@@ -264,6 +415,12 @@ export const CODE_FALLBACK_LIMITS: Readonly<MJLimitsConfig> = {
  * configuration used when `mj.config.cjs` omits a `limits` block.
  */
 export const DEFAULT_MJ_LIMITS_CONFIG: Readonly<MJLimitsConfig> = CODE_FALLBACK_LIMITS;
+
+type ResourceGuardKey = keyof MJLimitsResourceGuardsConfig;
+type TuningKey = keyof MJLimitsTuningConfig;
+
+export type ResourceGuardKeyPath = `ResourceGuards.${ResourceGuardKey}`;
+export type TuningKeyPath = `Tuning.${TuningKey}`;
 
 /**
  * Union of all canonical dot-separated limit key paths tracked for provenance.
@@ -301,7 +458,56 @@ export type LimitsKeyPath =
     | 'ProgressDetector.FastJudgeTimeoutMs'
     | 'ProgressDetector.FastJudgeMinIntervalIterations'
     | 'ProgressDetector.FastJudgeMaxInputChars'
-    | 'ProgressDetector.FastJudgeFailureFallback';
+    | 'ProgressDetector.FastJudgeFailureFallback'
+    | ResourceGuardKeyPath
+    | TuningKeyPath;
+
+const RESOURCE_GUARD_KEYS: readonly ResourceGuardKey[] = [
+    'MaxValidationRetries',
+    'MaxConsecutiveFailedSteps',
+    'MaxConsecutiveUnproductiveRetries',
+    'MaxRepeatedFailingStep',
+    'MaxConsecutiveReadToolPreemptions',
+    'FinalPayloadValidationMaxRetries',
+    'MaxRunChainLength',
+    'MaxAgentRunTreeDepth',
+    'MaxHandoffHops',
+    'MaxSubAgentConsultRounds',
+    'MaxDecisionRequestsPerTurn',
+    'MaxDecisionCallsPerTurn',
+    'MaxConversationToolCallsPerTurn',
+    'MaxSettlementRetryPasses',
+    'MaxReinvokeDepth',
+    'MaxProviderRaiseAttempts',
+    'ClientToolTimeoutMs',
+    'PipelineDeadlineMs',
+    'MaxPipelineStages',
+    'MaxMapElements',
+    'MaxLoopConcurrency',
+    'MaxRealtimeConsecutiveAgentTurns',
+] as const;
+
+const TUNING_KEYS: readonly TuningKey[] = [
+    'MaxPerAgentCacheEntries',
+    'MaxClientToolSessions',
+    'MaxToolsPerSession',
+    'CompactionDefaultContextTokens',
+    'CompactionDefaultTriggerPercent',
+    'CompactionDefaultTargetPercent',
+    'CompactionMinGainTokens',
+    'CompactionMinMessages',
+    'CompactionMaxDeltaMessageChars',
+    'MaxSkillDecisionCandidates',
+    'MaxHandoffCandidates',
+    'QueryCacheDefaultMaxSize',
+    'QueryCacheDefaultTtlMinutes',
+    'ScratchpadMaxTasks',
+    'DecisionsMaxItems',
+    'MaxInitialArtifactOperations',
+    'MaxDirectInIds',
+    'MaxAgentsOfferedInDraft',
+    'MaxStepsPerSignal',
+] as const;
 
 /**
  * Ordered list of every {@link LimitsKeyPath} covered by {@link LimitsConfigResolver}.
@@ -340,6 +546,8 @@ export const LIMITS_KEY_PATHS: readonly LimitsKeyPath[] = [
     'ProgressDetector.FastJudgeMinIntervalIterations',
     'ProgressDetector.FastJudgeMaxInputChars',
     'ProgressDetector.FastJudgeFailureFallback',
+    ...RESOURCE_GUARD_KEYS.map((k): ResourceGuardKeyPath => `ResourceGuards.${k}`),
+    ...TUNING_KEYS.map((k): TuningKeyPath => `Tuning.${k}`),
 ] as const;
 
 /** Primitive value type for an individual resolved limit key. */
@@ -440,6 +648,7 @@ const NUMERIC_CEILING_KEYS: ReadonlySet<LimitsKeyPath> = new Set<LimitsKeyPath>(
     'Budgets.AllowedInFlightOvershootUsd',
     'Budgets.AllowedInFlightOvershootMs',
     'ProgressDetector.FastJudgeMaxInputChars',
+    ...RESOURCE_GUARD_KEYS.map((k): ResourceGuardKeyPath => `ResourceGuards.${k}`),
 ]);
 
 function readObjectProperty(obj: Record<string, unknown>, keys: readonly string[]): unknown {
@@ -613,6 +822,24 @@ function normalizeProgressDetectorOverride(raw: unknown): MJLimitsProgressDetect
     return Object.keys(out).length > 0 ? out : undefined;
 }
 
+function normalizePositiveIntSection<K extends string>(
+    raw: unknown,
+    keys: readonly K[],
+): Partial<Record<K, number>> | undefined {
+    if (!IsPlainObject(raw)) {
+        return undefined;
+    }
+    const out: Partial<Record<K, number>> = {};
+    for (const key of keys) {
+        const camel = key.charAt(0).toLowerCase() + key.slice(1);
+        const val = readPositiveInteger(readObjectProperty(raw, [key, camel]));
+        if (val !== undefined) {
+            out[key] = val;
+        }
+    }
+    return Object.keys(out).length > 0 ? out : undefined;
+}
+
 /**
  * Tolerantly normalizes an untyped `limits` object (from `mj.config.cjs`, agent metadata JSON,
  * or API payloads) into a strongly-typed {@link MJLimitsOverride}. Accepts both PascalCase and
@@ -650,6 +877,10 @@ export function NormalizeLimitsInput(raw: unknown): MJLimitsOverride {
     if (budgets) out.Budgets = budgets;
     const progressDetector = normalizeProgressDetectorOverride(readObjectProperty(raw, ['ProgressDetector', 'progressDetector']));
     if (progressDetector) out.ProgressDetector = progressDetector;
+    const resourceGuards = normalizePositiveIntSection(readObjectProperty(raw, ['ResourceGuards', 'resourceGuards']), RESOURCE_GUARD_KEYS);
+    if (resourceGuards) out.ResourceGuards = resourceGuards;
+    const tuning = normalizePositiveIntSection(readObjectProperty(raw, ['Tuning', 'tuning']), TUNING_KEYS);
+    if (tuning) out.Tuning = tuning;
     return out;
 }
 
@@ -665,10 +896,20 @@ function cloneDefaultLimits(): MJLimitsConfig {
             AllowedInFlightOvershootMs: CODE_FALLBACK_LIMITS.Budgets.AllowedInFlightOvershootMs,
         },
         ProgressDetector: { ...CODE_FALLBACK_LIMITS.ProgressDetector },
+        ResourceGuards: { ...CODE_FALLBACK_LIMITS.ResourceGuards },
+        Tuning: { ...CODE_FALLBACK_LIMITS.Tuning },
     };
 }
 
 function extractTierValue(layer: MJLimitsOverride, key: LimitsKeyPath): LimitsScalarValue | undefined {
+    if (key.startsWith('ResourceGuards.')) {
+        const subKey = key.slice('ResourceGuards.'.length) as ResourceGuardKey;
+        return layer.ResourceGuards?.[subKey];
+    }
+    if (key.startsWith('Tuning.')) {
+        const subKey = key.slice('Tuning.'.length) as TuningKey;
+        return layer.Tuning?.[subKey];
+    }
     switch (key) {
         case 'AgentChannelConsecutiveTurns': return layer.AgentChannelConsecutiveTurns;
         case 'AgentChannelWakesPerHour': return layer.AgentChannelWakesPerHour;
@@ -707,6 +948,16 @@ function extractTierValue(layer: MJLimitsOverride, key: LimitsKeyPath): LimitsSc
 }
 
 function assignResolvedValue(target: MJLimitsConfig, key: LimitsKeyPath, value: LimitsScalarValue): void {
+    if (key.startsWith('ResourceGuards.')) {
+        const subKey = key.slice('ResourceGuards.'.length) as ResourceGuardKey;
+        target.ResourceGuards[subKey] = value as number;
+        return;
+    }
+    if (key.startsWith('Tuning.')) {
+        const subKey = key.slice('Tuning.'.length) as TuningKey;
+        target.Tuning[subKey] = value as number;
+        return;
+    }
     switch (key) {
         case 'AgentChannelConsecutiveTurns': target.AgentChannelConsecutiveTurns = value as number; break;
         case 'AgentChannelWakesPerHour': target.AgentChannelWakesPerHour = value as number; break;
@@ -829,6 +1080,8 @@ export function ValidateLimitsConfig(config: MJLimitsConfig): LimitsValidationRe
         ['ProgressDetector.FastJudgeTimeoutMs', config.ProgressDetector.FastJudgeTimeoutMs],
         ['ProgressDetector.FastJudgeMinIntervalIterations', config.ProgressDetector.FastJudgeMinIntervalIterations],
         ['ProgressDetector.FastJudgeMaxInputChars', config.ProgressDetector.FastJudgeMaxInputChars],
+        ...RESOURCE_GUARD_KEYS.map((k): [LimitsKeyPath, number] => [`ResourceGuards.${k}`, config.ResourceGuards[k]]),
+        ...TUNING_KEYS.map((k): [LimitsKeyPath, number] => [`Tuning.${k}`, config.Tuning[k]]),
     ];
     for (const [key, val] of positiveIntChecks) {
         if (!Number.isFinite(val) || val < 1) {

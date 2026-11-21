@@ -138,6 +138,12 @@ function mergeLimitsOverrides(base: MJLimitsOverride, extra: MJLimitsOverride): 
         ProgressDetector: base.ProgressDetector || extra.ProgressDetector
             ? { ...(base.ProgressDetector ?? {}), ...(extra.ProgressDetector ?? {}) }
             : undefined,
+        ResourceGuards: base.ResourceGuards || extra.ResourceGuards
+            ? { ...(base.ResourceGuards ?? {}), ...(extra.ResourceGuards ?? {}) }
+            : undefined,
+        Tuning: base.Tuning || extra.Tuning
+            ? { ...(base.Tuning ?? {}), ...(extra.Tuning ?? {}) }
+            : undefined,
     };
 }
 
