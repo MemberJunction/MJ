@@ -3,7 +3,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import type { ComponentFixture } from '@angular/core/testing';
 import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
-import { BaseEntityResult, RunView, TransactionGroupBase, type CompositeKey, type IMetadataProvider, type RunViewParams, type TransactionResult, type UserInfo } from '@memberjunction/core';
+import { BaseEntityResult, CompositeKey, RunView, TransactionGroupBase, type IMetadataProvider, type RunViewParams, type TransactionResult, type UserInfo } from '@memberjunction/core';
 import { MJListDetailEntity, MJListEntity, MJMLModelScoringBindingEntity, type MJMLModelEntity, type MJMLOutputBindingEntity } from '@memberjunction/core-entities';
 import type { SemanticsCheckBinding } from '@memberjunction/predictive-studio-core';
 import { NavigationService } from '@memberjunction/ng-shared';
@@ -439,9 +439,10 @@ describe('PSPredictionsGridComponent (DOM) — the selection becomes a List the 
       runViewResults: (p: RunViewParams) => (p.EntityName === 'MJ: ML Models' ? [model] : []),
       entityByName: (name: string) => (name === 'Members' ? members : undefined),
     });
-    // GetEntityObject<T> is generic: a typed mock resolves to the List, then one new List Detail per call
-    const getEntityObject = vi.fn<IMetadataProvider['GetEntityObject']>().mockImplementation(async (entityName: string, user?: UserInfo) => {
-      users.push(user);
+    // GetEntityObject<T> is generic and overloaded (a load key or the user second): a typed mock resolves to the List,
+    // then one new List Detail per call, and records the user it was given
+    const getEntityObject = vi.fn<IMetadataProvider['GetEntityObject']>().mockImplementation(async (entityName: string, second?: CompositeKey | UserInfo) => {
+      users.push(second instanceof CompositeKey ? undefined : second);
       if (entityName === 'MJ: Lists') return list;
       const d = new DetailDouble(detailsQueue);
       details.push(d);

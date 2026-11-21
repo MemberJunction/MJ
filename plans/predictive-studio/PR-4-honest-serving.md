@@ -11051,7 +11051,7 @@ All resolved; the defaults are implemented and the kickoff only confirms the fac
 The owner's ruling of 2026-11-10 (D4-69) removed OF4-1, OF4-2, OF4-4 and OF4-6: CI gains the sidecar pytest job at M1
 (Task M1.6), M5.4 drops `'Materialized'` from `ModeBadgeClass`, M4.3 deletes the grid's `@deprecated` aliases, and M3.4
 deletes `ProductionModelPromotionGate` and rewrites RD9 and the `ps-live-*` rigs, each with the test or rig it breaks
-updated as caller maintenance (§2.6). Fifty-three flags are listed (OF4-12…OF4-15 added at M3, OF4-17 at M4's start, OF4-16 and OF4-18…OF4-26 at M4, OF4-27…OF4-33 at M4b, OF4-34…OF4-36 at M5's start, OF4-37…OF4-41 at M5's exit, OF4-42…OF4-47 at the M5b/M6/M7 integration, OF4-48…OF4-52 at the M5b–M7 final verification, OF4-53…OF4-54 at the post-audit verification, OF4-55…OF4-57 at M8); OF4-30 is closed and OF4-34, OF4-48…OF4-51 and OF4-53 are resolved, so forty-six remain, each decided out of scope with its
+updated as caller maintenance (§2.6). Fifty-four flags are listed (OF4-12…OF4-15 added at M3, OF4-17 at M4's start, OF4-16 and OF4-18…OF4-26 at M4, OF4-27…OF4-33 at M4b, OF4-34…OF4-36 at M5's start, OF4-37…OF4-41 at M5's exit, OF4-42…OF4-47 at the M5b/M6/M7 integration, OF4-48…OF4-52 at the M5b–M7 final verification, OF4-53…OF4-54 at the post-audit verification, OF4-55…OF4-57 at M8, OF4-58 at R1); OF4-30 is closed and OF4-34, OF4-48…OF4-51 and OF4-53 are resolved, so forty-seven remain, each decided out of scope with its
 default implemented:
 
 - **OF4-3 · `packages/Angular/Explorer/core-entity-forms/src/lib/custom/RecordProcesses/**` stays out of scope**
@@ -11306,6 +11306,11 @@ default implemented:
   @EntityFieldID='EDA5A1D3-…', @RelatedEntityNameFieldMap='AgentChannel'` — `MJ: Agent Channel Participants.AgentChannelID`,
   next's entity (OF4-9's and OF4-34's statements are gone: next fixed both). **Default:** recorded; next's tail, not
   PR 4's.
+- **OF4-58 · next's `fls-closeout-client` CW7/CW8 fail with "API key not found"** (R1, CI on `546672021d`). In the
+  client shard, CW7's REST get as the reader succeeds and the REST runView on the same key then answers 403 `API key
+  not found`; CW8 reads the same refusal. Next's own push at 15:12 (run 44917940699), a dependabot PR and
+  `claude/practical-faraday-1ni6e9` fail identically; next's 15:03 push passed. PR 4 changes neither the bundle nor
+  API keys. **Default:** recorded; next's, not PR 4's.
 
 ## 10. PR description draft
 
@@ -11357,7 +11362,7 @@ are monitored on real outcomes.
 - Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, PS_SEED_LIMIT, PS_SIGN_IN_URL, PS_STORAGE_PROVIDER, PW_BASE_URL, STORAGE_LOCAL_ROOT<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->29<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->29<!-- /gen:checks -->
-- Head: <!-- gen:head -->ed1ddb5d39<!-- /gen:head -->
+- Head: <!-- gen:head -->546672021d<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,
@@ -13607,7 +13612,12 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   seed, `sql-claude` was OOM-killed at its 4 GB limit (host swap 12.0 of 13.3 GB): restarted, `max server memory`
   2560 MB, seeds cleaned and re-run. Repo gates check:guards, check:standards, check:ui, check:changeset,
   check:claude-md, check:codegen-tail → exit 0. **Rulings:** D4-274…D4-276.
-- **Commits:** `9b148df73e` (the revert, items 1–5 and 7, the plan) and this entry's commit (Save as list, D4-275).
+- **Commits:** `9b148df73e` (the revert, items 1–5 and 7, the plan) and `546672021d` (Save as list, D4-275), pushed.
+- **CI on `546672021d`:** Build red on the new test's `GetEntityObject` mock (its second parameter must accept the
+  overload's `CompositeKey`; the build tsconfig excludes tests, the package's `test:types` does not); fixed (the mock
+  takes `CompositeKey | UserInfo` and records the user) → `test:types` 0, dashboards 258/3154. Integration
+  (deterministic) red only on next's `fls-closeout-client` CW7/CW8 (`API key not found`), which fails the same way on
+  next's own 15:12 push (run 44917940699) and two other PRs: next's, not PR 4's (OF4-58).
 
 ## 12. Refresh log (append-only)
 
