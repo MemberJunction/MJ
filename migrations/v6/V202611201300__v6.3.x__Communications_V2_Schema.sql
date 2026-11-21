@@ -433,6 +433,12 @@ CREATE NONCLUSTERED INDEX IX_CommunicationLog_ProviderMessageID
     WHERE ProviderMessageID IS NOT NULL;
 GO
 
+-- Idempotency key for chunked/retried V2 runs: at most one log per (CommunicationRunID, CommunicationEndpointID).
+CREATE UNIQUE NONCLUSTERED INDEX UX_CommunicationLog_Run_Endpoint
+    ON ${flyway:defaultSchema}.CommunicationLog (CommunicationRunID, CommunicationEndpointID)
+    WHERE CommunicationRunID IS NOT NULL AND CommunicationEndpointID IS NOT NULL;
+GO
+
 -- Message history for one principal record.
 CREATE NONCLUSTERED INDEX IX_CommunicationLog_Principal
     ON ${flyway:defaultSchema}.CommunicationLog (EntityID, RecordID, MessageDate);

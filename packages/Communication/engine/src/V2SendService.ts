@@ -23,7 +23,7 @@ import {
   SendV2RecipientOutcome,
   SendV2Result,
 } from '@memberjunction/communication-types';
-import { Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import type {
   MJCommunicationEndpointEntity,
   MJCommunicationLogEntity,
@@ -32,10 +32,11 @@ import type {
   MJCommunicationPrincipalPreferenceEntity,
   MJCommunicationRunEntity,
   MJCommunicationSenderEntity,
+  MJCommunicationSenderPermissionEntity,
   MJCommunicationSendingDomainEntity,
   MJCommunicationSuppressionEntity,
 } from '@memberjunction/core-entities';
-import { EscapeSQLString, MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, MJGlobal, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { ProcessedMessageServer } from './BaseProvider';
 import { ComplianceGate } from './compliance/ComplianceGate';
 import { JurisdictionResolver } from './compliance/JurisdictionResolver';
@@ -322,6 +323,19 @@ export class V2SendService {
       };
     }
 
+    const senderPermCheck = await this.checkSenderPermission(sender, contextUser);
+    if (!senderPermCheck.Allowed) {
+      return {
+        Success: false,
+        IsAsyncRun: false,
+        TotalCount: params.Recipients.length,
+        QueuedCount: 0,
+        BlockedCount: params.Recipients.length,
+        DeferredCount: 0,
+        ErrorMessage: senderPermCheck.ErrorMessage,
+      };
+    }
+
     const providerId = params.Envelope.ProviderID ?? sender.CommunicationProviderID;
     const providerEntity = CommunicationEngineBase.Instance.Providers.find((p) =>
       providerId ? UUIDsEqual(p.ID, providerId) : true,
@@ -360,7 +374,7 @@ export class V2SendService {
 
     let run: MJCommunicationRunEntity | undefined;
     if (params.CommunicationRunID) {
-      const rv = new RunView();
+      const rv = this.getRunView();
       const existingRun = await rv.RunView<MJCommunicationRunEntity>(
         {
           EntityName: 'MJ: Communication Runs',
@@ -370,11 +384,30 @@ export class V2SendService {
         },
         contextUser,
       );
-      if (existingRun.Success && existingRun.Results.length > 0) {
-        run = existingRun.Results[0];
+      if (!existingRun.Success) {
+        return {
+          Success: false,
+          IsAsyncRun: false,
+          TotalCount: params.Recipients.length,
+          QueuedCount: 0,
+          BlockedCount: 0,
+          DeferredCount: 0,
+          ErrorMessage: `Failed loading communication run '${params.CommunicationRunID}': ${existingRun.ErrorMessage ?? 'RunView failed'}`,
+        };
       }
-    }
-    if (!run) {
+      if (existingRun.Results.length === 0) {
+        return {
+          Success: false,
+          IsAsyncRun: false,
+          TotalCount: params.Recipients.length,
+          QueuedCount: 0,
+          BlockedCount: 0,
+          DeferredCount: 0,
+          ErrorMessage: `Communication run '${params.CommunicationRunID}' was not found`,
+        };
+      }
+      run = existingRun.Results[0];
+    } else {
       run = await CommunicationEngineBase.Instance.StartRun();
     }
     if (!run) {
@@ -458,11 +491,11 @@ export class V2SendService {
 
       if (target.Decision === 'Deferred') {
         deferredCount++;
-        const log = await this.createV2Log(params, sender, providerEntity.ID, pmt?.ID, run.ID, target, contextUser);
+        const deferredLog = await this.claimOrCreateV2Log(params, sender, providerEntity.ID, pmt?.ID, run.ID, target, 'Pending', contextUser);
         outcomes.push({
           Principal: target.Principal,
           Endpoint: target.Endpoint,
-          CommunicationLogID: log?.ID,
+          CommunicationLogID: deferredLog.Log?.ID,
           Status: 'Deferred',
           DeferUntil: target.DeferUntil,
         });
@@ -510,28 +543,34 @@ export class V2SendService {
     provider: BaseCommunicationProvider,
     contextUser: UserInfo,
   ): Promise<SendV2RecipientOutcome> {
-    const log = await this.createV2Log(params, sender, providerID, pmt?.ID, runID, target, contextUser);
-    if (!log) {
+    const claim = await this.claimOrCreateV2Log(
+      params,
+      sender,
+      providerID,
+      pmt?.ID,
+      runID,
+      target,
+      'In-Progress',
+      contextUser,
+    );
+    if (claim.AlreadySent) {
+      return {
+        Principal: target.Principal,
+        Endpoint: target.Endpoint,
+        CommunicationLogID: claim.Log?.ID,
+        Status: 'Sent',
+      };
+    }
+    if (!claim.Log) {
       return {
         Principal: target.Principal,
         Endpoint: target.Endpoint,
         Status: 'Failed',
-        Reason: 'LogCreationFailed',
+        Reason: claim.FailureReason ?? 'LogCreationFailed',
+        Detail: claim.FailureDetail,
       };
     }
-
-    // Idempotency guard: skip if already In-Progress, Complete, or ProviderMessageID is set
-    if (log.Status === 'In-Progress' || log.Status === 'Complete' || Boolean(log.ProviderMessageID)) {
-      return {
-        Principal: target.Principal,
-        Endpoint: target.Endpoint,
-        CommunicationLogID: log.ID,
-        Status: 'Sent',
-      };
-    }
-
-    log.Status = 'In-Progress';
-    await log.Save();
+    const log = claim.Log;
 
     const payload: MessagePayload = {
       ...params.Payload,
@@ -594,7 +633,9 @@ export class V2SendService {
       if (obligationError) {
         log.Status = 'Failed';
         log.ErrorMessage = obligationError;
-        await log.Save();
+        if (!(await log.Save())) {
+          LogError(`V2SendService: failed to save failed CommunicationLog ${log.ID}: ${log.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
         return {
           Principal: target.Principal,
           Endpoint: target.Endpoint,
@@ -634,7 +675,18 @@ export class V2SendService {
     log.Status = sendRes.Success ? 'Complete' : 'Failed';
     log.ProviderMessageID = sendRes.ProviderMessageID ?? log.ProviderMessageID;
     log.ErrorMessage = sendRes.Error || null;
-    await log.Save();
+    if (!(await log.Save())) {
+      const saveErr = log.LatestResult?.CompleteMessage ?? 'unknown error';
+      LogError(`V2SendService: failed to update CommunicationLog ${log.ID} after send: ${saveErr}`);
+      return {
+        Principal: target.Principal,
+        Endpoint: target.Endpoint,
+        CommunicationLogID: log.ID,
+        Status: 'Failed',
+        Reason: 'PostSendLogSaveFailed',
+        Detail: saveErr,
+      };
+    }
 
     return {
       Principal: target.Principal,
@@ -810,7 +862,7 @@ export class V2SendService {
     senderID: string | undefined,
     contextUser: UserInfo,
   ): Promise<MJCommunicationSenderEntity | undefined> {
-    const rv = new RunView();
+    const rv = this.getRunView();
     const filter = senderID
       ? `ID='${EscapeSQLString(senderID)}' AND Status='Active'`
       : `IsDefault=1 AND Status='Active'`;
@@ -878,8 +930,8 @@ export class V2SendService {
   private async loadPreference(
     preferenceID: string,
     contextUser: UserInfo,
-  ): Promise<MJCommunicationPreferenceEntity | undefined> {
-    const rv = new RunView();
+  ): Promise<MJCommunicationPreferenceEntity> {
+    const rv = this.getRunView();
     const res = await rv.RunView<MJCommunicationPreferenceEntity>(
       {
         EntityName: 'MJ: Communication Preferences',
@@ -888,7 +940,13 @@ export class V2SendService {
       },
       contextUser,
     );
-    return res.Success && res.Results.length > 0 ? res.Results[0] : undefined;
+    if (!res.Success) {
+      throw new Error(`Failed loading communication preference '${preferenceID}': ${res.ErrorMessage ?? 'RunView failed'}`);
+    }
+    if (res.Results.length === 0) {
+      throw new Error(`Communication preference '${preferenceID}' was not found`);
+    }
+    return res.Results[0];
   }
 
   private async resolveAllAttributes(
@@ -952,7 +1010,7 @@ export class V2SendService {
       const norm = NormalizeEndpointAddress(rec.Endpoint.Address);
       if (!norm) return undefined;
       const hash = ComputeEndpointHash(norm.NormalizedValue);
-      const rv = new RunView();
+      const rv = this.getRunView();
       const res = await rv.RunView<MJCommunicationEndpointEntity>(
         {
           EntityName: 'MJ: Communication Endpoints',
@@ -985,7 +1043,7 @@ export class V2SendService {
     endpointID: string,
     contextUser: UserInfo,
   ): Promise<MJCommunicationEndpointEntity | undefined> {
-    const rv = new RunView();
+    const rv = this.getRunView();
     const res = await rv.RunView<MJCommunicationEndpointEntity>(
       {
         EntityName: 'MJ: Communication Endpoints',
@@ -1013,7 +1071,7 @@ export class V2SendService {
     }
     if (clauses.length === 0) return [];
 
-    const rv = new RunView();
+    const rv = this.getRunView();
     const res = await rv.RunView<MJCommunicationSuppressionEntity>(
       {
         EntityName: 'MJ: Communication Suppressions',
@@ -1038,7 +1096,7 @@ export class V2SendService {
     if (principals.length === 0) return out;
 
     const quoted = principals.map((p) => `'${EscapeSQLString(p.RecordID)}'`).join(',');
-    const rv = new RunView();
+    const rv = this.getRunView();
     const res = await rv.RunView<MJCommunicationPrincipalPreferenceEntity>(
       {
         EntityName: 'MJ: Communication Principal Preferences',
@@ -1047,7 +1105,10 @@ export class V2SendService {
       },
       contextUser,
     );
-    if (res.Success && res.Results) {
+    if (!res.Success) {
+      throw new Error(`Failed loading communication principal preferences: ${res.ErrorMessage ?? 'RunView failed'}`);
+    }
+    if (res.Results) {
       for (const pp of res.Results) {
         const key = `${pp.EntityID.toLowerCase()}:${pp.RecordID}`;
         const existing = out.get(key);
@@ -1060,6 +1121,57 @@ export class V2SendService {
     return out;
   }
 
+  private async checkSenderPermission(
+    sender: MJCommunicationSenderEntity,
+    contextUser: UserInfo,
+  ): Promise<{ Allowed: boolean; ErrorMessage?: string }> {
+    const chain = await this.loadSenderAncestry(sender, contextUser);
+    const ancestorIds = chain.slice(1).map((s) => `'${EscapeSQLString(s.ID)}'`);
+    const filter =
+      ancestorIds.length > 0
+        ? `CommunicationSenderID='${EscapeSQLString(sender.ID)}' OR (CommunicationSenderID IN (${ancestorIds.join(',')}) AND AppliesToChildSenders=1)`
+        : `CommunicationSenderID='${EscapeSQLString(sender.ID)}'`;
+
+    const rv = this.getRunView();
+    const res = await rv.RunView<MJCommunicationSenderPermissionEntity>(
+      {
+        EntityName: 'MJ: Communication Sender Permissions',
+        ExtraFilter: filter,
+        ResultType: 'entity_object',
+      },
+      contextUser,
+    );
+    if (!res.Success) {
+      return {
+        Allowed: false,
+        ErrorMessage: `Failed verifying sender permissions: ${res.ErrorMessage ?? 'RunView failed'}`,
+      };
+    }
+    if (res.Results.length === 0) {
+      // No ACL rows configured on sender chain — sender is unrestricted
+      return { Allowed: true };
+    }
+
+    const userRoleIds = new UUIDSet((contextUser.UserRoles ?? []).map((ur) => ur.RoleID));
+    const hasSend = res.Results.some((perm) => {
+      if (perm.PermissionLevel !== 'Send' && perm.PermissionLevel !== 'Manage') {
+        return false;
+      }
+      if (perm.UserID !== null && UUIDsEqual(perm.UserID, contextUser.ID)) {
+        return true;
+      }
+      return perm.RoleID !== null && userRoleIds.Has(perm.RoleID);
+    });
+
+    if (!hasSend) {
+      return {
+        Allowed: false,
+        ErrorMessage: `User lacks Send permission for sender '${sender.Name}'`,
+      };
+    }
+    return { Allowed: true };
+  }
+
   private async verifySendingDomain(
     providerID: string,
     domain: string | null,
@@ -1070,7 +1182,7 @@ export class V2SendService {
     const credClause = credentialID
       ? `CredentialID='${EscapeSQLString(credentialID)}'`
       : `CredentialID IS NULL`;
-    const rv = new RunView();
+    const rv = this.getRunView();
     const res = await rv.RunView<MJCommunicationSendingDomainEntity>(
       {
         EntityName: 'MJ: Communication Sending Domains',
@@ -1083,18 +1195,31 @@ export class V2SendService {
     return res.Success && res.Results.length > 0;
   }
 
-  private async createV2Log(
+  private async claimOrCreateV2Log(
     params: SendToPrincipalsParams,
     sender: MJCommunicationSenderEntity,
     providerID: string,
     pmtID: string | undefined,
     runID: string,
     target: SendableRecipient,
+    initialStatus: 'In-Progress' | 'Pending',
     contextUser: UserInfo,
-  ): Promise<MJCommunicationLogEntity | undefined> {
-    if (!pmtID) return undefined;
-    if (params.CommunicationRunID) {
-      const rv = new RunView();
+  ): Promise<{
+    Log?: MJCommunicationLogEntity;
+    AlreadySent?: boolean;
+    FailureReason?: string;
+    FailureDetail?: string;
+  }> {
+    if (!pmtID) {
+      return { FailureReason: 'MissingProviderMessageType', FailureDetail: 'No provider message type found for channel' };
+    }
+
+    const findExisting = async (): Promise<{
+      Success: boolean;
+      Log?: MJCommunicationLogEntity;
+      ErrorMessage?: string;
+    }> => {
+      const rv = this.getRunView();
       const existingRes = await rv.RunView<MJCommunicationLogEntity>(
         {
           EntityName: 'MJ: Communication Logs',
@@ -1104,14 +1229,56 @@ export class V2SendService {
         },
         contextUser,
       );
-      if (existingRes.Success && existingRes.Results.length > 0) {
-        return existingRes.Results[0];
+      if (!existingRes.Success) {
+        return { Success: false, ErrorMessage: existingRes.ErrorMessage ?? 'RunView failed' };
+      }
+      return { Success: true, Log: existingRes.Results[0] };
+    };
+
+    const handleExisting = async (
+      existing: MJCommunicationLogEntity,
+    ): Promise<{
+      Log?: MJCommunicationLogEntity;
+      AlreadySent?: boolean;
+      FailureReason?: string;
+      FailureDetail?: string;
+    }> => {
+      if (existing.Status === 'Complete' || Boolean(existing.ProviderMessageID)) {
+        return { Log: existing, AlreadySent: true };
+      }
+      if (initialStatus === 'Pending') {
+        return { Log: existing };
+      }
+      if (existing.Status === 'In-Progress') {
+        return {
+          FailureReason: 'LogAlreadyInProgress',
+          FailureDetail: `CommunicationLog ${existing.ID} is already In-Progress without a ProviderMessageID`,
+        };
+      }
+      existing.Status = 'In-Progress';
+      if (!(await existing.Save())) {
+        const msg = existing.LatestResult?.CompleteMessage ?? 'Failed to claim CommunicationLog In-Progress';
+        LogError(`V2SendService: ${msg}`);
+        return { FailureReason: 'LogClaimFailed', FailureDetail: msg };
+      }
+      return { Log: existing };
+    };
+
+    if (params.CommunicationRunID) {
+      const lookup = await findExisting();
+      if (!lookup.Success) {
+        return { FailureReason: 'LogLookupFailed', FailureDetail: lookup.ErrorMessage };
+      }
+      if (lookup.Log) {
+        return handleExisting(lookup.Log);
       }
     }
+
     const md = CommunicationEngineBase.Instance.ProviderToUse;
+    const bookkeepingUser = CommunicationEngineBase.Instance.ContextUser ?? contextUser;
     const log = await md.GetEntityObject<MJCommunicationLogEntity>(
       'MJ: Communication Logs',
-      contextUser,
+      bookkeepingUser,
     );
     log.CommunicationRunID = runID;
     log.CommunicationProviderID = providerID;
@@ -1127,7 +1294,7 @@ export class V2SendService {
     log.UnsubscribeToken = randomUUID();
     log.TrackingToken = randomUUID();
     log.Direction = 'Sending';
-    log.Status = 'Pending';
+    log.Status = initialStatus;
     log.MessageDate = new Date();
     log.CorrelationData = params.Envelope.CorrelationData
       ? JSON.stringify(params.Envelope.CorrelationData)
@@ -1138,7 +1305,22 @@ export class V2SendService {
       ...target.AuditSnapshot,
     });
 
-    return (await log.Save()) ? log : undefined;
+    if (await log.Save()) {
+      return { Log: log };
+    }
+
+    const saveErr = log.LatestResult?.CompleteMessage ?? 'Failed to save CommunicationLog';
+    // Re-check for a concurrent winner on (CommunicationRunID, CommunicationEndpointID)
+    const winner = await findExisting();
+    if (winner.Success && winner.Log) {
+      return handleExisting(winner.Log);
+    }
+    LogError(`V2SendService: ${saveErr}`);
+    return { FailureReason: 'LogCreationFailed', FailureDetail: saveErr };
+  }
+
+  private getRunView(): RunView {
+    return RunView.FromMetadataProvider(CommunicationEngineBase.Instance.ProviderToUse);
   }
 
   /**
@@ -1150,18 +1332,38 @@ export class V2SendService {
     messageClass: MessageClass,
     contextUser: UserInfo,
   ): Promise<{ Allowed: boolean; Reason?: string; Detail?: string }> {
-    const trimmed = recipientAddress.trim();
-    if (!trimmed) {
+    return this.CheckV1ComplianceGateBatch(channelID, [recipientAddress], messageClass, contextUser);
+  }
+
+  /**
+   * Batched V1 gate: checks endpoint status and active suppressions across all recipient addresses
+   * in at most two RunView calls instead of querying inside a per-recipient loop.
+   */
+  public async CheckV1ComplianceGateBatch(
+    channelID: string,
+    recipientAddresses: ReadonlyArray<string>,
+    messageClass: MessageClass,
+    contextUser: UserInfo,
+  ): Promise<{ Allowed: boolean; Reason?: string; Detail?: string }> {
+    const hashes = new Set<string>();
+    for (const raw of recipientAddresses) {
+      const trimmed = raw.trim();
+      if (!trimmed) continue;
+      const norm = NormalizeEndpointAddress(trimmed, channelID);
+      hashes.add(norm?.ValueHash ?? ComputeEndpointHash(trimmed.toLowerCase()));
+    }
+    if (hashes.size === 0) {
       return { Allowed: true };
     }
-    const norm = NormalizeEndpointAddress(trimmed, channelID);
-    const hash = norm?.ValueHash ?? ComputeEndpointHash(trimmed.toLowerCase());
 
-    const rv = new RunView();
+    const hashList = Array.from(hashes)
+      .map((h) => `'${EscapeSQLString(h)}'`)
+      .join(',');
+    const rv = this.getRunView();
     const epRes = await rv.RunView<MJCommunicationEndpointEntity>(
       {
         EntityName: 'MJ: Communication Endpoints',
-        ExtraFilter: `BaseMessageTypeID='${EscapeSQLString(channelID)}' AND ValueHash='${EscapeSQLString(hash)}'`,
+        ExtraFilter: `BaseMessageTypeID='${EscapeSQLString(channelID)}' AND ValueHash IN (${hashList})`,
         ResultType: 'entity_object',
       },
       contextUser,
@@ -1177,26 +1379,28 @@ export class V2SendService {
       return { Allowed: true };
     }
 
-    const endpoint = epRes.Results[0];
-    if (endpoint.Status === 'Hard Bounced' || endpoint.Status === 'Invalid' || endpoint.Status === 'Erased') {
-      return {
-        Allowed: false,
-        Reason: endpoint.Status,
-        Detail: `Blocked by endpoint status '${endpoint.Status}'`,
-      };
-    }
-    if (endpoint.Status === 'Complained' && messageClass !== 'Transactional') {
-      return {
-        Allowed: false,
-        Reason: 'Spam Complaint',
-        Detail: `Blocked by endpoint status 'Complained'`,
-      };
+    for (const endpoint of epRes.Results) {
+      if (endpoint.Status === 'Hard Bounced' || endpoint.Status === 'Invalid' || endpoint.Status === 'Erased') {
+        return {
+          Allowed: false,
+          Reason: endpoint.Status,
+          Detail: `Blocked by endpoint status '${endpoint.Status}'`,
+        };
+      }
+      if (endpoint.Status === 'Complained' && messageClass !== 'Transactional') {
+        return {
+          Allowed: false,
+          Reason: 'Spam Complaint',
+          Detail: `Blocked by endpoint status 'Complained'`,
+        };
+      }
     }
 
+    const epIds = epRes.Results.map((e) => `'${EscapeSQLString(e.ID)}'`).join(',');
     const supRes = await rv.RunView<MJCommunicationSuppressionEntity>(
       {
         EntityName: 'MJ: Communication Suppressions',
-        ExtraFilter: `CommunicationEndpointID='${EscapeSQLString(endpoint.ID)}' AND Status='Active'`,
+        ExtraFilter: `CommunicationEndpointID IN (${epIds}) AND Status='Active'`,
         ResultType: 'entity_object',
       },
       contextUser,
@@ -1230,7 +1434,7 @@ export class V2SendService {
             Detail: `Suppressed by ${s.Reason}`,
           };
         }
-        if ((s.Reason === 'User Unsubscribe' || s.Reason === 'Policy') && messageClass === 'Marketing') {
+        if (s.Reason === 'User Unsubscribe' || s.Reason === 'Policy') {
           return {
             Allowed: false,
             Reason: s.Reason,

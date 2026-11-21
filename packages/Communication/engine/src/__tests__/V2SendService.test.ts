@@ -107,6 +107,7 @@ describe('V2SendService chunk fan-out', () => {
     // Stub internal sender/provider/run helpers to isolate fan-out orchestration
     const svcInternal = service as unknown as {
       resolveSender: () => Promise<{ ID: string; CommunicationProviderID: string; SendingDomain: string; CredentialID: null }>;
+      checkSenderPermission: () => Promise<{ Allowed: boolean; ErrorMessage?: string }>;
     };
     vi.spyOn(svcInternal, 'resolveSender').mockResolvedValue({
       ID: 'sender-1',
@@ -114,6 +115,7 @@ describe('V2SendService chunk fan-out', () => {
       SendingDomain: 'example.com',
       CredentialID: null,
     });
+    vi.spyOn(svcInternal, 'checkSenderPermission').mockResolvedValue({ Allowed: true });
 
     const { CommunicationEngineBase } = await import('@memberjunction/communication-types');
     vi.spyOn(CommunicationEngineBase.Instance, 'Providers', 'get').mockReturnValue([
@@ -144,5 +146,149 @@ describe('V2SendService chunk fan-out', () => {
       { taskType: 'comms.dispatch', count: 2 },
       { taskType: 'comms.dispatch', count: 1 },
     ]);
+  });
+
+  it('fails closed on preference lookup error, enforces sender permissions, and blocks Operational on User Unsubscribe in V1 gate', async () => {
+    const { RunView } = await import('@memberjunction/core');
+    const service = new V2SendService();
+    const svcInternal = service as unknown as {
+      loadPreference: (id: string, user: unknown) => Promise<unknown>;
+      loadPrincipalPreferences: (refs: unknown[], prefId: string, senderId: string, user: unknown) => Promise<unknown>;
+      checkSenderPermission: (sender: { ID: string; Name: string; ParentSenderID: string | null }, user: { ID: string; UserRoles: Array<{ RoleID: string }> }) => Promise<{ Allowed: boolean; ErrorMessage?: string }>;
+      loadSenderAncestry: (sender: unknown, user: unknown) => Promise<unknown[]>;
+    };
+
+    vi.spyOn(RunView.prototype, 'RunView').mockResolvedValueOnce({
+      Success: false,
+      Results: [],
+      ErrorMessage: 'DB timeout',
+    } as never);
+    await expect(svcInternal.loadPreference('pref-1', {})).rejects.toThrow('Failed loading communication preference');
+
+    vi.spyOn(RunView.prototype, 'RunView').mockResolvedValueOnce({
+      Success: false,
+      Results: [],
+      ErrorMessage: 'DB timeout',
+    } as never);
+    await expect(
+      svcInternal.loadPrincipalPreferences([{ EntityID: 'ent-1', RecordID: 'rec-1' }], 'pref-1', 'sender-1', {}),
+    ).rejects.toThrow('Failed loading communication principal preferences');
+
+    // Sender permission enforcement: blocks user without Send/Manage, allows user with Send role
+    const testSender = { ID: 'sender-1', Name: 'Marketing Sender', ParentSenderID: null };
+    vi.spyOn(svcInternal, 'loadSenderAncestry').mockResolvedValue([testSender]);
+    vi.spyOn(RunView.prototype, 'RunView').mockResolvedValueOnce({
+      Success: true,
+      Results: [{ CommunicationSenderID: 'sender-1', UserID: null, RoleID: 'role-comms', PermissionLevel: 'Send', AppliesToChildSenders: true }],
+    } as never);
+    const denied = await svcInternal.checkSenderPermission(testSender, { ID: 'user-1', UserRoles: [{ RoleID: 'role-other' }] });
+    expect(denied.Allowed).toBe(false);
+
+    vi.spyOn(RunView.prototype, 'RunView').mockResolvedValueOnce({
+      Success: true,
+      Results: [{ CommunicationSenderID: 'sender-1', UserID: null, RoleID: 'role-comms', PermissionLevel: 'Send', AppliesToChildSenders: true }],
+    } as never);
+    const allowed = await svcInternal.checkSenderPermission(testSender, { ID: 'user-1', UserRoles: [{ RoleID: 'role-comms' }] });
+    expect(allowed.Allowed).toBe(true);
+
+    // V1 compliance gate blocks Operational on User Unsubscribe
+    vi.spyOn(RunView.prototype, 'RunView')
+      .mockResolvedValueOnce({
+        Success: true,
+        Results: [{ ID: 'ep-1', Status: 'Active' }],
+      } as never)
+      .mockResolvedValueOnce({
+        Success: true,
+        Results: [{ ID: 'sup-1', Reason: 'User Unsubscribe', Status: 'Active', ExpiresAt: null }],
+      } as never);
+    const v1Res = await service.CheckV1ComplianceGate('chan-email', 'user@example.com', 'Operational', {} as never);
+    expect(v1Res.Allowed).toBe(false);
+    expect(v1Res.Reason).toBe('User Unsubscribe');
+  });
+
+  it('fails closed on missing/failed CommunicationRunID lookup and does not treat In-Progress without ProviderMessageID as Sent', async () => {
+    const { RunView } = await import('@memberjunction/core');
+    const { CommunicationEngineBase } = await import('@memberjunction/communication-types');
+    const service = new V2SendService();
+    const svcInternal = service as unknown as {
+      resolveSender: () => Promise<{ ID: string; Name: string; CommunicationProviderID: string; SendingDomain: string; CredentialID: null }>;
+      checkSenderPermission: () => Promise<{ Allowed: boolean }>;
+      claimOrCreateV2Log: (
+        params: unknown,
+        sender: unknown,
+        providerID: string,
+        pmtID: string,
+        runID: string,
+        target: unknown,
+        initialStatus: 'In-Progress' | 'Pending',
+        user: unknown,
+      ) => Promise<{ Log?: { ID: string }; AlreadySent?: boolean; FailureReason?: string }>;
+    };
+
+    vi.spyOn(svcInternal, 'resolveSender').mockResolvedValue({
+      ID: 'sender-1',
+      Name: 'Sender',
+      CommunicationProviderID: 'prov-1',
+      SendingDomain: 'example.com',
+      CredentialID: null,
+    });
+    vi.spyOn(svcInternal, 'checkSenderPermission').mockResolvedValue({ Allowed: true });
+    vi.spyOn(CommunicationEngineBase.Instance, 'Providers', 'get').mockReturnValue([
+      { ID: 'prov-1', Name: 'SendGrid', RequireVerifiedDomain: false, MessageTypes: [] } as never,
+    ]);
+    const startRunSpy = vi.spyOn(CommunicationEngineBase.Instance, 'StartRun');
+
+    // Failed run lookup must fail without calling StartRun()
+    vi.spyOn(RunView.prototype, 'RunView').mockResolvedValueOnce({
+      Success: false,
+      Results: [],
+      ErrorMessage: 'Connection lost',
+    } as never);
+    const runFailRes = await service.Send(
+      {
+        CommunicationRunID: 'run-missing',
+        Envelope: { MessageClass: 'Marketing', ChannelID: 'chan-email' },
+        Recipients: [{ Endpoint: { Address: 'a@example.com' } }],
+      },
+      {} as never,
+      () => ({} as never),
+    );
+    expect(runFailRes.Success).toBe(false);
+    expect(startRunSpy).not.toHaveBeenCalled();
+
+    // In-Progress log without ProviderMessageID must NOT report AlreadySent
+    vi.spyOn(RunView.prototype, 'RunView').mockResolvedValueOnce({
+      Success: true,
+      Results: [{ ID: 'log-inprog', Status: 'In-Progress', ProviderMessageID: null }],
+    } as never);
+    const inProgClaim = await svcInternal.claimOrCreateV2Log(
+      { CommunicationRunID: 'run-1', Envelope: { MessageClass: 'Marketing', ChannelID: 'chan-email' } },
+      { ID: 'sender-1' },
+      'prov-1',
+      'pmt-1',
+      'run-1',
+      { Endpoint: { CommunicationEndpointID: 'ep-1', NormalizedValue: 'a@example.com' }, Obligations: {}, AuditSnapshot: {} },
+      'In-Progress',
+      {},
+    );
+    expect(inProgClaim.AlreadySent).toBeUndefined();
+    expect(inProgClaim.FailureReason).toBe('LogAlreadyInProgress');
+
+    // Complete log or ProviderMessageID set DOES report AlreadySent
+    vi.spyOn(RunView.prototype, 'RunView').mockResolvedValueOnce({
+      Success: true,
+      Results: [{ ID: 'log-done', Status: 'Complete', ProviderMessageID: 'sg-msg-1' }],
+    } as never);
+    const doneClaim = await svcInternal.claimOrCreateV2Log(
+      { CommunicationRunID: 'run-1', Envelope: { MessageClass: 'Marketing', ChannelID: 'chan-email' } },
+      { ID: 'sender-1' },
+      'prov-1',
+      'pmt-1',
+      'run-1',
+      { Endpoint: { CommunicationEndpointID: 'ep-1', NormalizedValue: 'a@example.com' }, Obligations: {}, AuditSnapshot: {} },
+      'In-Progress',
+      {},
+    );
+    expect(doneClaim.AlreadySent).toBe(true);
   });
 });
