@@ -122,6 +122,15 @@ export class CommunicationsAdminDashboardComponent extends BaseDashboard impleme
   /** Re-declared so host resource wrappers can bind `[Provider]` and thread it through to tabs. */
   @Input() override Provider: IMetadataProvider | null = null;
 
+  /** Re-declared so host resource wrappers can forward `[Data]` (deep-link queryParams & config). */
+  @Input()
+  public override set Data(value: ResourceData) {
+    super.Data = value;
+  }
+  public override get Data(): ResourceData {
+    return super.Data;
+  }
+
   public readonly Tabs = COMMS_ADMIN_TABS;
   public ActiveTab: CommsAdminTabId = 'simulator';
   public IsLoading = false;

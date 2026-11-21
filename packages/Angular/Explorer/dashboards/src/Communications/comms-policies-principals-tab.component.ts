@@ -312,9 +312,10 @@ export class CommsPoliciesPrincipalsTabComponent extends BaseAngularComponent {
     this.ErrorMessage = '';
     try {
       policy.Status = policy.Status === 'Active' ? 'Disabled' : 'Active';
-      if (await policy.Save()) {
-        this.RefreshRequested.emit();
+      if (!(await policy.Save())) {
+        throw new Error(policy.LatestResult?.CompleteMessage || 'Failed to update policy.');
       }
+      this.RefreshRequested.emit();
     } catch (err: unknown) {
       this.ErrorMessage = err instanceof Error ? err.message : 'Failed to update policy.';
       this.cdr.markForCheck();
@@ -328,16 +329,22 @@ export class CommsPoliciesPrincipalsTabComponent extends BaseAngularComponent {
 
     try {
       const p = this.ProviderToUse;
-      const principal = await p.GetEntityObject<MJCommunicationPrincipalEntity>(
-        'MJ: Communication Principals',
-        p.CurrentUser,
+      let principal = (this._metadata?.Principals ?? []).find((pr) =>
+        UUIDsEqual(pr.EntityID, item.EntityID),
       );
-      principal.EntityID = item.EntityID;
-      principal.Name = item.Entity;
-      principal.DisplayOrder = (this._metadata?.Principals.length ?? 0) + 1;
-      principal.Status = 'Active';
-      if (!(await principal.Save())) {
-        throw new Error(principal.LatestResult?.CompleteMessage || 'Failed to create principal.');
+      if (!principal) {
+        const created = await p.GetEntityObject<MJCommunicationPrincipalEntity>(
+          'MJ: Communication Principals',
+          p.CurrentUser,
+        );
+        created.EntityID = item.EntityID;
+        created.Name = item.Entity ?? item.EntityID;
+        created.DisplayOrder = (this._metadata?.Principals.length ?? 0) + 1;
+        created.Status = 'Active';
+        if (!(await created.Save())) {
+          throw new Error(created.LatestResult?.CompleteMessage || 'Failed to create principal.');
+        }
+        principal = created;
       }
 
       item.CommunicationPrincipalID = principal.ID;
