@@ -20,7 +20,7 @@
  * @module @memberjunction/ai-agents
  */
 
-import { IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo, WellKnownUserSource } from '@memberjunction/core';
+import { IMetadataProvider, LimitsConfigResolver, LogError, LogStatus, Metadata, RunView, UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import { BaseSingleton, EscapeSQLString, GetGlobalObjectStore, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
     MJAIAgentRequestEntity,
@@ -866,7 +866,10 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
                 };
             }
 
-            const maxTurns = channel.MaxConsecutiveAgentTurns > 0 ? channel.MaxConsecutiveAgentTurns : 10;
+            const resolvedLimits = LimitsConfigResolver.Resolve().Limits;
+            const maxTurns = channel.MaxConsecutiveAgentTurns > 0
+                ? channel.MaxConsecutiveAgentTurns
+                : resolvedLimits.AgentChannelConsecutiveTurns;
             const nextTurns = (channel.ConsecutiveAgentTurns ?? 0) + 1;
             channel.ConsecutiveAgentTurns = nextTurns;
 
@@ -890,7 +893,9 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
                 channel.HourlyWakeCount = 0;
             }
 
-            const maxHourlyWakes = channel.MaxHourlyWakes > 0 ? channel.MaxHourlyWakes : 6;
+            const maxHourlyWakes = channel.MaxHourlyWakes > 0
+                ? channel.MaxHourlyWakes
+                : resolvedLimits.AgentChannelWakesPerHour;
             if (peers.length > 0 && (channel.HourlyWakeCount ?? 0) + 1 > maxHourlyWakes) {
                 channel.ChannelStatus = 'Paused For Human';
                 await channel.Save();

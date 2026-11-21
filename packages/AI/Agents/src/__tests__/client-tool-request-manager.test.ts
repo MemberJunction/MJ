@@ -6,22 +6,28 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     return {
         ...actual,
         BaseSingleton: class MockBaseSingleton<T> {
-            private static _instance: unknown;
+            private static _instances = new Map<unknown, unknown>();
             protected constructor() {}
             static getInstance<U>(): U {
-                if (!MockBaseSingleton._instance) {
-                    MockBaseSingleton._instance = new (this as unknown as new () => U)();
+                let instance = MockBaseSingleton._instances.get(this);
+                if (!instance) {
+                    instance = new (this as unknown as new () => U)();
+                    MockBaseSingleton._instances.set(this, instance);
                 }
-                return MockBaseSingleton._instance as U;
+                return instance as U;
             }
         },
     };
 });
 
-vi.mock('@memberjunction/core', () => ({
-    LogStatus: vi.fn(),
-    LogError: vi.fn(),
-}));
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    return {
+        ...actual,
+        LogStatus: vi.fn(),
+        LogError: vi.fn(),
+    };
+});
 
 import { ClientToolRequestManager } from '../ClientToolRequestManager';
 

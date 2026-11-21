@@ -26,14 +26,14 @@ import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, ResolvePromptRunUserID, ResolvePayloadAtEnd, GovernedRunArtifactSummary, type ArtifactJsonValue, type ArtifactToolArgs } from "@memberjunction/ai-core-plus";
 import { GovernedArtifactService, MergeTouchedArtifactSummary } from './GovernedArtifactService';
 import { CollectDelegatedRunArtifactsSafely, ExtractDirectActionArtifacts } from './realtime/realtime-artifact-helpers';
-import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase, ToPlainJSON, ServerOperationScopeManager } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase, ToPlainJSON, ServerOperationScopeManager, CODE_FALLBACK_LIMITS, LimitsConfigResolver, type MJLimitsConfig } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult, GetSentPrefixFingerprint } from '@memberjunction/ai-prompts';
 import { BaseLLM, ChatMessage, ChatMessageContent, AIErrorType, AIAPIKeyResolver, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { LoopAgentType } from './agent-types/loop-agent-type';
 import { CreateAgentInstance } from './agent-instance';
-import { FailingStepError, IsPromptTurnStep, MAX_REPEATED_FAILING_STEP, RepeatedFailingStepTracker } from './repeated-failing-step';
+import { FailingStepError, GetMaxRepeatedFailingStep, IsPromptTurnStep, RepeatedFailingStepTracker } from './repeated-failing-step';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import { ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckLink, type SelfCheckLinkRow } from './self-check';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
@@ -76,7 +76,7 @@ import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AgentMemoryContextBuilder, AgentMemoryObservability } from './agent-memory-context-builder';
 import { ConversationCompactionManager, CompactionOutcome, EffectiveContextBudget } from './ConversationCompactionManager';
-import { ConversationToolManager, ConversationToolCall, ConversationToolExecutionResult, ConversationToolSummaryHost, ConversationToolNames, MAX_CONVERSATION_TOOL_CALLS_PER_TURN } from './ConversationToolManager';
+import { ConversationToolManager, ConversationToolCall, ConversationToolExecutionResult, ConversationToolSummaryHost, ConversationToolNames, GetMaxConversationToolCallsPerTurn } from './ConversationToolManager';
 import { FormatToolResultSection, FormatToolErrorSection, RenderToolResultData, ToolResultSectionParts, CarryForwardToolFamily, CarryForwardToolStepOutput, CarryForwardStepRecord, StoppedRunStepRecord } from './tool-result-format';
 import { PriorTurnToolResultCache } from './prior-turn-tool-result-cache';
 import { PromptComponentResolver, InjectScopedPromptParts, type PromptComponentScope } from './prompt-component-resolver';
@@ -269,10 +269,10 @@ import { ClientToolRequestManager } from './ClientToolRequestManager';
 import { BuildClientToolResultMessage, ResolveClientToolResultMaxChars, ReplaceMediaBlocksWithStubs, IsMediaBlock, IMAGE_BLOCK_TOKEN_ESTIMATE, WrapUntrustedExternalData } from './client-tool-results';
 import {
     CanAgentOwnSubAgentConsults,
-    DEFAULT_MAX_SUB_AGENT_CONSULT_ROUNDS,
     FormatReloadedConsultsMessage,
     FormatResponseFormSummary,
     FormatSubAgentConsultMessage,
+    GetMaxSubAgentConsultRounds,
     LoadOpenSubAgentConsults,
     SubAgentConsultRecord
 } from './sub-agent-consult';
@@ -710,7 +710,9 @@ export class BaseAgent {
      * Maximum allowed validation retries before forcing failure.
      * @private
      */
-    private static readonly MAX_VALIDATION_RETRIES = 10;
+    private static get MAX_VALIDATION_RETRIES(): number {
+        return LimitsConfigResolver.Resolve().Limits.ResourceGuards.MaxValidationRetries;
+    }
 
     /**
      * Maximum consecutive failed (non-terminating) steps before forcing termination.
@@ -718,7 +720,9 @@ export class BaseAgent {
      * terminate=false. Each successful step resets the counter.
      * @private
      */
-    private static readonly MAX_CONSECUTIVE_FAILED_STEPS = 10;
+    private static get MAX_CONSECUTIVE_FAILED_STEPS(): number {
+        return LimitsConfigResolver.Resolve().Limits.ResourceGuards.MaxConsecutiveFailedSteps;
+    }
 
     /**
      * Maximum consecutive *unproductive* retry steps before forcing termination.
@@ -735,7 +739,16 @@ export class BaseAgent {
      * counter. Any productive (non-unproductive-retry) step resets it.
      * @private
      */
-    private static readonly MAX_CONSECUTIVE_UNPRODUCTIVE_RETRIES = 10;
+    private static get MAX_CONSECUTIVE_UNPRODUCTIVE_RETRIES(): number {
+        return LimitsConfigResolver.Resolve().Limits.ResourceGuards.MaxConsecutiveUnproductiveRetries;
+    }
+
+    /** Resolves hierarchical execution limits for the current run, applying any per-run `limitsOverride`. */
+    private resolvedLimits(params?: ExecuteAgentParams): MJLimitsConfig {
+        return LimitsConfigResolver.Resolve({
+            RunOverride: params?.limitsOverride ?? null,
+        }).Limits;
+    }
 
     /**
      * Instance of AIPromptRunner used for executing hierarchical prompts.
@@ -1642,7 +1655,9 @@ export class BaseAgent {
      * moved — the gate would force `tool_choice: 'none'` on the wrong turn, or fail to force it
      * on the right one, and neither shows up as an error.
      */
-    protected static readonly DEFAULT_ABSOLUTE_MAX_ITERATIONS = 5000;
+    protected static get DEFAULT_ABSOLUTE_MAX_ITERATIONS(): number {
+        return LimitsConfigResolver.Resolve().Limits.AgentAbsoluteIterations;
+    }
 
     private _agentRun: MJAIAgentRunEntityExtended | null = null;
 
@@ -2799,7 +2814,11 @@ export class BaseAgent {
      * (2 hours) — tighten per-run for interactive scenarios.
      */
     protected get DefaultAgentTimeoutMS(): number {
-        return 2 * 60 * 60 * 1000;
+        const resolved = LimitsConfigResolver.Resolve().Limits.Budgets.PerRun.MaxWallClockMs;
+        if (typeof resolved === 'number' && resolved > 0) {
+            return resolved;
+        }
+        return CODE_FALLBACK_LIMITS.Budgets.PerRun.MaxWallClockMs ?? Number.MAX_SAFE_INTEGER;
     }
 
     public async Execute<C = any, R = any>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
@@ -4884,7 +4903,7 @@ export class BaseAgent {
         nextStep: BaseAgentNextStep<P>
     ): void {
         const count = tracker.Observe(executedDecision, nextStep);
-        if (count < MAX_REPEATED_FAILING_STEP) {
+        if (count < GetMaxRepeatedFailingStep()) {
             return;
         }
         const lastError = FailingStepError(nextStep);
@@ -5785,7 +5804,7 @@ export class BaseAgent {
         visitedRunIds.add(this._agentRun!.ID); // Add current run ID
         
         let currentRunId: string | null | undefined = lastRunId;
-        const maxChainLength = 1000; // Reasonable limit to prevent infinite loops
+        const maxChainLength = LimitsConfigResolver.Resolve().Limits.ResourceGuards.MaxRunChainLength;
         let chainLength = 0;
         let rv: RunView | undefined;
         
@@ -6462,8 +6481,9 @@ export class BaseAgent {
         if (this._conversationToolTurn?.turn !== this._promptTurnCount) {
             this._conversationToolTurn = { turn: this._promptTurnCount, count: 0 };
         }
-        if (++this._conversationToolTurn.count > MAX_CONVERSATION_TOOL_CALLS_PER_TURN) {
-            return { Content: `Skipped — per-turn cap of ${MAX_CONVERSATION_TOOL_CALLS_PER_TURN} conversation tool calls reached. Call it again on your next turn.`, IsError: true };
+        const maxConversationToolCallsPerTurn = GetMaxConversationToolCallsPerTurn();
+        if (++this._conversationToolTurn.count > maxConversationToolCallsPerTurn) {
+            return { Content: `Skipped — per-turn cap of ${maxConversationToolCallsPerTurn} conversation tool calls reached. Call it again on your next turn.`, IsError: true };
         }
         const ran = await this._conversationToolManager.ExecuteSingleToolCall({ tool: name, input: input as ConversationToolCall['input'] });
         return ran.result.success
@@ -6750,7 +6770,7 @@ export class BaseAgent {
             return false;
         }
         const perAgent = params.agent?.MaxIterationsPerRun;
-        const absolute = params.absoluteMaxIterations ?? BaseAgent.DEFAULT_ABSOLUTE_MAX_ITERATIONS;
+        const absolute = params.absoluteMaxIterations ?? this.resolvedLimits(params).AgentAbsoluteIterations;
         return (typeof perAgent === 'number' && perAgent > 0 && iterations >= perAgent)
             || (absolute > 0 && iterations >= absolute);
     }
@@ -8928,7 +8948,7 @@ export class BaseAgent {
                     this._validationRetryCount++;
                     
                     // Check if max retries exceeded
-                    const maxRetries = params.agent.FinalPayloadValidationMaxRetries || 3;
+                    const maxRetries = params.agent.FinalPayloadValidationMaxRetries || this.resolvedLimits(params).ResourceGuards.FinalPayloadValidationMaxRetries;
                     if (this._validationRetryCount >= maxRetries) {
                         // Max retries exceeded, force to Fail
                         this.logStatus(`❌ Max validation retries (${maxRetries}) exceeded, forcing failure`, false, params);
@@ -9404,7 +9424,7 @@ export class BaseAgent {
             this.applyTokenStatsToRun(agentRun, this.calculateTokenStats());
         }
 
-        const absoluteMaxIterations = params.absoluteMaxIterations ?? BaseAgent.DEFAULT_ABSOLUTE_MAX_ITERATIONS;
+        const absoluteMaxIterations = params.absoluteMaxIterations ?? this.resolvedLimits(params).AgentAbsoluteIterations;
         const { Result, Budget } = this._budgetTracker.CheckRunAndTreeGuardrails({
             Params: params,
             AgentRun: agentRun,
@@ -11611,8 +11631,9 @@ The context is now within limits. Please retry your request with the recovered c
         // through the normal rendering path so the model can re-request them next turn.
         // Deliberately no DB rows for skipped calls (zero I/O for work not done; the
         // Status union has no 'Skipped' and Failed steps would pollute failure metrics).
-        const callsToExecute = calls.slice(0, MAX_CONVERSATION_TOOL_CALLS_PER_TURN);
-        const skippedCalls = calls.slice(MAX_CONVERSATION_TOOL_CALLS_PER_TURN);
+        const maxConversationToolCallsPerTurn = GetMaxConversationToolCallsPerTurn();
+        const callsToExecute = calls.slice(0, maxConversationToolCallsPerTurn);
+        const skippedCalls = calls.slice(maxConversationToolCallsPerTurn);
         if (skippedCalls.length > 0) {
             this.logStatus(`[ConversationTools] ${calls.length} calls requested — executing first ${callsToExecute.length}, skipping ${skippedCalls.length} (per-turn cap)`, true, params);
         }
@@ -11664,7 +11685,7 @@ The context is now within limits. Please retry your request with the recovered c
             input: call.input,
             result: {
                 success: false,
-                errorMessage: `Skipped — per-turn cap of ${MAX_CONVERSATION_TOOL_CALLS_PER_TURN} conversation tool calls reached. Re-request this call on your next turn.`,
+                errorMessage: `Skipped — per-turn cap of ${maxConversationToolCallsPerTurn} conversation tool calls reached. Re-request this call on your next turn.`,
             },
             durationMs: 0,
         }));
@@ -12223,22 +12244,22 @@ The context is now within limits. Please retry your request with the recovered c
         return [...results, ...skipped];
     }
 
-    /** The most decision requests one turn may run: `decisionsMaxRequests`, or {@link MAX_DECISION_REQUESTS_PER_TURN}. */
+    /** The most decision requests one turn may run: `decisionsMaxRequests`, or `LimitsConfigResolver` fallback. */
     private decisionRequestCap(agentTypePromptParams: Record<string, unknown> | undefined): number {
-        return this.decisionLimit(agentTypePromptParams, 'decisionsMaxRequests', MAX_DECISION_REQUESTS_PER_TURN);
+        return this.decisionLimit(agentTypePromptParams, 'decisionsMaxRequests', LimitsConfigResolver.Resolve().Limits.ResourceGuards.MaxDecisionRequestsPerTurn);
     }
 
     /**
      * The most decision calls one turn's requests make in total, `forEachItemIn` items included:
-     * `decisionsMaxCallsPerTurn`, or {@link MAX_DECISION_CALLS_PER_TURN}.
+     * `decisionsMaxCallsPerTurn`, or `LimitsConfigResolver` fallback.
      */
     private decisionCallBudget(agentTypePromptParams: Record<string, unknown> | undefined): number {
-        return this.decisionLimit(agentTypePromptParams, 'decisionsMaxCallsPerTurn', MAX_DECISION_CALLS_PER_TURN);
+        return this.decisionLimit(agentTypePromptParams, 'decisionsMaxCallsPerTurn', LimitsConfigResolver.Resolve().Limits.ResourceGuards.MaxDecisionCallsPerTurn);
     }
 
     /** The most items one `forEachItemIn` request asks about: `decisionsMaxItems`, or its default. */
     private decisionMaxItems(agentTypePromptParams: Record<string, unknown> | undefined): number {
-        return this.decisionLimit(agentTypePromptParams, 'decisionsMaxItems', DEFAULT_LOOP_AGENT_PROMPT_PARAMS.decisionsMaxItems);
+        return this.decisionLimit(agentTypePromptParams, 'decisionsMaxItems', LimitsConfigResolver.Resolve().Limits.Tuning.DecisionsMaxItems);
     }
 
     /** A decision limit from the prompt params when it is a non-negative integer, or `fallback` when it is absent or anything else. */
@@ -13029,7 +13050,7 @@ The context is now within limits. Please retry your request with the recovered c
             const maxSkillDecisionCandidates =
                 typeof promptParams.maxSkillDecisionCandidates === 'number' && promptParams.maxSkillDecisionCandidates >= 1
                     ? Math.floor(promptParams.maxSkillDecisionCandidates)
-                    : DEFAULT_MAX_SKILL_DECISION_CANDIDATES;
+                    : LimitsConfigResolver.Resolve().Limits.Tuning.MaxSkillDecisionCandidates;
             const { FilteredCandidates: candidates, PreHiddenSkillIDs: preHiddenSkillIDs } =
                 PreFilterSkillCandidatesForDecision(
                     rawCandidates,
@@ -18304,7 +18325,7 @@ The context is now within limits. Please retry your request with the recovered c
                 const isChat = execution.result.agentRun?.FinalStep === 'Chat';
                 const question = execution.result.agentRun?.Message;
                 if (execution.consult) {
-                    const maxRounds = execution.maxConsultRounds ?? DEFAULT_MAX_SUB_AGENT_CONSULT_ROUNDS;
+                    const maxRounds = execution.maxConsultRounds ?? GetMaxSubAgentConsultRounds();
                     lines.push(
                         `* Question (round ${execution.consult.round} of ${maxRounds}): ${question?.trim() ? question : '(no message provided)'}`
                     );
@@ -18462,7 +18483,7 @@ The context is now within limits. Please retry your request with the recovered c
                 if (this.isSubAgentConsultActive(resolvedOption, params)) {
                     const round = (this._subAgentConsultRounds.get(execution.subAgentEntity.ID) ?? 0) + 1;
                     this._subAgentConsultRounds.set(execution.subAgentEntity.ID, round);
-                    const maxRounds = params.agent.MaxSubAgentConsultRounds ?? DEFAULT_MAX_SUB_AGENT_CONSULT_ROUNDS;
+                    const maxRounds = params.agent.MaxSubAgentConsultRounds ?? GetMaxSubAgentConsultRounds();
                     if (round <= maxRounds) {
                         const childRunId = execution.result.agentRun?.ID || '';
                         const question = execution.result.agentRun?.Message || null;
@@ -18679,7 +18700,7 @@ The context is now within limits. Please retry your request with the recovered c
         if (this.isSubAgentConsultActive(resolvedOption, params)) {
             const round = (this._subAgentConsultRounds.get(subAgentEntity.ID) ?? 0) + 1;
             this._subAgentConsultRounds.set(subAgentEntity.ID, round);
-            const maxRounds = params.agent.MaxSubAgentConsultRounds ?? DEFAULT_MAX_SUB_AGENT_CONSULT_ROUNDS;
+            const maxRounds = params.agent.MaxSubAgentConsultRounds ?? GetMaxSubAgentConsultRounds();
 
             const childRunId = subAgentResult.agentRun?.ID || '';
             const question = subAgentResult.agentRun?.Message || null;
@@ -19761,8 +19782,8 @@ The context is now within limits. Please retry your request with the recovered c
             displayMode: 'live'
         });
 
-        // Resolve default timeout: per-tool > params > agent config > 30s
-        const defaultTimeout = params.clientToolTimeoutMs ?? 30_000;
+        // Resolve default timeout: per-tool > params > resolved limits > 30s
+        const defaultTimeout = params.clientToolTimeoutMs ?? this.resolvedLimits(params).ResourceGuards.ClientToolTimeoutMs;
 
         const results: ClientToolResultSummary[] = [];
         const agentRunID = this._agentRun?.ID ?? 'unknown';
@@ -21174,7 +21195,7 @@ The context is now within limits. Please retry your request with the recovered c
         config: AgentConfiguration
     ): Promise<{ results: BaseAgentNextStep[], errors: any[], finalPayload: any }> {
         let currentPayload = initialPayload;
-        const maxIterations = forEach.maxIterations ?? 1000;
+        const maxIterations = forEach.maxIterations ?? this.resolvedLimits(params).ForEachMaxIterations;
         const results: Array<BaseAgentNextStep> = [];
         const errors = [];
 
@@ -21219,8 +21240,9 @@ The context is now within limits. Please retry your request with the recovered c
         params: ExecuteAgentParams,
         config: AgentConfiguration
     ): Promise<{ results: BaseAgentNextStep[], errors: any[], finalPayload: any }> {
-        const maxIterations = forEach.maxIterations ?? 1000;
-        const maxConcurrency = forEach.maxConcurrency ?? 10;
+        const limits = this.resolvedLimits(params);
+        const maxIterations = forEach.maxIterations ?? limits.ForEachMaxIterations;
+        const maxConcurrency = forEach.maxConcurrency ?? limits.ResourceGuards.MaxLoopConcurrency;
         const itemsToProcess = Math.min(collection.length, maxIterations);
 
         // Create batches for parallel processing
@@ -21834,7 +21856,7 @@ The context is now within limits. Please retry your request with the recovered c
         config: AgentConfiguration
     ): Promise<WhileLoopResults> {
         let currentPayload = initialPayload;
-        const maxIterations = whileOp.maxIterations ?? 100;
+        const maxIterations = whileOp.maxIterations ?? this.resolvedLimits(params).WhileLoopMaxIterations;
         const results: BaseAgentNextStep[] = [];
         const errors: LoopIterationError[] = [];
         let iterationCount = 0;
@@ -23565,12 +23587,12 @@ The context is now within limits. Please retry your request with the recovered c
      */
     protected getModelContextLimit(modelSelectionInfo?: AIModelSelectionInfo): number {
         // Default conservative limit if we can't determine the actual limit
-        const DEFAULT_LIMIT = 8000;
+        const defaultLimit = LimitsConfigResolver.Resolve().Limits.Tuning.CompactionDefaultContextTokens;
         const known = modelSelectionInfo ? this.tryGetModelMaxInputTokens(modelSelectionInfo) : null;
         if (known === null) {
-            this.logStatus(`Could not determine model context limit, using default limit: ${DEFAULT_LIMIT}`, true);
+            this.logStatus(`Could not determine model context limit, using default limit: ${defaultLimit}`, true);
         }
-        return known || DEFAULT_LIMIT;
+        return known || defaultLimit;
     }
 
     /**
