@@ -14,3 +14,24 @@
 /.github/workflows/release-lines-guard.yml @cadam11
 /.github/workflows/publish.yml @cadam11
 /ci/dist-tag-all.mjs @cadam11
+
+# MJ Canon (plans/canon-master-plan.md, "Governance after December 1"): this
+# list is what counts as Canon. A change under any of these paths needs a Canon
+# owner's review and must link an accepted `canon` issue or a section of the
+# master plan.
+/plans/canon-master-plan.md @AN-BC @jordanfanapour
+/plans/canon-semantic-graph.md @AN-BC @jordanfanapour
+/plans/canon-first-onboarding-and-ambient-health.md @AN-BC @jordanfanapour
+/guides/CANON_AND_SEMANTIC_GRAPHS_GUIDE.md @AN-BC @jordanfanapour
+/packages/MJCoreEntities/src/graph/ @AN-BC @jordanfanapour
+/packages/MJCoreEntities/src/engines/CanonGraphEngine.ts @AN-BC @jordanfanapour
+/packages/ContentPipeline/engine/src/stages/GraphStage.ts @AN-BC @jordanfanapour
+/packages/ContentPipeline/engine/src/stages/EntityGraphOverlayStore.ts @AN-BC @jordanfanapour
+/packages/SearchEngine/src/generic/GraphSearchProvider.ts @AN-BC @jordanfanapour
+/packages/Actions/CoreActions/src/custom/data/get-graph-context.action.ts @AN-BC @jordanfanapour
+/metadata/graphs/ @AN-BC @jordanfanapour
+/metadata/graph-types/ @AN-BC @jordanfanapour
+/metadata/graph-concept-types/ @AN-BC @jordanfanapour
+/metadata/graph-authority-tiers/ @AN-BC @jordanfanapour
+/metadata/graph-edge-types/ @AN-BC @jordanfanapour
+/.github/ISSUE_TEMPLATE/canon_idea.md @AN-BC @jordanfanapour
