@@ -294,13 +294,14 @@ jobs:
       # quality, so it pins the smallest local model. Read by MJAPI and the `mj` CLI alike, so both
       # embed with, and judge stored vectors against, the same model.
       MJ_DEFAULT_LOCAL_EMBEDDING_MODEL: 'all-MiniLM-L6-v2 (Local)'
-      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
-      # receive it, so they degrade to a cold local cache rather than failing. Rationale and
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. PR-triggered runs never
+      # receive it (the write token + HMAC signing key must not reach unreviewed PR code, which
+      # could poison cache entries the release gate replays), so they degrade to a cold local cache. Rationale and
       # setup instructions live once, on the build job in test.yml.
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v7
@@ -976,13 +977,14 @@ jobs:
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
       DB_TRUST_SERVER_CERTIFICATE: 'true'
-      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
-      # receive it, so they degrade to a cold local cache rather than failing. Rationale and
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. PR-triggered runs never
+      # receive it (the write token + HMAC signing key must not reach unreviewed PR code, which
+      # could poison cache entries the release gate replays), so they degrade to a cold local cache. Rationale and
       # setup instructions live once, on the build job in test.yml.
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
     steps:
       - name: Check live-model prerequisites
         id: prereq
@@ -1162,13 +1164,14 @@ jobs:
       # Redis + key prefix to assert what the servers broadcast. Defined here so the two cannot drift.
       REDIS_URL: redis://localhost:6379
       REDIS_KEY_PREFIX: mj
-      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
-      # receive it, so they degrade to a cold local cache rather than failing. Rationale and
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. PR-triggered runs never
+      # receive it (the write token + HMAC signing key must not reach unreviewed PR code, which
+      # could poison cache entries the release gate replays), so they degrade to a cold local cache. Rationale and
       # setup instructions live once, on the build job in test.yml.
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
     services:
       redis:
         image: redis:7
@@ -1345,13 +1348,14 @@ jobs:
       MJ_CODEGEN_NO_AI: '1'
       # Skip BEFORE/AFTER commands in mj.config — drift gate only checks generated file output
       MJ_CODEGEN_SKIP_COMMANDS: '1'
-      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
-      # receive it, so they degrade to a cold local cache rather than failing. Rationale and
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. PR-triggered runs never
+      # receive it (the write token + HMAC signing key must not reach unreviewed PR code, which
+      # could poison cache entries the release gate replays), so they degrade to a cold local cache. Rationale and
       # setup instructions live once, on the build job in test.yml.
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v7
@@ -1534,10 +1538,10 @@ jobs:
       MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
       # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Rationale and setup
       # instructions live once, on the build job in test.yml.
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -1599,10 +1603,10 @@ jobs:
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
       DB_TRUST_SERVER_CERTIFICATE: 'true'
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
       INTEGRATION_LIVE_MODEL_KEYS: ${{ secrets.INTEGRATION_LIVE_MODEL_KEYS }}
       # Skip BEFORE/AFTER commands in mj.config — drift gate only checks generated file output
       MJ_CODEGEN_SKIP_COMMANDS: '1'
