@@ -44,7 +44,7 @@ interface RelationSection {
                 <mj-empty-state
                     Icon="fa-solid fa-diagram-project"
                     Title="Nothing related yet"
-                    Message="Link another document with [[Name]], or keep writing: documents that share concepts appear here once they are indexed."
+                    Message="Type [[ in the editor to link another document, or keep writing: documents that share concepts appear here once they are indexed."
                     Size="compact" />
             } @else {
                 @for (section of Sections; track section.Key) {

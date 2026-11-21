@@ -1,12 +1,12 @@
 /**
  * @fileoverview Integration check bundle `'docs-semantic-graph'` (IT185) — MJ Docs in the semantic graph,
  * against a live database: the seeded "MJ Docs" content source and "Library Knowledge" graph, artifact
- * indexing (`ArtifactGraphIndexer`, `ContentUploadIngestor.IngestText`), `[[Name]]` links, the shared-concept
- * edge provider, the provenance access policies, and graph-evidence retraction. Server transport.
+ * indexing (`ArtifactGraphIndexer`, `ContentUploadIngestor.IngestText`), durable record-mention links,
+ * the shared-concept edge provider, the provenance access policies, and graph-evidence retraction. Server transport.
  *
  * DSG1 saves nothing. DSG2–DSG6 (`RequiresMutation`) share a fixture the lifecycle creates and removes:
  * two Markdown Document artifacts owned by the harness user — A private, B shared read-only with a peer
- * user — where A's text links to B with `[[B]]`.
+ * user — where A's text links to B with a durable record-mention token created by `ConversationUtility.CreateRecordLink`.
  *
  * The artifact read hooks the server installs at boot are installed here too, so a doc node's visibility
  * is decided by the artifact ACL exactly as it is in MJAPI.
@@ -17,8 +17,9 @@
  *   - `docs-semantic-graph.DSG2` — (`RequiresMutation`) indexing an artifact creates one Content Item at its
  *     `record://` URL with the latest version's text, linked to the artifact through an Entity Record
  *     Document, and segmented into chunks; indexing again is a no-op
- *   - `docs-semantic-graph.DSG3` — (`RequiresMutation`) `[[B]]` becomes a `LinksTo` record link that the
- *     Library Knowledge graph projects as an edge; an unknown name stays unresolved
+ *   - `docs-semantic-graph.DSG3` — (`RequiresMutation`) a durable record-mention token to B becomes a `LinksTo`
+ *     record link that the Library Knowledge graph projects as an edge; an unknown entity token is skipped
+ *     and plain `[[Name]]` text stays unlinked
  *   - `docs-semantic-graph.DSG4` — (`RequiresMutation`) for the owner and the peer, a doc's content item and
  *     chunks are visible exactly when `ArtifactPermissionEngine` lets that person read the doc
  *   - `docs-semantic-graph.DSG5` — (`RequiresMutation`) a concept sourced from both docs relates them with a
@@ -28,6 +29,7 @@
  *     from B stays
  */
 import { randomUUID } from 'node:crypto';
+import { ConversationUtility } from '@memberjunction/ai-core-plus';
 import { RunView, UserInfo, UserRoleInfo } from '@memberjunction/core';
 import { EscapeSQLString, GroupByUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
@@ -261,13 +263,13 @@ export const DocsSemanticGraphChecks: NamedCheck[] = [
     },
     {
         Id: `${BUNDLE}.DSG3`,
-        Name: 'DSG3: [[B]] in A becomes a LinksTo record link that Library Knowledge projects as an edge; an unknown name stays unresolved',
+        Name: 'DSG3: a record-mention token to B in A becomes a LinksTo record link that Library Knowledge projects as an edge; unknown entity tokens are skipped and plain [[Name]] stays unlinked',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const f = requireFixture();
             const result = await index(ctx, f.A);
             Assert(result.Links != null, 'links are reconciled for an indexed artifact');
-            AssertEqual(result.Links!.Unresolved.join(','), `__IT185 Missing ${f.A.Name.slice(-8)}`, 'an unknown [[name]] stays unresolved');
+            AssertEqual(result.Links!.Skipped.join(','), `__IT185 Missing Entity ${f.A.Name.slice(-8)}`, 'an unknown entity token is skipped');
             const links = await readRows<{ TargetRecordID: string }>(ctx, 'MJ: Record Links', `SourceRecordID = '${EscapeSQLString(f.A.ID)}' AND LinkType = 'LinksTo'`, ['TargetRecordID']);
             AssertEqual(links.length, 1, 'exactly one LinksTo record link from A');
             Assert(UUIDsEqual(links[0].TargetRecordID, f.B.ID), 'the link points at B');
@@ -340,7 +342,8 @@ export const DocsSemanticGraphChecks: NamedCheck[] = [
             const orphan = await conceptSourcedFrom(ctx, `__IT185 Orphan ${randomUUID().slice(0, 8)}`, [before.Chunks[0]]);
             const survivor = await conceptSourcedFrom(ctx, `__IT185 Survivor ${randomUUID().slice(0, 8)}`, [before.Chunks[0], b.Chunks[0]]);
 
-            f.Versions.push(await saveVersion(ctx, f.A, 2, `# ${f.A.Name}\n\nRewritten. Still see [[${f.B.Name}]].`));
+            const linkToB = ConversationUtility.CreateRecordLink(ARTIFACTS, f.B.Name, { ID: f.B.ID });
+            f.Versions.push(await saveVersion(ctx, f.A, 2, `# ${f.A.Name}\n\nRewritten. Still see ${linkToB}.`));
             const result = await index(ctx, f.A);
             AssertEqual(result.Outcomes.find((o) => UUIDsEqual(o.ContentSourceID, f.SourceID))?.Status, 'Indexed', `changed text is indexed: ${JSON.stringify(result.Outcomes)}`);
             const after = await indexedItem(ctx, f.A.ID);
@@ -384,8 +387,10 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
         Assert(await share.Save(), `sharing B with the peer failed: ${share.LatestResult?.CompleteMessage ?? ''}`);
         fixture = { SourceID: sources[0].ID, GraphID: sources[0].GraphID, Peer: peer, A, B, Versions: [], PeerShare: share, Concepts: [] };
         fixture.Versions.push(await saveVersion(ctx, B, 1, `# Discount Rules\n\nVolume discounts apply above 100 seats. Partners get 20 percent.\n\nDiscounts never stack.`));
+        const linkToB = ConversationUtility.CreateRecordLink(ARTIFACTS, B.Name, { ID: B.ID });
+        const unknownEntityLink = ConversationUtility.CreateRecordLink(`__IT185 Missing Entity ${suffix}`, 'Missing', { ID: randomUUID() });
         fixture.Versions.push(
-            await saveVersion(ctx, A, 1, `# Pricing Policy\n\nAll prices are net of tax. See [[${B.Name}]] for discounts and [[__IT185 Missing ${suffix}]] for history.\n\nPrices change once a year.`),
+            await saveVersion(ctx, A, 1, `# Pricing Policy\n\nAll prices are net of tax. See ${linkToB} for discounts, ${unknownEntityLink} for unknown entities, and plain [[${B.Name}]] text.\n\nPrices change once a year.`),
         );
         for (const art of [B, A]) {
             const result = await index(ctx, art);

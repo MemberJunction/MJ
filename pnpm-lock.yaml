@@ -6758,6 +6758,9 @@ importers:
       '@memberjunction/actions-base':
         specifier: 6.3.0-edge.1
         version: link:../../../Actions/Base
+      '@memberjunction/ai-core-plus':
+        specifier: 6.3.0-edge.1
+        version: link:../../../AI/CorePlus
       '@memberjunction/ai-diagrams':
         specifier: 6.3.0-edge.1
         version: link:../../../AI/Diagrams
@@ -6788,6 +6791,9 @@ importers:
       '@memberjunction/ng-code-editor':
         specifier: 6.3.0-edge.1
         version: link:../code-editor
+      '@memberjunction/ng-composer':
+        specifier: 6.3.0-edge.1
+        version: link:../composer
       '@memberjunction/ng-export-service':
         specifier: 6.3.0-edge.1
         version: link:../export-service
@@ -11511,9 +11517,6 @@ importers:
       '@memberjunction/document-parsing':
         specifier: 6.3.0-edge.1
         version: link:../../DocumentParsing
-      '@memberjunction/generic-database-provider':
-        specifier: 6.3.0-edge.1
-        version: link:../../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.3.0-edge.1
         version: link:../../MJGlobal

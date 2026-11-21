@@ -1,6 +1,8 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ComposerModule } from '@memberjunction/ng-composer';
+import { ConversationUtility } from '@memberjunction/ai-core-plus';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   EntityInfo,
@@ -11,7 +13,7 @@ import {
   type UserInfo,
 } from '@memberjunction/core';
 import { renderComponentFixture } from '@memberjunction/ng-test-utils';
-import { DocumentLiveBlockEngine, UserInfoEngine, type MJArtifactVersionEntity } from '@memberjunction/core-entities';
+import { ArtifactPermissionEngine, DocumentLiveBlockEngine, UserInfoEngine, type MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { MJ_EMBEDDED_ARTIFACT_ANCESTORS, MJ_MAX_EMBED_DEPTH } from '../artifact-type-plugin-viewer.component';
 import { MarkdownArtifactViewerComponent } from './markdown-artifact-viewer.component';
 import { MjContextMenuComponent } from '../context-menu/mj-context-menu.component';
@@ -322,6 +324,7 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
       imports: [
         CommonModule,
         FormsModule,
+        ComposerModule,
         StubMarkdownComponent,
         StubArtifactTypePluginViewerComponent,
         ArtifactAgentPresenceBarComponent,
@@ -1536,6 +1539,7 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
       imports: [
         CommonModule,
         FormsModule,
+        ComposerModule,
         StubMarkdownComponent,
         StubArtifactTypePluginViewerComponent,
         ArtifactAgentPresenceBarComponent,
@@ -1869,6 +1873,7 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
       imports: [
         CommonModule,
         FormsModule,
+        ComposerModule,
         StubMarkdownComponent,
         StubArtifactTypePluginViewerComponent,
         ArtifactAgentPresenceBarComponent,
@@ -1913,6 +1918,7 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
       imports: [
         CommonModule,
         FormsModule,
+        ComposerModule,
         StubMarkdownComponent,
         StubArtifactTypePluginViewerComponent,
         ArtifactAgentPresenceBarComponent,
@@ -1949,6 +1955,7 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
       imports: [
         CommonModule,
         FormsModule,
+        ComposerModule,
         StubMarkdownComponent,
         StubArtifactTypePluginViewerComponent,
         ArtifactAgentPresenceBarComponent,
@@ -1995,5 +2002,150 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
       Status: 'Pending',
     });
     expect(f.componentInstance.MarkdownContent).toContain('Targeted paragraph updated.');
+  });
+
+  it('renders readable vs unreadable durable doc-link chips, round-trips editable chips, and exports stored labels as plain text', async () => {
+    const readableId = '11111111-1111-4111-8111-111111111111';
+    const unreadableId = '22222222-2222-4222-8222-222222222222';
+    const readableToken = ConversationUtility.CreateRecordLink('MJ: Artifacts', 'Pricing Policy', { ID: readableId });
+    const unreadableToken = ConversationUtility.CreateRecordLink('MJ: Artifacts', 'Executive Memo', { ID: unreadableId });
+    const content = `See ${readableToken} and ${unreadableToken}.`;
+
+    const permSpy = vi
+      .spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions')
+      .mockImplementation(async (_provider, artifactId) => ({
+        ArtifactID: artifactId ?? '',
+        CanRead: artifactId === readableId,
+        CanEdit: false,
+        CanDelete: false,
+        CanShare: false,
+        Source: artifactId === readableId ? 'ArtifactPermission' : 'Denied',
+        Reason: artifactId === readableId ? 'Shared' : 'Denied',
+      }));
+
+    try {
+      const f = await renderDocsViewer(content, true);
+      const comp = f.componentInstance;
+      comp.SetViewMode('preview');
+      // Trigger access checks for both tokens and let them settle.
+      comp.RenderPreviewMarkdown(content);
+      await new Promise((r) => setTimeout(r, 20));
+      f.detectChanges();
+
+      const previewHtml = comp.RenderPreviewMarkdown(content);
+      expect(previewHtml).toContain('mj-doc-link-chip--readable');
+      expect(previewHtml).toContain('mj-doc-link-chip--unreadable');
+      expect(previewHtml).toContain('>Pricing Policy<');
+      expect(previewHtml).toContain('>Executive Memo<');
+      expect(previewHtml).toContain('You don&#39;t have access');
+
+      // Clicking readable chip emits OpenEntityRecord; clicking unreadable chip does nothing.
+      const opened: Array<{ entityName: string; id: string }> = [];
+      comp.OpenEntityRecord.subscribe((evt) => {
+        opened.push({ entityName: evt.entityName, id: String(evt.compositeKey.GetValueByFieldName('ID') ?? '') });
+      });
+
+      const host = document.createElement('div');
+      host.innerHTML = previewHtml;
+      const readableChip = host.querySelector<HTMLElement>('.mj-doc-link-chip--readable');
+      const unreadableChip = host.querySelector<HTMLElement>('.mj-doc-link-chip--unreadable');
+      expect(readableChip).not.toBeNull();
+      expect(unreadableChip).not.toBeNull();
+
+      comp.OnDocRecordLinkClick({ target: unreadableChip, preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as Event);
+      expect(opened).toHaveLength(0);
+
+      comp.OnDocRecordLinkClick({ target: readableChip, preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as Event);
+      expect(opened).toEqual([{ entityName: 'MJ: Artifacts', id: readableId }]);
+
+      // Editable HTML renders atomic chips and ExtractMarkdownFromEditableElement round-trips raw tokens losslessly.
+      const editableHost = document.createElement('div');
+      editableHost.innerHTML = comp.RenderInlineEditableHtml(content);
+      expect(comp.ExtractMarkdownFromEditableElement(editableHost)).toBe(content);
+
+      // Markdown export and PDF export emit stored plain-text labels; Source mode retains raw tokens.
+      const importExport = f.debugElement.injector.get(DocumentImportExportService);
+      const mdDownload = vi.spyOn(importExport, 'DownloadMarkdownFile').mockImplementation(() => undefined);
+      const pdfExport = vi.spyOn(importExport, 'ExportPrintablePdf').mockImplementation(() => undefined);
+
+      comp.OnExportMarkdown();
+      expect(mdDownload).toHaveBeenCalledWith('See Pricing Policy and Executive Memo.', expect.any(String));
+
+      await comp.ExportPDF();
+      expect(pdfExport).toHaveBeenCalledWith(expect.stringContaining('See Pricing Policy and Executive Memo.'), expect.any(String), 'portrait');
+      expect(pdfExport.mock.calls[0][0]).not.toContain('"_mode":"mention"');
+      expect(comp.MarkdownContent).toBe(content);
+    } finally {
+      permSpy.mockRestore();
+    }
+  });
+
+  it('opens [[ autocomplete as the current user in edit and suggest modes and inserts a durable record-link token on selection', async () => {
+    const targetId = '33333333-3333-4333-8333-333333333333';
+    const privateId = '44444444-4444-4444-8444-444444444444';
+    const baseMock = createDocsMockProvider();
+    const currentUser = baseMock.provider.CurrentUser;
+    const originalRunView = baseMock.provider.RunView;
+    const artifactSearchUsers: Array<UserInfo | undefined> = [];
+    const customProvider = {
+      ...baseMock.provider,
+      RunView: async (params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult> => {
+        if (params.EntityName === 'MJ: Artifacts' && String(params.ExtraFilter ?? '').includes('LIKE')) {
+          artifactSearchUsers.push(contextUser);
+          // Simulates server read hook: privateId is NOT readable by currentUser.
+          return {
+            Success: true,
+            Results: [
+              { ID: targetId, Name: 'Discount Rules', Description: null, Type: 'Markdown Document' },
+            ],
+            RowCount: 1,
+            TotalRowCount: 1,
+            ExecutionTime: 0,
+            ErrorMessage: '',
+            UserViewRunID: '',
+          };
+        }
+        return originalRunView(params, contextUser);
+      },
+    } as unknown as IMetadataProvider;
+
+    const f = await renderDocsViewer('Initial paragraph.', false, customProvider);
+    const comp = f.componentInstance;
+    comp.SetViewMode('edit');
+    f.detectChanges();
+
+    const paraSeg = comp.DocumentSegments.find((s) => s.Kind === 'markdown');
+    expect(paraSeg).toBeDefined();
+
+    // Simulate typing "See [[Disc" in Edit mode
+    const fakeEl = document.createElement('div');
+    fakeEl.textContent = 'See [[Disc';
+    comp.OnEditableBlockInput(paraSeg!, { target: fakeEl } as unknown as Event);
+    await new Promise((r) => setTimeout(r, 20));
+    f.detectChanges();
+
+    expect(comp.ShowDocLinkMenu).toBe(true);
+    expect(artifactSearchUsers).toEqual([currentUser]);
+    expect(comp.DocLinkSuggestions.map((s) => s.id)).toEqual([targetId]);
+    expect(comp.DocLinkSuggestions.some((s) => s.id === privateId)).toBe(false);
+
+    // Selecting inserts ConversationUtility.CreateRecordLink token in Edit mode
+    comp.OnDocLinkSuggestionSelected(comp.DocLinkSuggestions[0]);
+    const expectedToken = ConversationUtility.CreateRecordLink('MJ: Artifacts', 'Discount Rules', { ID: targetId });
+    expect(comp.ShowDocLinkMenu).toBe(false);
+    expect(comp.MarkdownContent).toContain(`See ${expectedToken}`);
+
+    // Suggest mode also opens [[ autocomplete and creates a pending suggestion with the token
+    comp.SetViewMode('suggest');
+    f.detectChanges();
+    const suggestSeg = comp.DocumentSegments.find((s) => s.Kind === 'markdown')!;
+    const suggestEl = document.createElement('div');
+    suggestEl.textContent = 'Also [[Disc';
+    comp.OnEditableBlockInput(suggestSeg, { target: suggestEl } as unknown as Event);
+    await new Promise((r) => setTimeout(r, 20));
+    f.detectChanges();
+    expect(comp.ShowDocLinkMenu).toBe(true);
+    comp.OnDocLinkSuggestionSelected(comp.DocLinkSuggestions[0]);
+    expect(comp.Suggestions.some((s) => s.ProposedMarkdown.includes(expectedToken))).toBe(true);
   });
 });

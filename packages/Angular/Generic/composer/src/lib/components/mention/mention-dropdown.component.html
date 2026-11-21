@@ -58,6 +58,12 @@
                   [ngClass]="getIconClasses(suggestion.icon || 'fa-solid fa-wand-magic-sparkles')"
                 ></i>
               }
+              <!-- Record / document link icon -->
+              @if (suggestion.type === 'record') {
+                <i
+                  [ngClass]="getIconClasses(suggestion.icon || 'fa-solid fa-file-lines')"
+                ></i>
+              }
             </div>
             <div class="suggestion-content">
               <div class="suggestion-name">
@@ -76,6 +82,9 @@
                 @if (suggestion.type === 'skill') {
                   <span class="suggestion-type-badge skill"
                         [style.background]="suggestion.color || null">Skill</span>
+                }
+                @if (suggestion.type === 'record') {
+                  <span class="suggestion-type-badge record">Record</span>
                 }
                 {{ suggestion.displayName }}
               </div>
