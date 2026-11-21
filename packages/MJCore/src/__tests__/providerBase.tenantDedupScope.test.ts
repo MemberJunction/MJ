@@ -26,8 +26,9 @@ class TenantDedupTestProvider extends TestMetadataProvider {
     public DelayMs = 15;
     public CustomScopeSuffix = '';
 
-    protected override ComputeRunViewDedupContextScope(contextUser?: UserInfo): string {
+    protected override ComputeRunViewDedupContextScope(contextUser?: UserInfo): string | null {
         const base = super.ComputeRunViewDedupContextScope(contextUser);
+        if (base === null) return null;
         if (!this.CustomScopeSuffix) return base;
         return base ? `${base}|${this.CustomScopeSuffix}` : this.CustomScopeSuffix;
     }
@@ -182,10 +183,12 @@ describe('ProviderBase RunView dedup — tenant & per-request security context i
         expect(provider.CallCount).toBe(6);
 
         const wg1 = makeUser(SHARED_USER_ID, (u) => { u.WidgetGuestContext = { WidgetID: 'w-1' }; u.AnonymousVisitorID = 'v-1'; });
-        const wg2 = makeUser(SHARED_USER_ID, (u) => { u.WidgetGuestContext = { WidgetID: 'w-1' }; u.AnonymousVisitorID = 'v-2'; });
+        const wg2 = makeUser(SHARED_USER_ID, (u) => { u.WidgetGuestContext = { WidgetID: 'w-2' }; u.AnonymousVisitorID = 'v-1'; });
+        const wg3 = makeUser(SHARED_USER_ID, (u) => { u.WidgetGuestContext = { WidgetID: 'w-1' }; u.AnonymousVisitorID = 'v-2'; });
         await provider.RunViews([baseParams()], wg1);
         await provider.RunViews([baseParams()], wg2);
-        expect(provider.CallCount).toBe(8);
+        await provider.RunViews([baseParams()], wg3);
+        expect(provider.CallCount).toBe(9);
 
         const mla1 = makeUser(SHARED_USER_ID, (u) => {
             u.IsMagicLinkAnonymous = true;
@@ -195,7 +198,47 @@ describe('ProviderBase RunView dedup — tenant & per-request security context i
         }, ['role-b']);
         await provider.RunViews([baseParams()], mla1);
         await provider.RunViews([baseParams()], mla2);
-        expect(provider.CallCount).toBe(10);
+        expect(provider.CallCount).toBe(11);
+    });
+
+    it('preserves case sensitivity for non-UUID tenant IDs (e.g. PostgreSQL mixed-case TenantIDs)', async () => {
+        provider.DelayMs = 0;
+        const uUpper = makeUser(SHARED_USER_ID, (u) => { u.TenantContext = { TenantID: 'TenantA', Source: 'header' }; });
+        const uLower = makeUser(SHARED_USER_ID, (u) => { u.TenantContext = { TenantID: 'tenanta', Source: 'header' }; });
+
+        await provider.RunViews([baseParams()], uUpper);
+        await provider.RunViews([baseParams()], uLower);
+
+        expect(provider.CallCount).toBe(2);
+    });
+
+    it('bypasses dedup completely when TenantContext contains nested objects or object arrays', async () => {
+        provider.DelayMs = 0;
+        const uObj = makeUser(SHARED_USER_ID, (u) => {
+            u.TenantContext = {
+                TenantID: ORG_A,
+                Source: 'header',
+                nestedScope: { region: 'us-east' },
+            } as unknown as TenantContext;
+        });
+
+        await provider.RunViews([baseParams()], uObj);
+        await provider.RunViews([baseParams()], uObj);
+
+        expect(provider.CallCount).toBe(2);
+
+        const uObjArr = makeUser(SHARED_USER_ID, (u) => {
+            u.TenantContext = {
+                TenantID: ORG_A,
+                Source: 'header',
+                scopes: [{ id: 's-1' }],
+            } as unknown as TenantContext;
+        });
+
+        await provider.RunViews([baseParams()], uObjArr);
+        await provider.RunViews([baseParams()], uObjArr);
+
+        expect(provider.CallCount).toBe(4);
     });
 
     it('allows provider subclasses to extend ComputeRunViewDedupContextScope for custom per-call isolation', async () => {

@@ -1,14 +1,7 @@
-import { BaseEntity, BaseEntityEvent, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { EscapeSQLString, MJEventType, MJGlobal, NormalizeUUID, RegisterClass, UserScopedCacheKey, UUIDsEqual } from '@memberjunction/global';
+import { Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { EscapeSQLString, MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import type { MJSearchScopePermissionEntity, MJAIAgentEntity, MJAISkillEntity, MJAISkillSearchScopeEntity } from '@memberjunction/core-entities';
-
-/** Shape of a short-TTL permission cache entry. */
-interface PermissionCacheEntry<T> {
-    data: T;
-    scopeID: string;
-    expiresAt: number;
-}
 
 /**
  * Permission level granted on a SearchScope. None is an explicit deny that
@@ -227,73 +220,6 @@ export const SEARCH_SCOPE_PERMISSION_RESOLVER_KEY = 'SearchScopePermissionResolv
  */
 @RegisterClass(SearchScopePermissionResolverBase, SEARCH_SCOPE_PERMISSION_RESOLVER_KEY)
 export class SearchScopePermissionResolver extends SearchScopePermissionResolverBase {
-    /**
-     * Short-TTL user-scoped caches for permission and assignment lookups, invalidated
-     * immediately on save/delete/remote-invalidate events for the backing entities.
-     */
-    private static readonly CACHE_TTL_MS = 30 * 1000; // 30 seconds
-    private static permissionRowsCache = new Map<string, PermissionCacheEntry<MJSearchScopePermissionEntity[]>>();
-    private static agentScopeCache = new Map<string, PermissionCacheEntry<boolean>>();
-    private static skillScopeRowsCache = new Map<string, PermissionCacheEntry<MJAISkillSearchScopeEntity[]>>();
-    private static invalidationListenerRegistered = false;
-    private static readonly invalidatingEntities: ReadonlySet<string> = new Set([
-        'mj: search scope permissions',
-        'mj: ai agent search scopes',
-        'mj: ai skill search scopes',
-    ]);
-
-    /**
-     * Clears cached permission rows and agent/skill scope assignments.
-     * When `searchScopeID` is supplied, only entries for that scope are evicted.
-     */
-    public static ClearCache(searchScopeID?: string): void {
-        if (!searchScopeID) {
-            SearchScopePermissionResolver.permissionRowsCache.clear();
-            SearchScopePermissionResolver.agentScopeCache.clear();
-            SearchScopePermissionResolver.skillScopeRowsCache.clear();
-            return;
-        }
-        const targetScopeID = NormalizeUUID(searchScopeID);
-        for (const [key, entry] of Array.from(SearchScopePermissionResolver.permissionRowsCache.entries())) {
-            if (entry.scopeID === targetScopeID) {
-                SearchScopePermissionResolver.permissionRowsCache.delete(key);
-            }
-        }
-        for (const [key, entry] of Array.from(SearchScopePermissionResolver.agentScopeCache.entries())) {
-            if (entry.scopeID === targetScopeID) {
-                SearchScopePermissionResolver.agentScopeCache.delete(key);
-            }
-        }
-        for (const [key, entry] of Array.from(SearchScopePermissionResolver.skillScopeRowsCache.entries())) {
-            if (entry.scopeID === targetScopeID) {
-                SearchScopePermissionResolver.skillScopeRowsCache.delete(key);
-            }
-        }
-    }
-
-    /** Subscribe once to MJ entity mutation events so permission changes invalidate immediately. */
-    private static ensureInvalidationListener(): void {
-        if (SearchScopePermissionResolver.invalidationListenerRegistered) return;
-        SearchScopePermissionResolver.invalidationListenerRegistered = true;
-        try {
-            MJGlobal.Instance.GetEventListener(false).subscribe((event) => {
-                if (event.event === MJEventType.ComponentEvent && event.eventCode === BaseEntity.BaseEventCode) {
-                    const entityEvent = event.args as BaseEntityEvent;
-                    if (entityEvent?.type === 'save' || entityEvent?.type === 'delete' || entityEvent?.type === 'remote-invalidate') {
-                        const entityName = (entityEvent.baseEntity?.EntityInfo?.Name ?? entityEvent.entityName)?.toLowerCase().trim();
-                        if (entityName && SearchScopePermissionResolver.invalidatingEntities.has(entityName)) {
-                            const entityWithScope = entityEvent.baseEntity as { SearchScopeID?: unknown } | null;
-                            const scopeID = typeof entityWithScope?.SearchScopeID === 'string' ? entityWithScope.SearchScopeID : undefined;
-                            SearchScopePermissionResolver.ClearCache(scopeID);
-                        }
-                    }
-                }
-            });
-        } catch {
-            // Non-fatal: 30s TTL bounds staleness when event bus is unavailable
-        }
-    }
-
     /**
      * Resolves the effective permission. All UUID comparisons go through
      * UUIDsEqual to remain case-insensitive across SQL Server / PostgreSQL.
@@ -520,46 +446,21 @@ export class SearchScopePermissionResolver extends SearchScopePermissionResolver
         searchScopeID: string,
         contextUser: UserInfo,
     ): Promise<boolean> {
-        SearchScopePermissionResolver.ensureInvalidationListener();
-        const cacheKey = UserScopedCacheKey(contextUser?.ID, 'skill-scope', NormalizeUUID(skillID), NormalizeUUID(searchScopeID));
-        const nowMs = Date.now();
-        let rows: MJAISkillSearchScopeEntity[] | undefined;
-
-        if (cacheKey !== null) {
-            const cached = SearchScopePermissionResolver.skillScopeRowsCache.get(cacheKey);
-            if (cached && cached.expiresAt > nowMs) {
-                rows = cached.data;
-            } else if (cached) {
-                SearchScopePermissionResolver.skillScopeRowsCache.delete(cacheKey);
-            }
+        const rv = new RunView();
+        const result = await rv.RunView<MJAISkillSearchScopeEntity>({
+            EntityName: 'MJ: AI Skill Search Scopes',
+            ExtraFilter: `SkillID='${EscapeSQLString(skillID)}' AND SearchScopeID='${EscapeSQLString(searchScopeID)}' AND Status='Active'`,
+            ResultType: 'simple',
+            // Same reasoning as loadPermissionsForScope: a permission decision must never read
+            // a stale cache.
+            BypassCache: true,
+        }, contextUser);
+        if (!result.Success) {
+            throw new Error(
+                `SearchScopePermissionResolver: failed to check skill scope assignment for skill ${skillID}: ${result.ErrorMessage}`);
         }
-
-        if (rows === undefined) {
-            const rv = new RunView();
-            const result = await rv.RunView<MJAISkillSearchScopeEntity>({
-                EntityName: 'MJ: AI Skill Search Scopes',
-                ExtraFilter: `SkillID='${EscapeSQLString(skillID)}' AND SearchScopeID='${EscapeSQLString(searchScopeID)}' AND Status='Active'`,
-                ResultType: 'simple',
-                // Bypass RunView's shared cache; the resolver's own user-scoped short-TTL cache
-                // is invalidated on entity save/delete/remote-invalidate events.
-                BypassCache: true,
-            }, contextUser);
-            if (!result.Success) {
-                throw new Error(
-                    `SearchScopePermissionResolver: failed to check skill scope assignment for skill ${skillID}: ${result.ErrorMessage}`);
-            }
-            rows = result.Results ?? [];
-            if (cacheKey !== null) {
-                SearchScopePermissionResolver.skillScopeRowsCache.set(cacheKey, {
-                    data: rows,
-                    scopeID: NormalizeUUID(searchScopeID),
-                    expiresAt: nowMs + SearchScopePermissionResolver.CACHE_TTL_MS,
-                });
-            }
-        }
-
         const now = new Date();
-        return rows.some((r) =>
+        return (result.Results ?? []).some((r) =>
             (!r.StartAt || new Date(r.StartAt) <= now) && (!r.EndAt || new Date(r.EndAt) >= now));
     }
 
@@ -574,42 +475,22 @@ export class SearchScopePermissionResolver extends SearchScopePermissionResolver
         searchScopeID: string,
         contextUser: UserInfo,
     ): Promise<boolean> {
-        SearchScopePermissionResolver.ensureInvalidationListener();
-        const cacheKey = UserScopedCacheKey(contextUser?.ID, 'agent-scope', NormalizeUUID(agentID), NormalizeUUID(searchScopeID));
-        const nowMs = Date.now();
-        if (cacheKey !== null) {
-            const cached = SearchScopePermissionResolver.agentScopeCache.get(cacheKey);
-            if (cached && cached.expiresAt > nowMs) {
-                return cached.data;
-            }
-            if (cached) {
-                SearchScopePermissionResolver.agentScopeCache.delete(cacheKey);
-            }
-        }
-
         const rv = new RunView();
         const result = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: AI Agent Search Scopes',
             ExtraFilter: `AgentID='${EscapeSQLString(agentID)}' AND SearchScopeID='${EscapeSQLString(searchScopeID)}' AND Status='Active'`,
             Fields: ['ID'],
             ResultType: 'simple',
-            // Bypass RunView's shared cache; the resolver's own user-scoped short-TTL cache
-            // is invalidated on entity save/delete/remote-invalidate events.
+            // Same fail-closed semantics as loadPermissionsForScope: a stale
+            // cache must never let an Assigned-mode agent reach a scope it
+            // shouldn't.
             BypassCache: true,
         }, contextUser);
         if (!result.Success) {
             throw new Error(
                 `SearchScopePermissionResolver: failed to load AIAgentSearchScope rows for agent ${agentID}, scope ${searchScopeID}: ${result.ErrorMessage}`);
         }
-        const assigned = (result.Results?.length ?? 0) > 0;
-        if (cacheKey !== null) {
-            SearchScopePermissionResolver.agentScopeCache.set(cacheKey, {
-                data: assigned,
-                scopeID: NormalizeUUID(searchScopeID),
-                expiresAt: nowMs + SearchScopePermissionResolver.CACHE_TTL_MS,
-            });
-        }
-        return assigned;
+        return (result.Results?.length ?? 0) > 0;
     }
 
     /**
@@ -621,26 +502,15 @@ export class SearchScopePermissionResolver extends SearchScopePermissionResolver
         searchScopeID: string,
         contextUser: UserInfo,
     ): Promise<MJSearchScopePermissionEntity[]> {
-        SearchScopePermissionResolver.ensureInvalidationListener();
-        const cacheKey = UserScopedCacheKey(contextUser?.ID, 'scope-perms', NormalizeUUID(searchScopeID));
-        const nowMs = Date.now();
-        if (cacheKey !== null) {
-            const cached = SearchScopePermissionResolver.permissionRowsCache.get(cacheKey);
-            if (cached && cached.expiresAt > nowMs) {
-                return [...cached.data];
-            }
-            if (cached) {
-                SearchScopePermissionResolver.permissionRowsCache.delete(cacheKey);
-            }
-        }
-
         const rv = new RunView();
         const result = await rv.RunView<MJSearchScopePermissionEntity>({
             EntityName: 'MJ: Search Scope Permissions',
             ExtraFilter: `SearchScopeID='${EscapeSQLString(searchScopeID)}'`,
             ResultType: 'simple',
-            // Bypass RunView's shared cache; the resolver's own user-scoped short-TTL cache
-            // is invalidated on entity save/delete/remote-invalidate events.
+            // Permission decisions must NEVER read stale cache — a freshly-revoked grant
+            // or a freshly-granted permission must take effect immediately. Skipping
+            // the server-side RunView cache adds one DB query per resolver call but
+            // eliminates the security-correctness risk of a delayed permission update.
             BypassCache: true,
         }, contextUser);
         if (!result.Success) {
@@ -649,15 +519,7 @@ export class SearchScopePermissionResolver extends SearchScopePermissionResolver
             throw new Error(
                 `SearchScopePermissionResolver: failed to load permissions for scope ${searchScopeID}: ${result.ErrorMessage}`);
         }
-        const rows = result.Results ?? [];
-        if (cacheKey !== null) {
-            SearchScopePermissionResolver.permissionRowsCache.set(cacheKey, {
-                data: rows,
-                scopeID: NormalizeUUID(searchScopeID),
-                expiresAt: nowMs + SearchScopePermissionResolver.CACHE_TTL_MS,
-            });
-        }
-        return [...rows];
+        return result.Results ?? [];
     }
 
     /**

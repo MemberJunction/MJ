@@ -1979,6 +1979,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
 
         const key = this.generateDedupKey(params, contextUser);
+        if (key === null) {
+            return this.executeRunViewsPipeline<T>(params, contextUser);
+        }
         const existing = this._inflightViews.get(key);
 
         // ── Linger hit: resolved result still within the linger window ──
@@ -2267,6 +2270,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const entryIndices: number[] = [];
             for (const param of entry.params) {
                 const key = this.generateDedupKey([param], contextUser);
+                if (key === null) {
+                    entryIndices.push(uniqueParams.length);
+                    uniqueParams.push(param);
+                    continue;
+                }
                 let idx = uniqueKeys.get(key);
                 if (idx === undefined) {
                     idx = uniqueParams.length;
@@ -2450,6 +2458,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     private async runViewsUncoalesced<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
         const key = this.generateDedupKey(params, contextUser);
+        if (key === null) {
+            return this.executeRunViewsPipeline<T>(params, contextUser);
+        }
         const existing = this._inflightViews.get(key);
 
         // ── Linger hit ──
@@ -2712,8 +2723,19 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         return result;
     }
 
-    private generateDedupKey(params: RunViewParams[], contextUser?: UserInfo): string {
+    private static readonly UUID_VALUE_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    private static normalizeDedupScalarString(value: string): string {
+        const trimmed = value.trim();
+        return ProviderBase.UUID_VALUE_REGEX.test(trimmed) ? NormalizeUUID(trimmed) : trimmed;
+    }
+
+    private generateDedupKey(params: RunViewParams[], contextUser?: UserInfo): string | null {
         const effectiveUser = contextUser ?? this.CurrentUser;
+        const contextScope = this.ComputeRunViewDedupContextScope(effectiveUser);
+        if (contextScope === null) {
+            return null;
+        }
         const userIdSegment = contextUser?.ID ? NormalizeUUID(contextUser.ID) : '';
         const parts = params.map(p => {
             const base = LocalCacheManager.Instance.GenerateRunViewFingerprint(p, this.InstanceConnectionString);
@@ -2730,7 +2752,6 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return `${base}|${extras}`;
         });
         const baseScope = this.RunViewDedupScope;
-        const contextScope = this.ComputeRunViewDedupContextScope(effectiveUser);
         const combinedScope = contextScope
             ? (baseScope ? `${baseScope}|${contextScope}` : contextScope)
             : baseScope;
@@ -2746,28 +2767,36 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * lingering dedup slot.
      *
      * Returns `''` when the user carries no per-request isolation context, keeping unscoped
-     * dedup keys unchanged. Subclasses may override this (calling `super`) to fold in
-     * additional per-call scope such as async-local tenant state.
+     * dedup keys unchanged. Returns `null` to bypass deduplication for the call when an
+     * unknown / non-primitive `TenantContext` field shape (e.g. a nested object or array of
+     * objects) is present so isolation is never silently weakened. Subclasses may override
+     * this (calling `super`) to fold in additional per-call scope such as async-local tenant state.
      */
-    protected ComputeRunViewDedupContextScope(contextUser?: UserInfo): string {
+    protected ComputeRunViewDedupContextScope(contextUser?: UserInfo): string | null {
         if (!contextUser) return '';
         const segments: string[] = [];
 
         if (contextUser.TenantContext) {
             const scalarEntries: string[] = [];
             for (const [key, value] of Object.entries(contextUser.TenantContext)) {
-                const lowerKey = key.toLowerCase();
-                const isIdKey = lowerKey.endsWith('id') || lowerKey.endsWith('ids');
+                if (value === undefined || value === null) {
+                    continue;
+                }
                 if (typeof value === 'string') {
-                    scalarEntries.push(`${key}=${isIdKey ? NormalizeUUID(value) : value.trim()}`);
+                    // Only lower-case genuine UUIDs; non-UUID tenant IDs can be case-sensitive (e.g. PostgreSQL)
+                    scalarEntries.push(`${key}=${ProviderBase.normalizeDedupScalarString(value)}`);
                 } else if (typeof value === 'number' || typeof value === 'boolean') {
                     scalarEntries.push(`${key}=${String(value)}`);
                 } else if (Array.isArray(value) && value.every(v => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')) {
                     const serialized = value
-                        .map(v => (typeof v === 'string' && isIdKey ? NormalizeUUID(v) : String(v).trim()))
+                        .map(v => (typeof v === 'string' ? ProviderBase.normalizeDedupScalarString(v) : String(v)))
                         .sort()
                         .join(',');
                     scalarEntries.push(`${key}=[${serialized}]`);
+                } else {
+                    // Fail closed: nested objects or arrays of objects cannot be safely folded
+                    // into a flat scalar key, so bypass dedup for this call.
+                    return null;
                 }
             }
             scalarEntries.sort();

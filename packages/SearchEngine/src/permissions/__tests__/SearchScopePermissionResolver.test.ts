@@ -66,12 +66,6 @@ const skillsForAgentStub = vi.fn((): Array<{ ID: string }> => [{ ID: 'ANY' }]);
 vi.mock('@memberjunction/global', () => ({
     UUIDsEqual: (a?: string | null, b?: string | null) =>
         !!a && !!b && a.toLowerCase() === b.toLowerCase(),
-    NormalizeUUID: (id: string) => id.trim().toLowerCase(),
-    UserScopedCacheKey: (userID: string | null | undefined, ...parts: string[]) => {
-        if (!userID || userID.trim() === '') return null;
-        return [...parts, `u:${userID.trim().toLowerCase()}`].join(':');
-    },
-    MJEventType: { ComponentEvent: 'ComponentEvent' },
     // The resolver escapes every value it interpolates into an ExtraFilter. A hand-written module
     // mock has to carry each function the module under test imports, or the import resolves to
     // undefined and every test dies on "is not a function" — which is what a missing entry here
@@ -84,7 +78,6 @@ vi.mock('@memberjunction/global', () => ({
                 CreateInstance: () => null,
                 Register: () => { /* no-op */ },
             },
-            GetEventListener: () => ({ subscribe: () => ({ unsubscribe: () => { /* no-op */ } }) }),
         },
     },
 }));
@@ -139,7 +132,6 @@ describe('SearchScopePermissionResolver', () => {
     let resolver: SearchScopePermissionResolver;
 
     beforeEach(() => {
-        SearchScopePermissionResolver.ClearCache();
         resolver = new SearchScopePermissionResolver();
         mockRows.length = 0;
         mockAgentScopeAssignments.length = 0;

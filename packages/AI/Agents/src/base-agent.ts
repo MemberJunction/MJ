@@ -14653,7 +14653,10 @@ The context is now within limits. Please retry your request with the recovered c
                 apiKeys: params.apiKeys, // propagate API keys to sub-agent
                 CredentialScope: params.CredentialScope, // a sub-agent may not spend keys its parent could not
                 Audience: params.Audience, // a sub-agent's output reaches the same room; it re-hydrates the IDs itself
-                inputArtifacts: this._artifactToolManager.ExportInputArtifacts(params.inputArtifacts), // propagate input + workspace-created artifacts so sub-agents inherit the parent's manifest + tools
+                // Propagate input + workspace-created artifacts (or explicit `[]` when none exist)
+                // so sub-agents inherit the parent's manifest + tools without re-scanning conversation
+                // artifact tables inside AgentRunner.hydrateConversationArtifacts.
+                inputArtifacts: this._artifactToolManager.ExportInputArtifacts(params.inputArtifacts) ?? [],
                 data: {
                         ...params.data,
                         ...templateParameters,

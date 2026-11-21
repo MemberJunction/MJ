@@ -124,48 +124,56 @@ describe('SearchEnricher & FullTextSearchProvider — hot-path optimizations', (
         });
     });
 
-    describe('SearchEnricher.ExcludeEntitySourcedContentItems — zero-entity-source fast path', () => {
-        it('skips MJ: Content Items DB lookup when entitySourceIDs is empty and metadata engine is unconstrained', async () => {
-            const results = [makeItem({ EntityName: 'MJ: Content Items', RecordID: 'ci-ext-1' })];
-
-            const output = await enricher.ExcludeEntitySourcedContentItems(results, USER);
-
-            expect(output).toHaveLength(1);
-            expect(output[0].RecordID).toBe('ci-ext-1');
-            expect(mockRunViewFn).not.toHaveBeenCalled();
-        });
-
-        it('skips DB lookup when RawMetadata.ContentSourceID names a known non-entity source even if entity sources exist', async () => {
-            mockKHState.contentSources = [
-                { ID: 'cs-entity-1', ContentSourceTypeID: 'cst-entity-id', Name: 'Core Entities' },
-                { ID: 'cs-web-1', ContentSourceTypeID: 'cst-web-id', Name: 'Docs' },
+    describe('SearchEnricher.ExcludeEntitySourcedContentItems — preserves non-Entity EntityRecordDocumentID promotion', () => {
+        it('promotes an Upload-sourced content item linked to an EntityRecordDocumentID even when no Entity ContentSource exists', async () => {
+            mockKHState.contentSourceTypes = [
+                { ID: 'cst-entity-id', Name: 'Entity' },
+                { ID: 'cst-upload-id', Name: 'Upload' },
             ];
+            mockKHState.contentSources = [
+                { ID: 'cs-upload-1', ContentSourceTypeID: 'cst-upload-id', Name: 'Member Uploads' },
+            ];
+            mockRunViewFn
+                .mockResolvedValueOnce({
+                    Success: true,
+                    Results: [{ ID: 'ci-1', ContentSourceID: 'cs-upload-1', EntityRecordDocumentID: 'erd-1' }],
+                })
+                .mockResolvedValueOnce({
+                    Success: true,
+                    Results: [{ ID: 'erd-1', Entity: 'Accounts', RecordID: 'acct-9' }],
+                });
+
             const results = [
                 makeItem({
                     EntityName: 'MJ: Content Items',
-                    RecordID: 'ci-web-1',
-                    RawMetadata: JSON.stringify({ ContentSourceID: 'cs-web-1' }),
+                    RecordID: 'ci-1',
+                    RawMetadata: JSON.stringify({ ContentSourceID: 'cs-upload-1' }),
                 }),
             ];
 
             const output = await enricher.ExcludeEntitySourcedContentItems(results, USER);
 
             expect(output).toHaveLength(1);
-            expect(mockRunViewFn).not.toHaveBeenCalled();
+            expect(output[0].EntityName).toBe('Accounts');
+            expect(output[0].RecordID).toBe('acct-9');
+            expect(mockRunViewFn).toHaveBeenCalledTimes(2);
         });
 
-        it('fails closed (still queries DB) when KnowledgeHubMetadataEngine.IsPermissionConstrained is true', async () => {
-            mockKHState.isPermissionConstrained = true;
-            mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
-            const results = [makeItem({ EntityName: 'MJ: Content Items', RecordID: 'ci-unknown' })];
+        it('skips DB lookup when RawMetadata already resolves Entity and RecordID directly', async () => {
+            const results = [
+                makeItem({
+                    EntityName: 'MJ: Content Items',
+                    RecordID: 'ci-direct',
+                    RawMetadata: JSON.stringify({ Entity: 'Accounts', RecordID: 'acct-42' }),
+                }),
+            ];
 
-            await enricher.ExcludeEntitySourcedContentItems(results, USER);
+            const output = await enricher.ExcludeEntitySourcedContentItems(results, USER);
 
-            expect(mockRunViewFn).toHaveBeenCalledTimes(1);
-            expect(mockRunViewFn).toHaveBeenCalledWith(
-                expect.objectContaining({ EntityName: 'MJ: Content Items' }),
-                USER,
-            );
+            expect(output).toHaveLength(1);
+            expect(output[0].EntityName).toBe('Accounts');
+            expect(output[0].RecordID).toBe('acct-42');
+            expect(mockRunViewFn).not.toHaveBeenCalled();
         });
     });
 

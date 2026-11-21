@@ -251,4 +251,34 @@ describe('VectorSearchProvider — user-scoped metadata cache & non-colocated cl
         expect(mockRunViewFn).toHaveBeenCalledTimes(6);
         expect(mockCreateInstance).toHaveBeenCalledTimes(3);
     });
+
+    it('bounds vectorIndexCache and vectorDatabaseCache to METADATA_CACHE_MAX_SIZE (100) via LRU eviction', async () => {
+        mockCreateInstance.mockReturnValue(makeDriver(false));
+
+        // Populate 100 distinct users (0..99)
+        for (let i = 0; i < 100; i++) {
+            const u = { ID: `user-${i}`, Email: `u${i}@example.com` } as UserInfo;
+            await provider.Search('q', 5, undefined, u);
+        }
+        expect(mockRunViewFn).toHaveBeenCalledTimes(200);
+
+        // Touch user-0 so user-1 becomes the LRU victim
+        const user0 = { ID: 'user-0', Email: 'u0@example.com' } as UserInfo;
+        const user1 = { ID: 'user-1', Email: 'u1@example.com' } as UserInfo;
+        await provider.Search('q', 5, undefined, user0);
+        expect(mockRunViewFn).toHaveBeenCalledTimes(200);
+
+        // 101st user evicts user-1 while keeping user-0 cached
+        const user100 = { ID: 'user-100', Email: 'u100@example.com' } as UserInfo;
+        await provider.Search('q', 5, undefined, user100);
+        expect(mockRunViewFn).toHaveBeenCalledTimes(202);
+
+        // user-0 still hits cache (0 new RunView calls)
+        await provider.Search('q', 5, undefined, user0);
+        expect(mockRunViewFn).toHaveBeenCalledTimes(202);
+
+        // user-1 was evicted (2 new RunView calls)
+        await provider.Search('q', 5, undefined, user1);
+        expect(mockRunViewFn).toHaveBeenCalledTimes(204);
+    });
 });

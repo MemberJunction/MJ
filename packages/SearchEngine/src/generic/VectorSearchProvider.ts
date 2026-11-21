@@ -73,13 +73,55 @@ export class VectorSearchProvider extends BaseSearchProvider {
     private static readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
     /**
-     * Short-TTL user-scoped caches for vector index and database metadata, plus a pool of
-     * non-colocated VectorDBBase driver instances keyed by `(ClassKey, apiKey)`.
+     * Bounded short-TTL user-scoped LRU caches for vector index and database metadata, plus a pool
+     * of non-colocated VectorDBBase driver instances keyed by `(ClassKey, apiKey)`.
      */
     private static readonly METADATA_CACHE_TTL_MS = 30 * 1000; // 30 seconds
+    private static readonly METADATA_CACHE_MAX_SIZE = 100;
     private static vectorIndexCache = new Map<string, TimedMetadataCacheEntry<MJVectorIndexEntity[]>>();
     private static vectorDatabaseCache = new Map<string, TimedMetadataCacheEntry<MJVectorDatabaseEntity | null>>();
     private static vectorClientPool = new Map<string, VectorDBBase>();
+
+    /** Read from a bounded TTL LRU cache, promoting live entries and evicting expired ones. */
+    private static getTimedCacheEntry<T>(
+        cache: Map<string, TimedMetadataCacheEntry<T>>,
+        key: string,
+        now: number
+    ): { hit: true; data: T } | { hit: false } {
+        const entry = cache.get(key);
+        if (!entry) return { hit: false };
+        if (entry.expiresAt > now) {
+            cache.delete(key);
+            cache.set(key, entry);
+            return { hit: true, data: entry.data };
+        }
+        cache.delete(key);
+        return { hit: false };
+    }
+
+    /** Write to a bounded TTL LRU cache, sweeping expired entries and evicting oldest past cap. */
+    private static setTimedCacheEntry<T>(
+        cache: Map<string, TimedMetadataCacheEntry<T>>,
+        key: string,
+        data: T,
+        now: number
+    ): void {
+        if (cache.has(key)) {
+            cache.delete(key);
+        } else if (cache.size >= VectorSearchProvider.METADATA_CACHE_MAX_SIZE) {
+            for (const [k, v] of Array.from(cache.entries())) {
+                if (v.expiresAt <= now) {
+                    cache.delete(k);
+                }
+            }
+            while (cache.size >= VectorSearchProvider.METADATA_CACHE_MAX_SIZE) {
+                const oldestKey = cache.keys().next().value;
+                if (oldestKey === undefined) break;
+                cache.delete(oldestKey);
+            }
+        }
+        cache.set(key, { data, expiresAt: now + VectorSearchProvider.METADATA_CACHE_TTL_MS });
+    }
     private static invalidationListenerRegistered = false;
     private static readonly invalidatingEntities: ReadonlySet<string> = new Set([
         'mj: vector indexes',
@@ -382,12 +424,9 @@ export class VectorSearchProvider extends BaseSearchProvider {
         const cacheKey = UserScopedCacheKey(contextUser?.ID, 'vector-indexes');
         const now = Date.now();
         if (cacheKey !== null) {
-            const cached = VectorSearchProvider.vectorIndexCache.get(cacheKey);
-            if (cached && cached.expiresAt > now) {
+            const cached = VectorSearchProvider.getTimedCacheEntry(VectorSearchProvider.vectorIndexCache, cacheKey, now);
+            if (cached.hit) {
                 return cached.data;
-            }
-            if (cached) {
-                VectorSearchProvider.vectorIndexCache.delete(cacheKey);
             }
         }
 
@@ -401,10 +440,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
             return null;
         }
         if (cacheKey !== null) {
-            VectorSearchProvider.vectorIndexCache.set(cacheKey, {
-                data: indexResult.Results,
-                expiresAt: now + VectorSearchProvider.METADATA_CACHE_TTL_MS,
-            });
+            VectorSearchProvider.setTimedCacheEntry(VectorSearchProvider.vectorIndexCache, cacheKey, indexResult.Results, now);
         }
         return indexResult.Results;
     }
@@ -414,12 +450,9 @@ export class VectorSearchProvider extends BaseSearchProvider {
         const cacheKey = UserScopedCacheKey(contextUser?.ID, 'vector-db', NormalizeUUID(vectorDatabaseID));
         const now = Date.now();
         if (cacheKey !== null) {
-            const cached = VectorSearchProvider.vectorDatabaseCache.get(cacheKey);
-            if (cached && cached.expiresAt > now) {
+            const cached = VectorSearchProvider.getTimedCacheEntry(VectorSearchProvider.vectorDatabaseCache, cacheKey, now);
+            if (cached.hit) {
                 return cached.data;
-            }
-            if (cached) {
-                VectorSearchProvider.vectorDatabaseCache.delete(cacheKey);
             }
         }
 
@@ -435,10 +468,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
         }
         const vectorDB = dbResult.Results[0] ?? null;
         if (cacheKey !== null) {
-            VectorSearchProvider.vectorDatabaseCache.set(cacheKey, {
-                data: vectorDB,
-                expiresAt: now + VectorSearchProvider.METADATA_CACHE_TTL_MS,
-            });
+            VectorSearchProvider.setTimedCacheEntry(VectorSearchProvider.vectorDatabaseCache, cacheKey, vectorDB, now);
         }
         return vectorDB;
     }

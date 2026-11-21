@@ -782,10 +782,14 @@ export class AgentRunner {
             // - Step 7 (media) creates new AIAgentRunMedia and ConversationDetailAttachment records —
             //   entirely separate from steps 5 and 6
             //
-            // IMPORTANT: All of these MUST complete before the resolver publishes the 'complete'
-            // event, because the client reloads all conversation data from the DB when it receives
-            // that event. If any write hasn't flushed yet, the client would see stale data. They run
-            // SEQUENTIALLY (not in parallel) — see the dispatch note below the definitions.
+            // IMPORTANT: All user-visible writes MUST complete before the resolver publishes the
+            // 'complete' event, because the client reloads all conversation data from the DB when
+            // it receives that event. If any write hasn't flushed yet, the client would see stale
+            // data. They run SEQUENTIALLY (not in parallel) — see the dispatch note below.
+            // Exception: internal 'System Only' payload-only artifacts (not user-visible) are
+            // deliberately deferred asynchronously after user-visible writes settle so they never
+            // block completion, and leave `artifactInfo` undefined so no client artifact notification
+            // is sent for an internal payload record.
 
             // Step 5: Update agent response detail with final result.
             const updateDetail = async () => {
@@ -3617,9 +3621,11 @@ export class AgentRunner {
      * conversation is ever scanned twice.
      */
     private async hydrateConversationArtifacts<C>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentParams<C>> {
-        // Sub-agent runs inherit artifact context from their parent run and must not
-        // re-scan conversation artifact tables on every sub-agent invocation.
-        if (params.inputArtifacts !== undefined || !params.contextUser || params.parentRun != null) {
+        // Callers that already resolved artifacts (RunAgentInConversation, BaseAgent sub-agent
+        // delegation) pass `inputArtifacts` (at least `[]`), avoiding duplicate DB scans while
+        // callers that pass `parentRun` with `inputArtifacts: undefined` (e.g. realtime delegation
+        // without client artifact summaries) still scan the conversation.
+        if (params.inputArtifacts !== undefined || !params.contextUser) {
             return params;
         }
         const conversationId = await this.resolveConversationId(params);

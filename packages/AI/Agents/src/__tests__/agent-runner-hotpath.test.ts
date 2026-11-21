@@ -190,7 +190,7 @@ describe('AgentRunner — hot-path latency optimizations', () => {
     });
 
     describe('sub-agent hydrateConversationArtifacts skip', () => {
-        it('skips conversation artifact DB queries when params.parentRun is set', async () => {
+        it('skips conversation artifact DB queries when BaseAgent sub-agent delegation passes explicit inputArtifacts: []', async () => {
             const getEntitySpy = vi.fn();
             const provider = { GetEntityObject: getEntitySpy } as unknown as IMetadataProvider;
             const bridge = new AgentRunner(provider) as unknown as HydrationBridge;
@@ -202,6 +202,7 @@ describe('AgentRunner — hot-path latency optimizations', () => {
                 conversationId: 'conv-1',
                 conversationDetailId: 'detail-1',
                 parentRun: { ID: 'parent-run-1' },
+                inputArtifacts: [],
             } as unknown as ExecuteAgentParams;
 
             const result = await bridge.hydrateConversationArtifacts(params);
@@ -211,15 +212,16 @@ describe('AgentRunner — hot-path latency optimizations', () => {
             expect(getEntitySpy).not.toHaveBeenCalled();
         });
 
-        it('still scans conversation artifacts when params.parentRun is absent', async () => {
+        it('still scans conversation artifacts when params.parentRun is set but inputArtifacts is undefined (e.g. realtime delegation without client summaries)', async () => {
             const provider = { GetEntityObject: vi.fn() } as unknown as IMetadataProvider;
             const bridge = new AgentRunner(provider) as unknown as HydrationBridge;
 
             const params = {
-                agent: { ID: ORCHESTRATOR_ID, Name: 'Top-Level Agent' },
+                agent: { ID: SPECIALIST_ID, Name: 'Realtime Delegated Agent' },
                 conversationMessages: [],
                 contextUser: USER,
                 conversationId: 'conv-1',
+                parentRun: { ID: 'realtime-parent-1' },
             } as unknown as ExecuteAgentParams;
 
             await bridge.hydrateConversationArtifacts(params);

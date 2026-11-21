@@ -3059,9 +3059,12 @@ export class AIPromptRunner extends BaseModelRunner {
   /**
    * Parses `ModelSpecificResponseFormat` from the executing prompt, falling back to
    * `modelSelectionPrompt.ModelSpecificResponseFormat` when the main prompt leaves it unset.
-   * This preserves provider-specific parameters (e.g. Gemini `thinkingConfig`) authored on
-   * an agent's own prompt when `BaseAgent` executes a shared system loop prompt with
-   * `modelSelectionPrompt`.
+   * Called only when `effectiveResponseFormat` is active (e.g. `JSON` or `ModelSpecific` on the
+   * executing prompt or via a scoped override). This preserves provider-specific parameters
+   * (such as Gemini `thinkingConfig`) authored on an agent's own prompt when `BaseAgent` executes
+   * a shared system prompt with `ModelSelectionMode === 'Agent'`. Note: for providers that read
+   * `modelSpecificResponseFormat` as a `response_format` schema under `ModelSpecific` (e.g. Azure,
+   * Groq, Fireworks), the selection prompt's value also applies when the executing prompt omits it.
    */
   private resolveModelSpecificResponseFormat(
     prompt: MJAIPromptEntityExtended,

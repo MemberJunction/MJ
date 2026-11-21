@@ -939,7 +939,12 @@ export class ScopedSearchAction extends BaseAction {
         return undefined;
     }
 
-    /** Load the skill principal from AIEngine cache first, falling back to direct entity load; null when it cannot be loaded. */
+    /**
+     * Load the skill principal from AIEngine's shared metadata cache first, falling back to direct
+     * entity load; returns null when it cannot be loaded. Reading from AIEngine skips the per-user
+     * `entity.Load` read check on the skill definition row, which is safe because a skill principal
+     * only narrows search scope rather than widening data access.
+     */
     private async loadSkill(skillID: string, contextUser: UserInfo): Promise<MJAISkillEntity | null> {
         try {
             try {
@@ -961,7 +966,12 @@ export class ScopedSearchAction extends BaseAction {
         }
     }
 
-    /** Load the agent principal from AIEngine cache first, falling back to direct entity load; null when it cannot be loaded. */
+    /**
+     * Load the agent principal from AIEngine's shared metadata cache first, falling back to direct
+     * entity load; returns null when it cannot be loaded. Reading from AIEngine skips the per-user
+     * `entity.Load` read check on the agent definition row, which is safe because an agent principal
+     * only narrows search scope rather than widening data access.
+     */
     private async loadAgent(agentID: string, contextUser: UserInfo): Promise<MJAIAgentEntity | null> {
         try {
             try {
