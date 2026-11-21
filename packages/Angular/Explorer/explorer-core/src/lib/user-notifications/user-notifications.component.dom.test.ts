@@ -11,10 +11,10 @@ import { UserNotificationsComponent } from './user-notifications.component';
 
 @Component({ standalone: true, selector: 'mj-empty-state', template: '' })
 class EmptyStateStub {
-  @Input() Variant: unknown;
-  @Input() Icon: unknown;
-  @Input() Title: unknown;
-  @Input() Message: unknown;
+  @Input() Variant: string | undefined;
+  @Input() Icon: string | undefined;
+  @Input() Title: string | undefined;
+  @Input() Message: string | undefined;
 }
 
 @Component({ standalone: true, selector: 'mj-markdown', template: '<div class="md-stub">{{ data }}</div>' })
