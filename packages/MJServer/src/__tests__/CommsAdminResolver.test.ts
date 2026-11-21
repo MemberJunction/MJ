@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../util.js', () => ({
   GetReadWriteProvider: mocks.getReadWriteProvider,
+  GetReadOnlyProvider: mocks.getReadWriteProvider,
 }));
 
 vi.mock('@memberjunction/core', async () => {
@@ -294,7 +295,7 @@ describe('CommsAdminResolver', () => {
     const resolver = new CommsAdminResolver();
     const res = await resolver.CreateCommsSendingDomain('dom-1', nonAdminContext);
     expect(res.Success).toBe(false);
-    expect(res.ErrorMessage).toContain('Administrator role required');
+    expect(res.ErrorMessage).toContain('Communications: Admin');
   });
 
   it('RevokeCommsSuppression does not clear downstream SendGrid lists for internal Admin Block', async () => {

@@ -1,0 +1,14 @@
+[
+  {
+    "fields": {
+      "Name": "Communications: Admin",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants permission to manage Communications V2 sending domains, compliance gate simulations, and suppression revocations."
+    },
+    "primaryKey": {
+      "ID": "59024F63-B735-4A03-A904-47BC46A9BC5E"
+    }
+  }
+]

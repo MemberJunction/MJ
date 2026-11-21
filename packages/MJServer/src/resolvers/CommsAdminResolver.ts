@@ -1,7 +1,8 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { GetReadWriteProvider } from '../util.js';
-import { IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
+import { GetReadOnlyProvider, GetReadWriteProvider } from '../util.js';
+import { IsOwner } from '../auth/actionAuthorization.js';
+import { AuthorizationEvaluator, IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
 import {
   MJCommunicationComplianceRegimeEntity,
   MJCommunicationComplianceRegimeJurisdictionEntity,
@@ -118,14 +119,23 @@ function hasRemoveSuppression(provider: object): provider is SuppressionRemovabl
   );
 }
 
-function requireCommsAdmin(user: UserInfo | undefined): string | null {
+function requireCommsAdmin(context: AppContext): string | null {
+  const user = context.userPayload?.userRecord;
   if (!user) {
     return 'Authentication required';
   }
-  const isAdmin =
-    user.Type === 'Owner' ||
-    (user.UserRoles ?? []).some((ur) => ur.Role.trim().toLowerCase() === 'administrator');
-  return isAdmin ? null : 'Administrator role required for Communications Admin operations';
+  if (IsOwner(user)) {
+    return null;
+  }
+  const authorizations =
+    GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true })?.Authorizations ?? [];
+  const commsAuth = authorizations.find(
+    (a) => a.Name?.trim().toLowerCase() === 'communications: admin',
+  );
+  if (commsAuth && new AuthorizationEvaluator().UserCanExecuteWithAncestors(commsAuth, user, authorizations)) {
+    return null;
+  }
+  return 'Owner privileges or "Communications: Admin" authorization required for Communications Admin operations';
 }
 
 function mapReasonToSuppressionType(reason: MJCommunicationSuppressionEntity['Reason']): string | undefined {
@@ -150,7 +160,7 @@ export class CommsAdminResolver {
     @Arg('Input') input: CommsGateSimulationInput,
     @Ctx() context: AppContext,
   ): Promise<CommsGateSimulationResult> {
-    const authError = requireCommsAdmin(context.userPayload?.userRecord);
+    const authError = requireCommsAdmin(context);
     if (authError) {
       return { Success: false, ErrorMessage: authError };
     }
@@ -304,7 +314,7 @@ export class CommsAdminResolver {
     @Arg('DomainID') domainId: string,
     @Ctx() context: AppContext,
   ): Promise<CommsSendingDomainAuthResult> {
-    const authError = requireCommsAdmin(context.userPayload?.userRecord);
+    const authError = requireCommsAdmin(context);
     if (authError) {
       return { Success: false, ErrorMessage: authError };
     }
@@ -361,7 +371,7 @@ export class CommsAdminResolver {
     @Arg('DomainID') domainId: string,
     @Ctx() context: AppContext,
   ): Promise<CommsSendingDomainAuthResult> {
-    const authError = requireCommsAdmin(context.userPayload?.userRecord);
+    const authError = requireCommsAdmin(context);
     if (authError) {
       return { Success: false, ErrorMessage: authError };
     }
@@ -436,7 +446,7 @@ export class CommsAdminResolver {
     @Arg('DomainID') domainId: string,
     @Ctx() context: AppContext,
   ): Promise<CommsAdminMutationResult> {
-    const authError = requireCommsAdmin(context.userPayload?.userRecord);
+    const authError = requireCommsAdmin(context);
     if (authError) {
       return { Success: false, ErrorMessage: authError };
     }
@@ -482,7 +492,7 @@ export class CommsAdminResolver {
     @Arg('SuppressionID') suppressionId: string,
     @Ctx() context: AppContext,
   ): Promise<CommsAdminMutationResult> {
-    const authError = requireCommsAdmin(context.userPayload?.userRecord);
+    const authError = requireCommsAdmin(context);
     if (authError) {
       return { Success: false, ErrorMessage: authError };
     }
@@ -519,7 +529,9 @@ export class CommsAdminResolver {
     audit.NewValue = JSON.stringify({ Status: 'Revoked' });
     audit.Source = 'Admin';
     audit.ChangedByUserID = user.ID;
-    await audit.Save();
+    if (!(await audit.Save())) {
+      LogError(`RevokeCommunicationSuppression: failed to save audit log: ${audit.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    }
 
     const warning = await this.clearDownstreamSuppression(mdProvider, supp, user);
     await this.restoreEndpointIfNoActiveSuppressions(mdProvider, supp.CommunicationEndpointID, user);
@@ -558,7 +570,9 @@ export class CommsAdminResolver {
     ) {
       endpoint.Status = 'Active';
       endpoint.SoftBounceCount = 0;
-      await endpoint.Save();
+      if (!(await endpoint.Save())) {
+        LogError(`restoreEndpointIfNoActiveSuppressions: failed to restore endpoint ${endpointID}: ${endpoint.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+      }
     }
   }
 
