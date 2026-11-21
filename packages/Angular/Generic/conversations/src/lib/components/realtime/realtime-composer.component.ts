@@ -1,63 +1,74 @@
-import { ChangeDetectorRef, Component, ElementRef, EventEmitter, HostListener, Input, Output, ViewChild, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, Output, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { CdkMenuTrigger } from '@angular/cdk/menu';
+import type { ConnectedPosition } from '@angular/cdk/overlay';
+import {
+  MJButtonDirective,
+  MJMenuComponent,
+  MJMenuItemComponent,
+  MJMenuTriggerDirective,
+} from '@memberjunction/ng-ui-components';
 import { MediaControlsComponent, type MediaSharePanel, type MediaShareRequest } from '@memberjunction/ng-realtime-media';
-import type { MediaDevice, MediaDeviceSelection } from '@memberjunction/ai-realtime-client/media';
+import type { DisplayCaptureSurface, MediaDevice, MediaDeviceSelection } from '@memberjunction/ai-realtime-client/media';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 
+/** The More menu opens above its button (the bar sits at the bottom of the call), falling back below when cramped. */
+const MORE_MENU_POSITIONS: ConnectedPosition[] = [
+  { originX: 'center', originY: 'top', overlayX: 'center', overlayY: 'bottom', offsetY: -8 },
+  { originX: 'end', originY: 'top', overlayX: 'end', overlayY: 'bottom', offsetY: -8 },
+  { originX: 'start', originY: 'top', overlayX: 'start', overlayY: 'bottom', offsetY: -8 },
+  { originX: 'center', originY: 'bottom', overlayX: 'center', overlayY: 'top', offsetY: 8 },
+];
+
 /**
- * The call overlay's BOTTOM DOCK — the progressive-disclosure composer
- * (`plans/realtime/mockups/redesign-a-progressive.html`). One component, two shapes,
- * keyed off the overlay's disclosure {@link Level}:
+ * The call overlay's BOTTOM DOCK. Two shapes, keyed off {@link Open}:
  *
- *  - **Levels 0–1 (phone-call strip)** — big round call controls, centered: Mute, the
- *    Captions toggle (level 1+, arriving WITH the text it controls), the Details peek
- *    (level 0 paths where the surface panel isn't earned yet — lets the user look at the
- *    Activity/Whiteboard panels on demand), the Type control, and End call. There's no visible
- *    composer yet — the Type control opens it, and so does simply starting to type (the overlay
- *    captures the first printable keystroke and seeds it via {@link AppendAndFocus}).
- *  - **Level 2+ (the dock)** — mute/captions shrink to small circles and the in-call text
- *    input docks beside them (one bottom bar, per Redesign A's fused composer+controls).
- *    Submit calls {@link RealtimeSessionService.SendText}, which injects the text as a user
- *    turn into the SAME live voice call.
+ *  - **The call bar** (not typing) — one bar at every width, left to right: the microphone (with its device chevron,
+ *    so a dead mic is one click from the fix), the camera when the call offers it, Share only while sharing (so the
+ *    user can stop it), the Captions toggle, a More menu, and End call. More is a popup menu holding "Share your
+ *    screen" (with the same choices as `mj-media-controls`' Share menu) and "Type a message"; it is absent when it
+ *    would be empty. At full width each control carries a short label beneath it; {@link Compact} drops the labels.
+ *  - **The fused dock** (typing) — small circles and the in-call text input in one bottom bar. Submit calls
+ *    {@link RealtimeSessionService.SendText}, which injects the text as a user turn into the SAME live voice call.
  *
- * The controls are the design system's: the microphone, the camera and Share are `mj-media-controls` (the call controls
- * the LiveKit room uses too) and every other control an `mjButton` circle, sized per shape (52, 44 or 32 px). The camera
- * and Share show only when the overlay says the call offers them; the camera is optional here, so it is neutral while off.
- * In the strip and the lean dock the microphone carries the device chevron, whose menu picks the microphone and, while the
- * camera is open, the camera ({@link Devices}); the fused dock, short of room, leaves it out, as it does the Share arrow.
+ * The controls are the design system's: the microphone, the camera and Share are `mj-media-controls`, every other
+ * control an `mjButton` circle, and More an `mj-menu`.
  *
- * Mute talks to the session service directly (pure local toggle); captions / Details /
- * End are emitted up so the overlay shell owns that state and lifecycle.
+ * Mute talks to the session service directly (pure local toggle); captions and End are emitted up so the overlay
+ * shell owns that state and lifecycle. Details moved to the call header; the composer no longer renders it.
  */
 @Component({
   standalone: true,
   selector: 'mj-realtime-composer',
-  imports: [CommonModule, FormsModule, MJButtonDirective, MediaControlsComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    MJButtonDirective,
+    MJMenuComponent,
+    MJMenuItemComponent,
+    MJMenuTriggerDirective,
+    MediaControlsComponent,
+  ],
   templateUrl: './realtime-composer.component.html',
   styleUrl: './realtime-composer.component.css'
 })
 export class RealtimeComposerComponent {
   /**
-   * Whether the typed-input dock is OPEN. A two-way door owned by the user: the strip's
-   * Type control (or the T hotkey) opens it; the dock's hide control closes it — typing
+   * Whether the typed-input dock is OPEN. A two-way door owned by the user: the More menu's
+   * "Type a message" (or the T hotkey) opens it; the dock's hide control closes it — typing
    * never becomes permanent chrome. Default closed (voice-first), reset per session.
    */
   @Input() Open = false;
 
   /**
-   * COMPACT (Calm Orb · overlay) presentation: collapse the phone-call strip to the
-   * mockup's lean dock — **Mute + End + a "•••"** overflow button. The "•••" blooms a small
-   * sheet hosting the secondary actions (Captions / Details / Type). The fused level-2 dock
-   * (minis + text input) is unchanged. Fed from the overlay's resolved `Ui.compact`.
-   * Default `false` (the full 5-button strip is unchanged).
+   * COMPACT (Calm Orb · overlay) presentation: the call bar keeps the same controls but drops their text labels.
+   * The fused dock (minis + text input) is unchanged. Fed from the overlay's resolved `Ui.compact`. Default `false`.
    */
   @Input() Compact = false;
 
   /**
-   * Whether the Type buttons render (the strip's Type control and the lean dock's "Type" entry
-   * in the "•••" sheet). The overlay binds its resolved `allowTyping`. Only the controls that
+   * Whether the More menu offers "Type a message". The overlay binds its resolved `allowTyping`. Only the controls that
    * OPEN the typed-input dock are gated: an already-open dock keeps its hide control and Send.
    * Default `true`.
    */
@@ -75,25 +86,25 @@ export class RealtimeComposerComponent {
    */
   @Input() ShowCaptionsControl = true;
 
-  /** Emitted when the user opens (Type control / typing) or closes (hide control) the dock. */
+  /** Emitted when the user opens ("Type a message" / typing) or closes (hide control) the dock. */
   @Output() OpenChanged = new EventEmitter<boolean>();
 
   /** Whether captions are currently shown (drives the captions control's active state). */
   @Input() CaptionsOn = true;
 
-  /** Whether the Details peek control renders (true until the surface panel is earned). */
+  /** @deprecated Details moved to the call header; the composer no longer renders it. */
   @Input() ShowDetails = false;
 
-  /** Whether the Details peek is currently open (active state on the control). */
+  /** @deprecated Details moved to the call header; the composer no longer renders it. */
   @Input() DetailsOn = false;
 
   /** Emitted when the user toggles captions; the overlay flips its caption state. */
   @Output() CaptionsToggled = new EventEmitter<boolean>();
 
-  /** Emitted when the user toggles the Details peek (the on-demand surface panel). */
+  /** @deprecated Details moved to the call header; the composer no longer renders it, so this never fires. */
   @Output() DetailsToggled = new EventEmitter<void>();
 
-  /** Emitted when the user ends the call from the strip's End control. */
+  /** Emitted when the user ends the call from the End control. */
   @Output() EndRequested = new EventEmitter<void>();
 
   /** Emitted with the new muted state whenever the user toggles the mic from the dock. */
@@ -105,7 +116,7 @@ export class RealtimeComposerComponent {
   /** Show the camera button: the call offers the camera (the runtime's `CaptureOffers$`). */
   @Input() ShowCamera = false;
 
-  /** Show the Share button: the call offers a screen share. */
+  /** The call offers a screen share: "Share your screen" in the More menu, and the Share button while sharing. */
   @Input() ShowShare = false;
 
   /** Whether the camera is on (or starting). */
@@ -115,7 +126,7 @@ export class RealtimeComposerComponent {
   @Input() Sharing = false;
 
   /**
-   * The panels of the page the Share menu offers under "This panel" (the overlay's on-screen panels). The typed-input
+   * The panels of the page the share choices offer under "This panel" (the overlay's on-screen panels). The typed-input
    * dock, whose Share button has no menu, leaves them out.
    */
   @Input() SharePanels: readonly MediaSharePanel[] = [];
@@ -166,38 +177,49 @@ export class RealtimeComposerComponent {
     return this.Draft.trim().length > 0;
   }
 
-  /** True while the big-controls phone-call strip renders (instead of the dock). */
+  /** @deprecated The call bar renders whenever the dock is not {@link Open}; read `!Open` instead. */
   public get StripMode(): boolean {
     return !this.Open;
   }
 
-  /**
-   * Whether the compact "•••" overflow sheet (inactive Camera / Share, Details, Type) is open. Only
-   * used in {@link Compact} strip mode; any outside click or action selection closes it.
-   */
+  /** The kinds of display surface "Share your screen" offers. */
+  /** Whether the More menu is open (drives the More button's pressed look). */
   public MoreOpen = false;
 
-  /**
-   * Whether the compact "•••" sheet has anything to hold: an inactive camera or share, Details, or
-   * Type. When the host switches all of them off, the "•••" itself goes, so it never opens an empty
-   * sheet. Mirrors the sheet's own `@if` blocks in the template, so keep the two in step.
-   */
+  /** "Share your screen" is in the More menu: the call offers a share and the user is not already sharing. */
+  public get ShareInMore(): boolean {
+    return this.ShowShare && !this.Sharing;
+  }
+
+  /** Whether the More menu has anything to hold; without it the More button goes, so it never opens an empty menu. */
   public get HasMoreItems(): boolean {
-    return this.AllowTyping || this.ShowDetails || (this.ShowCamera && !this.CameraOn) || (this.ShowShare && !this.Sharing);
+    return this.AllowTyping || this.ShareInMore;
   }
 
-  /** Open/close the compact overflow sheet (stops propagation so the outside-click close skips it). */
-  public ToggleMore(event: MouseEvent): void {
-    event.stopPropagation();
-    this.MoreOpen = !this.MoreOpen;
-  }
-
-  /** Any outside click closes the compact overflow sheet. */
-  @HostListener('document:click')
-  public OnDocumentClick(): void {
-    if (this.MoreOpen) {
-      this.MoreOpen = false;
+  /** Points the More button's menu above it once the button renders. */
+  @ViewChild('moreTrigger', { read: CdkMenuTrigger })
+  private set moreTrigger(trigger: CdkMenuTrigger | undefined) {
+    if (trigger) {
+      trigger.menuPosition = MORE_MENU_POSITIONS;
     }
+  }
+
+  /** "Type a message" in the More menu: opens the typed-input dock. */
+  public OpenTyping(): void {
+    this.OpenChanged.emit(true);
+  }
+
+  /**
+   * "Share your screen": with no surface, the browser's own picker opens and offers every kind (screen, window, tab).
+   * @param surface The kind the picker should open on, when a caller wants one.
+   */
+  public RequestDisplay(surface?: DisplayCaptureSurface): void {
+    this.ShareRequested.emit(surface ? { Kind: 'display', PreferredSurface: surface } : { Kind: 'display' });
+  }
+
+  /** A panel picked under "Share a panel". */
+  public RequestPanel(key: string): void {
+    this.ShareRequested.emit({ Kind: 'panel', PanelKey: key });
   }
 
   /** Toggle the local microphone mute and surface the new state to the overlay. */
@@ -212,7 +234,7 @@ export class RealtimeComposerComponent {
     this.CaptionsToggled.emit(this.CaptionsOn);
   }
 
-  /** Focuses the dock's text input (the overlay's Type control lands here). */
+  /** Focuses the dock's text input (opening the dock lands here). */
   public FocusInput(): void {
     this.dockInput?.nativeElement.focus();
   }

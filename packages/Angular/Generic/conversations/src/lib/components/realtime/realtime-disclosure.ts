@@ -17,8 +17,14 @@ import { Subject } from 'rxjs';
  *    gear and other chrome unlock as the user demonstrates depth (or asks: the hero's
  *    "Show the conversation", the T-to-type hotkey, the Details peek). Milestones persist
  *    per-user via UserInfoEngine under {@link REALTIME_UX_PREF_KEY}; once a control is
- *    earned it never auto-hides. The gear's Simple / Standard / Pro density control is
- *    the manual escape hatch, writing the same setting.
+ *    earned it never auto-hides.
+ *
+ * ### One layout (no density setting, no promotion)
+ * The call used to promote every user to the full console after {@link REALTIME_UX_PRO_CALLS}
+ * finished calls, and the gear offered Auto / Simple / Standard / Pro densities. Both are gone:
+ * {@link EffectiveBaseLevel} is the earned level alone, a stored density is ignored, and the
+ * gear (which now holds the call's details) shows in every call. The levels below still drive
+ * what content can reveal within a session.
  *
  * ### Levels
  * | Level | Name        | Adds                                                      |
@@ -34,7 +40,7 @@ import { Subject } from 'rxjs';
  * and subscribes {@link RealtimeDisclosureModel.Changed$} to re-render.
  */
 
-/** The user's manual interface-density override (the gear's escape hatch). */
+/** @deprecated The call has one layout; a stored density is read for compatibility and ignored. */
 export type RealtimeUxDensity = 'auto' | 'simple' | 'standard' | 'pro';
 
 /** Session events that RAISE the volatile disclosure level (never lower it). */
@@ -44,9 +50,9 @@ export type RealtimeDisclosureEvent = 'text' | 'engaged' | 'channel' | 'power';
 export interface RealtimeUxMilestones {
   /** Highest disclosure level EARNED across sessions (0–4). Never decreases. */
   Level: number;
-  /** Completed live calls — promotes the auto base to power level at {@link REALTIME_UX_PRO_CALLS}. */
+  /** Completed live calls. Counted only; it no longer promotes the base level. */
   Calls: number;
-  /** Manual density override; `'auto'` follows the earned ratchet. */
+  /** @deprecated Kept so stored payloads round-trip; it no longer has any effect. */
   Density: RealtimeUxDensity;
 }
 
@@ -56,7 +62,7 @@ export const REALTIME_UX_PREF_KEY = 'mj.realtimeVoice.uxMilestones.v1';
 /** The highest disclosure level. */
 export const REALTIME_UX_MAX_LEVEL = 4;
 
-/** Completed-call count at which the `auto` base promotes to the full power console. */
+/** @deprecated The base level no longer promotes after a number of calls; nothing reads this. */
 export const REALTIME_UX_PRO_CALLS = 3;
 
 /** The level each session event raises the volatile session level to. */
@@ -115,19 +121,14 @@ export function SerializeUxMilestones(m: RealtimeUxMilestones): string {
 }
 
 /**
- * The BASE disclosure level a fresh session starts at:
- *  - manual density overrides win outright (`simple` → 0, `standard` → 2, `pro` → 4);
- *  - `auto` follows the earned ratchet, promoted to the full console once the user has
- *    completed {@link REALTIME_UX_PRO_CALLS} calls.
+ * The BASE disclosure level a fresh session starts at: the level the user has earned, nothing more.
+ * Neither a density choice nor the number of finished calls changes it.
  */
 export function EffectiveBaseLevel(m: RealtimeUxMilestones): number {
-  switch (m.Density) {
-    case 'simple': return 0;
-    case 'standard': return 2;
-    case 'pro': return REALTIME_UX_MAX_LEVEL;
-    default:
-      return ClampUxLevel(Math.max(m.Level, m.Calls >= REALTIME_UX_PRO_CALLS ? REALTIME_UX_MAX_LEVEL : 0));
-  }
+  // One layout for every call: neither a density choice nor the number of finished calls moves the base. A stored
+  // density from before this change is kept in the payload but ignored, so nobody is left on a setting they can no
+  // longer reach.
+  return ClampUxLevel(m.Level);
 }
 
 /**
@@ -205,9 +206,10 @@ export class RealtimeDisclosureModel {
   }
 
   /**
-   * Applies the gear's manual density override. Takes effect immediately — `simple`
-   * returns even a mid-call console to the day-one surface (content tabs keep their
-   * content; only the chrome retracts). The caller persists the serialized milestones.
+   * Records a density choice in the milestones (so stored payloads round-trip) and resets the
+   * session to the base level.
+   * @deprecated The call has one layout and the gear no longer offers densities; the choice has
+   * no effect on the base level.
    */
   public SetDensity(density: RealtimeUxDensity): void {
     if (this.Milestones.Density === density) {

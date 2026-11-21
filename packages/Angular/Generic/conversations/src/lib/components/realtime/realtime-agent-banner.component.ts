@@ -7,15 +7,12 @@ import { RealtimeUxDensity } from './realtime-disclosure';
  * The call overlay's UNIFIED APP-BAR (per Redesign A — `plans/realtime/mockups/redesign-a.html`):
  * ONE header that owns identity, state, and every session action.
  *
- *  - LEFT: the glowing agent orb (motion = turn-state), agent name + "Co-Agent" badge,
- *    "speaking as" subline (+ subtle realtime-model suffix), and the state pill that swaps
- *    between a waveform (speaking/listening) and a spinner (connecting/thinking).
- *  - RIGHT (live): STATE + WINDOW-CHROME only — the gear (level 2+, opens a popover hosting the
- *    Simple/Standard/Pro/Auto INTERFACE DENSITY control — the progressive-disclosure escape hatch,
- *    where Simple IS the pure-audio surface — plus the developer-links toggle) and Minimize (hide
- *    the call view, call stays live). Call actions (Mute / Captions / Details / Type / End) live in
- *    the bottom dock, the single home for each; Captions & End used to duplicate here and were
- *    removed, and the standalone pure-audio headphones was folded into the gear's Density = Simple.
+ *  - LEFT: the glowing agent orb (motion = turn-state), the agent's name, and the state pill
+ *    that swaps between a waveform (speaking/listening) and a spinner (connecting/thinking).
+ *  - RIGHT (live): Details (opens the side panels), the gear (opens a "This call" popover with
+ *    the call details — agent, who voices it, model — the "Open session record" dev link and the
+ *    developer-links toggle) and Minimize (hide the call view, call stays live). Call actions
+ *    (Mute / Captions / Type / End) live in the bottom dock.
  *  - RIGHT (review): "Start live session" (resume, affirmative leads) + Close — the
  *    review session's exit lives up here in the header bar, not floating in the body.
  *
@@ -35,16 +32,15 @@ export class RealtimeAgentBannerComponent {
 
   /**
    * COMPACT (orb/overlay) presentation: collapse the app-bar to a minimal identity + state
-   * row. The duplicate orb, the redundant state pill, and the headphones / gear / expand
-   * controls are dropped — the body already shows the big orb + name + state, and the lean
-   * bottom dock (Mute / End / •••) owns the session actions. Minimize stays reachable so the
-   * user can hide the call without ending it. Fed from the overlay's resolved `Ui.compact`.
+   * row (avatar initial, name, state chip) with Details, the gear and Minimize on the right.
+   * The body already shows the big orb + name + state, and the lean bottom dock owns the
+   * call actions. Fed from the overlay's resolved `Ui.compact`.
    * Default `false` (the full console banner is unchanged).
    */
   @Input() Compact = false;
 
   /**
-   * Whether to suppress the turn-state pill and redundant "speaking as" label in the banner
+   * Whether to suppress the turn-state pill in the banner
    * because the center hero orb is already displaying the agent's name and live turn state.
    */
   @Input() HideState = false;
@@ -60,11 +56,11 @@ export class RealtimeAgentBannerComponent {
 
   /**
    * Display name of the realtime model the live session runs on (e.g. "GPT Realtime 2").
-   * Rendered as a subtle suffix in the identity line; hidden when null/empty.
+   * Shown as the "Model" row in the gear popover's call details; the row is omitted when null/empty.
    */
   @Input() ModelName: string | null = null;
 
-  /** Whether developer affordances (the "Open session" link) are revealed (gear-gated). */
+  /** Whether developer affordances (the "Open session record" link) are revealed (gear-gated). */
   @Input() DevMode = false;
 
   /** ID of the server-side agent session record (`MJ: AI Agent Sessions`), when known. */
@@ -87,11 +83,15 @@ export class RealtimeAgentBannerComponent {
   @Input() ReviewCloseReason: string | null = null;
 
   // ── App-bar action cluster (disclosure-gated by the overlay) ────────────────
-  // STATE + WINDOW-CHROME only. Captions & End were removed (they duplicated the bottom dock's
-  // controls — one home per control), and "pure audio" was folded into the gear's Density = Simple.
+
+  /** Whether the Details button (opens/closes the transcript + session side panels) renders. */
+  @Input() ShowDetails = false;
+
+  /** Whether the side panels are currently shown (the Details button's pressed state). */
+  @Input() DetailsOn = false;
 
   /**
-   * Whether the gear (density escape hatch + dev toggle) renders (disclosure level 2+). Taking the
+   * Whether the gear (call details + dev links) renders (disclosure level 2+). Taking the
    * gear away also closes its popover, so no empty popover outlives the button that opened it.
    */
   @Input()
@@ -107,11 +107,7 @@ export class RealtimeAgentBannerComponent {
   private _showGear = false;
 
   /**
-   * Whether the interface-density segmented control renders inside the gear popover.
-   * Default `true` (historical behaviour); a host may hide it via the overlay's
-   * `[ShowDensityPicker]` input. The gear itself still renders when {@link ShowGear} is true
-   * even if the density picker is hidden; its developer-links toggle renders only when
-   * {@link AllowDevLinks} is also true.
+   * @deprecated The call has one layout; this no longer has any effect.
    */
   @Input() ShowDensityPicker = true;
 
@@ -127,7 +123,9 @@ export class RealtimeAgentBannerComponent {
   /** Review only: whether the "Start live session" action renders. */
   @Input() ShowStartLive = true;
 
-  /** The user's current interface-density override (selected state in the gear popover). */
+  /**
+   * @deprecated The call has one layout; this no longer has any effect.
+   */
   @Input() Density: RealtimeUxDensity = 'auto';
 
   /** Emitted with the session record's ID when the dev "Open session" link is clicked. */
@@ -136,8 +134,13 @@ export class RealtimeAgentBannerComponent {
   /** Emitted when the user toggles developer links from the gear popover. */
   @Output() DevModeToggled = new EventEmitter<boolean>();
 
-  /** Emitted when the user picks an interface density in the gear popover. */
+  /**
+   * @deprecated The call has one layout; this no longer has any effect. Never emitted.
+   */
   @Output() DensityChanged = new EventEmitter<RealtimeUxDensity>();
+
+  /** Emitted when the user clicks Details to show or hide the side panels. */
+  @Output() DetailsToggled = new EventEmitter<void>();
 
   /** Emitted when the user minimizes the call view (the call stays live). */
   @Output() MinimizeRequested = new EventEmitter<void>();
@@ -151,15 +154,12 @@ export class RealtimeAgentBannerComponent {
   /** Whether the gear popover is open (closed by any outside click). */
   public GearOpen = false;
 
-  /** The density choices the gear popover offers, in display order. */
-  public readonly Densities: ReadonlyArray<{ Key: RealtimeUxDensity; Label: string }> = [
-    { Key: 'simple', Label: 'Simple' },
-    { Key: 'standard', Label: 'Standard' },
-    { Key: 'pro', Label: 'Pro' },
-    { Key: 'auto', Label: 'Auto' }
-  ];
+  /** Tooltip for the Details button, by its pressed state. */
+  public get DetailsTitle(): string {
+    return this.DetailsOn ? 'Hide the session panels' : 'Show the session panels';
+  }
 
-  /** True when the dev "Open session" link should render (gear on + session id known). */
+  /** True when the dev "Open session record" link should render (gear on + session id known). */
   public get ShowOpenSession(): boolean {
     return this.DevMode && !!this.SessionID;
   }
@@ -183,11 +183,6 @@ export class RealtimeAgentBannerComponent {
     if (this.GearOpen) {
       this.GearOpen = false;
     }
-  }
-
-  /** Gear popover: pick an interface density (the overlay applies + persists it). */
-  public SelectDensity(density: RealtimeUxDensity): void {
-    this.DensityChanged.emit(density);
   }
 
   /** Gear popover: toggle developer links. */
