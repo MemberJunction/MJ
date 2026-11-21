@@ -418,7 +418,8 @@
             "BaseMessageTypeID": null,
             "MessageClass": "Marketing",
             "Parameters": {
-              "maxDays": 730
+              "maxDays": 730,
+              "impliedOnly": true
             },
             "Notes": "CASL s. 10(10): implied consent from existing business relationship expires after 2 years (730 days) unless renewed.",
             "Status": "Active"

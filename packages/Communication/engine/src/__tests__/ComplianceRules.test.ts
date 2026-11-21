@@ -158,6 +158,27 @@ describe('Compliance Rule Drivers', () => {
       expect(driver.Evaluate(merged, makeContext({ PrincipalPreference: freshConsent })).Passed).toBe(
         true,
       );
+
+      const impliedMerged = driver.MergeStrictest([{ maxDays: 730, impliedOnly: true }]);
+      expect(impliedMerged.ImpliedOnly).toBe(true);
+      const oldExpressConsent = {
+        ConsentAt: new Date('2020-01-01T00:00:00Z'),
+        OptInMethod: 'Double',
+        ConsentSource: 'Signup Form',
+        ExpiresAt: null,
+      } as MJCommunicationPrincipalPreferenceEntity;
+      expect(driver.Evaluate(impliedMerged, makeContext({ PrincipalPreference: oldExpressConsent })).Passed).toBe(
+        true,
+      );
+      const oldImpliedConsent = {
+        ConsentAt: new Date('2020-01-01T00:00:00Z'),
+        OptInMethod: null,
+        ConsentSource: 'Import',
+        ExpiresAt: null,
+      } as MJCommunicationPrincipalPreferenceEntity;
+      expect(driver.Evaluate(impliedMerged, makeContext({ PrincipalPreference: oldImpliedConsent })).Passed).toBe(
+        false,
+      );
     });
   });
 
