@@ -50,7 +50,7 @@ const REG = {
   CASL: 'cccc0002-0000-0000-0000-000000000002',
   UK_PECR: 'cccc0003-0000-0000-0000-000000000003',
   AU_SPAM: 'cccc0004-0000-0000-0000-000000000004',
-  TRG_UK_SENDER: 'cccc0005-0000-0000-0000-000000000005',
+  UK_SENDER: 'cccc0005-0000-0000-0000-000000000005',
 };
 
 function buildSource(): ComplianceMetadataSource {
@@ -80,14 +80,14 @@ function buildSource(): ComplianceMetadataSource {
       { ID: REG.CASL, Name: 'CASL', AppliesBy: 'Recipient', AppliesWhenJurisdictionUnknown: true, Status: 'Active' } as MJCommunicationComplianceRegimeEntity,
       { ID: REG.UK_PECR, Name: 'UK PECR', AppliesBy: 'Recipient', AppliesWhenJurisdictionUnknown: false, Status: 'Active' } as MJCommunicationComplianceRegimeEntity,
       { ID: REG.AU_SPAM, Name: 'AU Spam Act', AppliesBy: 'Recipient', AppliesWhenJurisdictionUnknown: false, Status: 'Active' } as MJCommunicationComplianceRegimeEntity,
-      { ID: REG.TRG_UK_SENDER, Name: 'UK Sender Establishment', AppliesBy: 'Sender', AppliesWhenJurisdictionUnknown: false, Status: 'Active' } as MJCommunicationComplianceRegimeEntity,
+      { ID: REG.UK_SENDER, Name: 'UK Sender Establishment', AppliesBy: 'Sender', AppliesWhenJurisdictionUnknown: false, Status: 'Active' } as MJCommunicationComplianceRegimeEntity,
     ],
     ComplianceRegimeJurisdictions: [
       { ID: 'rj-1', CommunicationComplianceRegimeID: REG.CAN_SPAM, JurisdictionID: JUR.US } as MJCommunicationComplianceRegimeJurisdictionEntity,
       { ID: 'rj-2', CommunicationComplianceRegimeID: REG.CASL, JurisdictionID: JUR.CA } as MJCommunicationComplianceRegimeJurisdictionEntity,
       { ID: 'rj-3', CommunicationComplianceRegimeID: REG.UK_PECR, JurisdictionID: JUR.GB } as MJCommunicationComplianceRegimeJurisdictionEntity,
       { ID: 'rj-4', CommunicationComplianceRegimeID: REG.AU_SPAM, JurisdictionID: JUR.AU } as MJCommunicationComplianceRegimeJurisdictionEntity,
-      { ID: 'rj-5', CommunicationComplianceRegimeID: REG.TRG_UK_SENDER, JurisdictionID: JUR.GB } as MJCommunicationComplianceRegimeJurisdictionEntity,
+      { ID: 'rj-5', CommunicationComplianceRegimeID: REG.UK_SENDER, JurisdictionID: JUR.GB } as MJCommunicationComplianceRegimeJurisdictionEntity,
     ],
     ComplianceRegimeRules: [
       {
@@ -146,7 +146,7 @@ function buildSource(): ComplianceMetadataSource {
       } as MJCommunicationComplianceRegimeRuleEntity,
       {
         ID: 'r-7',
-        CommunicationComplianceRegimeID: REG.TRG_UK_SENDER,
+        CommunicationComplianceRegimeID: REG.UK_SENDER,
         CommunicationComplianceRuleTypeID: RT.Tracking,
         BaseMessageTypeID: null,
         MessageClass: null,
@@ -182,10 +182,10 @@ describe('JurisdictionResolver & ComplianceGate', () => {
   });
 
   const sender = {
-    ID: 'sender-aqha',
-    Name: 'AQHA',
-    FromName: 'AQHA',
-    PostalAddress: '1600 Quarter Horse Dr, Amarillo, TX',
+    ID: 'sender-assoc',
+    Name: 'Example Association',
+    FromName: 'Example Association',
+    PostalAddress: '100 Example Ave, Springfield, IL',
     JurisdictionID: JUR.US_TX,
     EnforcementMode: null,
   } as MJCommunicationSenderEntity;
@@ -205,7 +205,7 @@ describe('JurisdictionResolver & ComplianceGate', () => {
     Status: 'Active',
   } as MJCommunicationPreferenceEntity;
 
-  it('expands JurisdictionMember containment graph and handles AQHA TX/CA/GB/AU', () => {
+  it('expands JurisdictionMember containment graph and handles a single-tenant association across TX/CA/GB/AU', () => {
     const resolver = new JurisdictionResolver(buildSource());
     expect(resolver.ExpandJurisdiction('US-TX')).toEqual([JUR.US_TX, JUR.US]);
 
@@ -276,7 +276,7 @@ describe('JurisdictionResolver & ComplianceGate', () => {
     expect(auRes.Decision).toBe('Blocked');
   });
 
-  it('distinguishes TRG UK sender vs US sender for AppliesBy = Sender regimes', () => {
+  it('distinguishes a UK sender vs a US sender for AppliesBy = Sender regimes', () => {
     const gate = new ComplianceGate(new JurisdictionResolver(buildSource()));
     const ukSender = { ...sender, JurisdictionID: JUR.GB } as MJCommunicationSenderEntity;
 

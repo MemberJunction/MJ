@@ -24,9 +24,9 @@ import {
 function makeContext(overrides: Partial<ComplianceEvalContext> = {}): ComplianceEvalContext {
   const sender = {
     ID: 'sender-1',
-    Name: 'AQHA',
-    FromName: 'AQHA Team',
-    PostalAddress: '1600 Quarter Horse Dr, Amarillo, TX',
+    Name: 'Example Association',
+    FromName: 'Example Association Team',
+    PostalAddress: '100 Example Ave, Springfield, IL',
     Configuration: null,
   } as MJCommunicationSenderEntity;
 

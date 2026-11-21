@@ -16,6 +16,7 @@ import {
     TRANSPARENT_GIF_1X1,
     type CommsActivityWorkPayload,
     type CommsWebhookHandlerOptions,
+    type PreferenceCenterData,
 } from '../rest/CommsWebhookHandler.js';
 import { ComputeTrackingSignature } from '@memberjunction/communication-engine';
 
@@ -334,12 +335,11 @@ describe('CommsWebhookHandler', () => {
         const validUuid = '55555555-6666-4777-8888-999999999999';
         await withServer(
             {
-                ResolvePreferenceCenterData: async () => ({
-                    Found: true,
-                    EndpointValue: 'user@example.com',
-                    Categories: [],
-                    Channels: [],
-                    Branding: { BrandName: 'Acme' },
+                ResolvePreferenceCenterData: async (token): Promise<PreferenceCenterData> => ({
+                    Token: token,
+                    Sender: { ID: 'sender-1', Name: 'Acme', TemplateContext: { BrandName: 'Acme' } },
+                    Preferences: [],
+                    CanUnsubscribeAll: true,
                 }),
                 ConfirmDoubleOptIn: async () => ({ Found: true, Confirmed: true }),
             },
@@ -358,5 +358,158 @@ describe('CommsWebhookHandler', () => {
                 expect(confirmRes.headers.get('cache-control')).toBe('no-store');
             },
         );
+    });
+
+    // ─── Failure modes of the injected hooks ─────────────────────────────────
+
+    describe('when a hook fails', () => {
+        const nowSec = 1_700_000_000;
+        const rawBody = JSON.stringify([{ event: 'delivered', email: 'a@b.com', sg_event_id: 'e1' }]);
+        const validUuid = '66666666-7777-4888-8999-aaaaaaaaaaaa';
+        const failingPublish = async (): Promise<void> => {
+            throw new Error('WorkQueue publish rejected (TopicDisabled): comms.activity is disabled');
+        };
+
+        function signedHeaders(): Record<string, string> {
+            const { signature, timestamp } = signSendGridBody(rawBody, nowSec);
+            return {
+                'Content-Type': 'application/json',
+                'x-twilio-email-event-webhook-signature': signature,
+                'x-twilio-email-event-webhook-timestamp': timestamp,
+            };
+        }
+
+        it('POST /webhooks/sendgrid answers 401 and publishes nothing when no verification key resolves', async () => {
+            await withServer(
+                { ResolveWebhookKey: async () => undefined, PublishActivity: async (p) => { published.push(p); }, NowSeconds: () => nowSec },
+                async (baseUrl) => {
+                    const res = await fetch(`${baseUrl}/webhooks/sendgrid/cred-unknown`, { method: 'POST', headers: signedHeaders(), body: rawBody });
+
+                    expect(res.status).toBe(401);
+                    expect(await res.json()).toEqual({ error: 'Webhook verification key not configured' });
+                    expect(published).toHaveLength(0);
+                },
+            );
+        });
+
+        it('POST /webhooks/sendgrid answers 503 when a correctly signed batch cannot be published, so SendGrid retries it', async () => {
+            await withServer(
+                { ResolveWebhookKey: async () => publicKeyPem, PublishActivity: failingPublish, NowSeconds: () => nowSec },
+                async (baseUrl) => {
+                    const res = await fetch(`${baseUrl}/webhooks/sendgrid`, { method: 'POST', headers: signedHeaders(), body: rawBody });
+
+                    expect(res.status).toBe(503);
+                    expect(await res.json()).toEqual({ error: 'Failed to enqueue webhook batch' });
+                },
+            );
+        });
+
+        it('POST /webhooks/sendgrid never reaches the publisher for an unsigned or unverifiable request', async () => {
+            const publish = vi.fn(failingPublish);
+            await withServer(
+                { ResolveWebhookKey: async () => publicKeyPem, PublishActivity: publish, NowSeconds: () => nowSec },
+                async (baseUrl) => {
+                    const unsigned = await fetch(`${baseUrl}/webhooks/sendgrid`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: rawBody });
+                    const garbage = await fetch(`${baseUrl}/webhooks/sendgrid`, {
+                        method: 'POST',
+                        headers: { ...signedHeaders(), 'x-twilio-email-event-webhook-signature': 'not-base64-der' },
+                        body: rawBody,
+                    });
+
+                    expect([unsigned.status, garbage.status]).toEqual([401, 401]);
+                    expect(publish).not.toHaveBeenCalled();
+                },
+            );
+        });
+
+        it('POST /unsubscribe answers 503, not 200, when the unsubscribe cannot be published', async () => {
+            await withServer({ PublishActivity: failingPublish }, async (baseUrl) => {
+                const res = await fetch(`${baseUrl}/unsubscribe/${validUuid}`, { method: 'POST' });
+
+                expect(res.status).toBe(503);
+                expect(await res.json()).toEqual({ error: 'Failed to process unsubscribe' });
+            });
+        });
+
+        it('POST /unsubscribe answers 503 and publishes nothing when token verification throws', async () => {
+            await withServer(
+                {
+                    PublishActivity: async (p) => { published.push(p); },
+                    VerifyToken: async () => {
+                        throw new Error('token store unavailable');
+                    },
+                },
+                async (baseUrl) => {
+                    const res = await fetch(`${baseUrl}/unsubscribe/${validUuid}`, { method: 'POST' });
+
+                    expect(res.status).toBe(503);
+                    expect(published).toHaveLength(0);
+                },
+            );
+        });
+
+        it('GET /open still serves the pixel when publishing or token verification fails', async () => {
+            await withServer({ PublishActivity: failingPublish }, async (baseUrl) => {
+                const res = await fetch(`${baseUrl}/open/${validUuid}.gif`);
+
+                expect(res.status).toBe(200);
+                expect(Buffer.from(await res.arrayBuffer()).equals(TRANSPARENT_GIF_1X1)).toBe(true);
+            });
+            await withServer(
+                {
+                    PublishActivity: async (p) => { published.push(p); },
+                    VerifyToken: async () => {
+                        throw new Error('token store unavailable');
+                    },
+                },
+                async (baseUrl) => {
+                    expect((await fetch(`${baseUrl}/open/${validUuid}.gif`)).status).toBe(200);
+                    expect(published).toHaveLength(0);
+                },
+            );
+        });
+
+        it('GET /click still redirects a correctly signed link when publishing fails', async () => {
+            const secret = 'failure-mode-secret-32-characters!';
+            const target = 'https://example.com/landing';
+            const sig = SignClickTrackingUrl(secret, validUuid, target);
+
+            await withServer({ HmacSecret: secret, PublishActivity: failingPublish }, async (baseUrl) => {
+                const res = await fetch(`${baseUrl}/click/${validUuid}?u=${encodeURIComponent(target)}&sig=${sig}`, { redirect: 'manual' });
+
+                expect(res.status).toBe(302);
+                expect(res.headers.get('location')).toBe(target);
+            });
+        });
+
+        it('GET /click rejects a signature made for another token, and a link with no signature', async () => {
+            const secret = 'failure-mode-secret-32-characters!';
+            const target = 'https://example.com/landing';
+            const sigForOtherToken = SignClickTrackingUrl(secret, '77777777-8888-4999-8aaa-bbbbbbbbbbbb', target);
+
+            await withServer({ HmacSecret: secret, PublishActivity: async (p) => { published.push(p); } }, async (baseUrl) => {
+                const swapped = await fetch(`${baseUrl}/click/${validUuid}?u=${encodeURIComponent(target)}&sig=${sigForOtherToken}`, { redirect: 'manual' });
+                const unsigned = await fetch(`${baseUrl}/click/${validUuid}?u=${encodeURIComponent(target)}`, { redirect: 'manual' });
+
+                expect([swapped.status, unsigned.status]).toEqual([400, 400]);
+                expect(published).toHaveLength(0);
+            });
+        });
+
+        it('GET /unsubscribe falls back to the built-in preference page when the redirect lookup throws', async () => {
+            await withServer(
+                {
+                    ResolveUnsubscribeRedirect: async () => {
+                        throw new Error('sender lookup failed');
+                    },
+                },
+                async (baseUrl) => {
+                    const res = await fetch(`${baseUrl}/unsubscribe/${validUuid}`, { redirect: 'manual' });
+
+                    expect(res.status).toBe(302);
+                    expect(res.headers.get('location')).toBe(`/comms/preferences/${validUuid}`);
+                },
+            );
+        });
     });
 });

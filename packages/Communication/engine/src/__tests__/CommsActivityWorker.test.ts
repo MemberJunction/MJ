@@ -6,6 +6,7 @@ import {
   NormalizedActivityEvent,
 } from '@memberjunction/communication-types';
 import { IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
+import type { MJCommunicationSuppressionPolicyEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { CommsActivityWorker } from '../CommsActivityWorker';
 
@@ -59,6 +60,13 @@ function makeRecord(
       return copy;
     },
     async Save() {
+      // Save() never throws on a constraint violation: it returns false and reports through LatestResult.
+      const violation = table === 'MJ: Communication Suppressions' ? suppressionConstraintViolation(this) : null;
+      if (violation) {
+        this.LatestResult = { Success: false, CompleteMessage: violation };
+        rejectedSaves.push({ Table: table, Message: violation });
+        return false;
+      }
       if (isNew && !store[table].some((r) => r.ID === this.ID)) {
         store[table].push(this);
       }
@@ -66,6 +74,51 @@ function makeRecord(
     },
   };
   return rec;
+}
+
+/** Saves the fake refused, so a test can prove the worker never attempted an invalid write. */
+let rejectedSaves: Array<{ Table: keyof MockStore; Message: string }> = [];
+
+function isUnset(value: unknown): boolean {
+  return value === null || value === undefined;
+}
+
+/**
+ * CHECK constraints on CommunicationSuppression that the real database enforces
+ * (migrations/v6/V202611201300__v6.3.x__Communications_V2_Schema.sql).
+ */
+function suppressionConstraintViolation(row: MockRecord): string | null {
+  const prefix = 'The INSERT statement conflicted with the CHECK constraint';
+  if (isUnset(row.CommunicationEndpointID) && isUnset(row.EntityID)) {
+    return `${prefix} "CK_CommunicationSuppression_Target".`;
+  }
+  if (isUnset(row.EntityID) !== isUnset(row.RecordID)) {
+    return `${prefix} "CK_CommunicationSuppression_PrincipalPair".`;
+  }
+  if (row.Reason === 'Policy' && isUnset(row.CommunicationSuppressionPolicyID)) {
+    return `${prefix} "CK_CommunicationSuppression_PolicyLink".`;
+  }
+  return null;
+}
+
+/** The policy row shipped in metadata/communication-suppression-policies. */
+const SOFT_BOUNCE_POLICY = {
+  ID: '2A0A405B-03EA-419B-A93E-E4C5646F3CEB',
+  Name: 'SoftBounceThresholdPolicy',
+  DriverClass: 'SoftBounceThresholdPolicy',
+  Parameters: JSON.stringify({ threshold: 5, cooldownDays: 30, scope: 'Global' }),
+  Status: 'Active',
+} as MJCommunicationSuppressionPolicyEntity;
+
+function softBounceEvent(endpointID: string, occurredAt: Date): NormalizedActivityEvent {
+  return {
+    CommunicationProviderID: 'prov-1',
+    CommunicationEndpointID: endpointID,
+    NormalizedAddress: 'soft@example.com',
+    EventType: 'Soft Bounce',
+    OccurredAt: occurredAt,
+    IsMachineEvent: false,
+  };
 }
 
 function parseSimpleEqualityFilters(filter: string): Array<[string, string | null]> {
@@ -156,6 +209,7 @@ describe('CommsActivityWorker', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     idCounter = 0;
+    rejectedSaves = [];
     store = createEmptyStore();
     worker = new CommsActivityWorker();
     const provider = createMockProvider(store);
@@ -310,7 +364,7 @@ describe('CommsActivityWorker', () => {
     expect(ep.Status).toBe('Active');
   });
 
-  it('triggers 30-day policy suppression after 5 soft bounces', async () => {
+  function seedSoftBouncingEndpoint(softBounceCount: number): MockRecord {
     const ep = makeRecord(
       'MJ: Communication Endpoints',
       store,
@@ -318,37 +372,73 @@ describe('CommsActivityWorker', () => {
         ID: 'ep-soft',
         BaseMessageTypeID: 'chan-email',
         Status: 'Active',
-        SoftBounceCount: 4,
+        SoftBounceCount: softBounceCount,
         LastBouncedAt: null,
       },
       false,
     );
     store['MJ: Communication Endpoints'].push(ep);
+    return ep;
+  }
+
+  it('creates a 30-day Policy suppression linked to the SoftBounceThresholdPolicy row on the 5th soft bounce', async () => {
+    vi.spyOn(CommunicationEngineBase.Instance, 'SuppressionPolicies', 'get').mockReturnValue([
+      SOFT_BOUNCE_POLICY,
+    ]);
+    const ep = seedSoftBouncingEndpoint(4);
 
     const occurredAt = new Date('2026-02-01T00:00:00Z');
-    await worker.ProcessActivityBatch(
-      [
-        {
-          CommunicationProviderID: 'prov-1',
-          CommunicationEndpointID: 'ep-soft',
-          NormalizedAddress: 'soft@example.com',
-          EventType: 'Soft Bounce',
-          OccurredAt: occurredAt,
-          IsMachineEvent: false,
-        },
-      ],
-      mockUser,
-    );
+    await worker.ProcessActivityBatch([softBounceEvent('ep-soft', occurredAt)], mockUser);
 
     expect(ep.SoftBounceCount).toBe(5);
     expect(ep.Status).toBe('Soft Bouncing');
+    expect(rejectedSaves).toEqual([]);
     expect(store['MJ: Communication Suppressions']).toHaveLength(1);
     const supp = store['MJ: Communication Suppressions'][0];
     expect(supp.Reason).toBe('Policy');
     expect(supp.Source).toBe('Policy');
+    // CK_CommunicationSuppression_PolicyLink: a Policy suppression must name its policy.
+    expect(supp.CommunicationSuppressionPolicyID).toBe(SOFT_BOUNCE_POLICY.ID);
+    expect(supp.CommunicationEndpointID).toBe('ep-soft');
     expect((supp.ExpiresAt as Date).getTime()).toBe(
       occurredAt.getTime() + 30 * 86_400_000,
     );
+    expect(store['MJ: Communication Consent Audit Logs']).toHaveLength(1);
+  });
+
+  it('does not suppress below the soft-bounce threshold', async () => {
+    vi.spyOn(CommunicationEngineBase.Instance, 'SuppressionPolicies', 'get').mockReturnValue([
+      SOFT_BOUNCE_POLICY,
+    ]);
+    const ep = seedSoftBouncingEndpoint(3);
+
+    await worker.ProcessActivityBatch(
+      [softBounceEvent('ep-soft', new Date('2026-02-01T00:00:00Z'))],
+      mockUser,
+    );
+
+    expect(ep.SoftBounceCount).toBe(4);
+    expect(store['MJ: Communication Suppressions']).toHaveLength(0);
+    expect(rejectedSaves).toEqual([]);
+  });
+
+  // DEFECT (CommsActivityWorker.dispatchDriverHooks :1118-1120 with SoftBounceThresholdPolicy.Evaluate
+  // :1266-1271 and :1304-1313, line numbers at time of writing): when no active
+  // SoftBounceThresholdPolicy row is loaded, the worker still runs a default SoftBounceThresholdPolicy,
+  // which writes Reason='Policy' with CommunicationSuppressionPolicyID = null. The database rejects that
+  // row (CK_CommunicationSuppression_PolicyLink), Save() returns false, createSuppression throws, and the
+  // catch right after only logs it — so the endpoint is never suppressed. This test previously passed only
+  // because the fake accepted the invalid row.
+  it.fails('without a SoftBounceThresholdPolicy row, does not attempt a Policy suppression the database rejects', async () => {
+    const ep = seedSoftBouncingEndpoint(4);
+
+    await worker.ProcessActivityBatch(
+      [softBounceEvent('ep-soft', new Date('2026-02-01T00:00:00Z'))],
+      mockUser,
+    );
+
+    expect(ep.SoftBounceCount).toBe(5);
+    expect(rejectedSaves).toEqual([]);
   });
 
   it('maps Dropped reasons to global vs sender-scoped suppressions', async () => {

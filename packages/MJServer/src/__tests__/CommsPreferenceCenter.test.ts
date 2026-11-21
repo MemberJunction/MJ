@@ -11,10 +11,21 @@
 import type { AddressInfo } from 'node:net';
 import express from 'express';
 import { describe, it, expect, vi } from 'vitest';
+// The handler serves the Angular Element bundle only when `@memberjunction/ng-communications` has
+// been built. Pin that to "not built" so these tests do not depend on the checkout's dist folders.
+vi.mock('node:fs', async () => {
+    const actual = await vi.importActual<typeof import('node:fs')>('node:fs');
+    const existsSync = (path: Parameters<typeof actual.existsSync>[0]): boolean =>
+        String(path).endsWith('dist/element/main.js') ? false : actual.existsSync(path);
+    return { ...actual, existsSync, default: { ...actual, existsSync } };
+});
+
 import {
     CreateCommsWebhookHandler,
     type CommsWebhookHandlerOptions,
+    type ConfirmOptInResult,
     type PreferenceCenterData,
+    type SavePreferenceChoicesResult,
 } from '../rest/CommsWebhookHandler.js';
 import {
     CommsHostSecurityHeaders,
@@ -257,5 +268,212 @@ describe('CommsWebhookHandler Preference Center & Confirm Routes', () => {
                 expect(defaultRes.headers.get('location')).toBe(`/comms/preferences/${VALID_TOKEN}`);
             },
         );
+    });
+
+    it('GET /preferences/:token hosts the Angular Element when an element URL is configured', async () => {
+        await withServer(
+            { PreferenceElementSrc: 'https://cdn.example.com/prefs/main.js', GenerateNonce: () => 'element-nonce' },
+            async (baseUrl) => {
+                const html = await (await fetch(`${baseUrl}/preferences/${VALID_TOKEN}`, { headers: { Accept: 'text/html' } })).text();
+
+                expect(html).toContain('<mj-comms-preference-center');
+                expect(html).toContain('<script type="module" src="https://cdn.example.com/prefs/main.js" nonce="element-nonce">');
+            },
+        );
+    });
+
+    it('GET /preferences-element.js answers 404 when the element bundle has not been built', async () => {
+        await withServer({}, async (baseUrl) => {
+            const res = await fetch(`${baseUrl}/preferences-element.js`);
+
+            expect(res.status).toBe(404);
+        });
+    });
+
+    // ─── Failure modes of the injected hooks ─────────────────────────────────
+
+    describe('when the preference lookup fails', () => {
+        const json = { Accept: 'application/json' };
+
+        it('answers 404 for a token the resolver does not know', async () => {
+            await withServer({ ResolvePreferenceCenterData: async () => null }, async (baseUrl) => {
+                const res = await fetch(`${baseUrl}/preferences/${VALID_TOKEN}`, { headers: json });
+
+                expect(res.status).toBe(404);
+                expect(await res.json()).toEqual({ error: 'Preference token not found' });
+            });
+        });
+
+        it('answers 500, without leaking the error, when the resolver throws', async () => {
+            await withServer(
+                {
+                    ResolvePreferenceCenterData: async () => {
+                        throw new Error('Login failed for user mj_connect');
+                    },
+                },
+                async (baseUrl) => {
+                    const res = await fetch(`${baseUrl}/preferences/${VALID_TOKEN}`, { headers: json });
+
+                    expect(res.status).toBe(500);
+                    expect(await res.text()).not.toContain('mj_connect');
+                },
+            );
+        });
+
+        it('answers 400 for a malformed token as JSON and as an HTML error page, without calling the resolver', async () => {
+            const resolvePrefData = vi.fn(async () => sampleData);
+            await withServer({ ResolvePreferenceCenterData: resolvePrefData, GenerateNonce: () => 'err-nonce' }, async (baseUrl) => {
+                const jsonRes = await fetch(`${baseUrl}/preferences/not-a-uuid`, { headers: json });
+                const htmlRes = await fetch(`${baseUrl}/preferences/not-a-uuid`, { headers: { Accept: 'text/html' } });
+
+                expect(jsonRes.status).toBe(400);
+                expect(htmlRes.status).toBe(400);
+                expect(htmlRes.headers.get('content-security-policy')).toContain("'nonce-err-nonce'");
+                expect(await htmlRes.text()).toContain('Invalid or missing preference link.');
+                expect(resolvePrefData).not.toHaveBeenCalled();
+            });
+        });
+    });
+
+    describe('when saving preference choices fails', () => {
+        const post = (baseUrl: string, body: object, token = VALID_TOKEN) =>
+            fetch(`${baseUrl}/preferences/${token}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const saveResult = (overrides: Partial<SavePreferenceChoicesResult>): SavePreferenceChoicesResult => ({
+            Found: true,
+            Success: true,
+            UnsubscribedAll: false,
+            Preferences: sampleData.Preferences,
+            ...overrides,
+        });
+
+        it('answers 404 when the token matches no log', async () => {
+            await withServer({ SavePreferenceCenterChoices: async () => saveResult({ Found: false, Success: false, Preferences: [] }) }, async (baseUrl) => {
+                const res = await post(baseUrl, { UnsubscribeAll: true });
+
+                expect(res.status).toBe(404);
+                expect(await res.json()).toEqual({ error: 'Preference token not found' });
+            });
+        });
+
+        it('answers 400 with the reason when the choices were not saved', async () => {
+            const failed = saveResult({ Success: false, ErrorMessage: 'Preferences could not be saved because this address does not map to a unique recipient profile.' });
+            await withServer({ SavePreferenceCenterChoices: async () => failed }, async (baseUrl) => {
+                const res = await post(baseUrl, { Preferences: [{ PreferenceID: 'pref-1', State: 'Opted Out' }] });
+
+                expect(res.status).toBe(400);
+                expect(res.headers.get('cache-control')).toBe('no-store');
+                expect(await res.json()).toEqual(failed);
+            });
+        });
+
+        it('answers 500, without leaking the error, when the save throws', async () => {
+            await withServer(
+                {
+                    SavePreferenceCenterChoices: async () => {
+                        throw new Error('Failed to save principal preference: FK_PrincipalPreference_Sender');
+                    },
+                },
+                async (baseUrl) => {
+                    const res = await post(baseUrl, { UnsubscribeAll: true });
+
+                    expect(res.status).toBe(500);
+                    expect(await res.json()).toEqual({ error: 'Failed to save preferences' });
+                },
+            );
+        });
+
+        it('passes on only well-formed choices, and rejects a request left with none', async () => {
+            const savePrefChoices = vi.fn(async () => saveResult({}));
+            await withServer({ SavePreferenceCenterChoices: savePrefChoices }, async (baseUrl) => {
+                const mixed = await post(baseUrl, {
+                    Preferences: [
+                        { PreferenceID: 'pref-1', State: 'Opted Out' },
+                        { PreferenceID: 'pref-2', State: 'Pending' },
+                        { PreferenceID: 42, State: 'Opted In' },
+                        null,
+                    ],
+                });
+                const none = await post(baseUrl, { Preferences: [{ PreferenceID: 'pref-2', State: 'Maybe' }] });
+                const badToken = await post(baseUrl, { UnsubscribeAll: true }, 'not-a-uuid');
+
+                expect(mixed.status).toBe(200);
+                expect(savePrefChoices).toHaveBeenCalledTimes(1);
+                expect(savePrefChoices).toHaveBeenCalledWith(
+                    expect.objectContaining({ UnsubscribeAll: false, Preferences: [{ PreferenceID: 'pref-1', State: 'Opted Out' }] }),
+                );
+                expect([none.status, badToken.status]).toEqual([400, 400]);
+            });
+        });
+    });
+
+    describe('when confirming a double opt-in fails', () => {
+        const confirmWith = (result: ConfirmOptInResult): CommsWebhookHandlerOptions => ({
+            ConfirmDoubleOptIn: async () => result,
+            GenerateNonce: () => 'confirm-nonce',
+        });
+        const post = (baseUrl: string, accept: string, token = VALID_TOKEN) =>
+            fetch(`${baseUrl}/confirm/${token}`, { method: 'POST', headers: { Accept: accept } });
+
+        it('answers 404 for an unknown token, as JSON and as an HTML error page', async () => {
+            await withServer(confirmWith({ Found: false, Confirmed: false }), async (baseUrl) => {
+                const jsonRes = await post(baseUrl, 'application/json');
+                const htmlRes = await post(baseUrl, 'text/html');
+
+                expect(jsonRes.status).toBe(404);
+                expect(await jsonRes.json()).toEqual({ error: 'Confirmation token not found' });
+                expect(htmlRes.status).toBe(404);
+                expect(await htmlRes.text()).toContain('Confirmation link not found or expired.');
+            });
+        });
+
+        it('answers 409 when the preference was opted out and cannot be confirmed', async () => {
+            const optedOut: ConfirmOptInResult = { Found: true, Confirmed: false, State: 'Opted Out', ErrorMessage: 'Cannot confirm an opted-out preference' };
+            await withServer(confirmWith(optedOut), async (baseUrl) => {
+                const jsonRes = await post(baseUrl, 'application/json');
+                const htmlRes = await post(baseUrl, 'text/html');
+
+                expect(jsonRes.status).toBe(409);
+                expect(await jsonRes.json()).toEqual(optedOut);
+                expect(htmlRes.status).toBe(409);
+                expect(await htmlRes.text()).toContain('has been opted out');
+            });
+        });
+
+        it('answers 500, without leaking the error, when the confirmation throws', async () => {
+            await withServer(
+                {
+                    ConfirmDoubleOptIn: async () => {
+                        throw new Error('deadlock victim on CommunicationPrincipalPreference');
+                    },
+                },
+                async (baseUrl) => {
+                    const res = await post(baseUrl, 'application/json');
+
+                    expect(res.status).toBe(500);
+                    expect(await res.json()).toEqual({ error: 'Failed to confirm subscription' });
+                },
+            );
+        });
+
+        it('answers 400 for a malformed token without calling the confirmation, on GET and POST', async () => {
+            const confirmDoubleOptIn = vi.fn(async (): Promise<ConfirmOptInResult> => ({ Found: true, Confirmed: true }));
+            await withServer({ ConfirmDoubleOptIn: confirmDoubleOptIn }, async (baseUrl) => {
+                const getRes = await fetch(`${baseUrl}/confirm/not-a-uuid`, { headers: { Accept: 'text/html' } });
+                const postRes = await post(baseUrl, 'application/json', 'not-a-uuid');
+
+                expect([getRes.status, postRes.status]).toEqual([400, 400]);
+                expect(confirmDoubleOptIn).not.toHaveBeenCalled();
+            });
+        });
+
+        it('renders the confirmed page for a browser after a successful confirmation', async () => {
+            await withServer(confirmWith({ Found: true, Confirmed: true, State: 'Opted In' }), async (baseUrl) => {
+                const res = await post(baseUrl, 'text/html');
+
+                expect(res.status).toBe(200);
+                expect(res.headers.get('content-security-policy')).toContain("'nonce-confirm-nonce'");
+                expect(res.headers.get('cache-control')).toBe('no-store');
+            });
+        });
     });
 });
