@@ -21,12 +21,9 @@ import {
   MjSlidePanelComponent,
 } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { CompositeFilterSQLCompiler, CompositeKey, LogError, RunView, type CompositeFilterDescriptor, type EntityInfo, type IMetadataProvider, type RunViewParams, type UserInfo, EntityRecordNameInput, EntityRecordNameResult } from '@memberjunction/core';
+import { CompositeKey, LogError, RunView, type EntityInfo, type TransactionGroupBase, type IMetadataProvider, type RunViewParams, type UserInfo, EntityRecordNameInput, EntityRecordNameResult } from '@memberjunction/core';
 import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import { MJMLModelEntity, UserInfoEngine, type MJMLModelScoringBindingEntity, type MJUserViewEntity } from '@memberjunction/core-entities';
-import { ActionEngineBase, type ActionParam, type ActionResult } from '@memberjunction/actions-base';
-import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { BuildRecordIdFilter } from '../../shared/record-id-filter';
+import { MJMLModelEntity, UserInfoEngine, type MJListDetailEntity, type MJListEntity, type MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
 import { AgGridModule } from 'ag-grid-angular';
 import {
   AllCommunityModule,
@@ -1693,7 +1690,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   /** The outcome of the last "Save as list", for the toolbar; null before any. */
   public ListMessage: string | null = null;
 
-  /** The most records a selection saved as a List may hold (its User View names each record). */
+  /** The most records a selection saved as a List may hold (one transaction group carries the List and a detail per record). */
   public static readonly MaxListSelection = 5000;
 
   /** {@link MaxListSelection}, for the template. */
@@ -1705,10 +1702,9 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   }
 
   /**
-   * Saves the grid's selection — the rows its tier and decile filters show — as a new List (§5.4): a private User View
-   * of the target entity naming the selected records, materialized through the existing "Materialize List From View"
-   * action (with lineage to the view), then opens the List. No new action and no direct List Detail writes. When the
-   * action fails after the view was saved, the view is deleted again, so a failed save leaves nothing behind.
+   * Saves the grid's selection — the rows its tier and decile filters show — as a new List (§5.4) and opens it: the
+   * `MJ: Lists` row of the target entity and one `MJ: List Details` row per record, created as the current user (so the
+   * user's own List permissions decide) in one transaction group — all of them or none.
    */
   public async SaveSelectionAsList(): Promise<void> {
     const entity = this.ResolvedEntityName ? this.ProviderToUse.EntityByName(this.ResolvedEntityName) : undefined;
@@ -1716,134 +1712,59 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     this.SavingList = true;
     this.ListMessage = null;
     this.cdr.markForCheck();
-    let view: MJUserViewEntity | null = null;
-    let listCreated = false;
     try {
       const name = this.selectionListName();
-      view = await this.saveSelectionView(entity, name);
-      const listId = await this.materializeList(view, name);
-      listCreated = true;
+      const listId = await this.createSelectionList(entity, name);
       this.ListMessage = `Saved ${this.FilteredRows.length} record(s) as the list "${name}".`;
       this.navigationService.OpenEntityRecord('MJ: Lists', CompositeKey.FromID(listId));
     } catch (e) {
       this.ListMessage = `Could not save the list: ${e instanceof Error ? e.message : String(e)}`;
       LogError(`PSPredictionsGridComponent.SaveSelectionAsList: ${this.ListMessage}`);
     } finally {
-      if (!listCreated && view?.IsSaved) await this.deleteSelectionView(view);
       this.SavingList = false;
       this.cdr.markForCheck();
     }
   }
 
   /**
-   * Saves the private User View of `entity` naming the shown rows. A plain view (not CustomWhereClause, which MJ allows
-   * only an Owner): the provider screens its clause when the view runs. The selection is also its FilterState: a later
-   * save of the view recompiles WhereClause from FilterState, and this one compiles to the same records, so the
-   * lineage-linked List's refresh keeps them.
-   *
-   * @returns the saved view (the caller deletes it when the list is not created)
-   * @throws Error when the view is not saved
-   */
-  private async saveSelectionView(entity: EntityInfo, name: string): Promise<MJUserViewEntity> {
-    const user = this.ProviderToUse.CurrentUser;
-    const view = await this.ProviderToUse.GetEntityObject<MJUserViewEntity>('MJ: User Views', user);
-    view.NewRecord();
-    view.Name = name;
-    view.EntityID = entity.ID;
-    view.UserID = user.ID;
-    view.IsShared = false;
-    const recordIds = this.FilteredRows.map((r) => r.recordId);
-    view.WhereClause = BuildRecordIdFilter(entity, recordIds);
-    view.FilterState = JSON.stringify(PSPredictionsGridComponent.SelectionFilterState(entity, recordIds));
-    if (!(await view.Save())) throw new Error(`the selection's view was not saved: ${view.LatestResult?.CompleteMessage || 'unknown error'}`);
-    return view;
-  }
-
-  /**
-   * Runs "Materialize List From View" over the saved selection `view` with lineage to it.
+   * Queues the List named `name` of `entity` and a List Detail per shown row in one transaction group and submits it.
+   * The List's ID is the one its new record carries, so each detail names it before anything is written.
    *
    * @returns the created List's ID
-   * @throws Error when the action fails or creates no list
+   * @throws Error when a row is refused before it joins the group, or the group's submit fails (nothing is written)
    */
-  private async materializeList(view: MJUserViewEntity, name: string): Promise<string> {
-    const actionId = await this.ResolveMaterializeActionID();
-    const result = await this.RunListAction(actionId, [
-      { Name: 'ViewID', Value: view.ID, Type: 'Input' },
-      { Name: 'ListName', Value: name, Type: 'Input' },
-      { Name: 'RememberLineage', Value: 'true', Type: 'Input' },
-    ]);
-    const listId = result.Params?.find((p) => p.Name === 'CreatedListID')?.Value;
-    if (!result.Success || typeof listId !== 'string' || !listId) throw new Error(result.Message || 'the action created no list');
-    return listId;
+  private async createSelectionList(entity: EntityInfo, name: string): Promise<string> {
+    const p = this.ProviderToUse;
+    const user = p.CurrentUser;
+    const group = await p.CreateTransactionGroup();
+    const list = await p.GetEntityObject<MJListEntity>('MJ: Lists', user);
+    list.NewRecord();
+    list.Name = name;
+    list.EntityID = entity.ID;
+    list.UserID = user.ID;
+    list.TransactionGroup = group;
+    // In a transaction group Save() only queues the row: false means it was refused before it joined.
+    if (!(await list.Save())) throw new Error(list.LatestResult?.CompleteMessage || 'the list was refused');
+    for (const [seq, r] of this.FilteredRows.entries()) await this.queueListDetail(group, list.ID, r.recordId, seq);
+    if (!(await group.Submit())) throw new Error(list.LatestResult?.CompleteMessage || 'the list and its records were not saved');
+    return list.ID;
   }
 
   /**
-   * The User View FilterState naming exactly `recordIds` (compact key segments) of `entity`: for a single-column key,
-   * `in` rules of at most {@link CompositeFilterSQLCompiler.DefaultMaxInValues} IDs (the compiler's limit) ORed
-   * together; for a composite key, one AND of `eq` rules per record, ORed together.
-   */
-  public static SelectionFilterState(entity: EntityInfo, recordIds: readonly string[]): CompositeFilterDescriptor {
-    if (entity.PrimaryKeys.length === 1) {
-      const field = entity.FirstPrimaryKey.Name; // first-pk-ok: guarded by PrimaryKeys.length === 1
-      const chunk = CompositeFilterSQLCompiler.DefaultMaxInValues;
-      const filters: CompositeFilterDescriptor['filters'] = [];
-      for (let i = 0; i < recordIds.length; i += chunk) filters.push({ field, operator: 'in', value: recordIds.slice(i, i + chunk) });
-      return { logic: 'or', filters };
-    }
-    return {
-      logic: 'or',
-      filters: recordIds.map((id) => ({
-        logic: 'and',
-        filters: CompositeKey.FromURLSegment(entity, id).KeyValuePairs.map((kv) => ({ field: kv.FieldName, operator: 'eq', value: kv.Value })),
-      })),
-    };
-  }
-
-  /**
-   * Deletes the private view a failed "Save as list" created. Its own failure is logged and does not replace the
-   * message the user sees, which names why the list was not created.
-   */
-  private async deleteSelectionView(view: MJUserViewEntity): Promise<void> {
-    try {
-      if (!(await view.Delete())) LogError(`PSPredictionsGridComponent.SaveSelectionAsList: the selection's view ${view.ID} was not deleted: ${view.LatestResult?.CompleteMessage || 'unknown error'}`);
-    } catch (e) {
-      LogError(`PSPredictionsGridComponent.SaveSelectionAsList: the selection's view ${view.ID} was not deleted: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
-
-  /**
-   * Runs an action through the GraphQL action client of the grid's provider (the way Explorer surfaces run actions).
+   * Queues the List Detail naming `recordId` (its compact key segment) at `seq` in `group`.
    *
-   * @throws Error when the provider is not a GraphQL data provider
+   * @throws Error when the detail is refused before it joins the group
    */
-  public async RunListAction(actionId: string, params: ActionParam[]): Promise<Pick<ActionResult, 'Success' | 'Message' | 'Params'>> {
-    const provider = this.ProviderToUse;
-    if (!(provider instanceof GraphQLDataProvider)) throw new Error('running an action needs a GraphQL data provider');
-    return new GraphQLActionClient(provider).RunAction(actionId, params);
+  private async queueListDetail(group: TransactionGroupBase, listId: string, recordId: string, seq: number): Promise<void> {
+    const p = this.ProviderToUse;
+    const detail = await p.GetEntityObject<MJListDetailEntity>('MJ: List Details', p.CurrentUser);
+    detail.ListID = listId;
+    detail.RecordID = recordId;
+    detail.Sequence = seq;
+    detail.Status = 'Active';
+    detail.TransactionGroup = group;
+    if (!(await detail.Save())) throw new Error(detail.LatestResult?.CompleteMessage || 'a record of the list was refused');
   }
-
-  /**
-   * The ID of the "Materialize List From View" action, from the action engine of the grid's provider (its cached
-   * `MJ: Actions`, loaded once when the engine is not configured yet).
-   *
-   * @throws Error when the action is not in the engine's cache
-   */
-  public async ResolveMaterializeActionID(): Promise<string> {
-    const provider = this.ProviderToUse;
-    const actions = ActionEngineBase.GetProviderInstance(provider, ActionEngineBase) as ActionEngineBase;
-    if (actions.Actions.length === 0) await actions.Config(false, provider.CurrentUser, provider);
-    const id = PSPredictionsGridComponent.ActionIDByName(actions.Actions, PSPredictionsGridComponent.materializeActionName);
-    if (!id) throw new Error(`the "${PSPredictionsGridComponent.materializeActionName}" action is not available`);
-    return id;
-  }
-
-  /** The ID of the action named `name` (trimmed, case-insensitive) among `actions`, or null. Pure. */
-  public static ActionIDByName(actions: ReadonlyArray<{ readonly ID: string; readonly Name: string }>, name: string): string | null {
-    const wanted = name.trim().toLowerCase();
-    return actions.find((a) => a.Name.trim().toLowerCase() === wanted)?.ID || null;
-  }
-
-  private static readonly materializeActionName = 'Materialize List From View';
 
   /** "<title>: <tier> (<date>)", within the 100 characters of `MJ: Lists.Name`. */
   private selectionListName(): string {

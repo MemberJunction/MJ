@@ -13607,6 +13607,7 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   seed, `sql-claude` was OOM-killed at its 4 GB limit (host swap 12.0 of 13.3 GB): restarted, `max server memory`
   2560 MB, seeds cleaned and re-run. Repo gates check:guards, check:standards, check:ui, check:changeset,
   check:claude-md, check:codegen-tail → exit 0. **Rulings:** D4-274…D4-276.
+- **Commits:** `9b148df73e` (the revert, items 1–5 and 7, the plan) and this entry's commit (Save as list, D4-275).
 
 ## 12. Refresh log (append-only)
 
