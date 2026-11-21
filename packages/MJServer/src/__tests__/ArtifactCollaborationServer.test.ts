@@ -98,6 +98,7 @@ import {
     YJS_MESSAGE_PERMISSION_STATUS,
     YJS_MESSAGE_SYNC
 } from '../collaboration/ArtifactCollaborationServer.js';
+import { ServerWatermarkStore } from '../collaboration/ServerWatermarkStore.js';
 import {
     type IYjsRoomRelay,
     InMemoryYjsRelayBus,
@@ -147,6 +148,42 @@ function createTestUser(id: string, name: string, email: string): UserInfo {
     u.IsActive = true;
     return u;
 }
+
+describe('ArtifactCollaborationServer server watermarks stay bounded', () => {
+    type WatermarkRecorder = {
+        recordServerWatermark(room: {
+            RoomKey: string;
+            BaseVersionID?: string;
+            BaseVersionNumber?: number;
+            BaseVersionText?: string;
+        }): void;
+    };
+    type SharedCollabState = { ServerVersionWatermarks: ServerWatermarkStore };
+    const sharedStateKey = '___SINGLETON__MJ_COLLAB_SHARED_STATE';
+
+    it('keeps a capped number of watermarks however many rooms record one', () => {
+        const recorder = ArtifactCollaborationServer.Instance as unknown as WatermarkRecorder;
+        const roomCount = ServerWatermarkStore.DEFAULT_MAX_ENTRIES * 2;
+        for (let i = 0; i < roomCount; i++) {
+            recorder.recordServerWatermark({
+                RoomKey: `default::room-${i}`,
+                BaseVersionID: `version-${i}`,
+                BaseVersionNumber: 1,
+                BaseVersionText: `artifact ${i} text`,
+            });
+        }
+
+        const shared = GetGlobalObjectStore()[sharedStateKey] as SharedCollabState;
+        const store = shared.ServerVersionWatermarks;
+        expect(store).toBeInstanceOf(ServerWatermarkStore);
+        expect(store.Size).toBe(ServerWatermarkStore.DEFAULT_MAX_ENTRIES);
+        // The newest room still resumes from its watermark; the oldest fell back to the cold path.
+        expect(store.Get(`default::room-${roomCount - 1}`)?.BaseVersionID).toBe(`version-${roomCount - 1}`);
+        expect(store.Get('default::room-0')).toBeUndefined();
+
+        store.Clear();
+    });
+});
 
 describe('YjsRoomRelay (InMemoryYjsRoomRelay & RedisYjsRoomRelay)', () => {
     it('InMemoryYjsRoomRelay fans out messages across peer instances and suppresses self-echoes', async () => {

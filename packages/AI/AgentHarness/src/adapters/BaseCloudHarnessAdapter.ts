@@ -1,4 +1,4 @@
-import { BaseSingleton } from '@memberjunction/global';
+import { BaseSingleton, MJLruCache } from '@memberjunction/global';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { BaseHarnessAdapter } from './BaseHarnessAdapter.js';
 import {
@@ -146,9 +146,23 @@ export interface DetachedSessionState {
 /**
  * Process-wide registry of cloud sessions that detached in `adaptive-wake` mode and have not yet
  * been harvested by a subsequent `AgentWake`. Uses `BaseSingleton` for global object store safety.
+ *
+ * Bounded: an entry is only removed when a later turn IN THIS PROCESS sees the session reach a
+ * terminal state. A wake handled by another replica, a cancelled or abandoned run, or a resume that
+ * errors never does that, so entries (each holding the session's whole emitted-event-key set) would
+ * otherwise stay for the life of the process. Losing an entry is safe: a resume that finds none
+ * behaves as it does on another replica or after a restart.
  */
 export class CloudDetachedSessionRegistry extends BaseSingleton<CloudDetachedSessionRegistry> {
-    private readonly entries = new Map<string, DetachedSessionState>();
+    /** Most detached sessions tracked at once; the least recently used is dropped past this. */
+    public static readonly MAX_DETACHED_SESSIONS = 500;
+    /** A detached session nobody resumed for this long is forgotten. */
+    public static readonly DETACHED_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
+    private readonly entries = new MJLruCache<string, DetachedSessionState>({
+        maxSize: CloudDetachedSessionRegistry.MAX_DETACHED_SESSIONS,
+        ttlMs: CloudDetachedSessionRegistry.DETACHED_SESSION_TTL_MS,
+    });
 
     public constructor() {
         super();
@@ -159,7 +173,9 @@ export class CloudDetachedSessionRegistry extends BaseSingleton<CloudDetachedSes
     }
 
     public MarkDetached(sessionId: string, emittedEventKeys: ReadonlySet<string>): void {
-        this.entries.set(sessionId, {
+        // Each detach is also the moment to drop sessions that idled past the TTL without a wake.
+        this.entries.Prune();
+        this.entries.Set(sessionId, {
             SessionId: sessionId,
             EmittedEventKeys: new Set(emittedEventKeys),
             DetachedAtIso: new Date().toISOString(),
@@ -167,15 +183,20 @@ export class CloudDetachedSessionRegistry extends BaseSingleton<CloudDetachedSes
     }
 
     public GetDetached(sessionId: string): DetachedSessionState | undefined {
-        return this.entries.get(sessionId);
+        return this.entries.Get(sessionId);
     }
 
     public ClearDetached(sessionId: string): void {
-        this.entries.delete(sessionId);
+        this.entries.Delete(sessionId);
     }
 
     public ClearAll(): void {
-        this.entries.clear();
+        this.entries.Clear();
+    }
+
+    /** Number of detached sessions currently tracked. Exposed for diagnostics and tests. */
+    public get DetachedSessionCount(): number {
+        return this.entries.Size;
     }
 }
 

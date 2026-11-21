@@ -57,6 +57,7 @@ import { configInfo } from '../config.js';
 import { getUserPayload } from '../context.js';
 import type { DataSourceInfo } from '../types.js';
 import { InMemoryYjsRoomRelay, type IYjsRoomRelay, type YjsRelayMessage } from './YjsRoomRelay.js';
+import { ServerWatermarkStore } from './ServerWatermarkStore.js';
 import {
     ARTIFACT_AGENT_PRESENCE_HOOK_KEY,
     ARTIFACT_LIVE_CONTENT_READER_HOOK_KEY,
@@ -478,15 +479,6 @@ interface AuthenticatedUpgradeResult {
     Provider?: IMetadataProvider | null;
 }
 
-interface ServerPersistedWatermark {
-    BaseVersionID: string | null;
-    BaseVersionNumber: number;
-    BaseVersionText: string;
-    LastAppliedRestoreVersionID: string | null;
-    LastAppliedRestoreVersionNumber: number;
-    UpdatedAtMs: number;
-}
-
 interface WorkingStateProjection {
     ID: string;
     ArtifactID?: string;
@@ -626,7 +618,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         >;
         CompactedVectorKeysByArtifact: Map<string, Array<{ verKey: string; artKey: string }>>;
         InFlightCompactionVersionIds: Set<string>;
-        ServerVersionWatermarks: Map<string, ServerPersistedWatermark>;
+        ServerVersionWatermarks: ServerWatermarkStore;
     } {
         const store = GetGlobalObjectStore();
         const storeKey = '___SINGLETON__MJ_COLLAB_SHARED_STATE';
@@ -635,7 +627,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 CompactedStateVectors: new Map(),
                 CompactedVectorKeysByArtifact: new Map(),
                 InFlightCompactionVersionIds: new Set<string>(),
-                ServerVersionWatermarks: new Map<string, ServerPersistedWatermark>(),
+                ServerVersionWatermarks: new ServerWatermarkStore(),
             };
         }
         const state = store[storeKey] as {
@@ -651,10 +643,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             >;
             CompactedVectorKeysByArtifact: Map<string, Array<{ verKey: string; artKey: string }>>;
             InFlightCompactionVersionIds: Set<string>;
-            ServerVersionWatermarks?: Map<string, ServerPersistedWatermark>;
+            ServerVersionWatermarks?: ServerWatermarkStore;
         };
-        if (!state.ServerVersionWatermarks) {
-            state.ServerVersionWatermarks = new Map<string, ServerPersistedWatermark>();
+        // Also replaces a store left in the global slot by an older build of this module.
+        if (!(state.ServerVersionWatermarks instanceof ServerWatermarkStore)) {
+            state.ServerVersionWatermarks = new ServerWatermarkStore();
         }
         return state as {
             CompactedStateVectors: Map<
@@ -669,7 +662,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             >;
             CompactedVectorKeysByArtifact: Map<string, Array<{ verKey: string; artKey: string }>>;
             InFlightCompactionVersionIds: Set<string>;
-            ServerVersionWatermarks: Map<string, ServerPersistedWatermark>;
+            ServerVersionWatermarks: ServerWatermarkStore;
         };
     }
 
@@ -916,7 +909,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
     private recordServerWatermark(room: CollaborationRoom): void {
         const shared = ArtifactCollaborationServer.getSharedCollabState();
-        shared.ServerVersionWatermarks.set(room.RoomKey, {
+        shared.ServerVersionWatermarks.Set(room.RoomKey, {
             BaseVersionID: room.BaseVersionID ?? null,
             BaseVersionNumber: Math.max(room.BaseVersionNumber ?? 0, room.RejectedOobVersionNumber ?? 0),
             BaseVersionText: room.BaseVersionText ?? '',
@@ -1731,7 +1724,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         room.BaseVersionNumber,
                         room.RejectedOobVersionNumber ?? 0
                     );
-                    const serverWatermark = sharedState.ServerVersionWatermarks.get(room.RoomKey);
+                    const serverWatermark = sharedState.ServerVersionWatermarks.Get(room.RoomKey);
                     if (serverWatermark && serverWatermark.BaseVersionNumber > effectiveRoomVersion) {
                         return false;
                     }
@@ -2930,7 +2923,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         sharedState.InFlightCompactionVersionIds.clear();
         sharedState.CompactedStateVectors.clear();
         sharedState.CompactedVectorKeysByArtifact.clear();
-        sharedState.ServerVersionWatermarks.clear();
+        sharedState.ServerVersionWatermarks.Clear();
         for (const waiters of this._pendingSyncWaiters.values()) {
             for (const waiter of waiters) {
                 waiter.settle(false);
@@ -6126,7 +6119,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
 
             const sharedState = ArtifactCollaborationServer.getSharedCollabState();
-            const serverWatermark = sharedState.ServerVersionWatermarks.get(room.RoomKey);
+            const serverWatermark = sharedState.ServerVersionWatermarks.Get(room.RoomKey);
             if (serverWatermark?.LastAppliedRestoreVersionID) {
                 room.LastAppliedRestoreVersionID = serverWatermark.LastAppliedRestoreVersionID;
             }

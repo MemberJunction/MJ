@@ -7,6 +7,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import {
     EscapeSQLString,
     GetGlobalObjectStore,
+    MJLruCache,
     NormalizeUUID,
     UUIDsEqual,
 } from '@memberjunction/global';
@@ -75,16 +76,40 @@ export interface EmbeddedArtifactAccessResult {
 
 const ARTIFACT_SUGGESTIONS_STORE_KEY = '___MJ_ARTIFACT_SUGGESTIONS_STORE___';
 
-function getSuggestionStore(): Map<string, ArtifactSuggestionRecord[]> {
+/**
+ * Upper bound on the keys held by the in-process suggestion store. The store gains one key per
+ * artifact a suggestion tool touches (`artifact:<id>`) and one per distinct content hash in the
+ * standalone path (`ephemeral:<domain>:<hash>`, a new one on every accepted suggestion), so an
+ * unbounded map grew for the life of the process.
+ */
+export const MAX_STORED_SUGGESTION_KEYS = 500;
+
+/**
+ * How long an untouched key stays in the store. The store is only a fallback: the live room and the
+ * latest version's `Configuration` are authoritative whenever an artifact id is present, so an
+ * expired key costs at most one re-read from those sources.
+ */
+export const STORED_SUGGESTIONS_TTL_MS = 2 * 60 * 60 * 1000;
+
+type ArtifactSuggestionStore = MJLruCache<string, ArtifactSuggestionRecord[]>;
+
+function createSuggestionStore(): ArtifactSuggestionStore {
+    return new MJLruCache<string, ArtifactSuggestionRecord[]>({
+        maxSize: MAX_STORED_SUGGESTION_KEYS,
+        ttlMs: STORED_SUGGESTIONS_TTL_MS,
+    });
+}
+
+function getSuggestionStore(): ArtifactSuggestionStore {
     const globalStore = GetGlobalObjectStore();
     if (!globalStore) {
-        return new Map<string, ArtifactSuggestionRecord[]>();
+        return createSuggestionStore();
     }
     const existing = globalStore[ARTIFACT_SUGGESTIONS_STORE_KEY];
-    if (existing instanceof Map) {
-        return existing as Map<string, ArtifactSuggestionRecord[]>;
+    if (existing instanceof MJLruCache) {
+        return existing as ArtifactSuggestionStore;
     }
-    const created = new Map<string, ArtifactSuggestionRecord[]>();
+    const created = createSuggestionStore();
     globalStore[ARTIFACT_SUGGESTIONS_STORE_KEY] = created;
     return created;
 }
@@ -105,15 +130,25 @@ export function ComputeArtifactSuggestionStoreKey(
 }
 
 export function GetStoredArtifactSuggestions(key: string): ArtifactSuggestionRecord[] {
-    const list = getSuggestionStore().get(key);
+    const list = getSuggestionStore().Get(key);
     return list ? list.map((s) => ({ ...s, Anchor: { ...s.Anchor } })) : [];
 }
 
 export function SetStoredArtifactSuggestions(key: string, suggestions: ArtifactSuggestionRecord[]): void {
-    getSuggestionStore().set(
+    getSuggestionStore().Set(
         key,
         suggestions.map((s) => ({ ...s, Anchor: { ...s.Anchor } }))
     );
+}
+
+/** Number of keys currently held by the in-process suggestion store. Exposed for diagnostics and tests. */
+export function GetStoredArtifactSuggestionKeyCount(): number {
+    return getSuggestionStore().Size;
+}
+
+/** Empties the in-process suggestion store. The live room and persisted `Configuration` are unaffected. */
+export function ClearStoredArtifactSuggestions(): void {
+    getSuggestionStore().Clear();
 }
 
 /**

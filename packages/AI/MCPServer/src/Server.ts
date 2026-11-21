@@ -76,6 +76,7 @@ import { CreateOAuthProxyRouter } from './auth/OAuthProxyRouter.js';
 import type { OAuthProxyConfig } from './auth/OAuthProxyTypes.js';
 import { ResolveUpstreamOAuthEndpoints } from './auth/UpstreamEndpoints.js';
 import { ApplyTrustProxy } from './ProxySettings.js';
+import { ReleaseUnstoredStreamableSession, StreamableSessionStore } from './StreamableSessionStore.js';
 
 
 /*******************************************************************************
@@ -1485,8 +1486,11 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
         // STREAMABLE HTTP TRANSPORT (newer MCP protocol - single endpoint)
         // =====================================================================
 
-        // Store for Streamable HTTP transports (session ID -> transport)
-        const streamableTransports = new Map<string, StreamableHTTPServerTransport>();
+        // Store for Streamable HTTP sessions (session ID -> transport + its McpServer). Bounded: a
+        // session that idles out, or is the least recently used past the cap, is closed and dropped,
+        // because clients that vanish without an HTTP DELETE would otherwise pin a whole McpServer
+        // each for the life of the process.
+        const streamableSessions = new StreamableSessionStore<StreamableHTTPServerTransport>();
 
         // Streamable HTTP endpoint - handles both GET (SSE stream) and POST (messages)
         // This is the newer, recommended MCP transport
@@ -1494,9 +1498,10 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
             // Get or validate session ID from header
             const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
-            // For existing sessions, route to the existing transport
-            if (sessionId && streamableTransports.has(sessionId)) {
-                const transport = streamableTransports.get(sessionId)!;
+            // For existing sessions, route to the existing transport (this also restarts its idle clock)
+            const existingTransport = sessionId ? streamableSessions.GetTransport(sessionId) : undefined;
+            if (sessionId && existingTransport) {
+                const transport = existingTransport;
                 try {
                     // Pass parsed body to handleRequest - required for SDK to properly parse the message
                     await transport.handleRequest(req, res, req.body);
@@ -1519,9 +1524,14 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
 
             const sessionContext = ToSessionContext(authResult);
 
+            // Declared outside the try so a failure part-way through can release what was created.
+            let mcpServer: McpServer | null = null;
+            let transport: StreamableHTTPServerTransport | null = null;
+            let sessionStored = false;
+
             try {
                 // Create a new MCP server for this session
-                const mcpServer = new McpServer({
+                mcpServer = new McpServer({
                     name: "MemberJunction",
                     version: "1.0.0"
                 });
@@ -1530,29 +1540,34 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
                 await registerAllTools(mcpServer, sessionContext, systemUser);
 
                 // Create Streamable HTTP transport with session ID generation
-                const transport = new StreamableHTTPServerTransport({
+                const newTransport = new StreamableHTTPServerTransport({
                     sessionIdGenerator: () => randomUUID()
                 });
+                transport = newTransport;
 
-                // Connect the server to the transport
-                await mcpServer.connect(transport);
-
-                // Store for future requests (after first request establishes session)
-                transport.onclose = () => {
-                    const sid = transport.sessionId;
+                // Stop tracking the session when its transport closes (client DELETE, eviction, or
+                // error). This must be assigned BEFORE connect(): the SDK chains whatever onclose is
+                // already set with its own close handling, so assigning afterwards replaces that
+                // chain and the McpServer never learns its transport closed.
+                newTransport.onclose = () => {
+                    const sid = newTransport.sessionId;
                     if (sid) {
-                        streamableTransports.delete(sid);
+                        streamableSessions.Remove(sid);
                     }
                 };
 
+                // Connect the server to the transport
+                await mcpServer.connect(newTransport);
+
                 // Handle the current request
                 // Pass the parsed body to help the SDK recognize the initialize request
-                await transport.handleRequest(req, res, req.body);
+                await newTransport.handleRequest(req, res, req.body);
 
-                // Store the transport after successful request handling
-                const newSessionId = transport.sessionId;
+                // Store the session after successful request handling
+                const newSessionId = newTransport.sessionId;
                 if (newSessionId) {
-                    streamableTransports.set(newSessionId, transport);
+                    streamableSessions.Add(newSessionId, { Transport: newTransport, Server: mcpServer });
+                    sessionStored = true;
                     console.log(`[StreamableHTTP] New session for ${sessionContext.user.Email}: ${newSessionId}`);
                 } else {
                     console.warn(`[StreamableHTTP] WARNING: No session ID assigned after handleRequest`);
@@ -1565,6 +1580,12 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
                         error: 'internal_error',
                         message: error instanceof Error ? error.message : 'Connection failed'
                     });
+                }
+            } finally {
+                // Nothing will ever route to a session that was not stored (the request failed, or
+                // it was not an initialize request and so got no session ID): release it now.
+                if (!sessionStored) {
+                    await ReleaseUnstoredStreamableSession(mcpServer, transport);
                 }
             }
         });

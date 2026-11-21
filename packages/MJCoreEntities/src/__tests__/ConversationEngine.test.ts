@@ -1206,6 +1206,58 @@ describe('ConversationEngine', () => {
             const result = await engine.LoadConversationDetails('conv-1', contextUser);
             expect(result.Details).toHaveLength(1);
         });
+
+        // Memory-leak audit Round 23: the engine lives for the whole process (MJAPI) or browser
+        // session, and each entry holds a conversation's full history, so the cache must be bounded.
+        it('keeps at most MAX_CACHED_CONVERSATION_DETAILS conversations, evicting the oldest', async () => {
+            const cap = ConversationEngine.MAX_CACHED_CONVERSATION_DETAILS;
+            for (let i = 0; i < cap + 10; i++) {
+                enqueueDetailsResults([createMockDetail({ ID: `d-${i}`, ConversationID: `conv-${i}` })]);
+                await engine.LoadConversationDetails(`conv-${i}`, contextUser);
+            }
+
+            expect(engine.CachedConversationDetailCount).toBe(cap);
+            expect(engine.HasCachedDetails('conv-0')).toBe(false);
+            expect(engine.HasCachedDetails('conv-9')).toBe(false);
+            expect(engine.HasCachedDetails('conv-10')).toBe(true);
+            expect(engine.HasCachedDetails(`conv-${cap + 9}`)).toBe(true);
+        });
+
+        it('treats a read as use, so the conversation in active use survives eviction', async () => {
+            const cap = ConversationEngine.MAX_CACHED_CONVERSATION_DETAILS;
+            enqueueDetailsResults([createMockDetail({ ID: 'd-open', ConversationID: 'conv-open' })]);
+            await engine.LoadConversationDetails('conv-open', contextUser);
+
+            for (let i = 0; i < cap + 5; i++) {
+                enqueueDetailsResults([createMockDetail({ ID: `d-${i}`, ConversationID: `conv-${i}` })]);
+                await engine.LoadConversationDetails(`conv-${i}`, contextUser);
+                // The open conversation keeps being read while others load in the background.
+                expect(engine.GetCachedDetails('conv-open')).toHaveLength(1);
+            }
+
+            expect(engine.CachedConversationDetailCount).toBe(cap);
+            expect(engine.HasCachedDetails('conv-open')).toBe(true);
+            expect(engine.HasCachedDetails('conv-0')).toBe(false);
+        });
+
+        it('reloads an evicted conversation on its next read', async () => {
+            const cap = ConversationEngine.MAX_CACHED_CONVERSATION_DETAILS;
+            for (let i = 0; i <= cap; i++) {
+                enqueueDetailsResults([createMockDetail({ ID: `d-${i}`, ConversationID: `conv-${i}` })]);
+                await engine.LoadConversationDetails(`conv-${i}`, contextUser);
+            }
+            expect(engine.HasCachedDetails('conv-0')).toBe(false);
+
+            enqueueDetailsResults([
+                createMockDetail({ ID: 'd-0', ConversationID: 'conv-0' }),
+                createMockDetail({ ID: 'd-0b', ConversationID: 'conv-0' }),
+            ]);
+            const reloaded = await engine.LoadConversationDetails('conv-0', contextUser);
+
+            expect(reloaded.Details).toHaveLength(2);
+            expect(engine.HasCachedDetails('conv-0')).toBe(true);
+            expect(engine.CachedConversationDetailCount).toBe(cap);
+        });
     });
 
     // ========================================================================
