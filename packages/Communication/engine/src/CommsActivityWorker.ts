@@ -89,19 +89,29 @@ export class CommsActivityWorker {
 
     let processedCount = 0;
     let errorCount = 0;
+    let raceDuplicates = 0;
 
     for (const event of deduped) {
+      let claimedEvent: MJCommunicationProviderEventEntity | undefined;
       try {
-        await this.processSingleEvent(event, persistActivity, contextUser);
         if (event.ProviderEventID) {
-          await this.insertProviderEvent(
+          const claim = await this.claimProviderEvent(
             event.CommunicationProviderID,
             event.ProviderEventID,
             contextUser,
           );
+          if (claim.Duplicate) {
+            raceDuplicates++;
+            continue;
+          }
+          claimedEvent = claim.Entity;
         }
+        await this.processSingleEvent(event, persistActivity, contextUser);
         processedCount++;
       } catch (err) {
+        if (claimedEvent) {
+          await claimedEvent.Delete().catch(() => false);
+        }
         errorCount++;
         LogError(
           `CommsActivityWorker failed processing event (${event.EventType}): ${
@@ -115,7 +125,7 @@ export class CommsActivityWorker {
 
     return {
       ProcessedCount: processedCount,
-      DuplicateCount: duplicateCount,
+      DuplicateCount: duplicateCount + raceDuplicates,
       ErrorCount: errorCount,
     };
   }
@@ -303,7 +313,12 @@ export class CommsActivityWorker {
         },
         contextUser,
       );
-      if (res.Success && res.Results) {
+      if (!res.Success) {
+        throw new Error(
+          `Failed querying Communication Provider Events for deduplication: ${res.ErrorMessage ?? 'RunView failed'}`,
+        );
+      }
+      if (res.Results) {
         for (const row of res.Results) {
           keys.add(this.providerEventKey(row.CommunicationProviderID, row.ProviderEventID));
         }
@@ -313,11 +328,11 @@ export class CommsActivityWorker {
     return keys;
   }
 
-  private async insertProviderEvent(
+  private async claimProviderEvent(
     providerID: string,
     providerEventID: string,
     contextUser: UserInfo,
-  ): Promise<boolean> {
+  ): Promise<{ Entity?: MJCommunicationProviderEventEntity; Duplicate: boolean }> {
     const md = this.getProvider();
     const entity = await md.GetEntityObject<MJCommunicationProviderEventEntity>(
       'MJ: Communication Provider Events',
@@ -326,7 +341,26 @@ export class CommsActivityWorker {
     entity.CommunicationProviderID = providerID;
     entity.ProviderEventID = providerEventID;
     entity.ReceivedAt = new Date();
-    return entity.Save();
+    if (await entity.Save()) {
+      return { Entity: entity, Duplicate: false };
+    }
+
+    const saveErr = entity.LatestResult?.CompleteMessage ?? 'unknown error';
+    const rv = this.getRunView();
+    const existing = await rv.RunView<{ ID: string }>(
+      {
+        EntityName: 'MJ: Communication Provider Events',
+        Fields: ['ID'],
+        ExtraFilter: `CommunicationProviderID='${EscapeSQLString(providerID)}' AND ProviderEventID='${EscapeSQLString(providerEventID)}'`,
+        MaxRows: 1,
+        ResultType: 'simple',
+      },
+      contextUser,
+    );
+    if (existing.Success && existing.Results.length > 0) {
+      return { Duplicate: true };
+    }
+    throw new Error(`Failed to claim Communication Provider Event (${providerEventID}): ${saveErr}`);
   }
 
   private async correlateEvent(
@@ -856,12 +890,11 @@ export class CommsActivityWorker {
     pref.UserAgent = event.UserAgent ?? null;
 
     if (!(await pref.Save())) {
-      LogError(
+      throw new Error(
         `Failed to save Principal Preference opt-out: ${
           pref.LatestResult?.CompleteMessage ?? 'unknown error'
         }`,
       );
-      return;
     }
 
     await this.appendConsentAuditLog(
@@ -906,7 +939,7 @@ export class CommsActivityWorker {
     audit.ChangedAt = params.event.OccurredAt;
 
     if (!(await audit.Save())) {
-      LogError(
+      throw new Error(
         `Failed to save Consent Audit Log: ${
           audit.LatestResult?.CompleteMessage ?? 'unknown error'
         }`,
@@ -927,7 +960,7 @@ export class CommsActivityWorker {
 
   private async saveEndpoint(endpoint: MJCommunicationEndpointEntity): Promise<void> {
     if (!(await endpoint.Save())) {
-      LogError(
+      throw new Error(
         `Failed to save Communication Endpoint ${endpoint.ID}: ${
           endpoint.LatestResult?.CompleteMessage ?? 'unknown error'
         }`,
@@ -979,12 +1012,11 @@ export class CommsActivityWorker {
     suppression.Notes = fields.Notes ?? null;
 
     if (!(await suppression.Save())) {
-      LogError(
+      throw new Error(
         `Failed to save Communication Suppression: ${
           suppression.LatestResult?.CompleteMessage ?? 'unknown error'
         }`,
       );
-      return undefined;
     }
     return suppression;
   }
