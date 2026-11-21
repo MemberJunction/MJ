@@ -35,6 +35,11 @@ export class GeminiEnterpriseRealtimeClient extends GeminiRealtimeClient {
         return true;
     }
 
+    /** Vertex AI / Gemini Enterprise relay sessions accept sessionResumption.handle natively. */
+    protected override get DefaultTrustsNativeResumption(): boolean {
+        return true;
+    }
+
     /**
      * Opens one Live connection through the relay; a resume opens another with the same URL and the new handle.
      *
@@ -49,15 +54,7 @@ export class GeminiEnterpriseRealtimeClient extends GeminiRealtimeClient {
             apiKey: RELAY_PLACEHOLDER_API_KEY,
             httpOptions: { baseUrl: relayBaseUrl(args), apiVersion: VERTEX_LIVE_API_VERSION },
         });
-        return ai.live.connect({
-            model: args.Model,
-            config: this.withStatedModalities(args.Config),
-            callbacks: {
-                onmessage: args.OnMessage,
-                onerror: args.OnError,
-                onclose: args.OnClose,
-            },
-        });
+        return this.connectUntilSetup(args, (callbacks) => ai.live.connect({ model: args.Model, config: this.withStatedModalities(args.Config), callbacks }));
     }
 
     /**

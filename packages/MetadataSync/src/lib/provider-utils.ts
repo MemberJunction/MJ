@@ -9,13 +9,14 @@
 
 import sql from 'mssql';
 import { SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
-import { UserCache } from '@memberjunction/generic-database-provider';
+import { UserCache, GetServerPrincipal } from '@memberjunction/generic-database-provider';
 import type { MJConfig } from '../config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DatabaseProviderBase, Metadata, ResolveStartupMode, SetProvider, StartupManager, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { minimatch } from 'minimatch';
+import { IsIgnoredDirectoryName } from './ignore-directories';
 
 /** Global mssql ConnectionPool (SQL Server path only) */
 let globalPool: sql.ConnectionPool | null = null;
@@ -167,9 +168,8 @@ async function initializePostgresProvider(config: MJConfig): Promise<DatabasePro
   // Startup() entirely — adding it initializes LocalCacheManager and makes an
   // MJ_STARTUP_MODE=full opt-up actually pre-warm engines on PG too.
   const startupMode = ResolveStartupMode({ configValue: config.startup?.mode, defaultMode: 'task' });
-  const sysUser = UserCache.Instance.GetSystemUser();
-  const backupSysUser = UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
-  await StartupManager.Instance.Startup(false, sysUser || backupSysUser, provider, { mode: startupMode.mode });
+  const startupUser = GetServerPrincipal() ?? undefined;
+  await StartupManager.Instance.Startup(false, startupUser, provider, { mode: startupMode.mode });
 
   return provider;
 }
@@ -389,10 +389,7 @@ export function FindEntityDirectories(
   for (const entry of entries) {
     if (entry.isDirectory() && !entry.name.startsWith('.')) {
       // Check if this directory should be ignored
-      if (ignoreDirectories && ignoreDirectories.some(pattern => {
-        // Simple pattern matching: exact name or ends with pattern
-        return entry.name === pattern || entry.name.endsWith(pattern);
-      })) {
+      if (IsIgnoredDirectoryName(entry.name, ignoreDirectories)) {
         continue;
       }
       

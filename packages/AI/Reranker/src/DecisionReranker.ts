@@ -8,7 +8,7 @@
  */
 
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { BaseReranker } from '@memberjunction/ai';
+import { BaseReranker, CreateCancellationError } from '@memberjunction/ai';
 import type { DecisionAnswer, DecisionQuestion, RerankDocument, RerankParams, RerankResult } from '@memberjunction/ai';
 import { LogStatus, UserInfo } from '@memberjunction/core';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -16,6 +16,12 @@ import { AIDecisionParams, AIDecisionRunner } from '@memberjunction/ai-prompts';
 import type { AIDecisionRunResult, ModelVendorCandidate } from '@memberjunction/ai-prompts';
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { BasePromptBackedReranker } from './BasePromptBackedReranker';
+
+/** The end of a rerank's time budget: a promise that rejects when it ends, and the release of its timer and listener. */
+interface BudgetStop {
+    Stopped: Promise<never>;
+    Release: () => void;
+}
 
 /** The decision prompt the reranker asks when it is given no prompt ID. */
 const DEFAULT_DECISION_PROMPT_NAME = 'Default Decision';
@@ -181,7 +187,7 @@ export class DecisionReranker extends BasePromptBackedReranker {
         const batches = this.splitIntoBatches(params.documents, this.documentsPerCall(runner, prompt, params));
         LogStatus(`DecisionReranker: Scoring ${params.documents.length} documents in ${batches.length} decision call(s)`);
         const timeoutMS = this.positiveOption(params, 'TimeoutMS') ?? DEFAULT_DECISION_RERANK_TIMEOUT_MS;
-        const results = await this.askWithinBudget(runner, prompt, params.query, batches, timeoutMS);
+        const results = await this.askWithinBudget(runner, prompt, params.query, batches, timeoutMS, params.CancellationToken);
         // The decision runner saves its runs fire-and-forget, and the server prices a run when it saves
         // it. Wait for the saves, so UsageOf can read each run's cost, and so each save's cost rollup to
         // the parent run lands before the parent run is finalized.
@@ -233,30 +239,62 @@ export class DecisionReranker extends BasePromptBackedReranker {
      * Asks every batch's decision call in parallel, within one time budget. When the budget runs out
      * it aborts the calls, through the cancellation token they share (the decision runner hands it to
      * each driver call, failover included), and throws, so the rerank fails like any other error and
-     * the caller falls back. It does not wait for the aborted calls; their runs are still recorded.
+     * the caller falls back. The caller's own signal aborts the same token and throws a cancellation
+     * error, which `BaseReranker.Rerank` reports as cancelled rather than failed. It does not wait for
+     * the aborted calls; their runs are still recorded.
      */
     private async askWithinBudget(
         runner: DecisionRerankRunner,
         prompt: MJAIPromptEntityExtended,
         query: string,
         batches: RerankDocument[][],
-        timeoutMS: number
+        timeoutMS: number,
+        callerSignal?: AbortSignal
     ): Promise<AIDecisionRunResult[]> {
         const budget = new AbortController();
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        const expired = new Promise<never>((_resolve, reject) => {
-            timer = setTimeout(() => {
-                const error = new Error(`DecisionReranker: The decision calls did not finish within ${timeoutMS} ms`);
-                budget.abort(error);
-                reject(error);
-            }, timeoutMS);
-        });
+        const stop = this.stopWhenBudgetEnds(budget, timeoutMS, callerSignal);
         const calls = Promise.all(batches.map(batch => runner.ExecuteDecision(this.buildDecisionParams(prompt, query, batch, budget.signal))));
         try {
-            return await Promise.race([calls, expired]);
+            return await Promise.race([calls, stop.Stopped]);
         } finally {
-            clearTimeout(timer);
+            stop.Release();
         }
+    }
+
+    /**
+     * Ends the budget when its time runs out or the caller's signal aborts, whichever comes first:
+     * aborts the shared token and rejects `Stopped`, with a timeout error or a cancellation error.
+     * `Release` clears the timer and removes the listener on the caller's signal.
+     */
+    private stopWhenBudgetEnds(budget: AbortController, timeoutMS: number, callerSignal?: AbortSignal): BudgetStop {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        let onCallerAbort: (() => void) | undefined;
+        const stopped = new Promise<never>((_resolve, reject) => {
+            const end = (error: Error): void => {
+                if (!budget.signal.aborted) {
+                    budget.abort(error);
+                }
+                reject(error);
+            };
+            onCallerAbort = () => end(CreateCancellationError({ signal: callerSignal, provider: 'DecisionReranker' }));
+            if (callerSignal?.aborted) {
+                onCallerAbort();
+                return;
+            }
+            callerSignal?.addEventListener('abort', onCallerAbort, { once: true });
+            timer = setTimeout(() => end(new Error(`DecisionReranker: The decision calls did not finish within ${timeoutMS} ms`)), timeoutMS);
+        });
+        // The race may settle on the calls first; a later rejection of this promise is expected.
+        stopped.catch(() => undefined);
+        return {
+            Stopped: stopped,
+            Release: () => {
+                clearTimeout(timer);
+                if (onCallerAbort) {
+                    callerSignal?.removeEventListener('abort', onCallerAbort);
+                }
+            },
+        };
     }
 
     /** Splits the documents, in order, into batches of at most `limit`. */

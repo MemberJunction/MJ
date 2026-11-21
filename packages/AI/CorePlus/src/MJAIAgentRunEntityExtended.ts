@@ -1,7 +1,33 @@
-import { BaseEntity, BaseEntityResult, CompositeKey, EntitySaveOptions, LogError, LogErrorEx, IMetadataProvider } from "@memberjunction/core";
+import { BaseEntity, BaseEntityResult, CompositeKey, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunViewProvider, LogError, LogErrorEx, UserInfo } from "@memberjunction/core";
 import { MJAIAgentRunEntity, ConversationEngine, UserOwnsConversation, type ConversationBranchRow } from "@memberjunction/core-entities";
-import { RegisterClass, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
+import { EscapeSQLString, RegisterClass, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { MJAIAgentRunStepEntityExtended } from "./MJAIAgentRunStepEntityExtended";
+
+/**
+ * Trusted in-process server cancellations marked via {@link MJAIAgentRunEntityExtended.MarkServerCancellation}.
+ * Held in a module-private WeakSet (not an entity field or property) so no GraphQL input, `LoadFromData`,
+ * `OldValues___`, or transaction variable can ever set or forge it. Cleared in `Save()`'s `finally` block
+ * so each mark authorizes a single `Save()` call.
+ */
+const serverMarkedCancellations = new WeakSet<MJAIAgentRunEntityExtended>();
+
+interface PersistedAgentRunStopRow {
+    ID: string;
+    Status: MJAIAgentRunEntity['Status'] | null;
+    UserID: string | null;
+    ConversationID: string | null;
+    ParentRunID: string | null;
+}
+
+interface PersistedAgentRunParentRow {
+    ID: string;
+    ConversationID: string | null;
+    ParentRunID: string | null;
+}
+
+function isMetadataProvider(provider: IEntityDataProvider | null | undefined): provider is IEntityDataProvider & IMetadataProvider {
+    return provider != null && 'ProviderType' in provider;
+}
 
 @RegisterClass(BaseEntity, "MJ: AI Agent Runs")
 export class MJAIAgentRunEntityExtended extends MJAIAgentRunEntity {
@@ -9,38 +35,33 @@ export class MJAIAgentRunEntityExtended extends MJAIAgentRunEntity {
     public static readonly StopRefusedMessage = 'Only the user who started this run, or the owner of its conversation, can stop it.';
     /** What a stop reports when the check itself failed. */
     public static readonly StopCheckFailedMessage = 'Unable to verify who may stop this run.';
+    /** Maximum number of `ParentRunID` hops walked when resolving a child sub-agent run's conversation. */
+    private static readonly MaxParentRunWalkHops = 8;
 
     /**
-     * Guards a stop. Saving a run whose `Status` moves to `Cancelled` as a user's stop request
-     * (see {@link IsStopRequest}) is allowed only to the user who started the run or to the owner
-     * of its conversation (the owner, or an Owner-level grant: the same rule as Share). Any
-     * other user gets `false` with {@link StopRefusedMessage} in `LatestResult`. Server-side only:
-     * on a non-database provider the server's own copy of this save runs the check, and the
-     * conversation UI already offers Stop only where this would allow it (`CanStopDetail`).
+     * Marks this run instance as a trusted server-initiated cancellation (for example, `BaseAgent`
+     * finalizing an aborted, timed-out, or system-cancelled run). Authorizes the next `Save()` call
+     * to transition `Status` to `Cancelled` without checking user ownership; the marker is cleared
+     * in `Save()`'s `finally` block so a single mark covers one `Save()` call.
+     *
+     * Not an entity field: no GraphQL input, `LoadFromData()`, `OldValues___`, or transaction variable
+     * can reach it.
      */
-    override async Save(options?: EntitySaveOptions): Promise<boolean> {
-        if (this.IsStopRequest && !(await this.contextUserMayStop())) {
-            return false;
-        }
-        return super.Save(options);
+    public MarkServerCancellation(): this {
+        serverMarkedCancellations.add(this);
+        return this;
     }
 
     /**
-     * Whether this save is a stop request: an existing run whose `Status` is changing to
-     * `Cancelled` with no reason or the user-request reason. The framework's own cancellations
-     * (`Timeout`, `System`) are not stop requests, and neither is a save of a run that is
-     * already `Cancelled` (the agent finalizing after a stop).
+     * Whether this save requires stop-ownership authorization: an existing run being saved with
+     * `Status = 'Cancelled'` that has not been marked via {@link MarkServerCancellation}.
+     * Independent of `CancellationReason` (caller-controllable reason text cannot bypass the gate)
+     * and of client-supplied `Status` dirty flags (the server verifies the persisted DB status in `Save()`).
      */
     public get IsStopRequest(): boolean {
-        if (!this.IsSaved || this.Status !== MJAIAgentRunEntityExtended.CancelledStatus) {
-            return false;
-        }
-        const status = this.GetFieldByName('Status');
-        if (!status?.Dirty) {
-            return false;
-        }
-        const reason = this.CancellationReason;
-        return reason == null || reason === MJAIAgentRunEntityExtended.UserRequestCancellationReason;
+        return this.IsSaved
+            && this.Status === MJAIAgentRunEntityExtended.CancelledStatus
+            && !serverMarkedCancellations.has(this);
     }
 
     /**
@@ -52,18 +73,56 @@ export class MJAIAgentRunEntityExtended extends MJAIAgentRunEntity {
         return ownsConversation || starterId == null || UUIDsEqual(starterId, userId);
     }
 
-    /** {@link StopPermitted} for the context user against this run, on the server. */
+    /**
+     * Verifies {@link StopPermitted} against the persisted database row for the context user on the server.
+     * Reads `Status`, `UserID`, `ConversationID`, and `ParentRunID` directly from the database so client-spoofed
+     * `OldValues___`, `UserID`, or `ConversationID` fields cannot bypass authorization. Walks `ParentRunID`
+     * (up to {@link MaxParentRunWalkHops} hops with a cycle guard) when a child sub-agent run has no direct
+     * `ConversationID`.
+     */
     private async contextUserMayStop(): Promise<boolean> {
-        const provider = this.ProviderToUse as unknown as IMetadataProvider;
+        const provider = this.ProviderToUse;
         const user = this.ContextCurrentUser;
-        if (provider?.ProviderType !== 'Database' || !user) {
+        if (!isMetadataProvider(provider) || provider.ProviderType !== 'Database' || !user) {
             return true;
         }
         try {
-            if (MJAIAgentRunEntityExtended.StopPermitted(user.ID, this.UserID, false)) {
+            if (!this.ID) {
+                LogError('MJAIAgentRunEntityExtended: stop permission check failed: missing run ID');
+                this.recordStopRefused(MJAIAgentRunEntityExtended.StopCheckFailedMessage);
+                return false;
+            }
+            const rv = this.RunViewProviderToUse;
+            if (!rv || typeof rv.RunView !== 'function') {
+                LogError(`MJAIAgentRunEntityExtended: stop permission check unavailable for run ${this.ID}: no RunView provider`);
+                this.recordStopRefused(MJAIAgentRunEntityExtended.StopCheckFailedMessage);
+                return false;
+            }
+            const persistedResult = await rv.RunView<PersistedAgentRunStopRow>({
+                EntityName: 'MJ: AI Agent Runs',
+                ExtraFilter: `ID='${EscapeSQLString(this.ID)}'`,
+                Fields: ['ID', 'Status', 'UserID', 'ConversationID', 'ParentRunID'],
+                ResultType: 'simple',
+                BypassCache: true
+            }, user);
+            if (!persistedResult?.Success) {
+                LogError(`MJAIAgentRunEntityExtended: stop permission check query failed for run ${this.ID}: ${persistedResult?.ErrorMessage ?? 'unknown error'}`);
+                this.recordStopRefused(MJAIAgentRunEntityExtended.StopCheckFailedMessage);
+                return false;
+            }
+            const persisted = persistedResult.Results?.[0];
+            if (!persisted) {
+                this.recordStopRefused(MJAIAgentRunEntityExtended.StopRefusedMessage);
+                return false;
+            }
+            if (persisted.Status === MJAIAgentRunEntityExtended.CancelledStatus) {
                 return true;
             }
-            if (this.ConversationID && await UserOwnsConversation(provider, user, this.ConversationID)) {
+            if (MJAIAgentRunEntityExtended.StopPermitted(user.ID, persisted.UserID, false)) {
+                return true;
+            }
+            const conversationId = await this.resolveConversationIdForStop(persisted, rv, user);
+            if (conversationId && await UserOwnsConversation(provider, user, conversationId)) {
                 return true;
             }
             this.recordStopRefused(MJAIAgentRunEntityExtended.StopRefusedMessage);
@@ -73,6 +132,44 @@ export class MJAIAgentRunEntityExtended extends MJAIAgentRunEntity {
             this.recordStopRefused(MJAIAgentRunEntityExtended.StopCheckFailedMessage);
             return false;
         }
+    }
+
+    private async resolveConversationIdForStop(
+        persisted: PersistedAgentRunStopRow,
+        rv: IRunViewProvider,
+        user: UserInfo
+    ): Promise<string | null> {
+        if (persisted.ConversationID) {
+            return persisted.ConversationID;
+        }
+        const visited = new Set<string>([persisted.ID.toLowerCase()]);
+        let parentRunId = persisted.ParentRunID;
+        for (let hop = 0; hop < MJAIAgentRunEntityExtended.MaxParentRunWalkHops && parentRunId; hop++) {
+            const normalizedParentId = parentRunId.toLowerCase();
+            if (visited.has(normalizedParentId)) {
+                break;
+            }
+            visited.add(normalizedParentId);
+            const parentResult = await rv.RunView<PersistedAgentRunParentRow>({
+                EntityName: 'MJ: AI Agent Runs',
+                ExtraFilter: `ID='${EscapeSQLString(parentRunId)}'`,
+                Fields: ['ID', 'ConversationID', 'ParentRunID'],
+                ResultType: 'simple',
+                BypassCache: true
+            }, user);
+            if (!parentResult?.Success) {
+                throw new Error(parentResult?.ErrorMessage ?? `Failed to load parent run ${parentRunId}`);
+            }
+            const parent = parentResult.Results?.[0];
+            if (!parent) {
+                return null;
+            }
+            if (parent.ConversationID) {
+                return parent.ConversationID;
+            }
+            parentRunId = parent.ParentRunID;
+        }
+        return null;
     }
 
     private recordStopRefused(message: string): void {
@@ -86,6 +183,19 @@ export class MJAIAgentRunEntityExtended extends MJAIAgentRunEntity {
     }
 
     private _runSteps: MJAIAgentRunStepEntityExtended[] = [];
+    private _hasAuthoritativeBoundActionParams = false;
+    private _authoritativeBoundActionParams: string | null = null;
+
+    /**
+     * Records the run's server-authored action parameter bindings. Only server code (`BaseAgent`)
+     * calls this; values set directly on `BoundActionParams` by a client create or update (including
+     * via `OldValues___`) are ignored on save.
+     */
+    public SetServerBoundActionParams(serialized: string | null): void {
+        this._hasAuthoritativeBoundActionParams = true;
+        this._authoritativeBoundActionParams = serialized;
+        this.BoundActionParams = serialized;
+    }
 
     // ---- Run-state vocabulary ---------------------------------------------------------------
     // Typed from the entity's own unions so a CHECK-constraint change surfaces here at compile
@@ -248,11 +358,76 @@ export class MJAIAgentRunEntityExtended extends MJAIAgentRunEntity {
 
     override async InnerLoad(CompositeKey: CompositeKey, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
         if (await super.InnerLoad(CompositeKey, EntityRelationshipsToLoad)) {
+            this._hasAuthoritativeBoundActionParams = true;
+            this._authoritativeBoundActionParams = this.BoundActionParams ?? null;
             return await this.LoadRelatedData();
         }
         else {
             return false;
         }
+    }
+
+    /**
+     * Enforces both stop-ownership authorization and server-authoritative `BoundActionParams`
+     * preservation.
+     *
+     * For stop ownership: saving an existing run with `Status = 'Cancelled'` without a trusted
+     * {@link MarkServerCancellation} mark (see {@link IsStopRequest}) is allowed on the server only
+     * if the run is already `Cancelled` in the database, or the context user started the run, or the
+     * context user owns its conversation (walking `ParentRunID` for child sub-agent runs). Any other
+     * caller gets `false` with {@link StopRefusedMessage} in `LatestResult`. Server-side only: on a
+     * non-database provider the server's own copy of this save runs the check, and the conversation UI
+     * already offers Stop only where this would allow it (`CanStopDetail`).
+     */
+    override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        try {
+            if (this.IsStopRequest && !(await this.contextUserMayStop())) {
+                return false;
+            }
+            if (!this.IsSaved) {
+                if (!this._hasAuthoritativeBoundActionParams) {
+                    this.BoundActionParams = null;
+                    this._hasAuthoritativeBoundActionParams = true;
+                    this._authoritativeBoundActionParams = null;
+                } else {
+                    this.BoundActionParams = this._authoritativeBoundActionParams;
+                }
+            } else if (this._hasAuthoritativeBoundActionParams) {
+                this.BoundActionParams = this._authoritativeBoundActionParams;
+            } else {
+                const stored = await this.readStoredBoundActionParams();
+                if (!stored.ok) {
+                    return false;
+                }
+                this._authoritativeBoundActionParams = stored.value;
+                this._hasAuthoritativeBoundActionParams = true;
+                this.BoundActionParams = this._authoritativeBoundActionParams;
+            }
+            return await super.Save(options);
+        } finally {
+            serverMarkedCancellations.delete(this);
+        }
+    }
+
+    private async readStoredBoundActionParams(): Promise<{ ok: true; value: string | null } | { ok: false }> {
+        if (!this.ID) {
+            return { ok: false };
+        }
+        const rv = this.RunViewProviderToUse;
+        if (!rv || typeof rv.RunView !== 'function') {
+            return { ok: false };
+        }
+        const result = await rv.RunView<{ BoundActionParams: string | null }>({
+            EntityName: 'MJ: AI Agent Runs',
+            ExtraFilter: `ID='${EscapeSQLString(this.ID)}'`,
+            Fields: ['BoundActionParams'],
+            ResultType: 'simple',
+            BypassCache: true
+        }, this.ContextCurrentUser);
+        if (!result?.Success || !result.Results?.length) {
+            return { ok: false };
+        }
+        return { ok: true, value: result.Results[0].BoundActionParams ?? null };
     }
 
     /**

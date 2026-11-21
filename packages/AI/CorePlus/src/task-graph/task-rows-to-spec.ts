@@ -39,7 +39,11 @@ export type TaskRunRow = {
     Configuration?: string | null;
     AgentRunID?: string | null;
     ActionID?: string | null;
+    Action?: string | null;
     AgentID?: string | null;
+    Agent?: string | null;
+    PromptID?: string | null;
+    Prompt?: string | null;
     UserID?: string | null;
     ErrorMessage?: string | null;
     OutputPayload?: string | null;
@@ -106,6 +110,8 @@ export function ProjectTaskRowsToSpec(
             name: row.Name,
             description: row.Description ?? '',
             dependsOn: dependsOnByTask.get(row.ID) ?? [],
+            ...(config?.layout ? { layout: config.layout } : {}),
+            ...(config?.policy ? { policy: config.policy } : {}),
         };
 
         const layout = config?.layout;
@@ -136,21 +142,30 @@ function nodeFor(
 ): TaskGraphSpecNode {
     switch (row.StepType as TaskGraphNodeKind | null | undefined) {
         case 'Agent':
-            return TaskNode.Agent(base, { agentName: row.Name, message: config?.agent?.message });
+            return TaskNode.Agent(base, {
+                agentName: row.Agent?.trim() || row.AgentID?.trim() || row.Name,
+                message: config?.agent?.message,
+                ...(config?.agent?.presetName ? { presetName: config.agent.presetName } : {}),
+            });
         case 'Action':
             return TaskNode.Action(base, {
-                actionName: row.Name,
+                actionName: row.Action?.trim() || row.ActionID?.trim() || row.Name,
                 inputMapping: config?.inputMapping,
                 outputMapping: config?.outputMapping,
             });
         case 'Prompt':
-            return TaskNode.Prompt(base, { promptName: row.Name });
+            return TaskNode.Prompt(base, {
+                promptName: row.Prompt?.trim() || row.PromptID?.trim() || row.Name,
+            });
         case 'ForEach':
             return TaskNode.ForEach(base, config?.forEach ?? { collectionPath: '' });
         case 'While':
             return TaskNode.While(base, config?.while ?? { condition: '' });
         case 'External':
             return TaskNode.External(base, config?.external ?? { domain: 'external' });
+        case 'Wait':
+            // A wait whose settings are unreadable still draws as a wait; the run's DueAt is the truth.
+            return TaskNode.Wait(base, config?.wait ?? { durationSeconds: 0 });
         case 'Decision':
             return TaskNode.Decision(base, {
                 promptName: config?.decision?.promptName,
@@ -162,21 +177,25 @@ function nodeFor(
             return TaskNode.Human(base, {
                 assignToUserID: row.UserID ?? undefined,
                 instructions: config?.human?.instructions,
+                ...(config?.human?.provider ? { provider: config.human.provider } : {}),
+                ...(config?.human?.providerConfiguration ? { providerConfiguration: config.human.providerConfiguration } : {}),
             });
     }
 }
 
 /** The parts of `Task.Configuration` this projection reads. */
 type StoredConfiguration = {
-    agent?: { message?: string };
-    human?: { instructions?: string };
+    agent?: { message?: string; presetName?: string };
+    human?: { instructions?: string; provider?: string; providerConfiguration?: Record<string, unknown> };
     forEach?: { collectionPath: string };
     while?: { condition: string };
-    external?: { domain: string; ref?: string };
+    external?: TaskGraphNodeConfigMap['External'];
+    wait?: TaskGraphNodeConfigMap['Wait'];
     decision?: Partial<TaskGraphNodeConfigMap['Decision']>;
     inputMapping?: string;
     outputMapping?: string;
     layout?: { x?: number; y?: number; width?: number; height?: number };
+    policy?: TaskNodeBase['policy'];
 };
 
 /**

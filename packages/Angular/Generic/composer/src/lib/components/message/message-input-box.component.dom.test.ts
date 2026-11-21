@@ -177,7 +177,8 @@ describe('MessageInputBoxComponent (DOM)', () => {
       expect((query(f, '.send-slot-status-text') as HTMLElement).textContent).toBe('Sage is working');
       const elapsed = query(f, '.send-slot-status-elapsed') as HTMLElement;
       expect(elapsed.getAttribute('aria-hidden')).toBe('true');
-      expect(elapsed.textContent).toContain('41s');
+      expect(elapsed.textContent?.trim()).toBe('41s'); // a pill of its own: no comma joining it to the text
+      expect(line.textContent).not.toContain(',');
     });
 
     it('hides the status line when there is no status text', () => {

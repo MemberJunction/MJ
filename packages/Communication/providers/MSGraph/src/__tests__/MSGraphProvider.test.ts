@@ -98,6 +98,8 @@ vi.mock('@microsoft/microsoft-graph-client/authProviders/azureTokenCredentials',
 // ---------------------------------------------------------------------------
 
 import { MSGraphProvider } from '../MSGraphProvider';
+import type { GetMessagesParams } from '@memberjunction/communication-types';
+import type { GetMessagesContextDataParams } from '../generic/models';
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -129,7 +131,7 @@ describe('MSGraphProvider', () => {
 
     /**
      * Drives one Graph message resource through the public GetMessages() path.
-     * GetMessages chains .filter().top().get(), so the api mock must be chainable;
+     * GetMessages chains .filter().top()[.expand()].get(), so the api mock must be chainable;
      * mockReturnValueOnce keeps the default (non-chainable) api mock intact for other tests.
      */
     const getMessageFor = async (graphMessage: Record<string, unknown>): Promise<NormalizedMessage> => {
@@ -268,6 +270,57 @@ describe('MSGraphProvider', () => {
 
     it('declares both capabilities, because Graph really does filter server-side', async () => {
       expect(provider.MessageRetrieval).toEqual({ FilterByReceivedDate: true, FilterByUnread: true });
+    });
+
+    describe('ContextData.Expand is sent as $expand', () => {
+      const EXPAND = "singleValueExtendedProperties($filter=id eq 'String 0x1042' or id eq 'Integer 0x0036')";
+      const PROPS = [{ id: 'String 0x1042', value: '<a@x>' }];
+
+      /**
+       * Like Graph, this chain returns the extended properties ONLY when `$expand` asked for them, so
+       * the SourceData assertion below fails if the provider stops sending it.
+       */
+      const run = async (params: GetMessagesParams<GetMessagesContextDataParams>) => {
+        let expanded: string | undefined;
+        const chain = {
+          filter: vi.fn().mockReturnThis(),
+          top: vi.fn().mockReturnThis(),
+          expand: vi.fn((e: string) => {
+            expanded = e;
+            return chain;
+          }),
+          get: vi.fn(async () => ({ value: [{ id: 'm1', subject: 'Quote', ...(expanded ? { singleValueExtendedProperties: PROPS } : {}) }] })),
+        };
+        mockGraphApi.mockReturnValueOnce(chain);
+        const result = await provider.GetMessages(params);
+        return { chain, result };
+      };
+
+      it('sends it, and the extended properties come back in SourceData', async () => {
+        const { chain, result } = await run({ Identifier: 'rep@example.com', NumMessages: 10, ContextData: { Expand: EXPAND } });
+        expect(chain.expand).toHaveBeenCalledWith(EXPAND);
+        expect(result.SourceData?.[0]).toMatchObject({ singleValueExtendedProperties: PROPS });
+      });
+
+      it('sends no $expand when none is asked for, or a blank one', async () => {
+        const absent = await run({ Identifier: 'rep@example.com', NumMessages: 10 });
+        const blank = await run({ Identifier: 'rep@example.com', NumMessages: 10, ContextData: { Expand: '   ' } });
+        expect(absent.chain.expand).not.toHaveBeenCalled();
+        expect(blank.chain.expand).not.toHaveBeenCalled();
+        expect(absent.result.SourceData?.[0]).not.toHaveProperty('singleValueExtendedProperties');
+      });
+
+      it('keeps the composed filter and $top alongside it', async () => {
+        const { chain } = await run({
+          Identifier: 'rep@example.com',
+          NumMessages: 5,
+          ReceivedAfter: new Date('2026-11-01T00:00:00.000Z'),
+          ContextData: { Filter: "categories/any(c:c eq 'AIDP')", Expand: EXPAND },
+        });
+        expect(chain.filter).toHaveBeenCalledWith("(receivedDateTime ge 2026-11-01T00:00:00.000Z) and categories/any(c:c eq 'AIDP')");
+        expect(chain.top).toHaveBeenCalledWith(5);
+        expect(chain.expand).toHaveBeenCalledWith(EXPAND);
+      });
     });
   });
 
@@ -713,5 +766,85 @@ describe('MSGraphProvider', () => {
         expect(Array.isArray(result.Notifications)).toBe(true);
       }
     });
+  });
+});
+
+describe('MSGraphProvider — forward mailbox, direction and Bcc (#4322 #5811)', () => {
+  let provider: Record<string, Function>;
+  const MAILBOX = 'test@example.com'; // AZURE_ACCOUNT_EMAIL in the shared env mock
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    provider = new MSGraphProvider() as unknown as Record<string, Function>;
+  });
+
+  type Mapped = { Direction?: string; BCCRecipients?: string[] };
+
+  /** Routes each Graph path: the message list, or the Sent Items folder lookup. */
+  const getMessagesFor = async (graphMessages: Record<string, unknown>[], sentItemsId = 'sent-folder-id'): Promise<{ messages: Mapped[]; paths: string[] }> => {
+    const paths: string[] = [];
+    mockGraphApi.mockImplementation((path: string) => {
+      paths.push(path);
+      const isFolder = path.endsWith('/mailFolders/sentitems');
+      const chain = {
+        filter: vi.fn().mockReturnThis(),
+        top: vi.fn().mockReturnThis(),
+        get: vi.fn().mockResolvedValue(isFolder ? { id: sentItemsId } : { value: graphMessages }),
+      };
+      return chain;
+    });
+    const result = (await provider.GetMessages({ NumMessages: 10 })) as { Messages: Mapped[] };
+    return { messages: result.Messages, paths };
+  };
+
+  const msg = (overrides: Record<string, unknown>) => ({
+    id: 'm', conversationId: 'c', subject: 's', body: { content: 'b' }, parentFolderId: 'inbox-id', ...overrides,
+  });
+
+  it('maps a message sent on someone\'s behalf (from = executive, sender = this mailbox) as Outbound', async () => {
+    const { messages } = await getMessagesFor([msg({
+      from: { emailAddress: { address: 'executive@example.com' } },
+      sender: { emailAddress: { address: MAILBOX } },
+    })]);
+    expect(messages[0].Direction).toBe('Outbound');
+  });
+
+  it('maps a message in Sent Items as Outbound and an ordinary received one as Inbound', async () => {
+    const { messages } = await getMessagesFor([
+      msg({ from: { emailAddress: { address: 'shared@example.com' } }, sender: { emailAddress: { address: 'shared@example.com' } }, parentFolderId: 'sent-folder-id' }),
+      msg({ from: { emailAddress: { address: 'someone@example.org' } }, sender: { emailAddress: { address: 'someone@example.org' } } }),
+    ]);
+    expect(messages.map((m) => m.Direction)).toEqual(['Outbound', 'Inbound']);
+  });
+
+  it('maps bccRecipients', async () => {
+    const { messages } = await getMessagesFor([msg({
+      from: { emailAddress: { address: MAILBOX } },
+      bccRecipients: [{ emailAddress: { address: 'hidden@example.org' } }, { emailAddress: {} }],
+    })]);
+    expect(messages[0].BCCRecipients).toEqual(['hidden@example.org']);
+  });
+
+  it('does not look up Sent Items when every message is settled by its sender', async () => {
+    const { paths } = await getMessagesFor([msg({ from: { emailAddress: { address: MAILBOX } } })]);
+    expect(paths.some((p) => p.endsWith('/mailFolders/sentitems'))).toBe(false);
+  });
+
+  it('forwards from the mailbox named in ContextData.Email', async () => {
+    const post = vi.fn().mockResolvedValue({});
+    const paths: string[] = [];
+    mockGraphApi.mockImplementation((path: string) => {
+      paths.push(path);
+      return { post };
+    });
+
+    const result = (await provider.ForwardMessage({
+      MessageID: 'msg-1',
+      ToRecipients: ['to@example.org'],
+      ContextData: { Email: 'delegate@example.com' },
+    })) as { Success: boolean };
+
+    expect(result.Success).toBe(true);
+    expect(paths[0]).toContain(`/${encodeURIComponent('delegate@example.com')}/messages/msg-1/forward`);
   });
 });

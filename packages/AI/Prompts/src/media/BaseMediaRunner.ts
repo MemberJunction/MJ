@@ -6,7 +6,7 @@
 
 import { MJGlobal, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIErrorType, BaseModel, BaseResult, ErrorAnalyzer } from '@memberjunction/ai';
+import { AIErrorType, BaseModel, BaseResult, BuildCancellationErrorInfo, ErrorAnalyzer } from '@memberjunction/ai';
 import {
   AIModelSelectionInfo,
   AIPromptParams,
@@ -15,12 +15,10 @@ import {
 } from '@memberjunction/ai-core-plus';
 import {
   BaseModelRunner,
-  ExecutionBound,
   FailoverAttempt,
   FailoverConfiguration,
   ModelVendorCandidate,
 } from '../BaseModelRunner';
-import { AIPromptTimeoutError } from '../AIPromptTimeoutError';
 import {
   AIMediaRunOptions,
   AIMediaRunOutcome,
@@ -87,7 +85,8 @@ interface MediaRunPlan {
  * requests; any other message reads as `Unknown`, which fails over.
  *
  * Each driver call is bounded by the caller's `TimeoutMS` and `CancellationToken`, as a chat call is
- * by `timeoutMS` and `cancellationToken`.
+ * by `timeoutMS` and `cancellationToken`. The driver is handed the bound's signal as its params'
+ * `CancellationToken`, so a call that is cancelled or times out is torn down, not left running.
  *
  * @typeParam TParams The operation params, including {@link AIMediaRunOptions}.
  * @typeParam TDriver The driver base class, resolved through the ClassFactory by driver class.
@@ -147,9 +146,13 @@ export abstract class BaseMediaRunner<
 
   /**
    * A copy of the caller's params without the runner's own fields, so a driver never sees the user
-   * or the keys.
+   * or the keys. The caller's `CancellationToken` is replaced by `signal`, the call's bound (the
+   * caller's token composed with the timeout), which the driver forwards to its request.
+   *
+   * @param params The caller's params.
+   * @param signal The bound's signal for this driver call, or undefined when the call is unbounded.
    */
-  protected DriverParams<T>(params: T & AIMediaRunOptions): T {
+  protected DriverParams<T>(params: T & AIMediaRunOptions, signal: AbortSignal | undefined): T {
     const driverParams: T & Partial<AIMediaRunOptions> = { ...params };
     delete driverParams.ContextUser;
     delete driverParams.ModelID;
@@ -161,6 +164,9 @@ export abstract class BaseMediaRunner<
     delete driverParams.AgentRunID;
     delete driverParams.TimeoutMS;
     delete driverParams.CancellationToken;
+    if (signal) {
+      driverParams.CancellationToken = signal;
+    }
     return driverParams;
   }
 
@@ -241,21 +247,17 @@ export abstract class BaseMediaRunner<
     }
   }
 
-  /** Selects the first candidate with credentials, or returns an error listing every candidate. */
+  /** Selects the candidate to run (see SelectCandidate), or returns an error listing every candidate. */
   private selectCandidate(
     prompt: MJAIPromptEntityExtended,
     candidates: ModelVendorCandidate[],
     promptParams: AIPromptParams
   ): MediaSelection | string {
-    const credentialAvailability = new Map<string, boolean>();
-    let selected: ModelVendorCandidate | undefined;
-    for (const candidate of candidates) {
-      const available = this.HasCredentialsAvailable(candidate.driverClass, prompt.ID, candidate.model.ID, candidate.vendorId, promptParams);
-      credentialAvailability.set(this.candidateKey(candidate), available);
-      if (available && !selected) {
-        selected = candidate;
-      }
-    }
+    const { Candidate: selected, CredentialAvailability: credentialAvailability } = this.SelectCandidate(
+      candidates,
+      c => this.HasCredentialsAvailable(c.driverClass, prompt.ID, c.model.ID, c.vendorId, promptParams),
+      true
+    );
     if (!selected) {
       const summary = candidates
         .map(c => `[Model: ${c.model.Name}, Vendor: ${c.vendorName ?? 'default'}, Driver: ${c.driverClass}]`)
@@ -348,9 +350,10 @@ export abstract class BaseMediaRunner<
 
   /**
    * Calls the driver within the call's bound: the caller's timeout and cancellation token, composed
-   * as for a chat call. A driver that throws, or that the timeout abandons, gets the vendor's
-   * classification of the error; a timeout reads as a network error, so it fails over. A cancelled
-   * call is never failed over.
+   * as for a chat call. The driver is handed the bound's signal, so its request is torn down when the
+   * bound aborts, and the runner stops waiting at once either way. A driver that throws, or that the
+   * timeout ends, gets the vendor's classification of the error; a timeout reads as a network error,
+   * so it fails over. A cancelled call is never failed over.
    */
   private async callDriver(
     driver: TDriver,
@@ -360,17 +363,18 @@ export abstract class BaseMediaRunner<
   ): Promise<MediaCallResult<TOutput>> {
     const bound = this.createExecutionBound(plan.Prompt, plan.PromptParams, plan.PromptParams.cancellationToken);
     try {
-      const output = await this.withinBound(operation.Invoke(driver, this.apiNameFor(candidate)), bound, plan.Prompt);
+      const output = await this.RaceWithinBound(operation.Invoke(driver, this.apiNameFor(candidate), bound.Signal), bound, plan.Prompt);
       if (!output) {
         return this.failedCall(`The driver '${candidate.driverClass}' returned no result`, 'ModelError');
       }
       return this.callResultFrom(output, candidate);
     } catch (err: unknown) {
-      if (bound.Signal?.aborted && !bound.TimedOut()) {
+      const errorInfo = ErrorAnalyzer.AnalyzeError(err, candidate.vendorName);
+      if (!bound.TimedOut() && (bound.Signal?.aborted || this.IsCallerCancellation(errorInfo))) {
         return this.cancelledCall();
       }
       const failed = this.failedCall(err instanceof Error ? err.message : String(err), 'Unknown');
-      failed.errorInfo = ErrorAnalyzer.AnalyzeError(err, candidate.vendorName);
+      failed.errorInfo = errorInfo;
       return failed;
     } finally {
       bound.Dispose();
@@ -378,46 +382,15 @@ export abstract class BaseMediaRunner<
   }
 
   /**
-   * Waits for the driver call, or rejects when the bound aborts first. The media drivers take no
-   * abort signal, so an abandoned request is not torn down: the runner stops waiting for it and
-   * ignores its result.
-   */
-  private async withinBound(call: Promise<TOutput>, bound: ExecutionBound, prompt: MJAIPromptEntityExtended): Promise<TOutput> {
-    const signal = bound.Signal;
-    if (!signal) {
-      return call;
-    }
-    let onAbort: (() => void) | undefined;
-    const aborted = new Promise<never>((_, reject) => {
-      onAbort = () => reject(bound.TimedOut()
-        ? this.timeoutError(signal, prompt, bound)
-        : new Error(`The ${this.RequiredModelType} call was cancelled`));
-      if (signal.aborted) {
-        onAbort();
-      } else {
-        signal.addEventListener('abort', onAbort, { once: true });
-      }
-    });
-    try {
-      return await Promise.race([call, aborted]);
-    } finally {
-      if (onAbort) {
-        signal.removeEventListener('abort', onAbort);
-      }
-    }
-  }
-
-  /** The error a timed-out call fails with: the bound's own `AIPromptTimeoutError`. */
-  private timeoutError(signal: AbortSignal, prompt: MJAIPromptEntityExtended, bound: ExecutionBound): Error {
-    return signal.reason instanceof AIPromptTimeoutError ? signal.reason : new AIPromptTimeoutError(prompt.Name, bound.TimeoutMS ?? 0);
-  }
-
-  /**
    * Wraps the driver's result for the failover loop. A failure keeps the driver's classification,
    * which the shipped drivers take from the error the provider's SDK threw, with its HTTP status. A
-   * driver that reports only a message gets the analyzer's reading of the message.
+   * driver that reports only a message gets the analyzer's reading of the message. A failure the
+   * driver classified as a cancellation is recorded as one.
    */
   private callResultFrom(output: TOutput, candidate: ModelVendorCandidate): MediaCallResult<TOutput> {
+    if (!output.success && this.IsCallerCancellation(output.errorInfo)) {
+      return this.cancelledCall();
+    }
     const call = new MediaCallResult<TOutput>(output.success, output);
     if (!output.success) {
       call.errorMessage = output.errorMessage || `The driver '${candidate.driverClass}' reported a failure with no message`;
@@ -447,19 +420,25 @@ export abstract class BaseMediaRunner<
   }
 
   /**
-   * A call the caller cancelled. It is not eligible for failover, so the failover loop returns it
-   * as it is, and the run row records it as cancelled.
+   * A call the caller cancelled, classified `Cancelled`: Fatal and not eligible for failover, so the
+   * failover loop returns it as it is, and the run row records it as cancelled.
    */
   private cancelledCall(): MediaCallResult<TOutput> {
     const cancelled = new MediaCallResult<TOutput>(false);
     cancelled.errorMessage = `The ${this.RequiredModelType} call was cancelled`;
-    cancelled.errorInfo = { errorType: 'Unknown', severity: 'Fatal', canFailover: false };
+    cancelled.errorInfo = BuildCancellationErrorInfo({ error: new Error(cancelled.errorMessage) });
     cancelled.Cancelled = true;
     return cancelled;
   }
 
-  /** The result returned when every failover candidate has failed. */
+  /**
+   * The result returned when every failover candidate has failed, or when the caller cancelled and
+   * the failover loop stopped — which the run row records as cancelled.
+   */
   private createFailoverErrorResult(lastError: Error | null, failoverAttempts: FailoverAttempt[]): MediaCallResult<TOutput> {
+    if (lastError && this.IsCallerCancellation(ErrorAnalyzer.AnalyzeError(lastError))) {
+      return this.cancelledCall();
+    }
     const result = new MediaCallResult<TOutput>(false);
     result.errorMessage = lastError?.message || `Failover failed after ${failoverAttempts.length} attempts`;
     result.exception = lastError;
@@ -541,11 +520,6 @@ export abstract class BaseMediaRunner<
     };
   }
 
-  /** The key format BaseModelRunner's failover credential cache uses. */
-  private candidateKey(candidate: ModelVendorCandidate): string {
-    return `${candidate.driverClass}:${candidate.model.ID}:${candidate.vendorId || 'default'}`;
-  }
-
   /** Records which candidate was chosen and why, for the run row. */
   private buildSelectionInfo(plan: MediaRunPlan): AIModelSelectionInfo {
     const info = new AIModelSelectionInfo();
@@ -556,7 +530,7 @@ export abstract class BaseMediaRunner<
     info.SelectionReason = 'First candidate with available credentials';
     info.FallbackUsed = false;
     info.ModelsConsidered = plan.Candidates.map(c => {
-      const available = plan.Selection.CredentialAvailability.get(this.candidateKey(c)) ?? false;
+      const available = plan.Selection.CredentialAvailability.get(this.CandidateKey(c)) ?? false;
       return {
         model: c.model,
         vendor: c.vendorId ? AIEngine.Instance.VendorsByID.get(NormalizeUUID(c.vendorId)) : undefined,

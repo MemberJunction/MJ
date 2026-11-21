@@ -44,14 +44,18 @@ export type SessionChannelState = 'open' | 'closed';
 /**
  * Why a session ended.
  *
- * **Three values, not four.** The server-side `AIAgentSession.CloseReason`
- * column has four (`Explicit | Janitor | Shutdown | Error`), but only two are
- * distinguishable client-side (`explicit` = user called `EndRealtimeSession`;
- * `error` = teardown ran from a catch block). `'unknown'` covers any other
- * client-observable end path. Janitor/shutdown happen out-of-process and never
- * reach the runtime — see the module-level scope cut.
+ * **Only what the client can tell.** The server-side `AIAgentSession.CloseReason`
+ * column has more values than the client sees. Three are distinguishable
+ * client-side (`explicit` = the host or user called `EndRealtimeSession`;
+ * `error` = the runtime ended the call over a failure; `deadline` = the
+ * session deadline ended it, stamped `TimeLimit` on the row). `'unknown'`
+ * covers any other client-observable end path. Janitor/shutdown happen
+ * out-of-process and never reach the runtime — see the module-level scope cut.
+ *
+ * An intentional superset copy of the realtime runtime's `SessionEndReason` (adds `'unknown'`); it does not import
+ * `@memberjunction/realtime-runtime`, to keep this domain runtime free of driver dependencies.
  */
-export type SessionEndReason = 'explicit' | 'error' | 'unknown';
+export type SessionEndReason = 'explicit' | 'error' | 'deadline' | 'unknown';
 
 /**
  * One lifecycle event surfaced by an {@link ISessionsAdapter}.

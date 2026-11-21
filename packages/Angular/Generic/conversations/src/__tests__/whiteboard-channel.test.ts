@@ -10,7 +10,8 @@ import {
 } from '../lib/components/realtime/whiteboard/whiteboard-channel';
 import {
   RealtimeWhiteboardHostComponent, WHITEBOARD_TOOL_DEFINITIONS, WHITEBOARD_TOOL_PREFIX,
-  WhiteboardToolResult, WhiteboardWidgetInteractionEvent, WhiteboardWidgetSubmitEvent
+  WhiteboardToolResult, WhiteboardWidgetAccess, WhiteboardWidgetActionsChangedEventArgs,
+  WhiteboardWidgetInteractionEvent, WhiteboardWidgetSubmitEvent
 } from '@memberjunction/ng-whiteboard';
 
 /**
@@ -32,6 +33,8 @@ class FakeWhiteboardHost {
   public SaveToArtifactsRequested = new EventEmitter<void>();
   public WidgetSubmitted = new EventEmitter<WhiteboardWidgetSubmitEvent>();
   public WidgetInteraction = new EventEmitter<WhiteboardWidgetInteractionEvent>();
+  public WidgetActionsChanged = new EventEmitter<WhiteboardWidgetActionsChangedEventArgs>();
+  public AgentWidgetAccess: WhiteboardWidgetAccess = 'full';
   public AppliedTools: Array<{ ToolName: string; ArgsJson: string }> = [];
 
   public ApplyAgentTool(toolName: string, argsJson: string): string {
@@ -47,6 +50,14 @@ class FakeWhiteboardHost {
   public SetOnStage(onStage: boolean): void {
     this.FocusMode = onStage;
   }
+}
+
+/** Board tools resolve synchronously; only the widget tools return a Promise. */
+function syncResult(result: string | Promise<string>): string {
+  if (typeof result !== 'string') {
+    throw new Error('expected a synchronous (board-tool) result');
+  }
+  return result;
 }
 
 function asHost(fake: FakeWhiteboardHost): RealtimeWhiteboardHostComponent {
@@ -114,7 +125,7 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
   });
 
   it('ApplyAgentTool with NO surface bound falls back to the pure engine (collapsed panel)', () => {
-    const resultJson = channel.ApplyAgentTool('Whiteboard_AddNote', JSON.stringify({ text: 'hello' }));
+    const resultJson = syncResult(channel.ApplyAgentTool('Whiteboard_AddNote', JSON.stringify({ text: 'hello' })));
     const result = JSON.parse(resultJson) as WhiteboardToolResult;
 
     expect(result.success).toBe(true);
@@ -136,7 +147,7 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     expect(fake.State).toBe(channel.State);
     expect(fake.AgentName).toBe('Sage');
 
-    const resultJson = channel.ApplyAgentTool('Whiteboard_AddNote', JSON.stringify({ text: 'via host' }));
+    const resultJson = syncResult(channel.ApplyAgentTool('Whiteboard_AddNote', JSON.stringify({ text: 'via host' })));
     expect(fake.AppliedTools).toEqual([{ ToolName: 'Whiteboard_AddNote', ArgsJson: JSON.stringify({ text: 'via host' }) }]);
     expect((JSON.parse(resultJson) as WhiteboardToolResult).itemId).toBe('host-item');
 
@@ -611,7 +622,7 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     channel.Initialize(contextWithClient);
     c.videoBridge = mockBridge;
 
-    const resultJson = channel.ApplyAgentTool(toolName, argsJson);
+    const resultJson = syncResult(channel.ApplyAgentTool(toolName, argsJson));
 
     // The tool itself reported failure...
     expect(JSON.parse(resultJson).success).toBe(false);

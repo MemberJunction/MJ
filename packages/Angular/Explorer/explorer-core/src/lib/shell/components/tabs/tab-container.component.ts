@@ -26,10 +26,14 @@ import {
   TabShownEvent,
   WorkspaceTab,
   LayoutNode,
-  FlattenLayoutToSingleStack
+  FlattenLayoutToSingleStack,
+  TabService
 } from '@memberjunction/ng-base-application';
 import { MJGlobal } from '@memberjunction/global';
-import { BaseResourceComponent, HomeAppPinService, NavigationService, IsRecordTabsStyle, IsRecordsTabConfiguration, IsRecordsRegionTab, IsRecordDockedToWorkspace, RECORD_DOCKED_TO_WORKSPACE_KEY, GetRecordSourceContext, SafeDetectChanges, ExplorerBreakpointService, ResolveRecordTypeIcon } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, HomeAppPinService, NavigationService, IsRecordTabsStyle, IsRecordsTabConfiguration, IsRecordsRegionTab, IsRecordDockedToWorkspace, RECORD_DOCKED_TO_WORKSPACE_KEY, GetRecordSourceContext, SafeDetectChanges, ExplorerBreakpointService, ResolveRecordTypeIcon, ResolveRecordTabDisplayTitle,
+  GetDeletedRecordFromEvent, RecordTabShowsRecord, RemoveDeletedRecordFromOrigin, OriginToTabConfiguration, OriginHasReturnTarget,
+  NormalizeRecordIdForMatch } from '@memberjunction/ng-shared';
+import type { DeletedRecordRef, RecordSourceContext } from '@memberjunction/ng-shared';
 import { ResourceData, MJResourceTypeEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
 import { RecordOriginCrumbComponent } from '../record-open/record-origin-crumb.component';
 import { RecordSwitcherService } from '../record-open/record-switcher.service';
@@ -126,6 +130,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
   private pinService = inject(HomeAppPinService);
   private navigationService = inject(NavigationService);
+  private tabService = inject(TabService);
   private recordSwitcher = inject(RecordSwitcherService);
   private subscriptions: Subscription[] = [];
   private layoutInitRetryCount = 0;
@@ -348,7 +353,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     const activeTab = config.tabs.find(t => t.id === config.activeTabId);
     if (activeTab && this.isRecordTab(activeTab)) {
       const app = this.appManager.GetAppById(activeTab.applicationId);
-      this.RecordBarTitle = activeTab.title;
+      this.RecordBarTitle = this.resolveTabTitle(activeTab);
       this.RecordBarIcon = ResolveRecordTypeIcon(activeTab.configuration, this.ProviderToUse);
       this.RecordBarColor = app?.GetColor() || DEFAULT_APP_COLOR;
     }
@@ -376,12 +381,16 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       : null;
     return {
       TabId: tab.id,
-      Title: tab.title,
+      Title: this.resolveTabTitle(tab),
       Icon: ResolveRecordTypeIcon(tab.configuration, this.ProviderToUse),
       Color: app?.GetColor() || DEFAULT_APP_COLOR,
       OriginLabel: originLabel,
       IsActive: tab.id === activeTabId
     };
+  }
+
+  private resolveTabTitle(tab: WorkspaceTab): string {
+    return ResolveRecordTabDisplayTitle(tab, this.ProviderToUse) || tab.title;
   }
 
   /** True while the RECORDS region is the visible surface (active tab is a record) */
@@ -409,6 +418,8 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     SafeDetectChanges(this.cdr);
   }
 
+  private recordsLayoutInitRetryCount = 0;
+
   /**
    * Keep the RECORDS region in lockstep with the workspace configuration:
    * resolve region visibility (active tab is a record), lazily initialize the
@@ -430,6 +441,14 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     const activeTab = config.tabs.find(t => t.id === config.activeTabId);
     const showing = !!activeTab && this.isRecordTab(activeTab);
 
+    if (showing !== this.ShowRecordsRegion) {
+      this.ShowRecordsRegion = showing;
+      // Flush NOW — the visibility class must land BEFORE records GL init/tab
+      // creation so synchronous TabShown events see ShowRecordsRegion=true and
+      // load the active record immediately instead of parking it.
+      this.flushRegionCd();
+    }
+
     // EAGER init + sync on EVERY emission. The region container always keeps
     // its full layout box (visibility-hidden, never display:none — see the
     // component CSS), so the records GL can initialize and reconcile even
@@ -444,14 +463,8 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       this.syncRecordsTabs(recordTabs);
     }
 
-    if (showing !== this.ShowRecordsRegion) {
-      this.ShowRecordsRegion = showing;
-      // Flush NOW — the visibility class must land in this pass, not
-      // whenever the next unrelated emission happens to run CD.
-      this.flushRegionCd();
-      if (showing) {
-        this.flushPendingRecordShows();
-      }
+    if (this.ShowRecordsRegion) {
+      this.flushPendingRecordShows();
     }
 
     if (showing && activeTab && this.recordsLayoutInitialized) {
@@ -485,7 +498,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         const app = this.appManager.GetAppById(tab.applicationId);
         this.recordsLayoutManager.UpdateTabStyle(tab.id, {
           isPinned: tab.isPinned,
-          title: tab.title,
+          title: this.resolveTabTitle(tab),
           appColor: app?.GetColor() || DEFAULT_APP_COLOR,
           typeIcon: this.resolveTabTypeIcon(tab)
         });
@@ -558,6 +571,186 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   private promoteIfReattachedEditing(instance: Pick<BaseResourceComponent, 'IsEditing'>, tabId: string): void {
     if (instance.IsEditing()) {
       this.PromoteRecordTabOnEdit(tabId);
+    }
+  }
+
+  private hiddenTabIds?: Set<string>;
+  private wiredContainers?: WeakSet<object>;
+
+  private getHiddenTabIds(): Set<string> {
+    if (!this.hiddenTabIds) {
+      this.hiddenTabIds = new Set<string>();
+    }
+    return this.hiddenTabIds;
+  }
+
+  private getWiredContainers(): WeakSet<object> {
+    if (!this.wiredContainers) {
+      this.wiredContainers = new WeakSet<object>();
+    }
+    return this.wiredContainers;
+  }
+
+  /**
+   * Determines whether a tab's pane is currently visible on screen, accounting for:
+   * - Active tab focus
+   * - Side-by-side Golden Layout split panes (`glContainer.isHidden === false`)
+   * - Stacked background tabs (`glContainer.isHidden === true` or `hide` event)
+   * - Dual Main/Records region visibility (`ShowRecordsRegion`)
+   */
+  private isTabCurrentlyVisible(tabId: string, activeTabId: string | null): boolean {
+    if (tabId === activeTabId) {
+      return true;
+    }
+
+    if (this.RecordsStyleActive) {
+      const tab = this.workspaceManager?.GetTab?.(tabId);
+      if (tab && this.isRecordTab(tab) !== Boolean(this.ShowRecordsRegion)) {
+        return false;
+      }
+    }
+
+    if (this.getHiddenTabIds().has(tabId)) {
+      return false;
+    }
+
+    const glContainer = (
+      this.recordsLayoutManager?.GetContainer?.(tabId) ??
+      this.layoutManager?.GetContainer?.(tabId)
+    ) as { isHidden?: boolean } | undefined;
+
+    if (glContainer && typeof glContainer.isHidden === 'boolean') {
+      return !glContainer.isHidden;
+    }
+
+    return false;
+  }
+
+  /**
+   * Deactivates change detection for a hidden or inactive tab view.
+   * Detaches the component's ChangeDetectorRef so background/idle tabs
+   * do not participate in Angular change detection passes.
+   */
+  public DeactivateTabView(tabId: string): void {
+    const ref = this.componentRefs.get(tabId) ||
+      (this.singleResourceCacheIdentity?.tabId === tabId ? this.singleResourceComponentRef : null);
+    if (ref) {
+      try {
+        ref.changeDetectorRef.detach();
+      } catch {
+        // Change detector already detached or destroyed
+      }
+    }
+  }
+
+  /** @deprecated Use {@link DeactivateTabView}. */
+  public deactivateTabView(tabId: string): void {
+    this.DeactivateTabView(tabId);
+  }
+
+  /**
+   * Activates change detection for a visible/active tab view.
+   * Reattaches the component's ChangeDetectorRef and triggers markForCheck()
+   * so updates accumulated while inactive are rendered immediately.
+   */
+  public ActivateTabView(tabId: string): void {
+    const ref = this.componentRefs.get(tabId) ||
+      (this.singleResourceCacheIdentity?.tabId === tabId ? this.singleResourceComponentRef : null);
+    if (ref) {
+      try {
+        ref.changeDetectorRef.reattach();
+        ref.changeDetectorRef.markForCheck();
+      } catch {
+        // Change detector already destroyed
+      }
+    }
+  }
+
+  /** @deprecated Use {@link ActivateTabView}. */
+  public activateTabView(tabId: string): void {
+    this.ActivateTabView(tabId);
+  }
+
+  /**
+   * Synchronizes change detection across all tab components.
+   * Reattaches the active tab AND any visible side-by-side split-pane tabs in the active
+   * region, while detaching hidden/stacked tabs and tabs in the inactive region.
+   */
+  public SyncTabChangeDetection(activeTabId: string | null): void {
+    if (!activeTabId) return;
+
+    if (this.UseSingleResourceMode) {
+      if (this.singleResourceComponentRef) {
+        try {
+          this.singleResourceComponentRef.changeDetectorRef.reattach();
+          this.singleResourceComponentRef.changeDetectorRef.markForCheck();
+        } catch {
+          // ignore
+        }
+      }
+      return;
+    }
+
+    this.componentRefs.forEach((ref, tabId) => {
+      try {
+        if (this.isTabCurrentlyVisible(tabId, activeTabId)) {
+          ref.changeDetectorRef.reattach();
+          ref.changeDetectorRef.markForCheck();
+        } else {
+          ref.changeDetectorRef.detach();
+        }
+      } catch {
+        // ignore
+      }
+    });
+  }
+
+  /** @deprecated Use {@link SyncTabChangeDetection}. */
+  public syncTabChangeDetection(activeTabId: string | null): void {
+    this.SyncTabChangeDetection(activeTabId);
+  }
+
+  /**
+   * Wires Golden Layout container show/hide events to activate/deactivate
+   * the component's Angular change detection when tabs are hidden or shown.
+   */
+  private wireContainerVisibilityEvents(tabId: string, container: unknown): void {
+    if (!container || typeof container !== 'object') {
+      return;
+    }
+    const glContainer = container as {
+      isHidden?: boolean;
+      state?: { tabId?: string };
+      on?: (event: string, callback: () => void) => void;
+    };
+    if (glContainer.isHidden === true) {
+      this.getHiddenTabIds().add(tabId);
+    } else if (glContainer.isHidden === false) {
+      this.getHiddenTabIds().delete(tabId);
+    }
+
+    const wired = this.getWiredContainers();
+    if (wired.has(container)) {
+      return;
+    }
+    if (typeof glContainer.on === 'function') {
+      wired.add(container);
+      glContainer.on('hide', () => {
+        const resolvedTabId = glContainer.state?.tabId ?? tabId;
+        this.getHiddenTabIds().add(resolvedTabId);
+        this.DeactivateTabView(resolvedTabId);
+      });
+      glContainer.on('show', () => {
+        const resolvedTabId = glContainer.state?.tabId ?? tabId;
+        this.getHiddenTabIds().delete(resolvedTabId);
+        const tab = this.workspaceManager?.GetTab?.(resolvedTabId);
+        const inHiddenRegion = Boolean(
+          this.RecordsStyleActive && tab && this.isRecordTab(tab) !== Boolean(this.ShowRecordsRegion)
+        );
+        if (!inHiddenRegion) {
+          this.ActivateTabView(resolvedTabId);
+        }
+      });
     }
   }
 
@@ -688,17 +881,24 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       return;
     }
     const container = this.RecordsGlContainer?.nativeElement;
-    if (!container) {
-      return; // Template not settled yet — the next sync pass retries
-    }
-    // NEVER initialize GL inside a zero-size (hidden) container — it bakes a
-    // 0x0 internal size into every stack it later creates and the region
-    // renders collapsed forever. Happens when the region flip is reverted
-    // (activation stolen) before this deferred init runs; staying
-    // uninitialized is safe — the next real show retries.
-    if (container.getBoundingClientRect().height === 0) {
+    if (!container || container.getBoundingClientRect().height === 0) {
+      // NEVER initialize GL inside a missing or zero-size (hidden) container —
+      // it bakes a 0x0 internal size into every stack it later creates and the
+      // region renders collapsed forever. If the records region IS the active
+      // surface (e.g. startup deep link to a record before layout settles),
+      // schedule a bounded retry so initialization is not stranded.
+      if (this.ShowRecordsRegion && this.recordsLayoutInitRetryCount < this.MAX_LAYOUT_INIT_RETRIES) {
+        this.recordsLayoutInitRetryCount++;
+        setTimeout(() => {
+          const latest = this.workspaceManager.GetConfiguration();
+          if (latest && !this.recordsLayoutInitialized) {
+            this.syncRecordsRegion(latest);
+          }
+        }, 50);
+      }
       return;
     }
+    this.recordsLayoutInitRetryCount = 0;
     // Mobile: headerless GL — the record bar replaces the strip
     this.recordsLayoutManager.Initialize(container, { HideHeaders: this.mobileRecordsActive });
     this.recordsLayoutInitialized = true;
@@ -718,6 +918,14 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       // loading such a layout would render a ghost pane for a closed record.
       if (layoutToLoad?.root && recordTabs.length > 0 && this.layoutCoversExactTabSet(layoutToLoad.root, recordTabs)) {
         if (this.recordsLayoutManager.LoadLayout(layoutToLoad)) {
+          recordTabs.forEach(tab => this.updateTabDisplayName(tab));
+          setTimeout(() => {
+            const latest = this.workspaceManager.GetConfiguration();
+            if (latest?.activeTabId && this.ShowRecordsRegion) {
+              this.focusRecordsTab(latest.activeTabId);
+            }
+            this.recordsLayoutManager.updateSize();
+          }, 50);
           return;
         }
       }
@@ -777,7 +985,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       tabId: tab.id,
       appId: tab.applicationId,
       appColor: app?.GetColor() || DEFAULT_APP_COLOR,
-      title: tab.title,
+      title: this.resolveTabTitle(tab),
       route: tab.configuration['route'] as string || '',
       isPinned: tab.isPinned,
       isLoaded: false,
@@ -828,6 +1036,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       this.layoutManager.ActiveTab.subscribe(tabId => {
         if (tabId) {
           this.workspaceManager.SetActiveTab(tabId);
+          this.SyncTabChangeDetection(tabId);
         }
       }),
       this.layoutManager.TabDoubleClicked.subscribe(tabId => {
@@ -839,6 +1048,26 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     );
 
     this.wireRecordsLayoutEvents();
+
+    // A record deleted in this session: close every tab showing it and move the
+    // user off it (see HandleRecordDeleted). Remote deletes are left to the
+    // record tab itself, which shows a banner rather than vanishing under the user.
+    this.subscriptions.push(
+      MJGlobal.Instance.GetEventListener().subscribe(event => {
+        // Read the key NOW: right after raising 'delete' the entity calls
+        // NewRecord() and its key is gone.
+        const deleted = GetDeletedRecordFromEvent(event);
+        if (!deleted || deleted.Remote) {
+          return;
+        }
+        // Deferred one macrotask: the event fires inside BaseEntity.Delete(), and
+        // the deleting form still has to finish (success toast, RecordDeleted
+        // handlers) before its tab is torn down.
+        setTimeout(() => {
+          this.HandleRecordDeleted(deleted).catch(err => LogError(err));
+        }, 0);
+      })
+    );
 
     // Breakpoint crossings rebuild the records GL in the other chrome mode
     // (headerless+flattened vs full strip+splits). Skip-if-equal: the
@@ -878,6 +1107,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
           // the region is the visible surface for this configuration.
           this.syncRecordsRegion(config);
           this.updateRecordSurfaceState(config);
+          this.SyncTabChangeDetection(config.activeTabId);
 
           if (this.UseSingleResourceMode) {
             // In single-resource mode, reload content if the tab content changed
@@ -991,6 +1221,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         this.recordsRegionActiveTabId = tabId;
         if (tabId && this.ShowRecordsRegion && !this.recordsCreatingTabs && !this.recordsRebuilding) {
           this.workspaceManager.SetActiveTab(tabId);
+          this.SyncTabChangeDetection(tabId);
         }
       }),
       this.recordsLayoutManager.LayoutChanged.subscribe(() => {
@@ -1016,6 +1247,12 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   }
 
   ngAfterViewInit(): void {
+    const config = this.workspaceManager.GetConfiguration();
+    if (config) {
+      this.syncRecordsRegion(config);
+      this.updateRecordSurfaceState(config);
+    }
+
     // Initialize Golden Layout only if we're not in single-resource mode
     if (!this.UseSingleResourceMode) {
       this.initializeGoldenLayout();
@@ -1451,7 +1688,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     const driverClass = resourceData.Configuration?.resourceTypeDriverClass || resourceData.ResourceType;
     // Entity name discriminates between "new record" tabs of different entities (all
     // have empty ResourceRecordID otherwise). For non-Records resources this is undefined.
-    const cacheDiscriminator = resourceData.Configuration?.Entity as string | undefined;
+    const cacheDiscriminator = this.resolveCacheDiscriminator(resourceData.Configuration);
 
     // **OPTIMIZATION: Check cache first to reuse existing loaded component**
     const cached = this.cacheManager.getCachedComponent(
@@ -1492,6 +1729,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       // Store reference and identity for cleanup/detachment
       this.singleResourceComponentRef = cached.componentRef;
       this.singleResourceCacheIdentity = { driverClass, recordId: resourceData.ResourceRecordID || '', appId: activeTab.applicationId, tabId: activeTab.id, discriminator: cacheDiscriminator };
+      this.ActivateTabView(activeTab.id);
 
       // Reconcile the cached component's preserved queryParams with any INCOMING navigation
       // intent already on the tab config (e.g. a Home pin / deep link that targeted a specific
@@ -1619,6 +1857,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     // Store reference and identity for cleanup/detachment
     this.singleResourceComponentRef = componentRef as ComponentRef<BaseResourceComponent>;
     this.singleResourceCacheIdentity = { driverClass, recordId: resourceData.ResourceRecordID || '', appId: activeTab.applicationId, tabId: activeTab.id, discriminator: cacheDiscriminator };
+    this.ActivateTabView(activeTab.id);
   }
 
   /**
@@ -1669,9 +1908,16 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   private cleanupSingleResourceComponent(): void {
     if (this.singleResourceComponentRef) {
       if (this.singleResourceCacheIdentity) {
-        const { driverClass, recordId, appId, discriminator } = this.singleResourceCacheIdentity;
+        const { driverClass, recordId, appId, tabId, discriminator } = this.singleResourceCacheIdentity;
+        this.DeactivateTabView(tabId);
         // Mark as DETACHED by resource identity — the ONE consistent key used everywhere.
         this.cacheManager.markAsDetached(driverClass, recordId, appId, discriminator);
+      } else {
+        try {
+          this.singleResourceComponentRef.changeDetectorRef.detach();
+        } catch {
+          // ignore
+        }
       }
       this.singleResourceComponentRef = null;
       this.singleResourceCacheIdentity = null;
@@ -1731,14 +1977,14 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     if (isNewRecordTransition) {
       // Re-key the cache entry first, so when the workspace config emission triggers
       // signature/needsReload checks below, the cache lookup at the new id succeeds.
-      this.cacheManager.rekeyComponent(driverClass, oldRecordId, newRecordId, appId, oldDiscriminator, undefined);
+      this.cacheManager.rekeyComponent(driverClass, oldRecordId, newRecordId, appId, oldDiscriminator, oldDiscriminator);
 
       // Keep the in-memory single-resource identity in sync so detach uses the correct key.
       if (this.singleResourceCacheIdentity?.tabId === tabId) {
         this.singleResourceCacheIdentity = {
           ...this.singleResourceCacheIdentity,
           recordId: newRecordId,
-          discriminator: undefined
+          discriminator: oldDiscriminator
         };
       }
 
@@ -1818,13 +2064,28 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     const tab = config?.tabs.find(t => t.id === tabId);
     const isLastTab = config?.tabs.length === 1 && config.tabs[0].id === tabId;
 
-    // DESTROY (not just detach) the cached component before closing. The default
-    // tab-close path detaches and keeps components alive for reuse — but the
-    // discarded form is exactly what we DON'T want to keep: it holds a stale
-    // BaseEntity in view mode. The next "Create New Record" click for the same
-    // entity would otherwise hit the cache discriminator lookup, find this stale
-    // component, and reattach it — surfacing a blank form in view mode instead
-    // of a fresh edit-mode form. Destroy here forces a cache miss on the next click.
+    this.closeTabDestroyingComponent(tabId);
+
+    if (isLastTab && tab) {
+      // CloseTab kept the tab around but unpinned it. Replace it with the app's
+      // default tab so the user lands on a meaningful surface (typically the
+      // home dashboard) instead of staying on the discarded form.
+      await this.openAppDefaultTab(tab.applicationId);
+    }
+  }
+
+  /**
+   * Close a tab and DESTROY (not just detach) its cached component.
+   *
+   * The default tab-close path detaches and keeps components alive for reuse —
+   * but a discarded or deleted record's form is exactly what we DON'T want to
+   * keep: it holds a stale BaseEntity in view mode. The next "Create New Record"
+   * click for the same entity would otherwise hit the cache discriminator
+   * lookup, find this stale component, and reattach it — surfacing a blank form
+   * in view mode instead of a fresh edit-mode form. Destroy here forces a cache
+   * miss on the next open.
+   */
+  private closeTabDestroyingComponent(tabId: string): void {
     if (this.singleResourceCacheIdentity?.tabId === tabId) {
       // Single-resource mode: the component is tracked via singleResource* fields,
       // and its cache entry is currently marked attached. Use the identity directly
@@ -1835,7 +2096,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       this.singleResourceComponentRef = null;
       this.singleResourceCacheIdentity = null;
       // Clear the host container's DOM so the user isn't briefly looking at the
-      // destroyed component's wrapper between CloseTab and the default-tab load.
+      // destroyed component's wrapper between CloseTab and the next tab's load.
       const directContainer = this.DirectContentContainer?.nativeElement;
       if (directContainer) {
         while (directContainer.firstChild) directContainer.removeChild(directContainer.firstChild);
@@ -1848,19 +2109,89 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     }
 
     this.workspaceManager.CloseTab(tabId);
+  }
 
-    if (isLastTab && tab) {
-      // CloseTab kept the tab around but unpinned it. Replace it with the app's
-      // default tab so the user lands on a meaningful surface (typically the
-      // home dashboard) instead of staying on the discarded form.
-      const app = this.appManager.GetAppById(tab.applicationId);
-      if (app) {
-        const defaultTabRequest = await app.CreateDefaultTab();
-        if (defaultTabRequest) {
-          this.workspaceManager.OpenTab(defaultTabRequest, app.GetColor());
-        }
+  /** Open an app's default tab (its home / landing surface), if it has one. */
+  private async openAppDefaultTab(appId: string): Promise<void> {
+    const app = this.appManager.GetAppById(appId);
+    if (app) {
+      const defaultTabRequest = await app.CreateDefaultTab();
+      if (defaultTabRequest) {
+        this.workspaceManager.OpenTab(defaultTabRequest, app.GetColor());
       }
     }
+  }
+
+  /**
+   * A record was deleted in this session — from its own form, a custom form, a
+   * grid row, or any other `BaseEntity.Delete()`. Nothing may keep showing it:
+   *
+   * 1. Other record tabs whose origin chain names it get the record spliced out,
+   *    so their crumb returns to where the user was before it.
+   * 2. Every record tab showing it closes, its cached form destroyed.
+   * 3. If one of those was the ACTIVE tab, the user is taken back to where it
+   *    was opened from; with no origin (e.g. loaded straight from a URL), to the
+   *    Home dashboard, or the tab's own app landing page when there is no Home
+   *    app. Its URL's history entry is replaced so browser Back can't reopen it.
+   *
+   * Inactive tabs showing it just close: the user wasn't looking at them.
+   */
+  public async HandleRecordDeleted(record: DeletedRecordRef): Promise<void> {
+    const config = this.workspaceManager.GetConfiguration();
+    if (!config) {
+      return;
+    }
+    const showing = config.tabs.filter(t => RecordTabShowsRecord(t, record));
+    const showingIds = new Set(showing.map(t => t.id));
+
+    for (const tab of config.tabs) {
+      if (showingIds.has(tab.id) || !IsRecordsTabConfiguration(tab.configuration)) {
+        continue;
+      }
+      const origin = GetRecordSourceContext(tab.configuration) ?? undefined;
+      const pruned = RemoveDeletedRecordFromOrigin(origin, record);
+      if (pruned !== origin) {
+        this.workspaceManager.UpdateTabConfiguration(tab.id, OriginToTabConfiguration(pruned));
+      }
+    }
+
+    if (showing.length === 0) {
+      return;
+    }
+
+    const activeTab = showing.find(t => t.id === config.activeTabId);
+    const returnTo = activeTab
+      ? RemoveDeletedRecordFromOrigin(GetRecordSourceContext(activeTab.configuration) ?? undefined, record)
+      : undefined;
+    if (activeTab) {
+      // Mark by what the tab's URL carries (its own entity string and id), not
+      // the event's canonical name: the URL is built from the tab.
+      const urlEntity = activeTab.configuration?.['Entity'];
+      this.tabService.MarkRecordUrlForReplacement(
+        typeof urlEntity === 'string' ? urlEntity : record.EntityName,
+        NormalizeRecordIdForMatch(activeTab.resourceRecordId || record.RecordId)
+      );
+    }
+
+    for (const tab of showing) {
+      this.closeTabDestroyingComponent(tab.id);
+    }
+
+    if (activeTab) {
+      await this.leaveDeletedRecord(activeTab, returnTo);
+    }
+  }
+
+  /** Where the user goes after the record they were looking at is deleted. */
+  private async leaveDeletedRecord(deletedTab: WorkspaceTab, origin: RecordSourceContext | undefined): Promise<void> {
+    if (OriginHasReturnTarget(origin)) {
+      await this.navigationService.ReturnToRecordSource(origin);
+      return;
+    }
+    if (await this.navigationService.OpenHomeDashboard()) {
+      return;
+    }
+    await this.openAppDefaultTab(deletedTab.applicationId);
   }
 
   /**
@@ -1872,13 +2203,15 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     // IMPORTANT: Check both resourceRecordId AND configuration.recordId
     // because for nav items, the recordId is stored in configuration, not resourceRecordId
     const effectiveRecordId = tab.resourceRecordId || (tab.configuration?.recordId as string) || '';
+    const effectiveAbv = (tab.configuration?.['AlternateBaseView'] as string) || (tab.configuration?.['alternateBaseView'] as string) || '';
     const parts = [
       tab.applicationId,
       tab.configuration?.resourceType || '',
       tab.configuration?.driverClass || '',
       tab.configuration?.Entity || '',  // Include Entity name for Records resource type
       effectiveRecordId,
-      tab.configuration?.route || ''
+      tab.configuration?.route || '',
+      effectiveAbv
     ];
     return parts.join('|');
   }
@@ -1894,7 +2227,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       tabId: tab.id,
       appId: tab.applicationId,
       appColor,
-      title: tab.title,
+      title: this.resolveTabTitle(tab),
       route: tab.configuration['route'] as string || '',
       isPinned: tab.isPinned,
       isLoaded: false,
@@ -2011,7 +2344,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       const driverClass = resourceData.Configuration?.resourceTypeDriverClass || resourceData.ResourceType;
       // Discriminate distinct "new record" tabs of different entities (all have empty
       // ResourceRecordID otherwise — would silently collide in the cache).
-      const cacheDiscriminator = resourceData.Configuration?.Entity as string | undefined;
+      const cacheDiscriminator = this.resolveCacheDiscriminator(resourceData.Configuration);
 
       // Check if we have a cached component for this resource
       const cached = this.cacheManager.getCachedComponent(
@@ -2045,6 +2378,16 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
         // Keep legacy componentRefs map updated
         this.componentRefs.set(tabId, cached.componentRef);
+
+        // Wire GL container show/hide if supported
+        this.wireContainerVisibilityEvents(tabId, glContainer);
+
+        // Set change detection state based on pane visibility (active or visible split pane)
+        if (this.isTabCurrentlyVisible(tabId, this.workspaceManager.GetActiveTabId())) {
+          this.ActivateTabView(tabId);
+        } else {
+          this.DeactivateTabView(tabId);
+        }
 
         // If resource is already loaded, update tab title immediately and signal
         // load-complete so the shell clears any loading overlay.
@@ -2139,6 +2482,16 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
       // Store reference for cleanup (legacy)
       this.componentRefs.set(tabId, componentRef as ComponentRef<BaseResourceComponent>);
+
+      // Wire GL container show/hide if supported
+      this.wireContainerVisibilityEvents(tabId, glContainer);
+
+      // Set change detection state based on pane visibility (active or visible split pane)
+      if (this.isTabCurrentlyVisible(tabId, this.workspaceManager.GetActiveTabId())) {
+        this.ActivateTabView(tabId);
+      } else {
+        this.DeactivateTabView(tabId);
+      }
 
     } catch (e) {
       // A tab whose resource can't resolve (e.g. a persisted tab referencing an
@@ -2533,6 +2886,9 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   }
 
   private cleanupTabComponent(tabId: string): void {
+    this.getHiddenTabIds().delete(tabId);
+    // Deactivate change detection for this tab view
+    this.DeactivateTabView(tabId);
     // The pane crumb belongs to the pane, not the cached component — always
     // destroyed here; the next attach recreates it in the new pane.
     this.destroyOriginCrumb(tabId);
@@ -2606,6 +2962,8 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
           // reload from being handed back the component it just detached.
           const existingEntity = existingResourceData?.Configuration?.Entity as string | undefined;
           const newEntity = tab.configuration['Entity'] as string | undefined;
+          const existingAbv = ((existingResourceData?.Configuration?.['AlternateBaseView'] ?? existingResourceData?.Configuration?.['alternateBaseView']) as string | undefined) || '';
+          const newAbv = ((tab.configuration['AlternateBaseView'] ?? tab.configuration['alternateBaseView']) as string | undefined) || '';
 
           // The record id comparison accepts the URL-segment form ResourceRecordSaved writes into
           // the component's Data ('ID|<uuid>' for a tab that keeps '<uuid>'). An exact comparison
@@ -2615,6 +2973,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
                              existingResourceData?.Configuration?.applicationId !== tab.applicationId ||
                              !TabContainerComponent.IsSameRecordId(existingRecordId, newRecordId) ||
                              existingEntity !== newEntity ||
+                             existingAbv !== newAbv ||
                              (tab.configuration['resourceType'] === 'Custom' && existingDriverClass !== newDriverClass);
 
           if (needsReload) {
@@ -2647,7 +3006,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         const app = this.appManager.GetAppById(tab.applicationId);
         const styleUpdate: Partial<TabComponentState> = {
           isPinned: tab.isPinned,
-          title: tab.title,
+          title: this.resolveTabTitle(tab),
           appColor: app?.GetColor() || DEFAULT_APP_COLOR
         };
         if (IsRecordsTabConfiguration(tab.configuration)) {
@@ -3175,5 +3534,26 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
     // Unblock the shell's first-load gate so the loading overlay clears.
     this.emitFirstLoadCompleteOnce();
+  }
+
+  private resolveCacheDiscriminator(configuration?: Record<string, unknown> | null): string | undefined {
+    if (typeof ComponentCacheManager.GetCacheDiscriminator === 'function') {
+      return ComponentCacheManager.GetCacheDiscriminator(configuration);
+    }
+    if (!configuration) {
+      return undefined;
+    }
+    const entity = typeof configuration['Entity'] === 'string' && configuration['Entity'].trim().length > 0
+      ? configuration['Entity'].trim()
+      : '';
+    const rawAbv = configuration['AlternateBaseView'];
+    const abv = typeof rawAbv === 'string' && rawAbv.trim().length > 0 ? rawAbv.trim() : '';
+    if (!entity && !abv) {
+      return undefined;
+    }
+    if (entity && abv) {
+      return `${entity}|abv:${abv}`;
+    }
+    return entity || `abv:${abv}`;
   }
 }

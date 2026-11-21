@@ -17,6 +17,10 @@
       "IsLocked": true,
       "Priority": 0,
       "Status": "Active"
+    },
+    "sync": {
+      "lastModified": "2026-10-13T19:00:12.519Z",
+      "checksum": "7887bce5b6c6e7ff172acd06423889e360cbd34d01bf8f5b25168356879ea7ed"
     }
   }
 ]

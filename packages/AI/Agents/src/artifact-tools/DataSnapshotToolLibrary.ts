@@ -9,12 +9,15 @@ import { RegisterClass } from '@memberjunction/global';
 import { NormalizeToTables } from '@memberjunction/core';
 import {
     BaseArtifactToolLibrary,
+    type ArtifactJsonValue,
+    type ArtifactToolArgs,
     type ArtifactToolDefinition,
     type ArtifactToolResult,
 } from '@memberjunction/ai-core-plus';
+import { ComputeNumericExtremum } from './artifact-tool-helpers';
 
 // ---------------------------------------------------------------------------
-// Internal types (kept local — no `any`)
+// Internal types (kept local — no `any` / `unknown`)
 // ---------------------------------------------------------------------------
 
 interface SnapshotColumn {
@@ -22,10 +25,12 @@ interface SnapshotColumn {
     sqlBaseType: string;
 }
 
+type SnapshotRow = Record<string, ArtifactJsonValue | undefined>;
+
 interface SnapshotTable {
     name: string;
     columns: SnapshotColumn[];
-    rows: Array<Record<string, unknown>>;
+    rows: SnapshotRow[];
     metadata?: { rowCount: number };
 }
 
@@ -43,21 +48,17 @@ type AggregateOperation =
  * the identity matters (min/max → which row, distinct_count → which values,
  * mode → which value + how often) the result includes context fields so the
  * LLM doesn't have to guess or make a follow-up tool call.
- *
- * `value` is typed `unknown` because mode can return any scalar (string,
- * boolean, number, null) while the other ops return number. Consumers should
- * narrow based on the operation they requested.
  */
 interface AggregateResult {
-    value: unknown;
+    value: ArtifactJsonValue | undefined;
     /** For min/max/mode — rows whose field value equals the extremum / most frequent value. Capped at 10. */
-    contributingRows?: Array<Record<string, unknown>>;
+    contributingRows?: SnapshotRow[];
     /** For distinct_count — the actual distinct values. Capped at 50. */
-    distinctValues?: unknown[];
+    distinctValues?: Array<ArtifactJsonValue | undefined>;
     /** For mode — how many rows had the returned value. */
     frequency?: number;
     /** For mode — all tied mode values when frequency is shared by multiple values. Capped at 50. */
-    allModes?: unknown[];
+    allModes?: Array<ArtifactJsonValue | undefined>;
     /** True when `contributingRows` / `distinctValues` / `allModes` was truncated by the cap. */
     truncated?: boolean;
 }
@@ -224,7 +225,7 @@ class ExpressionParser {
  * references a missing/non-numeric field or produces a non-finite value; the
  * caller converts NaN to null for output/sorting.
  */
-function evaluateExpr(node: ExprNode, row: Record<string, unknown>): number {
+function evaluateExpr(node: ExprNode, row: SnapshotRow): number {
     switch (node.type) {
         case 'num': return node.value;
         case 'field': {
@@ -438,7 +439,7 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
 
     protected async invokeSubclassTool(
         toolName: string,
-        input: Record<string, unknown>,
+        input: ArtifactToolArgs,
         artifactContent: string | Buffer
     ): Promise<ArtifactToolResult> {
         const contentStr = typeof artifactContent === 'string'
@@ -447,7 +448,7 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
 
         let payload: SnapshotPayload;
         try {
-            const raw = JSON.parse(contentStr) as Record<string, unknown>;
+            const raw = JSON.parse(contentStr) as ArtifactToolArgs;
             // NormalizeToTables handles both multi-table snapshots and
             // legacy single-table format ({ columns, rows, metadata }).
             const tables = NormalizeToTables(raw);
@@ -496,7 +497,7 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
 
     private handleGetSchema(
         payload: SnapshotPayload,
-        input: Record<string, unknown>
+        input: ArtifactToolArgs
     ): ArtifactToolResult {
         const table = this.findTable(payload, input.table as string);
         if (!table) {
@@ -507,7 +508,7 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
 
     private handleGetRows(
         payload: SnapshotPayload,
-        input: Record<string, unknown>
+        input: ArtifactToolArgs
     ): ArtifactToolResult {
         const table = this.findTable(payload, input.table as string);
         if (!table) {
@@ -521,7 +522,7 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
 
     private handleSearchRows(
         payload: SnapshotPayload,
-        input: Record<string, unknown>
+        input: ArtifactToolArgs
     ): ArtifactToolResult {
         const table = this.findTable(payload, input.table as string);
         if (!table) {
@@ -551,7 +552,7 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
 
     private handleAggregate(
         payload: SnapshotPayload,
-        input: Record<string, unknown>
+        input: ArtifactToolArgs
     ): ArtifactToolResult {
         const table = this.findTable(payload, input.table as string);
         if (!table) {
@@ -579,7 +580,7 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
 
     private handleGroupAggregate(
         payload: SnapshotPayload,
-        input: Record<string, unknown>
+        input: ArtifactToolArgs
     ): ArtifactToolResult {
         const table = this.findTable(payload, input.table as string);
         if (!table) {
@@ -587,13 +588,13 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
         }
 
         const groupBy = Array.isArray(input.groupBy)
-            ? (input.groupBy as unknown[]).map(g => String(g))
+            ? input.groupBy.map(g => String(g))
             : [];
         if (groupBy.length === 0) {
             return this.errorResult('`groupBy` must be a non-empty array of field names.');
         }
 
-        const rawAggs = Array.isArray(input.aggregations) ? (input.aggregations as Array<Record<string, unknown>>) : [];
+        const rawAggs = Array.isArray(input.aggregations) ? (input.aggregations as ArtifactToolArgs[]) : [];
         if (rawAggs.length === 0) {
             return this.errorResult('`aggregations` must be a non-empty array of { field, operation, alias, p? }.');
         }
@@ -625,9 +626,9 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
         }
 
         // Bucket rows by composite group key.
-        const buckets = new Map<string, { keyValues: Record<string, unknown>; rows: Array<Record<string, unknown>> }>();
+        const buckets = new Map<string, { keyValues: SnapshotRow; rows: SnapshotRow[] }>();
         for (const row of table.rows) {
-            const keyValues: Record<string, unknown> = {};
+            const keyValues: SnapshotRow = {};
             for (const g of groupBy) keyValues[g] = row[g];
             const key = JSON.stringify(groupBy.map(g => row[g] ?? null));
             let bucket = buckets.get(key);
@@ -639,9 +640,9 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
         }
 
         // Build group rows: group-by values + each aggregation's scalar value.
-        let groups: Array<Record<string, unknown>> = [];
+        let groups: SnapshotRow[] = [];
         for (const bucket of buckets.values()) {
-            const groupRow: Record<string, unknown> = { ...bucket.keyValues };
+            const groupRow: SnapshotRow = { ...bucket.keyValues };
             for (const agg of aggs) {
                 groupRow[agg.alias] = this.computeAggregate(bucket.rows, agg.field, agg.operation, agg.p).value;
             }
@@ -649,8 +650,8 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
         }
 
         // Optional HAVING filter on an aggregation alias.
-        if (input.having && typeof input.having === 'object') {
-            const having = input.having as Record<string, unknown>;
+        if (input.having && typeof input.having === 'object' && !Array.isArray(input.having)) {
+            const having = input.having as ArtifactToolArgs;
             const alias = String(having.alias ?? '');
             const operator = String(having.operator ?? '');
             if (!alias || !VALID_SEARCH_OPERATORS.has(operator)) {
@@ -660,8 +661,8 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
         }
 
         // Optional sort by a group-by field or an aggregation alias.
-        if (input.sort && typeof input.sort === 'object') {
-            const sort = input.sort as Record<string, unknown>;
+        if (input.sort && typeof input.sort === 'object' && !Array.isArray(input.sort)) {
+            const sort = input.sort as ArtifactToolArgs;
             const by = String(sort.by ?? '');
             const direction = String(sort.direction ?? 'asc').toLowerCase() === 'desc' ? 'desc' : 'asc';
             if (by) groups = this.sortRows(groups, by, direction);
@@ -681,7 +682,7 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
 
     private handleCompute(
         payload: SnapshotPayload,
-        input: Record<string, unknown>
+        input: ArtifactToolArgs
     ): ArtifactToolResult {
         const table = this.findTable(payload, input.table as string);
         if (!table) {
@@ -700,7 +701,7 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
         let ast: ExprNode;
         try {
             ast = new ExpressionParser().Parse(expression);
-        } catch (err: unknown) {
+        } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             return this.errorResult(`Could not parse expression "${expression}": ${msg}`);
         }
@@ -740,19 +741,19 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
 
     private handleFilter(
         payload: SnapshotPayload,
-        input: Record<string, unknown>
+        input: ArtifactToolArgs
     ): ArtifactToolResult {
         const table = this.findTable(payload, input.table as string);
         if (!table) {
             return this.tableNotFoundError(input.table as string);
         }
 
-        const rawConditions = Array.isArray(input.conditions) ? (input.conditions as Array<Record<string, unknown>>) : [];
+        const rawConditions = Array.isArray(input.conditions) ? (input.conditions as ArtifactToolArgs[]) : [];
         if (rawConditions.length === 0) {
             return this.errorResult('`conditions` must be a non-empty array of { field, operator, value }.');
         }
 
-        interface Cond { field: string; operator: SearchOperator; value: unknown; }
+        interface Cond { field: string; operator: SearchOperator; value: ArtifactJsonValue | undefined; }
         const conditions: Cond[] = [];
         for (const c of rawConditions) {
             const field = String(c.field ?? '');
@@ -766,7 +767,7 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
         const combine = String(input.combine ?? 'and').toLowerCase() === 'or' ? 'or' : 'and';
         const limit = Math.min((input.limit as number) ?? 200, 500);
 
-        const matches = (row: Record<string, unknown>): boolean => {
+        const matches = (row: SnapshotRow): boolean => {
             if (combine === 'or') {
                 return conditions.some(c => this.evaluateCondition(row[c.field], c.operator, c.value));
             }
@@ -789,9 +790,9 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
     // -----------------------------------------------------------------------
 
     private evaluateCondition(
-        fieldValue: unknown,
+        fieldValue: ArtifactJsonValue | undefined,
         operator: SearchOperator,
-        targetValue: unknown
+        targetValue: ArtifactJsonValue | undefined
     ): boolean {
         switch (operator) {
             case 'eq':
@@ -818,10 +819,10 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
     // -----------------------------------------------------------------------
 
     private sortRows(
-        rows: Array<Record<string, unknown>>,
+        rows: SnapshotRow[],
         by: string,
         direction: 'asc' | 'desc'
-    ): Array<Record<string, unknown>> {
+    ): SnapshotRow[] {
         return [...rows].sort((a, b) => {
             const av = a[by];
             const bv = b[by];
@@ -844,7 +845,7 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
     // -----------------------------------------------------------------------
 
     private computeAggregate(
-        rows: Array<Record<string, unknown>>,
+        rows: SnapshotRow[],
         field: string,
         operation: AggregateOperation,
         p?: number
@@ -852,17 +853,23 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
         const MAX_CONTRIBUTING_ROWS = 10;
         const MAX_DISTINCT_VALUES = 50;
 
-        // Helper — extract finite numeric values for numeric-only operations.
-        const numericValues = (): number[] =>
-            rows
-                .map(r => r[field])
-                .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+        // Helper — extract finite numeric values iteratively (safe for >100k rows and skips null/undefined).
+        const numericValues = (): number[] => {
+            const out: number[] = [];
+            for (const row of rows) {
+                const v = row[field];
+                if (typeof v === 'number' && Number.isFinite(v)) {
+                    out.push(v);
+                }
+            }
+            return out;
+        };
 
         switch (operation) {
             case 'count':
                 return { value: rows.length };
             case 'distinct_count': {
-                const set = new Set<unknown>();
+                const set = new Set<ArtifactJsonValue | undefined>();
                 for (const row of rows) set.add(row[field]);
                 const all = Array.from(set);
                 const capped = all.slice(0, MAX_DISTINCT_VALUES);
@@ -870,24 +877,39 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
                 if (all.length > capped.length) result.truncated = true;
                 return result;
             }
-            case 'sum':
-                return { value: rows.reduce((acc, r) => acc + (r[field] as number), 0) };
+            case 'sum': {
+                const nums = numericValues();
+                let sum = 0;
+                for (const v of nums) sum += v;
+                return { value: sum };
+            }
             case 'avg':
             case 'mean': {
-                const sum = rows.reduce((acc, r) => acc + (r[field] as number), 0);
-                return { value: rows.length > 0 ? sum / rows.length : 0 };
+                const nums = numericValues();
+                if (nums.length === 0) return { value: 0 };
+                let sum = 0;
+                for (const v of nums) sum += v;
+                return { value: sum / nums.length };
             }
             case 'min':
             case 'max': {
-                if (rows.length === 0) return { value: 0, contributingRows: [] };
-                const nums = rows.map(r => r[field] as number);
-                const extremum = operation === 'min'
-                    ? Math.min(...nums)
-                    : Math.max(...nums);
-                const matching = rows.filter(r => (r[field] as number) === extremum);
-                const capped = matching.slice(0, MAX_CONTRIBUTING_ROWS);
-                const result: AggregateResult = { value: extremum, contributingRows: capped };
-                if (matching.length > capped.length) result.truncated = true;
+                const nums = numericValues();
+                if (nums.length === 0) return { value: 0, contributingRows: [] };
+                const extremum = ComputeNumericExtremum(nums, operation);
+                const matching: SnapshotRow[] = [];
+                let truncated = false;
+                for (const r of rows) {
+                    if (r[field] === extremum) {
+                        if (matching.length < MAX_CONTRIBUTING_ROWS) {
+                            matching.push(r);
+                        } else {
+                            truncated = true;
+                            break;
+                        }
+                    }
+                }
+                const result: AggregateResult = { value: extremum, contributingRows: matching };
+                if (truncated) result.truncated = true;
                 return result;
             }
             case 'median':
@@ -908,7 +930,7 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
             }
             case 'mode': {
                 if (rows.length === 0) return { value: null, frequency: 0, contributingRows: [] };
-                const tally = new Map<unknown, number>();
+                const tally = new Map<ArtifactJsonValue | undefined, number>();
                 for (const row of rows) {
                     const v = row[field];
                     tally.set(v, (tally.get(v) ?? 0) + 1);
@@ -917,7 +939,7 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
                 for (const freq of tally.values()) {
                     if (freq > maxFreq) maxFreq = freq;
                 }
-                const modeValues: unknown[] = [];
+                const modeValues: Array<ArtifactJsonValue | undefined> = [];
                 for (const [v, freq] of tally.entries()) {
                     if (freq === maxFreq) modeValues.push(v);
                 }
@@ -940,8 +962,11 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
                 const nums = numericValues();
                 // Sample stats undefined for N<2; return 0 rather than NaN to keep the schema stable.
                 if (nums.length < 2) return { value: 0 };
-                const mean = nums.reduce((a, b) => a + b, 0) / nums.length;
-                const sumSquaredDiffs = nums.reduce((acc, x) => acc + (x - mean) ** 2, 0);
+                let sum = 0;
+                for (const v of nums) sum += v;
+                const mean = sum / nums.length;
+                let sumSquaredDiffs = 0;
+                for (const x of nums) sumSquaredDiffs += (x - mean) ** 2;
                 const variance = sumSquaredDiffs / (nums.length - 1); // sample (N-1)
                 return { value: operation === 'variance' ? variance : Math.sqrt(variance) };
             }
@@ -960,7 +985,7 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
         return this.errorResult(`Table "${tableName}" not found in snapshot.`);
     }
 
-    private successResult(data: unknown): ArtifactToolResult {
+    private successResult(data: ArtifactToolResult['data']): ArtifactToolResult {
         return { success: true, data };
     }
 

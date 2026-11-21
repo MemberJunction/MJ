@@ -20,6 +20,8 @@
  * class-resolution bundle (CR1–CR5), which covers the DB-driven half of the same seam.
  */
 import { describe, it, expect } from 'vitest';
+import * as fs from 'fs';
+import * as path from 'path';
 import { MJGlobal } from '@memberjunction/global';
 import { ElevenLabsRealtime } from '@memberjunction/ai-elevenlabs';
 import { GeminiRealtime } from '@memberjunction/ai-gemini';
@@ -72,4 +74,18 @@ describe('class-registration manifest (real generated module)', () => {
         expect(AssemblyAIRealtime.SupportsDynamicToolSet).toBeFalsy();
         expect(HuggingFaceRealtime.SupportsDynamicToolSet).toBeFalsy();
     });
+
+    it('does not include test/spec/mock files or test-suite classes (e.g. GraphTestListEntity)', () => {
+        const classNames = CLASS_REGISTRATIONS.map(cls => (cls as { name?: string }).name ?? '');
+        expect(classNames).not.toContain('GraphTestListEntity');
+
+        const manifestSource = fs.readFileSync(
+            path.resolve(__dirname, '../generated/mj-class-registrations.ts'),
+            'utf-8'
+        );
+        expect(manifestSource).not.toContain('GraphTestListEntity');
+        expect(manifestSource).not.toContain('@memberjunction/integration-test-suite');
+        expect(manifestSource).not.toMatch(/__tests__|__mocks__|\.(?:test|spec)\b/);
+    });
 });
+

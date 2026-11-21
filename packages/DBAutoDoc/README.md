@@ -63,8 +63,9 @@ graph TD
 - **CodeGen Integration** -- Emit `additionalSchemaInfo.json` for MemberJunction CodeGen soft FK/PK support
 - **Granular Guardrails** -- Multi-level resource controls (run, phase, iteration limits)
 - **Resume Capability** -- Pause and resume analysis from checkpoint state files
+- **Index Advisor** -- Built-in plugin that reads existing indexes, proposes missing ones (uncovered foreign keys, discovered primary keys) with an optional LLM review, flags redundant indexes, and exports the proposals as a SQL migration. See [Index Advisor](#index-advisor-built-in-plugin)
 - **Programmatic API** -- Use as a library in your own applications
-- **Extensible** -- Custom database drivers and analysis plugins
+- **Extensible** -- Custom database drivers, plus a [plugin system](#plugins) for adding steps before, during and after a run and new export formats
 
 ### Output Formats
 - **SQL Scripts** -- Database-specific metadata scripts (extended properties, comments)
@@ -74,6 +75,7 @@ graph TD
 - **Mermaid Diagrams** -- Standalone ERD files (.mmd and .html)
 - **Analysis Reports** -- Detailed metrics and quality assessments
 - **Additional Schema Info** -- CodeGen-compatible JSON for soft FK/PK metadata
+- **Index Migration** -- Flyway-style SQL migration creating the Index Advisor's proposed indexes (`export --format index-migration`)
 
 ## Installation
 
@@ -161,6 +163,43 @@ This will:
 - Run iterative AI analysis with backpropagation
 - Perform sanity checks
 - Save state to `db-doc-state.json`
+
+#### Large databases
+
+```bash
+# Skip the table data sampling pass (row counts, distinct counts, sample values)
+db-auto-doc analyze --skip-sampling          # or "analysis": { "skipSampling": true }
+
+# An interrupted sampling pass resumes where it stopped: state is saved every 25 tables and a
+# resume samples only the tables that have no statistics yet
+db-auto-doc analyze --resume ./output/run-3/state.json
+```
+
+Sampling is what the enum/value-list verdicts and the organic-key cardinality gate are based on, so with
+`--skip-sampling` those verdicts fall back to the LLM's judgement. Organic-key detection is skipped with
+a warning when no table has column statistics; on a `--resume --skip-sampling` of a run that already
+sampled, the earlier statistics are kept and detection still runs.
+
+#### Seed context from files
+
+Long-form context (a data dictionary, an engineering assessment) can live in files instead of inline
+`customInstructions`; their contents are appended to it:
+
+```json
+"seedContext": {
+  "overallPurpose": "Association management system",
+  "file": "./context/data-dictionary.md",
+  "files": ["./context/assessment.md", "./context/glossary.md"]
+}
+```
+
+Paths are relative to `config.json`. The text is sent with every table prompt, so keep it to what the
+model needs for descriptions rather than a full specification.
+
+The primary- and foreign-key passes (discovery validation and PK/FK pruning) also get it, trimmed. A per-table
+pass gets only the paragraphs that name its table, and the whole-schema passes get the full text. Both are capped at
+`seedContext.keyPassMaxChars` characters (default 6000; `0` sends none). Name tables in your paragraphs so they
+reach the right pass.
 
 ### 3. Generate Sample Queries (Optional)
 
@@ -319,6 +358,68 @@ Export only AI-discovered relationships (exclude hard DB constraints):
 db-auto-doc export --schema-info --schema-info-discovered-only --confidence-threshold 70
 ```
 
+Plugins can contribute their own export formats. List them, then generate one or more with `--format` (repeatable):
+
+```bash
+db-auto-doc export --state-file ./output/run-1/state.json --list-formats
+db-auto-doc export --state-file ./output/run-1/state.json --format index-migration
+```
+
+Dialect-specific formats take the database platform from the state file; override it with `--provider sqlserver|postgresql|mysql`. `--file-prefix` replaces a format's default file-name prefix (for example a migration version such as `V202610081500__`).
+
+#### Subject-area diagrams for large schemas
+
+Mermaid refuses a diagram whose source exceeds ~50,000 characters, and a schema of a few hundred tables
+passes that long before it becomes readable. `--erd-mode clusters` splits the foreign-key graph into
+hub-centred subject areas and writes one diagram per area to `erd/`, with an index and a "Subject Areas"
+section in `documentation.html`:
+
+```bash
+db-auto-doc export --html --mermaid --erd-mode clusters
+db-auto-doc export --mermaid --erd-mode both --erd-columns keys     # keep the full diagram too
+```
+
+How the areas are chosen:
+
+1. **Reference tables** — tables that reference nothing and hold fewer than `lookupMaxRows` rows
+   (status codes, types, flags) — are listed beside each diagram rather than drawn. Left in, a flag table
+   referenced by sixty others links every area to every other.
+2. **Hubs** are tables referenced by at least `hubMinInbound` other tables.
+3. Every other connected table joins its nearest hub; an area smaller than `minClusterSize` folds into
+   the neighbour it links to most.
+4. An area larger than `pageSize` is paginated, with the hub on every page.
+
+Defaults live in `config.json` and any of them can be overridden per run:
+
+```json
+"output": {
+  "erd": {
+    "mode": "clusters",
+    "columns": "keys",
+    "hubMinInbound": 8,
+    "lookupMaxRows": 5000,
+    "pageSize": 50,
+    "minClusterSize": 4,
+    "hubs": ["Invoice"],
+    "lookupTables": ["AuditFlag"],
+    "excludeTables": ["Customer.bak"]
+  }
+}
+```
+
+| Flag | Overrides |
+|------|-----------|
+| `--erd-mode full\|clusters\|both` | `erd.mode` |
+| `--erd-columns all\|keys\|none` | `erd.columns` (clusters default to `keys`) |
+| `--erd-hub-min-inbound N` | `erd.hubMinInbound` |
+| `--erd-lookup-max-rows N` | `erd.lookupMaxRows` |
+| `--erd-page-size N` | `erd.pageSize` |
+| `--erd-min-cluster-size N` | `erd.minClusterSize` |
+
+`erd/index.md` names every area's members, the reference tables, the tables with no foreign keys and any
+connected tables that reached no hub, so a wrong-looking split can be traced to a threshold or pinned with
+`hubs` / `lookupTables` / `excludeTables`.
+
 ### 5. Export Sample Queries to Metadata (Optional)
 
 Transform generated sample queries into MemberJunction metadata format for syncing to the database:
@@ -417,6 +518,21 @@ Triggered automatically when:
 - Tables lack primary key constraints
 - Insufficient foreign key relationships detected (below threshold)
 
+### Existing Indexes as Evidence
+
+Databases often have indexes where no key is declared: developers index the columns they join and filter on. DBAutoDoc reads every table's indexes right after introspection and stores them in the state file (`schemas[].tables[].indexes`). The LLM sees them in the discovery validation pass, table analysis, and PK/FK pruning:
+
+- A `UNIQUE` index or primary key on non-null columns is strong evidence for the primary key (or an alternate key).
+- A non-unique index led by an ID- or code-like column often marks a foreign key.
+- In FK pruning, each candidate says whether its target column has a unique index.
+
+They are hints, not proof, and are weighed with names, statistics and value overlap. Turn this off with `"analysis": { "useExistingIndexes": false }`. A resumed run reads indexes for any table whose state has none yet. If a schema's catalog can't be read, the run continues without its indexes.
+
+Unique indexes also feed deterministic PK detection (`relationshipDiscovery.indexBackedCandidates`, default true). This matters for tables with no declared primary key; tables that have one skip PK discovery entirely.
+- a unique index on NOT NULL columns becomes a candidate even when the statistics can't show uniqueness (an empty table, for example), scored with an index boost, so naming, type, the name blacklist and column position still decide between several unique columns;
+- a unique index on a nullable column only boosts a column that already passes the statistical checks;
+- multi-column unique indexes are considered as composite keys when no single column qualifies (junction tables, for example); next to a qualifying single-column key they are alternate keys and are not added.
+
 ### Organic Key Detection (Optional)
 
 Foreign keys require **shared exact values**. Organic keys (MemberJunction [PR #2193](https://github.com/MemberJunction/MJ/pull/2193)) capture the weaker-but-broader condition of **shared identity**: two columns refer to the same real-world thing once each is canonicalized through its own transformation. That joins far more cross-system data than exact-match FKs -- e.g. the same phone number stored as `+1 (555) 123-4567`, `5551234567`, and `555.123.4567` across HubSpot, Zendesk, and QuickBooks.
@@ -433,6 +549,97 @@ This pass is **off by default** and runs after PK/FK detection. Enable it with `
 Results are written into `additionalSchemaInfo.json` (see [CodeGen Integration](#codegen-integration-additional-schema-info)) as `OrganicKeys` entries, which CodeGen upserts into `EntityOrganicKey` / `EntityOrganicKeyRelatedEntity` metadata. At runtime, `EntityInfo.BuildOrganicKeyViewParams` applies each side's own normalization expression when matching records.
 
 > **Note:** Embeddings route through MemberJunction's `BaseEmbeddings` drivers (OpenAI, Mistral, Azure, Bedrock, Ollama, local), defaulting to `OpenAIEmbedding`. The detection pass therefore requires an embedding provider with a valid key configured.
+
+### Plugins
+
+A plugin adds work to an analysis run and, optionally, new export formats. Plugins are classes registered with MemberJunction's class factory (`@RegisterClass` from `@memberjunction/global`, which needs no running MemberJunction system) and enabled in the config file.
+
+**Hooks.** A plugin overrides any of these, in run order. Each receives the state, the config, the plugin's options, the run folder, a logger, and (from `AfterIntrospection` on) the open database connection:
+
+| Hook | Runs |
+|---|---|
+| `OnPreRun` | after the state loads, before connecting |
+| `OnAfterIntrospection` | after schema introspection and data sampling |
+| `OnAfterDiscovery` | after primary/foreign key discovery |
+| `OnAfterDescriptions` | after the LLM description loop |
+| `OnAfterPruning` | after key pruning (also when pruning is not configured) |
+| `OnPostRun` | last, while the database connection is still open |
+
+Plugins run in `Priority` order (lower first, default 100). A hook that throws is logged and recorded in the state file, and the run continues. Each plugin keeps its hook history and any data it saves in its own section, `state.plugins.<Name>`. Hooks also run on `--resume`, so they should be safe to run more than once.
+
+**Configuration.** Built-in plugins run by default. External plugins are listed with a `Module`: an npm package name or a file path (relative paths resolve from the current directory), loaded at startup.
+
+```json
+{
+  "plugins": [
+    { "Name": "IndexAdvisor", "Options": { "MinRowCount": 5000 } },
+    { "Name": "MyCustomCheck", "Module": "./plugins/my-custom-check.js", "Priority": 50, "Options": { "Strict": true } },
+    { "Name": "SomeBuiltIn", "Enabled": false }
+  ]
+}
+```
+
+An enabled plugin whose name is not registered fails the run at startup, naming the plugins that are registered.
+
+**Writing a plugin:**
+
+```typescript
+import { RegisterClass } from '@memberjunction/global';
+import { BaseAutoDocPlugin, AutoDocPluginContext, AutoDocExporter } from '@memberjunction/db-auto-doc';
+
+@RegisterClass(BaseAutoDocPlugin, 'MyCustomCheck')
+export class MyCustomCheck extends BaseAutoDocPlugin {
+  public override async OnPostRun(context: AutoDocPluginContext): Promise<void> {
+    const tables = context.State.schemas.flatMap(s => s.tables);
+    this.SetData(context, 'MyCustomCheck', { TablesSeen: tables.length });
+    context.Log(`MyCustomCheck saw ${tables.length} tables`);
+  }
+
+  public override GetExporters(): AutoDocExporter[] {
+    return [{
+      Format: 'my-report',
+      Description: 'One-line summary from MyCustomCheck',
+      Generate: (state) => [{ FileName: 'my-report.txt', Content: JSON.stringify(state.plugins?.['MyCustomCheck']?.Data) }]
+    }];
+  }
+}
+```
+
+### Index Advisor (Built-in Plugin)
+
+The Index Advisor runs at the end of every analysis (`OnPostRun`) unless turned off. It never changes the database: it records proposals in the state file, and `export --format index-migration` writes them as a migration for someone to review and apply.
+
+1. **Reads existing indexes** on every analyzed schema: SQL Server `sys.indexes`, PostgreSQL `pg_index`, MySQL `information_schema.STATISTICS`. Primary-key, unique, partial (filtered), expression and INCLUDE columns are all captured; an expression key part keeps its position (as `(expression)`), so an index *led* by an expression never counts as covering the column after it. A schema whose indexes cannot be read is recorded in `SkippedSchemas`, and no proposals are made for it.
+2. **Proposes indexes with deterministic rules:**
+   - a foreign key (declared, or discovered and `confirmed` at `KeyMinConfidence` or higher) whose column has no index starting with it. A partial index does not count as covering;
+   - a confirmed discovered primary key on a table with no index on it.
+
+   Tables below `MinRowCount` are skipped, and so are leading columns that make poor index keys (large text/JSON/binary types, or two or fewer distinct values). Proposals are ranked by table size.
+3. **LLM review** (on by default). For up to `MaxLLMTables` tables, largest first, that carry a proposal or appear in a [sample query](#sample-query-generation), the model sees the column statistics, descriptions, existing indexes, rule-based proposals and the queries that use the table. It may **keep, drop or modify** each proposal (for example make it composite, or add INCLUDE columns) and **add** new ones, each with a reason. The model returns structured decisions, never SQL. Every change is validated: the columns must exist, the index must not duplicate an existing or planned one, and the leading column must be a usable key. Rejected suggestions are recorded with the reason. If a table's review call fails, that table keeps its rule-based proposals. Use the `indexAdvisor` key in `ai.modelOverrides` to review with a different model.
+4. **Flags redundant indexes** whose key columns are a leading prefix of (or identical to) another index of the same kind on the same table. They are reported only, never dropped. Unique, primary-key, partial and expression indexes are never flagged.
+
+**Options** (`plugins[].Options` for `IndexAdvisor`):
+
+| Option | Default | Meaning |
+|---|---|---|
+| `MinRowCount` | `1000` | Tables with fewer rows get no proposals |
+| `IncludeDiscoveredFKs` | `true` | Also index discovered (not only declared) foreign keys |
+| `KeyMinConfidence` | `90` | Minimum confidence for a discovered key to be used |
+| `LLMReview` | `true` | Run the LLM review layer |
+| `MaxLLMTables` | `40` | Most tables the review looks at |
+| `Concurrently` | `true` | PostgreSQL: `CREATE INDEX CONCURRENTLY` (see below) |
+
+Turn the plugin off with `{ "Name": "IndexAdvisor", "Enabled": false }`.
+
+**The migration** (`export --format index-migration`) is named `V<yyyyMMddHHmm>__dbautodoc_indexes.sql` from the analysis time (override the prefix with `--file-prefix`), highest-priority index first, each with a comment giving its source and reason. Index names are `IX_<table>_<columns>`, shortened with a hash suffix to the platform's identifier limit. On PostgreSQL, where index names must be unique across a schema, every name carries a hash of its exact table and columns so two similar names can't collide. Reasons are written on a single comment line, so multi-line text from the LLM can't spill into the SQL.
+
+| Platform | Statement |
+|---|---|
+| SQL Server | `CREATE NONCLUSTERED INDEX … INCLUDE (…)` guarded by `IF NOT EXISTS` on `sys.indexes`, so the script can be re-run |
+| PostgreSQL | `CREATE INDEX CONCURRENTLY IF NOT EXISTS … INCLUDE (…)` |
+| MySQL | `CREATE INDEX …` (MySQL has no `IF NOT EXISTS` for indexes, so the script cannot be re-run; INCLUDE columns are omitted) |
+
+> **PostgreSQL and `CONCURRENTLY`:** building concurrently does not lock writes on a live database, but it cannot run inside a transaction. The exporter therefore also writes `<migration>.sql.conf` containing `executeInTransaction=false`, which Flyway honors. **Skyway 0.6.x always runs each migration inside a transaction**, so a `CONCURRENTLY` migration fails there ("cannot run inside a transaction block"). Until Skyway supports a per-migration opt-out, apply the file with `psql` or Flyway, or set `"Concurrently": false` (which locks writes on each table while its index builds).
 
 ### Sample Query Generation
 
@@ -978,7 +1185,7 @@ Use different models for different pipeline phases. A cheaper/faster model for b
 {
   "ai": {
     "provider": "gemini",
-    "model": "gemini-3-flash-preview",
+    "model": "gemini-3.8-flash",
     "modelOverrides": {
       "fkPruning": {
         "model": "gemini-3.1-pro-preview",
@@ -1017,7 +1224,7 @@ DBAutoDoc integrates with [MemberJunction's AI provider system](../../packages/A
 ```json
 {
   "provider": "gemini",
-  "model": "gemini-3-flash-preview",
+  "model": "gemini-3.8-flash",
   "apiKey": "..."
 }
 ```

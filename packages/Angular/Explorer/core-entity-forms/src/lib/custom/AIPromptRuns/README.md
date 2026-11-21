@@ -35,10 +35,34 @@ A new component `ChatMessageViewerComponent` has been created to visualize chat 
 <mj-chat-message-viewer [messages]="chatMessages"></mj-chat-message-viewer>
 ```
 
+## Template Data Capture Note Component
+
+`PromptRunDataCaptureNoteComponent` is the first item in the **Data** sub-panel. It tells the user which template data the run stored, by capture mode:
+
+| `dataCapture` | The note shows |
+|---|---|
+| not set (runs saved before capture modes) | nothing |
+| `None` | "Template data was not stored for this run (capture: None)." and a table of input, key and size, largest first. When the shape lists only the largest keys, a notice gives the total key count. |
+| `Referenced` | "Only the template data keys the prompt's templates read were stored (capture: Referenced)." |
+| `Full` with a `dataCaptureNote` | "All template data was stored (capture: Full). " and the note |
+| `Full` without a note | nothing |
+
+For a `None` run, the Data sub-panel shows this note instead of "No data object found".
+
+### Usage:
+```html
+<mj-prompt-run-data-capture-note [DataCapture]="DataCapture" [DataShape]="DataShape" [DataCaptureNote]="DataCaptureNote" />
+```
+
 ## Data Structure
 The component expects the input messages to have this structure:
 ```json
 {
+  "dataCapture": "None" | "Referenced" | "Full",
+  "dataCaptureNote": "string",   // only when a Referenced run stored Full
+  "dataShape": {                 // None mode: key sizes, never values
+    "data": { "keyCount": 2, "totalBytes": 419840, "keys": { "compositionContext": 266240, "componentCatalog": 153600 } }
+  },
   "messages": [
     {
       "role": "system" | "user" | "assistant",
@@ -49,10 +73,12 @@ The component expects the input messages to have this structure:
     }
   ],
   "data": {
-    // Any additional data object
+    // Referenced and Full modes: the data object (Referenced keeps only the keys the templates read)
   }
 }
 ```
+
+Runs saved before capture modes have no `dataCapture`, `dataShape` or `dataCaptureNote`.
 
 ### Complex Content Example:
 ```json

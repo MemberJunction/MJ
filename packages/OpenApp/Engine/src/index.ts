@@ -7,10 +7,12 @@
  */
 
 // Manifest schema and validation
-export { MjAppManifestSchema, mjAppManifestSchema } from './manifest/manifest-schema.js';
-export type { MJAppManifest, ManifestPackageEntry, PackageRole } from './manifest/manifest-schema.js';
+export { MjAppManifestSchema, mjAppManifestSchema, IsManifestPublicErrorPage, PUBLIC_PAGE_SLUG_PATTERN, RESERVED_PUBLIC_PAGE_SLUGS } from './manifest/manifest-schema.js';
+export type { MJAppManifest, ManifestPackageEntry, ManifestPublicErrorPage, ManifestPublicPage, ManifestPublicPageEntry, PackageRole } from './manifest/manifest-schema.js';
 export { LoadManifestFromFile, ParseAndValidateManifest, ValidateManifestObject } from './manifest/manifest-loader.js';
 export type { ManifestLoadResult } from './manifest/manifest-loader.js';
+export { ResolvePackagePlatform, PackageRunsOnTier } from './manifest/package-platform.js';
+export type { PackagePlatform, PlatformRoutable } from './manifest/package-platform.js';
 
 // Types
 export type {
@@ -39,6 +41,7 @@ export type {
 export { ResolveDependencyGraph } from './dependency/dependency-graph-builder.js';
 export type {
     ManifestFetcher,
+    DependencyVersionResolver,
     FetchedManifest,
     RootApp,
     GraphResolutionResult
@@ -58,7 +61,9 @@ export {
     ListGitHubTags,
     ValidateGitHubTag,
     DownloadMigrations,
+    ExtractSqlFilesFromTarGz,
     GetLatestVersion,
+    DescribeUnresolvedVersion,
     ParseGitHubUrl,
     GitHubAccessError,
     IsPrereleaseVersion,
@@ -66,10 +71,20 @@ export {
 } from './github/github-client.js';
 export type {
     GitHubClientOptions,
+    GitHubTokenSource,
     GitHubRelease,
     ManifestFetchResult,
     MigrationDownloadResult
 } from './github/github-client.js';
+
+// App sources: where an app's manifest, versions and SQL files come from
+export { ResolveAppSource, SubpathFromLocator } from './source/open-app-source.js';
+export type { OpenAppSource, SourceContext, VersionValidationResult } from './source/open-app-source.js';
+export { GitHubAppSource } from './source/github-app-source.js';
+export { LocalAppSource, NormalizeAppSource, IsLocalAppLocator, LOCAL_LOCATOR_PREFIX } from './source/local-app-source.js';
+export type { NormalizedAppSource } from './source/local-app-source.js';
+export { CheckWorkspacePackages } from './install/workspace-packages.js';
+export type { WorkspacePackageCheck } from './install/workspace-packages.js';
 
 // Install handlers
 export { CheckCanMigrateAppSchema, CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName, EscapeSqlString } from './install/schema-manager.js';
@@ -88,15 +103,17 @@ export type { RefreshDatabaseConfig } from './install/open-app-metadata-refresh.
 export type { MigrationRunOptions, MigrationRunResult, FlywayDatabaseConfig, SkywayDatabaseConfig } from './install/migration-runner.js';
 
 export { AddAppPackages, RemoveAppPackages, RunNpmInstall, RunPackageInstall, RunPackageInstallAsync, ResolvePackageInstallTimeoutMs, IsDefaultNpmRegistry, DEFAULT_PACKAGE_INSTALL_TIMEOUT_MS, PACKAGE_INSTALL_TIMEOUT_ENV_VAR, BumpPrefixedDependencies, DetectPackageManager, detectPackageManager, HasPnpmCatalog, hasPnpmCatalog } from './install/package-manager.js';
-export type { PackageManagerOptions, PackageOperationResult, PackageManagerType, VersionStrategy, WorkspaceTarget } from './install/package-manager.js';
+export type { PackageManagerOptions, AppPackageGroups, PackageOperationResult, PackageManagerType, VersionStrategy, WorkspaceTarget } from './install/package-manager.js';
 
 export {
     AddServerDynamicPackages,
     AddClientDynamicPackages,
+    AddPublicPages,
+    CheckPublicPageSlugConflicts,
     RemoveServerDynamicPackages,
     PruneDynamicPackagesNotInManifest,
     ToggleServerDynamicPackages, SetNewUserTemplate } from './install/config-manager.js';
-export type { DynamicPackageEntry, ConfigOperationResult } from './install/config-manager.js';
+export type { DynamicPackageEntry, PublicPageConfigEntry, ConfigOperationResult } from './install/config-manager.js';
 export { OfferTemplateUser, NamesFromEmail, TEMPLATE_USER_ENV, type TemplateUserContext } from './install/template-user.js';
 
 export { AngularConfigManager, DerivePrebundleExcludePatterns } from './install/angular-config-manager.js';
@@ -135,3 +152,26 @@ export {
 } from './install/entity-teardown.js';
 export type { FkEdge, TeardownPlanItem, TeardownPlan } from './install/entity-teardown.js';
 export { ExtractApplicationIds, extractApplicationIds } from './install/migration-application-ids.js';
+
+// OpenApp scaffolder & Schema Consistency CI template (MC1-MC4 + FK index coverage)
+export {
+    ScaffoldOpenApp,
+    scaffoldOpenApp,
+    GenerateSchemaConsistencyWorkflow,
+    GenerateSchemaConsistencyScript,
+    ExpectedForeignKeyIndexName,
+    StripSqlCommentsAndStrings,
+    ScanMigrationForeignKeyIndexes,
+    SCHEMA_CONSISTENCY_WORKFLOW_PATH,
+    SCHEMA_CONSISTENCY_SCRIPT_PATH,
+} from './scaffold/app-scaffolder.js';
+export type {
+    SchemaConsistencyTemplateOptions,
+    AppScaffoldOptions,
+    ScaffoldedFile,
+    AppScaffoldResult,
+    MigrationSqlInput,
+    DeclaredForeignKeyColumn,
+    MissingForeignKeyIndex,
+    ForeignKeyIndexScanResult,
+} from './scaffold/app-scaffolder.js';

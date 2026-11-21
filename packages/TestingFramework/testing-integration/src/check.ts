@@ -26,6 +26,7 @@ import type {
 } from '@memberjunction/core-entities';
 import type sql from 'mssql';
 import type { InstrumentedLocalStorageProvider } from './instrumented-cache';
+import type { DbConfig } from './config';
 
 /**
  * The self-contained Query/Category fixtures the `runquery-cache` bundle needs:
@@ -301,6 +302,30 @@ export interface ListsFixture {
 }
 
 /**
+ * Shared fixture for the `list-refresh` bundle: a throwaway User View on `MJ: Roles` and a list on the
+ * same entity, created in setup, linked and refreshed across the ordered LR checks, deleted after.
+ */
+export interface ListRefreshFixture {
+    ViewID: string;
+    ListID: string;
+    /** The routine the list's Refresh automatically created, once a check has turned it on. */
+    RoutineID: string | null;
+}
+
+/**
+ * Shared fixture for the `list-from-query` bundle: the query saved from SQL (and a second one saved
+ * under the same name), the list made from it, and whether the user's User Lists category already
+ * existed, so teardown deletes only what the run created.
+ */
+export interface ListFromQueryFixture {
+    QueryIDs: string[];
+    ListID: string | null;
+    /** The user's subcategory of User Lists, and whether this run created it. */
+    CategoryID: string | null;
+    CreatedCategory: boolean;
+}
+
+/**
  * Shared fixture for the `entity-writes` bundle: the resolved entity IDs the write-side checks need
  * plus the FK-safe teardown accumulators. Nothing is created in Setup — each mutating check creates
  * exactly the throwaway rows it needs and appends their IDs here, so teardown can delete them in
@@ -403,6 +428,28 @@ export interface OpenAppTeardownFixture {
 }
 
 /**
+ * Shared fixture for the `open-app-local-source` bundle: a throwaway consumer repository (a pnpm
+ * workspace in the OS temp directory) whose app folders the checks install from, plus the apps and
+ * schemas the checks created, which teardown removes.
+ */
+export interface OpenAppLocalSourceFixture {
+    /** Unique per run; part of every app, schema, package and folder name. */
+    Tag: string;
+    /** Absolute path of the throwaway consumer repository. */
+    RepoRoot: string;
+    /** Absolute path of an app folder next to the repository, which a local install must refuse. */
+    OutsideFolder: string;
+    /** Connection settings the engine gives to the migration runner. */
+    Db: DbConfig;
+    /** True when the test login can create and drop schemas. */
+    CanChangeSchemas: boolean;
+    /** Apps the checks installed, in install order. */
+    AppNames: string[];
+    /** Schemas the checks' apps own. */
+    SchemaNames: string[];
+}
+
+/**
  * Shared fixture for the `user-routines` bundle: the resolved (never-mutated) 'Calculate Expression'
  * Action target, the mutable FK-safe teardown accumulators, and the cross-check routine references the
  * ordered UR1–UR16 checks read/append (e.g. RoutineDue set by UR9, run by UR10/11, deleted by UR14).
@@ -419,6 +466,8 @@ export interface UserRoutinesFixture {
     RoutineSunset?: MJUserRoutineEntity;
     RoutineSeed?: MJUserRoutineEntity;
     FirstRunId?: string | null;
+    /** The "User Routine Dispatcher" job lock the bundle holds, so no server sweep runs its routines meanwhile. */
+    DispatcherLock?: { JobID: string; Token: string } | null;
 }
 
 /**
@@ -559,6 +608,29 @@ export interface AgentPlanModeFixture {
 }
 
 /**
+ * Shared fixture for the `native-tool-calling-live` bundle (live-model): the agents, prompts, the
+ * in-process Action and its params the lifecycle creates, plus the AI Agent Runs the checks spawn.
+ * Teardown purges the runs, then the fixture Action's execution logs, then deletes
+ * `CreatedRecords` in reverse creation order (FK-safe). The stock `Create SVG Chart` Action the chart
+ * agent calls is referenced read-only.
+ */
+export interface NativeToolCallingLiveFixture {
+    /** The agent whose one Action carries a ValueSchema on every param. */
+    ReportAgentID: string;
+    /** The agent that calls the stock `Create SVG Chart` Action, whose params carry backfilled ValueSchemas. */
+    ChartAgentID: string;
+    /** The in-process fixture Action the report agent calls. */
+    ReportActionID: string;
+    /** The report and chart agents' own prompts — where each check sets the native preference. */
+    ReportPromptID: string;
+    ChartPromptID: string;
+    /** Every record the lifecycle created, in creation order. */
+    CreatedRecords: Array<{ Entity: string; ID: string }>;
+    /** Every AI Agent Run the checks created. */
+    RunIds: string[];
+}
+
+/**
  * Accumulator fixture for the `agent-compaction-e2e` bundle (CE1–CE9): the fabricated conversation
  * histories (created INSIDE the checks, fabricate-then-observe) + the AI Agent Run IDs the live
  * turns spawn. Teardown deletes run steps → runs → conversation details → conversations (FK-safe).
@@ -629,6 +701,24 @@ export interface AgentLiveFixture {
     FabricatedStepIds: string[];
 }
 
+/** Fixture of the Feature Pipeline gate bundles (`fp-gate-*`) and the Feature Pipeline core bundle. */
+export interface FeaturePipelineGateFixture {
+    /** The fixture Record Process (a clone of the job-title pipeline on the stub driver, or the core bundle's own pipeline). */
+    RecordProcessID: string;
+    /** The fixture's own prompt (a clone, so the gates can edit it without touching the installed one). */
+    PromptID: string;
+    /** The fixture prompt's one `MJ: AI Prompt Models` binding. */
+    PromptModelID: string;
+    /** The stub's `MJ: Feature Pipeline Types` row. */
+    PipelineTypeID: string;
+    /** Entity the pipeline runs on. */
+    EntityID: string;
+    /** Fixture record ID → its title/name input. */
+    Inputs: Map<string, string>;
+    /** `MJ: Tests` rows a check created (a golden-set test), deleted at teardown. */
+    CreatedTestIDs: string[];
+}
+
 export interface IntegrationCheckContext {
     /** Resolved context user threaded from the engine (server) or bootstrap. */
     User: UserInfo;
@@ -666,8 +756,14 @@ export interface IntegrationCheckContext {
     RemoteOpWireProgressFixture?: RemoteOpWireProgressFixture;
     /** Shared fixture for the `lists` bundle. */
     ListsFixture?: ListsFixture;
+    /** Shared fixture for the `list-refresh` bundle. */
+    ListRefreshFixture?: ListRefreshFixture;
+    /** Shared fixture for the `list-from-query` bundle. */
+    ListFromQueryFixture?: ListFromQueryFixture;
     /** Shared fixture for the `open-app-teardown` bundle. */
     OpenAppTeardownFixture?: OpenAppTeardownFixture;
+    /** Shared fixture for the `open-app-local-source` bundle. */
+    OpenAppLocalSourceFixture?: OpenAppLocalSourceFixture;
     /** Shared fixture for the `entity-writes` bundle (client transport, mutating). */
     EntityWritesFixture?: EntityWritesFixture;
     /** Accumulator fixture for the `entity-graph-client` bundle (client transport, mutating). */
@@ -690,6 +786,8 @@ export interface IntegrationCheckContext {
     AgentPlanModeFixture?: AgentPlanModeFixture;
     /** Accumulator fixture for the `agent-compaction-e2e` bundle (fabricate-then-observe). */
     AgentCompactionE2EFixture?: AgentCompactionE2EFixture;
+    /** Shared fixture for the `native-tool-calling-live` bundle (live-model). */
+    NativeToolCallingLiveFixture?: NativeToolCallingLiveFixture;
     /** Shared fixture for the `agent-memory-guards` bundle (live-model, marker-isolated). */
     AgentMemoryGuardsFixture?: AgentMemoryGuardsFixture;
     /** Shared fixture for the `agent-rag-search` bundle (split-tier: deterministic engine + live agent legs). */
@@ -704,6 +802,8 @@ export interface IntegrationCheckContext {
     ShippedAgentsLiveFixture?: AgentLiveFixture;
     /** Accumulator fixture for the `agent-carry-forward` bundle (live-model, client transport, fabricate-then-observe). */
     AgentCarryForwardFixture?: AgentLiveFixture;
+    /** Feature Pipeline gate fixture (the `fp-gate-*` bundles and the Feature Pipeline core bundle). */
+    FeaturePipelineGateFixture?: FeaturePipelineGateFixture;
     /**
      * The opaque per-selector `config` bag from `Test.Configuration.checks[].config`,
      * set by the driver/script before each bundle runs. Bundles read their own keys

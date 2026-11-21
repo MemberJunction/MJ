@@ -5,13 +5,44 @@ import {
   ModelUsage, 
   EmbedTextResult, 
   EmbedTextsResult,
-  ErrorAnalyzer 
+  EmbeddingModelInfo,
+  EmbeddingInputType,
+  ErrorAnalyzer,
+  ThrowIfAborted
 } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 import { 
   BedrockRuntimeClient, 
   InvokeModelCommand 
 } from '@aws-sdk/client-bedrock-runtime';
+
+/** The model the driver calls when it's given no model name. */
+const DEFAULT_MODEL = 'amazon.titan-embed-text-v1';
+
+/**
+ * The Titan text models' widths. The Cohere models aren't listed: the driver doesn't send them
+ * `dimensions`, so a requested width is passed through as before.
+ */
+const BEDROCK_EMBEDDING_MODELS: readonly EmbeddingModelInfo[] = [
+  {
+    Model: 'amazon.titan-embed-text-v1',
+    Description: 'Amazon Titan Embed Text V1',
+    OutputDimension: 1536,
+    AcceptsDimensions: false,
+  },
+  {
+    Model: 'amazon.titan-embed-text-v2:0',
+    Description: 'Amazon Titan Embed Text V2',
+    OutputDimension: 1024,
+    AcceptsDimensions: true,
+    SupportedDimensions: [256, 512, 1024],
+  },
+];
+
+/** Cohere-on-Bedrock's required input_type for a call's retrieval role (omitted means a document). */
+function cohereInputType(inputType: EmbeddingInputType | undefined): string {
+  return inputType === 'query' ? 'search_query' : 'search_document';
+}
 
 @RegisterClass(BaseEmbeddings, 'BedrockEmbedding')
 export class BedrockEmbedding extends BaseEmbeddings {
@@ -36,26 +67,30 @@ export class BedrockEmbedding extends BaseEmbeddings {
     return this._client;
   }
 
+  protected override get EmbeddingModels(): readonly EmbeddingModelInfo[] {
+    return BEDROCK_EMBEDDING_MODELS;
+  }
+
   /**
    * Embeds a single text using Amazon Bedrock embedding models
    */
   public async EmbedText(params: EmbedTextParams): Promise<EmbedTextResult> {
+    // The modelId should be specified in the model parameter, e.g., "amazon.titan-embed-text-v1"
+    const modelId = params.model || DEFAULT_MODEL;
+    // Outside the try: a width the model can't produce throws before any API call.
+    const dimensionsParam = this.DimensionsParam(modelId, params.dimensions);
     try {
-      // The modelId should be specified in the model parameter, e.g., "amazon.titan-embed-text-v1"
-      const modelId = params.model || 'amazon.titan-embed-text-v1';
       
       // Create request body - differs based on the provider's embedding model
       let requestBody: any;
       
       if (modelId.startsWith('amazon.titan-embed')) {
-        // `dimensions` is supported by Titan Embed Text V2 (256/512/1024); V1 rejects it,
-        // so it is only sent when the caller explicitly opts in.
         requestBody = {
           inputText: params.text,
-          ...(params.dimensions ? { dimensions: params.dimensions } : {})
+          ...dimensionsParam
         };
       } else if (modelId.startsWith('cohere.embed')) {
-        requestBody = { texts: [params.text], input_type: "search_document" };
+        requestBody = { texts: [params.text], input_type: cohereInputType(params.inputType) };
       } else {
         throw new Error(`Unsupported embedding model provider for Bedrock: ${modelId}`);
       }
@@ -68,7 +103,7 @@ export class BedrockEmbedding extends BaseEmbeddings {
         accept: 'application/json'
       });
       
-      const response = await this._client.send(command);
+      const response = await this._client.send(command, { abortSignal: params.CancellationToken });
       const responseBody = JSON.parse(new TextDecoder().decode(response.body));
       
       // Parse response body based on the model provider
@@ -90,6 +125,8 @@ export class BedrockEmbedding extends BaseEmbeddings {
         vector: embedding
       };
     } catch (error) {
+      // An aborted request is reported as cancelled, not as an empty (failed) result.
+      this.ThrowIfRequestAborted(error, params.CancellationToken);
       // Log error details for debugging
       const errorInfo = ErrorAnalyzer.analyzeError(error, 'Bedrock');
       console.error('Bedrock embedding error:', errorInfo);
@@ -97,7 +134,7 @@ export class BedrockEmbedding extends BaseEmbeddings {
       // Return error result
       return {
         object: "object" as "object" | "list",
-        model: params.model || 'amazon.titan-embed-text-v1',
+        model: modelId,
         ModelUsage: new ModelUsage(0, 0),
         vector: []
       };
@@ -108,9 +145,13 @@ export class BedrockEmbedding extends BaseEmbeddings {
    * Embeds multiple texts using Amazon Bedrock embedding models
    */
   public async EmbedTexts(params: EmbedTextsParams): Promise<EmbedTextsResult> {
+    // The modelId should be specified in the model parameter, e.g., "amazon.titan-embed-text-v1"
+    const modelId = params.model || DEFAULT_MODEL;
+    // Checked once, outside the try, so a width the model can't produce throws before the first call
+    // instead of being degraded to an empty result.
+    this.DimensionsParam(modelId, params.dimensions);
     try {
-      // The modelId should be specified in the model parameter, e.g., "amazon.titan-embed-text-v1"
-      const modelId = params.model || 'amazon.titan-embed-text-v1';
+      ThrowIfAborted(params.CancellationToken, 'Bedrock');
       
       // Some embedding models may support batch processing, others may not
       // For those that don't, we'll process texts one by one
@@ -119,7 +160,7 @@ export class BedrockEmbedding extends BaseEmbeddings {
         // Cohere supports batch embedding
         const requestBody = { 
           texts: params.texts, 
-          input_type: "search_document" 
+          input_type: cohereInputType(params.inputType) 
         };
         
         // Invoke the model
@@ -130,7 +171,7 @@ export class BedrockEmbedding extends BaseEmbeddings {
           accept: 'application/json'
         });
         
-        const response = await this._client.send(command);
+        const response = await this._client.send(command, { abortSignal: params.CancellationToken });
         const responseBody = JSON.parse(new TextDecoder().decode(response.body));
         
         return {
@@ -146,10 +187,13 @@ export class BedrockEmbedding extends BaseEmbeddings {
         let totalTokens = 0;
         
         for (const text of params.texts) {
+          // Checked before each text, so a cancelled batch sends no further requests.
+          ThrowIfAborted(params.CancellationToken, 'Bedrock');
           const result = await this.EmbedText({
             text: text,
             model: modelId,
-            dimensions: params.dimensions
+            dimensions: params.dimensions,
+            CancellationToken: params.CancellationToken
           });
           
           embeddings.push(result.vector);
@@ -164,6 +208,8 @@ export class BedrockEmbedding extends BaseEmbeddings {
         };
       }
     } catch (error) {
+      // An aborted request is reported as cancelled, not as an empty (failed) result.
+      this.ThrowIfRequestAborted(error, params.CancellationToken);
       // Log error details for debugging
       const errorInfo = ErrorAnalyzer.analyzeError(error, 'Bedrock');
       console.error('Bedrock embedding error:', errorInfo);
@@ -171,7 +217,7 @@ export class BedrockEmbedding extends BaseEmbeddings {
       // Return error result
       return {
         object: "list",
-        model: params.model || 'amazon.titan-embed-text-v1',
+        model: modelId,
         ModelUsage: new ModelUsage(0, 0),
         vectors: []
       };

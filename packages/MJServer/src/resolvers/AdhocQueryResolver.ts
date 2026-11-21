@@ -69,7 +69,7 @@ export class AdhocQueryResolver extends ResolverBase {
         if (IsScopeLimitedPrincipal(context.userPayload?.userRecord)) {
             return this.buildErrorResult('Ad-hoc SQL execution is not permitted for scope-limited sessions.');
         }
-        const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: false });
+        const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: false, purpose: 'adhoc' });
         if (!provider) {
             return this.buildErrorResult('No read-only data source available for ad-hoc query execution');
         }
@@ -139,6 +139,7 @@ export class AdhocQueryResolver extends ResolverBase {
             QueryID: '',
             QueryName: 'Ad-Hoc Query',
             Success: true,
+            // fls-guard: query rows; the SQL is refused before it runs if it reads a field the caller is denied
             Results: JSON.stringify(result.Results),
             RowCount: result.RowCount,
             TotalRowCount: result.TotalRowCount,

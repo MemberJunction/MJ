@@ -1,5 +1,4 @@
 {
-  "entityName": "MJ: User Notification Types",
   "fields": {
     "Name": "Agent Feedback Request",
     "Description": "Notifications sent when an AI agent needs human input, approval, or a decision before it can continue execution",

@@ -52,3 +52,14 @@ export type OutputTarget =
       /** Entity the TaggedItem points at. Default: the processed entity. */
       TaggedEntityName?: string;
     };
+
+/** Questions about an output's write target. */
+export class OutputTargets {
+  /**
+   * True when the output writes somewhere (a field, child rows or tags); false for a feature-value-only output. A JSON
+   * `"Target": null` (a stored spec parsed as written) counts as no target, the same as an omitted one.
+   */
+  public static HasWriteTarget<T extends { Target?: OutputTarget | null }>(output: T): output is T & { Target: OutputTarget } {
+    return output.Target !== undefined && output.Target !== null;
+  }
+}

@@ -70,6 +70,8 @@ export interface DBAutoDocAPIConfig {
     businessDomains?: string[];
     industryContext?: string;
     customInstructions?: string;
+    /** Cap on the customInstructions text sent to each PK/FK inference prompt. Default 6000; 0 sends none. */
+    keyPassMaxChars?: number;
   };
 
   /** Optional output directory (default: ./output) */
@@ -618,7 +620,8 @@ export class DBAutoDocAPI {
         markdownFile: path.join(outputDir, 'summary.md')
       },
       schemas: config.schemas || {},
-      tables: config.tables || {}
+      tables: config.tables || {},
+      seedContext: config.seedContext
     };
   }
 

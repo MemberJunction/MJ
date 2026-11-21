@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BehaviorSubject, Subject } from 'rxjs';
-import { RunViewParams, UserInfo } from '@memberjunction/core';
-import { ConversationEngine } from '@memberjunction/core-entities';
+import { EntityInfo, RunViewParams, UserInfo } from '@memberjunction/core';
+import { ConversationEngine, UserInfoEngine } from '@memberjunction/core-entities';
 import { CreateFakeProvider } from '@memberjunction/ng-test-utils';
 import { SearchService } from '../lib/services/search.service';
 import { ArtifactPermissionService } from '../lib/services/artifact-permission.service';
@@ -168,7 +168,8 @@ describe('SearchService visibility scope', () => {
   let rows: Record<string, object[]>;
 
   beforeEach(() => {
-    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => undefined });
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+    vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
     queries = [];
     rows = {};
     vi.spyOn(ConversationEngine.Instance, 'GetVisibleConversationsFilter').mockResolvedValue(VISIBLE_CONVERSATIONS);
@@ -241,6 +242,54 @@ describe('SearchService visibility scope', () => {
     expect(results.messages).toEqual([]);
   });
 
+  it('searches tasks without a subquery over conversations or their messages', async () => {
+    const entities = {
+      'MJ: Tasks': { Name: 'MJ: Tasks', SchemaName: '__mj', BaseView: 'vwTasks' },
+      'MJ: Conversations': { Name: 'MJ: Conversations', SchemaName: '__mj', BaseView: 'vwConversations' },
+      'MJ: Conversation Details': { Name: 'MJ: Conversation Details', SchemaName: '__mj', BaseView: 'vwConversationDetails' },
+    } as unknown as Record<string, EntityInfo>;
+    rows['MJ: Conversations'] = [{ ID: 'c1' }];
+    rows['MJ: Conversation Details'] = [{ ID: 'd1' }];
+    service.Provider = CreateFakeProvider<object>({
+      runViewResults: (params) => {
+        queries.push(params);
+        return rows[params.EntityName ?? ''] ?? [];
+      },
+      entityByName: (name) => entities[name],
+    });
+    service.SetSearchFilter('tasks');
+
+    await service.Search('plan', 'env-1', USER);
+
+    const allFilters = queries.map((q) => (typeof q.ExtraFilter === 'string' ? q.ExtraFilter : '')).join(' ');
+    expect(allFilters).not.toMatch(/vwConversation/i);
+    const taskFilter = filterFor('MJ: Tasks');
+    expect(taskFilter.startsWith("ParentID IS NULL AND (UserID = 'user-1' OR ConversationDetailID IN ('d1')) AND ")).toBe(true);
+    expect(taskFilter).toContain("LOWER(Name) LIKE '%plan%'");
+  });
+
+  it('reads the message IDs again on every task search', async () => {
+    const entities = { 'MJ: Tasks': { Name: 'MJ: Tasks', SchemaName: '__mj', BaseView: 'vwTasks' } } as unknown as Record<string, EntityInfo>;
+    rows['MJ: Conversations'] = [{ ID: 'c1' }];
+    rows['MJ: Conversation Details'] = [{ ID: 'd1' }];
+    service.Provider = CreateFakeProvider<object>({
+      runViewResults: (params) => {
+        queries.push(params);
+        return rows[params.EntityName ?? ''] ?? [];
+      },
+      entityByName: (name) => entities[name],
+    });
+    service.SetSearchFilter('tasks');
+
+    await service.Search('plan', 'env-1', USER);
+    rows['MJ: Conversation Details'] = [{ ID: 'd1' }, { ID: 'd2' }];
+    await service.Search('plan', 'env-1', USER);
+
+    const taskFilters = queriesFor('MJ: Tasks').map((q) => (typeof q.ExtraFilter === 'string' ? q.ExtraFilter : ''));
+    expect(taskFilters).toHaveLength(2);
+    expect(taskFilters[1]).toContain("ConversationDetailID IN ('d1','d2')");
+  });
+
   it('reads the branch and sequence of each message hit', async () => {
     rows['MJ: Conversations'] = [{ ID: 'c1' }];
     service.SetSearchFilter('messages');
@@ -279,5 +328,185 @@ describe('SearchService visibility scope', () => {
     expect(artifactPermissions.GetReadableArtifactsFilter).toHaveBeenCalledWith('user-1', USER);
     const filter = filterFor('MJ: Artifacts');
     expect(filter.startsWith(`EnvironmentID='env-1' AND ${READABLE_ARTIFACTS} AND (`)).toBe(true);
+  });
+});
+
+/** Overlapping searches: only the newest one publishes. */
+describe('SearchService overlapping searches', () => {
+  const USER = { ID: 'user-1', Name: 'User One' } as unknown as UserInfo;
+  let service: SearchService;
+
+  beforeEach(() => {
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+    vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+    const artifactPermissions = new ArtifactPermissionService(new CollectionPermissionService());
+    service = new SearchService(artifactPermissions);
+    // Each conversation row echoes the query that found it, so results show which search won.
+    service.Provider = CreateFakeProvider<object>({
+      runViewResults: (params) => {
+        const filter = typeof params.ExtraFilter === 'string' ? params.ExtraFilter : '';
+        const match = /LIKE '%(\w+)%'/.exec(filter);
+        return match ? [{ ID: `c-${match[1]}`, Name: match[1], Description: null, __mj_CreatedAt: new Date() }] : [];
+      },
+    });
+    service.SetSearchFilter('conversations');
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  /** Makes the first visibility lookup wait until released; later ones answer at once. */
+  function holdFirstSearch(): () => void {
+    let release: () => void = () => undefined;
+    const held = new Promise<string>((resolve) => {
+      release = () => resolve("EnvironmentID='env-1'");
+    });
+    vi.spyOn(ConversationEngine.Instance, 'GetVisibleConversationsFilter')
+      .mockImplementationOnce(() => held)
+      .mockResolvedValue("EnvironmentID='env-1'");
+    return release;
+  }
+
+  it('keeps the newer results when an older search resolves last', async () => {
+    const release = holdFirstSearch();
+    const busy: boolean[] = [];
+    service.IsSearching$.subscribe((b) => busy.push(b));
+
+    const first = service.Search('first', 'env-1', USER);
+    const second = await service.Search('second', 'env-1', USER);
+    expect(second.conversations.map((c) => c.title)).toEqual(['second']);
+    // The older search is still running, but the newer one owns the busy flag.
+    expect(busy[busy.length - 1]).toBe(false);
+
+    release();
+    const firstResults = await first;
+
+    // The older search answers its own caller but does not publish.
+    expect(firstResults.conversations.map((c) => c.title)).toEqual(['first']);
+    let published: string[] = [];
+    service.SearchResults$.subscribe((r) => (published = r.conversations.map((c) => c.title)));
+    expect(published).toEqual(['second']);
+    expect(busy[busy.length - 1]).toBe(false);
+  });
+
+  it('leaves the panel empty when results are cleared during a search', async () => {
+    const release = holdFirstSearch();
+    const pending = service.Search('first', 'env-1', USER);
+
+    service.ClearResults();
+    release();
+    await pending;
+
+    let total = -1;
+    service.SearchResults$.subscribe((r) => (total = r.total));
+    let busy = true;
+    service.IsSearching$.subscribe((b) => (busy = b));
+    expect(total).toBe(0);
+    expect(busy).toBe(false);
+  });
+});
+
+/** Artifact hits find their collection with two batched reads, not one per artifact. */
+describe('SearchService artifact collections', () => {
+  const USER = { ID: 'user-1', Name: 'User One' } as unknown as UserInfo;
+  let service: SearchService;
+  let queries: RunViewParams[];
+  let rows: Record<string, object[]>;
+
+  beforeEach(() => {
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+    vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+    queries = [];
+    rows = {
+      'MJ: Artifacts': [
+        { ID: 'A1', Name: 'Poem chart', Description: '', Type: 'Component', __mj_CreatedAt: new Date() },
+        { ID: 'a2', Name: 'Poem report', Description: '', Type: 'Report', __mj_CreatedAt: new Date() },
+        { ID: 'a3', Name: 'Poem notes', Description: '', Type: 'Text', __mj_CreatedAt: new Date() },
+      ],
+      'MJ: Artifact Versions': [
+        { ID: 'V1', ArtifactID: 'a1' },
+        { ID: 'v1b', ArtifactID: 'A1' },
+        { ID: 'v2', ArtifactID: 'a2' },
+      ],
+      'MJ: Collection Artifacts': [
+        { ArtifactVersionID: 'v1', CollectionID: 'col-1', Collection: 'Charts' },
+        { ArtifactVersionID: 'v1b', CollectionID: 'col-9', Collection: 'Later' },
+        { ArtifactVersionID: 'V2', CollectionID: 'col-2', Collection: 'Reports' },
+      ],
+    };
+    const artifactPermissions = new ArtifactPermissionService(new CollectionPermissionService());
+    vi.spyOn(artifactPermissions, 'GetReadableArtifactsFilter').mockResolvedValue("(UserID='user-1')");
+    service = new SearchService(artifactPermissions);
+    service.Provider = CreateFakeProvider<object>({
+      runViewResults: (params) => {
+        queries.push(params);
+        return rows[params.EntityName ?? ''] ?? [];
+      },
+    });
+    service.SetSearchFilter('artifacts');
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  const filterOf = (q: RunViewParams | undefined): string => (typeof q?.ExtraFilter === 'string' ? q.ExtraFilter : '');
+
+  it('reads versions and collection links once each for all matched artifacts', async () => {
+    await service.Search('poem', 'env-1', USER);
+
+    const versionReads = queries.filter((q) => q.EntityName === 'MJ: Artifact Versions');
+    const linkReads = queries.filter((q) => q.EntityName === 'MJ: Collection Artifacts');
+    expect(versionReads).toHaveLength(1);
+    expect(linkReads).toHaveLength(1);
+    expect(filterOf(versionReads[0])).toBe("ArtifactID IN ('A1','a2','a3')");
+    expect(filterOf(linkReads[0])).toBe("ArtifactVersionID IN ('V1','v1b','v2')");
+    // Each filter names only its own entity's columns: no subquery, no schema name.
+    for (const q of [...versionReads, ...linkReads]) {
+      expect(filterOf(q)).not.toMatch(/SELECT|__mj|vw/i);
+      expect(q.ResultType).toBe('simple');
+    }
+  });
+
+  it('puts each collection on the right artifact, ignoring ID case, first collection wins', async () => {
+    const results = await service.Search('poem', 'env-1', USER);
+
+    const byId = new Map(results.artifacts.map((r) => [r.id, r]));
+    expect(byId.get('A1')?.collectionId).toBe('col-1');
+    expect(byId.get('A1')?.collectionName).toBe('Charts');
+    expect(byId.get('a2')?.collectionName).toBe('Reports');
+    expect(byId.get('a3')?.collectionId).toBeUndefined();
+  });
+
+  it('skips the collection read when the artifacts have no versions', async () => {
+    rows['MJ: Artifact Versions'] = [];
+
+    const results = await service.Search('poem', 'env-1', USER);
+
+    expect(queries.filter((q) => q.EntityName === 'MJ: Collection Artifacts')).toHaveLength(0);
+    expect(results.artifacts).toHaveLength(3);
+  });
+
+  it('persists recent searches via UserInfoEngine instead of localStorage', async () => {
+    vi.useFakeTimers();
+    try {
+      const artifactPermissions = new ArtifactPermissionService(new CollectionPermissionService());
+      vi.spyOn(artifactPermissions, 'GetReadableArtifactsFilter').mockResolvedValue("(UserID='user-1')");
+      const timedService = new SearchService(artifactPermissions);
+      timedService.Provider = service.Provider;
+      const setSpy = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced');
+
+      await timedService.Search('poem', 'env-1', USER);
+      vi.advanceTimersByTime(350);
+      expect(setSpy).toHaveBeenCalledWith('mj-recent-searches', JSON.stringify(['poem']));
+
+      timedService.ClearRecentSearches();
+      expect(setSpy).toHaveBeenCalledWith('mj-recent-searches', JSON.stringify([]));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

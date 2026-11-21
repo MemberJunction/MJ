@@ -49,6 +49,14 @@ describe('ConversationChatAreaComponent.CanFork', () => {
         expect(createChatArea({ readOnly: true }).CanFork).toBe(false);
     });
 
+    it('is false when the host sets AllowForking false, even for an authorized writer', () => {
+        const c = createChatArea();
+        c.AllowForking = false;
+        expect(c.CanFork).toBe(false);
+        c.AllowForking = true;
+        expect(c.CanFork).toBe(true);
+    });
+
     it('counts forking as on when the settings cannot be read', () => {
         const c = createChatArea();
         vi.mocked(UserInfoEngine.Instance.GetSetting).mockImplementation(() => { throw new Error('not loaded'); });

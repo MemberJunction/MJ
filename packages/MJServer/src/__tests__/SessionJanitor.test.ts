@@ -6,12 +6,20 @@ vi.mock('@memberjunction/ai-engine-base', () => ({
 }));
 
 // Capture the ExtraFilter passed to each sweep page and return controllable rows.
-const { runViewMock, logErrorMock, logStatusMock, recoverMock, resolveAccountMock } = vi.hoisted(() => ({
+const { runViewMock, logErrorMock, logStatusMock, recoverMock, resolveAccountMock, assembleMock, ledgerMock } = vi.hoisted(() => ({
     runViewMock: vi.fn(),
     logErrorMock: vi.fn(),
     logStatusMock: vi.fn(),
     recoverMock: vi.fn(),
     resolveAccountMock: vi.fn(),
+    assembleMock: vi.fn(),
+    /** The one fake shard ledger every `new SqlRealtimeRecordingLedger(...)` returns. */
+    ledgerMock: {
+        ClaimAssembly: vi.fn(),
+        PurgeClosedBefore: vi.fn(),
+        LoadShardMetadata: vi.fn(),
+        StampTerminal: vi.fn(),
+    },
 }));
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
@@ -34,6 +42,8 @@ vi.mock('@memberjunction/ai-agents', async (importOriginal) => {
         ...actual,
         RecoverRealtimeRecordingFromSegments: recoverMock,
         ResolveRecordingStorageAccountID: resolveAccountMock,
+        AssembleRealtimeRecordingFromLedger: assembleMock,
+        SqlRealtimeRecordingLedger: vi.fn(function FakeLedger() { return ledgerMock; }),
     };
 });
 
@@ -44,7 +54,7 @@ import {
     HostInstanceIdentity,
     SetHostInstancePort,
 } from '../agentSessions/HostInstance.js';
-import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import type { UserInfo, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import type { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
 
 /** The port this test process "serves" on, set the way `Serve` sets it, before anything reads the identity. */
@@ -52,6 +62,16 @@ const OUR_PORT = 4000;
 /** The port of a second MJAPI on the same host. */
 const OTHER_PORT = 4100;
 SetHostInstancePort(OUR_PORT);
+
+/**
+ * The janitor builds the shard-ledger view name from the provider's core schema and dialect quoting;
+ * fakes carry SQL Server's so filter assertions read naturally.
+ */
+const LEDGER_SCHEMA_PROVIDER_FIELDS = {
+    MJCoreSchemaName: '__mj',
+    QuoteSchemaAndView: (schema: string, view: string) => `[${schema}].[${view}]`,
+};
+const LEDGER_VIEW = '[__mj].[vwAIAgentSessionRecordingShards]';
 
 interface FakeSession {
     ID: string;
@@ -61,6 +81,8 @@ interface FakeSession {
     LatestResult?: { CompleteMessage?: string };
     ClosedAt?: Date | null;
     CloseReason?: string | null;
+    Config_?: string | null;
+    LastActiveAt?: Date | string | null;
 }
 
 function makeUser(): UserInfo {
@@ -73,7 +95,7 @@ function makeUser(): UserInfo {
  * inside CloseSession uses runViewMock, which we default to an empty channel list.
  */
 function makeProvider(store: Map<string, 'Active' | 'Idle' | 'Closed'>): {
-    provider: IMetadataProvider;
+    provider: DatabaseProviderBase;
     closedIds: string[];
     closedReasons: Map<string, string | null>;
 } {
@@ -91,6 +113,10 @@ function makeProvider(store: Map<string, 'Active' | 'Idle' | 'Closed'>): {
                     if (status == null) return false;
                     entity.ID = id;
                     entity.Status = status;
+                    // CloseSession verifies a TimeLimit against the loaded row's stored deadline, so the
+                    // fake row carries the swept row's Config_ like the real table row does.
+                    entity.Config_ = sweptRows.get(id)?.Config_ ?? null;
+                    entity.LastActiveAt = sweptRows.get(id)?.LastActiveAt ?? null;
                     return true;
                 }),
                 Save: vi.fn(async () => {
@@ -105,9 +131,13 @@ function makeProvider(store: Map<string, 'Active' | 'Idle' | 'Closed'>): {
             };
             return entity as unknown as Awaited<ReturnType<IMetadataProvider['GetEntityObject']>>;
         }),
-    } as unknown as IMetadataProvider;
+        ...LEDGER_SCHEMA_PROVIDER_FIELDS,
+    } as unknown as DatabaseProviderBase;
     return { provider, closedIds, closedReasons };
 }
+
+/** Config_/LastActiveAt of rows a test swept, by session ID: sessionPages is consumed by the sweep before CloseSession loads the row. */
+const sweptRows = new Map<string, { Config_?: string | null; LastActiveAt?: Date | string | null }>();
 
 /**
  * Queue of result-sets for the *session* sweep pages (entity 'MJ: AI Agent Sessions'). Channel
@@ -124,11 +154,17 @@ function sessionSweepCalls(): Array<[{ EntityName: string; ExtraFilter: string; 
 }
 
 beforeEach(() => {
+    sweptRows.clear();
     runViewMock.mockReset();
     logErrorMock.mockReset();
     logStatusMock.mockReset();
     recoverMock.mockReset();
     resolveAccountMock.mockReset();
+    assembleMock.mockReset();
+    for (const method of Object.values(ledgerMock)) method.mockReset();
+    // Quiet ledger by default: nothing to purge, every claim lost.
+    ledgerMock.PurgeClosedBefore.mockResolvedValue(0);
+    ledgerMock.ClaimAssembly.mockResolvedValue(null);
     sessionPages = [];
     runViewMock.mockImplementation(async (params: { EntityName: string }) => {
         if (params.EntityName === 'MJ: AI Agent Session Channels') {
@@ -266,9 +302,114 @@ describe('SessionJanitor.RunStartupRecovery with two MJAPIs on one host (#5309)'
     });
 });
 
+/** An ISO moment `minutes` before now, for a row's `LastActiveAt` / deadline. */
+function minutesAgo(minutes: number): string {
+    return new Date(Date.now() - minutes * 60_000).toISOString();
+}
+
+/** Config_ JSON carrying an authored hard deadline `minutes` from now (negative = already passed). */
+function deadlineConfig(minutesFromNow: number): string {
+    return JSON.stringify({ maxSessionDeadlineIso: new Date(Date.now() + minutesFromNow * 60_000).toISOString() });
+}
+
+describe('SessionJanitor close reasons (#6182): sweeps stamp TimeLimit / Idle via ExpiryCloseReason', () => {
+    // Idle threshold is 15 min (the janitor default); each row below is placed relative to it.
+    beforeEach(() => {
+        SessionJanitor.Instance.Configure({ closeThresholdMinutes: 15 });
+    });
+
+    async function runSweep(
+        sweep: 'RunStalenessSweep' | 'RunMaxDurationSweep',
+        row: Record<string, unknown>,
+    ): Promise<{ count: number; reason: string | null | undefined; closed: boolean }> {
+        const id = row.ID as string;
+        sweptRows.set(id, { Config_: row.Config_ as string | null, LastActiveAt: row.LastActiveAt as Date | string | null });
+        sessionPages = [{ Success: true, Results: [row] }];
+        const { provider, closedIds, closedReasons } = makeProvider(new Map([[id, 'Active']]));
+        const count = await SessionJanitor.Instance[sweep](provider, makeUser());
+        return { count, reason: closedReasons.get(id), closed: closedIds.includes(id) };
+    }
+
+    it('the staleness sweep stamps Idle for a quiet row without a deadline', async () => {
+        const r = await runSweep('RunStalenessSweep', { ID: 'q1', Status: 'Active', LastActiveAt: minutesAgo(60), Config_: null });
+        expect(r.reason).toBe('Idle');
+    });
+
+    it('the max-duration sweep stamps TimeLimit for an expired row', async () => {
+        const r = await runSweep('RunMaxDurationSweep', {
+            ID: 'd1', Status: 'Active', LastActiveAt: minutesAgo(1), Config_: deadlineConfig(-5),
+        });
+        expect(r.reason).toBe('TimeLimit');
+    });
+
+    it('the idle sweep stamps TimeLimit when the deadline came first', async () => {
+        // Idle moment = 60-15 = 45 min ago; deadline 50 min ago is earlier.
+        const r = await runSweep('RunStalenessSweep', {
+            ID: 'both1', Status: 'Active', LastActiveAt: minutesAgo(60), Config_: deadlineConfig(-50),
+        });
+        expect(r.reason).toBe('TimeLimit');
+    });
+
+    it('the deadline sweep stamps Idle when the idle moment came first', async () => {
+        // Idle moment = 60-15 = 45 min ago; deadline 5 min ago is later.
+        const r = await runSweep('RunMaxDurationSweep', {
+            ID: 'both2', Status: 'Active', LastActiveAt: minutesAgo(60), Config_: deadlineConfig(-5),
+        });
+        expect(r.reason).toBe('Idle');
+    });
+
+    /*
+     * The SQL already judged this row stale (LastActiveAt < cutoff), so an unparseable LastActiveAt
+     * must not make it immortal: it closes as Idle, and the fallback is logged with the session ID.
+     */
+    it('the staleness sweep closes a stale row with an unparseable LastActiveAt as Idle and LogErrors the fallback', async () => {
+        logErrorMock.mockClear();
+        const r = await runSweep('RunStalenessSweep', { ID: 'garbled1', Status: 'Active', LastActiveAt: 'not-a-date', Config_: null });
+        expect(r.closed).toBe(true);
+        expect(r.reason).toBe('Idle');
+        const messages = logErrorMock.mock.calls.map((c) => String(c[0]));
+        expect(messages.some((m) => m.includes('garbled1') && m.includes('LastActiveAt unparseable; closing as Idle'))).toBe(true);
+    });
+
+    it('the staleness sweep does not LogError for a row ExpiryCloseReason decides', async () => {
+        logErrorMock.mockClear();
+        await runSweep('RunStalenessSweep', { ID: 'q2', Status: 'Active', LastActiveAt: minutesAgo(60), Config_: null });
+        expect(logErrorMock).not.toHaveBeenCalled();
+    });
+
+    it('skips rows the callback returns null for, without loading their channels', async () => {
+        const row = { ID: 'future1', Status: 'Active', LastActiveAt: minutesAgo(1), Config_: deadlineConfig(30) };
+        sessionPages = [{ Success: true, Results: [row] }];
+        const { provider, closedIds } = makeProvider(new Map([['future1', 'Active']]));
+
+        const count = await SessionJanitor.Instance.RunMaxDurationSweep(provider, makeUser());
+
+        expect(count).toBe(0);
+        expect(closedIds).toEqual([]);
+        const channelReads = runViewMock.mock.calls.filter(
+            (c) => (c[0] as { EntityName: string }).EntityName === 'MJ: AI Agent Session Channels',
+        );
+        expect(channelReads).toHaveLength(0);
+    });
+
+    it('startup recovery still stamps Janitor and the shutdown drain Shutdown', async () => {
+        const ours = GetCurrentHostInstance();
+        const orphan = { ID: 'orphan1', Status: 'Active', HostInstanceID: `${ours.GetInstancePrefix()}31337:boot-before` };
+        sessionPages = [{ Success: true, Results: [orphan] }];
+        const recovery = makeProvider(new Map([['orphan1', 'Active']]));
+        await SessionJanitor.Instance.RunStartupRecovery(recovery.provider, makeUser());
+        expect(recovery.closedReasons.get('orphan1')).toBe('Janitor');
+
+        sessionPages = [{ Success: true, Results: [{ ID: 'live1', Status: 'Active' }] }];
+        const drain = makeProvider(new Map([['live1', 'Active']]));
+        await SessionJanitor.Instance.RunShutdownDrain(drain.provider, makeUser());
+        expect(drain.closedReasons.get('live1')).toBe('Shutdown');
+    });
+});
+
 describe('SessionJanitor.RunStalenessSweep', () => {
     it('closes only past-threshold sessions (filter is staleness-scoped)', async () => {
-        const stale = { ID: 'stale-1', Status: 'Idle' };
+        const stale = { ID: 'stale-1', Status: 'Idle', LastActiveAt: minutesAgo(60) };
         sessionPages = [{ Success: true, Results: [stale] }];
 
         const store = new Map<string, 'Active' | 'Idle' | 'Closed'>([['stale-1', 'Idle']]);
@@ -278,8 +419,8 @@ describe('SessionJanitor.RunStalenessSweep', () => {
 
         expect(count).toBe(1);
         expect(closedIds).toContain('stale-1');
-        // Staleness sweep stamps the janitor close cause.
-        expect(closedReasons.get('stale-1')).toBe('Janitor');
+        // A quiet row without a deadline closes as Idle.
+        expect(closedReasons.get('stale-1')).toBe('Idle');
 
         const filter = sessionSweepCalls()[0][0].ExtraFilter as string;
         expect(filter).toContain("Status IN ('Active','Idle')");
@@ -287,7 +428,7 @@ describe('SessionJanitor.RunStalenessSweep', () => {
     });
 
     it('is idempotent — re-closing already-Closed rows is a harmless no-op', async () => {
-        const alreadyClosed = { ID: 'done-1', Status: 'Closed' };
+        const alreadyClosed = { ID: 'done-1', Status: 'Closed', LastActiveAt: minutesAgo(60) };
         sessionPages = [{ Success: true, Results: [alreadyClosed] }];
 
         const store = new Map<string, 'Active' | 'Idle' | 'Closed'>([['done-1', 'Closed']]);
@@ -379,7 +520,7 @@ describe('SessionJanitor.RunRecordingRecoverySweep', () => {
     let nextSessionNumber = 0;
 
     interface RecoveryHarness {
-        provider: IMetadataProvider;
+        provider: DatabaseProviderBase;
         /** Session id -> RecordingFileID the reload will report (default null). */
         fileIds: Map<string, string | null>;
         agentLoads: string[];
@@ -414,7 +555,8 @@ describe('SessionJanitor.RunRecordingRecoverySweep', () => {
                 };
                 return entity;
             }),
-        } as unknown as IMetadataProvider;
+            ...LEDGER_SCHEMA_PROVIDER_FIELDS,
+        } as unknown as DatabaseProviderBase;
         return { provider, fileIds, agentLoads, failingAgents };
     }
 
@@ -425,7 +567,7 @@ describe('SessionJanitor.RunRecordingRecoverySweep', () => {
     }
 
     /** Runs one sweep whose candidate page holds exactly `rows`. */
-    async function sweepWith(provider: IMetadataProvider, rows: unknown[]): Promise<number> {
+    async function sweepWith(provider: DatabaseProviderBase, rows: unknown[]): Promise<number> {
         sessionPages = [{ Success: true, Results: rows }];
         return SessionJanitor.Instance.RunRecordingRecoverySweep(provider, makeUser());
     }
@@ -453,6 +595,14 @@ describe('SessionJanitor.RunRecordingRecoverySweep', () => {
         expect(filter).toContain('RecordingFileID IS NULL');
         expect(filter).toContain(`ClosedAt < '${new Date(NOW.getTime() - 10 * MINUTE).toISOString()}'`);
         expect(filter).toContain(`ClosedAt >= '${new Date(NOW.getTime() - 168 * HOUR).toISOString()}'`);
+    });
+
+    it('leaves sessions on the shard ledger to the ledger sweep', async () => {
+        const { provider } = makeRecoveryProvider();
+        await sweepWith(provider, []);
+
+        const filter = recoveryFilter();
+        expect(filter).toContain(`RecordingStatus IS NULL AND ID NOT IN (SELECT AgentSessionID FROM ${LEDGER_VIEW})`);
     });
 
     it('honours Configure() overrides for grace and lookback', async () => {
@@ -878,7 +1028,7 @@ describe('SessionJanitor.RunRecordingRecoverySweep', () => {
             }
         });
 
-        it('runs recovery after the close sweeps', async () => {
+        it('runs recovery after the close sweeps: ledger assembly first, then legacy segment recovery', async () => {
             const { provider } = makeRecoveryProvider();
             await SessionJanitor.Instance.Start(provider, makeUser(), 60_000);
             runViewMock.mockClear();
@@ -886,10 +1036,69 @@ describe('SessionJanitor.RunRecordingRecoverySweep', () => {
             await vi.advanceTimersByTimeAsync(60_000);
 
             const filters = sessionSweepCalls().map((c) => c[0].ExtraFilter);
-            expect(filters).toHaveLength(3);
+            expect(filters).toHaveLength(4);
             expect(filters[0]).toContain('LastActiveAt <');
             expect(filters[1]).toContain('maxSessionDeadlineIso');
-            expect(filters[2]).toContain('RecordingStartedAt');
+            expect(filters[2]).toContain("RecordingStatus IN ('Pending','Assembling')");
+            expect(filters[3]).toContain('RecordingStartedAt');
+        });
+
+        it('purges ledger shards past the lookback window once per pass', async () => {
+            const { provider } = makeRecoveryProvider();
+            await SessionJanitor.Instance.Start(provider, makeUser(), 60_000);
+            ledgerMock.PurgeClosedBefore.mockResolvedValueOnce(42);
+
+            await vi.advanceTimersByTimeAsync(60_000);
+
+            expect(ledgerMock.PurgeClosedBefore).toHaveBeenCalledTimes(1);
+            const [cutoff, maxRows] = ledgerMock.PurgeClosedBefore.mock.calls[0] as [Date, number];
+            expect(cutoff.toISOString()).toBe(new Date(Date.now() - 168 * HOUR).toISOString()); // now = the tick
+            expect(maxRows).toBe(500);
+            expect(logStatusMock).toHaveBeenCalledWith(expect.stringMatching(/purged 42 recording shard/i));
+        });
+
+        it('a Stop() during the pass ends it before the next step', async () => {
+            const { provider } = makeRecoveryProvider();
+            await SessionJanitor.Instance.Start(provider, makeUser(), 60_000);
+            runViewMock.mockClear();
+            let releasePurge: () => void = () => undefined;
+            ledgerMock.PurgeClosedBefore.mockImplementationOnce(
+                () => new Promise<number>((resolve) => { releasePurge = () => resolve(0); }),
+            );
+
+            await vi.advanceTimersByTimeAsync(60_000); // the pass parks in the purge
+            SessionJanitor.Instance.Stop();
+            releasePurge();
+            await vi.advanceTimersByTimeAsync(0);
+
+            expect(sessionSweepCalls().filter((c) => c[0].ExtraFilter.includes('RecordingStatus'))).toHaveLength(0);
+        });
+
+        it('a failed purge is logged with context and the sweeps still run', async () => {
+            const { provider } = makeRecoveryProvider();
+            await SessionJanitor.Instance.Start(provider, makeUser(), 60_000);
+            runViewMock.mockClear();
+            ledgerMock.PurgeClosedBefore.mockRejectedValueOnce(new Error('purge deadlock'));
+
+            await vi.advanceTimersByTimeAsync(60_000);
+
+            expect(logErrorMock).toHaveBeenCalledWith(expect.stringMatching(/purge.*purge deadlock/i));
+            expect(sessionSweepCalls().some((c) => c[0].ExtraFilter.includes('RecordingStartedAt'))).toBe(true);
+        });
+
+        it('a failed ledger sweep is logged and legacy recovery still runs', async () => {
+            const { provider } = makeRecoveryProvider();
+            await SessionJanitor.Instance.Start(provider, makeUser(), 60_000);
+            runViewMock.mockClear();
+            runViewMock.mockImplementation(async (params: { ExtraFilter?: string }) => {
+                if (params.ExtraFilter?.includes("RecordingStatus IN ('Pending','Assembling')")) throw new Error('ledger query blew up');
+                return { Success: true, Results: [] };
+            });
+
+            await vi.advanceTimersByTimeAsync(60_000);
+
+            expect(logErrorMock).toHaveBeenCalledWith(expect.stringMatching(/ledger.*ledger query blew up/i));
+            expect(sessionSweepCalls().some((c) => c[0].ExtraFilter.includes('RecordingStartedAt'))).toBe(true);
         });
 
         it('a slow recovery does not block the close sweeps on later ticks and is not started twice', async () => {
@@ -1018,6 +1227,267 @@ describe('SessionJanitor.RunRecordingRecoverySweep', () => {
     });
 });
 
+describe('SessionJanitor.RunRecordingLedgerSweep', () => {
+    const NOW = new Date('2026-10-12T12:00:00.000Z');
+    const MINUTE = 60_000;
+    const HOUR = 60 * MINUTE;
+    const STALE_CUTOFF = new Date(NOW.getTime() - 10 * MINUTE); // recordingRecoveryAttemptTimeoutMinutes
+    let nextSessionNumber = 0;
+
+    type LedgerCandidate = {
+        ID: string;
+        AgentID: string;
+        RecordingStatus: 'Pending' | 'Assembling' | null;
+        RecordingExpectedShards: number | null;
+        RecordingCapturedSamples: number | null;
+        __mj_UpdatedAt: Date;
+    };
+
+    /** Session ids are unique per test: the janitor is a singleton whose backoff outlives a test. */
+    function ledgerCandidate(overrides: Partial<LedgerCandidate> = {}): LedgerCandidate {
+        return {
+            ID: `ledger-session-${nextSessionNumber++}`,
+            AgentID: 'agent-1',
+            RecordingStatus: 'Pending',
+            RecordingExpectedShards: null,
+            RecordingCapturedSamples: null,
+            __mj_UpdatedAt: new Date(NOW.getTime() - HOUR),
+            ...overrides,
+        };
+    }
+
+    function ledgerProvider(): DatabaseProviderBase {
+        return { GetEntityObject: vi.fn(), ...LEDGER_SCHEMA_PROVIDER_FIELDS } as unknown as DatabaseProviderBase;
+    }
+
+    /** Runs one ledger sweep whose candidate page holds exactly `rows`. */
+    async function ledgerSweepWith(rows: LedgerCandidate[], provider = ledgerProvider()): Promise<number> {
+        sessionPages = [{ Success: true, Results: rows }];
+        return SessionJanitor.Instance.RunRecordingLedgerSweep(provider, makeUser());
+    }
+
+    function ledgerFilter(): string {
+        const call = sessionSweepCalls().find((c) => c[0].ExtraFilter.includes('RecordingStatus'));
+        if (!call) throw new Error('ledger sweep never queried sessions');
+        return call[0].ExtraFilter;
+    }
+
+    function claimedIDs(): string[] {
+        return ledgerMock.ClaimAssembly.mock.calls.map((c) => c[0] as string);
+    }
+
+    beforeEach(() => {
+        vi.useFakeTimers();
+        vi.setSystemTime(NOW);
+        SessionJanitor.Instance.Configure({ recordingRecoveryGraceMinutes: 10, recordingRecoveryLookbackHours: 168, recordingRecoveryAttemptTimeoutMinutes: 10 });
+        ledgerMock.ClaimAssembly.mockResolvedValue(7);
+        assembleMock.mockResolvedValue('Partial');
+    });
+
+    afterEach(() => {
+        SessionJanitor.Instance.Stop();
+        vi.useRealTimers();
+    });
+
+    it('queries closed sessions past the grace and inside the lookback that are Pending, Assembling, or lost their status with shards on the ledger', async () => {
+        await ledgerSweepWith([]);
+
+        const filter = ledgerFilter();
+        expect(filter).toContain("Status = 'Closed'");
+        expect(filter).toContain(`ClosedAt < '${new Date(NOW.getTime() - 10 * MINUTE).toISOString()}'`);
+        expect(filter).toContain(`ClosedAt >= '${new Date(NOW.getTime() - 168 * HOUR).toISOString()}'`);
+        expect(filter).toContain("RecordingStatus IN ('Pending','Assembling')");
+        expect(filter).toContain(`RecordingStatus IS NULL AND ID IN (SELECT AgentSessionID FROM ${LEDGER_VIEW})`);
+        expect(filter).not.toContain('RecordingStartedAt');
+    });
+
+    it('assembles a closed Pending session with no terminal signal as Partial: stale-aware claim, then a forced assembly', async () => {
+        const session = ledgerCandidate();
+
+        expect(await ledgerSweepWith([session])).toBe(1);
+
+        expect(ledgerMock.ClaimAssembly).toHaveBeenCalledWith(session.ID, STALE_CUTOFF);
+        expect(assembleMock).toHaveBeenCalledTimes(1);
+        expect(assembleMock).toHaveBeenCalledWith(expect.objectContaining({
+            SessionID: session.ID, Version: 7, Ledger: ledgerMock, ForcePartial: true,
+        }));
+        expect(logStatusMock).toHaveBeenCalledWith(expect.stringMatching(new RegExp(`${session.ID}.*Partial`)));
+    });
+
+    it('re-claims an Assembling session whose assembler went quiet past the attempt timeout, but not a fresh one', async () => {
+        const stale = ledgerCandidate({ RecordingStatus: 'Assembling', __mj_UpdatedAt: new Date(STALE_CUTOFF.getTime() - 1) });
+        const fresh = ledgerCandidate({ RecordingStatus: 'Assembling', __mj_UpdatedAt: new Date(NOW.getTime() - MINUTE) });
+
+        expect(await ledgerSweepWith([fresh, stale])).toBe(1);
+
+        expect(claimedIDs()).toEqual([stale.ID]);
+        expect(ledgerMock.ClaimAssembly).toHaveBeenCalledWith(stale.ID, STALE_CUTOFF);
+    });
+
+    it('skips a session whose claim another assembler won, without backing it off', async () => {
+        const session = ledgerCandidate();
+        ledgerMock.ClaimAssembly.mockResolvedValueOnce(null);
+
+        expect(await ledgerSweepWith([session])).toBe(0);
+        expect(assembleMock).not.toHaveBeenCalled();
+        expect(logErrorMock).not.toHaveBeenCalled();
+
+        await ledgerSweepWith([session]); // not backed off: the next sweep tries the claim again
+        expect(claimedIDs()).toEqual([session.ID, session.ID]);
+    });
+
+    it('backs off a session whose assembly hit a transient error (Retry), and retries after the backoff', async () => {
+        const session = ledgerCandidate();
+        assembleMock.mockResolvedValueOnce('Retry');
+
+        expect(await ledgerSweepWith([session])).toBe(0);
+        await ledgerSweepWith([session]);
+        expect(claimedIDs()).toEqual([session.ID]);
+
+        vi.setSystemTime(NOW.getTime() + 11 * MINUTE); // first backoff is 2^1 * 5 min
+        await ledgerSweepWith([session]);
+        expect(claimedIDs()).toEqual([session.ID, session.ID]);
+    });
+
+    it('gives up on a session that keeps hitting Retry after 8 attempts, with one LogError', async () => {
+        const session = ledgerCandidate();
+        assembleMock.mockResolvedValue('Retry');
+
+        for (let i = 0; i < 12; i++) {
+            await ledgerSweepWith([session]);
+            vi.setSystemTime(Date.now() + 7 * HOUR); // past the longest (6 h) backoff
+        }
+
+        expect(assembleMock).toHaveBeenCalledTimes(8);
+        expect(logErrorMock.mock.calls.filter((c) => /Giving up/.test(String(c[0])) && String(c[0]).includes(session.ID))).toHaveLength(1);
+    });
+
+    it('LogErrors a Failed assembly with the session id and counts it as a failure', async () => {
+        const session = ledgerCandidate();
+        assembleMock.mockResolvedValueOnce('Failed');
+
+        expect(await ledgerSweepWith([session])).toBe(0);
+        expect(logErrorMock).toHaveBeenCalledWith(expect.stringMatching(new RegExp(`${session.ID}.*Failed`)));
+        await ledgerSweepWith([session]);
+        expect(claimedIDs()).toEqual([session.ID]); // backed off
+    });
+
+    it('logs a Superseded assembly without treating it as a failure', async () => {
+        const session = ledgerCandidate();
+        assembleMock.mockResolvedValueOnce('Superseded');
+
+        expect(await ledgerSweepWith([session])).toBe(0);
+        expect(logErrorMock).not.toHaveBeenCalled();
+        expect(logStatusMock).toHaveBeenCalledWith(expect.stringMatching(new RegExp(`${session.ID}.*Superseded`)));
+        await ledgerSweepWith([session]);
+        expect(claimedIDs()).toEqual([session.ID, session.ID]);
+    });
+
+    it('LogErrors an unexpected Deferred from a forced assembly and backs off', async () => {
+        const session = ledgerCandidate();
+        assembleMock.mockResolvedValueOnce('Deferred');
+
+        await ledgerSweepWith([session]);
+        expect(logErrorMock).toHaveBeenCalledWith(expect.stringMatching(new RegExp(`${session.ID}.*Deferred`)));
+        await ledgerSweepWith([session]);
+        expect(claimedIDs()).toEqual([session.ID]);
+    });
+
+    it('logs and backs off a claim that throws, then moves on to the next candidate', async () => {
+        const [bad, good] = [ledgerCandidate(), ledgerCandidate()];
+        ledgerMock.ClaimAssembly.mockRejectedValueOnce(new Error('claim deadlock'));
+
+        expect(await ledgerSweepWith([bad, good])).toBe(1);
+        expect(logErrorMock).toHaveBeenCalledWith(expect.stringMatching(new RegExp(`${bad.ID}.*claim deadlock`)));
+    });
+
+    it('restores the status a racing session save wiped with a (0, 0) stamp, never counts invented from the ledger, before claiming', async () => {
+        // No terminal counts survive: stamping 0/0 sets NULL -> Pending, and the assembly (shard count != 0)
+        // is Partial and keeps the shards, instead of a made-up terminal labelling it Complete.
+        const session = ledgerCandidate({ RecordingStatus: null });
+        ledgerMock.StampTerminal.mockResolvedValueOnce({ Outcome: 'Stamped', RecordingStatus: 'Pending' });
+
+        expect(await ledgerSweepWith([session])).toBe(1);
+
+        expect(ledgerMock.StampTerminal).toHaveBeenCalledWith(session.ID, 0, 0);
+        expect(ledgerMock.LoadShardMetadata).not.toHaveBeenCalled();
+        expect(ledgerMock.StampTerminal.mock.invocationCallOrder[0]).toBeLessThan(ledgerMock.ClaimAssembly.mock.invocationCallOrder[0]);
+        expect(assembleMock).toHaveBeenCalledWith(expect.objectContaining({ SessionID: session.ID, ForcePartial: true }));
+    });
+
+    it('restores a lost status with the counts the session still stores', async () => {
+        const session = ledgerCandidate({ RecordingStatus: null, RecordingExpectedShards: 9, RecordingCapturedSamples: 2_000_000 });
+        ledgerMock.StampTerminal.mockResolvedValueOnce({ Outcome: 'Stamped', RecordingStatus: 'Pending' });
+
+        await ledgerSweepWith([session]);
+
+        expect(ledgerMock.StampTerminal).toHaveBeenCalledWith(session.ID, 9, 2_000_000);
+    });
+
+    it('stamps a BIGINT capture count that the candidate page delivers as a string as a number', async () => {
+        // A RunView entity page keeps the driver's value for a BIGINT column: the SQL Server driver
+        // returns it as a string, and the ledger's integer guard refused it (#5294 gauntlet, row S13 J3).
+        const session = ledgerCandidate({ RecordingStatus: null, RecordingExpectedShards: 5, RecordingCapturedSamples: '1137600' as unknown as number });
+        ledgerMock.StampTerminal.mockResolvedValueOnce({ Outcome: 'Stamped', RecordingStatus: 'Pending' });
+
+        await ledgerSweepWith([session]);
+
+        expect(ledgerMock.StampTerminal).toHaveBeenCalledWith(session.ID, 5, 1_137_600);
+    });
+
+    it('LogErrors and backs off a lost status the stamp could not restore', async () => {
+        const session = ledgerCandidate({ RecordingStatus: null });
+        ledgerMock.StampTerminal.mockResolvedValueOnce({ Outcome: 'Ignored', RecordingStatus: null });
+
+        expect(await ledgerSweepWith([session])).toBe(0);
+        expect(ledgerMock.ClaimAssembly).not.toHaveBeenCalled();
+        expect(logErrorMock).toHaveBeenCalledWith(expect.stringContaining(session.ID));
+        await ledgerSweepWith([session]);
+        expect(ledgerMock.StampTerminal).toHaveBeenCalledTimes(1); // backed off
+    });
+
+    it('counts failed status restores toward the per-sweep cap', async () => {
+        const sessions = Array.from({ length: 7 }, () => ledgerCandidate({ RecordingStatus: null }));
+        ledgerMock.StampTerminal.mockRejectedValue(new Error('stamp deadlock'));
+
+        await ledgerSweepWith(sessions);
+
+        expect(ledgerMock.StampTerminal).toHaveBeenCalledTimes(5);
+    });
+
+    it('attempts at most 5 assemblies per sweep', async () => {
+        const sessions = Array.from({ length: 7 }, () => ledgerCandidate());
+
+        expect(await ledgerSweepWith(sessions)).toBe(5);
+        expect(assembleMock).toHaveBeenCalledTimes(5);
+    });
+
+    it('abandons an assembly that outlives the attempt timeout, backs it off, and continues with the next candidate', async () => {
+        const [hung, next] = [ledgerCandidate(), ledgerCandidate()];
+        let release: () => void = () => undefined;
+        assembleMock.mockImplementation(async (input: { SessionID: string }) => {
+            if (input.SessionID === hung.ID) {
+                await new Promise<void>((resolve) => { release = resolve; });
+                return 'Retry';
+            }
+            return 'Complete';
+        });
+        try {
+            const sweep = ledgerSweepWith([hung, next]);
+            await vi.advanceTimersByTimeAsync(10 * MINUTE);
+            expect(await sweep).toBe(1);
+            expect(logErrorMock).toHaveBeenCalledWith(expect.stringMatching(new RegExp(`${hung.ID}.*did not finish within 10 minutes`)));
+
+            vi.setSystemTime(Date.now() + 11 * MINUTE); // past the backoff, but the abandoned call is still running
+            await ledgerSweepWith([hung]);
+            expect(assembleMock.mock.calls.map((c) => (c[0] as { SessionID: string }).SessionID)).toEqual([hung.ID, next.ID]);
+        } finally {
+            release();
+            await vi.advanceTimersByTimeAsync(0);
+        }
+    });
+});
+
 describe('SessionJanitor.Configure', () => {
     const DEFAULTS: SessionJanitorConfig = {
         closeThresholdMinutes: 15, sweepIntervalMs: 60_000, recordingRecoveryGraceMinutes: 10, recordingRecoveryLookbackHours: 168,
@@ -1057,5 +1527,81 @@ describe('SessionJanitor.Configure', () => {
         const { provider } = makeProvider(new Map());
         await expect(SessionJanitor.Instance.Start(provider, makeUser(), 0)).rejects.toThrow(/sweepIntervalMs.*0/);
         expect(sessionSweepCalls()).toHaveLength(0);
+    });
+});
+
+describe('SessionJanitor.StartWithSettings (agentSessions.janitor)', () => {
+    const HOUR = 60 * 60_000;
+    const DEFAULTS = { enabled: true, sweepIntervalMs: 60_000, closeThresholdMinutes: 15 };
+
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+    afterEach(() => {
+        SessionJanitor.Instance.Stop();
+        SessionJanitor.Instance.Configure({ sweepIntervalMs: DEFAULTS.sweepIntervalMs, closeThresholdMinutes: DEFAULTS.closeThresholdMinutes });
+        vi.clearAllTimers();
+        vi.useRealTimers();
+    });
+
+    it('enabled: runs startup recovery, then ticks on the configured interval with the configured threshold', async () => {
+        const { provider } = makeProvider(new Map());
+        await SessionJanitor.Instance.StartWithSettings({ ...DEFAULTS, sweepIntervalMs: 120_000, closeThresholdMinutes: 30 }, provider, makeUser());
+        expect(sessionSweepCalls()).toHaveLength(1); // startup recovery
+        expect(SessionJanitor.Instance.IsSweepScheduled).toBe(true);
+
+        vi.setSystemTime(new Date('2026-10-29T12:00:00.000Z'));
+        await vi.advanceTimersByTimeAsync(120_000);
+
+        const staleness = sessionSweepCalls().map(c => c[0].ExtraFilter).find(f => f.includes('LastActiveAt <'));
+        expect(staleness).toBeTruthy();
+        // 30 minutes before the tick, not the default 15.
+        expect(staleness).toContain('2026-10-29T11:32:00.000Z');
+    });
+
+    it('disabled: runs startup recovery once and then issues no queries at all', async () => {
+        const { provider } = makeProvider(new Map());
+        await SessionJanitor.Instance.StartWithSettings({ ...DEFAULTS, enabled: false }, provider, makeUser());
+        expect(sessionSweepCalls()).toHaveLength(1);
+        runViewMock.mockClear();
+
+        await vi.advanceTimersByTimeAsync(HOUR);
+
+        expect(runViewMock).not.toHaveBeenCalled();
+        expect(ledgerMock.PurgeClosedBefore).not.toHaveBeenCalled();
+        expect(SessionJanitor.Instance.IsSweepScheduled).toBe(false);
+    });
+
+    it('disabled: still drains this host\'s live sessions on graceful shutdown', async () => {
+        sessionPages = [
+            { Success: true, Results: [] },                                   // startup recovery
+            { Success: true, Results: [{ ID: 'mine-3', Status: 'Active' }] }, // shutdown drain
+        ];
+        const store = new Map<string, 'Active' | 'Idle' | 'Closed'>([['mine-3', 'Active']]);
+        const { provider, closedIds, closedReasons } = makeProvider(store);
+
+        await SessionJanitor.Instance.StartWithSettings({ ...DEFAULTS, enabled: false }, provider, makeUser());
+        await SessionJanitor.Instance.Shutdown();
+
+        expect(closedIds).toContain('mine-3');
+        expect(closedReasons.get('mine-3')).toBe('Shutdown');
+    });
+
+    it('disabled after an earlier Start stops the tick that Start scheduled', async () => {
+        const { provider } = makeProvider(new Map());
+        await SessionJanitor.Instance.Start(provider, makeUser());
+        expect(SessionJanitor.Instance.IsSweepScheduled).toBe(true);
+
+        await SessionJanitor.Instance.StartWithSettings({ ...DEFAULTS, enabled: false }, provider, makeUser());
+
+        expect(SessionJanitor.Instance.IsSweepScheduled).toBe(false);
+    });
+
+    it('rejects an invalid interval before doing any work', async () => {
+        const { provider } = makeProvider(new Map());
+        await expect(SessionJanitor.Instance.StartWithSettings({ ...DEFAULTS, sweepIntervalMs: 0 }, provider, makeUser()))
+            .rejects.toThrow(/sweepIntervalMs must be a finite number greater than 0/);
+        expect(sessionSweepCalls()).toHaveLength(0);
+        expect(SessionJanitor.Instance.IsSweepScheduled).toBe(false);
     });
 });

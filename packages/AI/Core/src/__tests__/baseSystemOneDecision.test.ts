@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
+    BaseHostedSystemOneDecision,
     BaseSystemOneDecision,
     CreateSystemOneHTTPError,
     IsSystemOneWireObject,
     ParseSystemOneCredential,
+    ReadSystemOneErrorMessage,
+    RedactSecret,
     SystemOneConfigurationError,
 } from '../generic/baseSystemOneDecision';
+import { AIErrorType } from '../generic/errorTypes';
 import {
     ChoiceAnswer,
     ChoiceQuestion,
@@ -81,6 +85,49 @@ class WrappingSystemOneDecision extends TestSystemOneDecision {
         return `wrapped ${status} [${bodyText.length} chars]`;
     }
 }
+
+/** A driver that classifies a 422 itself, as a vendor whose 422 is a vendor-specific refusal. */
+class ClassifyingSystemOneDecision extends TestSystemOneDecision {
+    protected GetHTTPErrorType(status: number): AIErrorType | undefined {
+        return status === 422 ? 'VendorValidationError' : undefined;
+    }
+}
+
+/** A hosted driver on {@link BaseHostedSystemOneDecision}: only the vendor's facts, and the scripted network. */
+class TestHostedDecision extends BaseHostedSystemOneDecision {
+    public Sent: SentRequest[] = [];
+    public Responder: () => Response = () => jsonResponse(SAMPLE_RESPONSE);
+
+    protected get ServiceName(): string {
+        return 'Hosted Decisions API';
+    }
+
+    protected get DefaultModel(): string {
+        return 'hosted-model';
+    }
+
+    protected get DefaultEndpoint(): string {
+        return HOSTED_DEFAULT_ENDPOINT;
+    }
+
+    protected get APIKeyDescription(): string {
+        return 'a Hosted API key';
+    }
+
+    protected get LegacyKeyVariable(): string {
+        return 'AI_VENDOR_API_KEY__TESTHOSTEDDECISION';
+    }
+
+    protected async SendRequest(url: string, init: RequestInit): Promise<Response> {
+        this.Sent.push({ Url: url, Init: init, Body: JSON.parse(String(init.body)) });
+        return this.Responder();
+    }
+}
+
+const HOSTED_DEFAULT_ENDPOINT = 'https://hosted.example.test/v1/decisions';
+
+/** A key shaped like a real one, for the redaction tests. */
+const SECRET_KEY = 'sk-test-redaction-0123456789abcdef';
 
 function jsonResponse(body: unknown, status = 200): Response {
     return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -381,6 +428,42 @@ describe('BaseSystemOneDecision', () => {
             expect(denied.errorInfo).toMatchObject({ errorType: 'Authentication', severity: 'Fatal' });
         });
 
+        it("attaches GetHTTPErrorType's type as a Retriable, failover-eligible classification that ErrorAnalyzer keeps", async () => {
+            const driver = new ClassifyingSystemOneDecision();
+            driver.Responder = () => new Response('', { status: 422 });
+            const result = await driver.Decide(params());
+
+            expect(result.errorMessage).toBe('Test Decisions API returned HTTP 422');
+            expect(result.errorInfo).toEqual({ errorType: 'VendorValidationError', severity: 'Retriable', canFailover: true, httpStatusCode: 422 });
+        });
+
+        it('leaves a status GetHTTPErrorType does not map, and every status by default, to ErrorAnalyzer', async () => {
+            const classifying = new ClassifyingSystemOneDecision();
+            classifying.Responder = () => new Response('', { status: 401 });
+            expect((await classifying.Decide(params())).errorInfo).toMatchObject({ errorType: 'Authentication', severity: 'Fatal' });
+
+            const plain = new TestSystemOneDecision();
+            plain.Responder = () => new Response('', { status: 422 });
+            expect((await plain.Decide(params())).errorInfo).toMatchObject({ errorType: 'InvalidRequest', severity: 'Fatal', canFailover: false });
+        });
+
+        it('redacts the API key from an error body before any of it reaches the message', async () => {
+            const driver = new TestSystemOneDecision(SECRET_KEY);
+            driver.Responder = () => jsonResponse({ error: { message: `Invalid key ${SECRET_KEY}` } }, 401);
+            const result = await driver.Decide(params());
+
+            expect(result.errorMessage).toBe('Test Decisions API returned HTTP 401: {"error":{"message":"Invalid key [redacted]"}}');
+        });
+
+        it('redacts a key that straddles character 500 of the body, leaving no part of it', async () => {
+            const driver = new TestSystemOneDecision(SECRET_KEY);
+            driver.Responder = () => new Response(`${'x'.repeat(490)}${SECRET_KEY}${'y'.repeat(100)}`, { status: 500 });
+            const result = await driver.Decide(params());
+
+            expect(result.errorMessage).toBe(`Test Decisions API returned HTTP 500: ${'x'.repeat(490)}[redacted]`);
+            expect(result.errorMessage).not.toContain(SECRET_KEY.slice(0, 10));
+        });
+
         it('fails when a 2xx body is not JSON', async () => {
             const driver = new TestSystemOneDecision();
             driver.Responder = () => new Response('<html>gateway</html>', { status: 200 });
@@ -411,11 +494,113 @@ describe('BaseSystemOneDecision', () => {
             expect(IsSystemOneWireObject('x')).toBe(false);
         });
 
-        it('CreateSystemOneHTTPError carries the status', () => {
+        it.each([
+            ['a FastAPI detail string', { detail: 'Not authenticated' }, 'Not authenticated'],
+            ['a FastAPI detail list, joined', { detail: [{ loc: ['body', 'questions'], msg: 'Field required', type: 'missing' }, { msg: ' ' }, { msg: 'Input should be a valid string' }] }, 'Field required; Input should be a valid string'],
+            ["SubQ's detail object, prefixed by its error_type", { detail: { error_type: 'validation_error', message: "questions/queue: must have required property 'criteria'" } }, "validation_error: questions/queue: must have required property 'criteria'"],
+            ['a detail object with no error_type', { detail: { message: 'Insufficient credits.' } }, 'Insufficient credits.'],
+            ["an OpenAI-style error.message, trimmed", { error: { message: ' Decision model not found. ', type: 'invalid_request_error', code: 'model_not_found' } }, 'Decision model not found.'],
+            ['a detail object with no message, falling through to error.message', { detail: { error_type: 'x' }, error: { message: 'from error' } }, 'from error'],
+            ['an empty detail list, falling through to error.message', { detail: [], error: { message: 'Real' } }, 'Real'],
+            ['a blank detail string, falling through to error.message', { detail: '', error: { message: 'Real' } }, 'Real'],
+            ['a detail list with no non-empty msg, falling through to error', { detail: [{ msg: ' ' }, { loc: ['body'] }], error: 'Real' }, 'Real'],
+            ['a plain error string', { error: 'Model is loading' }, 'Model is loading'],
+            ['a body with neither', { message: 'not read' }, ''],
+        ])('ReadSystemOneErrorMessage reads %s', (_label, body, expected) => {
+            expect(ReadSystemOneErrorMessage(JSON.stringify(body))).toBe(expected);
+        });
+
+        it('ReadSystemOneErrorMessage gives an empty string for a body that is not a JSON object', () => {
+            expect(ReadSystemOneErrorMessage('')).toBe('');
+            expect(ReadSystemOneErrorMessage('<html>504</html>')).toBe('');
+            expect(ReadSystemOneErrorMessage('["detail"]')).toBe('');
+        });
+
+        it('CreateSystemOneHTTPError carries the status, and a given error type as a Retriable, failover-eligible classification', () => {
             const err = CreateSystemOneHTTPError('boom', 502);
             expect(err).toBeInstanceOf(Error);
             expect(err.message).toBe('boom');
             expect(err.status).toBe(502);
+            expect(err.errorInfo).toBeUndefined();
+
+            expect(CreateSystemOneHTTPError('refused', 422, 'ModelError').errorInfo)
+                .toEqual({ errorType: 'ModelError', severity: 'Retriable', canFailover: true, httpStatusCode: 422 });
         });
+
+        it('RedactSecret replaces every occurrence of the trimmed secret, and leaves the text alone for an empty one', () => {
+            expect(RedactSecret('a sk-12345 b sk-12345', ' sk-12345 ')).toBe('a [redacted] b [redacted]');
+            expect(RedactSecret('a sk-12345', '')).toBe('a sk-12345');
+            expect(RedactSecret('a sk-12345', '   ')).toBe('a sk-12345');
+        });
+
+        it('RedactSecret leaves a secret shorter than 8 characters alone, so a placeholder key cannot mangle the message', () => {
+            expect(RedactSecret('service unavailable: context length exceeded', 'e')).toBe('service unavailable: context length exceeded');
+            expect(RedactSecret('key abcdefg', 'abcdefg')).toBe('key abcdefg');
+            expect(RedactSecret('key abcdefgh', 'abcdefgh')).toBe('key [redacted]');
+        });
+    });
+});
+
+describe('BaseHostedSystemOneDecision', () => {
+    it("takes the constructor's endpoint over the credential's, and the credential's over the default", async () => {
+        const credential = JSON.stringify({ apiKey: 'k', endpoint: 'https://credential.example.test/v1/decisions' });
+        expect(new TestHostedDecision(credential, 'https://ctor.example.test/v1/decisions').EndpointURL).toBe('https://ctor.example.test/v1/decisions');
+        expect(new TestHostedDecision(credential).EndpointURL).toBe('https://credential.example.test/v1/decisions');
+        expect(new TestHostedDecision('k').EndpointURL).toBe(HOSTED_DEFAULT_ENDPOINT);
+        expect(new TestHostedDecision('k', '  ').EndpointURL).toBe(HOSTED_DEFAULT_ENDPOINT);
+
+        const driver = new TestHostedDecision(credential);
+        await driver.Decide(params({ Model: 'another-model' }));
+        expect(driver.Sent[0].Url).toBe('https://credential.example.test/v1/decisions');
+        expect(driver.Sent[0].Body['model']).toBe('another-model');
+    });
+
+    it('removes trailing slashes from every source of the endpoint', () => {
+        expect(new TestHostedDecision('k', 'https://ctor.example.test/v1/decisions//').EndpointURL).toBe('https://ctor.example.test/v1/decisions');
+        expect(new TestHostedDecision(JSON.stringify({ apiKey: 'k', endpoint: 'https://credential.example.test/v1/decisions/' })).EndpointURL)
+            .toBe('https://credential.example.test/v1/decisions');
+    });
+
+    it.each([
+        ['an empty key', ''],
+        ['a blank key', '   '],
+        ['a JSON credential with no apiKey', JSON.stringify({ endpoint: HOSTED_DEFAULT_ENDPOINT })],
+        ['a JSON credential with an empty apiKey', JSON.stringify({ apiKey: '' })],
+    ])('fails %s before any request, with a NoCredentials error that allows failover', async (_label, apiKey) => {
+        const driver = new TestHostedDecision(apiKey);
+        const result = await driver.Decide(params());
+
+        expect(driver.Sent).toHaveLength(0);
+        expect(result.success).toBe(false);
+        expect(result.errorMessage).toBe(
+            "Hosted Decisions API has no API key: bind an 'API Key' credential whose apiKey is a Hosted API key, or set AI_VENDOR_API_KEY__TESTHOSTEDDECISION"
+        );
+        expect(result.errorInfo).toEqual({ errorType: 'NoCredentials', severity: 'Retriable', canFailover: true });
+    });
+
+    it("names the vendor's message, read with ReadSystemOneErrorMessage, with the key redacted", async () => {
+        const driver = new TestHostedDecision(SECRET_KEY);
+        driver.Responder = () => jsonResponse({ detail: { error_type: 'invalid_api_key', message: `Key ${SECRET_KEY} is revoked.` } }, 401);
+        const result = await driver.Decide(params());
+
+        expect(result.errorMessage).toBe('Hosted Decisions API returned HTTP 401: invalid_api_key: Key [redacted] is revoked.');
+    });
+
+    it('redacts a key the body carried JSON-escaped, once the vendor-message reader has decoded it', async () => {
+        const driver = new TestHostedDecision(SECRET_KEY);
+        const escapedKey = `\\u0073${SECRET_KEY.slice(1)}`;
+        driver.Responder = () => new Response(`{"error":{"message":"bad key ${escapedKey}"}}`, { status: 401 });
+        const result = await driver.Decide(params());
+
+        expect(result.errorMessage).toBe('Hosted Decisions API returned HTTP 401: bad key [redacted]');
+    });
+
+    it('falls back to the status and the start of the body when the body has no message', async () => {
+        const driver = new TestHostedDecision('k');
+        driver.Responder = () => new Response('<html>504 Gateway Time-out</html>', { status: 504 });
+        expect((await driver.Decide(params())).errorMessage).toBe('Hosted Decisions API returned HTTP 504: <html>504 Gateway Time-out</html>');
+
+        driver.Responder = () => new Response('', { status: 404 });
+        expect((await driver.Decide(params())).errorMessage).toBe('Hosted Decisions API returned HTTP 404');
     });
 });

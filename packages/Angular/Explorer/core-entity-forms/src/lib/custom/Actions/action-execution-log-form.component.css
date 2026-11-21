@@ -638,3 +638,22 @@
     margin-left: 0;
   }
 }
+
+/* Phone: sections sit on the page's 12px gutter instead of the desktop 20px content padding,
+   and the params panel drops its own sides for the same reason. The param header can shrink,
+   so a long name ellipses instead of widening the row. */
+@media (max-width: 768px) {
+    .content-area {
+        padding: 12px;
+    }
+
+    .params-panel {
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    .param-header,
+    .param-name {
+        min-width: 0;
+    }
+}

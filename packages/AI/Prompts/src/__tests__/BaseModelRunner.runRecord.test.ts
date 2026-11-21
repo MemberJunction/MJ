@@ -329,6 +329,141 @@ describe('BaseModelRunner run record lifecycle', () => {
 
     expect(run.TotalCost).toBeCloseTo(0.0007, 10);
   });
+
+  it('FinalizeRunRecord populates Status and token rollups synchronously in memory while INSERT is still in flight, and re-applies them after INSERT reload', async () => {
+    const runner = new TestModelRunner();
+    let releaseInsert!: () => void;
+    const insertGate = new Promise<void>((resolve) => {
+      releaseInsert = resolve;
+    });
+
+    const slowInsertRun = new FakePromptRun();
+    slowInsertRun.Save = vi.fn(async (saveOptions?: { IgnoreDirtyState?: boolean }) => {
+      slowInsertRun.saveCount++;
+      if (!saveOptions?.IgnoreDirtyState) {
+        await insertGate;
+        // Simulate BaseEntity.finalizeSave reload reverting fields mutated while INSERT was in flight
+        slowInsertRun.Status = 'Running';
+        slowInsertRun.Success = undefined;
+        slowInsertRun.Result = undefined;
+        slowInsertRun.TokensPrompt = undefined;
+        slowInsertRun.TokensCompletion = undefined;
+        slowInsertRun.TokensUsed = undefined;
+        slowInsertRun.TokensPromptRollup = undefined;
+        slowInsertRun.TokensCompletionRollup = undefined;
+        slowInsertRun.TokensUsedRollup = undefined;
+        slowInsertRun.TotalCost = undefined;
+      }
+      const { savedRows, saveCount, LatestResult, ...row } = slowInsertRun;
+      slowInsertRun.savedRows.push({ ...row });
+      return true;
+    });
+
+    const provider: IMetadataProvider = {
+      GetEntityObject: vi.fn(async () => slowInsertRun as unknown),
+    } as unknown as IMetadataProvider;
+
+    const run = await runner.invokeCreateRunRecord(
+      createMockPrompt(),
+      createMockModel(),
+      { prompt: createMockPrompt(), provider },
+      new Date('2026-03-15T12:00:00.000Z')
+    );
+
+    const endTime = new Date('2026-03-15T12:00:02.000Z');
+    const applyResultFields = vi.fn((pr: MJAIPromptRunEntityExtended) => {
+      pr.Result = 'immediate-result';
+      pr.TokensPrompt = 120;
+      pr.TokensCompletion = 80;
+      pr.TokensUsed = 200;
+      pr.Cost = 0.0042;
+    });
+
+    await runner.invokeFinalizeRunRecord(run, true, endTime, 2000, applyResultFields);
+
+    // BEFORE the INSERT has resolved, callers reading result.promptRun (e.g., BaseAgent.calculateTokenStats)
+    // must already see the finalized Status, rollups, and TotalCost in memory:
+    expect(run.Status).toBe('Completed');
+    expect(run.Success).toBe(true);
+    expect(run.Result).toBe('immediate-result');
+    expect(run.TokensPromptRollup).toBe(120);
+    expect(run.TokensCompletionRollup).toBe(80);
+    expect(run.TokensUsedRollup).toBe(200);
+    expect(run.TotalCost).toBe(0.0042);
+    expect(applyResultFields).toHaveBeenCalledTimes(1);
+
+    // Now release the in-flight INSERT (which reloads/clobbers in-memory fields) and flush the queued UPDATE:
+    releaseInsert();
+    await runner.FlushPendingSaves();
+
+    expect(slowInsertRun.saveCount).toBe(2);
+    expect(applyResultFields).toHaveBeenCalledTimes(1); // still called only once!
+    const updatedRow = slowInsertRun.savedRows[1];
+    expect(updatedRow['Status']).toBe('Completed');
+    expect(updatedRow['Success']).toBe(true);
+    expect(updatedRow['Result']).toBe('immediate-result');
+    expect(updatedRow['TokensPromptRollup']).toBe(120);
+    expect(updatedRow['TokensCompletionRollup']).toBe(80);
+    expect(updatedRow['TokensUsedRollup']).toBe(200);
+    expect(updatedRow['TotalCost']).toBe(0.0042);
+  });
+
+  it('CreateRunRecord chains a child prompt run INSERT after its in-flight parent prompt run INSERT (FK_AIPromptRun_ParentID)', async () => {
+    const runner = new TestModelRunner();
+    const saveOrder: string[] = [];
+    let releaseParentInsert!: () => void;
+    const parentGate = new Promise<void>((resolve) => {
+      releaseParentInsert = resolve;
+    });
+
+    const parentRun = new FakePromptRun();
+    parentRun.NewRecord = () => {
+      parentRun.ID = '00000000-0000-4000-8000-000000000001';
+      return true;
+    };
+    parentRun.Save = vi.fn(async () => {
+      saveOrder.push('parent:start');
+      await parentGate;
+      (parentRun as Record<string, unknown>)['IsSaved'] = true;
+      saveOrder.push('parent:end');
+      return true;
+    });
+
+    const childRun = new FakePromptRun();
+    childRun.NewRecord = () => {
+      childRun.ID = '00000000-0000-4000-8000-000000000002';
+      return true;
+    };
+    childRun.Save = vi.fn(async () => {
+      saveOrder.push('child:start');
+      saveOrder.push('child:end');
+      return true;
+    });
+
+    const instances = [parentRun, childRun];
+    const provider: IMetadataProvider = {
+      GetEntityObject: vi.fn(async () => instances.shift() as unknown),
+    } as unknown as IMetadataProvider;
+
+    const prompt = createMockPrompt();
+    const model = createMockModel();
+    await runner.invokeCreateRunRecord(prompt, model, { prompt, provider }, new Date());
+    await runner.invokeCreateRunRecord(
+      prompt,
+      model,
+      { prompt, provider, parentPromptRunId: '00000000-0000-4000-8000-000000000001' },
+      new Date()
+    );
+
+    // While parent INSERT is still in flight, child INSERT must not have started
+    await new Promise((r) => setTimeout(r, 10));
+    expect(saveOrder).toEqual(['parent:start']);
+
+    releaseParentInsert();
+    await runner.FlushPendingSaves();
+
+    expect(saveOrder).toEqual(['parent:start', 'parent:end', 'child:start', 'child:end']);
+  });
 });
 
 /** The prompt-run members FinalizeRunRecord's cost handling reads and writes, plus the save it queues. */

@@ -36,6 +36,28 @@ export abstract class VectorDBBase {
         return false;
     }
 
+    /**
+     * True when an index is a real object this driver provisions and can be asked about —
+     * i.e. {@link CreateIndex} / {@link ListIndexes} describe something that exists outside
+     * MJ's own metadata.
+     *
+     * This is NOT the same question as {@link IsReadOnly}, which is about record ingestion.
+     * A driver can accept records while owning no index objects, and the distinction matters
+     * because it decides what a failed `CreateIndex` *means*. For a driver that provisions
+     * indexes, a failure is a real fault: the `MJ: Vector Indexes` row would otherwise claim
+     * an index that does not exist. For a driver where the "index" is a logical pairing
+     * recorded only in MJ metadata — `SimpleVectorServiceProvider` reads its vectors straight
+     * out of `MJ: Entity Record Documents.VectorJSON` — there is nothing to create, and
+     * `CreateIndex` answering `success: false` is the expected, correct answer rather than an
+     * error to escalate.
+     *
+     * Drivers that back their indexes with anything real (a Pinecone index, a Qdrant
+     * collection, a pgvector/SQL Server registry table) leave the default `true`.
+     */
+    public get ManagesIndexes(): boolean {
+        return true;
+    }
+
     //Union types to allow the sub class implementing the functions to mark them as async or not
     abstract ListIndexes(): IndexList | Promise<IndexList>;
     abstract GetIndex(params: BaseRequestParams): BaseResponse | Promise<BaseResponse>;
@@ -60,10 +82,19 @@ export abstract class VectorDBBase {
     abstract CreateRecords(records: VectorRecord[], indexName?: string, providerConfig?: Record<string, unknown>): BaseResponse  | Promise<BaseResponse>;
     abstract GetRecord(param: BaseRequestParams): BaseResponse  | Promise<BaseResponse>;
     abstract GetRecords(params: BaseRequestParams): BaseResponse  | Promise<BaseResponse>;
-    abstract UpdateRecord(record: UpdateOptions): BaseResponse  | Promise<BaseResponse>;
-    abstract UpdateRecords(records: UpdateOptions): BaseResponse  | Promise<BaseResponse>;
-    abstract DeleteRecord(record: VectorRecord, indexName?: string): BaseResponse  | Promise<BaseResponse>;
-    abstract DeleteRecords(records: VectorRecord[], indexName?: string): BaseResponse  | Promise<BaseResponse>;
+    abstract UpdateRecord(record: UpdateOptions, indexName?: string, providerConfig?: Record<string, unknown>): BaseResponse  | Promise<BaseResponse>;
+    /**
+     * Update stored records (values and/or metadata). A provider without batch support fails on an
+     * array; treat that as "not supported", not success.
+     */
+    abstract UpdateRecords(records: UpdateOptions | UpdateOptions[], indexName?: string, providerConfig?: Record<string, unknown>): BaseResponse  | Promise<BaseResponse>;
+    /** Delete one record, routed like {@link CreateRecords}: per-record directives, then `providerConfig`. */
+    abstract DeleteRecord(record: VectorRecord, indexName?: string, providerConfig?: Record<string, unknown>): BaseResponse  | Promise<BaseResponse>;
+    /**
+     * Delete records, routed like {@link CreateRecords}. An unrouted delete in a namespace-scoped
+     * store reports success and removes nothing.
+     */
+    abstract DeleteRecords(records: VectorRecord[], indexName?: string, providerConfig?: Record<string, unknown>): BaseResponse  | Promise<BaseResponse>;
 
     /**
      * Delete ALL records from an index. Use with caution.

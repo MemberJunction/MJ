@@ -2,7 +2,7 @@ import { NgModule, ModuleWithProviders, InjectionToken, Provider } from '@angula
 import { CommonModule } from '@angular/common';
 import { MJAuthBase } from './mjexplorer-auth-base.service';
 import { AngularAuthProviderFactory } from './AngularAuthProviderFactory';
-import { MJMagicLinkProvider } from './providers/mjexplorer-magic-link-provider.service';
+import { HasMagicLinkSessionToken, MAGIC_LINK_PROVIDER_TYPE } from './magic-link-session';
 import { MJGlobal } from '@memberjunction/global';
 import type { PublicAuthProviderInfo } from '@memberjunction/core';
 import { AuthProviderCatalog, type AuthProviderResolution } from './auth-provider-catalog';
@@ -23,6 +23,12 @@ export { RedirectComponent };
  * choice caused a reload.
  */
 export const MJ_AUTH_PROVIDER_RESOLUTION = new InjectionToken<AuthProviderResolution>('MJ_AUTH_PROVIDER_RESOLUTION');
+
+/**
+ * Injection token providing the configured base MJAPI URL (derived from `MJAPI_URI` or
+ * `GRAPHQL_URI`) so pre-auth standalone routes can call MJServer endpoints before login.
+ */
+export const MJ_PUBLIC_API_BASE_URL = new InjectionToken<string | null>('MJ_PUBLIC_API_BASE_URL');
 
 /** The resolution used when no catalog is supplied — i.e. the pre-existing single-provider path. */
 const NO_CATALOG_RESOLUTION: AuthProviderResolution = { active: null, choices: [], showPicker: false, autoLogin: false };
@@ -69,15 +75,22 @@ export class AuthServicesModule {
     // use the catalog selection, then the configured AUTH_TYPE. This auto-falls-back
     // to the IdP once a guest's token is gone (expired/logged out), so the normal
     // login button works again.
-    const magicLinkActive = MJMagicLinkProvider.hasSessionToken();
+    const magicLinkActive = HasMagicLinkSessionToken();
 
     // The catalog resolves which provider this load uses; it never overrides an active
     // magic-link session, which is a property of THIS page load rather than a configured choice.
     const resolution = resolvedCatalog.length ? AuthProviderCatalog.Resolve(resolvedCatalog) : NO_CATALOG_RESOLUTION;
     providers.push({ provide: MJ_AUTH_PROVIDER_RESOLUTION, useValue: resolution });
+    providers.push({
+      provide: MJ_PUBLIC_API_BASE_URL,
+      useValue: AuthProviderCatalog.BuildApiBaseUrl(
+        typeof env['GRAPHQL_URI'] === 'string' ? env['GRAPHQL_URI'] : '',
+        typeof env['MJAPI_URI'] === 'string' ? env['MJAPI_URI'] : undefined,
+      ) || null,
+    });
 
     const catalogType = resolution.active?.driverClass?.toLowerCase();
-    const authType = magicLinkActive ? MJMagicLinkProvider.PROVIDER_TYPE : (catalogType ?? configuredType);
+    const authType = magicLinkActive ? MAGIC_LINK_PROVIDER_TYPE : (catalogType ?? configuredType);
 
     if (!authType) {
       console.error('No authentication provider available: the server published no catalog and no AUTH_TYPE is set in the environment');

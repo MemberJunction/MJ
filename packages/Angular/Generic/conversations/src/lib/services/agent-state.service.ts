@@ -164,12 +164,16 @@ export class AgentStateService implements OnDestroy {
 
     try {
       const rv = RunView.FromMetadataProvider(this.Provider);
-      // Valid statuses: Running, Completed, Paused, Failed, Cancelled
+      // Valid statuses: Running, Paused, AwaitingFeedback, Completed, Failed, Cancelled.
+      //
+      // AwaitingFeedback is NOT live: a Chat final step ends the run with CompletedAt stamped,
+      // so it is how a conversational turn normally finishes. Counting it here kept every past
+      // turn in the active set and polling never stopped. A reply that resumes the run sets it
+      // back to Running; a run parked on a workflow is Paused. Both are read below.
       let filter = `Status IN ('Running', 'Paused')`;
 
       if (conversationId) {
-        const inScope = ConversationEngine.ScopeSubquery(scope ?? ConversationEngine.TrunkScope(conversationId));
-        filter += ` AND (${inScope} OR ([ConversationID]='${EscapeSQLString(conversationId)}' AND [ConversationDetailID] IS NULL))`;
+        filter += ` AND [ConversationID]='${EscapeSQLString(conversationId)}'`;
       }
 
       LogStatusEx({message: `[${timestamp}] 🤖 AgentStateService - Executing RunView for AI Agent Runs`, verboseOnly: true});
@@ -185,7 +189,24 @@ export class AgentStateService implements OnDestroy {
       );
 
       if (result.Success) {
-        const runs = result.Results || [];
+        let runs = result.Results || [];
+        if (conversationId && runs.length > 0) {
+          const candidateDetailIds = runs
+            .map(r => r.ConversationDetailID)
+            .filter((id): id is string => typeof id === 'string' && id.trim().length > 0);
+          if (candidateDetailIds.length > 0) {
+            const effectiveScope = scope ?? ConversationEngine.TrunkScope(conversationId);
+            const scopedDetailIds = await ConversationEngine.LoadScopedDetailIds(
+              effectiveScope,
+              this.Provider,
+              this.currentUser,
+              candidateDetailIds
+            );
+            runs = scopedDetailIds === null
+              ? runs.filter(r => !r.ConversationDetailID)
+              : runs.filter(r => !r.ConversationDetailID || scopedDetailIds.has(r.ConversationDetailID.trim().toLowerCase()));
+          }
+        }
         LogStatusEx({message: `[${timestamp}] 🤖 AgentStateService - Found ${runs.length} active agent(s)`, verboseOnly: true});
         const agentsWithStatus = runs.map(run => this.mapRunToAgentWithStatus(run));
         this._activeAgents$.next(agentsWithStatus);
@@ -243,9 +264,8 @@ export class AgentStateService implements OnDestroy {
         return 'acknowledging';
       }
 
-      // Check if nearing completion (has results or output)
-      if (run.Result || run.Status === 'Completed') {
-        // If there's output, likely completing
+      // A run that is no longer Running has reached its final block
+      if (run.Status !== 'Running') {
         return 'completing';
       }
 
@@ -261,13 +281,14 @@ export class AgentStateService implements OnDestroy {
    * Extracts confidence score from agent run if available
    */
   private extractConfidence(run: MJAIAgentRunEntity): number | null {
-    // Try to parse confidence from Result or other fields
+    // Try to parse confidence from the run payload (FinalPayload, or Result on older rows)
     // This is a placeholder - adjust based on actual data structure
     try {
-      if (run.Result) {
-        const result = typeof run.Result === 'string' ? JSON.parse(run.Result) : run.Result;
-        if (result.confidence != null) {
-          return parseFloat(result.confidence);
+      const payload = run.FinalPayload ?? run.Result;
+      if (payload) {
+        const result: { confidence?: number | string } | null = JSON.parse(payload);
+        if (result?.confidence != null) {
+          return parseFloat(String(result.confidence));
         }
       }
     } catch {
@@ -334,6 +355,7 @@ export class AgentStateService implements OnDestroy {
           ExtraFilter: `ConversationDetailID='${conversationDetailId}' AND Status IN ('Running', 'Paused')`,
           OrderBy: 'StartedAt DESC',
           MaxRows: 1,
+          SkipTotalRowCount: true,
           Fields: ['ID'],
           ResultType: 'simple'
         },

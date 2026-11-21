@@ -72,9 +72,44 @@ graph TD
 - **A single Action** — if it is one call, it is one call. See
   [`packages/Actions/CLAUDE.md`](../packages/Actions/CLAUDE.md).
 
+### Durable work beyond graphs: pick the substrate before writing one
+
+The tree above chooses between workflows and their neighbours. Apps reach one step further, and
+rebuild durable-execution plumbing they already have: status columns, attempt counts,
+next-attempt times, leases, stale-`Running` thresholds and dead-letter states. Before adding any of
+those, choose the substrate that already owns them:
+
+| The work | Use | Not |
+|---|---|---|
+| Several distinct steps, a branch, a person in the loop, a wait for time or an outside event, minutes to weeks | **Task graph** — a Flow agent with triggers, or a graph submitted from code | A status column advanced by cron sweeps; cron jobs offset by fifteen minutes to imply an order |
+| One step delivered durably: at-least-once, retries with backoff, leases, dead-letter, partitions | **WorkQueue** (`@memberjunction/work-queue-*`) | A hand-rolled outbox table with its own lease arithmetic |
+| One operation over a set of records, on demand, on a schedule or on change | **Record Process** | A scheduled job that pages through rows itself |
+| Which state moves are *allowed* | **The entity subclass** (`Validate` / `ValidateAsync`) | The workflow — it decides *when* a move happens, never *whether* it is legal |
+| One call | **An Action** (at a boundary) or a direct method call | Any of the above |
+
+The last two rows matter as much as the first three. A workflow drives sequencing, waiting and
+retries; an entity's transition table stays in the entity, and the status column becomes a
+projection of where the workflow is. Writing the workflow so it is the only thing allowed to change
+the status gives you both.
+
+**When the engine cannot express what you need, fix the engine.** A missing node kind, a missing
+trigger, a limit that does not fit: raise it in core (MJ `next`) and build on the fix. A local
+workaround — a fake Human step completed from code, a `LIKE` over `Task.Configuration`, a sweep that
+exists only because an event hook is missing — is invisible to the next team and becomes the thing
+that has to be unwound later.
+
 **A Loop agent can also emit a task graph** when it decides work should be parallel and durable —
 the two are not mutually exclusive. What makes a Flow agent different is that its graph is *drawn*
 rather than *inferred*, so it is reviewable, diffable and rerunnable.
+
+When a Loop agent needs another agent's help, pick the mechanism that matches who owns the rest of the turn:
+
+| Mechanism | When to use it | What happens to the caller's run |
+|---|---|---|
+| **Sub-Agent** (`nextStep.type = "Sub-Agent"`) | You need a child or related sub-agent to compute a result and hand it back inside your run. | Stays alive; the sub-agent's output merges into your payload/messages and your loop continues. |
+| **Consult** (`ChatHandlingOption = "Consult"` on a Sub-Agent) | A sub-agent pauses mid-run to ask a clarifying question and you want the parent agent to answer (or escalate) without losing the sub-agent's run. See [Sub-Agent `ChatHandlingOption` Resolution & Values](../packages/AI/Agents/docs/sub-agents-guide.md#sub-agent-chathandlingoption-resolution--values). | Both runs stay coordinated; the parent answers via `resumeRunId` up to `MaxSubAgentConsultRounds`. |
+| **Tasks** (`nextStep.type = "Tasks"`) | The work is a multi-step or long-running DAG that should outlive the request and execute durably on the task-graph dispatcher. | Submission ends the current run immediately; the dispatcher claims and runs the `Task` rows asynchronously. |
+| **Handoff** (`nextStep.type = "Handoff"`) | Another top-level peer agent should take over the conversation and speak directly to the user as itself (and stay sticky for follow-up turns). | The source agent's run completes cleanly (`FinalStep = "Success"`), and the host starts a fresh top-level run of the target agent on the same conversation. |
 
 ---
 
@@ -145,13 +180,16 @@ the run, they appear as ordinary `AIAgentRunStep` rows rather than `Task` rows, 
 is not supported. `startAtStep` works in-process and is refused under dispatch.
 
 Both modes choose outgoing paths with the same function (`SelectOutgoingEdges`), so a flow takes the
-same branches either way. One consequence differs from 5.x in both modes: a path whose destination
+same branches either way. Workflows with multiple `StartingStep: true` entry points compile all
+active starting steps as parallel wave-1 root tasks (`dependsOn: []`) on the dispatcher, while the
+in-process walker executes all starting branches sequentially before entering any downstream join
+step. One consequence differs from 5.x in both modes: a path whose destination
 step is not `Active` is not followed, so a flow whose only satisfied path leads to a disabled step
 now finishes with **Success** where 5.x reported *"No active steps found"*.
 
 ---
 
-## The seven node kinds
+## The node kinds
 
 A node carries a `kind` and a typed `configuration` bag for that kind. The kind is the discriminator
 everything routes on.
@@ -161,10 +199,16 @@ everything routes on.
 | `Agent` | `TaskAgentRunner` → a **new** `AIAgentRun` | `Task.AgentID` | ✅ |
 | `Action` | `TaskActionRunner` → `ActionExecutionLog` | `Task.ActionID` | ✅ |
 | `Human` | nobody — waits for a person | `Task.UserID` | ✅ |
-| `ForEach` | `TaskLoopExecutor`, body dispatched per iteration | `Task.ActionID` / `AgentID` = the **body** | ✅ |
-| `While` | `TaskLoopExecutor` | same | ✅ |
-| `Prompt` | — | `Task.PromptID` | ❌ no runner yet |
-| `External` | an outside system reports back | — | ❌ no runner yet |
+| `Prompt` | `TaskPromptRunner` → `AIPromptRun` | `Task.PromptID` | ✅ |
+| `ForEach` | `TaskLoopExecutor`, single body or multi-step `steps[]` per iteration | `Task.ActionID` / `AgentID` / `PromptID` (`Configuration.stepActionIds` for `steps[]`) | ✅ |
+| `While` | `TaskLoopExecutor`, single body or multi-step `steps[]` per iteration | same | ✅ |
+| `Decision` | `AIDecisionTaskRunner` → typed answers under `decisions.<step>.<question>` | `Task.PromptID` (optional; defaults to `Default Decision`) | ✅ |
+| `External` | waits for a signal — `TaskGraph.CompleteWaitingStep`, by task ID or correlation key | — (`Task.CorrelationKey`) | ✅ |
+| `Wait` | waits for a moment in time — `until` or `durationSeconds` | — (`Task.DueAt`) | ✅ |
+
+`External`, `Wait`, and a `Human` step handed to a plugged-in provider are **waiting steps**: nothing
+claims them, and they finish when something outside the runner says so. They have their own section,
+[Waiting steps](#waiting-steps-external-wait-and-human-providers).
 
 Unrunnable kinds are **refused at submission by name**, not persisted. A task nobody can run would
 sit in `Pending` forever and read as a workflow politely in progress — the worst available failure.
@@ -349,6 +393,49 @@ A `While` loop is always sequential and always bounded; an **unevaluable conditi
 rather than ending it quietly, because "the condition broke" and "the loop finished" must not look
 alike.
 
+### Multi-step action loop bodies (`steps[]`)
+
+Both `ForEach` and `While` accept an ordered `steps?: LoopBodyActionStep[]` sequence instead of a
+single `action` / `subAgent` / `prompt` body when each iteration needs to chain multiple Actions in
+memory without expanding into N graph nodes or paying per-item LLM turns:
+
+```json
+{
+  "collectionPath": "payload.items",
+  "itemVariable": "item",
+  "indexVariable": "idx",
+  "executionMode": "sequential",
+  "steps": [
+    {
+      "id": "fetch",
+      "name": "Get Stock Price",
+      "params": { "ticker": "{{item.symbol}}" }
+    },
+    {
+      "id": "enrich",
+      "name": "Calculate Expression",
+      "condition": "steps.fetch.CurrentPrice > 100",
+      "params": { "Expression": "{{steps.fetch.CurrentPrice}} * {{item.shares}}" },
+      "outputMapping": "{\"details.result\": \"positions[]\"}"
+    }
+  ]
+}
+```
+
+- **In-memory step output chaining (`steps.<id>.*`)**: Every completed step stores its structured
+  output under `steps[step.id ?? "step_" + stepIndex]`. Later steps in the same iteration can read
+  earlier outputs in both `params` (`{{steps.fetch.CurrentPrice}}` or `"steps.fetch.CurrentPrice"`)
+  and `condition` (`steps.fetch.CurrentPrice > 100`).
+- **Per-step `condition` and `outputMapping`**: A step whose `condition` evaluates to `false` is
+  skipped cleanly for that iteration. Each executed step's `outputMapping` folds into the loop's
+  running payload (`positions[]` appends safely even under `executionMode: "parallel"`).
+- **Pre-resolved `ActionID`s & sanitized tool names**: `TaskGraphService.Submit` resolves every
+  distinct step's `ActionID` into `Task.Configuration.stepActionIds` (setting `Task.ActionID` to
+  `steps[0]`'s action for FK/UI compatibility) and accepts both canonical MJ Action names
+  (`"Calculate Expression"`) and sanitized native tool names (`"calculate_expression"`).
+- **Lossless Flow graduation**: `ConvertTaskGraphToAgentSpec` and `CompileFlowToTaskGraph` preserve
+  `steps[]` across runtime-to-Flow graduation and compilation.
+
 ---
 
 ## Failure
@@ -358,12 +445,197 @@ Two levels, and they answer different questions.
 **Per-node `onError` policy** — `fail` (default), `continue`, or `retry` with `retryCount`.
 `continue` is what lets a workflow draw a recovery path instead of stopping dead.
 
+### Retries are durable
+
+A step with `policy.retryCount` that fails is **not** retried inside the run that failed. It goes
+back to `Pending` with the attempt counted (`Task.AttemptCount`), the error kept, and the earliest
+moment it may run again (`Task.NextAttemptAt`, on the database clock). Claiming waits for that
+moment, so the retry survives a restart or a deploy and runs on whichever instance is free. Nothing
+downstream reacts to a failure that is still going to be retried; viewers get a `ClaimChanged` frame
+with `ClaimEvent: 'retry-scheduled'`. Backoff doubles from `RetryBackoffBaseMs` (default 1s), capped
+at 30×. When the retries are spent, the failure is final.
+
+Which steps may be retried — the step's policy asks, **and** running it again is safe:
+
+| Step | Retried? | Why |
+|---|---|---|
+| Action | only when the action's `IsIdempotent` is true | a payment that failed after charging must not charge again; a node may switch retries off (`compensation.isIdempotent: false`) but never on |
+| Prompt, Decision | yes | a model call changes nothing it would repeat |
+| Agent (and a loop over an agent) | **never** | the agent may have called actions that must not run twice, and an agent has no idempotency flag to say otherwise — model its retry as an explicit failure path |
+
+A person retrying a step (`TaskGraph.RetryTask`) resets its attempt count.
+
+This is what makes an app-side outbox — status, attempt count, next-attempt time, lease,
+dead-letter — unnecessary for multi-step work: put the steps in the graph and give them a policy.
+
 **Per-graph `failureSemantics`:**
 
 | Value | Meaning | Used by |
 |---|---|---|
 | `'block'` | a failed node is terminal for its dependents | agent-emitted graphs |
 | `'edges'` | dependents are released along their edges, so a failure path can be *drawn* | **compiled flows** |
+
+---
+
+## Waiting steps: External, Wait, and Human providers
+
+Three step kinds finish without a runner. When the dispatcher **reaches** one (its prerequisites are
+satisfied) it marks the step waiting — once, across instances — and records three things on the
+row: its deadline (`Task.DueAt`), its correlation key (`Task.CorrelationKey`, External only) and the
+payload it was reached with (`Configuration.runtime.payloadAtStart`). Something else then completes
+it:
+
+| Step | Completed by | Fails when |
+|---|---|---|
+| `Wait` | the dispatcher, once `DueAt` has passed (judged on the **database** clock) | its `until` cannot be resolved |
+| `External` | `TaskGraph.CompleteWaitingStep` — by task ID, or by correlation key | `expiresInHours` passes with no signal |
+| `Human` with `provider` | the provider, calling `TaskGraphWaitingSteps.CompleteWaitingStep` in process — never the remote operation, which refuses these steps | `expiresInHours` passes; the provider is not registered; the provider refuses to raise it |
+
+### What a waiting step hands on
+
+The payload it was reached with, with the signal's payload (or a Wait's `waitedUntil`) merged over
+it. A runner's output already carries everything it received; a waiting step has no runner, so the
+dispatcher does the accumulating. Emitting only the signal's payload would drop everything upstream
+from every step after it — and a condition reading `payload.customer` three steps later would quietly
+read `undefined`.
+
+### Wait
+
+```json
+{ "kind": "Wait", "configuration": { "durationSeconds": 86400 } }
+{ "kind": "Wait", "configuration": { "until": "payload.renewal.chargeOn" } }
+```
+
+Exactly one of the two. `until` is an ISO-8601 timestamp or a `payload.<path>` holding a timestamp,
+a `Date` or epoch milliseconds; a moment already past continues at once. A path that holds nothing
+**fails** the step rather than continuing now — "charge immediately because the date was missing" is
+the silent wrong turn a workflow cannot recover from.
+
+This is what replaces cron chains (`spawn at 03:00, charge at 03:15, suspend at 03:30`) and sweeps
+that check whether a cooling-off period has passed.
+
+### External, and signalling
+
+```json
+{ "kind": "External", "configuration": { "domain": "stripe", "correlationKey": "payload.invoiceID", "expiresInHours": 72 } }
+```
+
+Complete it from a browser, MCP client or Action with the remote operation:
+
+```typescript
+await new TaskGraphCompleteWaitingStepOperation().Execute(
+    { correlationKey: invoiceID, payload: { paid: true, amount } },
+    { provider: this.ProviderToUse, user: this.CurrentUser },
+);
+```
+
+…or from server code (a webhook handler, another app's save hook) directly:
+
+```typescript
+import { TaskGraphWaitingSteps } from '@memberjunction/task-graph';
+
+const result = await TaskGraphWaitingSteps.CompleteWaitingStep(
+    { CorrelationKey: invoiceID, Payload: { paid: true, amount } },
+    provider, contextUser,
+);
+// result.Completed / result.Buffered / result.Refused — each with the task IDs, and Refused with reasons
+```
+
+- **A key is not unique.** One signal completes every reached External step waiting on it, so a
+  single event — a sprint closing — releases every workflow waiting on it.
+- **Early signals are held, not lost.** A signal for a step not reached yet is stored on the step and
+  applied the moment it is reached. A *literal* key is stamped at submit so this works by key too; a
+  `payload.<path>` key is only known once the step is reached, so an early signal for one must name
+  the task ID.
+- **`Status: 'Failed'`** completes the step as failed, so a failure edge (`failureSemantics: 'edges'`)
+  can route around it.
+- **Who may signal.** The remote operation requires the workflow run's owner or an Owner-type user,
+  per matched step; steps the caller may not complete are reported in `refused`, never skipped
+  silently. In-process callers are trusted code and pass no authorizer.
+- A `Wait` step and an inbox-`Human` step are refused: each already has one way to finish.
+
+### Human-step providers
+
+A Human step uses MJ's built-in inbox (an `MJ: AI Agent Requests` row) unless a provider takes it.
+Any package can supply one (an approval system, a ticketing integration) without core knowing it
+exists. The contract lives in `@memberjunction/ai-core-plus`, so agents can use the same providers
+(see [The install's default provider](#the-installs-default-provider)):
+
+```typescript
+import { RegisterClassEx } from '@memberjunction/global';
+import {
+    BaseHumanTaskProvider, HUMAN_TASK_PROVIDER_CAN_BE_DEFAULT,
+    type HumanTaskRaiseContext, type HumanTaskRaiseResult,
+} from '@memberjunction/ai-core-plus';
+
+@RegisterClassEx(BaseHumanTaskProvider, {
+    key: 'BizAppsTasks',
+    metadata: { [HUMAN_TASK_PROVIDER_CAN_BE_DEFAULT]: true },   // optional: may be the install's default
+})
+export class BizAppsTasksHumanTaskProvider extends BaseHumanTaskProvider {
+    public async RaiseTask(ctx: HumanTaskRaiseContext): Promise<HumanTaskRaiseResult> {
+        // Create the app's own task and remember ctx.Subject. When the task is decided:
+        //  - Subject.Kind 'WorkflowStep': TaskGraphWaitingSteps.CompleteWaitingStep({ TaskID: ctx.Subject.TaskID, ... })
+        //  - Subject.Kind 'AgentRequest': AnswerAgentRequestFromProvider({ AgentRequestID: ctx.Subject.AgentRequestID, ... })
+        return { Outcome: 'raised', ExternalReference: appTask.ID };
+    }
+}
+```
+
+```json
+{ "kind": "Human", "configuration": { "instructions": "Approve the refund", "provider": "BizAppsTasks",
+  "providerConfiguration": { "taskTypeCode": "REFUND_APPROVAL", "assigneeRole": "Finance" }, "expiresInHours": 48 } }
+```
+
+- `RaiseTask` is called **exactly once** per reached step. A `transient-failure` is retried a few
+  times inline; after that, or on `permanent-failure`, the step fails with the provider's message and
+  `TaskGraph.RetryTask` raises it again.
+- The provider receives the step's instructions, its `providerConfiguration` untouched, the assigned
+  and owning users, the deadline, and the payload the step was reached with.
+- `WithdrawTask` is called when the step expires (reason `'expired'`). The default does nothing.
+- Only the provider completes the step, by calling `TaskGraphWaitingSteps.CompleteWaitingStep` in
+  process when the person decides. The `TaskGraph.CompleteWaitingStep` remote operation refuses
+  provider-raised Human steps: through it the run's owner, often the person asking for the approval,
+  could approve their own request.
+- An unregistered provider is **refused at submit**, by name; the dispatcher re-checks when it
+  reaches the step, so a host that differs fails the step with the name rather than waiting forever.
+- `'AgentRequest'` is the built-in inbox, always. Omitted means the install's default provider, which
+  is the inbox unless the install chose one.
+
+#### The install's default provider
+
+Installing a provider never reroutes anyone's approvals. A provider takes asks that do not name it
+only when **both** of these hold:
+
+1. **The provider declares it can.** Its registration carries `CanBeDefault: true` (the
+   `HUMAN_TASK_PROVIDER_CAN_BE_DEFAULT` metadata key above). The app that writes the provider knows
+   whether it can take any ask, not only the ones built for it.
+2. **The install chooses it.** `humanTasks.defaultProvider` in `mj.config.cjs` (env
+   `MJ_HUMAN_TASKS_DEFAULT_PROVIDER`), applied at MJAPI startup through
+   `HumanTaskProviderDefaults.Instance.Configure()`.
+
+A configured provider that is not registered, or does not declare `CanBeDefault`, is ignored with an
+error at startup, and asks stay in the inbox. It is checked each time it is read, so a provider whose
+package loads later takes effect then.
+
+With a default in effect:
+
+- **Workflow Human steps that name no provider** go to it. The choice is made at submit and written
+  into the step's configuration, so the step records where it went and changing the setting later
+  does not reroute running workflows. A step naming `'AgentRequest'` stays in the inbox.
+- **Agents' questions (Chat steps)** are raised through it as well as kept in the inbox. The
+  `MJ: AI Agent Requests` row stays the source of truth, because answering it is what resumes the
+  agent. The row records the provider and its reference (`HumanTaskProvider`,
+  `HumanTaskExternalReference`). The provider answers with `AnswerAgentRequestFromProvider`
+  (`@memberjunction/ai-agents`): only the provider the request was raised through, only while it is
+  open, saved as the request's owner so the resumed run has that user's permissions. An answer given
+  in the inbox or the conversation instead calls `WithdrawTask` with `'completed-elsewhere'`. If
+  raising fails, the provider is cleared from the row and the inbox alone holds the request.
+- **Plan approvals** (an agent's Plan step) stay in the inbox: the reviewer edits the plan, and that
+  reply has no place in the provider contract yet.
+
+Drawn workflows (`AIAgentStep`) accept `External` and `Wait` step types, and a Human step's
+`provider` / `providerConfiguration` ride in its `Configuration`, exactly as they do on a graph node.
 
 ---
 
@@ -408,6 +680,137 @@ Author workflows as declarative metadata under `metadata/` and push with `mj syn
 reviewable and travel between environments. See [`metadata/CLAUDE.md`](../metadata/CLAUDE.md).
 
 ---
+
+## Triggers: when a workflow runs
+
+Everything above defines *what* a workflow does. *When* it runs is declared beside it, in a
+`WorkflowSpec` (`packages/AI/CorePlus/src/task-graph/workflow-spec.ts`):
+
+| Field | Meaning |
+|---|---|
+| `name`, `description` | The workflow as people see it |
+| `status` | `Draft` (the default), `Active` or `Paused` |
+| `graph` | A `TaskGraphSpec`, verbatim: the same shape the canvas, a Loop agent and a past run produce |
+| `triggers` | When it runs. Empty means on demand |
+| `notifications` | Who hears about a run: `Always`, `OnFailure` or `OnChange`, to a list of user IDs |
+
+**There is no `Workflow` table.** Saving a spec *reconciles* rows that already exist: the Flow agent
+behind the graph, a Scheduled Job for a schedule, an Entity Action binding for a record change. Each
+owned row is matched by a marker in its own configuration, so ownership survives a rename, and
+re-saving updates rows in place rather than deleting and recreating them, so a live trigger is never
+detached for a moment.
+
+### The three trigger kinds
+
+| `type` | Fires | What saving creates or updates |
+|---|---|---|
+| `OnDemand` | Only when something asks: **Run** on the workflow's agent form (opened from the Workflows app), an agent, the `TaskGraph.Submit` operation | Nothing |
+| `Schedule` | On `cron`, in `timezone` (an IANA zone; absent means the job's own default) | One `MJ: Scheduled Jobs` row of the existing `Agent` job type, pointing at the workflow's agent |
+| `EntityEvent` | After a record of `entityName` is created, updated or deleted, when `filter` allows | An `MJ: Entity Actions` binding on that entity dispatching to the existing `Execute Agent` action: an `MJ: Entity Action Invocations` row for the event, `MJ: Entity Action Params` carrying the agent and the changed record, and, when `filter` is set, an `MJ: Action Filters` row bound through `MJ: Entity Action Filters` |
+
+### Record-change (`EntityEvent`) triggers
+
+```jsonc
+"triggers": [{
+  "type": "EntityEvent",
+  "entityName": "Invoices",
+  "invocationType": "Update",
+  "filter": "DidFieldChangeToValue('Status', 'Approved')"
+}]
+```
+
+- **`invocationType`** is `AfterCreate`, `AfterUpdate` or `AfterDelete`, or the shorthand `Create`,
+  `Update`, `Delete`, which resolves to the *After* form. `Validate` and the `Before*` types are
+  refused: they run inside the save, holding its transaction open with the power to abort it, and a
+  workflow bound there would put an agent run in the middle of a user's save.
+- **`filter`** is a JavaScript boolean expression about the change. In scope:
+  `DidFieldChange('Field')`, `DidFieldChangeToValue('Field', value)`, `OldValues`, `NewValues`, and
+  `ActionFilterContext`. **Write the transition, not the state**: `NewValues.Status === 'Approved'` is
+  true on every later save too, while `DidFieldChangeToValue('Status', 'Approved')` is true once, on
+  the save that made it so. **A create reports no changed fields**, so a `Create` trigger tests
+  `NewValues` instead. The expression is syntax-checked when the workflow is validated, and at run time
+  it **fails closed**: one that throws prevents the run. It is the same language a plain entity action
+  filter and a Record Process `OnChangeFilter` use; the full vocabulary is in
+  [`packages/Actions/Engine/README.md`](../packages/Actions/Engine/README.md#transition-filters--deciding-on-the-change-not-the-end-state).
+- **`scopeEntityName` / `scopeRecordID`** narrow the trigger from the whole entity to one record.
+
+### Saving: `Workflow.Draft`, `Workflow.Validate`, `Workflow.Save`
+
+Three remote operations, implemented in `packages/TaskGraph/src/operations/WorkflowOperations.ts`:
+
+| Operation | Does |
+|---|---|
+| `Workflow.Draft` | Turns a plain-English description into a `TaskGraphSpec`, constrained to agents that exist. **Persists nothing**; the Workflows app's *Describe it* path uses it, and the author reviews the draft on the canvas |
+| `Workflow.Validate` | Runs exactly the validation `Workflow.Save` runs and returns every problem, each with a code, so an agent can iterate before committing |
+| `Workflow.Save` | Validates, persists the Flow agent, then reconciles the triggers (`packages/TaskGraph/src/WorkflowSpecSync.ts`). Returns the `agentID`, the Scheduled Jobs it touched, and `unreconciled`: any trigger it could not wire is reported, never silently dropped |
+
+`Workflow.Save` needs the agent-authoring package loaded on the host; without it the save is refused
+with that reason rather than half-persisting a workflow.
+
+Removing a trigger **disables** what it owned rather than deleting it: a Scheduled Job keeps its
+counts and run history, and a removed filter's row keeps the expression someone wrote.
+
+### Status
+
+A trigger follows the workflow's status. A schedule's job, and a record-change trigger's
+`MJ: Entity Actions` binding, are `Active` only while the spec is `Active`; a `Draft` or `Paused`
+workflow keeps them, `Disabled`, without running on them.
+
+The workflow's Flow agent follows the status too: a `Draft` or `Paused` spec is saved as an
+`MJ: AI Agents` row with `Status = 'Disabled'`
+(`packages/AI/AgentManager/core/src/workflow-agent-writer.ts`), and the agent form's **Run** button is
+disabled unless the agent is `Active`. A draft cannot be run on demand until it is saved `Active`.
+
+Removing a trigger from the spec **disables** what it owned: the Scheduled Job, or the binding.
+Re-adding it reactivates the same row, with its history.
+
+Record-change triggers on one entity and scope share one binding, and a filter belongs to the
+binding. Two such triggers with **different** filters cannot both be honoured, so the second is
+reported in `unreconciled` rather than silently overwriting the first. Give them identical filters,
+or split them into two workflows.
+
+### Where people work with triggers
+
+| Surface | What it does with triggers |
+|---|---|
+| **Workflows** app → **Create** (*Blank canvas*, *Describe it*, *From a past run*) | Saves the workflow through `Workflow.Save` as a `Draft` with no triggers (its Flow agent is `Disabled`) and opens it on the AI Agents form. It asks for no trigger, on purpose: creating a workflow captures *what* worked, and *when* is a separate decision |
+| **Workflows** app → list | Does not read triggers back yet, so every workflow shows as *On demand* |
+| A conversation's plan card → **Save as workflow** | Saves an agent's plan as a `Draft` on-demand workflow (`status: 'Draft'`, no triggers) |
+| **Scheduling** app | Shows the job a `Schedule` trigger owns, and its runs |
+| `Workflow.Save`, from code, an agent or an MCP client | The way to add or change a `Schedule` or `EntityEvent` trigger today |
+
+### Which record-change mechanism to use
+
+All three below share the same filter language and end up as the same Entity Action rows, so a person
+who learns one has learned the others.
+
+| You need | Use |
+|---|---|
+| One action when a record changes ("send the customer a confirmation") | A plain Entity Action with an Action Filter: [`packages/Actions/Engine/README.md`](../packages/Actions/Engine/README.md) |
+| One operation over a set of records, on demand, on a schedule or on change | A Record Process: [Record Set Processing Guide](RECORD_SET_PROCESSING_GUIDE.md), §7 |
+| Several steps, a branch, a person in the loop, or work that takes minutes | A workflow with an `EntityEvent` trigger |
+
+**Durability.** A record-change dispatch is an `After*` entity action, which runs fire-and-forget in
+the saving process unless its binding's `RunMode` is `Durable`. For a workflow that matters less
+than it sounds: `Execute Agent` submits the workflow as a durable task graph, so only the hand-off
+runs in that process. For a plain Entity Action whose work has an outside effect (an email, a call to
+another system), set `RunMode = 'Durable'`. The work then survives a restart and is tied to the
+transaction that caused it, so a save that rolled back never fires it. See "Durable dispatch" in
+[`packages/Actions/Engine/README.md`](../packages/Actions/Engine/README.md).
+
+For people who configure workflows rather than write code, the companion
+[Workflows for Business Users](WORKFLOWS_FOR_BUSINESS_USERS.md) guide explains the same ideas without
+the internals.
+
+---
+
+## Graph size
+
+A graph a **model** authored — a Loop agent's `nextStep.tasks`, a `Workflow.Draft` — is capped at
+`MAX_TASKS_PER_AGENT_GRAPH` (50), matching what a model can hold in its scratchpad. Graphs a person
+drew or code built are bounded only by `MAX_TASKS_PER_GRAPH` (10,000), a blast-radius ceiling for
+the `TaskGraph.Submit` remote operation. Work that fans out wider is one step repeated over a
+collection: a `ForEach`, or a Record Process.
 
 ## Submitting a graph from code
 
@@ -555,6 +958,22 @@ See the **[Workflow Debugger Guide](WORKFLOW_DEBUGGER_GUIDE.md)** for the walkth
 
 ## Troubleshooting
 
+### The workflow never fires on its trigger
+
+| Check | Why |
+|---|---|
+| Does the workflow have a trigger at all? | Workflows created in the Workflows app are on demand until a trigger is saved through `Workflow.Save` |
+| Was `unreconciled` empty when it was saved? | A trigger that could not be wired is reported there, not dropped |
+| Is a schedule's workflow `Active`? | A `Draft` or `Paused` workflow's Scheduled Job is `Disabled` |
+| Is the filter about a change? | `DidFieldChange` is false on every field of a create; a `Create` trigger must test `NewValues` |
+| Is there an `ActionExecutionLog` row whose message says a filter prevented it? | The filter ran and said no, or threw: filters fail closed |
+| Did the change go through `BaseEntity.Save()`? | Direct SQL fires no entity action |
+
+### The workflow fires too often
+
+The filter describes a state, not a transition. `NewValues.Status === 'Approved'` is true on every
+save after approval; use `DidFieldChangeToValue('Status', 'Approved')`.
+
 ### The workflow finished but did nothing
 
 Look for **every branch `Skipped`**. That means no condition at a fork evaluated true — and the
@@ -579,8 +998,19 @@ An `OutputPayload` of `{}` on the step *before* the fork is the tell.
 
 ### The workflow refused to start
 
-Read the message — it names the step. Common cases: a `Prompt` or `External` step (no runner yet), a
-loop with nothing to repeat, a step referencing an agent or action that no longer exists, or a cycle.
+Read the message — it names the step. Common cases: a loop with nothing to repeat, a step referencing
+an agent or action that no longer exists, a cycle, a Human step naming a provider no package on the
+server registers, or a step kind this server is too old to know.
+
+### A waiting step never finishes
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| An External step `Pending` with `ClaimedBy = '__waiting__'` | it is reached and waiting for its signal | signal it: `CompleteWaitingStep` by task ID, or by the `CorrelationKey` on the row |
+| A signal returned `buffered` and nothing happened | the step has not been reached yet — an upstream step is still running or failed | the signal is held; it applies when the step is reached |
+| A signal by key matched nothing | the key is a `payload.<path>` and the step is not reached yet, so `CorrelationKey` is still empty | signal by task ID, or use a literal key |
+| A Wait step is still `Pending` past its time | the graph is not being polled (no dispatcher), or `DueAt` was resolved later than expected | check the dispatcher is running; read `DueAt` on the row |
+| A provider-Human step failed at once | the provider is not registered on the dispatching server, or refused to raise | the step's `ErrorMessage` names which; fix and `TaskGraph.RetryTask` |
 
 ### Nothing is ever claimed — every task sits Pending
 
@@ -626,6 +1056,8 @@ The type system makes most of this a compile error rather than a runtime surpris
 
 ## Related reading
 
+- [Workflows for Business Users](WORKFLOWS_FOR_BUSINESS_USERS.md) — the same concepts for people who
+  configure workflows rather than write code
 - [`packages/AI/Agents/README.md`](../packages/AI/Agents/README.md) — the agent framework, agent
   types, and where `FlowAgentType` fits
 - [`packages/TaskGraph/README.md`](../packages/TaskGraph/README.md) — the durable execution package:

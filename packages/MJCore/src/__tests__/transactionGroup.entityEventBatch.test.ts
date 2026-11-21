@@ -57,14 +57,11 @@ interface PlannedItem {
     CallbackThrows?: boolean;
     /**
      * Where the item raises its save. An entity's `Save()` raises it when the group notifies its
-     * outcome ('notification', the default); 'callback' raises it from the item's callback.
-     *
-     * A real `BaseEntity` raises its save only from a successful notification, so 'callback' is a
-     * synthetic source. The failure-path tests use it to put a save inside a batch that then fails,
-     * standing in for any other save raised for the same provider during the group's callbacks: a
-     * callback that saves another entity, or, in a browser, an unrelated save on the shared provider.
+     * outcome ('notification', the default); 'callback' raises it from the item's callback when
+     * `success === true`; 'concurrent' raises unconditionally during the callback window to stand
+     * in for an unrelated save on the shared provider while the group's callbacks run.
      */
-    RaiseFrom?: 'notification' | 'callback';
+    RaiseFrom?: 'notification' | 'callback' | 'concurrent';
     /** When set, the item's callback waits for this before it finishes. */
     Gate?: Promise<void>;
 }
@@ -84,11 +81,11 @@ class FakeTransactionGroup extends TransactionGroupBase {
             if (item.CallbackThrows && success) {
                 throw new Error('finalizing the entity failed');
             }
-            if (success && item.RaiseFrom === 'callback') {
+            if (item.RaiseFrom === 'concurrent' || (success && item.RaiseFrom === 'callback')) {
                 raise();
             }
         });
-        if (item.RaiseFrom !== 'callback') {
+        if (!item.RaiseFrom || item.RaiseFrom === 'notification') {
             // As BaseEntity.Save() does for an entity in a group.
             this.TransactionNotifications$.subscribe(({ success, results }) => {
                 if (success && results?.some(r => r.Transaction === transaction)) {
@@ -185,12 +182,15 @@ describe('TransactionGroupBase.Submit batches cache maintenance', () => {
     it('invalidates the slot instead of applying part of a group that did not fully succeed', async () => {
         const owner = newOwner();
         const group = new FakeTransactionGroup();
-        group.Plan({ Owner: owner, Row: { ID: '2', Name: 'saved' }, RaiseFrom: 'callback' });
+        let item0CallbackRaised = false;
+        group.Plan({ Owner: owner, Row: { ID: '2', Name: 'saved' }, RaiseFrom: 'callback' }, () => { item0CallbackRaised = true; });
+        group.Plan({ Owner: owner, Row: { ID: '99', Name: 'concurrent' }, RaiseFrom: 'concurrent' });
         group.Plan({ Owner: owner, Row: { ID: '3', Name: 'failed' }, Succeeds: false, RaiseFrom: 'callback' });
 
         expect(await group.Submit()).toBe(false);
         await settle();
 
+        expect(item0CallbackRaised).toBe(false);
         expect(slotWrites).toHaveLength(0);
         expect(await rows(UNFILTERED)).toBeNull();
     });

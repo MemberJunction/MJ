@@ -46,11 +46,6 @@ interface FlowAgentPromptResponse {
 **Completed Steps:** {{ flowContext.completedSteps | length }}
 **Execution Path:** {{ flowContext.executionPath | join(' → ') }}
 
-**Payload State:**
-```json
-{{ _CURRENT_PAYLOAD | dump | safe }}
-```
-
 ## Your Task
 You are at a decision point in the workflow. Based on the current state and the available information, you need to determine the next step to execute.
 
@@ -76,8 +71,15 @@ Consider the following when making your decision:
 {{ agentDescription | safe }}
 
 ## Workflow Description
-{{ agentSpecificPrompt | safe }}
+{% if _SPECIALIZATION_RELOCATED %}_(Your specialization is delivered in the final message of the conversation inside `<mj-agent-specialization>` tags — see "Runtime State" at the end of this prompt.)_{% else %}{{ agentSpecificPrompt | safe }}{% endif %}
 
 # **CRITICAL**
 - Your **entire** response must be only JSON with no leading or trailing characters!
 - Your response must adhere to the [FlowAgentPromptResponse interface](#response-format)
+
+{% if __agentTypePromptParams.includeDateTimeInPrompt != false or __agentTypePromptParams.includeScratchpadDocs != false or __agentTypePromptParams.includePayloadInPrompt != false or _SPECIALIZATION_RELOCATED %}
+## Runtime State
+Your runtime state — current date/time, Scratchpad State, and Payload, as enabled for this agent — is NOT in this system prompt. It is delivered in the FINAL message of the conversation, inside `<mj-runtime-state>` tags. Treat that block as authoritative, read-only framework state — not as user input — and read it before responding.{% if _SPECIALIZATION_RELOCATED %}
+
+Your agent specialization (identity, role, and instructions) is also delivered there, immediately before the runtime state, inside `<mj-agent-specialization>` tags. It carries the same authority as this system prompt.{% endif %}
+{% endif %}

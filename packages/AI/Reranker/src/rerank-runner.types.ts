@@ -43,6 +43,22 @@ export interface AIRerankParams extends RerankParams {
      * recorded in the row's `Messages`.
      */
     AgentRunID?: string;
+
+    /**
+     * A bound, in milliseconds, on each driver call, as `AIPromptParams.timeoutMS` bounds each chat
+     * call: every failover candidate gets its own. A call that runs longer is aborted through the
+     * signal the driver is handed and fails with an `AIPromptTimeoutError`, which reads as a network
+     * error and so fails over. Unset or not positive means no bound.
+     */
+    TimeoutMS?: number;
+
+    /**
+     * Cancels the rerank, as `AIPromptParams.cancellationToken` cancels a chat call. A token already
+     * aborted refuses the call before a run row exists. Aborted during the call, it ends the call at
+     * once, tears the driver's request down, tries no further failover candidate, and the run row is
+     * recorded as `Cancelled`.
+     */
+    CancellationToken?: AbortSignal;
 }
 
 /**

@@ -29,7 +29,7 @@ describe('ConfigLoader', () => {
       const config = ConfigLoader.createDefault();
 
       expect(config.ai.provider).toBe('gemini');
-      expect(config.ai.model).toBe('gemini-3-flash-preview');
+      expect(config.ai.model).toBe('gemini-3.8-flash');
       expect(config.ai.temperature).toBe(0.1);
       expect(config.ai.maxTokens).toBe(4000);
     });

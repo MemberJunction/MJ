@@ -79,6 +79,7 @@ export async function ResolveIdentityByEmail(
         ExtraFilter: `${emailField} = '${trimmed.replace(/'/g, "''")}'`,
         Fields: pkNames,
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'simple',
       },
       contextUser,

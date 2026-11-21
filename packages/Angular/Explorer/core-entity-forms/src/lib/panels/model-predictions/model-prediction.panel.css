@@ -194,6 +194,11 @@
     margin-bottom: 8px;
 }
 
+.mpp-drivers-note {
+    font-size: 0.78rem;
+    color: var(--mj-text-muted);
+}
+
 .mpp-driver {
     display: grid;
     grid-template-columns: minmax(80px, 38%) 1fr;

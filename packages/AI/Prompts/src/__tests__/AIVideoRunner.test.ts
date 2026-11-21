@@ -5,6 +5,7 @@ import {
   AvatarInfo,
   AvatarVideoParams,
   BaseVideoGenerator,
+  BuildCancellationErrorInfo,
   ErrorAnalyzer,
   ModelUsage,
   VideoResult,
@@ -68,7 +69,7 @@ interface VideoCall {
 }
 
 const calls: VideoCall[] = [];
-let respond: (driver: string, params: AvatarVideoParams) => VideoResult;
+let respond: (driver: string, params: AvatarVideoParams) => VideoResult | Promise<VideoResult>;
 
 /** What HeyGen's driver returns: the render job's ID, and no usage, since the video does not exist yet. */
 function accepted(videoId: string, usage?: ModelUsage): VideoResult {
@@ -96,6 +97,25 @@ function rejectedWith(status: number): VideoResult {
   const result = failed(message);
   result.errorInfo = ErrorAnalyzer.AnalyzeError(Object.assign(new Error(message), { status }), 'HeyGen');
   return result;
+}
+
+/** A driver call that never answers. */
+function hangs(): Promise<VideoResult> {
+  return new Promise<VideoResult>(() => undefined);
+}
+
+/**
+ * A driver call that honors its params' `CancellationToken` as the shipped drivers do: it answers
+ * only when the signal aborts, with the failure classified as the abort's cause.
+ */
+function answersOnAbort(params: AvatarVideoParams): Promise<VideoResult> {
+  return new Promise<VideoResult>(resolve => {
+    params.CancellationToken?.addEventListener('abort', () => {
+      const result = failed('The request was aborted');
+      result.errorInfo = BuildCancellationErrorInfo({ signal: params.CancellationToken, provider: 'Test vendor' });
+      resolve(result);
+    }, { once: true });
+  });
 }
 
 abstract class ScriptedVideoGenerator extends BaseVideoGenerator {
@@ -281,6 +301,49 @@ describe('AIVideoRunner', () => {
       expect(result.Success).toBe(false);
       expect(result.VideoID).toBeUndefined();
       expect(MediaHarness.LastRun?.Status).toBe('Failed');
+    });
+  });
+
+  describe('timeout and cancellation', () => {
+    it("hands the driver the bound's signal, which aborts when the caller cancels, and does not fail over", async () => {
+      const controller = new AbortController();
+      respond = (_driver, params) => {
+        setTimeout(() => controller.abort(), 10);
+        return answersOnAbort(params);
+      };
+
+      const result = await runner.RunAvatarVideo(videoParams({ CancellationToken: controller.signal, TimeoutMS: 5000 }));
+      await runner.WaitForPendingPromptRunSaves();
+      const run = MediaHarness.LastRun;
+
+      const signal = calls[0].Params.CancellationToken;
+      expect(signal).toBeInstanceOf(AbortSignal);
+      expect(signal?.aborted).toBe(true);
+      expect(Object.keys(calls[0].Params)).not.toContain('TimeoutMS');
+      expect(calls).toHaveLength(1);
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toBe('The Video call was cancelled');
+      expect(run?.Status).toBe('Cancelled');
+      expect(run?.Cancelled).toBe(true);
+      expect(run?.FailoverAttempts).toBe(0);
+    });
+
+    it('passes the caller token to the driver when there is no TimeoutMS', async () => {
+      const controller = new AbortController();
+
+      await runner.RunAvatarVideo(videoParams({ CancellationToken: controller.signal }));
+
+      expect(calls[0].Params.CancellationToken).toBe(controller.signal);
+    });
+
+    it('tears down a call that exceeds TimeoutMS, and fails it over', async () => {
+      respond = driver => (driver === DRIVER_A ? hangs() : accepted('video-job-2'));
+
+      const result = await runner.RunAvatarVideo(videoParams({ ModelID: VIDEO_MODEL_ID, TimeoutMS: 25 }));
+
+      expect(calls.map(c => c.Driver)).toEqual([DRIVER_A, DRIVER_B]);
+      expect(calls[0].Params.CancellationToken?.aborted).toBe(true);
+      expect(result.Success).toBe(true);
     });
   });
 

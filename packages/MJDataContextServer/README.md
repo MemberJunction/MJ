@@ -1,16 +1,16 @@
 # @memberjunction/data-context-server
 
-Server-side implementation of the MemberJunction Data Context system. Provides SQL-based data loading for `DataContextItem` objects using direct database connections.
+Server-side implementation of the MemberJunction Data Context system. Loads the data of `sql`-type `DataContextItem` objects by running their SQL through a query provider's screened ad-hoc path.
 
 ## Overview
 
-The `@memberjunction/data-context-server` package extends the base `DataContextItem` class from `@memberjunction/data-context` with a server-side implementation that executes SQL queries directly against SQL Server using `mssql` connection pools. This is the server counterpart to the client-side GraphQL-based data context loading.
+The `@memberjunction/data-context-server` package extends the base `DataContextItem` class from `@memberjunction/data-context` with a server-side implementation of `LoadFromSQL`. It runs the item's SQL through `RunQuery({ SQL })` on a query provider, the same ad-hoc path `ExecuteAdhocQuery` uses, so the SQL must be a single read statement. On PostgreSQL that path also runs it in a read-only transaction that is rolled back. It never sends SQL to a raw connection pool. This is the server counterpart to the client-side GraphQL-based data context loading.
 
 ```mermaid
 graph TD
     A["DataContextItemServer"] -->|extends| B["DataContextItem<br/>(data-context package)"]
-    A -->|uses| C["mssql ConnectionPool"]
-    C --> D["SQL Server"]
+    A -->|"RunQuery({ SQL })"| C["Read-only query provider"]
+    C --> D["Database"]
 
     E["Server-Side Code<br/>(MJAPI, Actions, etc.)"] --> A
     F["Client-Side Code<br/>(Angular, React)"] --> G["DataContextItemClient<br/>(GraphQL-based)"]
@@ -31,28 +31,29 @@ npm install @memberjunction/data-context-server
 
 ## How It Works
 
-The package registers `DataContextItemServer` as a subclass of `DataContextItem` using MemberJunction's `@RegisterClass` decorator. When server-side code creates a `DataContextItem`, the class factory automatically returns the server implementation that uses direct SQL execution rather than GraphQL.
+The package registers `DataContextItemServer` as a subclass of `DataContextItem` using MemberJunction's `@RegisterClass` decorator. When server-side code creates a `DataContextItem`, the class factory automatically returns the server implementation.
 
 ```typescript
 import '@memberjunction/data-context-server';
-// DataContextItem instances now use direct SQL execution on the server
+// DataContextItem instances can now load `sql` items on the server
 ```
 
 The `LoadFromSQL` method:
-1. Receives a SQL Server `ConnectionPool` as the data source
-2. Creates a new `Request` from the pool
-3. Executes the `DataContextItem.SQL` query directly
-4. Stores the resulting recordset in `DataContextItem.Data`
+1. Receives a query provider (`IRunQueryProvider`) as the data source. MJServer passes its read-only provider.
+2. Refuses when there is no context user, or when the data source is not a query provider (for example a raw connection pool)
+3. Runs `DataContextItem.SQL` through `RunQuery({ SQL })` for the context user. The provider accepts only a single read statement.
+4. Stores the result rows in `DataContextItem.Data`
 5. Returns success/failure with error details on `DataLoadingError`
+
+Callers decide who may run an item's SQL. MJServer's `GetDataContextData` and `GetDataContextItemData` queries allow it only for the data context's owner or an administrator, never for a scope-limited session, and only on the read-only provider.
 
 ## Dependencies
 
 | Package | Purpose |
 |---------|---------|
-| `@memberjunction/core` | UserInfo, LogError utilities |
+| `@memberjunction/core` | `IRunQueryProvider`, `UserInfo`, `LogError` |
 | `@memberjunction/global` | RegisterClass decorator |
 | `@memberjunction/data-context` | Base DataContextItem class |
-| `mssql` | SQL Server connectivity |
 
 ## License
 

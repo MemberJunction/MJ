@@ -1,5 +1,6 @@
 import { UserInfo } from "@memberjunction/core";
 import { MJCredentialEntity } from "@memberjunction/core-entities";
+import { CredentialExpirationPolicy, CredentialExpirationStatus } from "./expiration";
 
 /**
  * Options for resolving credentials.
@@ -35,6 +36,17 @@ export interface CredentialResolutionOptions {
      * Helps identify where credentials are being used.
      */
     subsystem?: string;
+
+    /**
+     * Optional: Override the engine-wide expiration policy for this one call.
+     *
+     * Pass `'warn'` for the narrow set of callers that legitimately need to read
+     * a credential *because* it has expired — chiefly credential rotation and
+     * administration tooling, which must load the stale value in order to
+     * replace it. Ordinary consumers should leave this unset and inherit the
+     * engine's configured policy.
+     */
+    expirationPolicy?: CredentialExpirationPolicy;
 }
 
 /**
@@ -75,6 +87,26 @@ export interface ResolvedCredential<T extends Record<string, string> = Record<st
      * Null if no expiration is set.
      */
     expiresAt?: Date | null;
+
+    /**
+     * The credential's lifecycle state at the moment it was resolved.
+     *
+     * Credentials supplied via `directValues` always report `'valid'` — the
+     * caller owns their lifetime and the engine knows nothing about it.
+     *
+     * A resolved credential can legitimately be `'expired'` here: that happens
+     * under a `'warn'` policy, or inside the configured grace period. Callers
+     * that want to refuse such a credential should check this field rather than
+     * assuming a successful resolve implies a live credential.
+     */
+    expirationStatus: CredentialExpirationStatus;
+
+    /**
+     * Whole days until the credential expires, negative once it has expired,
+     * and null when the credential has no expiry. Useful for surfacing
+     * "expires in N days" without re-deriving it from `expiresAt`.
+     */
+    daysUntilExpiration?: number | null;
 }
 
 /**
@@ -160,6 +192,15 @@ export interface CredentialAccessDetails {
      * Time taken for the operation in milliseconds.
      */
     durationMs?: number;
+
+    /**
+     * The credential's lifecycle state at the time of the operation.
+     *
+     * Recorded in the audit log so an auditor can answer "was any credential
+     * used while expired?" — which matters under a `'warn'` policy or a grace
+     * period, where such a use succeeds rather than failing loudly.
+     */
+    expirationStatus?: CredentialExpirationStatus;
 }
 
 // ============================================================================
@@ -241,3 +282,69 @@ export interface TwilioCredentialValues {
     accountSid: string;
     authToken: string;
 }
+
+/**
+ * Values stored for a per-user delegated OAuth 2.0 (`3LO`) credential (Posture 3).
+ * `ownerUserId` is encrypted inside `Values` and strictly enforced by `CredentialEngine`
+ * against `contextUser.ID` on every resolution.
+ */
+export interface UserDelegatedOAuthCredentialValues {
+    [key: string]: string;
+    ownerUserId: string;
+    principalEmail: string;
+    providerName: string;
+    accessToken: string;
+    refreshToken: string;
+    tokenType: string;
+    scope: string;
+    tenantId: string;
+    issuedAt: string;
+}
+
+/**
+ * Options for storing or rotating a per-user delegated OAuth 2.0 (`3LO`) credential.
+ */
+export interface StoreUserDelegatedCredentialOptions {
+    credentialTypeName?: string;
+    providerName: string;
+    ownerUserId: string;
+    principalEmail: string;
+    accessToken: string;
+    refreshToken?: string;
+    tokenType?: string;
+    scope?: string;
+    tenantId?: string;
+    expiresAt?: Date;
+    categoryId?: string;
+}
+
+/**
+ * Values for "GitHub App" credential type (`schemas/github-app.schema.json`).
+ * Used to mint short-lived, repository-scoped installation access tokens via RS256 JWT.
+ */
+export interface GitHubAppCredentialValues {
+    [key: string]: string | undefined;
+    appId: string;
+    installationId: string;
+    privateKey: string;
+    defaultOwner?: string;
+    allowedRepositories?: string;
+    allowMerge?: string;
+    defaultPRMode?: 'draft' | 'ready';
+    apiBaseUrl?: string;
+    webhookSecret?: string;
+}
+
+/**
+ * Values for "GitHub Personal Access Token" credential type (`schemas/github-pat.schema.json`).
+ */
+export interface GitHubPATCredentialValues {
+    [key: string]: string | undefined;
+    token: string;
+    defaultOwner?: string;
+    allowedRepositories?: string;
+    allowMerge?: string;
+    defaultPRMode?: 'draft' | 'ready';
+    apiBaseUrl?: string;
+}
+

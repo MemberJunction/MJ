@@ -12,7 +12,6 @@
       {
         "fields": {
           "RubricID": "@parent:ID",
-          "Status": "Draft",
           "PassThreshold": 0.7,
           "NotApplicablePolicy": "NotAllowed",
           "ScoreDisplayMin": 0,
@@ -230,8 +229,8 @@
           ]
         },
         "sync": {
-          "lastModified": "2026-10-02T21:42:24.203Z",
-          "checksum": "a538420290b4c6a3b81ef301b02aabc2e75b5a521a8a8950a5fc9533a23eae42"
+          "lastModified": "2026-10-20T23:19:37.806Z",
+          "checksum": "4c13a0e512e8c9ed06618a917d8f954e1f3893e75b55cb8ea489c669a71b8112"
         }
       }
     ]

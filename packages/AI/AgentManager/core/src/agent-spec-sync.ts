@@ -16,10 +16,12 @@ import {
     AgentSpec,
     AgentActionSpec,
     AgentStep,
+    AgentStepPath,
     SubAgentSpec
 } from '@memberjunction/ai-core-plus';
-import { UUIDsEqual } from '@memberjunction/global';
-import { StepConfigurationText } from './flow-step-validation';
+import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { UUIDsEqual, UUIDSet } from '@memberjunction/global';
+import { IsLoopStep, StepConfigurationText } from './flow-step-validation';
 
 /**
  * Represents a single database mutation performed by AgentSpecSync
@@ -35,6 +37,36 @@ export interface AgentSpecSyncMutation {
     Description: string;
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isPersistedUUID(id: string | null | undefined): id is string {
+    return typeof id === 'string' && UUID_REGEX.test(id.trim());
+}
+
+/** The seeded "Chat" AI Prompt Type that inline step prompts are created under. */
+const CHAT_PROMPT_TYPE_ID = 'a6da423e-f36b-1410-8dac-00021f8b792e';
+
+/** A Sub-Agent step, or a loop step whose body is a sub-agent. */
+function stepRunsSubAgent(step: AgentStep): boolean {
+    return step.StepType === 'Sub-Agent' || (IsLoopStep(step) && step.LoopBodyType === 'Sub-Agent');
+}
+
+/** A Prompt step, or a loop step whose body is a prompt. */
+function stepRunsPrompt(step: AgentStep): boolean {
+    return step.StepType === 'Prompt' || (IsLoopStep(step) && step.LoopBodyType === 'Prompt');
+}
+
+/** Names compare the way SQL Server's default collation does: trimmed, case-insensitive. */
+function sameName(a: string | null | undefined, b: string | null | undefined): boolean {
+    return (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase();
+}
+
+/**
+ * Where a step with an empty `SubAgentID` gets its sub-agent: one of this spec's own sub-agents
+ * (whose ID exists only after `saveSubAgents`), or an existing active agent.
+ */
+type StepSubAgentLink = { Source: 'spec'; SubAgent: SubAgentSpec } | { Source: 'existing'; AgentID: string };
+
 /**
  * Result of SaveToDatabase operation including all mutations performed
  */
@@ -43,6 +75,8 @@ export interface AgentSpecSyncResult {
     agentId: string;
     /** Whether the operation succeeded */
     success: boolean;
+    /** Error message when success is false */
+    errorMessage?: string;
     /** Array of all database mutations performed */
     mutations: AgentSpecSyncMutation[];
 }
@@ -179,6 +213,20 @@ export class AgentSpecSync {
      * @private
      */
     private _mutations: AgentSpecSyncMutation[] = [];
+
+    /**
+     * Maps synthetic/pre-save step correlation IDs (e.g. 'wf-node-1') and step names to
+     * their persisted database UUIDs so saveStepPaths can resolve OriginStepID and DestinationStepID.
+     * @private
+     */
+    private _stepIdMap = new Map<string, string>();
+
+    /**
+     * Sub-agent links for steps saved with an empty `SubAgentID`, keyed by the step spec. Resolved
+     * before anything is written, so a step that names no sub-agent, or several, refuses the save.
+     * @private
+     */
+    private _stepSubAgentLinks = new Map<AgentStep, StepSubAgentLink>();
 
     /**
      * Create a new AgentSpecSync instance.
@@ -609,6 +657,7 @@ export class AgentSpecSync {
             // Other config
             DefaultPromptEffortLevel: agent.DefaultPromptEffortLevel || undefined,
             ChatHandlingOption: agent.ChatHandlingOption || undefined,
+            MaxSubAgentConsultRounds: agent.MaxSubAgentConsultRounds ?? undefined,
             DefaultArtifactTypeID: agent.DefaultArtifactTypeID || undefined,
             OwnerUserID: agent.OwnerUserID || undefined,
             InvocationMode: agent.InvocationMode,
@@ -696,7 +745,9 @@ export class AgentSpecSync {
             AgentRelationshipID: relationship.ID,
             SubAgentInputMapping: this.parseJsonField<Record<string, string>>(relationship.SubAgentInputMapping),
             SubAgentOutputMapping: this.parseJsonField<Record<string, string>>(relationship.SubAgentOutputMapping),
-            SubAgentContextPaths: this.parseJsonField<Record<string, string>>(relationship.SubAgentContextPaths)
+            SubAgentContextPaths: this.parseJsonField<Record<string, string>>(relationship.SubAgentContextPaths),
+            ChatHandlingOption: relationship.ChatHandlingOption || undefined,
+            ConfigurationPresetID: relationship.ConfigurationPresetID || undefined
         };
     }
 
@@ -733,7 +784,9 @@ export class AgentSpecSync {
     }
 
     /**
-     * Map MJAIAgentStepEntity to AgentStep format.
+     * Map MJAIAgentStepEntity to AgentStep format, preserving execution policy
+     * (`TimeoutSeconds`, `RetryCount`, `OnErrorBehavior`) and canvas geometry
+     * (`PositionX`, `PositionY`, `Width`, `Height`) across save/load round trips.
      *
      * @private
      * @param step - The agent step entity
@@ -755,25 +808,34 @@ export class AgentSpecSync {
             LoopBodyType: step.LoopBodyType || undefined,
             Configuration: step.Configuration || undefined,
             ActionInputMapping: this.parseJsonField<Record<string, unknown>>(step.ActionInputMapping),
-            ActionOutputMapping: this.parseJsonField<Record<string, unknown>>(step.ActionOutputMapping)
+            ActionOutputMapping: this.parseJsonField<Record<string, unknown>>(step.ActionOutputMapping),
+            TimeoutSeconds: step.TimeoutSeconds ?? undefined,
+            RetryCount: step.RetryCount ?? undefined,
+            OnErrorBehavior: step.OnErrorBehavior || undefined,
+            PositionX: step.PositionX ?? undefined,
+            PositionY: step.PositionY ?? undefined,
+            Width: step.Width ?? undefined,
+            Height: step.Height ?? undefined
         };
     }
 
     /**
-     * Map MJAIAgentStepPathEntity to AgentStepPath format.
+     * Map MJAIAgentStepPathEntity to AgentStepPath format, preserving canvas routing
+     * (`PathPoints`) across save/load round trips.
      *
      * @private
      * @param path - The agent step path entity
      * @returns Mapped path spec
      */
-    private mapPathEntityToSpec(path: MJAIAgentStepPathEntity): any {
+    private mapPathEntityToSpec(path: MJAIAgentStepPathEntity): AgentStepPath {
         return {
             ID: path.ID,
             OriginStepID: path.OriginStepID,
             DestinationStepID: path.DestinationStepID,
             Condition: path.Condition || undefined,
             Description: path.Description || undefined,
-            Priority: path.Priority
+            Priority: path.Priority,
+            PathPoints: path.PathPoints || undefined
         };
     }
 
@@ -818,6 +880,10 @@ export class AgentSpecSync {
         }
 
         try {
+            // Resolve name-linked sub-agent steps first, so a step naming no sub-agent (or several)
+            // refuses the save before any record is written.
+            await this.resolveStepSubAgentLinks();
+
             // Step 0: Delete orphaned records (if this is an update)
             if (this._isLoaded && this.Spec.ID) {
                 console.log(`🗑️ SaveToDatabase: Loading current database state for agent ${this.Spec.ID}...`);
@@ -859,10 +925,13 @@ export class AgentSpecSync {
                 mutations: this.GetMutations()
             };
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            LogError(`AgentSpecSync.SaveToDatabase failed: ${errorMessage}`);
             // Return failure with whatever mutations were completed before error
             return {
                 agentId: this.Spec.ID || '',
                 success: false,
+                errorMessage,
                 mutations: this.GetMutations()
             };
         }
@@ -883,15 +952,18 @@ export class AgentSpecSync {
             this._contextUser
         );
 
-        // Track if this is an update or create
-        const isUpdate = !!this.Spec.ID;
-
-        // If ID exists, load existing record
-        if (this.Spec.ID) {
+        // Only treat Spec.ID as an existing database record when it is a real UUID.
+        // Callers such as WorkflowAgentWriter pass a correlation ID (e.g. 'workflow-...')
+        // on a brand-new spec; calling Load() with a non-UUID fails SQL uniqueidentifier conversion.
+        let isUpdate = false;
+        if (isPersistedUUID(this.Spec.ID)) {
             const loaded = await agentEntity.Load(this.Spec.ID);
             if (!loaded) {
                 throw new Error(`Cannot update non-existent agent with ID ${this.Spec.ID}`);
             }
+            isUpdate = true;
+        } else {
+            agentEntity.NewRecord?.();
         }
 
         // Map spec to entity fields
@@ -948,6 +1020,7 @@ export class AgentSpecSync {
         // Other config
         agentEntity.DefaultPromptEffortLevel = this.Spec.DefaultPromptEffortLevel || null;
         agentEntity.ChatHandlingOption = this.Spec.ChatHandlingOption || null;
+        agentEntity.MaxSubAgentConsultRounds = this.Spec.MaxSubAgentConsultRounds ?? null;
         agentEntity.DefaultArtifactTypeID = this.Spec.DefaultArtifactTypeID || null;
 
         // Set OwnerUserID - always use contextUser if available (user creating/modifying the agent)
@@ -1165,6 +1238,8 @@ export class AgentSpecSync {
         relationshipEntity.AgentID = agentId;
         relationshipEntity.SubAgentID = SubAgentSpec.SubAgent.ID;
         relationshipEntity.Status = 'Active';
+        relationshipEntity.ChatHandlingOption = SubAgentSpec.ChatHandlingOption ?? null;
+        relationshipEntity.ConfigurationPresetID = SubAgentSpec.ConfigurationPresetID ?? null;
 
         // Serialize mapping fields
         if (SubAgentSpec.SubAgentInputMapping) {
@@ -1344,6 +1419,161 @@ export class AgentSpecSync {
     }
 
     /**
+     * Resolve the sub-agent of every step that runs one (a Sub-Agent step, or a loop whose body is a
+     * sub-agent) and leaves `SubAgentID` empty. The step's Name links it: first to this spec's own
+     * sub-agents, then to active agents in the database. Zero or several matches refuse the save
+     * rather than leave the step unlinked or pick one arbitrarily.
+     *
+     * @private
+     * @throws {Error} Listing every step that names no sub-agent, or several
+     */
+    private async resolveStepSubAgentLinks(): Promise<void> {
+        this._stepSubAgentLinks.clear();
+        const unlinked = (this.Spec.Steps ?? []).filter(step => stepRunsSubAgent(step) && !step.SubAgentID);
+        if (unlinked.length === 0) {
+            return;
+        }
+
+        const errors: string[] = [];
+        for (const step of unlinked) {
+            const link = await this.findStepSubAgent(step, errors);
+            if (link) {
+                this._stepSubAgentLinks.set(step, link);
+            }
+        }
+        if (errors.length > 0) {
+            throw new Error(`Cannot link sub-agent steps: ${errors.join('; ')}`);
+        }
+    }
+
+    /**
+     * Find the one sub-agent a step's Name links to, or record why there is none.
+     * @private
+     */
+    private async findStepSubAgent(step: AgentStep, errors: string[]): Promise<StepSubAgentLink | null> {
+        const specMatches = this.distinctSubAgents(
+            (this.Spec.SubAgents ?? []).filter(sub => sameName(sub.SubAgent?.Name, step.Name))
+        );
+        if (specMatches.length === 1) {
+            return { Source: 'spec', SubAgent: specMatches[0] };
+        }
+        if (specMatches.length > 1) {
+            errors.push(`step "${step.Name}" matches ${specMatches.length} sub-agents in the spec; set its SubAgentID`);
+            return null;
+        }
+
+        const existingIds = await this.findActiveAgentIdsByName(step.Name);
+        if (existingIds.length === 1) {
+            return { Source: 'existing', AgentID: existingIds[0] };
+        }
+        errors.push(existingIds.length === 0
+            ? `step "${step.Name}" has no SubAgentID and no sub-agent in the spec or active agent has that name`
+            : `step "${step.Name}" matches ${existingIds.length} active agents; set its SubAgentID`);
+        return null;
+    }
+
+    /**
+     * The spec sub-agents with duplicates removed: entries naming the same saved agent count once.
+     * Entries not yet saved (empty ID) are each a separate agent to create.
+     * @private
+     */
+    private distinctSubAgents(subAgents: SubAgentSpec[]): SubAgentSpec[] {
+        const distinct: SubAgentSpec[] = [];
+        const seen = new UUIDSet();
+        for (const sub of subAgents) {
+            const id = sub.SubAgent?.ID;
+            if (id) {
+                if (seen.Has(id)) continue;
+                seen.Add(id);
+            }
+            distinct.push(sub);
+        }
+        return distinct;
+    }
+
+    /**
+     * IDs of the active agents with this name, other than the agent being saved.
+     * @private
+     */
+    private async findActiveAgentIdsByName(name: string): Promise<string[]> {
+        const rv = RunView.FromMetadataProvider(this.providerToUse);
+        const result = await rv.RunView<{ ID: string }>({
+            EntityName: 'MJ: AI Agents',
+            ExtraFilter: `Name='${name.trim().replace(/'/g, "''")}' AND Status='Active'`,
+            Fields: ['ID'],
+            ResultType: 'simple'
+        }, this._contextUser);
+        if (!result.Success) {
+            throw new Error(`Failed to look up agent "${name}": ${result.ErrorMessage}`);
+        }
+        const ids: string[] = [];
+        const seen = new UUIDSet();
+        for (const row of result.Results ?? []) {
+            if (this.Spec.ID && UUIDsEqual(row.ID, this.Spec.ID)) continue;
+            if (seen.Has(row.ID)) continue;
+            seen.Add(row.ID);
+            ids.push(row.ID);
+        }
+        return ids;
+    }
+
+    /**
+     * The SubAgentID to save on a step: its own, or the one its Name resolved to.
+     * @private
+     */
+    private stepSubAgentID(stepSpec: AgentStep): string | null {
+        if (stepSpec.SubAgentID) {
+            return stepSpec.SubAgentID;
+        }
+        const link = this._stepSubAgentLinks.get(stepSpec);
+        if (!link) {
+            return null;
+        }
+        const id = link.Source === 'spec' ? link.SubAgent.SubAgent?.ID : link.AgentID;
+        if (!id) {
+            throw new Error(`Sub-agent "${stepSpec.Name}" has no ID after saving sub-agents`);
+        }
+        stepSpec.SubAgentID = id; // Update spec too
+        return id;
+    }
+
+    /**
+     * Create the AIPrompt for a step whose prompt is written inline as PromptText.
+     *
+     * @private
+     * @returns The new prompt's ID
+     * @throws {Error} If the prompt save fails
+     */
+    private async createInlineStepPrompt(stepSpec: AgentStep): Promise<string> {
+        console.log(`🔷 saveSteps: Creating inline prompt for step "${stepSpec.Name}"`);
+        const promptEntity = await this.providerToUse.GetEntityObject<MJAIPromptEntityExtended>(
+            'MJ: AI Prompts',
+            this._contextUser
+        );
+
+        promptEntity.Name = stepSpec.PromptName || `${stepSpec.Name} Prompt`;
+        promptEntity.Description = stepSpec.PromptDescription || `Prompt for step: ${stepSpec.Name}`;
+        promptEntity.TypeID = CHAT_PROMPT_TYPE_ID;
+        promptEntity.Status = 'Active';
+        promptEntity.ResponseFormat = 'JSON';
+        promptEntity.TemplateText = stepSpec.PromptText ?? '';
+
+        const promptSaved = await promptEntity.Save();
+        if (!promptSaved) {
+            throw new Error(`Failed to save inline prompt for step "${stepSpec.Name}"`);
+        }
+
+        this.trackMutation(
+            'MJ: AI Prompts',
+            'Create',
+            promptEntity.ID,
+            `Created inline prompt: ${promptEntity.Name}`
+        );
+        console.log(`✅ saveSteps: Created inline AIPrompt with ID: ${promptEntity.ID}`);
+        return promptEntity.ID;
+    }
+
+    /**
      * Save all steps for this agent (Flow agents only).
      *
      * Creates AIAgentStep records for each step in the spec. Steps define the nodes
@@ -1355,6 +1585,7 @@ export class AgentSpecSync {
      */
     private async saveSteps(agentId: string): Promise<void> {
         console.log(`🔷 saveSteps: Called with agentId=${agentId}, Steps=${this.Spec.Steps ? this.Spec.Steps.length : 'undefined'}`);
+        this._stepIdMap.clear();
 
         if (!this.Spec.Steps || this.Spec.Steps.length === 0) {
             console.log('🔷 saveSteps: No steps to save, returning early');
@@ -1365,15 +1596,20 @@ export class AgentSpecSync {
         const md = this.providerToUse;
 
         for (const stepSpec of this.Spec.Steps) {
+            const originalStepId = stepSpec.ID;
             const stepEntity = await md.GetEntityObject<MJAIAgentStepEntity>(
                 'MJ: AI Agent Steps',
                 this._contextUser
             );
 
-            // Load existing if ID provided
-            const isUpdate = !!(stepSpec.ID && stepSpec.ID !== '');
-            if (isUpdate) {
-                await stepEntity.Load(stepSpec.ID);
+            // Only load from DB when stepSpec.ID is a real persisted UUID; synthetic IDs
+            // (such as 'wf-node-1' from ConvertTaskGraphToAgentSpec) are new step records.
+            let isUpdate = false;
+            if (isPersistedUUID(stepSpec.ID)) {
+                isUpdate = await stepEntity.Load(stepSpec.ID);
+            }
+            if (!isUpdate) {
+                stepEntity.NewRecord?.();
             }
 
             // Map fields
@@ -1383,7 +1619,7 @@ export class AgentSpecSync {
             stepEntity.StepType = stepSpec.StepType;
             stepEntity.StartingStep = stepSpec.StartingStep;
             stepEntity.ActionID = stepSpec.ActionID || null;
-            stepEntity.SubAgentID = stepSpec.SubAgentID || null;
+            stepEntity.SubAgentID = this.stepSubAgentID(stepSpec);
             stepEntity.Status = 'Active'; // Default to Active
             // Loop steps: the body type says which of Action/Prompt/Sub-Agent runs each pass, and
             // Configuration carries the bounds. Written for every step because a step that STOPS
@@ -1393,46 +1629,38 @@ export class AgentSpecSync {
             // normalized: the text the Architect's validator compiled.
             stepEntity.Configuration = StepConfigurationText(stepSpec);
 
-            // Handle inline prompt creation for Prompt-type steps
-            // If StepType is Prompt and PromptID is empty, create a new AIPrompt record
-            if (stepSpec.StepType === 'Prompt' && (!stepSpec.PromptID || stepSpec.PromptID === '')) {
+            // Map execution policy and canvas geometry when provided on the spec
+            if (stepSpec.TimeoutSeconds !== undefined) {
+                stepEntity.TimeoutSeconds = stepSpec.TimeoutSeconds ?? null;
+            }
+            if (stepSpec.RetryCount !== undefined) {
+                stepEntity.RetryCount = stepSpec.RetryCount ?? null;
+            }
+            if (stepSpec.OnErrorBehavior !== undefined) {
+                stepEntity.OnErrorBehavior = stepSpec.OnErrorBehavior ?? 'fail';
+            }
+            if (stepSpec.PositionX !== undefined) {
+                stepEntity.PositionX = Math.round(stepSpec.PositionX);
+            }
+            if (stepSpec.PositionY !== undefined) {
+                stepEntity.PositionY = Math.round(stepSpec.PositionY);
+            }
+            if (stepSpec.Width !== undefined) {
+                stepEntity.Width = Math.round(stepSpec.Width);
+            }
+            if (stepSpec.Height !== undefined) {
+                stepEntity.Height = Math.round(stepSpec.Height);
+            }
+
+            // A Prompt step, or a loop whose body is a prompt, with an empty PromptID and inline
+            // PromptText gets a new AIPrompt created and linked.
+            if (stepRunsPrompt(stepSpec) && !stepSpec.PromptID) {
                 if (stepSpec.PromptText) {
-                    console.log(`🔷 saveSteps: Creating inline prompt for step "${stepSpec.Name}"`);
-
-                    // Create AIPrompt entity (using any type for TemplateText dynamic property)
-                    const promptEntity = await md.GetEntityObject<any>(
-                        'MJ: AI Prompts',
-                        this._contextUser
-                    );
-
-                    // Set prompt fields
-                    promptEntity.Name = stepSpec.PromptName || `${stepSpec.Name} Prompt`;
-                    promptEntity.Description = stepSpec.PromptDescription || `Prompt for step: ${stepSpec.Name}`;
-                    promptEntity.TypeID = 'a6da423e-f36b-1410-8dac-00021f8b792e'; // Chat type
-                    promptEntity.Status = 'Active';
-                    promptEntity.ResponseFormat = 'JSON';
-                    promptEntity.TemplateText = stepSpec.PromptText; // TemplateText is a dynamic property
-
-                    const promptSaved = await promptEntity.Save();
-                    if (!promptSaved) {
-                        throw new Error(`Failed to save inline prompt for step "${stepSpec.Name}"`);
-                    }
-
-                    // Track mutation
-                    this.trackMutation(
-                        'MJ: AI Prompts',
-                        'Create',
-                        promptEntity.ID,
-                        `Created inline prompt: ${promptEntity.Name}`
-                    );
-
-                    console.log(`✅ saveSteps: Created inline AIPrompt with ID: ${promptEntity.ID}`);
-
-                    // Link the created prompt to this step
-                    stepEntity.PromptID = promptEntity.ID;
-                    stepSpec.PromptID = promptEntity.ID; // Update spec too
+                    const promptId = await this.createInlineStepPrompt(stepSpec);
+                    stepEntity.PromptID = promptId;
+                    stepSpec.PromptID = promptId; // Update spec too
                 } else {
-                    console.warn(`⚠️ saveSteps: Step "${stepSpec.Name}" is Prompt type with empty PromptID but no PromptText provided`);
+                    console.warn(`⚠️ saveSteps: Step "${stepSpec.Name}" runs a prompt with empty PromptID but no PromptText provided`);
                     stepEntity.PromptID = null;
                 }
             } else {
@@ -1471,6 +1699,16 @@ export class AgentSpecSync {
                 `${isUpdate ? 'Updated' : 'Created'} step: ${stepSpec.Name}`
             );
 
+            // Record both the pre-save correlation ID (e.g. 'wf-node-1') and the step Name
+            // so saveStepPaths can resolve OriginStepID and DestinationStepID to the persisted UUID.
+            if (originalStepId) {
+                this._stepIdMap.set(originalStepId, stepEntity.ID);
+            }
+            if (stepSpec.Name) {
+                this._stepIdMap.set(stepSpec.Name, stepEntity.ID);
+            }
+            this._stepIdMap.set(stepEntity.ID, stepEntity.ID);
+
             // Update the spec with the saved ID so paths can reference it
             stepSpec.ID = stepEntity.ID;
 
@@ -1501,12 +1739,14 @@ export class AgentSpecSync {
         console.log(`🔶 saveStepPaths: Processing ${this.Spec.Paths.length} path(s)...`);
         const md = this.providerToUse;
 
-        // Create a map of step names to IDs for easy lookup
-        const stepNameToId = new Map<string, string>();
+        // Combine _stepIdMap (populated during saveSteps, including synthetic IDs like 'wf-node-1')
+        // with stepNameToId for any steps not saved in this pass.
+        const stepRefToId = new Map<string, string>(this._stepIdMap);
         if (this.Spec.Steps) {
             for (const step of this.Spec.Steps) {
                 if (step.ID) {
-                    stepNameToId.set(step.Name, step.ID);
+                    stepRefToId.set(step.Name, step.ID);
+                    stepRefToId.set(step.ID, step.ID);
                 }
             }
         }
@@ -1517,25 +1757,19 @@ export class AgentSpecSync {
                 this._contextUser
             );
 
-            // Load existing if ID provided
-            const isUpdate = !!(pathSpec.ID && pathSpec.ID !== '');
-            if (isUpdate) {
-                await pathEntity.Load(pathSpec.ID);
+            // Only load from DB when pathSpec.ID is a real persisted UUID; synthetic IDs
+            // (such as 'wf-node-3') are new path records.
+            let isUpdate = false;
+            if (isPersistedUUID(pathSpec.ID)) {
+                isUpdate = await pathEntity.Load(pathSpec.ID);
+            }
+            if (!isUpdate) {
+                pathEntity.NewRecord?.();
             }
 
-            // Resolve step IDs from step names
-            // OriginStepID and DestinationStepID can be either step IDs or step names
-            // If they're names, look them up in our map
-            let originStepId = pathSpec.OriginStepID;
-            let destinationStepId = pathSpec.DestinationStepID;
-
-            // Try to resolve as step names first
-            if (stepNameToId.has(pathSpec.OriginStepID)) {
-                originStepId = stepNameToId.get(pathSpec.OriginStepID)!;
-            }
-            if (stepNameToId.has(pathSpec.DestinationStepID)) {
-                destinationStepId = stepNameToId.get(pathSpec.DestinationStepID)!;
-            }
+            // Resolve step IDs from synthetic step IDs or step names
+            const originStepId = stepRefToId.get(pathSpec.OriginStepID) ?? pathSpec.OriginStepID;
+            const destinationStepId = stepRefToId.get(pathSpec.DestinationStepID) ?? pathSpec.DestinationStepID;
 
             // Map fields
             pathEntity.OriginStepID = originStepId;
@@ -1543,6 +1777,9 @@ export class AgentSpecSync {
             pathEntity.Condition = pathSpec.Condition || null;
             pathEntity.Description = pathSpec.Description || null;
             pathEntity.Priority = pathSpec.Priority;
+            if (pathSpec.PathPoints !== undefined) {
+                pathEntity.PathPoints = pathSpec.PathPoints || null;
+            }
 
             const saved = await pathEntity.Save();
             if (!saved) {
@@ -1557,8 +1794,10 @@ export class AgentSpecSync {
                 `${isUpdate ? 'Updated' : 'Created'} path from "${pathSpec.OriginStepID}" to "${pathSpec.DestinationStepID}"`
             );
 
-            // Update the spec with the saved ID
+            // Update the spec with the saved IDs
             pathSpec.ID = pathEntity.ID;
+            pathSpec.OriginStepID = originStepId;
+            pathSpec.DestinationStepID = destinationStepId;
 
             console.log(`✅ saveStepPaths: Created AIAgentStepPath with ID: ${pathEntity.ID}`);
         }
@@ -1631,6 +1870,7 @@ export class AgentSpecSync {
             StartingPayloadValidationMode: partial.StartingPayloadValidationMode || 'Fail',
             DefaultPromptEffortLevel: partial.DefaultPromptEffortLevel,
             ChatHandlingOption: partial.ChatHandlingOption,
+            MaxSubAgentConsultRounds: partial.MaxSubAgentConsultRounds,
             DefaultArtifactTypeID: partial.DefaultArtifactTypeID,
             OwnerUserID: partial.OwnerUserID,
             InvocationMode: partial.InvocationMode || 'Any',

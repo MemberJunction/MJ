@@ -100,6 +100,8 @@ The slide-in timeline of all changes to a single record. Hosts the reusable `Res
 |-------|------|---------|-------------|
 | `record` | `BaseEntity` | — | **Required.** The live record whose change history will be displayed. |
 | `AllowRestore` | `boolean` | `false` | When true, renders a "Restore record to this version" button on each change card and exposes the `RestoreRequested` event. |
+| `AllowFormPreview` | `boolean` | `true` | When true, renders a "Preview in Form" button on each change card that has `FullRecordJSON` so the host form can rehydrate and preview that snapshot in place. |
+| `PreviewedChangeID` | `string \| null` | `null` | ID of the historical `MJRecordChangeEntity` currently being previewed in the host form. Highlights the active version card in the timeline. |
 
 #### Outputs
 
@@ -107,6 +109,12 @@ The slide-in timeline of all changes to a single record. Hosts the reusable `Res
 |--------|------------|-------------|
 | `dialogClosed` | `void` | Emitted when the user closes the slide-in. |
 | `RestoreRequested` | `RestoreVersionEvent` | Emitted after the user confirms a restore in the preview panel. The host is responsible for applying the snapshot and saving. |
+| `PreviewVersionSelected` | `PreviewVersionEvent \| null` | Emitted when the user clicks "Preview in Form" on a historical version (`{ Change, Index, TotalCount }`) or exits preview (`null`). Wired automatically by `<mj-record-form-container>`. |
+
+#### 12-Month Activity Sparkline & Collapsible Version Labels
+
+- **Activity Sparkline (`ActivityChartBuckets`)**: When a record has 2+ changes, a collapsible 12-month bar chart appears in the timeline header showing monthly change volume. Clicking any month bar filters the timeline to changes in that month (`SelectedMonthKey`); clicking again clears the filter.
+- **Compact Collapsible Version Labels (`ShowLabelsSection`)**: Version labels are tucked behind a single-line header pill (`Labels (N)` + `+ Label` quick action) and stay collapsed by default when 0 labels exist so the change timeline gets maximum vertical space.
 
 #### `RestoreVersionEvent`
 
@@ -167,6 +175,20 @@ Reusable slide-in that previews a restore operation against a historical `MJReco
 The preview compares the **full snapshot** captured in the source change's `FullRecordJSON` to the current live record (or to nothing in undelete mode). It does NOT roll back a single delta — restoring `v2` means *"make the record look like it did at v2"*, not *"undo v3's changes"*.
 
 This also means any change row is a valid restore target: `Create` (the original state), `Update` (post-update state), `Snapshot` (an explicit point-in-time capture from the Version Label system), or `Delete` (state before deletion — used by the Recycle Bin).
+
+## Activity Over Time — Burst-Aware Cluster Strip (Time-Gap Compression & Multi-Year Zoom)
+
+Record change histories are often highly irregular over time (for example, an initial creation burst, months of quiet, and a recent cluster of edits) or span several years with hundreds of changes. `<mj-record-changes>` embeds the reusable `<mj-burst-cluster-strip>` (`MJBurstClusterStripComponent`) from `@memberjunction/ng-ui-components`:
+
+- **Session Burst Clustering & Non-Linear Gap Compression**: Groups adjacent changes into active editing sessions separated by compressed `⋯ 11 mos quiet ⋯` gap connectors instead of leaving 80%+ of linear time buckets empty.
+- **Adaptive Multi-Year Scaling & Semantic Click-to-Zoom**: When raw bursts exceed `BurstEraZoomThreshold` (default `10`) across multiple months/years, the strip automatically coalesces into `Year` or `Month` era cards (`2023`, `2024`, `2025`, `2026`). Clicking any era zooms the strip into that period's bursts with a `← All (N)` breadcrumb pill.
+- **Configurable Grouping Inputs on `<mj-record-changes>`**:
+  - `[BurstResolution]`: `'auto' | 'session' | 'day' | 'week' | 'month' | 'quarter' | 'year'` (default `'auto'`)
+  - `[BurstCoalesceStrategy]`: `'adaptive-era' | 'merge-closest'` (default `'adaptive-era'`)
+  - `[BurstSessionGapHours]`: `number` (default `6`)
+  - `[BurstMaxClusters]`: `number` (default `5`)
+  - `[BurstEraZoomThreshold]`: `number` (default `10`)
+  - `[AllowBurstZoom]`: `boolean` (default `true`)
 
 ## Type Exports
 

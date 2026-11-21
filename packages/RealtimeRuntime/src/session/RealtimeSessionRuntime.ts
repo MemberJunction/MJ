@@ -4,7 +4,18 @@ import { UserInfoEngine, type MJAIAgentChannelEntity, type MJAIAgentChannelEntit
 import { AddRealtimeUsageRecord, AIEngineBase, HasRealtimeUsage, type RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider, GraphQLRealtimeSessionClient } from '@memberjunction/graphql-dataprovider';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, DEFAULT_REALTIME_AUDIO_TRACKS, JSONObject, JSONValue, ParseRealtimeAvatarStatus, ParseRealtimeClientTransport, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection } from '@memberjunction/ai';
+import {
+  ClientRealtimeSessionConfig,
+  DEFAULT_REALTIME_AUDIO_TRACKS,
+  JSONObject,
+  JSONValue,
+  ParseRealtimeAvatarStatus,
+  ParseRealtimeClientTransport,
+  RealtimeToolDefinition,
+  RealtimeTrackDescriptor,
+  RealtimeTrackDirection,
+  type RealtimeContextNoteOptions,
+} from '@memberjunction/ai';
 import {
   AppContextSnapshot,
   CompareExposure,
@@ -12,6 +23,7 @@ import {
   IsIdentityVerifiedEventPayload,
   NormalizeChannelKey,
   ParseRealtimeSessionClientPolicy,
+  RECORDING_TERMINAL_MAX_BYTES,
   ResolveClientTools,
   SelectNativeChannelTools,
   UserExposureReason,
@@ -29,6 +41,7 @@ import {
   type LocalMediaState,
   LoadAssemblyAIRealtimeClient,
   LoadElevenLabsRealtimeClient,
+  LoadElevenRealtimeClient,
   LoadGeminiEnterpriseRealtimeClient,
   LoadGeminiRealtimeClient,
   LoadHuggingFaceRealtimeClient,
@@ -40,15 +53,18 @@ import {
   RealtimeClientToolCall,
   RealtimeClientTranscript,
   RealtimeClientUsage,
+  type RealtimeClientTokenRefreshOptions,
+  type RefreshedRealtimeClientCredential,
+  type RealtimeClientTimingFields,
   VideoSourceArbiter,
   type DisplayCaptureOptions,
   type MediaVideoSource,
   type VideoSourceState,
   REQUESTED_TRACKS_SESSION_KEY
 } from '@memberjunction/ai-realtime-client';
-import { DefaultRealtimeSessionLauncher, HasClientCredential, type IRealtimeSessionLauncher } from './session-launcher';
+import { DefaultRealtimeSessionLauncher, HasClientCredential, IsUnsupportedGraphQLExtension, type IRealtimeSessionLauncher } from './session-launcher';
 import { RequestsAgentVideo, ResolveAvatarNotice, type RealtimeAvatarNotice } from './avatar-notice';
-import { ClientSessionDeadline } from './client-session-deadline';
+import { ClientSessionDeadline, type SessionDeadlineOptions } from './client-session-deadline';
 import {
   RealtimeCaptures,
   REALTIME_CAPTURES_OFF,
@@ -85,6 +101,78 @@ import {
   type RealtimeSessionStartOptions
 } from './channel-session-scope';
 import { RecordingShardQueue } from './RecordingShardQueue';
+import { RecordingShardWindow, type RecordingShard } from './RecordingShardWindow';
+import { CreateRecordingShardStore, type IRecordingShardStore } from './RecordingShardStore';
+import type { IRecordingTransport } from './RecordingTransport';
+import { CreateSessionCloseBeaconForProvider, type ISessionCloseBeacon } from './SessionCloseBeacon';
+import { CreateRecordingTransportForProvider, DeleteStoredRecordingShard, DrainStoredRecordingShardsOnce, MAX_DRAINED_SHARDS_PER_LOAD, type RecordingShardDrainPass } from './RecordingShardDrain';
+
+/**
+ * How long teardown waits for the server to acknowledge the recording's terminal request, measured
+ * from after `CloseAgentSession`. The terminal is `keepalive`, so it completes even if the page goes
+ * away; the wait only keeps `SavingRecording$` (and so a host's "don't close yet" guard) up while the
+ * server has not confirmed. Bounded so a dead server can never hold the End of a call hostage —
+ * unacknowledged shards stay in the local store and the server janitor assembles what arrived.
+ */
+export const RECORDING_TERMINAL_ACK_TIMEOUT_MS = 3000;
+
+/**
+ * How long teardown waits for the recorder to stop and flush its encoder. `Stop()` runs BEFORE
+ * `CloseAgentSession`, so a wedged encoder must not be able to hold the End of a call (and the
+ * server session) open; past this the recording ends at the packets already encoded.
+ */
+export const RECORDER_STOP_TIMEOUT_MS = 2000;
+
+
+function describeRecordingFailure(failure: unknown): string {
+  return failure instanceof Error ? failure.message : String(failure);
+}
+
+/**
+ * The shard pipeline of ONE recording. Created when recording starts and captured by value by every
+ * async step, so a flush or upload still running when the next session starts keeps using its own
+ * session id, window and queue instead of reading the runtime's current ones.
+ */
+interface RecordingShardPipeline {
+  SessionID: string;
+  /** The signed-in user who started the call; every stored shard carries it (see `PendingRecordingShard.UserID`). */
+  UserID: string | null;
+  Window: RecordingShardWindow;
+  Queue: RecordingShardQueue;
+  /** Null when the provider has no REST configuration: shards are then only kept in the store. */
+  Transport: IRecordingTransport | null;
+  /**
+   * The most recent `final: true` terminal request dispatched for this pipeline, along with the
+   * `LastSealedIndex` it covered. When `SendRecordingTerminal` (`pagehide`) fires while `finishRecording`
+   * is awaiting `stopRecorder` and `Stop()` flushes zero additional packets, `finishRecording` reuses
+   * this terminal instead of sending a duplicate final terminal and re-running
+   * `resendUnacknowledgedWithKeepalive`.
+   */
+  FinalTerminal?: { LastSealedIndex: number; Acked: Promise<boolean> };
+}
+
+/** Options of {@link RealtimeSessionRuntime.SendPageHideSignals}. */
+export interface PageHideSignalOptions {
+  /** The `pagehide` event's `persisted` flag: true when the page enters the back/forward cache and may come back. */
+  Persisted: boolean;
+}
+
+/** Options of {@link RealtimeSessionRuntime.SendRecordingTerminal}. */
+export interface RecordingTerminalOptions {
+  /**
+   * False when the call may continue — the host's `visibilitychange → hidden` handler. The server then
+   * stamps the counts but assembles only after its grace period, so switching tabs does not rewrite the
+   * recording each time. Defaults to true (`pagehide`: the page is going away).
+   */
+  Final?: boolean;
+}
+
+/** A terminal request that teardown started before closing the session and awaits after it. */
+interface PendingRecordingTerminal {
+  Pipeline: RecordingShardPipeline;
+  /** Resolves true on a server ack; never rejects. */
+  Acked: Promise<boolean>;
+}
 
 /**
  * `MJ: User Settings` key for the per-user "record this voice call" consent toggle. Stored as
@@ -117,6 +205,7 @@ LoadGeminiEnterpriseRealtimeClient();
 LoadElevenLabsRealtimeClient();
 LoadAssemblyAIRealtimeClient();
 LoadxAIRealtimeClient();
+LoadElevenRealtimeClient();
 LoadHuggingFaceRealtimeClient();
 
 /**
@@ -208,11 +297,6 @@ export interface RealtimeChannelFocusEvent {
   Channel: BaseRealtimeChannelClient;
   /** `true` to enter focus mode (surface owns the screen), `false` to leave it. */
   Focused: boolean;
-}
-
-/** The `UploadRealtimeRecordingSegment` mutation result; `true` only when the server stored the shard. */
-interface UploadRecordingSegmentResult {
-  UploadRealtimeRecordingSegment?: boolean;
 }
 
 /**
@@ -378,14 +462,6 @@ export interface RealtimeThoughtNarration {
   IsFinal?: boolean;
 }
 
-/** A finished call recording, encoded and ready for `UploadRealtimeRecording`. */
-interface StoppedRecording {
-  MimeType: string;
-  /** Consolidated WAV, base64. */
-  AudioBase64: string;
-  Peaks: number[];
-}
-
 /**
  * Raw shape of the JSON `message` the server publishes on the push-status topic during a delegated run.
  * We filter on `resolver` + `type` before correlating by `agentSessionID`; normal agent runs publish
@@ -496,6 +572,36 @@ export interface StartRealtimeClientSessionResult {
    * so it is a credential: never log it. A host that mints for itself must pass it on for a relay session.
    */
   RelayUrl?: string | null;
+  /**
+   * OPTIONAL — the catalog timing the server resolved for this session (`ModelConfiguration.Realtime` on the model and
+   * model-vendor rows, narrowed to the driver's provider ceiling; `TrustNativeResumption` forced `false` for zero data
+   * retention). The runtime hands them to the client driver on the typed `ClientRealtimeSessionConfig` fields, because
+   * the server deliberately keeps them out of `SessionConfigJson`. Absent or null from a server that predates them and
+   * from a host that mints for itself and does not pass them on; the driver then uses its own defaults.
+   */
+  ConnectionMaxSeconds?: number | null;
+  SessionMaxSeconds?: number | null;
+  ReconnectBufferSeconds?: number | null;
+  TrustNativeResumption?: boolean | null;
+}
+
+/** The fields of a mint or refresh result that carry the session's catalog timing (see {@link StartRealtimeClientSessionResult}). */
+type RealtimeTimingResultFields = Pick<
+  StartRealtimeClientSessionResult,
+  'ConnectionMaxSeconds' | 'SessionMaxSeconds' | 'ReconnectBufferSeconds' | 'TrustNativeResumption'
+>;
+
+/**
+ * The timing fields a mint or refresh result carries, as `ClientRealtimeSessionConfig` fields. GraphQL answers an unset
+ * nullable field with `null`; those are left out so the client driver keeps its own value.
+ */
+function timingFieldsOf(result: RealtimeTimingResultFields): RealtimeClientTimingFields {
+  return {
+    ...(result.ConnectionMaxSeconds != null ? { ConnectionMaxSeconds: result.ConnectionMaxSeconds } : {}),
+    ...(result.SessionMaxSeconds != null ? { SessionMaxSeconds: result.SessionMaxSeconds } : {}),
+    ...(result.ReconnectBufferSeconds != null ? { ReconnectBufferSeconds: result.ReconnectBufferSeconds } : {}),
+    ...(result.TrustNativeResumption != null ? { TrustNativeResumption: result.TrustNativeResumption } : {}),
+  };
 }
 
 /**
@@ -538,6 +644,35 @@ export interface RealtimeSessionRunOptions {
 }
 
 /**
+ * Why a call ended, as the runtime reports it on `SessionEnded$`: `'explicit'` when the host or user ended it,
+ * `'error'` when the runtime ended it over a failure, `'deadline'` when it ended because the session deadline was
+ * reached (the runtime's own auto-end, or a host's `EndRealtimeSession('deadline')`).
+ */
+export type SessionEndReason = 'explicit' | 'error' | 'deadline';
+
+/**
+ * The `CloseReason` values a client may stamp on its own session row; the others belong to the server. `TimeLimit`
+ * is a claim the server verifies against the session's stored deadline (and downgrades to `Explicit` when it does
+ * not hold).
+ */
+export type ClientCloseReason = 'Explicit' | 'Error' | 'TimeLimit';
+
+/** The one mapping from how a call ended to the `CloseReason` the client claims for its row; a new end reason is a compile error here. */
+const CLOSE_REASON_BY_END: Readonly<Record<SessionEndReason, ClientCloseReason>> = {
+  explicit: 'Explicit',
+  error: 'Error',
+  deadline: 'TimeLimit',
+};
+
+/** Thrown by a start while a call is live: the runtime holds one driver, and never replaces a live one. */
+export class RealtimeSessionAlreadyActiveError extends Error {
+  constructor(public readonly ActiveAgentSessionId: string | null) {
+    super(`A realtime session is already active${ActiveAgentSessionId ? ` (${ActiveAgentSessionId})` : ''}; end it before starting another.`);
+    this.name = 'RealtimeSessionAlreadyActiveError';
+  }
+}
+
+/**
  * Drives a **client-direct** real-time voice session: the browser mints an ephemeral
  * token from the MJ server, then connects DIRECTLY to the realtime provider. Audio
  * frames never transit the MJ server (low latency); only tool calls and final
@@ -562,11 +697,23 @@ export interface RealtimeSessionRunOptions {
 export class RealtimeSessionRuntime {
   /**
    * @param mediaHost the platform's media capabilities. The runtime never touches `navigator`,
-   *                  `Blob` or `FileReader` itself — microphone acquisition and audio recording
-   *                  are the host's, because both are platform-specific product decisions
-   *                  (permission UX, container format, where the bytes live).
+   *                  `Blob` or `FileReader` itself — microphone acquisition and audio capture/encoding
+   *                  are the host's, because both are platform-specific (permission UX, which
+   *                  encoder the platform offers).
    */
-  constructor(protected readonly mediaHost: IRealtimeMediaHost) {}
+  constructor(protected readonly mediaHost: IRealtimeMediaHost) {
+    this.wireSessionDeadline();
+    // Re-upload shards a previous, interrupted call left in the local store. Deferred a tick so a
+    // host can assign `Provider` right after construction; when it still has no transport the drain
+    // defers itself and session start tries again. Unref'd so it never holds a Node process open.
+    const drainTimer: unknown = setTimeout(() => {
+      void this.DrainPendingRecordingShards();
+    }, 0);
+    // Node returns a Timeout object with unref(); browsers return a number.
+    if (typeof drainTimer === 'object' && drainTimer !== null && 'unref' in drainTimer && typeof drainTimer.unref === 'function') {
+      drainTimer.unref();
+    }
+  }
 
   // ── Reactive UI state ──────────────────────────────────────────────────────
   private _connectionState$ = new BehaviorSubject<RealtimeConnectionState>('closed');
@@ -590,7 +737,7 @@ export class RealtimeSessionRuntime {
   // a naive Active$ subscription would emit session-started with sessionId === null.
   // Emitting explicitly avoids the race entirely. ───
   private _sessionStarted$ = new Subject<{ sessionId: string; channelNames: string[] }>();
-  private _sessionEnded$ = new Subject<{ sessionId: string; reason: 'explicit' | 'error' }>();
+  private _sessionEnded$ = new Subject<{ sessionId: string; reason: SessionEndReason }>();
   private _channelActivity$ = new Subject<BaseRealtimeChannelClient>();
 
   /** Current connection / turn state. */
@@ -645,10 +792,11 @@ export class RealtimeSessionRuntime {
 
   /**
    * True while the end-of-call recording is being saved: from the first statement of a teardown
-   * that holds a recorder until that teardown settles. False at construction and for unrecorded
-   * sessions. Exists for #5195: the page must stay open until the consolidated upload lands, or
-   * the recording is lost. The runtime is platform-free, so hosts own the reaction (a browser
-   * `beforeunload` guard, a "saving" indicator, etc.).
+   * that holds a recorder until that teardown settles — which includes waiting (at most
+   * {@link RECORDING_TERMINAL_ACK_TIMEOUT_MS}) for the server to acknowledge the recording's terminal
+   * request. False at construction and for unrecorded sessions. Exists for #5195; the runtime is
+   * platform-free, so hosts own the reaction (a "saving" indicator, a disabled navigation button,
+   * etc.).
    */
   public readonly SavingRecording$: Observable<boolean> = this._savingRecording$.asObservable();
 
@@ -754,11 +902,12 @@ export class RealtimeSessionRuntime {
    * Fired EXACTLY ONCE per session as teardown begins, with the prior
    * `agentSessionId` (so subscribers can correlate against `SessionStarted$`'s
    * sessionId) and the client-distinguishable reason — `'explicit'` when the
-   * user called `EndRealtimeSession`, `'error'` when teardown ran from a catch
-   * block. Server-side close paths (janitor, shutdown) do NOT propagate here —
+   * user called `EndRealtimeSession`, `'error'` when the runtime ended the call over a failure: a
+   * failed start, or a fatal error from the provider mid-call; `'deadline'` when the session deadline ended it
+   * (the runtime's auto-end, or `EndRealtimeSession('deadline')`). Server-side close paths (janitor, shutdown) do NOT propagate here —
    * they happen out-of-process and have no client push channel today.
    */
-  public readonly SessionEnded$: Observable<{ sessionId: string; reason: 'explicit' | 'error' }> =
+  public readonly SessionEnded$: Observable<{ sessionId: string; reason: SessionEndReason }> =
     this._sessionEnded$.asObservable();
 
   /**
@@ -911,25 +1060,54 @@ export class RealtimeSessionRuntime {
   // ── Browser-side call recording ────────────────────────────────────────────
   /**
    * The active session's audio recorder (mic + agent mix), or `null` when the user didn't
-   * consent or the browser can't record. Created after the client connects; stopped + uploaded
-   * at teardown.
+   * consent or the browser can't record. Created after the client connects; its packets are
+   * shipped as 5 s shards during the call, and it is stopped at teardown.
    */
   private recorder: IRealtimeSessionRecorder | null = null;
   /** ISO timestamp of when recording started — sent to the server on session start. */
   private recordingStartedAtIso: string | null = null;
-  /** Interval that flushes ~15s crash-recovery shards to the server during a recording. */
-  private segmentTimer: ReturnType<typeof setInterval> | null = null;
+  /** Interval that cuts and uploads a shard every {@link recordingShardFlushMs} during a recording. */
+  private shardFlushTimer: ReturnType<typeof setInterval> | null = null;
   /**
-   * Owns shard indexing and retry for the current recording: it assigns each shard its index and
-   * keeps failed shards to resend under that same index. A fresh queue per recording keeps a flush
-   * still in flight from a previous session off this session's indexes. Null when not recording.
-   * A recording that ends discards its queue, and any retained shard with it: the consolidated
-   * end-of-call upload supersedes them, and if that upload is lost too, server-side recovery
-   * (#5196) fills the gap with silence.
+   * The current recording's shard pipeline (window → store → queue → transport), or null when not
+   * recording. A fresh pipeline per recording keeps a flush still in flight from a previous session
+   * off this session's indexes. Its queue is closed when the recording ends; anything it had not
+   * delivered stays in the local store for the next-load drain.
    */
-  private shardQueue: RecordingShardQueue | null = null;
-  /** How often crash-recovery shards are flushed during a recording. */
-  private static readonly segmentFlushMs = 15000;
+  private recordingShards: RecordingShardPipeline | null = null;
+  /** How often packets are cut into shards: the 5 s shard window, so each tick seals about one window. */
+  private static readonly recordingShardFlushMs = 5000;
+  /**
+   * Bytes of `keepalive` request bodies one terminal may use, the tail included. Browsers share about
+   * 64 KiB of in-flight keepalive bodies per page; the brief reserves 48 KiB of it for the recording,
+   * leaving room for a host's own close beacon (Caliber sends one from `pagehide` too).
+   */
+  private static readonly recordingKeepaliveBudgetBytes = RECORDING_TERMINAL_MAX_BYTES;
+  /**
+   * Bytes of this page's recording `keepalive` requests still in flight. The browser's keepalive budget
+   * is per page, and closing a tab fires `visibilitychange` and `pagehide` back to back, so each dispatch
+   * budgets against what the previous one has not finished sending.
+   */
+  private keepaliveBytesInFlight = 0;
+  /** `sessionId/index` of shards whose `keepalive` copy is still in flight; never sent twice at once. */
+  private readonly keepaliveShardsInFlight = new Set<string>();
+  /**
+   * Most runs one drain call makes (each run is itself bounded): it runs again when it was re-armed while
+   * running, or when a run deleted shards the server refused for good, which frees the page for the
+   * shards behind them.
+   */
+  private static readonly maxDrainRunsPerCall = 3;
+  /** The durable local shard store, created on first use and shared by every recording of this runtime. */
+  private shardStore: IRecordingShardStore | null = null;
+  /**
+   * True once a drain ran with a transport; the drain then does nothing until a recording ends and
+   * re-arms it ({@link rearmPendingShardDrain}).
+   */
+  private pendingShardsDrained = false;
+  /** Bumped by every re-arm, so a drain already in flight cannot mark itself done over a re-arm. */
+  private drainGeneration = 0;
+  /** The drain in flight, so overlapping callers share it instead of uploading the same shards twice. */
+  private drainInFlight: Promise<number> | null = null;
 
   // ── Server-side liveness ───────────────────────────────────────────────────
   /**
@@ -948,12 +1126,40 @@ export class RealtimeSessionRuntime {
    * Recording-relative ms offset at which the IN-FLIGHT (not-yet-finalized) turn's audio
    * actually BEGAN — captured the moment that turn's audio/text starts flowing (its first
    * interim transcript), NOT inherited from the previous turn's end. `null` before the first
-   * turn / between turns (until the next turn's audio starts). Sent as `utteranceStartMs` on
-   * the turn's final transcript so per-turn timing lines up with the recording even when a
-   * tool-call / silence gap sits between turns (the inherit-previous-end model mis-stamped
-   * the post-gap turn at the pre-gap offset). See {@link markTurnAudioStart}.
+   * turn / between turns (until the next turn's audio starts), and it stays `null` for a turn
+   * whose start was never measured. Sent as `utteranceStartMs` on the turn's final transcript
+   * AS-IS — `null` is relayed as `null`, never replaced with 0 — so per-turn timing lines up
+   * with the recording even when a tool-call / silence gap sits between turns (the
+   * inherit-previous-end model mis-stamped the post-gap turn at the pre-gap offset). See
+   * {@link markTurnAudioStart}. A user speech onset signalled by the client does NOT land here;
+   * it has its own slot, {@link userSpeechStartMs}.
    */
   private currentTurnStartMs: number | null = null;
+  /**
+   * Recording-relative ms offset of the first user speech onset the client signalled
+   * (`OnUserSpeechStart`) since the last final user transcript, or `null` when none was signalled.
+   * It has its own slot, apart from {@link currentTurnStartMs}, so a user onset never claims the
+   * assistant turn's start: OpenAI user transcripts arrive asynchronously, often after the
+   * assistant's interims (or its final) for the reply have already flowed. See
+   * {@link markUserSpeechStart}.
+   */
+  private userSpeechStartMs: number | null = null;
+  /**
+   * `true` once an assistant turn has finalized after {@link userSpeechStartMs} was stamped BEFORE
+   * that turn began. The held onset may still be claimed by a late user transcript (OpenAI
+   * transcribes asynchronously), but the NEXT onset replaces it: an onset no transcript ever claimed
+   * (a VAD false positive, a failed transcription) must not become the start of the next real user
+   * turn. A barge-in onset (stamped during the assistant turn) is not superseded by that turn's
+   * final. An EMPTY user transcript releases the onset outright (see onClientTranscript).
+   */
+  private userSpeechStartSuperseded = false;
+  /**
+   * Recording-relative ms offsets of user speech onsets keyed by the provider's conversation item id
+   * (`input_audio_buffer.speech_started.item_id`), paired with the matching final user transcript
+   * (`RealtimeClientTranscript.ItemId`) so a late user transcript never claims a later turn's onset
+   * (MJ#5902). Unkeyed drivers continue to use {@link userSpeechStartMs}.
+   */
+  private readonly userSpeechStartByItemId = new Map<string, number>();
   /**
    * Wall-anchor of the SESSION clock (#3832): `performance.now()` at the moment the call went
    * live, or `null` before any call has. Read only through {@link nowTurnOffsetMs}.
@@ -1058,6 +1264,16 @@ export class RealtimeSessionRuntime {
    * two `SessionEnded$` emissions for one session.
    */
   private teardownInFlight: Promise<void> | null = null;
+
+  /**
+   * True from the moment a start finishes (connected, liveness pulse running) until the slot is
+   * released. A driver's Fatal ends the call only while this is set: during a start, drivers emit
+   * Fatal from their socket handlers while Connect is still pending, and the start's own failure path
+   * ({@link failSessionStart}) is what reports that error, whether Connect then rejects or resolves
+   * (runMintedSession checks {@link lastSessionError} after Connect). Not {@link isSessionLive}: drivers move the
+   * state to 'listening' from inside Connect, and a live call that is resuming reads 'connecting'.
+   */
+  private callWentLive = false;
 
   /**
    * The latest start's opening of the host's microphone, until {@link IRealtimeMediaHost.ReleaseMicrophone} hands it
@@ -1181,6 +1397,29 @@ export class RealtimeSessionRuntime {
   public IdentityVerifiedSpokenResponse: string | ((payload: IdentityVerifiedEventPayload) => string | null) | null = null;
 
   private readonly clientDeadline = new ClientSessionDeadline();
+  /**
+   * The deadline the clock reached while no session id existed yet (the host set a deadline that passed, or one nearer
+   * than the mint takes), or `null`. The mint path consumes it as soon as the session id is adopted, so the call still
+   * ends at its deadline; Set, Extend and session teardown drop it, since each replaces or forgets that deadline.
+   */
+  private pendingDeadlineReached: Date | null = null;
+  private readonly _sessionDeadlineWarning$ = new Subject<{ sessionId: string; deadline: Date; remainingMs: number }>();
+  private readonly _sessionDeadlineReached$ = new Subject<{ sessionId: string; deadline: Date }>();
+
+  /**
+   * Fires once per offset the host passed in `warnBeforeMs` to {@link SetSessionDeadline}, as that moment arrives, with
+   * the live session's id. `remainingMs` is the offset. Emits only while a session is live.
+   */
+  public readonly SessionDeadlineWarning$: Observable<{ sessionId: string; deadline: Date; remainingMs: number }> =
+    this._sessionDeadlineWarning$.asObservable();
+
+  /**
+   * Fires once when the session deadline is reached, with the live session's id — BEFORE the runtime's own auto-end, so
+   * a host that ends the call here (`autoEnd: false`, or a goodbye of its own) is the end that counts; a second end is
+   * coalesced onto the first. Emits only while a session is live; a deadline reached while the session is still being
+   * minted fires (and auto-ends) as soon as the mint adopts the session id.
+   */
+  public readonly SessionDeadlineReached$: Observable<{ sessionId: string; deadline: Date }> = this._sessionDeadlineReached$.asObservable();
 
   /**
    * The client's copy of the session's absolute deadline (`null` when none is known). A host that
@@ -1198,9 +1437,88 @@ export class RealtimeSessionRuntime {
     return this.clientDeadline.Value;
   }
 
-  /** Sets the baseline deadline a host knows at session start (`null` clears). See {@link SessionDeadline$}. */
-  public SetSessionDeadline(deadline: Date | null): void {
-    this.clientDeadline.Set(deadline);
+  /**
+   * Sets the baseline deadline a host knows at session start (`null` clears) and arms the alarm. See
+   * {@link SessionDeadline$}. By default the runtime ends the call with reason `'deadline'` when it is reached; pass
+   * `{ autoEnd: false }` to own the hang-up (then end with `EndRealtimeSession('deadline')`, which claims `TimeLimit`: the
+   * server keeps it only against the session's stored deadline, so a deadline set here alone records `Explicit`), and
+   * `warnBeforeMs` for {@link SessionDeadlineWarning$}. The server's verified deadline (`identity.verified`) also arms the
+   * alarm with the current options (default `autoEnd: true`); a host that owns the hang-up calls `SetSessionDeadline(d, { autoEnd: false })`.
+   * The runtime never arms this by itself.
+   */
+  public SetSessionDeadline(deadline: Date | null, options?: SessionDeadlineOptions): void {
+    this.pendingDeadlineReached = null;
+    this.clientDeadline.Set(deadline, options);
+  }
+
+  /**
+   * Re-publishes the deadline clock's warnings and reach with the live session id, and runs the auto-end. Subscribed
+   * once, from the constructor; the clock is owned by this runtime and shares its lifetime, and the runtime has no
+   * dispose step, so the subscriptions are never torn down separately. Session teardown clears the clock, which
+   * cancels every pending timer.
+   */
+  private wireSessionDeadline(): void {
+    this.clientDeadline.Warning$.subscribe((warning) => {
+      const sessionId = this.liveDeadlineSessionId();
+      if (sessionId) {
+        this._sessionDeadlineWarning$.next({ sessionId, deadline: warning.deadline, remainingMs: warning.remainingMs });
+      }
+    });
+    this.clientDeadline.Reached$.subscribe((reached) => this.onSessionDeadlineReached(reached.deadline));
+  }
+
+  /**
+   * Tells the host first, then auto-ends unless the host opted out, already ended the call, or moved the deadline from
+   * inside the event. Reached before the call went live (before the mint, or while the microphone and connect are still
+   * in flight) and with no teardown running, the reach is kept in {@link pendingDeadlineReached} for the start to
+   * replay once `SessionStarted$` has fired, so a host never hears of a deadline for a call it was not told started.
+   */
+  private onSessionDeadlineReached(deadline: Date): void {
+    const sessionId = this.liveDeadlineSessionId();
+    if (!sessionId) {
+      if (!this.teardownInFlight && this.holdsDeadline(deadline)) {
+        this.pendingDeadlineReached = deadline;
+      }
+      return;
+    }
+    this._sessionDeadlineReached$.next({ sessionId, deadline });
+    if (this.clientDeadline.Options.autoEnd && this.liveDeadlineSessionId() === sessionId && this.holdsDeadline(deadline)) {
+      this.teardown('deadline').catch((error: unknown) => {
+        console.error(`[RealtimeSession] Ending session ${sessionId} at its deadline failed:`, error);
+      });
+    }
+  }
+
+  /** Whether the clock still holds `deadline`: a host that set or extended it (even from inside `Reached$`) has replaced it. */
+  private holdsDeadline(deadline: Date): boolean {
+    return this.clientDeadline.Value?.getTime() === deadline.getTime();
+  }
+
+  /**
+   * Replays a deadline reached before the call went live, once it is live. On the next tick, so the host's
+   * `SessionDeadlineReached$` handler runs outside the start, after the start has finished.
+   */
+  private replayPendingDeadlineReached(): void {
+    const pending = this.pendingDeadlineReached;
+    if (!pending) {
+      return;
+    }
+    this.pendingDeadlineReached = null;
+    setTimeout(() => {
+      if (this.holdsDeadline(pending)) {
+        this.onSessionDeadlineReached(pending);
+      }
+    }, 0);
+  }
+
+  /**
+   * The session a deadline event belongs to: the session once its call went live, unless it is already being torn
+   * down. A start still opening the microphone or connecting has none: a host that owns the hang-up must be able to
+   * speak its goodbye when it hears the deadline. {@link callWentLive}, not {@link isSessionLive}: a call that is
+   * resuming reads `'connecting'`, and its deadline still holds. Warnings due before the call went live are dropped.
+   */
+  private liveDeadlineSessionId(): string | null {
+    return this.teardownInFlight || !this.callWentLive ? null : this.agentSessionId;
   }
 
   /**
@@ -1263,7 +1581,9 @@ export class RealtimeSessionRuntime {
       return;
     }
     const payload = event.Payload;
-    this.clientDeadline.Extend(payload.MaxSessionDeadlineIso);
+    if (this.clientDeadline.Extend(payload.MaxSessionDeadlineIso)) {
+      this.pendingDeadlineReached = null;
+    }
     this.SendContextNote(
       `[identity] verified ${JSON.stringify({ email: payload.VerifiedEmail, name: payload.VerifiedName, method: payload.Method })} ` +
         '(background context — the user has proven they control this email address; treat them as verified. Do not read this note aloud.)'
@@ -1285,6 +1605,26 @@ export class RealtimeSessionRuntime {
    */
   public IsActiveFor(conversationId: string | null | undefined): boolean {
     return this.IsActive && conversationId != null && UUIDsEqual(this.sessionConversationId, conversationId);
+  }
+
+  /**
+   * Takes the runtime's one driver slot for a new start; the two starts call it after awaiting any
+   * teardown in flight, and only when no End arrived during that wait (a changed {@link startGeneration}).
+   *
+   * A teardown still in flight is awaited rather than read as "busy": ending a call and starting the
+   * next one back to back is normal host behaviour (a retry, a re-mounted surface), and the flag it
+   * used to read flips only at the END of teardown, so the start was dropped with nothing to show
+   * for it — a bare `undefined`, which hosts had to guess at (MJ#4629). A call that is genuinely
+   * live is refused with an error the host can show; it is never silently ignored, and never
+   * overwritten, since a driver no slot points at can never be stopped again.
+   *
+   * Deliberately synchronous: the start's state must be set in the tick the host called it in, or an
+   * End issued straight after the Start (a user tapping back during the mint) finds nothing to abandon.
+   */
+  private claimSessionSlot(): void {
+    if (this.IsActive) {
+      throw new RealtimeSessionAlreadyActiveError(this.agentSessionId);
+    }
   }
 
   /**
@@ -1317,7 +1657,7 @@ export class RealtimeSessionRuntime {
    *   pickers, and never synthesize overrides beyond what the user explicitly chose.
    *   Omit/`null` for the server's defaults (today's behavior).
    * @param recordingConsent Optional EXPLICIT "record this call" consent for THIS session. When
-   *   `true`, the browser records a mic + agent-audio mix and uploads it at session end. When
+   *   `true`, the browser records a mic + agent-audio mix and uploads it as 5 s Opus shards during the call. When
    *   omitted/`null`, the per-user persisted preference (`mj.realtimeVoice.recordingConsent.v1`
    *   via {@link UserInfoEngine}) is read as the default. `false` never records.
    * @param mediaCollectionId Optional per-session media-kit override (`MJ: Collections.ID`). When set,
@@ -1347,14 +1687,28 @@ export class RealtimeSessionRuntime {
     appContext?: AppContextSnapshot | null,
     options?: RealtimeSessionStartOptions | null
   ): Promise<void> {
-    if (this.IsActive) {
-      return; // a session is already running — ignore duplicate starts
+    // Captured BEFORE any wait: a teardown from here on bumps it, and the checks below (and in
+    // runMintedSession) abandon the start. Re-capturing after the wait would absorb an End issued during it.
+    const generation = this.startGeneration;
+    // Synchronous unless a teardown is in flight: a start must take the slot in the same tick it was
+    // called in, so a host's End issued right after it finds a start to abandon (see claimSessionSlot).
+    if (this.teardownInFlight) {
+      await this.teardownInFlight;
+      // An End issued during the wait found IsActive still true (the last call was closing), so it only
+      // joined that teardown and bumped the generation. Nothing is acquired yet, so nothing to release.
+      if (this.startGeneration !== generation) {
+        return;
+      }
+    }
+    this.claimSessionSlot();
+    // Armed only now that the slot is ours: set before the claim, a refused start would leave its deadline to end
+    // the call that holds the runtime.
+    if (options?.SessionDeadline) {
+      this.SetSessionDeadline(options.SessionDeadline);
     }
 
     const consent = this.beginSessionStart({ agentName, recordingConsent, applicationId, appContext });
     this.sessionConversationId = conversationId ?? null;
-    // A teardown while the channels are prepared or the mint runs bumps this; see the checks below.
-    const generation = this.startGeneration;
     // Captured BEFORE the channels are prepared so the mint carries exactly the snapshot the prologue
     // resolved, whatever a channel plugin may push in the meantime.
     const effectiveAppContext = this._appContext$.value;
@@ -1381,7 +1735,7 @@ export class RealtimeSessionRuntime {
     // The host ended the start while the mint ran. That teardown had no session id to close, so
     // close the minted row here, and touch no shared state: a newer start may already own it.
     if (this.startGeneration !== generation) {
-      await this.closeServerSession(session.AgentSessionId);
+      await this.closeServerSession(session.AgentSessionId, 'Explicit');
       return;
     }
 
@@ -1390,7 +1744,7 @@ export class RealtimeSessionRuntime {
       return;
     }
 
-    await this.runMintedSession(session, conversationId ?? null, consent, options?.CameraCheck === true);
+    await this.runMintedSession(session, conversationId ?? null, consent, options?.CameraCheck === true, generation);
   }
 
   /**
@@ -1429,8 +1783,7 @@ export class RealtimeSessionRuntime {
     // published them on ActiveChannels$; skipping teardown would leave them undisposed, their tool
     // handlers registered, and their subscriptions live until the next start replaced them.
     this.agentSessionId = session.AgentSessionId ?? this.agentSessionId;
-    this.setConnectionState('error');
-    await this.teardown(true);
+    await this.endOnFailure();
   }
 
   /**
@@ -1450,7 +1803,9 @@ export class RealtimeSessionRuntime {
    *
    * @param result The minted session — the same ten fields the `StartRealtimeClientSession`
    *   mutation returns. `EphemeralToken` and `Provider` are what actually open the call; a relay
-   *   session opens with its `Transport` and `RelayUrl` instead, so a host must pass those on.
+   *   session opens with its `Transport` and `RelayUrl` instead, so a host must pass those on. A host
+   *   should pass on the catalog timing too (`ConnectionMaxSeconds` and the rest), or the driver
+   *   reconnects on its own defaults.
    * @param options Host-side inputs the result cannot carry; see {@link RealtimeSessionRunOptions}.
    *   Every field defaults exactly as its {@link StartRealtimeSession} counterpart does.
    */
@@ -1458,9 +1813,15 @@ export class RealtimeSessionRuntime {
     result: StartRealtimeClientSessionResult,
     options?: RealtimeSessionRunOptions
   ): Promise<void> {
-    if (this.IsActive) {
-      return; // a session is already running — ignore duplicate starts
+    // Same wait, same generation check, same reasons as StartRealtimeSession.
+    const generation = this.startGeneration;
+    if (this.teardownInFlight) {
+      await this.teardownInFlight;
+      if (this.startGeneration !== generation) {
+        return;
+      }
     }
+    this.claimSessionSlot();
 
     const effectiveOptions = options ?? {};
     if (!this.hostCanUseProvider(result.Provider)) {
@@ -1468,14 +1829,14 @@ export class RealtimeSessionRuntime {
       return;
     }
     const consent = this.beginSessionStart(effectiveOptions);
-    await this.runMintedSession(result, effectiveOptions.conversationId ?? null, consent, false);
+    await this.runMintedSession(result, effectiveOptions.conversationId ?? null, consent, false, generation);
   }
 
   /**
    * Start prologue shared by both entry points: clear the last start's failure, bind the app layer,
    * publish the agent name, reset per-session state, and flip the session live (which is ALSO what
-   * makes the `IsActive` guard suppress duplicate starts while the mint is still in flight — hence it
-   * runs before minting, not after). Returns the resolved recording consent, which the mint half
+   * makes {@link claimSessionSlot} refuse a second start with {@link RealtimeSessionAlreadyActiveError}
+   * while the mint is still in flight — hence it runs before minting, not after). Returns the resolved recording consent, which the mint half
    * reports to the server and the run half uses to decide whether to record.
    */
   private beginSessionStart(options: RealtimeSessionRunOptions): boolean {
@@ -1503,6 +1864,9 @@ export class RealtimeSessionRuntime {
     this.resetState();
     this._active$.next(true);
     this.setConnectionState('connecting');
+    // A drain the constructor deferred (no provider/transport yet) gets its second chance here, and
+    // runs whether or not THIS session records: the pending shards belong to an earlier call.
+    void this.DrainPendingRecordingShards();
 
     // Resolve recording consent for this session: explicit value wins, else the per-user
     // persisted preference. Computed before mint so it can be reported to the server.
@@ -1516,15 +1880,16 @@ export class RealtimeSessionRuntime {
    * the provider connection, and go live. `inputConversationId` is the conversation the START asked
    * for (null ⇒ "server, make me one") — the result alone can't distinguish the two. `cameraCheck` is
    * whether the host shows a camera check ({@link RealtimeSessionStartOptions.CameraCheck}).
+   * `generation` is the {@link startGeneration} the entry point captured before its first await; every
+   * await below is a window in which the host can end the session, and so was every await before this.
    */
   private async runMintedSession(
     session: StartRealtimeClientSessionResult,
     inputConversationId: string | null,
     consent: boolean,
-    cameraCheck: boolean
+    cameraCheck: boolean,
+    generation: number
   ): Promise<void> {
-    // Captured up front: every await below is a window in which the host can end the session.
-    const generation = this.startGeneration;
     try {
       // Mount the channels the resolved policy puts in the session. Deliberately BEFORE the session
       // id is adopted: `ActiveChannels$` consumers (the sessions adapter) treat an emission that
@@ -1568,6 +1933,10 @@ export class RealtimeSessionRuntime {
       }
 
       const clientConfig = this.BuildClientConfig(session);
+      client.ApplySessionConfigTiming(clientConfig);
+      // Forward the driver's options: the Gemini relay seed-fallback asks for AllowFreshReopen, and
+      // only that flag makes the server re-arm the relay's handle-less reopen window.
+      client.SetTokenRefreshCallback((options) => this.refreshClientSessionCredential(session, options));
       const connectError = await this.connectClient(client, clientConfig, microphone.Stream);
       if (this.startGeneration !== generation) {
         await this.unwindAbandonedStart(session, client, lease);
@@ -1575,6 +1944,13 @@ export class RealtimeSessionRuntime {
       }
       if (connectError) {
         throw connectError;
+      }
+      // A Fatal the driver sent during this start (the fatal handler leaves it to the start, see
+      // callWentLive) fails the start even when Connect resolved: the real drivers keep awaiting mic
+      // capture after their connect-failure channel settles, then report 'listening' and resolve on a
+      // socket that already closed. lastSessionError is reset per start and set only by the current client.
+      if (this.lastSessionError?.Fatal) {
+        throw new Error(this.lastSessionError.Message);
       }
       // Tracks are negotiated now, so a capture can tell whether the model takes video, and the call whether it shows
       // the avatar its agent asked for. The driver holds the microphone now, so the user may switch it.
@@ -1594,6 +1970,7 @@ export class RealtimeSessionRuntime {
       // as soon as the control channel is usable (which may be right now, or a moment after Connect).
       this.catalogNotePending = true;
       this.flushChannelCatalogNote();
+      this.flushFocusedChannelNote();
 
       // Start browser-side recording (mic + agent mix) when consented. Best-effort: an
       // unsupported browser / missing remote stream degrades gracefully (mic-only or off)
@@ -1631,6 +2008,8 @@ export class RealtimeSessionRuntime {
       // Same place, same reason: the session is connected and its id is known, which is exactly
       // the window in which the server needs to be told it is alive.
       this.startLivenessPulse();
+      this.callWentLive = true;
+      this.replayPendingDeadlineReached();
     } catch (error) {
       await this.failSessionStart(error);
     }
@@ -1700,7 +2079,7 @@ export class RealtimeSessionRuntime {
     // session, and clearing the id would leave that teardown no session to report.
     if (session.AgentSessionId && this.agentSessionId === session.AgentSessionId && !this.teardownInFlight) {
       this.agentSessionId = null;
-      await this.closeServerSession(session.AgentSessionId);
+      await this.closeServerSession(session.AgentSessionId, 'Explicit');
     }
   }
 
@@ -2039,19 +2418,39 @@ export class RealtimeSessionRuntime {
   private async failSessionStart(error: unknown): Promise<void> {
     console.error('[RealtimeSession] Failed to start session:', error);
     this.lastStartError = error instanceof Error ? error : new Error(String(error));
+    await this.endOnFailure();
+  }
+
+  /**
+   * Ends the call over a failure: a failed start, an unusable provider, or a fatal provider error.
+   *
+   * The teardown is claimed BEFORE `'error'` is published. `ConnectionState$` emits synchronously, and a
+   * host may end the call the moment it sees `'error'` (MobileApp's voice screen does); claimed first, that
+   * host's End joins this teardown instead of starting its own as `'explicit'`, so the row still closes as
+   * `Error` and `SessionEnded$` still says `'error'`. Teardown keeps a terminal `'error'` state.
+   */
+  private endOnFailure(): Promise<void> {
+    const ending = this.teardown('error');
     this.setConnectionState('error');
-    await this.teardown(false);
+    return ending;
   }
 
   /**
    * End the active session: stop the mic, tear down the provider connection, and close
    * the server-side agent session. Safe to call when no session is active.
+   *
+   * @param reason `'deadline'` for a host that owns the hang-up at its deadline (`autoEnd: false`): the end is reported
+   *   as `'deadline'` and the row is claimed as `TimeLimit`. The server keeps `TimeLimit` only when the session's own
+   *   stored deadline (`Config_.maxSessionDeadlineIso`, stamped at mint, e.g. a widget guest's voice cap) has passed or is
+   *   within a minute; a deadline known only to this browser is recorded as `Explicit`. Default `'explicit'`.
    */
-  public async EndRealtimeSession(): Promise<void> {
+  public async EndRealtimeSession(reason: 'explicit' | 'deadline' = 'explicit'): Promise<void> {
     if (!this.IsActive && !this.agentSessionId) {
       return;
     }
-    await this.teardown(true);
+    // A JS caller wiring this straight to a click handler passes the event object; anything but 'deadline' is explicit.
+    const end: SessionEndReason = reason === 'deadline' ? 'deadline' : 'explicit';
+    await this.teardown(end);
   }
 
   /**
@@ -2078,7 +2477,7 @@ export class RealtimeSessionRuntime {
     }
     client.SendText(trimmed);
     // Relay as a user turn — same path spoken input uses (caption + persisted transcript).
-    void this.onUserTranscript(trimmed);
+    void this.onUserTranscript(trimmed, 'typed');
   }
 
   /**
@@ -2118,14 +2517,14 @@ export class RealtimeSessionRuntime {
   /**
    * Feeds a background context note into the live model (no spoken reply is requested) — the
    * perception channel interactive surfaces use (e.g. the whiteboard's coalesced scene deltas).
-   * No-op when no session is live.
+   * No-op when no session is live or resuming mid-call.
    */
-  public SendContextNote(text: string): void {
+  public SendContextNote(text: string, options?: RealtimeContextNoteOptions): void {
     const trimmed = text?.trim() ?? '';
-    if (trimmed.length === 0 || !this.client || !this.isSessionLive()) {
+    if (trimmed.length === 0 || !this.client || (!this.isSessionLive() && !this._resuming$.value)) {
       return;
     }
-    this.client.SendContextNote(trimmed);
+    this.client.SendContextNote(trimmed, options);
   }
 
   /**
@@ -2149,7 +2548,16 @@ export class RealtimeSessionRuntime {
     if (trimmed.length === 0 || !this.client || !this.isSessionLive()) {
       return false;
     }
-    this.requestChannelSpokenResponse(trimmed);
+    // The opening is part of the conversation, so it goes out as a spoken TURN: captioned, relayed
+    // and persisted like any turn the model takes on its own. It used to ride the delegation
+    // narration channel, whose replies are disposable by contract, so the greeting the participant
+    // heard was never in the transcript (MJ#4591). A driver from before the capability existed
+    // falls back to that channel rather than leaving the session silent.
+    if (this.client.RequestSpokenTurn) {
+      this.client.RequestSpokenTurn(trimmed);
+    } else {
+      this.client.RequestSpokenUpdate(trimmed);
+    }
     return true;
   }
 
@@ -2235,6 +2643,9 @@ export class RealtimeSessionRuntime {
       // turn one's cue wherever the clocks happen to differ.
       this.currentTurnStartMs = recorder.IsRecording ? 0 : null;
       this.turnAudioStartCaptured = false;
+      this.userSpeechStartMs = null;
+      this.userSpeechStartSuperseded = false;
+      this.userSpeechStartByItemId.clear();
       if (this.recorder) {
         // WebRTC drivers (OpenAI): the agent's track usually lands AFTER Connect() resolves, so
         // `remoteStream` above is null here and this handler attaches it later. PCM-playback
@@ -2242,7 +2653,7 @@ export class RealtimeSessionRuntime {
         // `remoteStream` is already set and the handler fires immediately with the same stream;
         // AttachRemoteStream is idempotent, so it is mixed only once.
         client.OnRemoteMediaStream?.((stream) => this.recorder?.AttachRemoteStream(stream));
-        this.startSegmentFlushing();
+        this.startShardFlushing();
       }
     } catch (error) {
       console.warn('[RealtimeSession] Failed to start call recording:', error);
@@ -2250,17 +2661,181 @@ export class RealtimeSessionRuntime {
     }
   }
 
-  /** Begins flushing ~15s crash-recovery shards to the server for the duration of the recording. */
-  private startSegmentFlushing(): void {
-    this.shardQueue = new RecordingShardQueue();
-    this.segmentTimer = setInterval(() => { void this.flushRecordingSegment(); }, RealtimeSessionRuntime.segmentFlushMs);
+  // ── Recording shards (MJ#5294) ───────────────────────────────────────────────
+  //
+  // The recorder hands over Opus packets; the runtime cuts them into 5 s `MJOPUS1` shards, writes
+  // each one to the local store BEFORE its upload starts, uploads it as raw bytes, and deletes it from
+  // the store only on the server's ack. The call ends with a `keepalive` terminal request carrying the
+  // final partial shard and the counts the server needs to know it has everything.
+
+  /**
+   * Builds the transport for shard uploads and terminal requests. The default posts to MJAPI's REST
+   * recording routes, derived from the session's GraphQL provider configuration, with credentials
+   * read per request so a refreshed token is used. Returns null — shards then wait in the local
+   * store — when the provider has no URL (a test double, a provider that is not GraphQL, or one not
+   * configured yet). Override to supply another transport.
+   */
+  protected createRecordingTransport(): IRecordingTransport | null {
+    return CreateRecordingTransportForProvider(this.Provider);
   }
 
-  /** Stops the periodic crash-recovery shard flush. */
-  private stopSegmentFlushing(): void {
-    if (this.segmentTimer) {
-      clearInterval(this.segmentTimer);
-      this.segmentTimer = null;
+  /**
+   * Builds the beacon {@link SendPageHideSignals} closes the session with. The default posts a
+   * `keepalive` `CloseAgentSession` to the session's GraphQL provider with the same credentials as the
+   * GraphQL client; null when the provider has no URL. Override to supply another beacon.
+   */
+  protected createSessionCloseBeacon(): ISessionCloseBeacon | null {
+    return CreateSessionCloseBeaconForProvider(this.Provider);
+  }
+
+
+  /**
+   * Builds the durable local shard store. The default is IndexedDB where the host has it and a no-op
+   * store elsewhere (Node, some React Native runtimes). Called once per runtime. Override to supply
+   * another store.
+   */
+  protected createRecordingShardStore(): IRecordingShardStore {
+    return CreateRecordingShardStore(globalThis.indexedDB);
+  }
+
+  /** The provider's signed-in user, or null (no provider yet, or an anonymous page). */
+  private signedInUserID(): string | null {
+    return this.Provider?.CurrentUser?.ID ?? null;
+  }
+
+  /** The runtime's shard store, created on first use. */
+  private ensureShardStore(): IRecordingShardStore {
+    this.shardStore ??= this.createRecordingShardStore();
+    return this.shardStore;
+  }
+
+  /**
+   * Re-uploads shards an earlier, interrupted call left in the local store (crash, closed tab, dead
+   * network), each under its OWN session id and index, oldest first, at most
+   * {@link MAX_DRAINED_SHARDS_PER_LOAD} per runtime. A shard is deleted only on the server's ack.
+   *
+   * Runs once per runtime instance, re-armed whenever a recording ends (which may leave shards behind
+   * for the next session start on the same page). When there is no transport yet (no provider configuration, e.g.
+   * before login) it returns 0 WITHOUT marking itself done, so a later call — session start — drains
+   * instead of the shards being skipped for this page. Concurrent calls share one run. Never rejects.
+   *
+   * @returns the number of shards the server acknowledged in this call.
+   */
+  public DrainPendingRecordingShards(): Promise<number> {
+    if (this.pendingShardsDrained) {
+      return Promise.resolve(0);
+    }
+    this.drainInFlight ??= this.drainPendingShards().finally(() => {
+      this.drainInFlight = null;
+    });
+    return this.drainInFlight;
+  }
+
+  /** Makes the next {@link DrainPendingRecordingShards} call run again, even one already in flight. */
+  private rearmPendingShardDrain(): void {
+    this.pendingShardsDrained = false;
+    this.drainGeneration++;
+  }
+
+  /**
+   * The body of {@link DrainPendingRecordingShards}, up to {@link maxDrainRunsPerCall} runs. It runs
+   * again after a re-arm while a run is in flight (a recovery after an outage gave up on more shards),
+   * because the running pass listed the store before those shards were there; and after a run deleted
+   * refused shards, because those filled the page that the shards behind them now get.
+   */
+  private async drainPendingShards(): Promise<number> {
+    try {
+      const transport = this.createRecordingTransport();
+      if (!transport) {
+        return 0;
+      }
+      let delivered = 0;
+      for (let run = 1; run <= RealtimeSessionRuntime.maxDrainRunsPerCall; run++) {
+        // A re-arm while this run is in flight must win over this run marking itself done.
+        const generation = this.drainGeneration;
+        const outcome = await this.drainStoredShardsOnce(transport);
+        delivered += outcome.Delivered;
+        // Done only when every listed shard was delivered or refused for good: a drain during an outage
+        // must not stop the next session start or recovery from trying again.
+        this.pendingShardsDrained = generation === this.drainGeneration && outcome.Delivered + outcome.Refused === outcome.Listed;
+        if (generation === this.drainGeneration && outcome.Refused === 0) {
+          break;
+        }
+      }
+      return delivered;
+    } catch (error) {
+      console.warn(`[RealtimeSession] Draining stored recording shards failed: ${describeRecordingFailure(error)}; will retry at the next session start.`, error);
+      return 0;
+    }
+  }
+
+  /** One drain pass over the signed-in user's stored shards (see {@link DrainStoredRecordingShardsOnce}). */
+  private drainStoredShardsOnce(transport: IRecordingTransport): Promise<RecordingShardDrainPass> {
+    return DrainStoredRecordingShardsOnce(this.ensureShardStore(), transport, this.signedInUserID());
+  }
+
+  /** Builds this recording's shard pipeline and starts the 5 s flush. */
+  private startShardFlushing(): void {
+    const sessionId = this.agentSessionId;
+    if (!sessionId) {
+      // Unreachable in practice (the session id is adopted before recording starts), but without
+      // one there is nowhere to send shards, so say so rather than recording into the void.
+      console.warn('[RealtimeSession] Recording started without an agent session id; shards will not be saved.');
+      return;
+    }
+    const transport = this.createRecordingTransport();
+    if (!transport) {
+      console.warn(`[RealtimeSession] No recording transport for session ${sessionId} (provider has no REST configuration); shards are kept in the local store only.`);
+    }
+    // True once the queue gave up on a shard and until an upload succeeds again: that first success
+    // re-sends what the queue dropped meanwhile (see recoverStoredShardsAfterOutage).
+    let shardsGivenUp = false;
+    this.recordingShards = {
+      SessionID: sessionId,
+      UserID: this.signedInUserID(),
+      Window: new RecordingShardWindow(),
+      Transport: transport,
+      // Closes over this recording's session id and transport — never the runtime's current ones.
+      Queue: new RecordingShardQueue(async (shard) => {
+        if (!transport) {
+          return 'Retry';
+        }
+        // The outcome goes to the queue unchanged: it logs a different reason for each, and stops
+        // retrying a `Refused` shard at once (#6012).
+        const outcome = await transport.UploadShard(sessionId, shard);
+        if (outcome === 'Acked') {
+          await this.deleteStoredShard(sessionId, shard.Index);
+          if (shardsGivenUp) {
+            shardsGivenUp = false;
+            this.recoverStoredShardsAfterOutage(sessionId);
+          }
+        }
+        return outcome;
+      }, () => {
+        shardsGivenUp = true;
+      }),
+    };
+    this.shardFlushTimer = setInterval(() => { void this.flushRecordingShards(); }, RealtimeSessionRuntime.recordingShardFlushMs);
+  }
+
+  /**
+   * Uploads succeed again after failing: re-sends, from the local store, the shards the queue gave up
+   * on during the outage. The queue's attempts run out after about 10 s of a dead network (or an
+   * expired token), and without this those shards would wait for a later page load — which a widget
+   * guest never makes — leaving a permanent gap. Runs in the background, outside any page-lifecycle
+   * handler, so the IndexedDB read is allowed. Never rejects.
+   */
+  private recoverStoredShardsAfterOutage(sessionId: string): void {
+    console.log(`[RealtimeSession] Recording uploads for session ${sessionId} recovered; re-sending stored shards.`);
+    this.rearmPendingShardDrain();
+    void this.DrainPendingRecordingShards();
+  }
+
+  /** Stops the periodic shard flush. */
+  private stopShardFlushing(): void {
+    if (this.shardFlushTimer) {
+      clearInterval(this.shardFlushTimer);
+      this.shardFlushTimer = null;
     }
   }
 
@@ -2322,133 +2897,412 @@ export class RealtimeSessionRuntime {
   }
 
   /**
-   * Uploads the chunks captured since the last flush as one crash-recovery shard (durability only;
-   * the canonical file is still the full upload at teardown). Best-effort — never disturbs the call:
-   * a failed shard is retained by the queue and resent under its own index on later flushes, up to a
-   * bounded number of attempts (#5197).
+   * One 5 s tick: cuts the packets encoded since the last tick into shards, stores each one, then
+   * uploads them. Best-effort — never disturbs the call and never rejects. Overlapping ticks are
+   * safe: `Append` and `SealTail` are synchronous, so indexes are assigned in order, and the queue
+   * bounds how many flushes upload at once. A failed shard is retained by the queue and resent under
+   * its own index on later ticks (#5197), and stays in the store until acknowledged.
+   *
+   * Every tick seals whatever it took, even under a full window (the window's 250-packet and byte caps
+   * still split a larger batch). Capture starts slightly after this timer, so a tick almost never
+   * holds exactly 250 packets; sealing only full windows would leave nearly 5 s of encoded audio in
+   * memory at every moment, unstored and unsent, which a killed tab loses.
    */
-  private async flushRecordingSegment(): Promise<void> {
+  private async flushRecordingShards(): Promise<void> {
     const recorder = this.recorder;
-    const agentSessionId = this.agentSessionId;
-    const queue = this.shardQueue;
-    if (!recorder || !agentSessionId || !queue) {
+    const pipeline = this.recordingShards;
+    if (!recorder || !pipeline) {
       return;
     }
-    // Read once: a shard's sample rate is fixed at capture, and the recorder may be stopped by the
-    // time a retry of it runs.
-    const sampleRate = recorder.SampleRate;
-    await queue.Flush(
-      () => recorder.SnapshotNewSegmentBase64(),
-      (segmentIndex, audioBase64) => this.uploadRecordingShard(agentSessionId, sampleRate, segmentIndex, audioBase64),
-    );
-  }
-
-  /**
-   * Sends one shard and reports whether the server stored it. The resolver reports a failed
-   * ownership load or storage write as `false`, not as an error — that is how #5197 lost a shard
-   * without a single client-side log line — so the typed result must be checked, not just the absence
-   * of a throw.
-   */
-  private async uploadRecordingShard(agentSessionId: string, sampleRate: number, segmentIndex: number, audioBase64: string): Promise<boolean> {
-    const mutation = `
-      mutation UploadRealtimeRecordingSegment($agentSessionId: String!, $segmentIndex: Int!, $audioBase64: String!, $mimeType: String!) {
-        UploadRealtimeRecordingSegment(agentSessionId: $agentSessionId, segmentIndex: $segmentIndex, audioBase64: $audioBase64, mimeType: $mimeType)
+    let sealed: RecordingShard[];
+    try {
+      sealed = pipeline.Window.Append(recorder.TakeEncodedPackets());
+      const tick = pipeline.Window.SealTail();
+      if (tick) {
+        sealed.push(tick);
       }
-    `;
-    // Shards are HEADER-LESS raw little-endian PCM16 (mime audio/L16 with the capture sample rate),
-    // NOT individually-playable WAV — recovery is concatenate-in-order then WAV-wrap. The canonical
-    // seekable WAV is the consolidated end-of-call upload below.
-    const shardMime = `audio/L16;rate=${sampleRate}`;
-    const result = (await this.gql().ExecuteGQL(mutation, {
-      agentSessionId,
-      segmentIndex,
-      audioBase64,
-      mimeType: shardMime,
-    })) as UploadRecordingSegmentResult | null;
-    return result?.UploadRealtimeRecordingSegment === true;
+    } catch (error) {
+      console.warn(`[RealtimeSession] Failed to take encoded recording packets for session ${pipeline.SessionID}; this tick's audio is lost:`, error);
+      return;
+    }
+    await this.storeShards(pipeline, sealed);
+    await pipeline.Queue.Flush(sealed);
+  }
+
+  /** Writes shards to the local store, in order, before their upload starts. Never rejects. */
+  private async storeShards(pipeline: RecordingShardPipeline, shards: RecordingShard[]): Promise<void> {
+    const store = this.ensureShardStore();
+    for (const shard of shards) {
+      try {
+        await store.Put({ SessionID: pipeline.SessionID, UserID: pipeline.UserID, Index: shard.Index, Bytes: shard.Bytes, SavedAt: Date.now() });
+      } catch (error) {
+        // The store contract is never-throw; an override that does must still not stop the upload.
+        console.warn(`[RealtimeSession] Failed to store recording shard ${pipeline.SessionID}/${shard.Index}; uploading it anyway:`, error);
+      }
+    }
+  }
+
+  /** Removes an acknowledged shard from the local store. Never rejects. */
+  private deleteStoredShard(sessionId: string, index: number): Promise<void> {
+    return DeleteStoredRecordingShard(this.ensureShardStore(), sessionId, index);
+  }
+
+
+  /**
+   * Tells the server, right now, how much of the recording exists — for a host's `pagehide` and
+   * `visibilitychange → hidden` handlers, where the page may be gone a moment later. Synchronous:
+   * it seals the pending partial shard and fires the `keepalive` terminal with it, then re-sends
+   * with `keepalive` whatever the server has not acknowledged yet (see
+   * {@link dispatchRecordingTerminal}), and returns without waiting. Never stops the recorder: after
+   * a `hidden` the call may well continue, and later audio simply starts the next shard index (the
+   * tail is sealed, so no index is ever re-sent with different bytes). Also works while End is still
+   * stopping the recorder, which is exactly when a host that does not await End navigates away.
+   * No-op when nothing is recording, there is no session id or no transport, or nothing was
+   * captured. Never throws.
+   *
+   * Deliberately opens NO IndexedDB transaction inside the handler: a `pagehide` handler gets a few
+   * milliseconds, and a store write started there could not complete during unload anyway. The
+   * shards it sealed are written to the store from a `setTimeout(0)` task after the handler returns:
+   * on a page that is merely hidden (the call goes on) that keeps the durable copy until the server
+   * acknowledges it; on a page that is unloading the task just never runs.
+   */
+  public SendRecordingTerminal(options?: RecordingTerminalOptions): void {
+    const recorder = this.recorder;
+    const pipeline = this.recordingShards;
+    if (!recorder || !pipeline || !pipeline.Transport) {
+      return;
+    }
+    try {
+      const sealed = pipeline.Window.Append(recorder.TakeEncodedPackets());
+      const tail = pipeline.Window.SealTail();
+      if (pipeline.Window.LastSealedIndex < 0) {
+        return;
+      }
+      const final = options?.Final ?? true;
+      if (sealed.length === 0 && !tail && pipeline.FinalTerminal?.LastSealedIndex === pipeline.Window.LastSealedIndex) {
+        return;
+      }
+      void this.dispatchRecordingTerminal(pipeline, sealed, tail, true, final);
+    } catch (error) {
+      console.warn(`[RealtimeSession] Failed to send the recording terminal for session ${pipeline.SessionID}:`, error);
+    }
   }
 
   /**
-   * Stops the active recorder and encodes the captured audio. Split from the upload so teardown can
-   * close the server session in between (#5195). Best-effort: returns `null` when nothing was
-   * recorded or the stop failed (warned) — it must NEVER block teardown.
+   * Whether {@link SendPageHideSignals} closes the live session. True by default. A host that closes the
+   * session from `pagehide` itself (the `<mj-realtime-widget>` element) turns it off: its close and the
+   * beacon would be two `CloseAgentSession` calls for one session, and the server shares overlapping closes
+   * only within one host instance.
    */
-  private async stopRecording(): Promise<StoppedRecording | null> {
-    this.stopSegmentFlushing();
-    // Close the queue with the recording: its retained shards (base64 audio) are released now, not at
-    // the next session start, and a flush still in flight stops sending, so no resend lands after the
-    // end-of-call upload below has deleted the shards.
-    this.shardQueue?.Close();
-    this.shardQueue = null;
+  public ClosesSessionOnPageHide = true;
+
+  /**
+   * The session this runtime's `CloseAgentSession` closed (the server returned true; {@link closeServerSession}). End's
+   * teardown closes the session, then keeps its id while it waits on the recording terminal's ack, so a
+   * `pagehide` in that window would otherwise send a second close of a closed session. While the close is
+   * still in flight this stays unset and the beacon is still sent: unload can cancel the ordinary close. It
+   * also stays unset when the server did not close the session, so the beacon tries again.
+   */
+  private completedServerCloseSessionId: string | null = null;
+
+  /**
+   * The page-lifecycle `pagehide` handler: the page is being hidden for navigation or unload. Sends the
+   * final recording terminal ({@link SendRecordingTerminal}), then, when the page is going away for good
+   * (`persisted` false, so not entering the back/forward cache, from which it may come back), closes the
+   * live server session with a `keepalive` `CloseAgentSession` ({@link ISessionCloseBeacon}). An
+   * ordinary close is cancelled on unload, so without it a closed tab left the session `Active` until
+   * the server janitor's idle sweep.
+   *
+   * Synchronous, like {@link SendRecordingTerminal}: everything is dispatched before it returns. The
+   * terminal goes first so the recording keeps priority on the browser's ~64 KiB per-page keepalive
+   * budget; the recording uses at most {@link recordingKeepaliveBudgetBytes} of it, and the close body
+   * (a few hundred bytes) fits in the remainder reserved for exactly such a close. Never throws.
+   *
+   * Only for `pagehide`: a hidden tab (`visibilitychange`) must not close the session, the user may
+   * come back. A host that sends its own close beacon turns {@link ClosesSessionOnPageHide} off.
+   */
+  public SendPageHideSignals(options: PageHideSignalOptions): void {
+    this.SendRecordingTerminal({ Final: true });
+    const agentSessionId = this.agentSessionId;
+    if (options.Persisted || !agentSessionId || !this.ClosesSessionOnPageHide) {
+      return;
+    }
+    if (this.completedServerCloseSessionId && UUIDsEqual(this.completedServerCloseSessionId, agentSessionId)) {
+      return;
+    }
+    try {
+      const beacon = this.createSessionCloseBeacon();
+      if (!beacon) {
+        console.warn(`[RealtimeSession] Page closed with session ${agentSessionId} live, but the provider has no endpoint to close it on; the server janitor closes it.`);
+        return;
+      }
+      void beacon.SendClose(agentSessionId, 'Explicit');
+    } catch (error) {
+      console.warn(`[RealtimeSession] Failed to send the page-close CloseAgentSession for session ${agentSessionId}:`, error);
+    }
+  }
+
+  /**
+   * Fires the terminal request, then re-sends with `keepalive` every shard the server has not
+   * acknowledged, then stores the shards sealed for this terminal. Shared by End and the page-lifecycle
+   * handlers. Everything that needs the network is dispatched synchronously, before any storage work,
+   * because the page may close at any moment from here on: an ordinary `fetch` is aborted on unload,
+   * and a `keepalive` one is not.
+   *
+   * - The terminal goes first so it always gets the keepalive budget. The server waits for the shards
+   *   the terminal says exist, and assembles as soon as the last missing one arrives.
+   * - The re-sent shards are the queue's unacknowledged ones (on the wire, waiting in a batch, or
+   *   retained after a failure) plus `sealedNow`, oldest first, within
+   *   {@link recordingKeepaliveBudgetBytes} together with the tail. A `sealedNow` shard that does not
+   *   fit, or whose keepalive upload fails, goes through the ordinary queue instead (it may still
+   *   land if the page stays). The queue keeps its own shards either way; a duplicate is acked as one.
+   * - `sealedNow` and the tail are stored after the dispatch, from a `setTimeout(0)` task when called
+   *   from a page-lifecycle handler (`deferStore`). A shard's stored copy is deleted on its ack, after
+   *   the store write, so a fast ack can never leave an orphan row.
+   *
+   * Resolves true when the terminal was acknowledged. Never rejects.
+   */
+  private dispatchRecordingTerminal(
+    pipeline: RecordingShardPipeline,
+    sealedNow: RecordingShard[],
+    tail: RecordingShard | null,
+    deferStore: boolean,
+    final: boolean,
+  ): Promise<boolean> {
+    const sessionId = pipeline.SessionID;
+    const terminalAcked = this.sendRecordingTerminal(pipeline, tail, final);
+    const toStore = tail ? [...sealedNow, tail] : sealedNow;
+    let stored: Promise<void> = Promise.resolve();
+    if (toStore.length > 0) {
+      stored = deferStore ? this.storeShardsLater(pipeline, toStore) : this.storeShards(pipeline, toStore);
+    }
+    this.resendUnacknowledgedWithKeepalive(pipeline, sealedNow, stored);
+    const ackedPromise = terminalAcked.then(async (acked) => {
+      await stored;
+      if (!tail) {
+        return acked;
+      }
+      if (acked) {
+        await this.deleteStoredShard(sessionId, tail.Index);
+      } else {
+        // Retried as an ordinary shard; a Flush on a closed queue (the recording ended) is a logged no-op.
+        await pipeline.Queue.Flush([tail]);
+      }
+      return acked;
+    });
+    if (final) {
+      pipeline.FinalTerminal = { LastSealedIndex: pipeline.Window.LastSealedIndex, Acked: terminalAcked };
+    }
+    return ackedPromise;
+  }
+
+  /** Counts `bytes` against the page's keepalive budget until `request` settles. */
+  private trackKeepalive<T>(bytes: number, request: Promise<T>): Promise<T> {
+    this.keepaliveBytesInFlight += bytes;
+    return request.finally(() => {
+      this.keepaliveBytesInFlight -= bytes;
+    });
+  }
+
+  /**
+   * The `keepalive` re-send part of {@link dispatchRecordingTerminal}, budgeted against everything this
+   * page still has in flight (the terminal just sent included). A shard whose `keepalive` copy is already
+   * on the wire is not sent again. Never throws.
+   */
+  private resendUnacknowledgedWithKeepalive(
+    pipeline: RecordingShardPipeline,
+    sealedNow: RecordingShard[],
+    stored: Promise<void>,
+  ): void {
+    const transport = pipeline.Transport;
+    const sessionId = pipeline.SessionID;
+    const fresh = new Set(sealedNow.map((shard) => shard.Index));
+    const toQueue = (shard: RecordingShard): Promise<void> => stored.then(() => pipeline.Queue.Flush([shard]));
+    const byIndex = new Map<number, RecordingShard>();
+    for (const shard of [...pipeline.Queue.Unacknowledged(), ...sealedNow]) {
+      byIndex.set(shard.Index, shard);
+    }
+    for (const shard of [...byIndex.values()].sort((a, b) => a.Index - b.Index)) {
+      const key = `${sessionId}/${shard.Index}`;
+      if (this.keepaliveShardsInFlight.has(key)) {
+        continue;
+      }
+      const budget = RealtimeSessionRuntime.recordingKeepaliveBudgetBytes - this.keepaliveBytesInFlight;
+      if (!transport || shard.Bytes.length > budget) {
+        if (fresh.has(shard.Index)) {
+          void toQueue(shard);
+        }
+        continue;
+      }
+      this.keepaliveShardsInFlight.add(key);
+      void this.trackKeepalive(shard.Bytes.length, transport.UploadShard(sessionId, shard, { Keepalive: true }).then((outcome) => outcome === 'Acked'))
+        .finally(() => this.keepaliveShardsInFlight.delete(key))
+        .catch((error: unknown) => {
+          console.warn(`[RealtimeSession] Keepalive upload of recording shard ${sessionId}/${shard.Index} failed: ${describeRecordingFailure(error)}`, error);
+          return false;
+        })
+        .then(async (acked) => {
+          await stored;
+          if (acked) {
+            await this.deleteStoredShard(sessionId, shard.Index);
+          } else if (fresh.has(shard.Index)) {
+            await pipeline.Queue.Flush([shard]);
+          }
+        });
+    }
+  }
+
+  /**
+   * Stores shards from a `setTimeout(0)` task rather than now — the path for shards sealed inside a
+   * page-lifecycle handler, which must not open an IndexedDB transaction itself. Resolves once they
+   * are stored (never, if the page unloads first). Never rejects.
+   */
+  private storeShardsLater(pipeline: RecordingShardPipeline, shards: RecordingShard[]): Promise<void> {
+    return new Promise<void>((resolve) => {
+      setTimeout(() => {
+        void this.storeShards(pipeline, shards).then(resolve);
+      }, 0);
+    });
+  }
+
+  /**
+   * Sends the terminal request for a pipeline whose tail is already sealed. Resolves true on a server
+   * ack and logs the outcome with the session id. Never rejects.
+   */
+  private async sendRecordingTerminal(pipeline: RecordingShardPipeline, tail: RecordingShard | null, final: boolean): Promise<boolean> {
+    const lastShardIndex = pipeline.Window.LastSealedIndex;
+    const capturedSamples = pipeline.Window.SealedSamples;
+    const context = `session ${pipeline.SessionID} (last shard ${lastShardIndex}, ${capturedSamples} samples)`;
+    if (!pipeline.Transport) {
+      console.warn(`[RealtimeSession] Recording terminal NOT sent for ${context}: no recording transport; stored shards are drained on a later load.`);
+      return false;
+    }
+    try {
+      const acked = await this.trackKeepalive(tail?.Bytes.length ?? 0, pipeline.Transport.SendTerminal(pipeline.SessionID, {
+        Tail: tail?.Bytes ?? null,
+        LastShardIndex: lastShardIndex,
+        CapturedSamples: capturedSamples,
+        Final: final,
+      }));
+      if (!acked) {
+        console.warn(`[RealtimeSession] Recording terminal for ${context} was not acknowledged; the server janitor assembles what arrived.`);
+      }
+      return acked;
+    } catch (error) {
+      console.warn(`[RealtimeSession] Recording terminal for ${context} failed: ${describeRecordingFailure(error)}`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Ends the recording at teardown and STARTS its terminal request: stops the recorder (flushing the
+   * encoder), cuts the remaining packets into shards with the tail trimmed to the recorder's captured
+   * sample count, and dispatches the `keepalive` terminal plus `keepalive` re-sends of everything not
+   * yet acknowledged, before storing anything ({@link dispatchRecordingTerminal}). Teardown awaits the
+   * returned terminal only after `CloseAgentSession` ({@link awaitRecordingTerminal}), so the small,
+   * critical close never waits behind the recording (#5195).
+   *
+   * The recorder and pipeline stay visible to {@link SendRecordingTerminal} until the recorder has
+   * stopped: a `pagehide` in that window (a host that navigates away without awaiting End) still
+   * sends what was captured, and End then continues at the next index.
+   *
+   * Returns null when nothing was recording or nothing was captured (no terminal is sent then).
+   * Best-effort: never throws, never blocks teardown on the network.
+   */
+  private async finishRecording(): Promise<PendingRecordingTerminal | null> {
+    this.stopShardFlushing();
     const recorder = this.recorder;
-    this.recorder = null;
+    const pipeline = this.recordingShards;
     this.currentTurnStartMs = null;
     this.turnAudioStartCaptured = false;
-    if (!recorder) {
+    this.userSpeechStartMs = null;
+    this.userSpeechStartSuperseded = false;
+    this.userSpeechStartByItemId.clear();
+    if (!recorder || !pipeline) {
+      this.recorder = null;
+      this.recordingShards = null;
       return null;
     }
     try {
-      // Capture the recorder MIME (now 'audio/wav') BEFORE Stop() — the getter reads '' once stopped.
-      const mimeType = recorder.MimeType;
-      const audioBase64 = await recorder.StopAndEncode();
-      // Read the real waveform peaks computed during capture (survives the stop via the snapshot).
-      const peaks = recorder.GetPeaks();
-      if (!audioBase64) {
-        console.warn('[RealtimeSession] ⚠️ recording NOT uploaded — empty recording.');
+      const capturedSamples = await this.stopRecorder(recorder, pipeline.SessionID);
+      this.recorder = null;
+      this.recordingShards = null;
+      const sealed = pipeline.Window.Append(recorder.TakeEncodedPackets());
+      // Without a count from the recorder the tail keeps every packet it holds (SealTail's default).
+      const tail = pipeline.Window.SealTail(
+        capturedSamples === null ? undefined : Math.max(0, capturedSamples - pipeline.Window.SealedSamples),
+      );
+      if (pipeline.Window.LastSealedIndex < 0) {
+        pipeline.Queue.Close();
         return null;
       }
-      return { MimeType: mimeType, AudioBase64: audioBase64, Peaks: peaks };
+      if (sealed.length === 0 && !tail && pipeline.FinalTerminal?.LastSealedIndex === pipeline.Window.LastSealedIndex) {
+        return { Pipeline: pipeline, Acked: pipeline.FinalTerminal.Acked };
+      }
+      return { Pipeline: pipeline, Acked: this.dispatchRecordingTerminal(pipeline, sealed, tail, false, true) };
     } catch (error) {
-      console.warn('[RealtimeSession] Failed to stop call recording:', error);
+      console.warn(`[RealtimeSession] Failed to finish the call recording for session ${pipeline.SessionID}; stored shards are drained at the next session start or load:`, error);
+      this.recorder = null;
+      this.recordingShards = null;
+      pipeline.Queue.Close();
+      this.rearmPendingShardDrain();
       return null;
     }
   }
 
   /**
-   * Uploads a recording returned by {@link stopRecording}. Never throws. No-op when there is
-   * nothing to upload; warns when there is no session id to attach the file to.
+   * Stops the recorder, bounded by {@link RECORDER_STOP_TIMEOUT_MS}. Resolves the captured sample
+   * count, or null when the recorder threw or did not finish in time (logged) — the caller then ends
+   * the recording at the packets already encoded. Never rejects.
    */
-  private async uploadStoppedRecording(agentSessionId: string | null, recording: StoppedRecording | null): Promise<void> {
-    if (!recording) {
-      return;
-    }
-    if (!agentSessionId) {
-      console.warn('[RealtimeSession] ⚠️ recording NOT uploaded — no session id.');
-      return;
-    }
+  private async stopRecorder(recorder: IRealtimeSessionRecorder, sessionId: string): Promise<number | null> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(() => resolve('timeout'), RECORDER_STOP_TIMEOUT_MS);
+    });
     try {
-      await this.uploadRecording(agentSessionId, recording.AudioBase64, recording.MimeType, recording.Peaks);
+      const outcome = await Promise.race([recorder.Stop(), timedOut]);
+      if (outcome === 'timeout') {
+        console.warn(`[RealtimeSession] Recorder did not stop within ${RECORDER_STOP_TIMEOUT_MS}ms for session ${sessionId}; ending the recording at the packets already encoded.`);
+        return null;
+      }
+      return outcome;
     } catch (error) {
-      console.warn(`[RealtimeSession] Failed to upload call recording for session ${agentSessionId}:`, error);
+      console.warn(`[RealtimeSession] Recorder failed to stop for session ${sessionId}; ending the recording at the packets already encoded:`, error);
+      return null;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
   /**
-   * Runs the `UploadRealtimeRecording` mutation. A `Success:false` payload is logged; a transport
-   * rejection propagates to `uploadStoppedRecording`, which catches and logs it. Sends the
-   * capture-time waveform `peaks` (max-abs per bucket, normalized 0..1) so the server can persist a
-   * `peaks.json` sidecar for fast waveform rendering without re-decoding the audio.
+   * Waits for the terminal {@link finishRecording} started, bounded by
+   * {@link RECORDING_TERMINAL_ACK_TIMEOUT_MS}, logs the outcome, then closes the recording's queue
+   * (anything it had not delivered stays in the local store for the next-load drain). Never throws.
    */
-  private async uploadRecording(agentSessionId: string, audioBase64: string, mimeType: string, peaks: number[]): Promise<void> {
-    const mutation = `
-      mutation UploadRealtimeRecording($agentSessionId: String!, $audioBase64: String!, $mimeType: String!, $consent: Boolean, $peaks: [Float!]) {
-        UploadRealtimeRecording(agentSessionId: $agentSessionId, audioBase64: $audioBase64, mimeType: $mimeType, consent: $consent, peaks: $peaks) {
-          Success
-          FileID
-          ErrorMessage
-        }
-      }
-    `;
-    const result = await this.gql().ExecuteGQL(mutation, {
-      agentSessionId,
-      audioBase64,
-      mimeType,
-      consent: true,
-      peaks
+  private async awaitRecordingTerminal(pending: PendingRecordingTerminal): Promise<void> {
+    const sessionId = pending.Pipeline.SessionID;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(() => resolve('timeout'), RECORDING_TERMINAL_ACK_TIMEOUT_MS);
     });
-    const payload = result?.UploadRealtimeRecording as { Success?: boolean; FileID?: string; ErrorMessage?: string } | undefined;
-    if (!payload?.Success) {
-      console.warn(`[RealtimeSession] ❌ recording upload reported failure: ${payload?.ErrorMessage ?? 'unknown error'} (full result: ${JSON.stringify(result)})`);
+    try {
+      const outcome = await Promise.race([pending.Acked.then((ok) => (ok ? 'ack' : 'failed')), timedOut]);
+      if (outcome === 'ack') {
+        console.log(`[RealtimeSession] Recording terminal acknowledged for session ${sessionId}.`);
+      } else if (outcome === 'timeout') {
+        console.warn(`[RealtimeSession] Recording terminal for session ${sessionId} not acknowledged within ${RECORDING_TERMINAL_ACK_TIMEOUT_MS}ms; ending anyway (the keepalive request may still land).`);
+      }
+      // 'failed' was already logged with its reason by sendRecordingTerminal.
+    } finally {
+      clearTimeout(timer);
+      pending.Pipeline.Queue.Close();
+      // The recording may have left shards in the store (an unacknowledged tail, windows the queue
+      // still held or had on the wire at Close), so re-arm the drain for the next session start on
+      // this page. Re-armed here, after the wait, so it never races the recording's own terminal;
+      // and unconditionally, because whether a fire-and-forget upload landed is not known here and
+      // a drain of an empty store costs one read.
+      this.rearmPendingShardDrain();
     }
   }
 
@@ -2631,20 +3485,126 @@ export class RealtimeSessionRuntime {
 
   /** The channel whose surface the user is looking at, kept so it applies to an arbiter created after it was set. */
   private focusedChannelKey: string | null = null;
+  /** Normalized channel key (or `null` for Activity) last reported via a `[surface]` context note; `undefined` before first note. */
+  private lastNotedFocusedChannel: string | null | undefined = undefined;
+  /** True when focus changed before the control channel reached `listening` and should flush once live. */
+  private focusedChannelNotePending = false;
 
   /**
    * Tells the session which channel's surface the user is looking at (`null` for none, e.g. the activity tab).
    * When the model can see only one video source and several are live, the one the user is looking at is the one
-   * it sees (after an explicit pick, and after a camera or screen share the user started). Safe to call before the
-   * session is live: it applies when the connection comes up.
+   * it sees (after an explicit pick, and after a camera or screen share the user started). Also emits a compact
+   * `[surface]` context note so the live model stays aware of what the user is looking at. Safe to call before
+   * the session is live: it applies and flushes when the connection comes up.
    *
    * @param channelKey The focused channel's key, as it appears on {@link VideoSources$} entries' `ChannelKey`.
    */
   public SetFocusedChannel(channelKey: string | null): void {
-    this.focusedChannelKey = channelKey;
+    const normalizedInput = channelKey && channelKey.trim().length > 0 ? channelKey.trim() : null;
+    this.focusedChannelKey = normalizedInput;
     if (this.client) {
-      VideoSourceArbiter.ForSink(this.client).SetFocusedChannel(channelKey);
+      VideoSourceArbiter.ForSink(this.client).SetFocusedChannel(normalizedInput);
     }
+    const normalizedCompare = normalizedInput ? NormalizeChannelKey(normalizedInput) : null;
+    if (normalizedCompare === this.lastNotedFocusedChannel) {
+      return;
+    }
+    if (!this.isSessionLive()) {
+      if (normalizedInput !== null || this.lastNotedFocusedChannel !== undefined) {
+        this.focusedChannelNotePending = true;
+      }
+      return;
+    }
+    this.emitFocusedChannelNote(normalizedInput, normalizedCompare);
+  }
+
+  /** Flushes a deferred focused-surface note once the realtime control channel is live. */
+  private flushFocusedChannelNote(): void {
+    if (!this.focusedChannelNotePending || !this.isSessionLive()) {
+      return;
+    }
+    const normalizedCompare = this.focusedChannelKey ? NormalizeChannelKey(this.focusedChannelKey) : null;
+    if (normalizedCompare === this.lastNotedFocusedChannel) {
+      this.focusedChannelNotePending = false;
+      return;
+    }
+    this.emitFocusedChannelNote(this.focusedChannelKey, normalizedCompare);
+  }
+
+  /** Sends a compact `[surface]` context note describing the surface the user just focused. */
+  private emitFocusedChannelNote(channelKey: string | null, normalizedCompare: string | null): void {
+    const verb = this.lastNotedFocusedChannel === undefined ? 'is viewing' : 'switched view to';
+    this.lastNotedFocusedChannel = normalizedCompare;
+    this.focusedChannelNotePending = false;
+    if (normalizedCompare === null) {
+      this.SendContextNote(`[surface] user ${verb} Activity (transcript/activity view)`, {
+        StateKey: 'focused-surface',
+      });
+      return;
+    }
+    const channel = this._activeChannels$.value.find((c) => NormalizeChannelKey(c.ChannelName) === normalizedCompare);
+    if (!channel) {
+      this.SendContextNote(`[surface] user ${verb} ${channelKey}`, { StateKey: 'focused-surface' });
+      return;
+    }
+    const title = channel.TabTitle ?? channel.ChannelName;
+    if (channel.Exposure === 'none') {
+      this.SendContextNote(
+        `[surface] user ${verb} ${title} (${channel.ChannelName}) {"exposure":"none"}`,
+        { StateKey: 'focused-surface' },
+      );
+      return;
+    }
+    let stateSuffix = '';
+    try {
+      const state = channel.GetState();
+      if (state && Object.keys(state).length > 0) {
+        const serialized = JSON.stringify(state);
+        stateSuffix = serialized.length > 1200 ? ` ${serialized.slice(0, 1197)}...` : ` ${serialized}`;
+      }
+    } catch {
+      stateSuffix = '';
+    }
+    this.SendContextNote(
+      `[surface] user ${verb} ${title} (${channel.ChannelName})${stateSuffix}`,
+      { StateKey: 'focused-surface' },
+    );
+  }
+
+  /**
+   * Returns a read-only JSON snapshot of the user's currently focused surface and every active
+   * channel's title, exposure, and state (omitting state when `Exposure === 'none'`).
+   */
+  public GetSurfaceSnapshot(): JSONObject {
+    const focusedNormalized = this.focusedChannelKey ? NormalizeChannelKey(this.focusedChannelKey) : null;
+    const channels: JSONObject[] = [];
+    for (const plugin of this._activeChannels$.value) {
+      const isFocused =
+        focusedNormalized !== null && NormalizeChannelKey(plugin.ChannelName) === focusedNormalized;
+      const entry: JSONObject = {
+        ChannelKey: plugin.ChannelName,
+        Title: plugin.TabTitle ?? plugin.ChannelName,
+        Exposure: plugin.Exposure,
+        IsFocused: isFocused,
+      };
+      if (plugin.Exposure !== 'none') {
+        try {
+          entry.State = plugin.GetState();
+        } catch {
+          entry.StateError = 'Unable to read channel state';
+        }
+      }
+      channels.push(entry);
+    }
+    const focusedEntry = channels.find((c) => c.IsFocused === true);
+    const activeSurface =
+      focusedNormalized !== null
+        ? (typeof focusedEntry?.ChannelKey === 'string' ? focusedEntry.ChannelKey : this.focusedChannelKey)
+        : 'activity';
+    return {
+      ActiveSurface: activeSurface,
+      ActiveChannels: channels,
+    };
   }
 
   /** Stops following the arbiter and clears {@link VideoSources$}. Safe to call when nothing is watched. */
@@ -3125,7 +4085,7 @@ export class RealtimeSessionRuntime {
     ];
     const note = BuildChannelCatalogNote(entries);
     if (note) {
-      this.SendContextNote(note);
+      this.SendContextNote(note, { StateKey: 'channel-catalog' });
     }
   }
 
@@ -3156,7 +4116,8 @@ export class RealtimeSessionRuntime {
       get Provider(): IMetadataProvider {
         return service.Provider;
       },
-      SendContextNote: (text: string) => this.SendContextNote(text),
+      SendContextNote: (text: string, options?: RealtimeContextNoteOptions) => this.SendContextNote(text, options),
+      GetSurfaceSnapshot: () => this.GetSurfaceSnapshot(),
       RequestSpokenResponse: (instructions: string) => this.requestChannelSpokenResponse(instructions),
       RequestSave: (stateJson: string) => this.scheduleChannelSave(plugin.ChannelName, stateJson),
       SaveAsArtifact: (name: string, contentJson: string) => this.saveChannelArtifact(plugin.ChannelName, name, contentJson),
@@ -3343,23 +4304,48 @@ export class RealtimeSessionRuntime {
       console.warn('[RealtimeSession] PriorChannelStatesJson was malformed — starting channels fresh');
       return;
     }
+    let restoredAnyActive = false;
     for (const plugin of this._activeChannels$.value) {
-      this.restorePriorChannelState(plugin);
+      if (this.restorePriorChannelState(plugin)) {
+        restoredAnyActive = true;
+      }
+    }
+    // Mount any advertised ('on-demand') channels that carry saved prior-session state so
+    // Workspace / Browser / etc. resume visibly right where the prior session left off.
+    let mountedAdvertised = false;
+    for (const prepared of [...this.advertisedChannels]) {
+      const state = this.priorChannelStates[prepared.Plugin.ChannelName];
+      if (typeof state !== 'string' || state.length === 0) {
+        continue;
+      }
+      mountedAdvertised = true;
+      this.mountAdvertisedChannel(prepared.Plugin).catch((error) => {
+        console.warn(`[RealtimeSession] Failed to mount advertised channel '${prepared.Plugin.ChannelName}' on resume:`, error);
+      });
+    }
+    // Re-publish ActiveChannels$ when already-mounted channels restored prior state without
+    // an advertised mount emitting afterward, so listeners see updated HasChannelBeenUsed().
+    if (restoredAnyActive && !mountedAdvertised) {
+      this._activeChannels$.next([...this._activeChannels$.value]);
     }
   }
 
   /** Offers one plugin its prior-session state, if there is one. Rejections and throws are logged, never fatal. */
-  private restorePriorChannelState(plugin: BaseRealtimeChannelClient): void {
+  private restorePriorChannelState(plugin: BaseRealtimeChannelClient): boolean {
     const state = this.priorChannelStates[plugin.ChannelName];
     if (typeof state !== 'string' || state.length === 0) {
-      return;
+      return false;
     }
     try {
-      if (!plugin.RestoreState(state)) {
-        console.warn(`[RealtimeSession] Channel '${plugin.ChannelName}' declined its prior-session state — starting fresh`);
+      if (plugin.RestoreState(state)) {
+        this.usedChannelNames.add(plugin.ChannelName);
+        return true;
       }
+      console.warn(`[RealtimeSession] Channel '${plugin.ChannelName}' declined its prior-session state — starting fresh`);
+      return false;
     } catch (error) {
       console.warn(`[RealtimeSession] Channel '${plugin.ChannelName}' restore threw — starting fresh`, error);
+      return false;
     }
   }
 
@@ -3461,6 +4447,9 @@ export class RealtimeSessionRuntime {
     // nothing to dispose — only the bookkeeping to forget.
     this.discardUnmountedChannels();
     this.catalogNotePending = false;
+    this.focusedChannelKey = null;
+    this.lastNotedFocusedChannel = undefined;
+    this.focusedChannelNotePending = false;
     this.resolvedChannels.clear();
     this.priorChannelStates = {};
     this.sessionClientTools = null;
@@ -3494,7 +4483,8 @@ export class RealtimeSessionRuntime {
    * Aggregates the tracks active channels source and sink under {@link REQUESTED_TRACKS_SESSION_KEY} so the
    * driver can negotiate them (e.g., inbound video for Whiteboard / RemoteBrowser, outbound video for a
    * channel that shows the agent's video). A track the model does not support resolves to `'unsupported'`.
-   * The session's transport and relay URL go to the driver as minted (an unknown transport is left out: direct).
+   * The session's transport and relay URL go to the driver as minted (an unknown transport is left out: direct), and so
+   * does the catalog timing, on the typed fields.
    */
   public BuildClientConfig(session: StartRealtimeClientSessionResult): ClientRealtimeSessionConfig {
     const sessionConfig = this.parseSessionConfig(session.SessionConfigJson);
@@ -3531,6 +4521,7 @@ export class RealtimeSessionRuntime {
       ExpiresAt: session.ExpiresAt,
       ...(transport ? { Transport: transport } : {}),
       ...(session.RelayUrl ? { RelayUrl: session.RelayUrl } : {}),
+      ...timingFieldsOf(session),
       SessionConfig: sessionConfig
     };
   }
@@ -3557,6 +4548,132 @@ export class RealtimeSessionRuntime {
     }
   }
 
+  /**
+   * Mints a fresh single-use ephemeral credential (or extends the relay grant) for an active
+   * browser realtime session via `RefreshRealtimeClientSessionToken(agentSessionId, allowFreshReopen)`.
+   * During rolling upgrades where an older MJServer does not expose `RefreshRealtimeClientSessionToken`
+   * yet, falls back once to the initial credential if its `ExpiresAt` is still in the future.
+   */
+  private async refreshClientSessionCredential(
+    initialSession: StartRealtimeClientSessionResult,
+    options?: RealtimeClientTokenRefreshOptions
+  ): Promise<RefreshedRealtimeClientCredential> {
+    const agentSessionId = this.agentSessionId ?? initialSession.AgentSessionId;
+    if (!agentSessionId) {
+      throw new Error('Cannot refresh realtime session credential: no active agentSessionId');
+    }
+    const allowFreshReopen = options?.AllowFreshReopen === true;
+    const buildMutation = (includeKindAndReopen: boolean): string =>
+      includeKindAndReopen && allowFreshReopen
+        ? `
+      mutation RefreshRealtimeClientSessionToken($agentSessionId: String!, $allowFreshReopen: Boolean) {
+        RefreshRealtimeClientSessionToken(agentSessionId: $agentSessionId, allowFreshReopen: $allowFreshReopen) {
+          Success
+          ErrorMessage
+          Kind
+          EphemeralToken
+          ExpiresAt
+          RelayUrl
+          SessionConfigJson
+          ConnectionMaxSeconds
+          SessionMaxSeconds
+          ReconnectBufferSeconds
+          TrustNativeResumption
+        }
+      }
+    `
+        : `
+      mutation RefreshRealtimeClientSessionToken($agentSessionId: String!) {
+        RefreshRealtimeClientSessionToken(agentSessionId: $agentSessionId) {
+          Success
+          ErrorMessage
+          EphemeralToken
+          ExpiresAt
+          RelayUrl
+          SessionConfigJson
+          ConnectionMaxSeconds
+          SessionMaxSeconds
+          ReconnectBufferSeconds
+          TrustNativeResumption
+        }
+      }
+    `;
+    try {
+      type RefreshGraphQLPayload = {
+        RefreshRealtimeClientSessionToken?: {
+          Success: boolean;
+          ErrorMessage?: string;
+          Kind?: string | null;
+          EphemeralToken?: string;
+          ExpiresAt?: string;
+          RelayUrl?: string | null;
+          SessionConfigJson?: string | null;
+        } & RealtimeTimingResultFields;
+      };
+      let response: RefreshGraphQLPayload;
+      if (allowFreshReopen) {
+        try {
+          response = (await this.gql().ExecuteGQL(buildMutation(true), {
+            agentSessionId,
+            allowFreshReopen: true,
+          })) as RefreshGraphQLPayload;
+        } catch (err) {
+          if (
+            IsUnsupportedGraphQLExtension(err, 'allowFreshReopen') ||
+            IsUnsupportedGraphQLExtension(err, 'Kind')
+          ) {
+            response = (await this.gql().ExecuteGQL(buildMutation(false), {
+              agentSessionId,
+            })) as RefreshGraphQLPayload;
+          } else {
+            throw err;
+          }
+        }
+      } else {
+        response = (await this.gql().ExecuteGQL(buildMutation(false), {
+          agentSessionId,
+        })) as RefreshGraphQLPayload;
+      }
+      const result = response?.RefreshRealtimeClientSessionToken;
+      if (!result?.Success) {
+        throw new Error(result?.ErrorMessage ?? 'RefreshRealtimeClientSessionToken failed');
+      }
+      const effectiveRelayUrl = result.RelayUrl || initialSession.RelayUrl;
+      const isRelayRefresh =
+        result.Kind === 'relay' ||
+        initialSession.Transport === 'relay' ||
+        (!result.EphemeralToken && Boolean(effectiveRelayUrl));
+      if (!isRelayRefresh && !result.EphemeralToken) {
+        throw new Error(result?.ErrorMessage ?? 'RefreshRealtimeClientSessionToken returned no token');
+      }
+      return {
+        Kind: isRelayRefresh ? 'relay' : 'token',
+        EphemeralToken: result.EphemeralToken ?? '',
+        ExpiresAt: result.ExpiresAt ?? initialSession.ExpiresAt,
+        ...(effectiveRelayUrl ? { RelayUrl: effectiveRelayUrl } : {}),
+        ...timingFieldsOf(result),
+        SessionConfig: this.parseSessionConfig(result.SessionConfigJson ?? initialSession.SessionConfigJson),
+      };
+    } catch (error) {
+      const initialExpiryMs = Date.parse(initialSession.ExpiresAt);
+      if (
+        IsUnsupportedGraphQLExtension(error, 'RefreshRealtimeClientSessionToken') &&
+        Number.isFinite(initialExpiryMs) &&
+        initialExpiryMs > Date.now()
+      ) {
+        const isRelay = initialSession.Transport === 'relay' || (!initialSession.EphemeralToken && Boolean(initialSession.RelayUrl));
+        return {
+          Kind: isRelay ? 'relay' : 'token',
+          EphemeralToken: initialSession.EphemeralToken,
+          ExpiresAt: initialSession.ExpiresAt,
+          ...(initialSession.RelayUrl ? { RelayUrl: initialSession.RelayUrl } : {}),
+          SessionConfig: this.parseSessionConfig(initialSession.SessionConfigJson),
+        };
+      }
+      throw error;
+    }
+  }
+
   /** Subscribes this service's policy handlers to the realtime client's events. */
   private wireClientHandlers(client: BaseRealtimeClient): void {
     client.OnStateChange((state: RealtimeClientState) => this.onClientStateChange(state));
@@ -3570,6 +4687,27 @@ export class RealtimeSessionRuntime {
       console.error('[RealtimeSession] Provider error event:', JSON.stringify(error), error);
       if (error.Fatal && this.client === client) {
         this.lastSessionError = error;
+        // While the start is still running, its own failure path reports the error and ends the call
+        // (runMintedSession throws on this recorded Fatal after Connect, even if Connect resolves):
+        // ending it here would bump startGeneration, so the start would read as ended by the host and
+        // never set LastStartError.
+        if (!this.callWentLive) {
+          return;
+        }
+        // An explicit teardown is already ending the call and the client stays current until its
+        // finally: a driver reporting its own close as Fatal from inside Disconnect() is part of that
+        // clean End, and must not flip it to 'error' or start a second teardown.
+        if (this.teardownInFlight) {
+          return;
+        }
+        // The driver is dead on the wire; nothing resumes after it says Fatal. End the call the way a
+        // failed start ends: the row closes as Error, the microphone is released, the host is told
+        // through SessionEnded$ (MJ#4629). A host's own End afterwards finds nothing to do.
+        // Captured now: teardown nulls agentSessionId, and the failure it reports must name the session.
+        const failedSessionId = this.agentSessionId;
+        void this.endOnFailure().catch((teardownError: unknown) => {
+          console.error(`[RealtimeSession] Teardown after a fatal provider error failed for session ${failedSessionId}:`, teardownError);
+        });
       }
     });
     // Usage telemetry: accumulate the driver's per-response token DELTAS and relay them to
@@ -3587,6 +4725,12 @@ export class RealtimeSessionRuntime {
     client.OnInterruption(() => {
       this.cancelPendingNarration();
     });
+    // The provider VAD saw the user start speaking. Final-only user-transcript drivers (OpenAI,
+    // HuggingFace, xAI) emit no user interim, so this is their only real user-turn start. It goes
+    // to its own slot (or item-keyed map entry when `itemId` is present), not the shared turn slot:
+    // the user transcript arrives asynchronously, so the assistant's reply may already be streaming
+    // and must keep its own start.
+    client.OnUserSpeechStart((itemId?: string) => this.markUserSpeechStart(itemId));
     client.OnRemoteVideo((video: MediaVideoSource) => this.onAgentVideo(client, video));
   }
 
@@ -3620,6 +4764,7 @@ export class RealtimeSessionRuntime {
     if (mapped) {
       this.setConnectionState(mapped);
       this.flushChannelCatalogNote();
+      this.flushFocusedChannelNote();
     }
   }
 
@@ -3696,6 +4841,11 @@ export class RealtimeSessionRuntime {
       }
       return;
     }
+    if (transcript.Role === 'User' && transcript.Text.trim().length === 0) {
+      // An empty final user transcript (a VAD false positive, an empty transcription) never reaches
+      // relayTranscript, so release its onset here: it must not become the next real turn's start.
+      this.releaseUserSpeechStart(transcript.ItemId);
+    }
     if (transcript.Role === 'Assistant') {
       this.hasActiveInterimUserCaption = false;
       this.pendingUserCaption = '';
@@ -3734,7 +4884,7 @@ export class RealtimeSessionRuntime {
       if (this.firstUserTranscript === null) {
         this.firstUserTranscript = transcript.Text;
       }
-      await this.relayTranscript('user', transcript.Text);
+      await this.relayTranscript('user', transcript.Text, false, 'speech', transcript.ItemId);
     } else if (transcript.ReplacesPrevious) {
       // STREAMING user transcription: providers like Grok and OpenAI Live emit the growing utterance as repeated
       // events (each the full text so far), flagging all but the first ReplacesPrevious. Update the
@@ -3744,9 +4894,9 @@ export class RealtimeSessionRuntime {
         return;
       }
       this.replaceLastCaption('User', transcript.Text);
-      await this.relayTranscript('user', transcript.Text, true);
+      await this.relayTranscript('user', transcript.Text, true, 'speech', transcript.ItemId);
     } else {
-      await this.onUserTranscript(transcript.Text);
+      await this.onUserTranscript(transcript.Text, 'speech', transcript.ItemId);
     }
   }
 
@@ -3765,11 +4915,10 @@ export class RealtimeSessionRuntime {
    * - NORMAL turns only — NARRATION interims are ephemeral and never persisted, so they must not
    *   claim the next real turn's start slot.
    *
-   * Works for any role whose driver surfaces interim deltas (all drivers for the assistant; the
-   * relevant case here — the post-tool-gap assistant answer — and user-interim drivers like
-   * Gemini/AssemblyAI). For final-only user turns (OpenAI/xAI/ElevenLabs) no interim arrives, so
-   * {@link relayTranscript} falls back to the seeded/prior start — the gap case that drifts is the
-   * assistant answer, which always has interims.
+   * Stamped on a turn's first interim transcript (all drivers for the assistant — the post-tool-gap
+   * assistant answer — and user-interim drivers like Gemini/AssemblyAI). Final-only user turns
+   * (OpenAI-protocol drivers) take their start from {@link markUserSpeechStart}'s own slot
+   * instead; one with no speech-start signal either (ElevenLabs) relays `null` as-is.
    */
   private markTurnAudioStart(kind: 'normal' | 'narration'): void {
     if (this.turnAudioStartCaptured || kind === 'narration') {
@@ -3784,14 +4933,77 @@ export class RealtimeSessionRuntime {
   }
 
   /**
+   * Stamps the user speech onset when the client signals that the user began to speak. When the
+   * driver supplies a conversation `itemId`, records the FIRST onset for that item in
+   * {@link userSpeechStartByItemId} so a mid-sentence pause that re-fires with the same id keeps the
+   * original start. When no `itemId` is supplied, stamps the single-slot {@link userSpeechStartMs}
+   * fallback (keeping the first onset unless {@link userSpeechStartSuperseded} is set).
+   */
+  private markUserSpeechStart(itemId?: string): void {
+    if (itemId !== undefined && itemId.length > 0) {
+      if (this.userSpeechStartByItemId.has(itemId)) {
+        return;
+      }
+      const offset = this.nowTurnOffsetMs();
+      if (offset === null) {
+        return;
+      }
+      this.userSpeechStartByItemId.set(itemId, offset);
+      return;
+    }
+    if (this.userSpeechStartMs !== null && !this.userSpeechStartSuperseded) {
+      return;
+    }
+    const offset = this.nowTurnOffsetMs();
+    if (offset === null) {
+      return;
+    }
+    this.userSpeechStartMs = offset;
+    this.userSpeechStartSuperseded = false;
+  }
+
+  /**
+   * Ends the held user onset: a final user transcript (empty or not) closed the utterance it began.
+   * When `itemId` is supplied, deletes only that item's entry in {@link userSpeechStartByItemId};
+   * otherwise clears the unkeyed single slot.
+   */
+  private releaseUserSpeechStart(itemId?: string): void {
+    if (itemId !== undefined && itemId.length > 0) {
+      this.userSpeechStartByItemId.delete(itemId);
+      return;
+    }
+    this.userSpeechStartMs = null;
+    this.userSpeechStartSuperseded = false;
+  }
+
+  /**
+   * Consumes and deletes the onset recorded for `itemId` in {@link userSpeechStartByItemId}. When a
+   * matching onset is found, also deletes any remaining map entry with an earlier offset so a VAD
+   * false positive whose transcription never arrived cannot accumulate in the map.
+   */
+  private takeKeyedUserSpeechStart(itemId: string): number | null {
+    const onset = this.userSpeechStartByItemId.get(itemId) ?? null;
+    this.userSpeechStartByItemId.delete(itemId);
+    if (onset !== null) {
+      for (const [otherId, otherOnset] of this.userSpeechStartByItemId) {
+        if (otherOnset < onset) {
+          this.userSpeechStartByItemId.delete(otherId);
+        }
+      }
+    }
+    return onset;
+  }
+
+  /**
    * The current per-turn offset in ms — the RECORDER's clock when one runs (an offset into a
    * seekable file), else the SESSION clock (#3832: orderable and displayable, not seekable),
    * else `null` before any call is live. One function so the two stamp sites cannot disagree
-   * about which clock a session is on.
+   * about which clock a session is on. Always whole milliseconds: the offsets travel as GraphQL
+   * `Int`, which refuses a fraction, and a 48 kHz sample clock rarely lands on a whole millisecond.
    */
   private nowTurnOffsetMs(): number | null {
     if (this.recorder) {
-      return this.recorder.NowOffsetMs();
+      return Math.round(this.recorder.NowOffsetMs());
     }
     if (this.sessionClockStartMs !== null) {
       return Math.max(0, Math.round(performance.now() - this.sessionClockStartMs));
@@ -3817,8 +5029,18 @@ export class RealtimeSessionRuntime {
     this.appendCaption({ Role: role, Text: text });
   }
 
-  /** Finalizes the user turn: push a caption + relay the final transcript. */
-  private async onUserTranscript(transcript: string): Promise<void> {
+  /**
+   * Finalizes the user turn: push a caption + relay the final transcript.
+   *
+   * @param source `'typed'` for a {@link SendText} turn: it has no speech onset, so it neither takes
+   *   nor clears the held one (a spoken transcript may still be pending for it).
+   * @param itemId Provider conversation item id (`RealtimeClientTranscript.ItemId`) when present.
+   */
+  private async onUserTranscript(
+    transcript: string,
+    source: 'speech' | 'typed' = 'speech',
+    itemId?: string,
+  ): Promise<void> {
     if (transcript.trim().length === 0) {
       return;
     }
@@ -3827,7 +5049,7 @@ export class RealtimeSessionRuntime {
       this.firstUserTranscript = transcript;
     }
     this.appendCaption({ Role: 'User', Text: transcript });
-    await this.relayTranscript('user', transcript);
+    await this.relayTranscript('user', transcript, false, source, itemId);
   }
 
   // ── Tool calling ───────────────────────────────────────────────────────────
@@ -3979,9 +5201,9 @@ export class RealtimeSessionRuntime {
           await this.mountAdvertisedChannel(plugin);
         }
         await plugin.OnDelegationArtifacts(artifacts);
-        if (!isOpen) {
-          this.noteChannelActivity(plugin); // the channel was mounted for this: reveal its tab
-        }
+        // Always reveal/mark the channel active when it took delegated artifacts, even for `open-on-start` channels
+        // (e.g. ArtifactWorkspace) whose surface tab stays hidden until first activity.
+        this.noteChannelActivity(plugin);
       } catch (error) {
         console.error(`[RealtimeSession] Channel '${plugin.ChannelName}' failed to take a delegated run's artifacts:`, error);
       }
@@ -4190,37 +5412,83 @@ export class RealtimeSessionRuntime {
    * Relays a final transcript turn to MJ via `RelayRealtimeTranscript`.
    *
    * When the session is being recorded, per-turn timing rides along: `utteranceEndMs` is the
-   * recording-relative offset at finalization, and `utteranceStartMs` is the offset captured by
-   * {@link markTurnAudioStart} when THIS turn's audio actually began (its first interim) — NOT
-   * inherited from the previous turn's end. That distinction is the timing fix: when a tool-call
-   * / silence gap sits between turns, the post-gap turn's audio starts much later, so inheriting
-   * the prior turn's end stamped the cue ~gap-length too early. Both are omitted (left `null`)
-   * when the session isn't being recorded.
+   * recording-relative offset at finalization, and `utteranceStartMs` is where THIS turn's audio
+   * actually began — NOT inherited from the previous turn's end. For a user turn whose onset the
+   * client signalled, that is {@link userSpeechStartMs}; otherwise it is the offset captured by
+   * {@link markTurnAudioStart} on the turn's first interim. That distinction is the timing fix:
+   * when a tool-call / silence gap sits between turns, the post-gap turn's audio starts much
+   * later, so inheriting the prior turn's end stamped the cue ~gap-length too early. Both are
+   * omitted (left `null`) when the session isn't being recorded. `utteranceStartMs` is also
+   * `null` when no start was measured for this turn; it is never replaced with a placeholder 0.
    *
    * A correction (`replacesPrevious`) doesn't open a new turn, so it carries no start and doesn't
    * reset the per-turn start guard. After a normal finalization the guard is cleared so the NEXT
-   * turn re-stamps its start from where ITS audio begins.
+   * turn re-stamps its start from where ITS audio begins — except for a user turn that used its
+   * own speech-start slot, which leaves the shared slot alone (it may hold the in-flight
+   * assistant turn's start). Every final user transcript, corrections included, clears the
+   * speech-start slot.
    *
    * @param replacesPrevious CORRECTION semantics: the server updates the session's most
    *   recent persisted turn of this role IN PLACE instead of appending (e.g. ElevenLabs'
    *   post-barge-in `agent_response_correction`).
+   * @param source `'typed'` for a user turn sent with {@link SendText}: it does not read or clear
+   *   {@link userSpeechStartMs} or {@link userSpeechStartByItemId}, which belong to the user's speech.
+   * @param itemId Provider conversation item id (`RealtimeClientTranscript.ItemId`) when present.
    */
-  private async relayTranscript(role: 'user' | 'assistant', text: string, replacesPrevious: boolean = false): Promise<void> {
+  private async relayTranscript(
+    role: 'user' | 'assistant',
+    text: string,
+    replacesPrevious: boolean = false,
+    source: 'speech' | 'typed' = 'speech',
+    itemId?: string,
+  ): Promise<void> {
     if (!this.agentSessionId) {
       return;
     }
+    // Every final user transcript closes the signalled onset — a correction too, since it ends the
+    // same utterance — so a later onset (an xAI mid-sentence resume) can't leak into the next turn.
+    // When the transcript carries a provider itemId, consume its keyed onset from the map without
+    // touching the unkeyed single slot or falling back to currentTurnStartMs.
+    const hasItemId = role === 'user' && source === 'speech' && itemId !== undefined && itemId.length > 0;
+    let userSpeechStartMs: number | null = null;
+    if (hasItemId) {
+      userSpeechStartMs = this.takeKeyedUserSpeechStart(itemId);
+    } else if (role === 'user' && source === 'speech') {
+      userSpeechStartMs = this.userSpeechStartMs;
+      this.releaseUserSpeechStart();
+    }
     // Per-turn timing against whichever clock the session is on (#3832): the recorder's when one
-    // runs, else the session clock. `utteranceStartMs` is where this turn's audio actually began
-    // (captured by markTurnAudioStart on the first interim); the `?? 0` fallback covers a turn
-    // whose interim was missed / a final-only first turn.
+    // runs, else the session clock. `utteranceStartMs` is where this turn's audio actually began.
+    // It is null when no start was measured for this turn (a final-only driver with no speech-start
+    // signal), so the server stores NULL rather than a placeholder 0.
     const utteranceEndMs = this.nowTurnOffsetMs();
-    const utteranceStartMs = utteranceEndMs !== null && !replacesPrevious ? (this.currentTurnStartMs ?? 0) : null;
-    if (utteranceEndMs !== null && !replacesPrevious) {
+    const opensTurn = utteranceEndMs !== null && !replacesPrevious;
+    let utteranceStartMs: number | null = null;
+    if (opensTurn && (hasItemId || userSpeechStartMs !== null)) {
+      // A user turn with a signalled onset (or a keyed user turn whose itemId was not in the map,
+      // which relays null). Leave the shared slot alone: the user transcript arrives asynchronously,
+      // so it may already hold the in-flight assistant reply's start.
+      utteranceStartMs = userSpeechStartMs;
+      if (!this.turnAudioStartCaptured) {
+        // No turn has captured a start, so the slot holds only the recording-start seed (0). This
+        // user turn was the first turn; drop the seed so a later unmeasured turn relays null, not 0.
+        this.currentTurnStartMs = null;
+      }
+    } else if (opensTurn) {
+      utteranceStartMs = this.currentTurnStartMs;
       // This turn is finalized — arm the NEXT turn to re-stamp its start from its own first
       // interim (handles a tool-call gap before the next turn). Stop inheriting this end as the
-      // next start. `null` means "not yet captured"; relay falls back to `?? 0` if no interim fires.
+      // next start. `null` means "not yet captured" and is relayed as-is if nothing stamps it.
       this.currentTurnStartMs = null;
       this.turnAudioStartCaptured = false;
+      if (role === 'assistant' && this.userSpeechStartMs !== null && (utteranceStartMs === null || this.userSpeechStartMs < utteranceStartMs)) {
+        // The floor moved on past an onset that began BEFORE this assistant turn: a late user
+        // transcript may still claim it, but the next onset replaces it (see userSpeechStartSuperseded).
+        // An onset that began DURING this turn is a barge-in; it belongs to the user speech still
+        // pending, so it stays the first onset. With no measured assistant start we cannot tell, and
+        // treat the onset as earlier.
+        this.userSpeechStartSuperseded = true;
+      }
     }
     try {
       const mutation = `
@@ -4383,34 +5651,34 @@ export class RealtimeSessionRuntime {
    * delegation path is untouched.
    */
   private onDelegationStatusMessage(raw: string): void {
-    const frame = this.parseScreencastFrame(raw);
+    let parsed: Partial<RemoteBrowserScreencastPayload & RemoteBrowserAudioChunkPayload & RealtimeDelegationProgressPayload>;
+    try {
+      parsed = JSON.parse(raw) as Partial<RemoteBrowserScreencastPayload & RemoteBrowserAudioChunkPayload & RealtimeDelegationProgressPayload>;
+    } catch {
+      return;
+    }
+    const frame = this.parseScreencastFrame(parsed);
     if (frame) {
       this.routeScreencastFrame(frame);
       return;
     }
-    const audio = this.parseAudioChunk(raw);
+    const audio = this.parseAudioChunk(parsed);
     if (audio) {
       this.routeAudioChunk(audio);
       return;
     }
-    const progress = this.parseProgress(raw);
+    const progress = this.parseProgress(parsed);
     if (progress) {
       this.dispatchProgress(progress);
     }
   }
 
   /**
-   * Parses a push-status message and returns it only when it's a Remote Browser screencast frame for the
+   * Matches a parsed push-status payload and returns it only when it's a Remote Browser screencast frame for the
    * active session — otherwise `null` (ignored, so delegation progress falls through). Matched by
    * `resolver` + `type`, then scoped to THIS session by `agentSessionID`.
    */
-  private parseScreencastFrame(raw: string): RemoteBrowserScreencastPayload | null {
-    let payload: { resolver?: string } & Partial<RemoteBrowserScreencastPayload>;
-    try {
-      payload = JSON.parse(raw);
-    } catch {
-      return null;
-    }
+  private parseScreencastFrame(payload: { resolver?: string } & Partial<RemoteBrowserScreencastPayload>): RemoteBrowserScreencastPayload | null {
     const matches =
       payload?.resolver === 'RemoteBrowserActionResolver' &&
       payload?.type === 'RemoteBrowserScreencastFrame' &&
@@ -4443,17 +5711,11 @@ export class RealtimeSessionRuntime {
   }
 
   /**
-   * Parses a push-status message and returns it only when it's a Remote Browser audio chunk for the active
+   * Matches a parsed push-status payload and returns it only when it's a Remote Browser audio chunk for the active
    * session — otherwise `null` (ignored). Matched by `resolver` + `type`, then scoped to THIS session by
    * `agentSessionID`.
    */
-  private parseAudioChunk(raw: string): RemoteBrowserAudioChunkPayload | null {
-    let payload: { resolver?: string } & Partial<RemoteBrowserAudioChunkPayload>;
-    try {
-      payload = JSON.parse(raw);
-    } catch {
-      return null;
-    }
+  private parseAudioChunk(payload: { resolver?: string } & Partial<RemoteBrowserAudioChunkPayload>): RemoteBrowserAudioChunkPayload | null {
     const matches =
       payload?.resolver === 'RemoteBrowserActionResolver' &&
       payload?.type === 'RemoteBrowserAudioChunk' &&
@@ -4490,16 +5752,10 @@ export class RealtimeSessionRuntime {
   }
 
   /**
-   * Parses a push-status message and returns it only when it's a delegation
+   * Matches a parsed push-status payload and returns it only when it's a delegation
    * progress event for the active voice session — otherwise `null` (ignored).
    */
-  private parseProgress(raw: string): RealtimeDelegationProgress | null {
-    let payload: RealtimeDelegationProgressPayload;
-    try {
-      payload = JSON.parse(raw) as RealtimeDelegationProgressPayload;
-    } catch {
-      return null; // non-JSON or unrelated frame
-    }
+  private parseProgress(payload: Partial<RealtimeDelegationProgressPayload>): RealtimeDelegationProgress | null {
     const matches =
       payload?.resolver === 'RealtimeClientSessionResolver' &&
       payload?.type === 'RealtimeDelegationProgress' &&
@@ -4508,9 +5764,9 @@ export class RealtimeSessionRuntime {
       return null;
     }
     return {
-      CallID: payload.callID,
-      Step: payload.step,
-      Message: payload.message,
+      CallID: payload.callID as string,
+      Step: payload.step as RealtimeDelegationProgress['Step'],
+      Message: payload.message as string,
       Percentage: payload.percentage
     };
   }
@@ -4536,7 +5792,7 @@ export class RealtimeSessionRuntime {
     if (!client) {
       return;
     }
-    client.SendContextNote(`[delegated-agent progress] ${progress.Message}`);
+    client.SendContextNote(`[delegated-agent progress] ${progress.Message}`, { Ephemeral: true });
     // Floods of small updates AGGREGATE: each distinct message joins the digest buffer,
     // and ONE spoken update fires per window (first at ~5s into the burst, then every
     // ~8s). The buffer is discarded if the final result lands first.
@@ -4642,10 +5898,19 @@ export class RealtimeSessionRuntime {
   // ── Teardown ───────────────────────────────────────────────────────────────
 
   /**
-   * Tears down all client resources and (optionally) closes the server session.
-   * @param closeServerSession when true, calls `CloseAgentSession` on the server.
+   * Tears down all client resources and closes the server session when one was minted.
+   *
+   * The server row is closed whichever way the call ended: a start that failed after the mint used to
+   * leave its row `Active` until the janitor's staleness sweep, 15 minutes later, so every host that
+   * counts live sessions saw a phantom call (MJ#6013). The janitor remains the fallback for a client
+   * that dies before it can say anything; it is never the plan.
+   *
+   * @param end why the call ended — `'explicit'` when the host or user ended it, `'error'` when the
+   *   runtime ended it because the start or the call failed, `'deadline'` when the session deadline ended it.
+   *   Reported on `SessionEnded$` and stamped on the server row as its `CloseReason` through
+   *   {@link CLOSE_REASON_BY_END} (`Explicit` / `Error` / `TimeLimit`).
    */
-  private async teardown(closeServerSession: boolean): Promise<void> {
+  private async teardown(end: SessionEndReason): Promise<void> {
     // Invalidate any start still in flight BEFORE anything else, so it abandons itself at its next
     // await rather than opening a microphone behind a session that is being ended.
     this.startGeneration++;
@@ -4656,7 +5921,7 @@ export class RealtimeSessionRuntime {
       await this.teardownInFlight;
       return;
     }
-    this.teardownInFlight = this.runTeardown(closeServerSession).finally(() => {
+    this.teardownInFlight = this.runTeardown(end).finally(() => {
       if (this._savingRecording$.value) {
         this._savingRecording$.next(false);
       }
@@ -4666,23 +5931,43 @@ export class RealtimeSessionRuntime {
   }
 
   /** The body of {@link teardown}; never called concurrently with itself. */
-  private async runTeardown(closeServerSession: boolean): Promise<void> {
+  private async runTeardown(end: SessionEndReason): Promise<void> {
     // Arm BEFORE any await so a tab closed in the first milliseconds of teardown is still guarded.
     if (this.recorder) {
       this._savingRecording$.next(true);
     }
+    // Whatever a step below does, the slot is released: a teardown that threw halfway used to leave
+    // `IsActive` set for good, so every later start was refused (MJ#4629).
+    try {
+      await this.releaseCallResources(end);
+    } finally {
+      this.releaseSessionSlot(end);
+    }
+  }
 
+  /** The teardown's work: stop the call, hand back what it held, and close the server session. */
+  private async releaseCallResources(end: SessionEndReason): Promise<void> {
     // First: stop asserting liveness. A pulse racing the close would re-stamp LastActiveAt on a
     // session we are deliberately ending, leaving an Idle row the janitor then has to age out.
     this.stopLivenessPulse();
     this.teardownDelegationProgress();
     this.stopSessionEvents();
     this.clientDeadline.Clear();
+    this.pendingDeadlineReached = null;
 
     // Channels first: flush any unsaved channel state WHILE the live session id is still
     // set (the captured per-save id covers the race anyway), then dispose the plugins.
     this.flushAllChannelSaves();
     this.disposeChannels();
+
+    // End the recording and START its keepalive terminal request now: stop the recorder (which flushes
+    // the encoder) before anything else that awaits. A tab closed right after End gets only the pagehide
+    // terminal, which carries packets already encoded; releasing the mic and disconnecting the driver can
+    // take long enough for the page to die first, and the audio still inside the encoder would be lost.
+    // It also goes out before the usage flush and the close, so it is on the wire if the page dies during
+    // either. Best-effort — finishRecording never throws. Null when nothing was recorded.
+    const recordingTerminal = await this.finishRecording();
+    this.recordingStartedAtIso = null;
 
     // The camera and screen share go first: the camera runs on the controller closed next.
     this.closeCaptures();
@@ -4718,12 +6003,6 @@ export class RealtimeSessionRuntime {
       }
     }
 
-    // Stop + encode the call recording now (the recorder must be detached before the session id is
-    // cleared); the upload itself happens after the close below. Best-effort — stopRecording
-    // swallows its own errors. Null when nothing was recorded.
-    const recording = await this.stopRecording();
-    this.recordingStartedAtIso = null;
-
     // Final usage flush WHILE the live session id is still set (the relay mutation also
     // accepts a Closed session, so ordering vs. CloseAgentSession is belt-and-braces).
     if (this.usageFlushTimer) {
@@ -4733,21 +6012,26 @@ export class RealtimeSessionRuntime {
     await this.flushPendingUsage(this.agentSessionId);
     this.resetUsageRelay();
 
-    if (closeServerSession && this.agentSessionId) {
-      await this.closeServerSession(this.agentSessionId);
+    if (this.agentSessionId) {
+      await this.closeServerSession(this.agentSessionId, CLOSE_REASON_BY_END[end]);
     }
 
-    // Upload AFTER the close. The WAV is tens of MB and takes seconds; a page unload aborts the
-    // request, and nothing after an aborted await ever runs — so the small, critical close goes
-    // first (#5195). The server accepts the upload on a Closed session (loadOwnedSession does not
-    // check status), and uploadStoppedRecording never throws.
-    await this.uploadStoppedRecording(this.agentSessionId, recording);
+    // Wait for the terminal's ack only AFTER the close: nothing after an aborted await ever runs, so
+    // the small, critical close must never queue behind the recording (#5195). Bounded by
+    // RECORDING_TERMINAL_ACK_TIMEOUT_MS; SavingRecording$ stays up until it settles.
+    if (recordingTerminal) {
+      await this.awaitRecordingTerminal(recordingTerminal);
+    }
+  }
 
+  /** Clears the slot and tells the host the call ended; runs even when {@link releaseCallResources} threw. */
+  private releaseSessionSlot(end: SessionEndReason): void {
     // Capture the session id BEFORE we null it so the lifecycle emit carries it.
     // Skip emitting when there was no live session (defensive — teardown is safe
     // to call without an active session).
     const closedSessionId = this.agentSessionId;
     this.agentSessionId = null;
+    this.callWentLive = false;
     this.sessionConversationId = null;
     this.narrationTemplate = null;
     this.clientToolHandlers.clear();
@@ -4761,14 +6045,9 @@ export class RealtimeSessionRuntime {
       this.setConnectionState('closed');
     }
 
-    // Surface generic session-ended for the conversations runtime bridge.
-    // `closeServerSession=true` means the user explicitly called EndRealtimeSession;
-    // `false` means teardown ran from a catch block (start path error path).
+    // Surface generic session-ended for the conversations runtime bridge, with why it ended.
     if (closedSessionId) {
-      this._sessionEnded$.next({
-        sessionId: closedSessionId,
-        reason: closeServerSession ? 'explicit' : 'error',
-      });
+      this._sessionEnded$.next({ sessionId: closedSessionId, reason: end });
     }
   }
 
@@ -4784,17 +6063,27 @@ export class RealtimeSessionRuntime {
     }
   }
 
-  /** Calls the `CloseAgentSession` mutation (provisioned in P4b). */
-  private async closeServerSession(agentSessionId: string): Promise<void> {
+  /**
+   * Calls the `CloseAgentSession` mutation (provisioned in P4b) with why the client ended the call, which
+   * the server stamps as the row's `CloseReason`. Requires a server that accepts the `closeReason`
+   * argument (MJ#6013); the runtime and the server ship together.
+   */
+  private async closeServerSession(agentSessionId: string, closeReason: ClientCloseReason): Promise<void> {
     try {
       const mutation = `
-        mutation CloseAgentSession($agentSessionId: String!) {
-          CloseAgentSession(agentSessionId: $agentSessionId)
+        mutation CloseAgentSession($agentSessionId: String!, $closeReason: String) {
+          CloseAgentSession(agentSessionId: $agentSessionId, closeReason: $closeReason)
         }
       `;
-      await this.gql().ExecuteGQL(mutation, { agentSessionId });
+      const result = await this.gql().ExecuteGQL(mutation, { agentSessionId, closeReason });
+      // Only a close the server reports done stops the page-close beacon; `false` means the session did not close.
+      if (result?.CloseAgentSession === true) {
+        this.completedServerCloseSessionId = agentSessionId;
+      } else {
+        console.warn(`[RealtimeSession] The server did not close session ${agentSessionId} (closeReason ${closeReason}).`);
+      }
     } catch (error) {
-      console.error('[RealtimeSession] Failed to close server session:', error);
+      console.error(`[RealtimeSession] Failed to close server session ${agentSessionId} (closeReason ${closeReason}):`, error);
     }
   }
 
@@ -4811,12 +6100,17 @@ export class RealtimeSessionRuntime {
     this.pendingUserCaption = '';
     this.hasActiveInterimUserCaption = false;
     this.SetMinimized(false);
-    this.stopSegmentFlushing();
-    this.shardQueue = null;
+    this.stopShardFlushing();
+    // Defensive: teardown already ended any previous recording; a stray pipeline must not keep sending.
+    this.recordingShards?.Queue.Close();
+    this.recordingShards = null;
     this.recorder = null;
     this.recordingStartedAtIso = null;
     this.currentTurnStartMs = null;
     this.turnAudioStartCaptured = false;
+    this.userSpeechStartMs = null;
+    this.userSpeechStartSuperseded = false;
+    this.userSpeechStartByItemId.clear();
     this.usedChannelNames.clear();
     this.microphoneMuted = false;
   }

@@ -7,8 +7,10 @@
  * (`client.chat.complete(params, { signal })` / `client.chat.stream(params, { signal })`),
  * speaking Mistral's camelCase wire shapes (`finishReason`, `usage.promptTokens`, chunks nested
  * under `chunk.data`). Cancellation is surfaced with the SDK's own error name
- * ('RequestAbortedError'), which isMistralCancellationError recognizes.
+ * ('RequestAbortedError'), which BaseLLM recognizes as an abort.
  */
+import { describe, it, expect } from 'vitest';
+import { ChatMessageRole, ChatParams } from '@memberjunction/ai';
 import {
     ExpectedUsageCounts,
     FailureSite,
@@ -150,7 +152,6 @@ RunLLMConformanceSuite({
     ProviderName: 'Mistral',
     SupportsStreaming: true,
     NonStreamingFailureMode: 'throws',
-    PreAbortedStreamingBehavior: 'rejectsErrorResult',
     CreateLLM: () => {
         const llm = new MistralLLM('conformance-test-key');
         // Swap the private SDK client for the scriptable seam (same boundary the SDK owns).
@@ -169,4 +170,22 @@ RunLLMConformanceSuite({
     ScriptStreamingCancellation: (chunksBeforeAbort: string[], controller: AbortController): void => {
         behavior = { Kind: 'streamingCancellation', Chunks: chunksBeforeAbort, Controller: controller };
     }
+});
+
+describe('Mistral — SDK abort classification', () => {
+    it('reports a RequestAbortedError as Cancelled even before the signal reads aborted', async () => {
+        behavior = { Kind: 'failure', Error: requestAbortedError(), At: 'nonStreaming' };
+        const llm = new MistralLLM('conformance-test-key');
+        (llm as unknown as { _client: MistralSeamClient })._client = seamClient;
+        const params = new ChatParams();
+        params.model = 'conformance-test-model';
+        params.messages = [{ role: ChatMessageRole.user, content: 'hello' }];
+        params.cancellationToken = new AbortController().signal;
+
+        const result = await llm.ChatCompletion(params);
+
+        expect(result.success).toBe(false);
+        expect(result.statusText).toBe('cancelled');
+        expect(result.errorInfo).toMatchObject({ errorType: 'Cancelled', severity: 'Fatal', canFailover: false, providerErrorCode: 'request_cancelled' });
+    });
 });

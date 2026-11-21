@@ -1,0 +1,35 @@
+{
+    "kind": "calendar#event",
+    "etag": "\"3463209845028000\"",
+    "id": "7cbh8rpc10lrc0ckih9tafss99",
+    "status": "confirmed",
+    "htmlLink": "https://www.google.com/calendar/event?eid=N2NiaDhycGMxMGxyYzBja2loOXRhZnNzOTkgb3JnYW5pemVyQGV4YW1wbGUub3Jn",
+    "created": "2026-10-12T17:00:00.000Z",
+    "updated": "2026-10-12T17:00:01.514Z",
+    "summary": "Board planning",
+    "description": "<p>Agenda attached.</p>",
+    "location": "Room 4",
+    "creator": { "email": "organizer@example.org", "self": true },
+    "organizer": { "email": "organizer@example.org", "displayName": "Org Anizer", "self": true },
+    "start": { "dateTime": "2026-10-20T10:00:00-04:00", "timeZone": "America/New_York" },
+    "end": { "dateTime": "2026-10-20T11:00:00-04:00", "timeZone": "America/New_York" },
+    "iCalUID": "7cbh8rpc10lrc0ckih9tafss99@google.com",
+    "sequence": 0,
+    "attendees": [
+        { "email": "organizer@example.org", "organizer": true, "self": true, "responseStatus": "accepted" },
+        { "email": "ada@example.org", "displayName": "Ada Lovelace", "responseStatus": "needsAction" },
+        { "email": "grace@example.com", "optional": true, "responseStatus": "needsAction" }
+    ],
+    "hangoutLink": "https://meet.google.com/abc-defg-hij",
+    "conferenceData": {
+        "createRequest": { "requestId": "5b1a3c0e-4b8f-4d1e-9f53-2b7e0c2a8d11", "conferenceSolutionKey": { "type": "hangoutsMeet" }, "status": { "statusCode": "success" } },
+        "entryPoints": [
+            { "entryPointType": "video", "uri": "https://meet.google.com/abc-defg-hij", "label": "meet.google.com/abc-defg-hij" },
+            { "entryPointType": "phone", "uri": "tel:+1-555-0100", "label": "+1 555-0100", "pin": "123456789" }
+        ],
+        "conferenceSolution": { "key": { "type": "hangoutsMeet" }, "name": "Google Meet" },
+        "conferenceId": "abc-defg-hij"
+    },
+    "reminders": { "useDefault": true },
+    "eventType": "default"
+}

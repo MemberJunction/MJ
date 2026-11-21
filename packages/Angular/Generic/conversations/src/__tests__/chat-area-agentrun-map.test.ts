@@ -80,4 +80,28 @@ describe('ConversationChatArea.refreshAgentRunsForInProgress', () => {
 
     expect(open.agentRunsByDetailId).not.toBe(before);
   });
+
+  it('guards OnAgentRunUpdate with ShouldReplaceDetailAgentRun and refreshes the message in place without cloning messages', async () => {
+    const rootRun = { ID: 'RUN-ROOT', ConversationDetailID: DETAIL, ParentRunID: null, Status: 'Running' };
+    const subRun = { ID: 'RUN-SUB', ConversationDetailID: DETAIL, ParentRunID: 'RUN-ROOT', Status: 'Running' };
+    const { component, open } = createHarness(rootRun, []);
+    open.AgentRunsByDetailId = open.agentRunsByDetailId;
+    open.isActiveConversation = vi.fn(() => true);
+    open.cdr = { detectChanges: vi.fn() };
+    const refreshSpy = vi.fn(() => true);
+    open.messageListComponent = { RefreshRenderedMessage: refreshSpy };
+    const originalMessages = open.messages;
+
+    await component.OnAgentRunUpdate({
+      conversationId: 'CONV-1',
+      conversationDetailId: DETAIL,
+      agentRun: subRun as never,
+    });
+
+    // Sub-run must NOT overwrite the root run
+    expect(runIdFor(open)).toBe('RUN-ROOT');
+    // Rendered message was refreshed in place without cloning the messages array
+    expect(refreshSpy).toHaveBeenCalledWith((originalMessages as unknown[])[0], { markStreaming: false });
+    expect(open.messages).toBe(originalMessages);
+  });
 });

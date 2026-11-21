@@ -37,6 +37,9 @@ vi.mock('@memberjunction/global', () => ({
 // be tested against — a mocked copy would be the second implementation the shared module exists to prevent.
 import * as actualToolMapping from '../../../../Core/src/generic/openAICompatibleTools';
 import { toClassicChatMessageRole as actualToClassicChatMessageRole } from '../../../../Core/src/generic/chat.types';
+// The cancellation classification is likewise pure and shared, so the stand-in BaseLLM below builds
+// its cancelled results from the real module rather than from a hand-copied shape.
+import * as actualCancellation from '../../../../Core/src/generic/cancellation';
 
 vi.mock('@memberjunction/ai', () => {
     class BaseModel {
@@ -86,6 +89,20 @@ vi.mock('@memberjunction/ai', () => {
             }
             return message;
         }
+        /** Mirrors BaseLLM.IsCancellationError: an aborted signal or an abort-named error. */
+        protected IsCancellationError(error: unknown, signal?: AbortSignal | null): boolean {
+            return signal?.aborted === true || actualCancellation.IsAbortError(error);
+        }
+        /** Mirrors BaseLLM.BuildCancelledChatResult, classifying through the real shared module. */
+        protected BuildCancelledChatResult(startTime: Date, options: { error?: unknown; signal?: AbortSignal | null; message?: string } = {}): ChatResult {
+            const result = new ChatResult(false, startTime, new Date());
+            result.data = { choices: [], usage: new ModelUsage(0, 0) };
+            result.statusText = 'cancelled';
+            result.errorMessage = options.message || actualCancellation.DescribeCancellation(options.signal);
+            result.exception = options.error;
+            result.errorInfo = actualCancellation.BuildCancellationErrorInfo({ error: options.error, signal: options.signal, provider: this.constructor.name });
+            return result;
+        }
     }
     class ModelUsage {
         promptTokens: number;
@@ -108,6 +125,7 @@ vi.mock('@memberjunction/ai', () => {
         statusText: string | null = null;
         errorMessage: string | null = null;
         exception: unknown = null;
+        errorInfo: unknown = null;
         modelSpecificResponseDetails: unknown = null;
         constructor(success: boolean, startTime: Date, endTime: Date) {
             this.success = success;
@@ -135,6 +153,9 @@ vi.mock('@memberjunction/ai', () => {
         buildOpenAICompatibleToolCalls: actualToolMapping.buildOpenAICompatibleToolCalls,
         buildOpenAICompatibleToolResults: actualToolMapping.buildOpenAICompatibleToolResults,
         extractOpenAICompatibleToolCalls: actualToolMapping.extractOpenAICompatibleToolCalls,
+        ReadOpenAICompatibleToolCalls: actualToolMapping.ReadOpenAICompatibleToolCalls,
+        CHAT_FINISH_REASON_MALFORMED_TOOL_CALL: 'malformed_tool_call',
+        CHAT_FINISH_REASON_TOOL_CALLS: 'tool_calls',
         // Narrows a `tool` role to the classic trio; the driver relies on it, so use the real one.
         toClassicChatMessageRole: actualToClassicChatMessageRole,
         BaseLLM,
@@ -425,16 +446,19 @@ describe('GroqLLM', () => {
     });
 
     describe('cancellationToken', () => {
-        type CancellableResult = { success: boolean; statusText: string | null; errorMessage: string | null };
+        type CancellableResult = {
+            success: boolean;
+            statusText: string | null;
+            errorMessage: string | null;
+            exception: unknown;
+            errorInfo: { errorType: string; severity: string; canFailover: boolean; providerErrorCode?: string } | null;
+        };
 
         const callNonStreaming = async (params: Record<string, unknown>): Promise<CancellableResult> => {
             return (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion'].bind(instance)(params) as Promise<CancellableResult>;
         };
         const callCreateStream = async (params: Record<string, unknown>): Promise<AsyncIterable<unknown>> => {
             return (instance as ReturnType<typeof Object.create>)['createStreamingRequest'].bind(instance)(params) as Promise<AsyncIterable<unknown>>;
-        };
-        const callFinalize = (content: string): CancellableResult => {
-            return (instance as ReturnType<typeof Object.create>)['finalizeStreamingResponse'].bind(instance)(content, null, null) as CancellableResult;
         };
 
         const baseParams = (signal: AbortSignal) => ({
@@ -455,24 +479,20 @@ describe('GroqLLM', () => {
             expect(mockCreate.mock.calls[0][1]).toEqual({ signal: controller.signal });
         });
 
-        it('should return a cancelled result without calling the SDK when already aborted', async () => {
-            const controller = new AbortController();
-            controller.abort();
-
-            const result = await callNonStreaming(baseParams(controller.signal));
-
-            expect(mockCreate).not.toHaveBeenCalled();
-            expect(result.success).toBe(false);
-            expect(result.statusText).toBe('cancelled');
-        });
-
-        it('should return a cancelled result when the SDK raises an abort error', async () => {
-            mockCreate.mockRejectedValue(new MockAPIUserAbortError());
+        it('should return a Cancelled, non-failover-able result when the SDK raises an abort error', async () => {
+            const abortError = new MockAPIUserAbortError();
+            mockCreate.mockRejectedValue(abortError);
 
             const result = await callNonStreaming(baseParams(new AbortController().signal));
 
             expect(result.success).toBe(false);
             expect(result.statusText).toBe('cancelled');
+            expect(result.errorMessage).toBe('Request was cancelled');
+            expect(result.exception).toBe(abortError);
+            expect(result.errorInfo?.errorType).toBe('Cancelled');
+            expect(result.errorInfo?.severity).toBe('Fatal');
+            expect(result.errorInfo?.canFailover).toBe(false);
+            expect(result.errorInfo?.providerErrorCode).toBe('request_cancelled');
         });
 
         it('should rethrow non-cancellation SDK errors on the non-streaming path', async () => {
@@ -481,28 +501,89 @@ describe('GroqLLM', () => {
             await expect(callNonStreaming(baseParams(new AbortController().signal))).rejects.toThrow('boom');
         });
 
-        it('should forward the cancellation token on the streaming path and report a mid-stream abort as cancelled', async () => {
+        it('should forward the cancellation token on the streaming path and hand the SDK stream back unwrapped', async () => {
             const controller = new AbortController();
-            mockCreate.mockResolvedValue({
+            const sdkStream = {
                 async *[Symbol.asyncIterator]() {
                     yield { choices: [{ delta: { content: 'partial' } }] };
                     controller.abort();
                     throw new MockAPIUserAbortError();
                 }
-            });
+            };
+            mockCreate.mockResolvedValue(sdkStream);
 
             const stream = await callCreateStream(baseParams(controller.signal));
+
             expect(mockCreate.mock.calls[0][1]).toEqual({ signal: controller.signal });
+            // The abort reaches BaseLLM's stream loop, which reports the request as cancelled.
+            expect(stream).toBe(sdkStream);
+        });
+    });
 
-            const chunks: unknown[] = [];
-            for await (const chunk of stream) {
-                chunks.push(chunk);
-            }
+    describe('tool_use_failed recovery (#5847)', () => {
+        type RecoveredResult = {
+            success: boolean;
+            ToolCallsRecovered?: boolean;
+            data: { choices: Array<{ finish_reason: string; message: { content: string; toolCalls?: Array<{ id: string; name: string; arguments: Record<string, unknown> }> } }> };
+        };
+        const callNonStreaming = async (params: Record<string, unknown>): Promise<RecoveredResult> => {
+            return (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion'].bind(instance)(params) as Promise<RecoveredResult>;
+        };
+        /** The shape groq-sdk throws for a 400: the response body is kept on `error`. */
+        const toolUseFailed = (failedGeneration: string): Error & { status: number; error: unknown } =>
+            Object.assign(new Error('400 tool call validation failed'), {
+                status: 400,
+                error: { error: { message: 'tool call validation failed', type: 'invalid_request_error', code: 'tool_use_failed', failed_generation: failedGeneration } }
+            });
+        const withTools = {
+            model: 'qwen/qwen3.6-27b',
+            messages: [{ role: ChatMessageRole.user, content: 'Draw a chart' }],
+            tools: [{ name: 'create_svg_chart', inputSchema: { type: 'object', properties: { ShowGrid: { type: 'boolean' } } } }]
+        };
+        const qwenGeneration = '<tool_call>\n<function=create_svg_chart>\n<parameter=ChartType>\nbar\n</parameter>\n<parameter=ShowGrid>\ntrue\n</parameter>\n</function>\n</tool_call>';
 
-            expect(chunks).toHaveLength(1);
-            const result = callFinalize('partial');
-            expect(result.success).toBe(false);
-            expect(result.statusText).toBe('cancelled');
+        it('returns the rejected call as a tool call flagged ToolCallsRecovered', async () => {
+            mockCreate.mockRejectedValue(toolUseFailed(qwenGeneration));
+
+            const result = await callNonStreaming(withTools);
+
+            expect(result.success).toBe(true);
+            expect(result.ToolCallsRecovered).toBe(true);
+            const choice = result.data.choices[0];
+            expect(choice.finish_reason).toBe('tool_calls');
+            expect(choice.message.toolCalls).toHaveLength(1);
+            expect(choice.message.toolCalls?.[0].name).toBe('create_svg_chart');
+            // The model's own values: coercion is the action layer's job, not the driver's.
+            expect(choice.message.toolCalls?.[0].arguments).toEqual({ ChartType: 'bar', ShowGrid: 'true' });
+            expect(choice.message.toolCalls?.[0].id).toMatch(/^call_recovered_/);
+        });
+
+        it('rethrows when the rejected call names a tool the request did not declare', async () => {
+            const error = toolUseFailed('{"name": "json", "arguments": {"answer": 1}}');
+            mockCreate.mockRejectedValue(error);
+
+            await expect(callNonStreaming(withTools)).rejects.toBe(error);
+        });
+
+        it('rethrows when the request declared no tools', async () => {
+            const error = toolUseFailed(qwenGeneration);
+            mockCreate.mockRejectedValue(error);
+
+            await expect(callNonStreaming({ ...withTools, tools: undefined })).rejects.toBe(error);
+        });
+
+        it('rethrows a 400 that is not tool_use_failed', async () => {
+            const error = Object.assign(new Error('400 bad'), { status: 400, error: { error: { code: 'invalid_request', failed_generation: qwenGeneration } } });
+            mockCreate.mockRejectedValue(error);
+
+            await expect(callNonStreaming(withTools)).rejects.toBe(error);
+        });
+
+        it('rethrows when the failed generation cannot be parsed', async () => {
+            const error = toolUseFailed('I would like to draw a chart but cannot.');
+            mockCreate.mockRejectedValue(error);
+
+            await expect(callNonStreaming(withTools)).rejects.toBe(error);
         });
     });
 });

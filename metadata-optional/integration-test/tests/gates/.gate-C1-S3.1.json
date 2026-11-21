@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C1 -> S3.1",
+    "Description": "Gate G1.12 (phase 1, dataset C1, criterion S3.1): 100 scenario C1 entities assembled through the training path and through the scoring path at the same as-of date give identical feature vectors, 0 mismatches of 100. It fails when the scoring path's AssembleForScoring reads current values instead of calling the as-of assembler, so mismatches appear.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G1.12\",\"owner:PR3\",\"phase:1\",\"dataset:C1\",\"criterion:S3.1\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "100 C1 unit rows assembled through the training path and the scoring path give identical feature vectors: 0 mismatches of 100."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-c1-s3-1"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "FC5DA85C-24B3-48B9-8053-254F28B31B1B"
+  }
+}

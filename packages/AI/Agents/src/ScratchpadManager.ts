@@ -62,6 +62,75 @@ export class ScratchpadManager {
         return this._notes;
     }
 
+    /**
+     * Return individual non-empty note lines from the scratchpad notes.
+     */
+    GetNoteLines(): string[] {
+        if (!this._notes) return [];
+        return this._notes
+            .split('\n')
+            .map(l => l.trimEnd())
+            .filter(l => l.trim().length > 0);
+    }
+
+    /**
+     * Enforce a maximum number of note lines in the scratchpad by pruning the oldest
+     * low-priority note lines first, then the oldest remaining lines if still over the limit.
+     *
+     * High-priority notes are lines marked with `[HIGH]`, `[IMPORTANT]`, `[PINNED]`,
+     * `PRIORITY: HIGH`, `❗`, or `⚠️` (case-insensitive). All other non-empty lines are
+     * treated as normal/low priority and are pruned oldest-first before any high-priority
+     * notes are removed.
+     *
+     * @param maxNotes - Maximum number of note lines to retain (must be >= 0)
+     * @returns Number of note lines pruned
+     */
+    PruneNotes(maxNotes: number): number {
+        if (maxNotes < 0 || !this._notes) return 0;
+
+        const lines = this.GetNoteLines();
+        if (lines.length <= maxNotes) return 0;
+
+        if (maxNotes === 0) {
+            const prunedCount = lines.length;
+            this._notes = '';
+            return prunedCount;
+        }
+
+        const overCount = lines.length - maxNotes;
+        const indicesToRemove = new Set<number>();
+
+        // Pass 1: Prune oldest low-priority note lines first
+        for (let i = 0; i < lines.length && indicesToRemove.size < overCount; i++) {
+            if (!this.isHighPriorityNoteLine(lines[i])) {
+                indicesToRemove.add(i);
+            }
+        }
+
+        // Pass 2: If still over limit, prune oldest remaining lines
+        for (let i = 0; i < lines.length && indicesToRemove.size < overCount; i++) {
+            if (!indicesToRemove.has(i)) {
+                indicesToRemove.add(i);
+            }
+        }
+
+        const retained = lines.filter((_, idx) => !indicesToRemove.has(idx));
+        this._notes = retained.join('\n');
+        return indicesToRemove.size;
+    }
+
+    private isHighPriorityNoteLine(line: string): boolean {
+        const lower = line.toLowerCase();
+        return (
+            lower.includes('[high]') ||
+            lower.includes('[important]') ||
+            lower.includes('[pinned]') ||
+            lower.includes('priority: high') ||
+            line.includes('❗') ||
+            line.includes('⚠️')
+        );
+    }
+
     // ─── Task List Management ─────────────────────────────────────────
 
     /**

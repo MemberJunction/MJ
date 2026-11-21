@@ -17,6 +17,14 @@ import {
 import type { TaskGraphDecisionQuestion } from '@memberjunction/ai-core-plus';
 import { DECISION_QUESTION_KEY_PATTERN, ReadDecisionStepKey, ReadEditableDecisionConfig } from './decision-step-config';
 import { PathRunProblems, StepRunProblems, type FlowRunProblem } from './flow-run-check';
+import {
+  ParsePositiveNumber,
+  ReadStepConfigBag,
+  ReadWaitFields,
+  WithStepConfigField,
+  WithWaitMode,
+  type WaitFieldValues
+} from './waiting-step-config';
 
 /** Step type accent color mapping */
 const STEP_TYPE_COLORS: Record<string, string> = {
@@ -25,7 +33,10 @@ const STEP_TYPE_COLORS: Record<string, string> = {
   Decision: '#0891b2',
   'Sub-Agent': '#10b981',
   ForEach: '#f59e0b',
-  While: '#f59e0b'
+  While: '#f59e0b',
+  Human: '#7b1fa2',
+  External: '#0891b2',
+  Wait: '#64748b'
 };
 
 /** Step type icon mapping */
@@ -35,7 +46,10 @@ const STEP_TYPE_ICONS: Record<string, string> = {
   Decision: 'fa-scale-balanced',
   'Sub-Agent': 'fa-robot',
   ForEach: 'fa-arrows-spin',
-  While: 'fa-rotate'
+  While: 'fa-rotate',
+  Human: 'fa-user-check',
+  External: 'fa-arrow-up-right-from-square',
+  Wait: 'fa-hourglass-half'
 };
 
 /** What a Decision question asks for. */
@@ -165,6 +179,65 @@ export class AgentPropertiesPanelComponent {
     return this.ShowLoopConfig;
   }
 
+  // ── Waiting steps (Human, External, Wait) ───────────────────
+  // These steps finish without a runner. The fields below edit their Configuration; whether what is
+  // there would RUN is the flow's run check's call, which asks the runtime itself.
+
+  get ShowHumanConfig(): boolean { return this.Step?.StepType === 'Human'; }
+  get ShowExternalConfig(): boolean { return this.Step?.StepType === 'External'; }
+  get ShowWaitConfig(): boolean { return this.Step?.StepType === 'Wait'; }
+
+  /** A Wait's two ways of saying when, as the fields show them. */
+  get WaitFields(): WaitFieldValues {
+    return ReadWaitFields(this.Step?.Configuration);
+  }
+
+  /** One configuration field, as text for an input. */
+  ConfigText(field: string): string {
+    const value = ReadStepConfigBag(this.Step?.Configuration)[field];
+    if (value === undefined || value === null) return '';
+    return typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
+  }
+
+  /** Sets (or, when empty, removes) one text field of the step's configuration. */
+  OnConfigTextChange(field: string, value: string): void {
+    this.writeConfig(WithStepConfigField(this.Step?.Configuration, field, value));
+  }
+
+  /** Sets (or, when empty or not a number, removes) one numeric field. */
+  OnConfigNumberChange(field: string, value: string): void {
+    this.writeConfig(WithStepConfigField(this.Step?.Configuration, field, ParsePositiveNumber(value)));
+  }
+
+  /** Switches a Wait between a duration and a moment, clearing the other so it never holds both. */
+  OnWaitModeChange(mode: 'duration' | 'until'): void {
+    this.writeConfig(WithWaitMode(this.Step?.Configuration, mode));
+  }
+
+  /**
+   * A Human step's provider configuration, edited as JSON because only the provider knows its shape.
+   * Text that does not parse is kept as typed rather than discarded, and the run check says so.
+   */
+  OnProviderConfigurationChange(value: string): void {
+    const text = (value ?? '').trim();
+    if (!text) {
+      this.writeConfig(WithStepConfigField(this.Step?.Configuration, 'providerConfiguration', undefined));
+      return;
+    }
+    try {
+      const parsed: unknown = JSON.parse(text);
+      this.writeConfig(WithStepConfigField(this.Step?.Configuration, 'providerConfiguration', parsed));
+    } catch {
+      // Not yet valid JSON — leave the stored value as it was until it is.
+    }
+  }
+
+  private writeConfig(next: string): void {
+    if (!this.Step || this.ReadOnly) return;
+    this.Step.Configuration = next;
+    this.StepChanged.emit(this.Step);
+  }
+
   get StepTypeLabel(): string {
     switch (this.Step?.StepType) {
       case 'Action': return 'Action';
@@ -173,6 +246,9 @@ export class AgentPropertiesPanelComponent {
       case 'Sub-Agent': return 'Sub-Agent';
       case 'ForEach': return 'For Each Loop';
       case 'While': return 'While Loop';
+      case 'Human': return 'Person';
+      case 'External': return 'External Signal';
+      case 'Wait': return 'Wait';
       default: return 'Step';
     }
   }

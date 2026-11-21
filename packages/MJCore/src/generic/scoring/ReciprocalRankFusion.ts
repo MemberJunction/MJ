@@ -72,9 +72,18 @@ export function ComputeRRF(
             continue;
         }
 
-        for (let rank = 0; rank < list.length; rank++) {
-            const candidate = list[rank];
-            const rrfContribution = weight * (1.0 / (k + rank + 1)); // rank is 0-based, formula uses 1-based
+        const seenInList = new Set<string>();
+        let uniqueRank = 0;
+
+        for (let i = 0; i < list.length; i++) {
+            const candidate = list[i];
+            if (seenInList.has(candidate.ID)) {
+                continue;
+            }
+            seenInList.add(candidate.ID);
+
+            const rrfContribution = weight * (1.0 / (k + uniqueRank + 1)); // uniqueRank is 0-based, formula uses 1-based
+            uniqueRank++;
 
             const existing = fusedScores.get(candidate.ID);
             if (existing) {

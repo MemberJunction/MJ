@@ -16,6 +16,7 @@
  * Used by the CLI to parse and validate app manifests before installation.
  */
 import { z } from 'zod';
+import { ResolvePackagePlatform } from './package-platform.js';
 
 // ── Identity ──────────────────────────────────────────────
 
@@ -33,6 +34,14 @@ const hexColorRegex = /^#[0-9a-fA-F]{6}$/;
 
 /** GitHub repository URL */
 const githubRepoRegex = /^https:\/\/github\.com\/.+\/.+$/;
+
+/**
+ * Where a dependency is installed from: a GitHub repository URL, or a `file:` locator for a folder
+ * in the consumer repository, relative to its root (e.g. `file:openapps/settings`). The engine
+ * accepts a `file:` dependency only from an app that is itself installed from a local folder.
+ */
+const dependencyRepositoryRegex = /^(https:\/\/github\.com\/.+\/.+|file:.+)$/;
+const dependencyRepositoryMessage = 'Dependency repository must be a GitHub URL or a file: locator';
 
 /** Tag: lowercase alphanumeric + hyphens, max 50 chars */
 const tagRegex = /^[a-z0-9-]{1,50}$/;
@@ -64,10 +73,17 @@ const packageRoleSchema = z.enum([
     'bootstrap', 'actions', 'engine', 'provider', 'module', 'components', 'library'
 ]);
 
+/**
+ * Where the package may RUN. Absent, it is derived from `role` — see
+ * {@link ResolvePackagePlatform} in ./package-platform.ts, which is the canonical rule.
+ */
+const packagePlatformSchema = z.enum(['node', 'browser', 'both']);
+
 const packageEntrySchema = z.object({
     name: z.string().max(214).regex(npmPackageNameRegex, 'Package name must be a valid npm package name (lowercase, URL-safe characters, optional @scope/)'),
     role: packageRoleSchema,
     startupExport: z.string().regex(jsIdentifierRegex, 'startupExport must be a single JavaScript identifier').optional(),
+    platform: packagePlatformSchema.optional(),
 }).refine(
     (pkg) => pkg.role !== 'bootstrap' || (pkg.startupExport != null && pkg.startupExport.length > 0),
     { message: 'startupExport is required for packages with the "bootstrap" role', path: ['startupExport'] }
@@ -85,7 +101,32 @@ const packagesSchema = z.object({
     server: z.array(packageEntrySchema).optional(),
     client: z.array(packageEntrySchema).optional(),
     shared: z.array(packageEntrySchema).optional(),
-});
+})
+    // A package whose EFFECTIVE platform contradicts the array it sits in is a self-contradictory
+    // manifest — whether that platform was declared explicitly or is only the role-implied default
+    // (e.g. role:'actions' with no `platform` resolves to 'node'). Testing `pkg.platform` alone
+    // would only catch the explicit case and let the role-implied one through: a `client[]` entry
+    // with role:'actions' and no `platform` is Node-only just as surely as one that writes
+    // `platform: "node"`, so we resolve through `ResolvePackagePlatform` (the canonical rule) to
+    // catch both. Routing would silently drop the package from the only tier that asked for it —
+    // the class of silent-wrong-config failure that produces a green install and a broken host.
+    .superRefine((packages, ctx) => {
+        for (const [array, forbidden] of [['client', 'node'], ['server', 'browser']] as const) {
+            for (const [index, pkg] of (packages[array] ?? []).entries()) {
+                if (ResolvePackagePlatform(pkg) !== forbidden) {
+                    continue;
+                }
+                const message = pkg.platform
+                    ? `"${pkg.name}" is declared in packages.${array} but sets platform "${forbidden}". Move it to packages.${forbidden === 'node' ? 'server' : 'client'}, or declare platform "both".`
+                    : `"${pkg.name}" sits in packages.${array} but role "${pkg.role}" makes it ${forbidden === 'node' ? 'Node-only' : 'browser-only'} — declare platform "${forbidden === 'node' ? 'browser' : 'node'}" or "both", or move it to packages.${forbidden === 'node' ? 'server' : 'client'}.`;
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: [array, index, 'platform'],
+                    message,
+                });
+            }
+        }
+    });
 
 // ── Database Schema ───────────────────────────────────────
 
@@ -179,6 +220,50 @@ const templateUserSchema = z.object({
     newUsers: z.enum(['offer', 'always', 'never']).optional(),
 });
 
+// ── Public Pages ──────────────────────────────────────────
+
+/** Public page slug: lowercase alphanumeric words joined by single hyphens. */
+export const PUBLIC_PAGE_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/** Slugs a visitor could take for a sign-in or account address of the host. No app may use them. */
+export const RESERVED_PUBLIC_PAGE_SLUGS: readonly string[] = ['login', 'signin', 'sign-in', 'auth', 'sso', 'oauth', 'account', 'admin', 'password', 'reset'];
+
+/** Error page scope: a folder under `/p/` (slug words joined by `/`), or empty for all of `/p/`. */
+const PUBLIC_ERROR_PAGE_SCOPE_PATTERN = /^(?:[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*)?$/;
+
+const publicPagePackageSchema = z.string().max(214).regex(npmPackageNameRegex, 'package must be a valid npm package name (lowercase, URL-safe characters, optional @scope/)');
+const publicPageExportSchema = z.string().regex(jsIdentifierRegex, 'export must be a single JavaScript identifier');
+
+/**
+ * A page the app serves before sign-in, at `/p/<slug>` in the host.
+ * `package` must be a browser-capable package the app declares in `packages.client` or `packages.shared`.
+ */
+const publicPageSchema = z.object({
+    slug: z.string().max(64).regex(PUBLIC_PAGE_SLUG_PATTERN, 'slug must be lowercase letters and digits, words joined by single hyphens'),
+    role: z.literal('page').optional(),
+    package: publicPagePackageSchema,
+    export: publicPageExportSchema,
+    /** The page title, and the title of its link preview. */
+    title: z.string().max(120).optional(),
+    /** The text of the page's link preview and search result. */
+    description: z.string().max(300).optional(),
+    /** True when the page also answers the addresses under its slug (`/p/<slug>/...`). */
+    subPaths: z.boolean().optional(),
+});
+
+/**
+ * A page the host shows for a wrong address in a folder under `/p/`. The host uses the error page
+ * of the requested folder, then of each parent folder, then of the root (`scope: ""`).
+ */
+const publicErrorPageSchema = z.object({
+    role: z.literal('error'),
+    scope: z.string().max(200).regex(PUBLIC_ERROR_PAGE_SCOPE_PATTERN, 'scope must be a folder under /p/ (lowercase words joined by "/"), or empty for the root'),
+    package: publicPagePackageSchema,
+    export: publicPageExportSchema,
+});
+
+const publicPageEntrySchema = z.union([publicPageSchema, publicErrorPageSchema]);
+
 // ── Full Manifest ─────────────────────────────────────────
 
 /**
@@ -229,7 +314,7 @@ export const MjAppManifestSchema = z.object({
     dependencies: z.union([
         z.array(z.object({
             name: z.string().regex(appNameRegex, 'Dependency app name must match app name format'),
-            repository: z.string().regex(githubRepoRegex, 'Dependency repository must be a GitHub URL'),
+            repository: z.string().regex(dependencyRepositoryRegex, dependencyRepositoryMessage),
             versionRange: z.string().min(1),
             /** In-repo subpath to the dependency app, for dependencies that live in a multi-app repo. */
             subpath: z.string().optional(),
@@ -245,7 +330,7 @@ export const MjAppManifestSchema = z.object({
                 z.string().min(1),
                 z.object({
                     version: z.string().min(1),
-                    repository: z.string().regex(githubRepoRegex, 'Dependency repository must be a GitHub URL'),
+                    repository: z.string().regex(dependencyRepositoryRegex, dependencyRepositoryMessage),
                     /** In-repo subpath to the dependency app, for dependencies that live in a multi-app repo. */
                     subpath: z.string().optional(),
                 })
@@ -265,10 +350,57 @@ export const MjAppManifestSchema = z.object({
     // Template user the app ships, offered to the installer after install
     templateUser: templateUserSchema.optional(),
 
+    // Pages served before sign-in
+    publicPages: z.array(publicPageEntrySchema).optional(),
+
     // Discovery (MJ Central)
     categories: z.array(z.string()).max(5).optional(),
     tags: z.array(z.string().regex(tagRegex, 'Tags must be lowercase alphanumeric + hyphens, max 50 chars')).max(20).optional(),
-});
+}).superRefine(ValidatePublicPages);
+
+/** True for an error page entry of `publicPages`. */
+export function IsManifestPublicErrorPage(entry: ManifestPublicPageEntry): entry is ManifestPublicErrorPage {
+    return entry.role === 'error';
+}
+
+/**
+ * Rejects duplicate and reserved slugs, duplicate error page scopes, an error page outside the
+ * app's own slugs, and entries whose package does not run in the browser.
+ */
+function ValidatePublicPages(
+    manifest: { packages?: z.infer<typeof packagesSchema>; publicPages?: ManifestPublicPageEntry[] },
+    ctx: z.RefinementCtx
+): void {
+    const entries = manifest.publicPages ?? [];
+    const browserPackages = new Set(
+        [...(manifest.packages?.client ?? []), ...(manifest.packages?.shared ?? [])]
+            .filter((pkg) => ResolvePackagePlatform(pkg) !== 'node')
+            .map((pkg) => pkg.name)
+    );
+    const ownSlugs = new Set(entries.flatMap((entry) => (IsManifestPublicErrorPage(entry) ? [] : [entry.slug])));
+    const seen = new Set<string>();
+    for (const [index, entry] of entries.entries()) {
+        const isError = IsManifestPublicErrorPage(entry);
+        const label = isError ? `Public error page "${entry.scope}"` : `Public page "${entry.slug}"`;
+        const key = isError ? `error:${entry.scope}` : `page:${entry.slug}`;
+        const addIssue = (field: string, message: string): void => {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['publicPages', index, field], message });
+        };
+        if (seen.has(key)) {
+            addIssue(isError ? 'scope' : 'slug', isError ? `Duplicate public error page scope "${entry.scope}".` : `Duplicate public page slug "${entry.slug}".`);
+        }
+        seen.add(key);
+        if (!isError && RESERVED_PUBLIC_PAGE_SLUGS.includes(entry.slug)) {
+            addIssue('slug', `Public page slug "${entry.slug}" is reserved: a visitor could take it for a sign-in or account address.`);
+        }
+        if (isError && entry.scope !== '' && !ownSlugs.has(entry.scope.split('/')[0])) {
+            addIssue('scope', `Public error page scope "${entry.scope}" must start with a slug this app declares in publicPages, or be empty for the root.`);
+        }
+        if (!browserPackages.has(entry.package)) {
+            addIssue('package', `${label} uses package "${entry.package}", which must be declared in packages.client or packages.shared with a platform that runs in the browser.`);
+        }
+    }
+}
 
 /** @deprecated Use {@link MjAppManifestSchema}. */
 export const mjAppManifestSchema = MjAppManifestSchema;
@@ -283,6 +415,15 @@ export type MJAppManifest = z.infer<typeof MjAppManifestSchema>;
  * Type for a single package entry within the manifest.
  */
 export type ManifestPackageEntry = z.infer<typeof packageEntrySchema>;
+
+/** A page entry of `publicPages` in the manifest. */
+export type ManifestPublicPage = z.infer<typeof publicPageSchema>;
+
+/** An error page entry of `publicPages` in the manifest. */
+export type ManifestPublicErrorPage = z.infer<typeof publicErrorPageSchema>;
+
+/** Any entry of `publicPages` in the manifest. */
+export type ManifestPublicPageEntry = ManifestPublicPage | ManifestPublicErrorPage;
 
 /**
  * Valid package roles.

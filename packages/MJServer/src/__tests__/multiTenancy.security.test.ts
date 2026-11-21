@@ -456,19 +456,75 @@ describe('Multi-Tenancy Security Edge Cases', () => {
       });
     });
 
-    it('should not set TenantContext when header is missing', () => {
+    it('should reject a request with no tenant header with 400 rather than run it unscoped', () => {
       const middleware = CreateTenantMiddleware(makeConfig());
-      const userRecord = { ID: 'u1' } as Record<string, unknown>;
+      const userRecord = { ID: 'u1', UserRoles: [{ Role: 'Member' }] } as Record<string, unknown>;
       const req = {
         headers: {},
         userPayload: { userRecord, email: 'test@test.com', sessionId: 's1' },
       } as unknown as Parameters<typeof middleware>[0];
-      const res = {} as Parameters<typeof middleware>[1];
+      const json = vi.fn();
+      const status = vi.fn().mockReturnValue({ json });
+      const res = { status } as unknown as Parameters<typeof middleware>[1];
       const next = vi.fn();
 
       middleware(req, res, next);
 
+      // The hooks leave a user with no TenantContext unfiltered, so continuing would show every tenant's rows
+      expect(status).toHaveBeenCalledWith(400);
+      expect(json).toHaveBeenCalledWith({ error: expect.stringContaining('Missing x-tenant-id header') });
+      expect(next).not.toHaveBeenCalled();
       expect(userRecord['TenantContext']).toBeUndefined();
+    });
+
+    it('should treat an empty tenant header as missing', () => {
+      const middleware = CreateTenantMiddleware(makeConfig());
+      const req = {
+        headers: { 'x-tenant-id': '' },
+        userPayload: { userRecord: { ID: 'u1' }, email: 'test@test.com', sessionId: 's1' },
+      } as unknown as Parameters<typeof middleware>[0];
+      const status = vi.fn().mockReturnValue({ json: vi.fn() });
+      const res = { status } as unknown as Parameters<typeof middleware>[1];
+      const next = vi.fn();
+
+      middleware(req, res, next);
+
+      expect(status).toHaveBeenCalledWith(400);
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it('should let an admin-role user through without a tenant header, as the hooks do not filter admins', () => {
+      const middleware = CreateTenantMiddleware(makeConfig({ adminRoles: ['Admin'] }));
+      const userRecord = { ID: 'u1', UserRoles: [{ Role: ' admin ' }] } as Record<string, unknown>;
+      const req = {
+        headers: {},
+        userPayload: { userRecord, email: 'admin@test.com', sessionId: 's1' },
+      } as unknown as Parameters<typeof middleware>[0];
+      const status = vi.fn();
+      const res = { status } as unknown as Parameters<typeof middleware>[1];
+      const next = vi.fn();
+
+      middleware(req, res, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(status).not.toHaveBeenCalled();
+      expect(userRecord['TenantContext']).toBeUndefined();
+    });
+
+    it('should let the system user through without a tenant header', () => {
+      const middleware = CreateTenantMiddleware(makeConfig());
+      const req = {
+        headers: {},
+        userPayload: { userRecord: { ID: 'sys' }, email: 'system@test.com', sessionId: 's1', isSystemUser: true },
+      } as unknown as Parameters<typeof middleware>[0];
+      const status = vi.fn();
+      const res = { status } as unknown as Parameters<typeof middleware>[1];
+      const next = vi.fn();
+
+      middleware(req, res, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(status).not.toHaveBeenCalled();
     });
 
     it('should reject a repeated header (array value) with 400 rather than guessing which value applies', () => {
@@ -515,6 +571,57 @@ describe('Multi-Tenancy Security Edge Cases', () => {
       expect(userA.TenantContext?.TenantID).toBe('tenant-A');
       expect(userB.TenantContext?.TenantID).toBe('tenant-B');
       expect((sharedUserRecord as unknown as UserInfo).TenantContext).toBeUndefined();
+    });
+  });
+
+  // ─── Client ExtraFilter containment ───────────────────────────────────
+
+  describe('client ExtraFilter must stay inside its parentheses', () => {
+    // The hook builds `(<ExtraFilter>) AND (<tenant>)`. A filter that closes a parenthesis it did
+    // not open turns that into `(1=1) OR (1=1) AND (<tenant>)`: AND binds tighter than OR, so the
+    // tenant predicate would narrow only one side of an OR the caller controls.
+    const escapes = [
+      '1=1) OR (1=1',
+      "Name = 'a') OR (Name = 'b'",
+      '1=1)) OR ((1=1',
+    ];
+
+    it.each(escapes)('refuses the ExtraFilter %j instead of ANDing the tenant predicate onto it', (extraFilter) => {
+      const hook = CreateTenantPreRunViewHook(makeConfig());
+      const params = { EntityName: 'Customers', ExtraFilter: extraFilter } as RunViewParams;
+
+      expect(() => hook(params, makeUser('tenant-abc'))).toThrow(/parenthesis/);
+    });
+
+    it('refuses an ExtraFilter that ends inside an unterminated string literal', () => {
+      const hook = CreateTenantPreRunViewHook(makeConfig());
+      const params = { EntityName: 'Customers', ExtraFilter: "Name = 'a" } as RunViewParams;
+
+      expect(() => hook(params, makeUser('tenant-abc'))).toThrow(/unterminated/);
+    });
+
+    it('refuses an ExtraFilter that contains a comment', () => {
+      const hook = CreateTenantPreRunViewHook(makeConfig());
+      const params = { EntityName: 'Customers', ExtraFilter: "Name = 'a' -- note\n" } as RunViewParams;
+
+      expect(() => hook(params, makeUser('tenant-abc'))).toThrow(/comment/);
+    });
+
+    it('applies the PostgreSQL rules too when the provider dialect is unknown', () => {
+      // The mocked Metadata.Provider here is not a database provider, so the hook reads the filter
+      // with every supported dialect.
+      const hook = CreateTenantPreRunViewHook(makeConfig());
+      const params = { EntityName: 'Customers', ExtraFilter: 'Name = $$x$$' } as RunViewParams;
+
+      expect(() => hook(params, makeUser('tenant-abc'))).toThrow(/dollar/);
+    });
+
+    it('keeps a balanced ExtraFilter and the tenant predicate as separate parenthesized terms', () => {
+      const hook = CreateTenantPreRunViewHook(makeConfig());
+      const params = { EntityName: 'Customers', ExtraFilter: "Name = 'a) OR (b' OR Name = 'c'" } as RunViewParams;
+
+      const result = hook(params, makeUser('tenant-abc')) as RunViewParams;
+      expect(result.ExtraFilter).toBe("(Name = 'a) OR (b' OR Name = 'c') AND ([OrganizationID] = 'tenant-abc')");
     });
   });
 

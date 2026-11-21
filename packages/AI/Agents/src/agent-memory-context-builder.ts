@@ -78,6 +78,8 @@ export class AgentMemoryContextBuilder {
      * @param secondaryScopeConfig - Optional agent-level scope config for per-dimension inheritance
      * @param observability - Optional observability context for run-step tracking
      * @param logStatus - Optional verbose-aware status logger
+     * @param sharedOnly - Inject only shared notes and examples (no `UserID`): set when the run has an audience
+     *   that adds a reader (`ExecuteAgentParams.Audience`), so one user's memory is not shown to a room
      * @returns Object containing injected notes and examples
      */
     public async InjectContextMemory(
@@ -92,7 +94,8 @@ export class AgentMemoryContextBuilder {
         secondaryScopes?: Record<string, SecondaryScopeValue>,
         secondaryScopeConfig?: SecondaryScopeConfig | null,
         observability?: AgentMemoryObservability,
-        logStatus?: AgentMemoryStatusLogger
+        logStatus?: AgentMemoryStatusLogger,
+        sharedOnly?: boolean
     ): Promise<{ notes: MJAIAgentNoteEntity[]; examples: MJAIAgentExampleEntity[] }> {
         // Check if injection is enabled
         if (!agent.InjectNotes && !agent.InjectExamples) {
@@ -106,52 +109,58 @@ export class AgentMemoryContextBuilder {
         const rerankerConfig = RerankerService.Instance.parseConfiguration(rerankerConfigJson);
         const rerankObservability = this.rerankObservability(observability);
 
-        // Get notes if injection enabled
-        const notes = agent.InjectNotes
-            ? await injector.GetNotesForContext({
-                agentId: agent.ID,
-                userId,
-                companyId,
-                currentInput: input,
-                strategy: agent.NoteInjectionStrategy as 'Relevant' | 'Recent' | 'All',
-                maxNotes: agent.MaxNotesToInject || 5,
-                contextUser: contextUser!,
-                rerankerConfig,
-                primaryScopeEntityId,
-                primaryScopeRecordId,
-                secondaryScopes,
-                secondaryScopeConfig,
-                // Pass observability context for run step tracking
-                observability: rerankObservability()
-            })
-            : [];
-        logStatus?.(`BaseAgent: Got ${notes.length} notes from injector`, true);
+        const fetchNotes = () => injector.GetNotesForContext({
+            agentId: agent.ID,
+            userId,
+            companyId,
+            currentInput: input,
+            strategy: agent.NoteInjectionStrategy as 'Relevant' | 'Recent' | 'All',
+            maxNotes: agent.MaxNotesToInject || 5,
+            contextUser: contextUser!,
+            rerankerConfig,
+            primaryScopeEntityId,
+            primaryScopeRecordId,
+            secondaryScopes,
+            secondaryScopeConfig,
+            SharedOnly: sharedOnly,
+            // Pass observability context for run step tracking
+            observability: rerankObservability()
+        });
 
-        // Get examples if injection enabled
-        const examples = agent.InjectExamples
-            ? await injector.GetExamplesForContext({
-                agentId: agent.ID,
-                userId,
-                companyId,
-                currentInput: input,
-                strategy: agent.ExampleInjectionStrategy as 'Semantic' | 'Recent' | 'Rated',
-                maxExamples: agent.MaxExamplesToInject || 3,
-                contextUser: contextUser!,
-                // Examples are reranked only when the configuration sets rerankExamples
-                rerankerConfig,
-                primaryScopeEntityId,
-                primaryScopeRecordId,
-                secondaryScopes,
-                secondaryScopeConfig,
-                // Numbered after the notes rerank's step, when there was one
-                observability: rerankObservability()
-            })
-            : [];
+        const fetchExamples = () => injector.GetExamplesForContext({
+            agentId: agent.ID,
+            userId,
+            companyId,
+            currentInput: input,
+            strategy: agent.ExampleInjectionStrategy as 'Semantic' | 'Recent' | 'Rated',
+            maxExamples: agent.MaxExamplesToInject || 3,
+            contextUser: contextUser!,
+            // Examples are reranked only when the configuration sets rerankExamples
+            rerankerConfig,
+            primaryScopeEntityId,
+            primaryScopeRecordId,
+            secondaryScopes,
+            secondaryScopeConfig,
+            SharedOnly: sharedOnly,
+            // Numbered after the notes rerank's step, when there was one (sequential path)
+            observability: rerankObservability()
+        });
+
+        let notes: MJAIAgentNoteEntity[];
+        let examples: MJAIAgentExampleEntity[];
+        if (agent.InjectNotes && agent.InjectExamples && !observability) {
+            [notes, examples] = await Promise.all([fetchNotes(), fetchExamples()]);
+            logStatus?.(`BaseAgent: Got ${notes.length} notes from injector`, true);
+        } else {
+            notes = agent.InjectNotes ? await fetchNotes() : [];
+            logStatus?.(`BaseAgent: Got ${notes.length} notes from injector`, true);
+            examples = agent.InjectExamples ? await fetchExamples() : [];
+        }
 
         // Format and inject memory context into conversation messages
         if ((notes.length > 0 || examples.length > 0) && conversationMessages) {
-            const notesText = injector.FormatNotesForInjection(notes);
-            const examplesText = injector.FormatExamplesForInjection(examples);
+            const notesText = injector.FormatNotesForInjection(notes, true, contextUser);
+            const examplesText = injector.FormatExamplesForInjection(examples, contextUser);
 
             let memoryContext = '';
             if (notesText) memoryContext += notesText + '\n\n';
@@ -214,6 +223,9 @@ export class AgentMemoryContextBuilder {
      * @param payload - The agent's current payload (for template rendering).
      * @param logStatus - Optional verbose-aware status logger.
      * @param logError - Optional error logger (used when RAG injection fails non-fatally).
+     * @param activeSkillIDs - The skills active for this run; a lone active skill is the search's skill principal.
+     * @param audienceReaders - The run's audience readers beyond the caller (hydrated users): each must pass the
+     *   scope gate, and the search keeps only results every one of them may read. Empty or omitted: no audience.
      * @returns The structured RAG result, or `null` if no scopes produced results.
      */
     public async InjectPreExecutionRAG(
@@ -227,7 +239,9 @@ export class AgentMemoryContextBuilder {
         secondaryScopes?: Record<string, SecondaryScopeValue>,
         payload?: unknown,
         logStatus?: AgentMemoryStatusLogger,
-        logError?: AgentMemoryErrorLogger
+        logError?: AgentMemoryErrorLogger,
+        activeSkillIDs?: string[],
+        audienceReaders?: UserInfo[]
     ): Promise<AgentPreExecutionRAGResult | null> {
         try {
             if (!contextUser) return null;
@@ -242,7 +256,9 @@ export class AgentMemoryContextBuilder {
                 primaryScopeRecordId,
                 primaryScopeEntityId,
                 secondaryScopes,
-                contextUser
+                contextUser,
+                activeSkillIDs,
+                audienceReaders
             });
 
             if (!result) return null;

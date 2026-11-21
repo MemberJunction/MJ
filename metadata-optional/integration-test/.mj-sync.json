@@ -4,9 +4,11 @@
     "autoCreateMissingRecords": true
   },
   "directoryOrder": [
+    "datasets",
     "tests",
     "test-suites",
     "roles",
+    "row-level-security-filters",
     "entity-permissions",
     "users",
     "ai-prompt-categories",

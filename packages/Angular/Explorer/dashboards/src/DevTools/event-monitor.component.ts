@@ -70,7 +70,8 @@ export class EventMonitorComponent extends BaseResourceComponent implements OnIn
         super();
     }
 
-    public ngOnInit(): void {
+    public override ngOnInit(): void {
+        super.ngOnInit();
         this.loadPrefs();
         this.subscribe();
         this.rateTimer = setInterval(() => this.tickRate(), 500);
@@ -85,10 +86,11 @@ export class EventMonitorComponent extends BaseResourceComponent implements OnIn
         this.registerAgentClientTools();
     }
 
-    public ngOnDestroy(): void {
+    public override ngOnDestroy(): void {
         this.savePrefs();
         this.sub?.unsubscribe();
         if (this.rateTimer) clearInterval(this.rateTimer);
+        super.ngOnDestroy();
     }
 
     private loadPrefs(): void {

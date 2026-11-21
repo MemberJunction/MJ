@@ -193,7 +193,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-rocket",
-      "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -422,8 +425,8 @@
       "ID": "01CC021C-F711-4116-B57F-8CA7C6CC5BFF"
     },
     "sync": {
-      "lastModified": "2026-09-01T16:57:32.434Z",
-      "checksum": "697f760ad6ad7d4dd034dacc4f049603c6c999149e5cee4d4ee82c9f0a82420a"
+      "lastModified": "2026-11-10T23:41:27.516Z",
+      "checksum": "62b8d1f5b69c7c37557ae817744330e5c69a555da69208a6a7cbe39627078e01"
     }
   },
   {
@@ -1180,6 +1183,10 @@
           },
           "primaryKey": {
             "ID": "E40936C7-6D3E-4727-A362-884AD5FE81BC"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:03.522Z",
+            "checksum": "358a169b615b24c526444b07e263eb2c12f8a7302a43480e5b027feba00b94c5"
           }
         },
         {
@@ -1194,6 +1201,10 @@
           },
           "primaryKey": {
             "ID": "209FA0C5-35D2-4ED2-B91A-67B9CEDF009D"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:03.539Z",
+            "checksum": "7daa08b76e84ed887689a3196b4afe7b410cdc9a0113bb2083850575585461aa"
           }
         },
         {
@@ -1302,8 +1313,8 @@
             "ID": "A53BE18A-8C31-45BE-A84A-6563E2FEFD78"
           },
           "sync": {
-            "lastModified": "2026-09-01T16:57:33.839Z",
-            "checksum": "3b2ccbcc764a3c102fc5cb70fe3db6c3e9e1a52e7be436a2923076926ce364ec"
+            "lastModified": "2026-10-13T19:00:03.550Z",
+            "checksum": "ac887ba3132f32e52d720761ff68f1c9451cd20f76c3372cd1636d6143a74057"
           }
         },
         {
@@ -1318,6 +1329,10 @@
           },
           "primaryKey": {
             "ID": "9375BC74-D21D-493C-9171-27A7FBF2BFF7"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:03.567Z",
+            "checksum": "04739e164572d74744189fac9c023f2201f59335bfffa3d8c0763abe9079eeed"
           }
         },
         {
@@ -1463,7 +1478,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-rocket",
-      "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -1775,8 +1793,8 @@
       "ID": "A86E808D-C935-4894-896D-BB1F40BD1FC0"
     },
     "sync": {
-      "lastModified": "2026-09-01T16:57:32.505Z",
-      "checksum": "71b9e6d32f0fbe61d27478c87ae34550ce61e239a5804adfa224f6efa1a2e5ec"
+      "lastModified": "2026-11-10T23:41:27.532Z",
+      "checksum": "cc97782781f09f1706c8be97c497e3adb66c80b731fb2ef864c76b3829f31526"
     }
   },
   {
@@ -1787,7 +1805,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-rocket",
-      "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -2099,8 +2120,8 @@
       "ID": "BBE73BEB-302C-4B94-A007-600F5525E17B"
     },
     "sync": {
-      "lastModified": "2026-09-01T16:57:32.522Z",
-      "checksum": "fd3ce35a950eb66dfa79c8c86ad0f5dde5f8291c3983b180388bc3ca5cd6ece7"
+      "lastModified": "2026-11-10T23:41:27.543Z",
+      "checksum": "f11a26a9c6cc80a5baf5d44cceeb966421a55b21059a5adfa817c0467868f405"
     }
   }
 ]

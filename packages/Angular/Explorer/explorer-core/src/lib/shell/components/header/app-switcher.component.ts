@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { UserAppConfigContentComponent } from '@memberjunction/ng-explorer-settings';
+import { UserAppConfigContentComponent } from '@memberjunction/ng-explorer-settings/user-settings.module';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { Subject, takeUntil } from 'rxjs';

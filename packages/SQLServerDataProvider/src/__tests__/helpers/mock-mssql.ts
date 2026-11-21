@@ -12,13 +12,23 @@
  *
  * ```ts
  * vi.mock('mssql', async () => (await import('./helpers/mock-mssql')).createMockMssqlModule());
+ * ```
+ *
+ * The driver's data types (`TYPES`, `NVarChar`, `MAX`, …) are the real ones, so a test sees the
+ * exact type each save parameter is bound with.
+ *
+ * ```ts
  * import { mssqlState, MockConnectionPool } from './helpers/mock-mssql';
  * ```
  */
 
+import { vi } from 'vitest';
+
 export interface RecordedInput {
   name: string;
   value: unknown;
+  /** The driver type when the input was bound as `input(name, type, value)`. */
+  type?: unknown;
 }
 
 export interface RecordedQuery {
@@ -167,8 +177,8 @@ export class MockRequest {
     this.parent = parent;
   }
 
-  public input(name: string, value: unknown): this {
-    this.boundInputs.push({ name, value });
+  public input(name: string, typeOrValue: unknown, value?: unknown): this {
+    this.boundInputs.push(arguments.length >= 3 ? { name, type: typeOrValue, value } : { name, value: typeOrValue });
     return this;
   }
 
@@ -208,8 +218,13 @@ export class MockRequest {
  * and `import * as sql from 'mssql'` consumers see the same constructors (keeping
  * `instanceof` checks inside the provider working).
  */
-export function createMockMssqlModule(): Record<string, unknown> {
+export async function createMockMssqlModule(): Promise<Record<string, unknown>> {
+  const actual = await vi.importActual<{ default: Record<string, unknown> }>('mssql');
+  const types = actual.default.TYPES as Record<string, unknown>;
   const mod = {
+    ...types,
+    TYPES: types,
+    MAX: actual.default.MAX,
     ConnectionPool: MockConnectionPool,
     Transaction: MockTransaction,
     Request: MockRequest,

@@ -27,16 +27,6 @@
                 "output": "/assets"
               },
               {
-                "glob": "**/*",
-                "input": "node_modules/@memberjunction/ng-explorer-app/dist/assets",
-                "output": "/assets"
-              },
-              {
-                "glob": "pdf.worker.min.mjs",
-                "input": "node_modules/pdfjs-dist/build",
-                "output": "/assets"
-              },
-              {
                 "glob": "pdf.worker.min.mjs",
                 "input": "node_modules/pdfjs-dist/build",
                 "output": "/assets"
@@ -51,7 +41,7 @@
           "configurations": {
             "production": {
               "optimization": {
-                "scripts": false,
+                "scripts": true,
                 "styles": true,
                 "fonts": true
               },
@@ -71,7 +61,7 @@
             },
             "staging": {
               "optimization": {
-                "scripts": false,
+                "scripts": true,
                 "styles": true,
                 "fonts": true
               },

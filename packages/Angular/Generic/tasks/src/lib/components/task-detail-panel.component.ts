@@ -23,10 +23,17 @@ import { UUIDsEqual } from '@memberjunction/global';
       </div>
     
       <div class="detail-content">
-        @if (task.Description) {
+        @if (TaskInstructions) {
           <div class="detail-field">
             <label>Description</label>
-            <p>{{ task.Description }}</p>
+            <p class="detail-pre-text">{{ TaskInstructions }}</p>
+          </div>
+        }
+
+        @if (TaskOutput) {
+          <div class="detail-field">
+            <label>{{ IsErrorOutput ? 'Error Details' : 'Agent Output' }}</label>
+            <div class="detail-output-box" [class.error-output]="IsErrorOutput">{{ TaskOutput }}</div>
           </div>
         }
     
@@ -88,7 +95,7 @@ import { UUIDsEqual } from '@memberjunction/global';
         }
     
         <!-- Agent Run Information -->
-        @if (agentRunId) {
+        @if (EffectiveAgentRunId) {
           <div class="detail-field">
             <label>Agent Run</label>
             <div class="agent-run-link" (click)="openAgentRun()">
@@ -181,6 +188,30 @@ import { UUIDsEqual } from '@memberjunction/global';
       line-height: 1.5;
     }
 
+    .detail-pre-text {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .detail-output-box {
+      padding: 12px;
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--mj-text-primary);
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 280px;
+      overflow-y: auto;
+    }
+
+    .detail-output-box.error-output {
+      border-color: var(--mj-status-error);
+      color: var(--mj-status-error);
+    }
+
     .detail-progress {
       display: flex;
       align-items: center;
@@ -196,7 +227,7 @@ import { UUIDsEqual } from '@memberjunction/global';
     }
 
     .progress-fill-detail {
-      height: calc(100% - 69px);
+      height: 100%;
       background: var(--mj-brand-primary);
       transition: width 0.3s ease;
     }
@@ -358,11 +389,51 @@ export class TaskDetailPanelComponent implements OnInit, OnChanges {
     return this.OpenAgent();
   }
 
+  public get EffectiveAgentRunId(): string | null {
+    return this.agentRunId || this.Task?.AgentRunID || null;
+  }
+
+  public get TaskInstructions(): string {
+    const desc = this.Task?.Description || '';
+    const outputMarker = '\n\n--- Output ---\n';
+    const errorMarker = '\n\n--- Error ---\n';
+    const outIdx = desc.indexOf(outputMarker);
+    if (outIdx >= 0) {
+      return desc.substring(0, outIdx).trim();
+    }
+    const errIdx = desc.indexOf(errorMarker);
+    if (errIdx >= 0) {
+      return desc.substring(0, errIdx).trim();
+    }
+    return desc.trim();
+  }
+
+  public get TaskOutput(): string | null {
+    const desc = this.Task?.Description || '';
+    const outputMarker = '\n\n--- Output ---\n';
+    const errorMarker = '\n\n--- Error ---\n';
+    const outIdx = desc.indexOf(outputMarker);
+    if (outIdx >= 0) {
+      return desc.substring(outIdx + outputMarker.length).trim();
+    }
+    const errIdx = desc.indexOf(errorMarker);
+    if (errIdx >= 0) {
+      return desc.substring(errIdx + errorMarker.length).trim();
+    }
+    return null;
+  }
+
+  public get IsErrorOutput(): boolean {
+    const desc = this.Task?.Description || '';
+    return desc.includes('\n\n--- Error ---\n');
+  }
+
   public OpenAgentRun(): void {
-    if (this.agentRunId) {
+    const runId = this.EffectiveAgentRunId;
+    if (runId) {
       this.OpenEntityRecord.emit({
         entityName: 'MJ: AI Agent Runs',
-        recordId: this.agentRunId
+        recordId: runId
       });
     }
   }

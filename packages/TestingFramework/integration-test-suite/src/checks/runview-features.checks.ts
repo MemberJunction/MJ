@@ -19,6 +19,13 @@
  *   RVF5 — empty entity (0 rows) across every ResultType: clean empties everywhere
  *   RVF6 — ExtraFilter literal binding safety: apostrophes / unicode / very long strings are
  *          accepted (not injection-refused) and match literally
+ *   RVF7 — the TotalRowCount contract: a full page of one row reports the real total, and
+ *          SkipTotalRowCount reports undefined (not 0, 1 or null) on a miss, a hit and a repeat
+ *   RVF8 — RunViewParams.Parameters scalar + array IN (@list) binding matches unparameterized PK sets
+ *   RVF9 — RunViewParams.Parameters binds SQL-injection payloads as inert literal values over the wire
+ *   RVF10 — RunViewParams.Parameters + Aggregates + MaxRows + count_only multi-statement batch parity
+ *   RVF11 — RunViewParams.Parameters fail-closed validation rejects missing, empty-array, and invalid params
+ *   RVF12 — RunViewParams.Parameters cache fingerprint isolation across distinct parameter values
  *
  * Deliberately NOT implemented here:
  *   - "Fields projection matches the `|f:` client fingerprint slot" — pinned verbatim by
@@ -27,7 +34,7 @@
  */
 import { RunView } from '@memberjunction/core';
 import type { EntityInfo, RunViewResult, AggregateResult } from '@memberjunction/core';
-import { Assert, AssertEqual, AssertRowShape } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, AssertRowShape, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -60,6 +67,7 @@ function aggregateValue(results: readonly AggregateResult[] | undefined, alias: 
 interface FeatureUniverse {
     /** `EntityID IN ('a','b') AND Sequence IS NOT NULL` — the bounded predicate every leg reuses. */
     Filter: string;
+    EntityIds: [string, string];
     Rows: Array<{ ID: string; Sequence: number }>;
 }
 
@@ -77,7 +85,8 @@ async function getUniverse(ctx: IntegrationCheckContext): Promise<FeatureUnivers
     requireSuccess(parents, 'universe discovery (MJ: Entities)');
     Assert(parents.Results.length === 2, `universe discovery needs 2 entities, got ${parents.Results.length}`);
 
-    const filter = `EntityID IN ('${parents.Results.map(x => x.ID).join("','")}') AND Sequence IS NOT NULL`;
+    const entityIds: [string, string] = [parents.Results[0].ID, parents.Results[1].ID];
+    const filter = `EntityID IN ('${entityIds.join("','")}') AND Sequence IS NOT NULL`;
     const rows = await rv.RunView<{ ID: string; Sequence: number }>(
         { EntityName: FIELDS_ENTITY, Fields: ['ID', 'Sequence'], ExtraFilter: filter, IgnoreMaxRows: true, ResultType: 'simple' },
         ctx.User,
@@ -87,7 +96,7 @@ async function getUniverse(ctx: IntegrationCheckContext): Promise<FeatureUnivers
     const distinct = new Set(rows.Results.map(r => Number(r.Sequence)));
     Assert(distinct.size >= 2, 'universe must span ≥2 distinct Sequence values — the ordering legs would be vacuous');
 
-    universeMemo = { Filter: filter, Rows: rows.Results };
+    universeMemo = { Filter: filter, EntityIds: entityIds, Rows: rows.Results };
     return universeMemo;
 }
 
@@ -243,8 +252,7 @@ const RVF5: NamedCheck = {
     Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
         const entity = await discoverEmptyEntity(ctx);
         if (!entity) {
-            console.warn('      ⚠ RVF5 SKIPPED — every readable entity in this deployment has at least one row; the empty-set branch is unreachable here.');
-            return;
+            SkipCheck('every readable entity in this deployment has at least one row; the empty-set branch is unreachable here.');
         }
         const rv = new RunView();
 
@@ -308,8 +316,306 @@ const RVF6: NamedCheck = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────────────────
+// RVF7 — the TotalRowCount contract
+// ─────────────────────────────────────────────────────────────────────────────────────────
+const RVF7: NamedCheck = {
+    Id: 'runview-features.RVF7',
+    Name: 'RVF7: TotalRowCount is a real total, or undefined when the caller asked not to count',
+    Fn: async (ctx: IntegrationCheckContext) => {
+        const u = await getUniverse(ctx);
+        const rv = new RunView();
+        const page = () => ({ EntityName: FIELDS_ENTITY, Fields: ['ID'], ExtraFilter: u.Filter, OrderBy: 'ID', MaxRows: 1, ResultType: 'simple' as const });
 
-export const RunViewFeatureChecks: NamedCheck[] = [RVF1, RVF2, RVF3, RVF4, RVF5, RVF6];
+        const counted = await rv.RunView(page(), ctx.User);
+        requireSuccess(counted, 'RVF7 MaxRows:1 full page');
+        AssertEqual(counted.TotalRowCount, u.Rows.length, 'RVF7 a full page of one row must report the real total');
+
+        // Twice, so the second answer can come from a cache slot rather than the database.
+        for (const leg of ['first read', 'repeat read']) {
+            const skipped = await rv.RunView({ ...page(), SkipTotalRowCount: true }, ctx.User);
+            requireSuccess(skipped, `RVF7 skipped count (${leg})`);
+            AssertEqual(skipped.Results.length, 1, `RVF7 rows are unaffected by the flag (${leg})`);
+            AssertEqual(skipped.TotalRowCount, undefined, `RVF7 a skipped count must be undefined (${leg})`);
+        }
+
+        const miss = await rv.RunView({ ...page(), ExtraFilter: `${u.Filter} AND 1=0`, SkipTotalRowCount: true }, ctx.User);
+        requireSuccess(miss, 'RVF7 skipped count on an empty page');
+        AssertEqual(miss.TotalRowCount, undefined, 'RVF7 an empty page with the flag is undefined too, not 0');
+
+        const countOnly = await rv.RunView({ ...page(), ResultType: 'count_only', SkipTotalRowCount: true }, ctx.User);
+        requireSuccess(countOnly, 'RVF7 count_only with the flag');
+        AssertEqual(countOnly.TotalRowCount, u.Rows.length, 'RVF7 count_only ignores the flag');
+        console.log(`      → real total ${u.Rows.length} on a full page of one; skipped counts stayed undefined`);
+    },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// RVF8 — RunViewParams.Parameters scalar + array IN (@list) binding parity
+// ─────────────────────────────────────────────────────────────────────────────────────────
+
+const RVF8: NamedCheck = {
+    Id: 'runview-features.RVF8',
+    Name: 'RVF8: RunViewParams.Parameters — scalar (@str, @num, @bool) and array IN (@list) binding matches unparameterized PK sets',
+    Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+        const u = await getUniverse(ctx);
+        const rv = new RunView();
+        const minSeq = Math.min(...u.Rows.map(r => Number(r.Sequence)));
+
+        const parameterized = await rv.RunView<{ ID: string; Sequence: number }>(
+            {
+                EntityName: FIELDS_ENTITY,
+                Fields: ['ID', 'Sequence'],
+                ExtraFilter: 'EntityID IN (@entityIds) AND Sequence >= @minSeq AND IsVirtual = @isVirtual',
+                Parameters: {
+                    entityIds: u.EntityIds,
+                    minSeq,
+                    isVirtual: false,
+                },
+                IgnoreMaxRows: true,
+                ResultType: 'simple',
+            },
+            ctx.User,
+        );
+        requireSuccess(parameterized, 'RVF8 parameterized read');
+
+        const inlineFilter = `${u.Filter} AND Sequence >= ${minSeq} AND IsVirtual = 0`;
+        const unparameterized = await rv.RunView<{ ID: string; Sequence: number }>(
+            {
+                EntityName: FIELDS_ENTITY,
+                Fields: ['ID', 'Sequence'],
+                ExtraFilter: inlineFilter,
+                IgnoreMaxRows: true,
+                ResultType: 'simple',
+            },
+            ctx.User,
+        );
+        requireSuccess(unparameterized, 'RVF8 unparameterized reference read');
+
+        const paramPks = parameterized.Results.map(r => normId(r.ID)).sort().join('|');
+        const refPks = unparameterized.Results.map(r => normId(r.ID)).sort().join('|');
+        AssertEqual(paramPks, refPks, 'RVF8 parameterized and inline filters must produce the exact same PK set');
+        AssertEqual(parameterized.TotalRowCount, unparameterized.TotalRowCount, 'RVF8 TotalRowCount must match');
+        console.log(`      → parameterized IN (@entityIds) + @minSeq + @isVirtual matched ${parameterized.Results.length} rows verbatim`);
+    },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// RVF9 — RunViewParams.Parameters hostile SQL-injection payload literal safety
+// ─────────────────────────────────────────────────────────────────────────────────────────
+
+const RVF9: NamedCheck = {
+    Id: 'runview-features.RVF9',
+    Name: 'RVF9: RunViewParams.Parameters — hostile SQL-injection strings bind as inert literal values over the wire',
+    Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+        const rv = new RunView();
+        const hostilePayloads: string[] = [
+            "'; DROP TABLE Users; --",
+            "' OR 1=1 UNION SELECT * FROM __mj.vwUsers --",
+            "/* block comment */ xp_cmdshell('whoami')",
+        ];
+        for (const payload of hostilePayloads) {
+            const res = await rv.RunView<{ ID: string }>(
+                {
+                    EntityName: 'MJ: Entities',
+                    Fields: ['ID'],
+                    ExtraFilter: 'Name = @targetName',
+                    Parameters: { targetName: payload },
+                    ResultType: 'simple',
+                },
+                ctx.User,
+            );
+            requireSuccess(res, `RVF9 parameterized read with payload ${JSON.stringify(payload)}`);
+            AssertEqual(res.Results.length, 0, `RVF9 hostile literal must match 0 rows: ${payload}`);
+        }
+
+        const control = await rv.RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Entities',
+                Fields: ['ID'],
+                ExtraFilter: 'Name = @targetName',
+                Parameters: { targetName: 'MJ: Entities' },
+                ResultType: 'simple',
+            },
+            ctx.User,
+        );
+        requireSuccess(control, 'RVF9 control read');
+        AssertEqual(control.Results.length, 1, 'RVF9 control parameter must match 1 row');
+        console.log(`      → 3 hostile SQL-injection payloads bound safely to 0 rows; control matched 1 row`);
+    },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// RVF10 — RunViewParams.Parameters + Aggregates + MaxRows + count_only multi-statement batch
+// ─────────────────────────────────────────────────────────────────────────────────────────
+
+const RVF10: NamedCheck = {
+    Id: 'runview-features.RVF10',
+    Name: 'RVF10: RunViewParams.Parameters + Aggregates + MaxRows + count_only — multi-statement batch binds parameters across all queries',
+    Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+        const u = await getUniverse(ctx);
+        const expectedSum = u.Rows.reduce((a, r) => a + Number(r.Sequence), 0);
+        const cap = 2;
+        const rv = new RunView();
+
+        const cappedWithAgg = await rv.RunView<{ ID: string }>(
+            {
+                EntityName: FIELDS_ENTITY,
+                Fields: ['ID'],
+                ExtraFilter: 'EntityID IN (@entityIds) AND Sequence IS NOT NULL',
+                Parameters: { entityIds: u.EntityIds },
+                MaxRows: cap,
+                ResultType: 'simple',
+                Aggregates: [
+                    { expression: 'SUM(Sequence)', alias: 'SumSeq' },
+                    { expression: 'COUNT(*)', alias: 'Cnt' },
+                ],
+            },
+            ctx.User,
+        );
+        requireSuccess(cappedWithAgg, 'RVF10 parameterized MaxRows + Aggregates read');
+        AssertEqual(cappedWithAgg.Results.length, cap, 'RVF10 MaxRows must cap returned rows');
+        AssertEqual(cappedWithAgg.TotalRowCount, u.Rows.length, 'RVF10 TotalRowCount must reflect full parameterized set');
+        AssertEqual(aggregateValue(cappedWithAgg.AggregateResults, 'Cnt'), u.Rows.length, 'RVF10 COUNT(*) must match full set');
+        AssertEqual(aggregateValue(cappedWithAgg.AggregateResults, 'SumSeq'), expectedSum, 'RVF10 SUM(Sequence) must match full set');
+
+        const countOnlyWithAgg = await rv.RunView(
+            {
+                EntityName: FIELDS_ENTITY,
+                ExtraFilter: 'EntityID IN (@entityIds) AND Sequence IS NOT NULL',
+                Parameters: { entityIds: u.EntityIds },
+                ResultType: 'count_only',
+                Aggregates: [{ expression: 'COUNT(*)', alias: 'Cnt' }],
+            },
+            ctx.User,
+        );
+        requireSuccess(countOnlyWithAgg, 'RVF10 parameterized count_only + Aggregates read');
+        AssertEqual(countOnlyWithAgg.Results.length, 0, 'RVF10 count_only must return 0 rows');
+        AssertEqual(countOnlyWithAgg.TotalRowCount, u.Rows.length, 'RVF10 count_only TotalRowCount must match');
+        AssertEqual(aggregateValue(countOnlyWithAgg.AggregateResults, 'Cnt'), u.Rows.length, 'RVF10 count_only aggregate must match');
+        console.log(`      → parameterized batch delivered capped page (${cap}), TotalRowCount=${u.Rows.length}, and SUM=${expectedSum}`);
+    },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// RVF11 — RunViewParams.Parameters fail-closed validation over the wire
+// ─────────────────────────────────────────────────────────────────────────────────────────
+
+const RVF11: NamedCheck = {
+    Id: 'runview-features.RVF11',
+    Name: 'RVF11: RunViewParams.Parameters — fail-closed validation rejects missing @param, empty array IN (@list), and invalid parameter names',
+    Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+        const rv = new RunView();
+
+        const missingParam = await rv.RunView(
+            {
+                EntityName: 'MJ: Entities',
+                Fields: ['ID'],
+                ExtraFilter: 'Name = @missingKey',
+                Parameters: { providedKey: 'MJ: Entities' },
+                ResultType: 'simple',
+            },
+            ctx.User,
+        );
+        Assert(missingParam.Success === false, 'RVF11 missing @missingKey must fail closed');
+
+        const emptyArrayParam = await rv.RunView(
+            {
+                EntityName: 'MJ: Entities',
+                Fields: ['ID'],
+                ExtraFilter: 'ID IN (@emptyIds)',
+                Parameters: { emptyIds: [] },
+                ResultType: 'simple',
+            },
+            ctx.User,
+        );
+        Assert(emptyArrayParam.Success === false, 'RVF11 empty array parameter must fail closed');
+
+        const invalidName = await rv.RunView(
+            {
+                EntityName: 'MJ: Entities',
+                Fields: ['ID'],
+                ExtraFilter: '1=1',
+                Parameters: { 'bad-name;': 'MJ: Entities' },
+                ResultType: 'simple',
+            },
+            ctx.User,
+        );
+        Assert(invalidName.Success === false, 'RVF11 invalid parameter identifier must fail closed');
+        console.log(`      → missing @param, empty array parameter, and invalid identifier all failed closed`);
+    },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// RVF12 — RunViewParams.Parameters cache fingerprint isolation
+// ─────────────────────────────────────────────────────────────────────────────────────────
+
+const RVF12: NamedCheck = {
+    Id: 'runview-features.RVF12',
+    Name: 'RVF12: RunViewParams.Parameters — identical ExtraFilter template with distinct Parameters stays isolated across cache slots',
+    Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+        const u = await getUniverse(ctx);
+        const [entityA, entityB] = u.EntityIds;
+        const rv = new RunView();
+        const templateFilter = 'EntityID = @entityId AND Sequence IS NOT NULL';
+
+        const readA1 = await rv.RunView<{ ID: string }>(
+            {
+                EntityName: FIELDS_ENTITY,
+                Fields: ['ID'],
+                ExtraFilter: templateFilter,
+                Parameters: { entityId: entityA },
+                CacheLocal: true,
+                IgnoreMaxRows: true,
+                ResultType: 'simple',
+            },
+            ctx.User,
+        );
+        requireSuccess(readA1, 'RVF12 entityA first read');
+        Assert(readA1.Results.length >= 1, 'RVF12 entityA must have at least 1 field row');
+
+        const readB = await rv.RunView<{ ID: string }>(
+            {
+                EntityName: FIELDS_ENTITY,
+                Fields: ['ID'],
+                ExtraFilter: templateFilter,
+                Parameters: { entityId: entityB },
+                CacheLocal: true,
+                IgnoreMaxRows: true,
+                ResultType: 'simple',
+            },
+            ctx.User,
+        );
+        requireSuccess(readB, 'RVF12 entityB read');
+        Assert(readB.Results.length >= 1, 'RVF12 entityB must have at least 1 field row');
+
+        const setA = new Set(readA1.Results.map(r => normId(r.ID)));
+        const overlap = readB.Results.filter(r => setA.has(normId(r.ID)));
+        AssertEqual(overlap.length, 0, 'RVF12 entityA and entityB parameterized reads must not share field PKs or collide in cache');
+        AssertEqual(readA1.Results.length + readB.Results.length, u.Rows.length, 'RVF12 union of entityA and entityB must equal universe');
+
+        const readA2 = await rv.RunView<{ ID: string }>(
+            {
+                EntityName: FIELDS_ENTITY,
+                Fields: ['ID'],
+                ExtraFilter: templateFilter,
+                Parameters: { entityId: entityA },
+                CacheLocal: true,
+                IgnoreMaxRows: true,
+                ResultType: 'simple',
+            },
+            ctx.User,
+        );
+        requireSuccess(readA2, 'RVF12 entityA repeat read');
+        const pksA1 = readA1.Results.map(r => normId(r.ID)).sort().join('|');
+        const pksA2 = readA2.Results.map(r => normId(r.ID)).sort().join('|');
+        AssertEqual(pksA2, pksA1, 'RVF12 repeat read for entityA must return entityA rows');
+        console.log(`      → entityA (${readA1.Results.length} rows) and entityB (${readB.Results.length} rows) stayed isolated under identical ExtraFilter template`);
+    },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+
+export const RunViewFeatureChecks: NamedCheck[] = [RVF1, RVF2, RVF3, RVF4, RVF5, RVF6, RVF7, RVF8, RVF9, RVF10, RVF11, RVF12];
 
 for (const check of RunViewFeatureChecks) {
     IntegrationCheckRegistry.Instance.Register(check);

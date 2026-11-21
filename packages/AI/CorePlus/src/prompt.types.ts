@@ -15,6 +15,7 @@ import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJAIPromptEntityExtended } from './MJAIPromptEntityExtended';
 import { MJAIModelEntityExtended } from './MJAIModelEntityExtended';
 import { AIModelRunParams, type AIModelRunResult } from './model-run.types';
+import type { TemplateDataCaptureMode } from './prompt-run-messages.types';
 
 /**
  * Modality types for multi-modal outputs
@@ -258,6 +259,13 @@ export class AIModelSelectionInfo {
     model: MJAIModelEntityExtended;
     /** The vendor entity, if a specific vendor was considered */
     vendor?: MJAIVendorEntity;
+    /**
+     * The provider implementation this combination would run through (e.g. `OpenRouterLLM`).
+     * Optional because it is telemetry, not identity — a long candidate list is often a single
+     * driver class repeated, which is the difference between "the chain is misconfigured" and
+     * "one provider has no key".
+     */
+    driverClass?: string;
     /** Priority of this model/vendor combination */
     priority: number;
     /** Whether this model/vendor had an available API key */
@@ -272,6 +280,8 @@ export class AIModelSelectionInfo {
     model: MJAIModelEntityExtended;
     /** The vendor entity, if a specific vendor was considered */
     vendor?: MJAIVendorEntity;
+    /** See {@link ModelsConsidered}. */
+    driverClass?: string;
     /** Priority of this model/vendor combination */
     priority: number;
     /** Whether this model/vendor had an available API key */
@@ -287,6 +297,8 @@ export class AIModelSelectionInfo {
     model: MJAIModelEntityExtended;
     /** The vendor entity, if a specific vendor was considered */
     vendor?: MJAIVendorEntity;
+    /** See {@link ModelsConsidered}. */
+    driverClass?: string;
     /** Priority of this model/vendor combination */
     priority: number;
     /** Whether this model/vendor had an available API key */
@@ -382,6 +394,13 @@ export class AIPromptParams extends AIModelRunParams {
   templateData?: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   /**
+   * Which template inputs (`data`, `templateData`) this run stores in `AIPromptRun.Messages`.
+   * Overrides the `TemplateDataCapture` of the run's prompts (child prompts, then the main prompt)
+   * and the server default (`aiPromptRuns.templateDataCapture` in mj.config.cjs, otherwise `'None'`).
+   */
+  TemplateDataCapture?: TemplateDataCaptureMode;
+
+  /**
    * Optional conversation messages for multi-turn conversations
    * When provided, these messages will be combined with the rendered template
    * for direct conversation-style prompting
@@ -410,6 +429,26 @@ export class AIPromptParams extends AIModelRunParams {
    * parent render. Absent (the normal case), the runner renders `childPrompts` itself.
    */
   PreRenderedChildTemplates?: Record<string, string>;
+
+  /**
+   * Called by the prompt runner once this attempt's template data is final — the native tool-calling
+   * flags (`_NATIVE_TOOL_CALLING`, `_NATIVE_CONTROL_FLOW`) set from the gate's decision — and before
+   * the prompt renders. A caller that rendered something from `data` ahead of the runner renders it
+   * again here, so it reads the same flags as the system prompt: the loop agent's relocated
+   * specialization, which it pre-rendered into `PreRenderedChildTemplates` and the trailing message
+   * before a model was selected. The runner awaits it and reads `PreRenderedChildTemplates` after.
+   * A failover attempt whose decision differs re-renders only the system prompt (see the runner's
+   * `rerenderForNativeDecision`), not what this callback rendered.
+   */
+  OnTemplateDataFinalized?: (params: AIPromptParams) => Promise<void>;
+
+  /**
+   * The system-prompt-and-tools fingerprint of the previous request in this conversation, from
+   * `GetSentPrefixFingerprint`. Set by a caller that replays reasoning to a provider which binds it
+   * to an unchanged prefix. When this request's system prompt or tools differ, the runner sends
+   * it without any replayed reasoning, which that provider would otherwise reject.
+   */
+  ReplayedReasoningPrefix?: string;
 
   /**
    * Optional callback for receiving execution progress updates
@@ -493,6 +532,13 @@ export class AIPromptParams extends AIModelRunParams {
    * The AIPromptRunner will pass these through when building model-specific parameters.
    */
   additionalParameters?: Record<string, any>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+  /**
+   * When false, the prompt's template renders without HTML escaping: its output is plain text for a model, not HTML.
+   * Unset keeps the template engine's default (escaped), as every caller got before this member existed. Feature
+   * Pipeline drivers set it to false.
+   */
+  templateAutoescape?: boolean;  // case-violation-ok-legacy-back-compat: new member of shipped camelCase AIPromptParams keeps its casing
 
   /**
    * Optional prompt to use for model selection instead of the main prompt.
@@ -723,7 +769,7 @@ export class AIPromptParams extends AIModelRunParams {
    * 2. AIPromptModel.CredentialID (prompt-model specific)
    * 3. AIModelVendor.CredentialID (model-vendor specific)
    * 4. AIVendor.CredentialID (vendor default)
-   * 5. Legacy: apiKeys[] parameter
+   * 5. Legacy: apiKeys[] parameter, then `APIKeyResolver`
    * 6. Legacy: AI_VENDOR_API_KEY__<DRIVER> environment variables
    *
    * **Important**: When any credential ID is set (priorities 1-4), the system uses
@@ -791,8 +837,8 @@ export class AIPromptParams extends AIModelRunParams {
 
 /**
  * The {@link AIPromptParams} fields that decide who a prompt runs as and which credentials it may
- * spend: the user, the metadata provider, the AI configuration, the runtime keys, the per-request
- * credential and the credential scope.
+ * spend: the user, the metadata provider, the AI configuration, the runtime keys and key resolver,
+ * the per-request credential and the credential scope.
  *
  * A prompt the runner starts on a caller's behalf — AI JSON repair, the parallel result selector —
  * must run under the caller's scope. Each one copying these fields by hand is how JSON repair came to
@@ -801,7 +847,7 @@ export class AIPromptParams extends AIModelRunParams {
  */
 export type AIPromptExecutionScope = Pick<
   AIPromptParams,
-  'contextUser' | 'provider' | 'configurationId' | 'apiKeys' | 'credentialId' | 'CredentialScope'
+  'contextUser' | 'provider' | 'configurationId' | 'apiKeys' | 'APIKeyResolver' | 'credentialId' | 'CredentialScope'
 >;
 
 /**
@@ -817,6 +863,7 @@ export function PickPromptExecutionScope(params: AIPromptExecutionScope): AIProm
     provider: params.provider,
     configurationId: params.configurationId,
     apiKeys: params.apiKeys,
+    APIKeyResolver: params.APIKeyResolver,
     credentialId: params.credentialId,
     CredentialScope: params.CredentialScope,
   } satisfies Record<keyof AIPromptExecutionScope, AIPromptExecutionScope[keyof AIPromptExecutionScope]>;

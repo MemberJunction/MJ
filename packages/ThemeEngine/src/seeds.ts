@@ -86,3 +86,41 @@ export function ResolveSeeds(seeds: ThemeSeeds): ResolvedSeeds {
 export function resolveSeeds(seeds: ThemeSeeds): ResolvedSeeds {
   return ResolveSeeds(seeds);
 }
+
+const SEED_HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+/** A font stack: names, quotes, commas, spaces, dashes, dots. Nothing that can end a CSS declaration. */
+const SEED_FONT = /^[A-Za-z0-9 ,'"._-]{1,200}$/;
+
+/**
+ * Seeds from an untrusted source, reduced to what derivation can use safely: hex colors, finite numbers
+ * clamped to sane ranges, and font stacks that cannot end the CSS declaration they are written into.
+ * Anything else is dropped (the default takes its place); no usable `primary` means null.
+ *
+ * For a page that applies a theme before anyone signs in, where the seeds came over an unauthenticated
+ * route: `derive` writes several of these values into CSS verbatim.
+ */
+export function SanitizeThemeSeeds(value: unknown): ThemeSeeds | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const v = value as Record<string, unknown>;
+  const hex = (x: unknown): string | undefined => (typeof x === 'string' && SEED_HEX.test(x) ? x : undefined);
+  const num = (x: unknown, min: number, max: number): number | undefined =>
+    (typeof x === 'number' && Number.isFinite(x) ? Math.max(min, Math.min(max, x)) : undefined);
+  const font = (x: unknown): string | undefined => (typeof x === 'string' && SEED_FONT.test(x) ? x : undefined);
+  const primary = hex(v['primary']);
+  if (!primary) return null;
+  const out: ThemeSeeds = { primary };
+  const set = <K extends keyof ThemeSeeds>(k: K, x: ThemeSeeds[K] | undefined): void => { if (x !== undefined) out[k] = x; };
+  set('accent', hex(v['accent']));
+  set('tertiary', hex(v['tertiary']));
+  set('neutralChroma', num(v['neutralChroma'], 0, 0.4));
+  set('vibrancy', num(v['vibrancy'], 0, 3));
+  set('radius', num(v['radius'], 0, 64));
+  set('depth', num(v['depth'], 0, 2));
+  set('fontFamily', font(v['fontFamily']));
+  set('fontFamilyMono', font(v['fontFamilyMono']));
+  if (Array.isArray(v['vizPalette'])) {
+    const palette = v['vizPalette'].map(hex).filter((c): c is string => !!c).slice(0, 24);
+    if (palette.length) out.vizPalette = palette;
+  }
+  return out;
+}

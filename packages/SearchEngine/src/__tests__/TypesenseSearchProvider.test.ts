@@ -111,6 +111,23 @@ describe('TypesenseSearchProvider', () => {
             expect(headers['X-TYPESENSE-API-KEY']).toBe('fake-key');
         });
 
+        it('a scoped search with no Typesense row queries nothing — never the default collection', async () => {
+            mockFetch.mockResolvedValueOnce(healthOk()); // CheckAvailability
+            const p = new TypesenseSearchProvider();
+            await p.Initialize(basicConfig(), fakeUser);
+            await p.CheckAvailability(fakeUser);
+            mockFetch.mockClear();
+
+            const none = await p.Search('hello', 10, undefined, fakeUser, { ExternalIndexes: [] });
+            const otherType = await p.Search('hello', 10, undefined, fakeUser, {
+                ExternalIndexes: [{ IndexType: 'AzureAISearch', ExternalIndexName: 'az-docs' }],
+            });
+
+            expect(none).toEqual([]);
+            expect(otherType).toEqual([]);
+            expect(mockFetch).not.toHaveBeenCalled();
+        });
+
         it('uses scope ExternalIndexes when present and merges results across collections', async () => {
             mockFetch.mockResolvedValueOnce(healthOk());
             mockFetch.mockResolvedValueOnce(tsResponse([{ id: 'a', text_match: 800 }]));

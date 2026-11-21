@@ -55,6 +55,7 @@ This package implements a comprehensive API key authorization system with:
 - **Pattern Matching**: Wildcard and multi-value patterns for resource-level permissions
 - **Usage Logging**: Automatic audit trails for all authorization decisions
 - **Scope Hierarchy**: Structured permission paths (e.g., `entity:read`, `agent:execute`)
+- **High-Throughput Caching & Write Throttling**: Short-TTL in-memory validation cache (`validationCacheTTLMs`, default 60s) with automatic `BaseEntity` event invalidation on key/binding changes, plus `LastUsedAt` database write throttling (`lastUsedWriteThrottleMs`, default 5 minutes) to eliminate per-request SQL round-trips under bursty API key traffic. See the **[Server Scaling and Broadcast Architecture Guide](../../../guides/SERVER_SCALING_AND_BROADCAST_ARCHITECTURE.md)**.
 
 ## Installation
 

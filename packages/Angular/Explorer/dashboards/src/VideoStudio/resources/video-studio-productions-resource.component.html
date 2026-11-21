@@ -1,0 +1,362 @@
+<div class="vs-resource-shell" [class.vs-resource-shell--slidein-open]="IsCopilotSlideInOpen">
+  <mj-page-layout class="vs-resource-shell__page">
+    <mj-page-header
+      Title="Productions"
+      Icon="fa-solid fa-clapperboard"
+      Subtitle="Browse, preview, and iterate on video productions"
+    >
+    <div meta>
+      <mj-stat-badge
+        [Count]="FilteredCount"
+        [Total]="TotalCount"
+        Label="Productions"
+      />
+    </div>
+
+    <div actions>
+      <mj-refresh-button
+        [Loading]="IsLoading"
+        (Clicked)="Refresh()"
+      />
+      <button
+        type="button"
+        mjButton
+        Variant="primary"
+        data-testid="productions-open-copilot-button"
+        [attr.aria-expanded]="IsCopilotSlideInOpen"
+        title="Start a new video production"
+        (click)="OpenNewProductionCopilot()"
+      >
+        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+        <span>New production</span>
+      </button>
+    </div>
+
+    @if (!IsIterateFocusMode) {
+      <div toolbar>
+        <mj-page-search
+          Placeholder="Search productions by title, archetype, brand kit, or format..."
+          [Value]="SearchText"
+          (ValueChange)="OnSearchChange($event)"
+        />
+        <mj-filter-popover
+          Label="Filters"
+          Icon="fa-solid fa-filter"
+          [ActiveCount]="ActivePopoverFilterCount"
+          [ShowClearAll]="ActivePopoverFilterCount > 0"
+          (ClearAllRequested)="ClearAllFilters()"
+        >
+          <mj-filter-panel
+            [Fields]="FilterFields"
+            [Values]="FilterValues"
+            [ShowReset]="false"
+            (ValuesChange)="OnFilterValuesChange($event)"
+          />
+          <div class="vs-date-filter-group">
+            <mj-filter-field Label="Updated from">
+              <mj-datepicker
+                AriaLabel="Updated from"
+                data-testid="productions-date-from"
+                [ngModel]="DateFromDate"
+                (ngModelChange)="OnDateFromChange($event)"
+              />
+            </mj-filter-field>
+            <mj-filter-field Label="Updated to">
+              <mj-datepicker
+                AriaLabel="Updated to"
+                data-testid="productions-date-to"
+                [ngModel]="DateToDate"
+                (ngModelChange)="OnDateToChange($event)"
+              />
+            </mj-filter-field>
+          </div>
+        </mj-filter-popover>
+      </div>
+    }
+  </mj-page-header>
+
+  <mj-page-body>
+    <div class="vs-productions-main">
+      @if (IsLoading && AllProductions.length === 0) {
+        <div class="vs-loading-state" data-testid="productions-loading">
+          <mj-loading Text="Loading video productions..." Size="medium" />
+        </div>
+      } @else if (LoadError) {
+        <mj-empty-state
+          data-testid="productions-error"
+          Role="alert"
+          Variant="error"
+          Icon="fa-solid fa-triangle-exclamation"
+          Title="Unable to load productions"
+          [Message]="LoadError"
+          ActionText="Try again"
+          ActionIcon="fa-solid fa-rotate"
+          ActionVariant="secondary"
+          (Action)="Refresh()"
+        ></mj-empty-state>
+      } @else if (FilteredProductions.length === 0) {
+        @if (AllProductions.length === 0) {
+          <mj-empty-state
+            data-testid="productions-empty"
+            Variant="empty"
+            Icon="fa-solid fa-clapperboard"
+            Title="No video productions yet"
+            Message="Open Video Studio to set a brief, storyboard beats, and render your first production."
+            ActionText="New production"
+            ActionIcon="fa-solid fa-plus"
+            ActionVariant="primary"
+            (Action)="OpenNewProductionCopilot()"
+          ></mj-empty-state>
+        } @else {
+          <mj-empty-state
+            data-testid="productions-empty"
+            Variant="no-results"
+            Icon="fa-solid fa-clapperboard"
+            Title="No productions match your filters"
+            Message="Try adjusting your search query or clearing active filter criteria."
+            ActionText="Reset filters"
+            ActionIcon="fa-solid fa-filter-circle-xmark"
+            ActionVariant="secondary"
+            (Action)="ResetFiltersAndSearch()"
+          ></mj-empty-state>
+        }
+      } @else {
+        <div
+          class="vs-productions-workspace"
+          [class.vs-productions-workspace--split]="SelectedProduction !== null && !IsIterateFocusMode"
+          [class.vs-productions-workspace--focus]="IsIterateFocusMode"
+        >
+          @if (!IsIterateFocusMode) {
+            <div class="vs-productions-grid" data-testid="productions-grid">
+              @for (item of FilteredProductions; track item.ID) {
+                <article
+                  class="vs-production-card"
+                  [class.vs-production-card--selected]="SelectedProduction?.ID === item.ID"
+                  [attr.data-testid]="'production-card-' + item.ID"
+                  tabindex="0"
+                  role="button"
+                  [attr.aria-pressed]="SelectedProduction?.ID === item.ID"
+                  (click)="SelectProduction(item)"
+                  (keydown.enter)="SelectProduction(item)"
+                  (keydown.space)="$event.preventDefault(); SelectProduction(item)"
+                >
+                  <div class="vs-production-poster">
+                    @if (item.PosterUrl) {
+                      <img
+                        class="vs-production-poster-img"
+                        [src]="item.PosterUrl"
+                        [alt]="item.Name + ' poster'"
+                        loading="lazy"
+                      />
+                    } @else {
+                      <div class="vs-production-poster-placeholder">
+                        <i class="fa-solid fa-film" aria-hidden="true"></i>
+                      </div>
+                    }
+
+                    <mj-video-badge
+                      class="vs-production-poster__status"
+                      [Variant]="StatusBadgeVariant(item.Status)"
+                      data-testid="production-status-badge"
+                    >
+                      {{ item.Status }}
+                    </mj-video-badge>
+
+                    @if (item.DurationSeconds !== null) {
+                      <span class="vs-production-duration">
+                        {{ FormatDuration(item.DurationSeconds) }}
+                      </span>
+                    }
+                  </div>
+
+                  <div class="vs-production-card-body">
+                    <h3 class="vs-production-title" [title]="item.Name">
+                      {{ item.Name }}
+                    </h3>
+
+                    <div class="vs-production-meta-line">
+                      @if (item.Archetype) {
+                        <span class="vs-production-meta-item" data-testid="production-archetype-chip">
+                          {{ item.Archetype }}
+                        </span>
+                      }
+                      @if (item.BrandKitName || item.BrandKitID) {
+                        @if (item.Archetype) {
+                          <span class="vs-production-meta-sep" aria-hidden="true">·</span>
+                        }
+                        <button
+                          type="button"
+                          class="vs-production-brand-link"
+                          title="Open brand kit"
+                          (click)="OpenBrandKitRecord(item.BrandKitID, $event)"
+                        >
+                          {{ item.BrandKitName || 'Brand kit' }}
+                        </button>
+                      }
+                      @if (item.AspectRatio) {
+                        @if (item.Archetype || item.BrandKitName || item.BrandKitID) {
+                          <span class="vs-production-meta-sep" aria-hidden="true">·</span>
+                        }
+                        <span class="vs-production-formats">
+                          @for (fmt of ParseFormats(item.AspectRatio); track fmt) {
+                            <mj-video-format-glyph [Format]="fmt" Size="sm"></mj-video-format-glyph>
+                          }
+                        </span>
+                      }
+                    </div>
+                  </div>
+                </article>
+              }
+            </div>
+          }
+
+          @if (SelectedProduction !== null) {
+            <aside class="vs-production-detail-pane" data-testid="production-detail-pane">
+              <div class="vs-production-detail-toolbar" data-testid="production-detail-toolbar">
+                <div class="vs-production-detail-toolbar__start">
+                  <button
+                    mjButton
+                    Variant="flat"
+                    Size="sm"
+                    type="button"
+                    data-testid="production-all-productions-button"
+                    title="Show all productions"
+                    (click)="ShowAllProductions()"
+                  >
+                    <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                    <span>All productions</span>
+                  </button>
+                  <span class="vs-production-detail-toolbar__title">{{ SelectedProduction.Name }}</span>
+                </div>
+                <div class="vs-production-detail-toolbar__actions">
+                  @if (!IsFullViewerMode) {
+                    <button
+                      mjButton
+                      Variant="flat"
+                      Size="sm"
+                      type="button"
+                      data-testid="production-open-full-viewer-button"
+                      (click)="OpenFullViewer()"
+                    >
+                      <i class="fa-solid fa-film" aria-hidden="true"></i>
+                      <span>Storyboard, review &amp; versions</span>
+                    </button>
+                  } @else {
+                    <button
+                      mjButton
+                      Variant="flat"
+                      Size="sm"
+                      type="button"
+                      data-testid="production-back-to-overview-button"
+                      (click)="BackToOverview()"
+                    >
+                      <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                      <span>Back to overview</span>
+                    </button>
+                  }
+                  <button
+                    mjButton
+                    Variant="outline"
+                    Size="sm"
+                    type="button"
+                    data-testid="production-share-button"
+                    [disabled]="!CanShareSelected"
+                    (click)="OpenShareModal(SelectedProduction.ID)"
+                  >
+                    <i class="fa-solid fa-share-nodes" aria-hidden="true"></i>
+                    <span>Share</span>
+                  </button>
+                  <button
+                    mjButton
+                    Variant="primary"
+                    Size="sm"
+                    type="button"
+                    data-testid="production-iterate-button"
+                    [disabled]="!SelectedProductionConversationId"
+                    [attr.title]="
+                      SelectedProductionConversationId
+                        ? 'Iterate on this production in its conversation'
+                        : 'Made outside a conversation. Start a new production in Video Studio.'
+                    "
+                    (click)="StartIterate()"
+                  >
+                    <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+                    <span>Iterate</span>
+                  </button>
+                </div>
+              </div>
+              <div class="vs-production-detail-body">
+                <div class="vs-production-detail-viewer" data-testid="production-detail-viewer">
+                  @if (IsFullViewerMode) {
+                    <mj-artifact-viewer-panel
+                      data-testid="production-full-viewer"
+                      [artifactId]="SelectedProduction.ID"
+                      [Provider]="Provider"
+                      [CurrentUser]="ProviderToUse.CurrentUser"
+                      [canShare]="CanShareSelected"
+                      [canEdit]="CanEditSelected"
+                      [ShowSaveToCollection]="false"
+                      [ShowMaximizeButton]="false"
+                      (Closed)="BackToOverview()"
+                      (ShareRequested)="OpenShareModal($event)"
+                      (NavigateToLink)="OnNavigateToArtifactLink($event)"
+                    />
+                  } @else if (IsLoadingSelectedVersion) {
+                    <div class="vs-production-detail-state" data-testid="production-overview-loading">
+                      <mj-loading Text="Loading production…" Size="medium"></mj-loading>
+                    </div>
+                  } @else if (VersionLoadError) {
+                    <div class="vs-production-detail-state" data-testid="production-overview-error">
+                      <mj-empty-state
+                        Variant="error"
+                        Icon="fa-solid fa-triangle-exclamation"
+                        Title="Couldn't load production"
+                        [Message]="VersionLoadError"
+                        ActionText="Try again"
+                        ActionIcon="fa-solid fa-rotate"
+                        (Action)="RetryLoadSelectedProductionVersion()"
+                      ></mj-empty-state>
+                    </div>
+                  } @else if (SelectedVersionEntity) {
+                    <mj-video-production-viewer
+                      data-testid="production-overview-viewer"
+                      [artifactVersion]="SelectedVersionEntity"
+                      [Provider]="ProviderToUse"
+                      [BrandKitName]="SelectedProduction.BrandKitName"
+                    ></mj-video-production-viewer>
+                  }
+                </div>
+              </div>
+            </aside>
+          }
+        </div>
+      }
+    </div>
+
+    @if (IsShareModalOpen && ShareTargetArtifact) {
+      <mj-artifact-share-modal
+        [IsOpen]="IsShareModalOpen"
+        [Artifact]="ShareTargetArtifact"
+        [CurrentUser]="ProviderToUse.CurrentUser"
+        (Saved)="OnShareSaved()"
+        (cancelled)="CloseShareModal()"
+      />
+    }
+  </mj-page-body>
+  </mj-page-layout>
+
+  <vs-studio-slide-in
+    #studioSlideIn
+    [Provider]="ProviderToUse"
+    [CurrentUser]="CurrentUser"
+    [EnvironmentId]="EnvironmentId"
+    [ApplicationId]="ApplicationId"
+    [PageSource]="this"
+    [PageContext]="PageContext"
+    [PageTools]="PageTools"
+    [FallbackBrandKitId]="FallbackBrandKitId"
+    [HeaderTitle]="'Video Studio'"
+    (OpenChange)="OnSlideInOpenChange($event)"
+    (PendingArtifactConsumed)="OnSlideInPendingArtifactConsumed()"
+  ></vs-studio-slide-in>
+</div>

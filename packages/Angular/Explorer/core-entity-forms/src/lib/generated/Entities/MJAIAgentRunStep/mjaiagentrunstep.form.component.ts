@@ -21,8 +21,10 @@ export class MJAIAgentRunStepFormComponent extends BaseFormComponent {
             { sectionKey: 'dataPayload', sectionName: 'Data & Payload', isExpanded: true },
             { sectionKey: 'notesSystemMetadata', sectionName: 'Notes & System Metadata', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJAIAgentRunSteps', sectionName: 'AI Agent Run Steps', isExpanded: false },
-            { sectionKey: 'mJAIAgentRequests', sectionName: 'AI Agent Requests', isExpanded: false }
+            { sectionKey: 'mJAIAgentRunStepsParentID', sectionName: 'AI Agent Run Steps (Parent Step)', isExpanded: false },
+            { sectionKey: 'mJAIAgentRunStepsPayloadAtStartSourceStepID', sectionName: 'AI Agent Run Steps (Payload At Start Source Step ID)', isExpanded: false },
+            { sectionKey: 'mJAIAgentRequests', sectionName: 'AI Agent Requests', isExpanded: false },
+            { sectionKey: 'mJAIAgentRunStepsPayloadAtEndSourceStepID', sectionName: 'AI Agent Run Steps (Payload At End Source Step ID)', isExpanded: false }
         ]);
     }
 }

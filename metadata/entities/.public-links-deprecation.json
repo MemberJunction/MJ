@@ -1,0 +1,17 @@
+[
+  {
+    "fields": {
+      "Name": "MJ: Public Links",
+      "Status": "Deprecated",
+      "AutoUpdateDescription": false,
+      "Description": "DEPRECATED: dormant v2 schema table never wired to server or UI runtime. Use MJ: Magic Link Invites (Kind='resource-share', IdentityMode='anonymous') paired with MJ: Artifact Guest Share Links for Frozen external guest sharing, or MJ: Artifact Permissions / MJ: Collection Permissions / MJ: Access Control Rules for authenticated sharing."
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Public Links"
+    },
+    "sync": {
+      "lastModified": "2026-11-18T00:23:13.196Z",
+      "checksum": "a17704bec7e6d3c5efde6f09d3fdc20490c64efe6609365df8060e6dc84e9300"
+    }
+  }
+]

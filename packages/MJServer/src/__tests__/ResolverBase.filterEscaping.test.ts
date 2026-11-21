@@ -36,9 +36,12 @@ type Captured = { params: RunViewParams | null };
 function fakeProvider(captured: Captured, rows: Record<string, unknown>[] = [], unreadableEntities: string[] = []): DatabaseProviderBase {
     const withPerms = (e: Record<string, unknown>) => ({
         ...e,
-        // Real EntityInfo aggregates per-user permissions; the boundary screen now consults
-        // CanRead for every subquery target, so the mock must answer it.
+        // Real EntityInfo aggregates per-user permissions; the boundary screen consults CanRead,
+        // the row filter and the denied fields for every subquery target, so the mock answers
+        // them (an unscoped read).
         GetUserPermisions: () => ({ CanRead: !unreadableEntities.includes(e.Name as string) }),
+        GetEffectiveRowFilterWhereClause: () => '',
+        GetDeniedReadFields: () => new Set<string>(),
     });
     return {
         Entities: [

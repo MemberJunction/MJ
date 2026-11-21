@@ -106,8 +106,9 @@
                           Message="This ran inline as a single step — a workflow of one needs no scheduling. You can still save it.">
                 </mj-alert>
               }
-              <button mjButton variant="primary" size="sm" (click)="RequestSaveAsWorkflow()">
-                <i class="fa-solid fa-floppy-disk"></i> Save as Workflow
+              <button mjButton variant="primary" size="sm" [disabled]="SavingWorkflow" (click)="RequestSaveAsWorkflow()">
+                <i class="fa-solid" [ngClass]="SavingWorkflow ? 'fa-spinner fa-spin' : 'fa-floppy-disk'"></i>
+                {{ SavingWorkflow ? 'Saving Workflow…' : 'Save as Workflow' }}
               </button>
             </div>
             @if (stepTaskGraphParentTaskID; as parentTaskID) {

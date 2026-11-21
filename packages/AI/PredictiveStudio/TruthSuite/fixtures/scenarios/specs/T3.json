@@ -1,0 +1,28 @@
+{
+  "id": "T3",
+  "namespace": "71bc5b6a-4322-49b1-a509-91d3d2d41ea8",
+  "seed": 2208,
+  "description": "Planted series with a legitimate lag column (LagTarget) and a same-period outcome leak (SamePeriodTarget).",
+  "kind": "series",
+  "nPeriods": 240,
+  "testPeriods": 12,
+  "startYear": 2005,
+  "level": 50.0,
+  "trend": 0.2,
+  "seasonAmp": 5.0,
+  "phi": 0.6,
+  "sigma": 2.0,
+  "features": {},
+  "betas": {},
+  "intercept": null,
+  "seriesLeak": {
+    "lagColumn": "LagTarget",
+    "sameColumn": "SamePeriodTarget",
+    "leakSd": 0.25
+  },
+  "sizingNote": "240 monthly periods (20 years; Ruling Q9: >= 240 months), monthly rather than daily because the planted seasonality is 12-month. Forecast scores use a rolling origin with K = 12 non-overlapping 12-month windows (144 scored forecasts, first origin after 96 training months), because a single 12-point test window measures RMSE with a relative SE of 0.248 while the 12 origins bring it to 0.071 (between-origin spread; evidence/logs/P2/recovery.txt). Paired naive-vs-oracle t = 5.46 over the 12 origins. The leak's noise SD (0.25) is a tenth of the AR error's stationary SD (2.5), so a model using SamePeriodTarget has near-zero error that no legitimate model can reach.",
+  "rollingOrigin": {
+    "K": 12,
+    "H": 12
+  }
+}

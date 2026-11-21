@@ -52,10 +52,12 @@ Two kinds of cache exist:
 
 | `PrefixPromptCache` | Providers | Behaviour of the cache | What the agent does with the previous iteration's fragment |
 |---|---|---|---|
-| absent / `false` (block cache) | Anthropic (explicit breakpoints), Gemini (implicit), Cerebras (sliding) | Matches on block or segment boundaries inside the prompt | **Replaces it.** Only the latest fragment is attached; history stays compact. |
+| absent / `false` (block cache) | Anthropic (explicit breakpoints), Gemini (implicit), Cerebras (sliding) | Matches on block or segment boundaries inside the prompt | **Replaces it.** Only the latest fragment is attached; history stays compact. Exception: a native-tools run on Anthropic retains it (see below). |
 | `true` (byte-prefix cache) | OpenAI automatic cache, xAI | Reuses a prior request only when that request's *entire* prompt is a byte prefix of the new one | **Retains it and appends the new one**, so each request is an exact prefix extension of the last. Costs a few hundred stale (cached) tokens per iteration. |
 
 Replacing the fragment on a prefix cache breaks the prefix right after the system prompt and caps the cached share there (measured: GPT 5.6 flat at 21K cached every iteration). Appending recovers the history (~93% cached).
+
+**Native tools on Anthropic are append-only, whatever the catalog says.** Claude 5.x accepts a replayed thinking block only while the system prompt, the tools and every earlier message are unchanged since the turn that produced it. Replacing the fragment would change the history behind every replayed block, and the request would be rejected. So a run that declares native tools to a driver with `BaseLLM.ReplayedReasoningRequiresStablePrefix` (true for `AnthropicLLM`) retains its fragments. When something else changes earlier history anyway (expiry, compaction, expansion, context recovery) or the system prompt or tools change (a skill activating mid-run), the replayed reasoning behind the change is dropped instead of sent.
 
 **Which provider is which is metadata, not code.** `PrefixPromptCache` is a boolean in `LLMConfigurationSettings` in the model catalog's `ModelConfiguration` cascade, which since 6.2 has a vendor layer. AI Vendors carries its own `Configuration` bag (`IAIVendorConfiguration`), and its `ModelDefaults` key is a model-configuration bag that forms the default for every model the vendor serves:
 
@@ -70,7 +72,7 @@ The vendor default sits above the model's own bag on purpose: a host's statement
 
 `BaseAgent.resolvePrefixPromptCache(model, vendor)` finds the vendor's *inference-provider* model-vendor row and reads the effective configuration through `AIEngine.GetEffectiveModelConfiguration`, which folds in the `ModelDefaults` of the vendor named by that model-vendor row. `true` ships under `Configuration.ModelDefaults` on the OpenAI and x.ai vendor rows in `metadata/ai-vendors`, so every model they serve inherits it and a new OpenAI model needs no seed of its own. A host that caches differently for one model sets the flag on that model-vendor row in `metadata/ai-models`. Nothing in code knows a provider's name.
 
-The mode is decided **once per run**: from a runtime model override, else from the first iteration's model selection, then frozen so a failover cannot flip the layout mid-run. On turn 1, before any selection is known, the layout is replace-in-place; if turn 2 resolves to append-only, turn 1's fragment is restored at the turn-1 boundary. The prompt's bound models are deliberately not consulted, because prompts bind several vendors for failover.
+The mode is decided **once per run**: a runtime model override that names a vendor, or whose catalog says yes, answers immediately; otherwise the first iteration's model selection decides. The answer is then frozen so a failover cannot flip the layout mid-run. On turn 1, before any selection is known, the layout is replace-in-place; if turn 2 resolves to append-only, turn 1's fragment is restored at the turn-1 boundary. The prompt's bound models are deliberately not consulted, because prompts bind several vendors for failover.
 
 Per-agent override, on the Loop type's prompt params (`trailingStateMode`): `auto` (default), `appendOnly` (a serving path whose rows carry no strategy yet), `replace` (context growth matters more than cache hits).
 

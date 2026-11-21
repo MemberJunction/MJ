@@ -7,9 +7,12 @@ import {
 } from './public-api';
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
 import { ClaimRedeemComponent } from './lib/identity-claims/claim-redeem.component';
-import { DATA_EXPLORER_DASHBOARDS_ROUTE } from './lib/guards/moved-nav-item-redirect';
+import { OfficeConnectComponent } from './lib/office/office-connect.component';
+import { PublicArtifactGuestComponent } from './lib/public-guest/public-artifact-guest.component';
+import { OFFICE_CONNECT_ROUTE_PATH } from '@memberjunction/excel-addin';
+import { CHAT_COLLECTIONS_ROUTE, CHAT_TASKS_ROUTE, DATA_EXPLORER_DASHBOARDS_ROUTE } from './lib/guards/moved-nav-item-redirect';
 import { LogError, Metadata, StartupManager, IMetadataProvider, IsNewEntityRecordUrlId, NEW_RECORD_VALUES_QUERY_PARAM, CompositeKey } from '@memberjunction/core';
-import { SharedService, SYSTEM_APP_ID, RECORDS_RESOURCE_TYPE } from '@memberjunction/ng-shared';
+import { SharedService, SYSTEM_APP_ID, RECORDS_RESOURCE_TYPE, RecordTabQueryParams, FindMovedNavItem } from '@memberjunction/ng-shared';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
 import { ApplicationManager, TabService } from '@memberjunction/ng-base-application';
 import { MJGlobal, MJEventType } from '@memberjunction/global';
@@ -247,14 +250,16 @@ export class ResourceResolver implements Resolve<void> {
     const KNOWN_RESOURCE_TYPES = ['dashboard', 'record', 'view', 'query', 'report', 'artifact', 'search'];
 
     // Handle app-scoped resource navigation: /app/:appName/:resourceType/:param1/:param2?
-    // This pattern supports resources opened within an app context (e.g., /app/home/dashboard/abc123)
-    // Only handle if the second path segment is a known resource type
+    // This pattern supports resources opened within an app context (e.g., /app/home/dashboard/abc123).
+    // Routes like `app/:appName/record/:param1/:param2` and `app/:appName/view/dynamic/:param2` store
+    // `resourceType` in `route.data['resourceType']` rather than `route.params['resourceType']`.
+    const rawResourceType = (route.params['resourceType'] ?? route.data?.['resourceType']) as string | undefined;
     if (route.params['appName'] !== undefined &&
-        route.params['resourceType'] !== undefined &&
-        KNOWN_RESOURCE_TYPES.includes(route.params['resourceType'].toLowerCase())) {
+        rawResourceType !== undefined &&
+        KNOWN_RESOURCE_TYPES.includes(rawResourceType.toLowerCase())) {
       const appName = decodeURIComponent(route.params['appName']);
-      const resourceType = route.params['resourceType'].toLowerCase();
-      const param1 = route.params['param1'];
+      const resourceType = rawResourceType.toLowerCase();
+      const param1 = route.params['param1'] ?? (resourceType === 'view' && route.params['param2'] !== undefined ? 'dynamic' : undefined);
       const param2 = route.params['param2'];
 
       // Check app access
@@ -323,6 +328,7 @@ export class ResourceResolver implements Resolve<void> {
               recordId: isNew ? '' : recordId,
               isNew: isNew || undefined,
               NewRecordValues: newRecordValues,
+              ...RecordTabQueryParams(route.queryParams),
               appName: appName,
               appId: app.ID
             },
@@ -338,7 +344,9 @@ export class ResourceResolver implements Resolve<void> {
             // Dynamic view: /app/:appName/view/dynamic/:entityName
             const entityName = decodeURIComponent(param2);
             const extraFilter = route.queryParams['ExtraFilter'] || route.queryParams['extraFilter'];
-            const filterSuffix = extraFilter ? ' (Filtered)' : '';
+            const rawAbv = route.queryParams['AlternateBaseView'] ?? route.queryParams['alternateBaseView'] ?? route.queryParams['abv'];
+            const alternateBaseView = typeof rawAbv === 'string' ? rawAbv : (Array.isArray(rawAbv) ? rawAbv[0] : undefined);
+            const filterSuffix = (extraFilter || alternateBaseView) ? ' (Filtered)' : '';
 
             this.tabService.OpenTab({
               ApplicationId: app.ID,
@@ -347,6 +355,7 @@ export class ResourceResolver implements Resolve<void> {
                 resourceType: 'MJ: User Views',
                 Entity: entityName,
                 ExtraFilter: extraFilter,
+                AlternateBaseView: alternateBaseView,
                 isDynamic: true,
                 recordId: 'dynamic',
                 appName: appName,
@@ -502,10 +511,40 @@ export class ResourceResolver implements Resolve<void> {
         }
       }
 
-      // Find the nav item by label (case-insensitive)
-      const navItem = navItems.find(item =>
+      // Find the nav item by label (case-insensitive), consulting MOVED_NAV_ITEMS if renamed/moved
+      let targetApp = app;
+      let targetAppName = appName;
+      let navItem = navItems.find(item =>
         item.Label?.trim().toLowerCase() === navItemName.trim().toLowerCase()
       );
+
+      if (!navItem) {
+        const moved = FindMovedNavItem(app.Name, navItemName);
+        if (moved) {
+          const movedApp = applications.find(a =>
+            a.Name.trim().toLowerCase() === moved.ToApplication.trim().toLowerCase() ||
+            a.Path.trim().toLowerCase() === moved.ToApplication.trim().toLowerCase()
+          );
+          if (movedApp && this.appManager.CheckAppAccess(movedApp.Name).status === 'accessible') {
+            let movedNavItems: typeof navItems = [];
+            if (movedApp.DefaultNavItems) {
+              try {
+                movedNavItems = JSON.parse(movedApp.DefaultNavItems);
+              } catch {
+                movedNavItems = [];
+              }
+            }
+            const movedCandidate = movedNavItems.find(item =>
+              item.Label?.trim().toLowerCase() === moved.ToNavItem.trim().toLowerCase()
+            );
+            if (movedCandidate) {
+              targetApp = movedApp;
+              targetAppName = movedApp.Name;
+              navItem = movedCandidate;
+            }
+          }
+        }
+      }
 
       if (!navItem) {
         LogError(`Nav item ${navItemName} not found in app ${appName}`);
@@ -527,8 +566,8 @@ export class ResourceResolver implements Resolve<void> {
         route: navItem.Route,
         resourceType: navItem.ResourceType,
         recordId: navItem.RecordID,
-        appName: appName,
-        appId: app.ID,
+        appName: targetAppName,
+        appId: targetApp.ID,
         navItemName: navItem.Label,
         ...(navItem.Configuration || {}),
         queryParams: route.queryParams
@@ -540,7 +579,7 @@ export class ResourceResolver implements Resolve<void> {
       }
 
       this.tabService.OpenTab({
-        ApplicationId: app.ID,
+        ApplicationId: targetApp.ID,
         Title: navItem.Label,
         Configuration: config,
         IsPinned: false
@@ -582,7 +621,8 @@ export class ResourceResolver implements Resolve<void> {
           Entity: entityName,
           recordId: isNew ? '' : recordId,
           isNew: isNew || undefined,
-          NewRecordValues: newRecordValues
+          NewRecordValues: newRecordValues,
+          ...RecordTabQueryParams(route.queryParams)
         },
         ResourceRecordId: isNew ? '' : recordId,
         IsPinned: false
@@ -613,8 +653,10 @@ export class ResourceResolver implements Resolve<void> {
       // /resource/view/dynamic/:entityName
       const entityName = decodeURIComponent(route.params['entityName']);
       const extraFilter = route.queryParams['ExtraFilter'] || route.queryParams['extraFilter'];
+      const rawAbv = route.queryParams['AlternateBaseView'] ?? route.queryParams['alternateBaseView'] ?? route.queryParams['abv'];
+      const alternateBaseView = typeof rawAbv === 'string' ? rawAbv : (Array.isArray(rawAbv) ? rawAbv[0] : undefined);
 
-      const filterSuffix = extraFilter ? ' (Filtered)' : '';
+      const filterSuffix = (extraFilter || alternateBaseView) ? ' (Filtered)' : '';
 
       // Queue tab request via TabService
       this.tabService.OpenTab({
@@ -624,6 +666,7 @@ export class ResourceResolver implements Resolve<void> {
           resourceType: 'MJ: User Views',
           Entity: entityName,
           ExtraFilter: extraFilter,
+          AlternateBaseView: alternateBaseView,
           isDynamic: true,
           recordId: 'dynamic'
         },
@@ -742,6 +785,22 @@ const routes: Routes = [
     component: ClaimRedeemComponent
   },
 
+  // Excel add-in sign-in window — opened by the add-in pane in an Office dialog with its one-time
+  // public key and state (office/connect?pk=..&state=..). Same posture as the claim page: no
+  // AuthGuard (the component waits for the session and offers sign-in itself), and a direct
+  // component for the same library-routing reason.
+  {
+    path: OFFICE_CONNECT_ROUTE_PATH,
+    component: OfficeConnectComponent
+  },
+
+  // External guest artifact share route (NW-1) — standalone route activated via Magic Link
+  // `#token=<jwt>` redemption redirect; resolves the Frozen snapshot via ResolveGuestArtifactSnapshot.
+  {
+    path: 'guest/artifact',
+    component: PublicArtifactGuestComponent
+  },
+
   // App-scoped resource routes (new pattern)
   // These must come BEFORE app/:appName/:navItemName to be matched first
   {
@@ -768,6 +827,8 @@ const routes: Routes = [
   // when Data Explorer no longer has that nav item and the user has the Dashboards app (NavigationService applies
   // the same rule to pins and saved tabs)
   DATA_EXPLORER_DASHBOARDS_ROUTE,
+  CHAT_TASKS_ROUTE,
+  CHAT_COLLECTIONS_ROUTE,
   // App navigation routes
   {
     path: 'app/:appName/:navItemName',

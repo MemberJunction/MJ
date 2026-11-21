@@ -5,6 +5,7 @@
 
 import { MJComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
+import { BaseSingleton } from '@memberjunction/global';
 import * as t from '@babel/types';
 
 export interface CompiledValidator {
@@ -21,24 +22,32 @@ export interface CompiledLibraryRules {
   options?: any;
 }
 
-export class LibraryLintCache {
-  private static instance: LibraryLintCache;
-  private compiledRules: Map<string, CompiledLibraryRules> = new Map();
+export class LibraryLintCache extends BaseSingleton<LibraryLintCache> {
+  private compiledRules!: Map<string, CompiledLibraryRules>;
   private loadingPromise: Promise<void> | null = null;
   private isLoaded = false;
 
-  private constructor() {}
-
-  public static GetInstance(): LibraryLintCache {
-    if (!LibraryLintCache.instance) {
-      LibraryLintCache.instance = new LibraryLintCache();
+  public constructor() {
+    super();
+    if (!this.compiledRules) {
+      this.compiledRules = new Map();
     }
-    return LibraryLintCache.instance;
   }
 
-  /** @deprecated Use {@link GetInstance}. */
-  public static getInstance(): LibraryLintCache {
-    return this.GetInstance();
+  public static get Instance(): LibraryLintCache {
+    return super.getInstance<LibraryLintCache>();
+  }
+
+  public static GetInstance(): LibraryLintCache {
+    return super.getInstance<LibraryLintCache>();
+  }
+
+  /** @deprecated Use {@link Instance} or {@link GetInstance}. */
+  public static override getInstance<T extends BaseSingleton<unknown> = LibraryLintCache>(
+    this: new () => T,
+    className?: string
+  ): T {
+    return super.getInstance<T>(className);
   }
 
   /**

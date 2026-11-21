@@ -22,9 +22,11 @@ import { CALL_CONTROL_SETTLE_MS } from '../telephony/telephonyCallTools.js';
 import {
     AuthorizeOutboundCallOrRelease,
     BuildTelephonyCallConfiguration,
+    CloseAgentSessionRow,
     TelephonyCallSessionStarter,
     type TelephonyCallStartArgs,
 } from '../telephony/telephonyCallSession.js';
+import { IsTrustedSessionConfigWriteActive } from '@memberjunction/core-entities-server';
 
 const USER = { ID: 'user-1' } as unknown as UserInfo;
 const IDENTITY = { AgentID: 'target-agent', IdentityValue: '+18005550100' };
@@ -457,5 +459,35 @@ describe('AuthorizeOutboundCallOrRelease', () => {
         const throwing = { ...guard(true), CanRunAgent: async () => { throw new Error('perm lookup failed'); } };
         await expect(AuthorizeOutboundCallOrRelease(request, throwing, lease as never)).rejects.toThrow('perm lookup failed');
         expect(gate.Active).toBe(0);
+    });
+});
+
+describe('CloseAgentSessionRow', () => {
+    // The session entity refuses a server-only CloseReason (Janitor, Shutdown) from an untrusted save, so the call
+    // bookkeeping that stamps one must save inside the trusted session-write scope.
+    it.each([
+        ['Janitor', 'Janitor'],
+        ['Shutdown', 'Shutdown'],
+        ['Error', 'Error'],
+    ] as const)('closes the row as %s inside the trusted session-write scope', async (reason, expected) => {
+        let trustedAtSave: boolean | null = null;
+        const row = {
+            Status: 'Active',
+            ClosedAt: null as Date | null,
+            CloseReason: null as string | null,
+            Load: vi.fn(async () => true),
+            Save: vi.fn(async () => {
+                trustedAtSave = IsTrustedSessionConfigWriteActive();
+                return true;
+            }),
+            LatestResult: { CompleteMessage: '' },
+        };
+        const provider = { GetEntityObject: vi.fn(async () => row) } as unknown as IMetadataProvider;
+
+        await CloseAgentSessionRow('session-1', reason, USER, provider);
+
+        expect(row.Status).toBe('Closed');
+        expect(row.CloseReason).toBe(expected);
+        expect(trustedAtSave).toBe(true);
     });
 });

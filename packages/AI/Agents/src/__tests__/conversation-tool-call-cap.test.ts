@@ -197,3 +197,25 @@ describe('BaseAgent.recordCompactionRunStep — PromptRun linkage + post-turn to
         expect(requestedEntities).not.toContain('MJ: AI Agent Runs');
     });
 });
+
+describe('BaseAgent — the conversation_tool native tool keeps the per-turn cap', () => {
+    it('runs the first 8 calls of a turn, skips the rest, and starts counting again on the next turn', async () => {
+        const agent = new BaseAgent();
+        const executeSingle = vi.fn().mockResolvedValue({ tool: 'getMessageBySequence', input: {}, result: { success: true, data: 'ok' }, durationMs: 1 });
+        const a = agent as unknown as {
+            _promptTurnCount: number;
+            _conversationToolManager: { ExecuteSingleToolCall: typeof executeSingle };
+            runConversationToolFromTool(tool: string, input: Record<string, unknown>): Promise<{ Content: string; IsError: boolean }>;
+        };
+        a._conversationToolManager = { ExecuteSingleToolCall: executeSingle };
+        a._promptTurnCount = 3;
+
+        const turn = await Promise.all(Array.from({ length: 10 }, () => a.runConversationToolFromTool('getMessageBySequence', { sequence: 1 })));
+        expect(turn.filter((r) => !r.IsError)).toHaveLength(MAX_CONVERSATION_TOOL_CALLS_PER_TURN);
+        expect(turn.slice(MAX_CONVERSATION_TOOL_CALLS_PER_TURN).every((r) => r.IsError && r.Content.includes('per-turn cap'))).toBe(true);
+        expect(executeSingle).toHaveBeenCalledTimes(MAX_CONVERSATION_TOOL_CALLS_PER_TURN);
+
+        a._promptTurnCount = 4;
+        expect((await a.runConversationToolFromTool('getMessageBySequence', { sequence: 2 })).IsError).toBe(false);
+    });
+});

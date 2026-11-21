@@ -33,10 +33,12 @@ import {
     DECISION_DISCOVERY_MIN_OPTIONS,
     DECISION_DISCOVERY_TIMEOUT_MS,
     SuggestedAgentMessage,
-    DECISION_DISCOVERY_CALIBRATION,
-    type DecisionDiscoveryCalibration,
+    DECISION_DISCOVERY_AGENT_QUESTION,
+    DECISION_DISCOVERY_APPLIES_QUESTION,
+    DECISION_DISCOVERY_USE,
     DECISION_DISCOVERY_MIN_CONFIDENCE,
 } from '../decision-discovery';
+import { CalibrationEngineMethods, ShippedAgentCalibrations, ShippedFit } from './helpers/shipped-decision-calibrations';
 import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { DecisionResult, type ChatMessage, type ChoiceQuestion, type DecisionAnswer, type PlattCalibration } from '@memberjunction/ai';
@@ -310,6 +312,7 @@ class DiscoveryHarness {
     public get engineInstance(): Record<string, unknown> {
         return {
             Config: async (): Promise<void> => undefined,
+            ...CalibrationEngineMethods(ShippedAgentCalibrations),
             Agents: [this.self, ...this.catalog],
             AgentRelationships: [],
             AgentCategories: [],
@@ -439,13 +442,12 @@ const ANSWERING_MODEL = 'Jev';
 /** The exact model the scripted answers come from: Jev at the version its calibration was fitted on. */
 const ANSWERING_RESOLVED_MODEL = 'typesafe/jev-1.13-20260917';
 
-/** The answering model's discovery calibration. */
-function answeringCalibration(): DecisionDiscoveryCalibration {
-    const entry = DECISION_DISCOVERY_CALIBRATION.find(c => c.ModelName === ANSWERING_MODEL && c.ResolvedModel === ANSWERING_RESOLVED_MODEL);
-    if (!entry) {
-        throw new Error(`no discovery calibration for ${ANSWERING_MODEL} (${ANSWERING_RESOLVED_MODEL})`);
-    }
-    return entry.Calibration;
+/** The answering model's two shipped discovery fits. */
+function answeringCalibration(): { Confidence: PlattCalibration; AnyApplies: PlattCalibration } {
+    return {
+        Confidence: ShippedFit(ANSWERING_MODEL, DECISION_DISCOVERY_USE, DECISION_DISCOVERY_AGENT_QUESTION),
+        AnyApplies: ShippedFit(ANSWERING_MODEL, DECISION_DISCOVERY_USE, DECISION_DISCOVERY_APPLIES_QUESTION),
+    };
 }
 
 /** The raw probability that the answering model's calibration maps to `calibrated` (Platt, inverted). */
@@ -591,7 +593,7 @@ describe('decision discovery — off by default', () => {
         await agent.Execute(makeParams());
         const buildsOnFirstRun = agent.Builds;
         await agent.Execute(makeParams());
-        await agent.Execute(makeParams({ data: { __agentTypePromptParams: { decisionDiscovery: false } } }));
+        await agent.Execute(makeParams({ data: { __agentTypePromptParams: { decisionDiscovery: false } }, TrustReservedRunData: true }));
 
         // The first run fills the cache; after it, only gatherPromptTemplateData merges the override.
         expect(buildsOnFirstRun).toBeGreaterThan(0);
@@ -687,7 +689,7 @@ describe('decision discovery — the options', () => {
         const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
         const { agent } = makeAgent();
 
-        await agent.Execute(makeParams({ data: { __agentTypePromptParams: ON } }));
+        await agent.Execute(makeParams({ data: { __agentTypePromptParams: ON }, TrustReservedRunData: true }));
 
         expect(ask).toHaveBeenCalledTimes(1);
     });
@@ -697,7 +699,7 @@ describe('decision discovery — the options', () => {
         const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
         const { agent } = makeAgent();
 
-        await agent.Execute(makeParams({ data: { __agentTypePromptParams: { decisionsEnabled: true } } }));
+        await agent.Execute(makeParams({ data: { __agentTypePromptParams: { decisionsEnabled: true } }, TrustReservedRunData: true }));
 
         expect(ask).toHaveBeenCalledTimes(1);
     });
@@ -706,7 +708,7 @@ describe('decision discovery — the options', () => {
         const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
         const { agent } = makeAgent();
 
-        await agent.Execute(makeParams({ data: { __agentTypePromptParams: { decisionsEnabled: false } } }));
+        await agent.Execute(makeParams({ data: { __agentTypePromptParams: { decisionsEnabled: false } }, TrustReservedRunData: true }));
 
         expect(ask).not.toHaveBeenCalled();
         expect(discoverySteps()).toHaveLength(0);

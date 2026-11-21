@@ -159,4 +159,41 @@ export class TabService {
   ClearSuppressFlag(): void {
     this._suppressNextResolve = false;
   }
+
+  /**
+   * A record whose URL's browser-history entry should be REPLACED, not kept,
+   * when the workspace next navigates away from it. See
+   * {@link MarkRecordUrlForReplacement}.
+   */
+  private _recordUrlToReplace: { EntityName: string; RecordId: string } | null = null;
+
+  /**
+   * Ask that the next URL sync leaving this record's URL replace its history
+   * entry instead of pushing a new one. Used when the record was deleted:
+   * browser Back must not land on it again and reopen it as a blank form.
+   *
+   * Keyed by the record rather than "the next sync": URL syncs run
+   * asynchronously, and an unrelated one may land first.
+   */
+  MarkRecordUrlForReplacement(entityName: string, recordId: string): void {
+    this._recordUrlToReplace = { EntityName: entityName, RecordId: recordId };
+  }
+
+  /**
+   * True, once, when the URL being left shows the marked record. Clears the
+   * mark when it matches. Entity and id compare case-insensitively, like the
+   * record-tab matching that set the mark.
+   */
+  ConsumeRecordUrlReplacement(entityName: string, recordId: string): boolean {
+    const mark = this._recordUrlToReplace;
+    if (!mark) {
+      return false;
+    }
+    const matches = mark.EntityName.trim().toLowerCase() === entityName.trim().toLowerCase()
+      && mark.RecordId.trim().toLowerCase() === recordId.trim().toLowerCase();
+    if (matches) {
+      this._recordUrlToReplace = null;
+    }
+    return matches;
+  }
 }

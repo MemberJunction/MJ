@@ -36,9 +36,13 @@
         "realtime": {
           "directActions": {
             "enabled": true,
-            "timeoutMs": 5000,
+            "timeoutMs": 30000,
             "actionNames": [
-              "Search Query Catalog"
+              "Search Query Catalog",
+              "Create Governed Artifact",
+              "Inspect Governed Artifact",
+              "Mutate Governed Artifact",
+              "List Workspace Artifacts"
             ]
           }
         }
@@ -98,10 +102,10 @@
           "fields": {
             "AgentID": "@parent:ID",
             "Name": "ALL_QUERIES",
-            "Description": "Complete list of existing queries for reference and composition. Includes Reusable flag and SQL for composition planning.",
+            "Description": "Approved queries, for reference and composition: names, descriptions, categories and the Reusable flag, without SQL. Approved only: a Pending query is a draft (for example one saved from a conversation so a list can refresh from it) and is not offered to agents.",
             "SourceType": "RunView",
             "EntityName": "MJ: Queries",
-            "ExtraFilter": "Status = 'Approved' OR Status = 'Pending'",
+            "ExtraFilter": "Status = 'Approved'",
             "OrderBy": "Name ASC",
             "FieldsToRetrieve": [
               "ID",
@@ -110,8 +114,7 @@
               "CategoryID",
               "Category",
               "Status",
-              "Reusable",
-              "SQL"
+              "Reusable"
             ],
             "ResultType": "simple",
             "DestinationType": "Data",
@@ -201,6 +204,62 @@
           "sync": {
             "lastModified": "2026-03-14T01:24:29.545Z",
             "checksum": "03ec54a55a9a6428d24077811896d312d4f4ef434887e67ba35fbded0073cd8d"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Create Governed Artifact",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "15021DF3-622A-448D-870B-C18CF259943E"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:24:47.175Z",
+            "checksum": "ec935fc6573efac0226117962fd8dd9ddf4f44733cf1dd077a3f07a1500b9c34"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Inspect Governed Artifact",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "DE99E194-B41F-47C0-B89E-BD5C4D79A787"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:24:47.200Z",
+            "checksum": "aa7cb156da674a9ff36278666b5faf9c8d175c5c81d86f1609e993d6cc3d0bff"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Mutate Governed Artifact",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "2A1A6613-4FC8-4CC0-A800-B12AB90EA9C9"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:24:47.222Z",
+            "checksum": "655b7653331c0a44aabc9282bf8b5fef41b9b209201b886702a691e885ef3511"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=List Workspace Artifacts",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "8477D452-C25E-481B-9D87-BB3BD5DE6C24"
+          },
+          "sync": {
+            "lastModified": "2026-11-18T00:24:47.245Z",
+            "checksum": "cf5f1824bdcb573d9d4c437cf0a0345c0f94a23ced571c3791cba3780dad8c11"
           }
         }
       ],
@@ -397,6 +456,34 @@
                   "lastModified": "2026-03-14T01:24:29.735Z",
                   "checksum": "03ec54a55a9a6428d24077811896d312d4f4ef434887e67ba35fbded0073cd8d"
                 }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Get Entity List",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "C6907EC0-02D6-48B5-B11B-34FE13764621"
+                },
+                "sync": {
+                  "lastModified": "2026-11-18T00:24:47.266Z",
+                  "checksum": "6d5208ddfb69fc5db2c42c9277ec78b2da6b3503f2e58c5a366ba35703bc4253"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Explore Database Schema",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "E066FBBC-4268-4845-9E70-E64370E880DB"
+                },
+                "sync": {
+                  "lastModified": "2026-11-18T00:24:47.280Z",
+                  "checksum": "e9b61ca75b6273dd85663b4826aeaec6e434a7f3948c7a223ce485f019f6adfb"
+                }
               }
             ],
             "MJ: AI Agent Rubrics": [
@@ -479,8 +566,8 @@
       "ID": "204FF1D6-A807-4278-B71A-9D692F19E808"
     },
     "sync": {
-      "lastModified": "2026-09-12T15:03:57.291Z",
-      "checksum": "5bdf225512d5c5af2254f2917b31b38e5d871abe7236c10854755abafadc0fe0"
+      "lastModified": "2026-11-18T00:24:47.104Z",
+      "checksum": "00e0fed5d759a582d355e514837676e4a1d3fe03e62d44a88427923343c4e205"
     }
   }
 ]

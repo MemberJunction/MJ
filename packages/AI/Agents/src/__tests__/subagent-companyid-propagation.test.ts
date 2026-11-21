@@ -118,6 +118,49 @@ describe("BaseAgent.ExecuteSubAgent - companyId propagation (§4.2)", () => {
         expect(passedParams.configurationId).toBe("config-uuid-1");
     });
 
+    it("a sub-agent inherits the run's audience, as given, so it re-hydrates the same readers", async () => {
+        const caller = new TestableSubAgentCaller();
+        const audience = { Mode: "Intersection" as const, UserIDs: ["aaaaaaaa-0000-4000-8000-0000000000b3"] };
+        const params: ExecuteAgentParams = {
+            agent: { ID: "parent-agent-id", Name: "ParentAgent" } as unknown as MJAIAgentEntityExtended,
+            conversationMessages: [],
+            Audience: audience,
+        };
+        const subAgent = { ID: "child-agent-id", Name: "ChildAgent", Status: "Active" } as unknown as MJAIAgentEntityExtended;
+        const stepEntity = { ID: "step-uuid-4", TargetLogID: null } as unknown as MJAIAgentRunStepEntityExtended;
+
+        await caller.invokeExecuteSubAgent(params, { name: "ChildAgent", message: "Do it", terminateAfter: false }, subAgent, stepEntity);
+
+        const passedParams: ExecuteAgentParams = mockRunAgent.mock.calls[0][0];
+        expect(passedParams.Audience).toBe(audience);
+    });
+
+    it("the realtime delegation target inherits the run's audience", async () => {
+        const caller = new TestableSubAgentCaller();
+        const audience = { Mode: "Intersection" as const, UserIDs: ["aaaaaaaa-0000-4000-8000-0000000000b4"] };
+        const target = { ID: "target-agent-id", Name: "Target" } as unknown as MJAIAgentEntityExtended;
+        const internals = caller as unknown as {
+            resolveRealtimeTargetAgent: (params: ExecuteAgentParams) => MJAIAgentEntityExtended | null;
+            delegateRealtimeToTarget: (
+                params: ExecuteAgentParams,
+                config: undefined,
+                request: { CallID: string; Arguments: string; AbortSignal: AbortSignal }
+            ) => Promise<{ Success: boolean }>;
+        };
+        vi.spyOn(internals, "resolveRealtimeTargetAgent").mockReturnValue(target);
+        const params: ExecuteAgentParams = {
+            agent: { ID: "coagent-id", Name: "CoAgent" } as unknown as MJAIAgentEntityExtended,
+            conversationMessages: [],
+            Audience: audience,
+        };
+
+        const request = { CallID: "call-1", Arguments: JSON.stringify({ request: "do it" }), AbortSignal: new AbortController().signal };
+        await internals.delegateRealtimeToTarget(params, undefined, request);
+
+        expect(mockRunAgent).toHaveBeenCalledTimes(1);
+        expect((mockRunAgent.mock.calls[0][0] as ExecuteAgentParams).Audience).toBe(audience);
+    });
+
     it("passes undefined companyId when parent params do not specify one", async () => {
         const caller = new TestableSubAgentCaller();
         const params: ExecuteAgentParams = {

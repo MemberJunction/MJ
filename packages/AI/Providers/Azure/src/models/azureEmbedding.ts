@@ -1,8 +1,22 @@
-import { BaseEmbeddings, Embeddings, EmbedTextParams, EmbedTextResult, EmbedTextsParams, EmbedTextsResult, BaseResult, ErrorAnalyzer } from '@memberjunction/ai';
+import { BaseEmbeddings, Embeddings, EmbeddingModelInfo, EmbedTextParams, EmbedTextResult, EmbedTextsParams, EmbedTextsResult, BaseResult, ErrorAnalyzer } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import ModelClient from "@azure-rest/ai-inference";
 import { AzureKeyCredential } from "@azure/core-auth";
 import { DefaultAzureCredential } from "@azure/identity";
+
+/** The model the driver calls when it's given no model name. */
+const DEFAULT_MODEL = 'text-embedding-ada-002';
+
+/**
+ * The default model's widths. ada-002 has one width, 1536, and rejects the `dimensions` parameter.
+ * A named model is a deployment, which could be any model, so its widths aren't known here.
+ */
+const DEFAULT_MODEL_INFO: EmbeddingModelInfo = {
+    Model: DEFAULT_MODEL,
+    Description: 'Azure Embedding - text-embedding-ada-002',
+    OutputDimension: 1536,
+    AcceptsDimensions: false,
+};
 
 /**
  * Implementation of Azure AI Embedding Model
@@ -20,6 +34,10 @@ export class AzureEmbedding extends BaseEmbeddings {
     constructor(apiKey: string) {
         super(apiKey);
         // Client initialization is deferred until SetAdditionalSettings is called
+    }
+
+    protected override get EmbeddingModels(): readonly EmbeddingModelInfo[] {
+        return [DEFAULT_MODEL_INFO];
     }
 
     /** Native batch endpoint: Azure AI Inference embeds an array of inputs in one request. */
@@ -94,17 +112,18 @@ export class AzureEmbedding extends BaseEmbeddings {
         }
         
         const startTime = new Date();
+        const model = params.model || DEFAULT_MODEL;
+        // Outside the try: a width the default model can't produce throws before any API call.
+        const dimensionsParam = this.DimensionsParam(model, params.dimensions);
         
         try {
             // Call Azure AI embeddings API
             const response = await this.Client.path("/embeddings").post({
+                abortSignal: params.CancellationToken,
                 body: {
                     input: [params.text], // API requires array
-                    model: params.model || "text-embedding-ada-002", // Default model
-                    // Only send dimensions when explicitly requested — older models
-                    // (e.g. ada-002) reject the parameter, and omitting it lets the
-                    // model produce its native dimensionality.
-                    ...(params.dimensions ? { dimensions: params.dimensions } : {})
+                    model,
+                    ...dimensionsParam
                 }
             });
             
@@ -138,6 +157,8 @@ export class AzureEmbedding extends BaseEmbeddings {
             
             return result;
         } catch (error) {
+            // An aborted request is reported as cancelled, not as an empty (failed) result.
+            this.ThrowIfRequestAborted(error, params.CancellationToken);
             const endTime = new Date();
             
             // Log error details for debugging
@@ -173,6 +194,9 @@ export class AzureEmbedding extends BaseEmbeddings {
         }
         
         const startTime = new Date();
+        const model = params.model || DEFAULT_MODEL;
+        // Outside the try: a width the default model can't produce throws before any API call.
+        const dimensionsParam = this.DimensionsParam(model, params.dimensions);
         
         try {
             // Ensure we have text input
@@ -182,13 +206,11 @@ export class AzureEmbedding extends BaseEmbeddings {
             
             // Call Azure AI embeddings API
             const response = await this.Client.path("/embeddings").post({
+                abortSignal: params.CancellationToken,
                 body: {
                     input: params.texts,
-                    model: params.model || "text-embedding-ada-002", // Default model
-                    // Only send dimensions when explicitly requested — older models
-                    // (e.g. ada-002) reject the parameter, and omitting it lets the
-                    // model produce its native dimensionality.
-                    ...(params.dimensions ? { dimensions: params.dimensions } : {})
+                    model,
+                    ...dimensionsParam
                 }
             });
             
@@ -222,6 +244,8 @@ export class AzureEmbedding extends BaseEmbeddings {
             
             return result;
         } catch (error) {
+            // An aborted request is reported as cancelled, not as an empty (failed) result.
+            this.ThrowIfRequestAborted(error, params.CancellationToken);
             const endTime = new Date();
             
             // Log error details for debugging
@@ -252,10 +276,10 @@ export class AzureEmbedding extends BaseEmbeddings {
     public async GetEmbeddingModels(): Promise<any> {
         return [
             {
-                id: "text-embedding-ada-002",
-                name: "Azure Embedding - text-embedding-ada-002",
+                id: DEFAULT_MODEL,
+                name: DEFAULT_MODEL_INFO.Description,
                 contextLength: 8191,
-                dimensions: 1536
+                dimensions: DEFAULT_MODEL_INFO.OutputDimension
             }
         ];
     }

@@ -52,9 +52,9 @@
 
         <div class="routine-meta">
           <div class="routine-meta-row">
-            <i class="fa-solid" [class.fa-clock]="routine.RoutineType === 'Scheduled'" [class.fa-eye]="routine.RoutineType === 'Monitoring'"></i>
+            <i class="fa-solid" [class.fa-clock]="routine.RoutineType === 'Scheduled'" [class.fa-eye]="routine.RoutineType === 'Monitoring'" [class.fa-bolt]="routine.RoutineType === 'AgentWake'"></i>
             <span class="routine-type-badge">{{ routine.RoutineType }}</span>
-            <span class="routine-cron" [title]="routine.CronExpression">{{ DescribeCron(routine.CronExpression) }}</span>
+            <span class="routine-cron" [title]="routine.CronExpression || routine.ScheduleMode">{{ ScheduleDescription(routine) }}</span>
             <span class="routine-tz">({{ routine.Timezone }})</span>
           </div>
           <div class="routine-meta-row">

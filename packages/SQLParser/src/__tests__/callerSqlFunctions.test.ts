@@ -55,3 +55,24 @@ describe('FindForbiddenFunctionCalls on SQL Server', () => {
         expect(FindForbiddenFunctionCalls(`SELECT query_to_xml('x')`, tsql)).toEqual([]);
     });
 });
+
+describe('the dialect lists cover every function the clause and ad-hoc screens must refuse', () => {
+    it('PostgreSQL: the XML exporters, dblink, the file readers, large objects and the sleep functions', () => {
+        const required = [
+            'table_to_xml', 'query_to_xml', 'cursor_to_xml', 'schema_to_xml', 'database_to_xml',
+            'table_to_xmlschema', 'query_to_xmlschema', 'cursor_to_xmlschema', 'schema_to_xmlschema', 'database_to_xmlschema',
+            'table_to_xml_and_xmlschema', 'query_to_xml_and_xmlschema', 'schema_to_xml_and_xmlschema', 'database_to_xml_and_xmlschema',
+            'dblink', 'dblink_exec', 'pg_read_file', 'pg_read_binary_file', 'pg_ls_dir', 'lo_import', 'lo_export',
+            'pg_sleep', 'pg_sleep_for', 'pg_sleep_until',
+        ];
+        for (const name of required) {
+            expect(FindForbiddenFunctionCalls(`SELECT ${name}(1)`, pg)).toEqual([name]);
+        }
+    });
+
+    it('SQL Server: the rowset functions that reach other servers, files or XML documents', () => {
+        for (const name of ['openquery', 'openrowset', 'opendatasource', 'openxml']) {
+            expect(FindForbiddenFunctionCalls(`SELECT * FROM ${name.toUpperCase()}(1, 'x')`, tsql)).toEqual([name]);
+        }
+    });
+});

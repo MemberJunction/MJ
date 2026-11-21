@@ -33,6 +33,17 @@ const upgradeItems = [
   .filter((doc) => existsSync(path.join(REPO_ROOT, doc.src)))
   .map(({ label, slug }) => ({ label, slug }));
 
+/**
+ * The BizApps catalog gets its own top-level entry, but only when ingest wrote
+ * the page: it is skipped on documentation sets that predate Open Apps, and
+ * Starlight fails the build on a sidebar slug with no page behind it. (Ingest
+ * runs before `astro build` loads this file.)
+ */
+const CONTENT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'src/content/docs');
+const bizAppsItems = ['guides/bizapps.mdx', 'guides/bizapps.md'].some((file) => existsSync(path.join(CONTENT_DIR, file)))
+  ? [{ label: 'BizApps', slug: 'guides/bizapps' }]
+  : [];
+
 export default defineConfig({
   site,
   base,
@@ -88,6 +99,7 @@ export default defineConfig({
         { label: 'Release Notes', collapsed: true, autogenerate: { directory: 'releases', collapsed: true } },
         { label: 'Architecture', slug: 'architecture' },
         { label: 'Building Apps on MJ', slug: 'custom-apps' },
+        ...bizAppsItems,
         { label: 'Guides', collapsed: true, autogenerate: { directory: 'guides', collapsed: true } },
         {
           label: 'AI & Agents',

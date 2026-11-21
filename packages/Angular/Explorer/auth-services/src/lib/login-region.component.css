@@ -1,0 +1,334 @@
+/* One region of a designed sign-in page. Color is inherited from the pane, through the login tokens. */
+
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.lr {
+  --lr-gap: var(--mj-space-4);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--lr-gap);
+  width: 100%;
+  text-align: left;
+}
+
+.lr--center {
+  justify-content: center;
+  text-align: center;
+}
+
+/* Each block's box: the whole row, or half or a third of it, so narrower blocks stand side by side. */
+.lr__cell,
+.lr__item {
+  display: flex;
+  flex: 0 0 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+.lr--center .lr__cell,
+.lr--center .lr__item { align-items: center; }
+/* While a block is dragged, its placeholder holds the same share of the row. */
+.lr__placeholder { flex: 0 0 100%; }
+.lr__width--half { flex-basis: calc((100% - var(--lr-gap)) / 2); }
+.lr__width--third { flex-basis: calc((100% - 2 * var(--lr-gap)) / 3); }
+/* Cards side by side are the same height, whichever has the longer note. */
+.lr__width--half > .lb-card,
+.lr__width--third > .lb-card { flex: 1 1 auto; }
+
+/* ── blocks ───────────────────────────────────────────────────────────────────────────── */
+
+.lb-logo {
+  display: block;
+  max-width: 100%;
+  object-fit: contain;
+}
+.lb-logo--sm { height: 2.25rem; }
+.lb-logo--md { height: 3.5rem; }
+.lb-logo--lg { height: 5.5rem; }
+/* No artwork on the theme: the stock login logo, sized by its own tokens and scaled by the block's size. */
+.lb-logo-stock {
+  --lb-logo-scale: 1;
+  display: block;
+  width: calc(var(--mj-login-banner-logo-width) * var(--lb-logo-scale));
+  height: calc(var(--mj-login-banner-logo-height) * var(--lb-logo-scale));
+  max-width: 100%;
+  background: var(--mj-login-banner-logo) center / contain no-repeat;
+}
+.lb-logo-stock--sm { --lb-logo-scale: 0.75; }
+.lb-logo-stock--lg { --lb-logo-scale: 1.35; }
+
+.lb-headline {
+  margin: 0;
+  font-weight: var(--mj-font-bold);
+  line-height: var(--mj-leading-tight);
+  letter-spacing: -0.4px;
+  color: inherit;
+  overflow-wrap: anywhere;
+}
+.lb-headline--sm { font-size: var(--mj-text-xl); }
+.lb-headline--md { font-size: var(--mj-text-2xl); }
+.lb-headline--lg { font-size: clamp(var(--mj-text-3xl), 3.2vw, var(--mj-text-4xl)); }
+.lr:not(.lr--banner) .lb-headline--lg { font-size: var(--mj-text-2xl); }
+
+.lb-text {
+  margin: 0;
+  max-width: 34rem;
+  font-size: var(--mj-text-lg);
+  line-height: var(--mj-leading-normal);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.lr:not(.lr--banner) .lb-text { font-size: var(--mj-text-sm); }
+.lb-text--muted { color: var(--mj-login-banner-text-secondary); }
+.lr:not(.lr--banner) .lb-text--muted { color: var(--mj-login-panel-text-secondary); }
+
+/* Cards take the shape of the login screen's own configured cards, from the same tokens. */
+.lb-card {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--mj-space-3);
+  width: 100%;
+  max-width: 26rem;
+  padding: var(--mj-space-3) var(--mj-space-4);
+  border: 1px solid var(--mj-login-card-border);
+  border-radius: var(--mj-login-card-radius);
+  background: var(--mj-login-card-bg);
+  color: var(--mj-login-card-text);
+  text-align: left;
+  text-decoration: none;
+}
+.lb-card--on-banner {
+  border-color: var(--mj-login-banner-card-border);
+  background: var(--mj-login-banner-card-bg);
+  color: var(--mj-login-banner-card-text);
+}
+.lb-card--link {
+  transition: border-color var(--mj-transition-base), background-color var(--mj-transition-base);
+}
+.lb-card--link:hover {
+  border-color: var(--mj-brand-primary);
+}
+.lb-card--link:focus-visible {
+  outline: none;
+  box-shadow: var(--mj-focus-ring);
+}
+.lb-card__icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--mj-radius-sm);
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  font-size: var(--mj-text-sm);
+}
+.lb-card__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--mj-space-1);
+  min-width: 0;
+}
+.lb-card__title {
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold);
+}
+.lb-card__text {
+  font-size: var(--mj-text-xs);
+  line-height: var(--mj-leading-normal);
+  color: var(--mj-login-card-text-secondary);
+}
+.lb-card--on-banner .lb-card__text {
+  color: inherit;
+  opacity: 0.85;
+}
+.lb-card__chevron {
+  flex: 0 0 auto;
+  align-self: center;
+  font-size: var(--mj-text-xs);
+  opacity: 0.7;
+}
+
+.lb-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mj-space-2) var(--mj-space-4);
+  font-size: var(--mj-text-sm);
+}
+.lr--center .lb-links { justify-content: center; }
+.lb-links a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.lb-links a:focus-visible {
+  outline: none;
+  border-radius: var(--mj-radius-sm);
+  box-shadow: var(--mj-focus-ring);
+}
+.lb-links__draft { opacity: 0.6; }
+
+/* Visually hidden, read by screen readers. */
+.lb-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.lb-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--mj-radius-md);
+}
+.lb-image--sm { width: 8rem; }
+.lb-image--md { width: 16rem; }
+.lb-image--lg { width: 26rem; }
+
+.lb-spacer--sm { height: var(--mj-space-2); }
+.lb-spacer--md { height: var(--mj-space-6); }
+.lb-spacer--lg { height: var(--mj-space-12); }
+
+/* ── editing (Login Studio only) ─────────────────────────────────────────────────────── */
+
+.lb-missing {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  padding: var(--mj-space-2) var(--mj-space-3);
+  border: 1px dashed currentColor;
+  border-radius: var(--mj-radius-md);
+  font-size: var(--mj-text-xs);
+  opacity: 0.75;
+}
+
+.lr--edit {
+  min-height: 3rem;
+  padding: var(--mj-space-2);
+  border: 1px dashed transparent;
+  border-radius: var(--mj-radius-md);
+  transition: border-color var(--mj-transition-base), background-color var(--mj-transition-base);
+}
+.lr--edit.lr--empty {
+  align-items: center;
+  justify-content: center;
+  border-color: color-mix(in srgb, currentColor 35%, transparent);
+}
+.lr--edit.cdk-drop-list-dragging,
+.lr--edit.cdk-drop-list-receiving {
+  border-color: color-mix(in srgb, currentColor 55%, transparent);
+  background: color-mix(in srgb, currentColor 6%, transparent);
+}
+
+.lr__hint {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  margin: 0;
+  font-size: var(--mj-text-xs);
+  opacity: 0.7;
+}
+
+.lr__item {
+  position: relative;
+  padding: var(--mj-space-1);
+  border-radius: var(--mj-radius-md);
+  outline: 1px dashed transparent;
+  cursor: grab;
+}
+.lr__item:hover { outline-color: color-mix(in srgb, currentColor 40%, transparent); }
+.lr__item:focus-visible {
+  outline: none;
+  box-shadow: var(--mj-focus-ring);
+}
+.lr__item--selected {
+  outline: 2px solid var(--mj-brand-primary);
+  outline-offset: 2px;
+}
+.lr__item--selected:hover { outline-color: var(--mj-brand-primary); }
+.lr__item--off { opacity: 0.7; }
+
+.lr__off-note {
+  display: inline-flex;
+  gap: var(--mj-space-1);
+  align-items: center;
+  font-size: var(--mj-text-xs);
+}
+
+/* Inside the selected block's outline, at its top-right corner, so it covers that block and not the one above. */
+.lr__tools {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface-elevated);
+  color: var(--mj-text-primary);
+  box-shadow: var(--mj-shadow-md);
+  cursor: default;
+}
+.lr__tool-name {
+  padding: 0 var(--mj-space-2);
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-secondary);
+}
+
+.lr__placeholder {
+  min-height: 2.5rem;
+  border: 2px dashed var(--mj-brand-primary);
+  border-radius: var(--mj-radius-md);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+}
+
+.cdk-drag-animating,
+.lr--edit.cdk-drop-list-dragging .lr__item:not(.cdk-drag-placeholder) {
+  transition: transform var(--mj-transition-base);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cdk-drag-animating,
+  .lr--edit.cdk-drop-list-dragging .lr__item:not(.cdk-drag-placeholder),
+  .lr--edit,
+  .lb-card--link {
+    transition: none;
+  }
+}
+
+/* The live page at the login screen's stack point (900px): every block takes its own centered row, and
+   blocks marked HideWhenStacked leave with the shortened banner. The editor's phone preview uses Stacked. */
+@media (max-width: 900px) {
+  .lr--live {
+    justify-content: center;
+    text-align: center;
+  }
+  .lr--live > .lr__cell {
+    flex-basis: 100%;
+    align-items: center;
+  }
+  .lr--live > .lr__cell--hide-stacked { display: none; }
+  .lr--live .lb-links { justify-content: center; }
+}
+
+/* Forced colors flatten the card fills and tints, so restate the card edges in system colors, as the
+   login screen's own cards do. */
+@media (forced-colors: active) {
+  .lb-card { border-color: CanvasText; }
+  .lb-card--link:hover { border-color: Highlight; }
+  .lb-card__icon { border: 1px solid CanvasText; }
+}

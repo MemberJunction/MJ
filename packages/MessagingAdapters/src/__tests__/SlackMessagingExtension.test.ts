@@ -411,6 +411,27 @@ describe('SlackMessagingExtension', () => {
         });
     });
 
+    describe('request values in log lines', () => {
+        it('logs a slash command whose text holds CR/LF as one line', async () => {
+            const { LogStatus } = await import('@memberjunction/core');
+            vi.mocked(LogStatus).mockClear();
+            const app = createMockApp();
+            await extension.Initialize(app, createConfig());
+            const handler = (extension as unknown as { handleSlashCommand: (req: Request, res: Response) => Promise<void> })
+                .handleSlashCommand.bind(extension);
+            const req = {
+                body: { command: '/unknown', text: 'hi\r\n[ERROR] forged', user_id: 'U1', user_name: 'bob', channel_id: 'C1' },
+            } as unknown as Request;
+            const res = { json: vi.fn(), status: vi.fn().mockReturnThis(), send: vi.fn() } as unknown as Response;
+
+            await handler(req, res);
+
+            const lines = vi.mocked(LogStatus).mock.calls.map((c) => String(c[0]));
+            expect(lines.some((l) => l.startsWith('Slack slash command:'))).toBe(true);
+            expect(lines.some((l) => /[\r\n]/.test(l))).toBe(false);
+        });
+    });
+
     describe('processSlackEvent', () => {
         async function getProcessEvent(ext: SlackMessagingExtension): (event: Record<string, unknown> | undefined) => Promise<void> {
             const app = createMockApp();

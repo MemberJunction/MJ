@@ -79,6 +79,50 @@ export interface FormCompositionChoice {
     Label: string;
 }
 
+/**
+ * Compact active-record state included in {@link FormCompositionSnapshot} and {@link FormAgentContext}
+ * when a saved record is open, giving AI assistants (Skip / Sage) immediate visibility into
+ * the record's display name, edit/dirty status, and key scalar field values.
+ */
+export interface FormAgentRecordState {
+    DisplayName?: string | null;
+    RecordDisplayName?: string | null;
+    EditMode: boolean;
+    IsDirty: boolean;
+    Dirty?: boolean;
+    DirtyFields?: string[];
+    DirtyFieldNames?: string[];
+    HasExternalUpdateConflict?: boolean;
+    PreviewingHistoricalChangeID?: string | null;
+    ConflictCount?: number;
+    VersionCount?: number;
+    TagCount?: number;
+    KeyFields?: Record<string, string | number | boolean | null>;
+}
+
+/**
+ * Compact summary of incoming and outgoing record links for {@link FormAgentContext}.
+ */
+export interface FormAgentLinksSummary {
+    TotalCount: number;
+    OutgoingCount: number;
+    IncomingCount: number;
+    ByEntity?: Array<{
+        EntityName: string;
+        EntityDisplayName: string;
+        Direction: 'outgoing' | 'incoming' | 'both';
+        Count: number;
+        SampleNames: string[];
+    }>;
+    TopLinks?: Array<{
+        Direction: 'outgoing' | 'incoming';
+        EntityName: string;
+        RecordID: string;
+        DisplayName: string;
+        FieldLabel: string;
+    }>;
+}
+
 export interface FormCompositionSnapshot {
     Entity: string;
     /**
@@ -98,6 +142,10 @@ export interface FormCompositionSnapshot {
     Rail: FormCompositionRailItem[];
     SlotsPresent: FormPanelSlot[];
     ChromeRuleCount: number;
+    /** Optional active record field/dirty state for AI context. */
+    RecordState?: FormAgentRecordState;
+    /** Optional bidirectional record links summary for AI context. */
+    Links?: FormAgentLinksSummary;
 }
 
 /** One rail item, as a consumer outside the form needs it. */
@@ -131,6 +179,8 @@ export interface BuildFormCompositionSnapshotInput {
     HiddenContributionKeys: ReadonlySet<string>;
     SlotsPresent: readonly FormPanelSlot[];
     ChromeRuleCount: number;
+    RecordState?: FormAgentRecordState;
+    Links?: FormAgentLinksSummary;
 }
 
 function groupOf(groups: readonly FormChromeGroup[], sectionKey: string): string | null {
@@ -242,6 +292,8 @@ export function BuildFormCompositionSnapshot(input: BuildFormCompositionSnapshot
         })),
         SlotsPresent: [...input.SlotsPresent],
         ChromeRuleCount: input.ChromeRuleCount,
+        ...(input.RecordState ? { RecordState: input.RecordState } : {}),
+        ...(input.Links ? { Links: input.Links } : {}),
     };
 }
 
@@ -271,6 +323,10 @@ export interface FormAgentContext {
     RecordPrimaryKey: string | null;
     FormChoice: FormCompositionChoice;
     Sections: FormAgentContextSection[];
+    /** Optional active record field/dirty state for AI context. */
+    RecordState?: FormAgentRecordState;
+    /** Optional bidirectional record links summary for AI context. */
+    Links?: FormAgentLinksSummary;
 }
 
 /**
@@ -303,5 +359,7 @@ export function BuildFormAgentContext(snapshot: FormCompositionSnapshot): FormAg
             Hidden: section.Hidden,
             ContributionKey: holderBySection.get(section.Key) ?? null,
         })),
+        ...(snapshot.RecordState ? { RecordState: snapshot.RecordState } : {}),
+        ...(snapshot.Links ? { Links: snapshot.Links } : {}),
     };
 }

@@ -99,7 +99,8 @@ import { MJUserEntity } from '@memberjunction/core-entities';
  *      freely editable.
  *      `Email` is the ladder's OTHER rung (`principals.ts:141`) with the IDENTICAL lack of a `Type`
  *      filter, and is deliberately left mutable here — not overlooked. Two things narrow it: (a)
- *      `MJ: Users.Email` carries the database's `UQ_User_Email` unique constraint, so redirecting
+ *      `MJ: Users.Email` carries the database's `UQ_User_Email` unique constraint (asserted on both
+ *      platforms by the `user-elevation.UE5` integration check), so redirecting
  *      the Email rung to your own row requires the configured candidate to match NO active user at
  *      all — already the misconfiguration case this file's docs (and `resolvePrincipalFrom`'s own
  *      per-redeem logging) already surface loudly, not a quiet success path; and (b) even granting

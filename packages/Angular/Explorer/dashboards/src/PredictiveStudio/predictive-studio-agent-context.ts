@@ -20,6 +20,8 @@
  * read-only boundary is restated on each door component; this module never mutates anything.
  */
 
+import { UUIDsEqual } from '@memberjunction/global';
+import type { GateOutcome } from '@memberjunction/predictive-studio-core';
 import { BoundNameList } from '../shared/agent-tool-validation';
 
 /** Upper bound on names published in any PS context list field; a companion `*Count` is surfaced when truncated. */
@@ -28,11 +30,6 @@ export const PS_AGENT_CONTEXT_NAME_LIST_CAP = 25;
 /** Cap a name list to {@link PS_AGENT_CONTEXT_NAME_LIST_CAP}. Pure; never mutates the input. */
 export function CapPSNames(names: readonly string[]): string[] {
   return BoundNameList(names, PS_AGENT_CONTEXT_NAME_LIST_CAP);
-}
-
-/** @deprecated Use {@link CapPSNames}. */
-export function capPSNames(names: readonly string[]): string[] {
-  return CapPSNames(names);
 }
 
 /** Minimal id+name descriptor the doors hand the resolver so it can match an agent reference. */
@@ -46,23 +43,18 @@ export interface PSNamedRecord {
  * SQL-Server-upper vs PG-lower UUID casing) → exact name (trimmed, case-insensitive) → case-insensitive
  * *contains* match on the name, but ONLY when it's unambiguous — a needle contained in several candidate
  * names returns null (silently opening the first would be silently opening the wrong one; the paired
- * {@link buildPSNotFoundError} then lists the contenders so the agent can disambiguate). Pure +
+ * {@link BuildPSNotFoundError} then lists the contenders so the agent can disambiguate). Pure +
  * deterministic over the candidate list.
  */
 export function ResolvePSRecord<T extends PSNamedRecord>(input: string, candidates: readonly T[]): T | null {
   const needle = (input ?? '').trim().toLowerCase();
   if (!needle) return null;
-  const byId = candidates.find((c) => c.ID.toLowerCase() === needle);
+  const byId = candidates.find((c) => UUIDsEqual(c.ID, needle));
   if (byId) return byId;
   const byName = candidates.find((c) => c.Name.trim().toLowerCase() === needle);
   if (byName) return byName;
   const contains = candidates.filter((c) => c.Name.toLowerCase().includes(needle));
   return contains.length === 1 ? contains[0] : null;
-}
-
-/** @deprecated Use {@link ResolvePSRecord}. */
-export function resolvePSRecord<T extends PSNamedRecord>(input: string, candidates: readonly T[]): T | null {
-  return ResolvePSRecord(input, candidates);
 }
 
 /**
@@ -79,20 +71,18 @@ export function BuildPSNotFoundError(input: string, candidates: readonly PSNamed
   return `No ${noun} matching "${input}" is available. Available ${noun}s include: ${sample || '(none)'}.`;
 }
 
-/** @deprecated Use {@link BuildPSNotFoundError}. */
-export function buildPSNotFoundError(input: string, candidates: readonly PSNamedRecord[], noun: string): string {
-  return BuildPSNotFoundError(input, candidates, noun);
-}
-
 // ============================================================================
 // PREDICTIONS door context (catalog ↔ trust-gated workspace)
 // ============================================================================
 
+/** What the open prediction's trust verdict says: the stored gate outcome, or not evaluated. */
+export type PredictionTrustOutcome = GateOutcome | 'not-evaluated';
+
 /** The open prediction's salient slice, published when the workspace is showing a selection. */
 export interface SelectedPredictionSummary {
   Name: string;
-  /** Trust grade (Poor/Fair/Good/Excellent). */
-  TrustGrade: string;
+  /** The stored gate outcome of the model's training run (`model` / `keep-simple-baseline` / `no-signal`), or `not-evaluated`. */
+  TrustOutcome: PredictionTrustOutcome;
   /** Whether the trust gate lets the user act on this prediction. */
   CanOpen: boolean;
 }
@@ -115,11 +105,13 @@ export interface PredictionsAgentContextInput {
   AtRiskLoaded?: boolean;
   /** Ranked at-risk row count (when loaded). */
   AtRiskCount?: number;
+  /** True when the latest run had more predictions than the read cap, so the counts cover only the first ones. */
+  AtRiskCapped?: boolean;
   /** Band breakdown of the at-risk rows (when loaded). */
   HighRiskCount?: number;
   MediumRiskCount?: number;
   LowRiskCount?: number;
-  /** Plain-language "what's driving this" drivers for the selection (bounded). */
+  /** The features the model weighted most for the selection (coefficient models only; bounded). */
   Drivers?: string[];
 }
 
@@ -137,7 +129,7 @@ export function BuildPredictionsAgentContext(input: PredictionsAgentContextInput
   }
   if (input.View === 'workspace' && input.Selected) {
     context['SelectedPredictionName'] = input.Selected.Name;
-    context['SelectedPredictionTrust'] = input.Selected.TrustGrade;
+    context['SelectedPredictionTrust'] = input.Selected.TrustOutcome;
     context['SelectedPredictionCanAct'] = input.Selected.CanOpen;
     // Only surface the at-risk breakdown once loaded — never fabricate zeros before the fetch resolves.
     if (input.AtRiskLoaded) {
@@ -145,17 +137,15 @@ export function BuildPredictionsAgentContext(input: PredictionsAgentContextInput
       context['HighRiskCount'] = input.HighRiskCount ?? 0;
       context['MediumRiskCount'] = input.MediumRiskCount ?? 0;
       context['LowRiskCount'] = input.LowRiskCount ?? 0;
+      if (input.AtRiskCapped) {
+        context['AtRiskCapped'] = true;
+      }
     }
     if (input.Drivers && input.Drivers.length > 0) {
       context['Drivers'] = CapPSNames(input.Drivers);
     }
   }
   return context;
-}
-
-/** @deprecated Use {@link BuildPredictionsAgentContext}. */
-export function buildPredictionsAgentContext(input: PredictionsAgentContextInput): Record<string, unknown> {
-  return BuildPredictionsAgentContext(input);
 }
 
 // ============================================================================
@@ -196,11 +186,6 @@ export function BuildStudioAgentContext(input: StudioAgentContextInput): Record<
   };
 }
 
-/** @deprecated Use {@link BuildStudioAgentContext}. */
-export function buildStudioAgentContext(input: StudioAgentContextInput): Record<string, unknown> {
-  return BuildStudioAgentContext(input);
-}
-
 // ============================================================================
 // MODELS door context (registry + production)
 // ============================================================================
@@ -231,9 +216,4 @@ export function BuildModelsAgentContext(input: ModelsAgentContextInput): Record<
     DraftModelCount: input.DraftModelCount,
     ProductionModelCount: input.ProductionModelCount,
   };
-}
-
-/** @deprecated Use {@link BuildModelsAgentContext}. */
-export function buildModelsAgentContext(input: ModelsAgentContextInput): Record<string, unknown> {
-  return BuildModelsAgentContext(input);
 }

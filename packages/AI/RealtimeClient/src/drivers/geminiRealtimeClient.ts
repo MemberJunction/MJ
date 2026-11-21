@@ -8,14 +8,18 @@ import {
     IsPcmAudioMimeType,
     ParseDurationToMs,
     RealtimeConnectionSetup,
-    RealtimeSessionResumption,
     RealtimeToolBatchBarrier,
     RealtimeTrackDescriptor,
     ExtractToolSchedulingHint,
     REALTIME_RELAY_TIME_LIMIT_CLOSE_CODE,
+    RenderLateToolResultNote,
+    RenderRealtimeMemorySeed,
+    RenderRealtimeMemorySeedAsContextNote,
     type RealtimeAvatarUnavailableReason,
     type RealtimeClientTransport,
-    type RealtimeResumeAttempt,
+    type RealtimeContextNoteOptions,
+    type RealtimeReconnectFailureCode,
+    type RealtimeReconnectReason,
 } from '@memberjunction/ai';
 import {
     GoogleGenAI,
@@ -25,6 +29,7 @@ import {
     type Content,
     type FunctionCall,
     type FunctionResponse,
+    type LiveCallbacks,
     type LiveConnectConfig,
     type LiveServerContent,
     type LiveServerMessage,
@@ -37,6 +42,8 @@ import {
     REALTIME_CLIENT_TIME_LIMIT_ERROR_CODE,
     RealtimeClientState,
     REQUESTED_TRACKS_SESSION_KEY,
+    type RealtimeClientReconnectContext,
+    type RefreshedRealtimeClientCredential,
 } from '../generic/baseRealtimeClient';
 import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
@@ -62,6 +69,13 @@ const GEMINI_OUTPUT_SAMPLE_RATE = 24000;
 const HELD_MIC_AUDIO_SECONDS = 2;
 /** {@link HELD_MIC_AUDIO_SECONDS} of 16 kHz, 16-bit mono PCM, as the base64 characters the chunks travel in. */
 const MAX_HELD_MIC_AUDIO_BASE64_CHARS = Math.ceil((GEMINI_INPUT_SAMPLE_RATE * 2 * HELD_MIC_AUDIO_SECONDS * 4) / 3);
+/**
+ * How long, after the user's last audible mic chunk, words the connection has not answered yet hold a timed move. Google
+ * sends nothing for an utterance (not even its transcription) until its answer starts, about a second after the user
+ * stops; a move in that gap closes the only connection that heard the words. The hold ends early when a turn opens
+ * (that turn then holds the move), and is a safety net for speech Google never answers (a cough, background noise).
+ */
+export const GEMINI_UNANSWERED_UTTERANCE_HOLD_MS = 5_000;
 
 /** The detail field each Gemini `usageMetadata` modality's token count goes into; other modalities are not kept. */
 const GEMINI_MODALITY_TOKEN_FIELDS: Partial<Record<string, 'TextTokens' | 'AudioTokens' | 'ImageTokens' | 'VideoTokens'>> = {
@@ -152,9 +166,27 @@ interface GeminiParsedSessionConfig {
     supportsInboundVideo?: boolean;
     maxInboundVideoRate?: number;
     maxInboundVideoStreams?: number;
+    contextWindowCompression?: boolean;
+    uncompressedVideoConnectionMaxSeconds?: number;
     requestedTracks?: readonly RealtimeTrackDescriptor[];
     /** The avatar the server granted this session, or `null` when it granted none. */
     avatar: GeminiAvatarGrant | null;
+}
+
+/** A microphone chunk held while the session moves to a new connection. */
+interface GeminiHeldMicChunk {
+    /** The base64 PCM16 audio. */
+    readonly Pcm: string;
+    /** Whether the mic meter heard the user when the chunk was captured (as a live chunk is judged when sent). */
+    readonly Speech: boolean;
+}
+
+/** A send deferred while a turn is in flight or the session moves to a new connection. */
+interface GeminiQueuedSend {
+    /** Sends it. */
+    readonly Run: () => void;
+    /** The call a tool-result send answers, so a blocking batch's results can be found in the queue. */
+    readonly ToolCallID?: string;
 }
 
 /** A connection {@link GeminiRealtimeClient} opened, with the number that marks it as current. */
@@ -163,6 +195,8 @@ interface GeminiOpenedConnection {
     ConnectionNumber: number;
     /** Google's confirmation of the connection's setup (`setupComplete`); the connection is put to use only after it. */
     Setup: RealtimeConnectionSetup;
+    /** Resolves when the underlying session's `OnClose` callback fires. */
+    Closed: Promise<void>;
 }
 
 /**
@@ -242,7 +276,7 @@ export class GeminiPcmPlayback extends RealtimePcmPlayback {
  *   stops at the first send that starts a new response).
  * - **Moving to a new connection**: Google ends a connection after about 10 minutes, announcing
  *   it with `goAway`, and the session resumes on a new one with Google's handle
- *   ({@link RealtimeSessionResumption}). A planned move waits until no turn is in progress
+ *   ({@link RealtimeReconnectController}). A planned move waits until no turn is in progress
  *   ({@link IsTurnOpen}). A connection is put to use only once Google confirms its setup
  *   (`setupComplete`): input that reaches it earlier is dropped. During a move, sends queue and
  *   the latest 2 s of mic audio are held; both go out on the new connection once it is ready.
@@ -252,7 +286,19 @@ export class GeminiPcmPlayback extends RealtimePcmPlayback {
  *   commit. {@link SendToolResult} therefore follows `sendToolResponse` with an empty-turn
  *   commit whenever a note left the turn open, so the model speaks the result immediately
  *   (the behavioral equivalent of the OpenAI driver's explicit `response.create`).
- - **Triggering turns ride realtime text**: typed text ({@link SendText}) and narration
+ * - **Blocking tool-call batch** (`turnComplete` idle signal, blocking tooling): a BLOCKING Gemini
+ *   answers only once it has EVERY result of a `toolCall` frame. The first result marks the client
+ *   busy (the reply is next), so the batch's other results skip that wait and go out in order;
+ *   context notes and narrations still wait for the reply. The open-turn commit goes out after
+ *   the batch's last result. When the tool-batch barrier gives up, the batch expires: its queued
+ *   results go out first, then the held commit (once, last). Once the last result is out, a no-output
+ *   backstop ({@link BLOCKING_TOOL_REPLY_BACKSTOP_MS}) releases the turn if the model never answers.
+ *   The backstop covers a single blocking call too (a batch of one). A commit still held when the
+ *   session moves to a new connection goes out once the move completes and nothing is owed.
+ *   Known limit: a user turn that takes the floor before the batch's first result keeps it, so the
+ *   batch's results wait for that turn's reply, or for the tool-batch barrier (15 s) when a blocking
+ *   Gemini does not answer text while calls are pending.
+ * - **Triggering turns ride realtime text**: typed text ({@link SendText}) and narration
  *   triggers ({@link RequestSpokenUpdate}) are sent via `sendRealtimeInput({ text })` — the
  *   Live API's documented in-conversation text path. Native-audio Live models treat
  *   `sendClientContent` as initial-history seeding only: a mid-call `turnComplete: true`
@@ -269,6 +315,103 @@ export class GeminiPcmPlayback extends RealtimePcmPlayback {
 @RegisterClass(BaseRealtimeClient, 'gemini')
 export class GeminiRealtimeClient extends BaseRealtimeClient {
     public static readonly ASSISTANT_SAFETY_BACKSTOP_MS = 15000;
+    /**
+     * Blocking tooling on the `turnComplete` idle signal: with no model output, `turnComplete`, new
+     * tool call or new user turn this long after the last tool result of a batch went out, the turn
+     * is released (see {@link handleIdleTerminal}) so later sends are not held until the connection moves.
+     * A single blocking call is a batch of one, so it gets this backstop too (#6753 point 3).
+     *
+     * Basis for 10 s: a downstream eval on Gemini 3.8 Live (blocking) measured the time from the last
+     * tool result to the model's next output at p50 1.17 s, p95 3.78 s and max 4.76 s over 85 waits,
+     * none at or over 10 s. A reply that takes longer than this to start is released early: a queued
+     * note or narration then goes out and interrupts it.
+     */
+    public static readonly BLOCKING_TOOL_REPLY_BACKSTOP_MS = 10000;
+    public static readonly GEMINI_LIVE_CONNECTION_SECONDS = 600;
+    public static readonly GEMINI_LIVE_UNCOMPRESSED_VIDEO_CONNECTION_SECONDS = 120;
+
+    private uncompressedVideoConnectionSeconds: number | undefined =
+        GeminiRealtimeClient.GEMINI_LIVE_UNCOMPRESSED_VIDEO_CONNECTION_SECONDS;
+    private videoCapActive = false;
+    private hasResumedOnce = false;
+    private currentClosedPromise: Promise<void> | null = null;
+
+    protected override get DefaultCallDurationSeconds(): number | undefined {
+        return GeminiRealtimeClient.GEMINI_LIVE_CONNECTION_SECONDS;
+    }
+
+    /**
+     * Applies the 120 s uncompressed-video connection cap only when inbound video is active,
+     * at least one frame has been sent on the current connection/stream (`videoCapActive`), AND
+     * `this.uncompressedVideoConnectionSeconds` is defined (`undefined` when sliding-window
+     * compression is enabled in the session pact or connect config).
+     */
+    protected override get RuntimeCallDurationSeconds(): number | undefined {
+        if (
+            this.uncompressedVideoConnectionSeconds !== undefined &&
+            this.IsTrackEstablished('video', 'inbound') &&
+            this.videoCapActive
+        ) {
+            return this.uncompressedVideoConnectionSeconds;
+        }
+        return undefined;
+    }
+
+    /**
+     * Google Gemini Developer API (`GeminiRealtimeClient`, key `'gemini'`) defaults to `false`
+     * because `BidiGenerateContent` does not reliably honor `sessionResumption.handle` across
+     * connections; `GeminiEnterpriseRealtimeClient` (Vertex AI Live) overrides this to `true`.
+     */
+    protected override get DefaultTrustsNativeResumption(): boolean {
+        return false;
+    }
+
+    /** Gemini / Vertex AI Live emits a fresh resumable handle shortly after each `turnComplete`. */
+    protected override get RequiresPostTurnResumptionHandle(): boolean {
+        return true;
+    }
+
+    /**
+     * Gemini ephemeral tokens open several connections (`SessionConfig.tokenUses`) until `ExpiresAt`, and relay
+     * tickets allow multiple opens until `ExpiresAt`, so refreshes are driven by `ExpiresAt` and the spent uses
+     * ({@link CredentialConnectionLimit}) rather than minting a new token on every reconnect attempt.
+     */
+    protected override get RequiresFreshTokenPerReconnect(): boolean {
+        return false;
+    }
+
+    /**
+     * The connections a minted ephemeral token opens (`tokenUses`, which the server sizes from the effective connection
+     * length). Each resume is a new session to Gemini and spends one; one past the count is refused
+     * "Token has been used too many times". A relay ticket, or a mint that predates the field, has no limit here.
+     */
+    protected override CredentialConnectionLimit(credential: RefreshedRealtimeClientCredential): number | undefined {
+        if (credential.Kind === 'relay') {
+            return undefined;
+        }
+        const uses = credential.SessionConfig?.['tokenUses'];
+        return typeof uses === 'number' && Number.isInteger(uses) && uses > 0 ? uses : undefined;
+    }
+
+    /**
+     * Google closes a connection opened on an ephemeral token when that token's `expireTime` passes ("1011 auth token has
+     * expired"), even after the client holds a refreshed one: the token bounds the sessions it opened, not only their
+     * setup. A relay connection runs on the server's key, and its ticket only gates opening the tunnel.
+     */
+    protected override ConnectionClosesAtCredentialExpiry(credential: RefreshedRealtimeClientCredential): boolean {
+        return credential.Kind !== 'relay';
+    }
+
+    public override RemoveTrack(descriptor: Pick<RealtimeTrackDescriptor, 'Modality' | 'Direction' | 'SourceID'>): boolean {
+        const removed = super.RemoveTrack(descriptor);
+        if (removed && !this.IsTrackEstablished('video', 'inbound') && this.videoCapActive) {
+            this.videoCapActive = false;
+            if (this.connectionReady && !this.IsReconnecting) {
+                this.ArmConnectionDurationTimer();
+            }
+        }
+        return removed;
+    }
 
     // ── Transport / audio resources ────────────────────────────────────────────
     private session: GeminiLiveClientSession | null = null;
@@ -286,13 +429,6 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private lastVideoSendTimestamp = 0;
     protected videoFramesSent = 0;
     /**
-     * Moves the session to a new connection with Google's resumption handle: when Google
-     * announces the connection is ending (`goAway`, with the time left; on Vertex AI it came about
-     * 9 minutes into a connection, with 30 s left) and after an unexpected drop. A planned move
-     * waits until no turn is in progress ({@link IsTurnOpen}). Created per {@link Connect}.
-     */
-    private resumption: RealtimeSessionResumption | null = null;
-    /**
      * Whether input can go out: the connection in use has confirmed its setup (`setupComplete`) and
      * no move to a new connection is in progress. Google drops input that reaches a connection
      * before its setup completes, and a connection being replaced resumes from a handle issued
@@ -301,11 +437,18 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      */
     private connectionReady = false;
     /** Microphone audio captured during a move, sent on the new connection once it is ready. */
-    private heldMicAudio: string[] = [];
+    private heldMicAudio: GeminiHeldMicChunk[] = [];
     /** Base64 characters in {@link heldMicAudio}, kept under {@link MAX_HELD_MIC_AUDIO_BASE64_CHARS}. */
     private heldMicAudioChars = 0;
     /** See {@link IsTurnOpen}. */
     private turnOpen = false;
+    /**
+     * When the mic last carried the user's voice to the connection in use, while no turn holds a move for it; `null` once
+     * a turn opens, the hold times out, or the connection is left. See {@link GEMINI_UNANSWERED_UTTERANCE_HOLD_MS}.
+     */
+    private unansweredSpeechAtMs: number | null = null;
+    /** Ends the {@link unansweredSpeechAtMs} hold once the user has been quiet for the hold time. */
+    private unansweredSpeechTimer: ReturnType<typeof setTimeout> | null = null;
     /** A turn's `turnComplete` came while a tool call was pending: the turn ends once the last pending call's result goes out. */
     private turnEndAwaitsToolResults = false;
     /** Model, config and token of the current connection; a resume reuses them with the new handle. */
@@ -318,11 +461,6 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * the session that replaced it. `0` while no connection is in use.
      */
     private currentConnection = 0;
-
-    /** Returns the latest session resumption handle reported by the server, if any. */
-    public get ResumptionHandle(): string | null {
-        return this.resumption?.Handle ?? null;
-    }
 
     /**
      * Whether a turn is in progress. A turn opens at its first sign: the user's first transcribed words, a turn this
@@ -370,6 +508,25 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         return !this.supportsBlocking;
     }
 
+    /**
+     * Whether tool-call frames are tracked as blocking batches: blocking tooling on the `turnComplete`
+     * idle signal. Gemini waits for every result of a frame before it answers, while one result marks
+     * the client busy for the reply.
+     */
+    private get tracksBlockingBatch(): boolean {
+        return !this.isNonBlocking && this.idleSignal === 'turnComplete';
+    }
+
+    // ── Blocking tool-call batch (see tracksBlockingBatch) ─────────────────────
+    /** Calls of the open batch whose results have not gone out. A second frame while results are owed joins the batch. */
+    private blockingBatchOwed = new Set<string>();
+    /** Calls of a batch the tool-batch barrier expired: a late result still skips the turn wait. */
+    private blockingBatchExpired = new Set<string>();
+    /** A result of the open batch went out, so the client waits for the reply and the batch's other results skip that wait. */
+    private blockingBatchStarted = false;
+    /** The commit of an open client turn was held for the batch's last result and has not gone out. */
+    private blockingBatchCommitHeld = false;
+
     // ── Response state machine ─────────────────────────────────────────────────
     /** Accumulates the in-flight assistant transcript across delta frames. */
     private pendingAssistantText = '';
@@ -384,7 +541,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     /** The kind of the turn currently in flight; stamped at send time, reset on turnComplete. */
     private activeResponseKind: 'normal' | 'narration' = 'normal';
     /** Sends deferred while a turn is in flight; drained in order on turnComplete. */
-    private queuedSends: Array<() => void> = [];
+    private queuedSends: GeminiQueuedSend[] = [];
     /**
      * Maps each pending tool call's `CallID` to its function name: Gemini's `sendToolResponse`
      * requires the function name, which the {@link SendToolResult} contract does not carry.
@@ -398,9 +555,18 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * {@link SendContextNote}; cleared by the empty-turn commit in
      * {@link sendToolResponseTurn} and on a model `turnComplete` (the generation consumed the
      * open content). Realtime-text triggers ({@link sendTriggeringUserTurn}) do NOT commit
-     * client content and leave this flag untouched.
+     * client content and leave this flag untouched. Under `interactionStatus`, true IDLE ends the
+     * interaction instead: it commits the turn only when a non-blocking tool response is waiting on
+     * it ({@link toolResponseAwaitsCommit}), and otherwise treats the open content as consumed.
      */
     private openClientTurn = false;
+    /**
+     * True when a NON_BLOCKING tool response went out while {@link openClientTurn} was open: the
+     * commit that releases its continuation was deferred to true IDLE so it would not cut off the
+     * generation in progress. Only this deferred commit is owed at IDLE; committing an open context
+     * note the finished generation already consumed would start a second, unsolicited reply.
+     */
+    private toolResponseAwaitsCommit = false;
     /**
      * The client's own view of the session state — mirrors what was last emitted, EXCEPT after
      * a tool call: the host typically shows its own busy indicator then, so the client silently
@@ -429,11 +595,23 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     public async Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream, cameraStream?: MediaStream): Promise<void> {
         this.AssertTransportSupported(config);
         this.resetForConnect(micStream, cameraStream);
+        this.ApplySessionConfigTiming(config);
         this.setState('connecting');
         const session = this.parseSessionConfig(config);
         this.idleSignal = session.idleSignal;
         this.supportsScheduling = session.supportsScheduling;
         this.supportsBlocking = session.supportsBlocking;
+        const hasContextCompression =
+            session.contextWindowCompression ??
+            (session.uncompressedVideoConnectionMaxSeconds === 0
+                ? true
+                : Boolean(session.liveConfig.contextWindowCompression));
+        const rawUncompressedVideoSec = session.uncompressedVideoConnectionMaxSeconds;
+        this.uncompressedVideoConnectionSeconds = hasContextCompression
+            ? undefined
+            : rawUncompressedVideoSec !== undefined && rawUncompressedVideoSec > 0
+              ? rawUncompressedVideoSec
+              : GeminiRealtimeClient.GEMINI_LIVE_UNCOMPRESSED_VIDEO_CONNECTION_SECONDS;
         this.negotiateSessionTracks(session);
         const playback = this.createPlayback();
         this.playback = playback;
@@ -441,8 +619,6 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         // it in (issue #5153). Null for playbacks with no output stream (fakes, no WebAudio).
         this.publishRemoteMediaStream(playback.GetOutputStream?.() ?? null);
         const liveConfig = this.prepareAvatar(session, playback);
-        this.resumption?.Dispose();
-        this.resumption = this.createResumption();
         const target: GeminiConnectTarget = {
             Model: session.model,
             Config: liveConfig,
@@ -469,9 +645,13 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.cameraStream = cameraStream ?? null;
         this.clearSafetyBackstop();
         this.toolBatchBarrier.Clear();
+        this.closeBlockingBatch();
         this.firstVideoSendTimestamp = 0;
         this.lastVideoSendTimestamp = 0;
         this.videoFramesSent = 0;
+        this.videoCapActive = false;
+        this.hasResumedOnce = false;
+        this.currentClosedPromise = null;
         this.resetConnectionState();
         this.disposeAvatarOutput();
     }
@@ -654,6 +834,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * Safe to call more than once.
      */
     public async Disconnect(): Promise<void> {
+        this.DisposeReconnectTimers();
         this.closeAudioMeters();
         this.clearSafetyBackstop();
         this.toolBatchBarrier.Clear();
@@ -667,16 +848,16 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.disposeAvatarOutput();
         this.playback?.Close();
         this.playback = null;
-        // Stop resuming before the socket closes, and drop events still in flight from it.
-        this.resumption?.Dispose();
-        this.resumption = null;
         this.connectTarget = null;
         this.currentConnection = 0;
+        this.currentClosedPromise = null;
         this.resetConnectionState();
         this.clearRemoteMediaStream();
         this.firstVideoSendTimestamp = 0;
         this.lastVideoSendTimestamp = 0;
         this.videoFramesSent = 0;
+        this.videoCapActive = false;
+        this.hasResumedOnce = false;
         if (this.session) {
             try {
                 this.session.close();
@@ -708,7 +889,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * needed.
      */
     public SendText(text: string): void {
-        if (!this.session) {
+        if (!this.session && !this.IsReconnecting) {
             return;
         }
         this.CancelActiveResponse();
@@ -749,7 +930,13 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         if (this.firstVideoSendTimestamp === 0) {
             this.firstVideoSendTimestamp = now;
         }
+        const wasVideoCapInactive = !this.videoCapActive;
+        this.videoCapActive = true;
         this.videoFramesSent++;
+        if (wasVideoCapInactive && this.uncompressedVideoConnectionSeconds !== undefined) {
+            // Re-arm connection duration timer under the 120s uncompressed video cap.
+            this.ArmConnectionDurationTimer();
+        }
         // Reviewer Item 31: Send `video` alone — do not populate sibling `media` slot to avoid duplicate bytes & billing
         this.session?.sendRealtimeInput({
             video: { data: base64Image, mimeType },
@@ -770,7 +957,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * when nothing is active. An avatar's video stops with the voice.
      */
     public CancelActiveResponse(): void {
-        if (!this.session) {
+        if (!this.session && !this.IsReconnecting) {
             return;
         }
         if (!this.responseActive && !this.IsAudioPlaying && !this.interactionInProgress) {
@@ -800,10 +987,15 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * holds generation until a `turnComplete: true` commit arrives. {@link openClientTurn}
      * tracks this so {@link SendToolResult} can commit the turn and unblock the spoken reply.
      */
-    public SendContextNote(text: string): void {
-        if (!this.session) {
+    public SendContextNote(text: string, options?: RealtimeContextNoteOptions): void {
+        if (!this.session && !this.IsReconnecting) {
             return;
         }
+        this.conversationMemory.Record({
+            Kind: 'note',
+            Text: text,
+            ...options,
+        });
         this.enqueueOrRun(() => {
             this.session?.sendClientContent({ turns: [{ role: 'user', parts: [{ text }] }], turnComplete: false });
             this.openClientTurn = true;
@@ -820,10 +1012,18 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * in-flight turn so it can never interrupt a pending reply.
      */
     public RequestSpokenUpdate(instructions: string): void {
-        if (!this.session) {
+        if (!this.session && !this.IsReconnecting) {
             return;
         }
         this.enqueueOrRun(() => this.sendTriggeringUserTurn(instructions, 'narration', false));
+    }
+
+    /** A spoken TURN: the same realtime-text trigger as the update, with the reply kept `normal` (MJ#4591). */
+    public RequestSpokenTurn(instructions: string): void {
+        if (!this.session && !this.IsReconnecting) {
+            return;
+        }
+        this.enqueueOrRun(() => this.sendTriggeringUserTurn(instructions, 'normal', false));
     }
 
     /**
@@ -837,14 +1037,15 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * — without it the server keeps waiting for more client input and NEVER starts the spoken
      * reply (observed live as the model staying silent after a delegated agent's result).
      */
-    public SendToolResult(callID: string, outputJson: string): void {
-        if (!this.session) {
-            return;
+    protected override doSendToolResult(callID: string, outputJson: string): boolean | void {
+        if (!this.session && !this.IsReconnecting) {
+            return false;
         }
         const name = this.pendingToolCallNames.get(callID) ?? '';
-        // Non-blocking results go out while the model talks; blocking ones wait for the turn in flight. Both wait while
-        // the session moves to a new connection.
-        this.enqueueOrRun(() => this.sendToolResponseTurn(callID, name, outputJson), !this.isNonBlocking);
+        // Non-blocking results go out while the model talks; blocking ones wait for the turn in flight, except the later
+        // results of a blocking batch (see tracksBlockingBatch). All wait while the session moves to a new connection.
+        const waitsForTurn = !this.isNonBlocking && !this.skipsTurnWaitInBatch(callID);
+        this.enqueueOrRun(() => this.sendToolResponseTurn(callID, name, outputJson), waitsForTurn, callID);
     }
 
     /**
@@ -902,18 +1103,37 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * Creation seam for the Gemini Live session. Production constructs a `GoogleGenAI` client
      * with the **ephemeral token as the API key** on the `v1alpha` API version (the only
      * version that accepts `auth_tokens`), then opens `live.connect` with the server-built
-     * model + config. Unit tests override this to return an in-memory fake.
+     * model + config. Rejects if the socket errors or closes before Gemini acknowledges the setup.
+     * Unit tests override this to return an in-memory fake.
      */
     protected async connectLiveSession(args: GeminiClientConnectArgs): Promise<GeminiLiveClientSession> {
         const ai = new GoogleGenAI({ apiKey: args.EphemeralToken, httpOptions: { apiVersion: 'v1alpha' } });
-        return ai.live.connect({
-            model: args.Model,
-            config: args.Config,
-            callbacks: {
+        return this.connectUntilSetup(args, (callbacks) => ai.live.connect({ model: args.Model, config: args.Config, callbacks }));
+    }
+
+    /**
+     * Opens a Live connection with `connect`, which passes the given callbacks to `live.connect`, and rejects if the
+     * socket errors or closes before Gemini acknowledges the setup. `live.connect` (@google/genai 2.11+) resolves only on
+     * the server's setupComplete frame and never rejects when the socket errors or closes first (a rejected token, model
+     * or setup field), so without this the connect waits forever. A promise settles once, so callbacks after a successful
+     * connect only reach the handlers. Every {@link connectLiveSession} override should open through this.
+     */
+    protected connectUntilSetup(
+        args: GeminiClientConnectArgs,
+        connect: (callbacks: LiveCallbacks) => Promise<GeminiLiveClientSession>
+    ): Promise<GeminiLiveClientSession> {
+        return new Promise<GeminiLiveClientSession>((resolve, reject) => {
+            connect({
                 onmessage: args.OnMessage,
-                onerror: args.OnError,
-                onclose: args.OnClose,
-            },
+                onerror: (event) => {
+                    reject(new Error(`Gemini Live connection failed: ${event?.message ?? 'websocket error'}`));
+                    args.OnError(event);
+                },
+                onclose: (event) => {
+                    reject(new Error(`Gemini Live closed during setup (code ${event?.code ?? 'unknown'}${event?.reason ? `: ${event.reason}` : ''})`));
+                    args.OnClose(event);
+                },
+            }).then(resolve, reject);
         });
     }
 
@@ -977,9 +1197,20 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         const rawMaxStreams = sessionConfig['maxInboundVideoStreams'];
         const maxInboundVideoStreams =
             typeof rawMaxStreams === 'number' && Number.isInteger(rawMaxStreams) && rawMaxStreams >= 0 ? rawMaxStreams : undefined;
+        const rawUncompressedVideoSec = sessionConfig['uncompressedVideoConnectionMaxSeconds'];
+        const uncompressedVideoConnectionMaxSeconds =
+            typeof rawUncompressedVideoSec === 'number' && Number.isInteger(rawUncompressedVideoSec) && rawUncompressedVideoSec >= 0
+                ? rawUncompressedVideoSec
+                : undefined;
+        const contextWindowCompression =
+            typeof sessionConfig['contextWindowCompression'] === 'boolean'
+                ? sessionConfig['contextWindowCompression']
+                : undefined;
         return {
             model, liveConfig, idleSignal, supportsScheduling, supportsBlocking, supportsInboundVideo, maxInboundVideoRate,
             maxInboundVideoStreams,
+            uncompressedVideoConnectionMaxSeconds,
+            contextWindowCompression,
             requestedTracks: GeminiRealtimeClient.readRequestedTracks(sessionConfig[REQUESTED_TRACKS_SESSION_KEY]),
             avatar: GeminiRealtimeClient.readAvatarGrant(sessionConfig['avatar']),
         };
@@ -1036,7 +1267,62 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             this.holdMicChunk(base64Pcm16);
             return;
         }
+        if (this.isUserSpeaking()) {
+            this.noteUnansweredSpeech();
+        }
         this.sendAudio(this.session, base64Pcm16);
+    }
+
+    /** The user's voice went to the connection in use: a timed move waits for its answer (bounded). */
+    private noteUnansweredSpeech(): void {
+        this.unansweredSpeechAtMs = Date.now();
+        if (this.unansweredSpeechTimer === null) {
+            this.armUnansweredSpeechTimer(GEMINI_UNANSWERED_UTTERANCE_HOLD_MS);
+        }
+    }
+
+    /** One timer per hold, re-armed for the rest of the hold time when the user spoke since it was set. */
+    private armUnansweredSpeechTimer(delayMs: number): void {
+        this.unansweredSpeechTimer = setTimeout(() => {
+            this.unansweredSpeechTimer = null;
+            if (this.unansweredSpeechAtMs === null) {
+                return;
+            }
+            const quietMs = Date.now() - this.unansweredSpeechAtMs;
+            if (quietMs < GEMINI_UNANSWERED_UTTERANCE_HOLD_MS) {
+                this.armUnansweredSpeechTimer(GEMINI_UNANSWERED_UTTERANCE_HOLD_MS - quietMs);
+                return;
+            }
+            RealtimeDiagLog(
+                `[GeminiRealtimeClient] no answer ${GEMINI_UNANSWERED_UTTERANCE_HOLD_MS} ms after the user stopped speaking; a timed move may go ahead`
+            );
+            this.clearUnansweredSpeech();
+            this.reconnectController.NotifyIdleStateChanged();
+        }, delayMs);
+    }
+
+    /** Ends the hold without re-checking a move: a turn now holds it, or the connection it belongs to is left. */
+    private clearUnansweredSpeech(): void {
+        if (this.unansweredSpeechTimer !== null) {
+            clearTimeout(this.unansweredSpeechTimer);
+            this.unansweredSpeechTimer = null;
+        }
+        this.unansweredSpeechAtMs = null;
+    }
+
+    /** @inheritdoc Here: the user's words wait for their answer, which is the first sign of them Google sends. */
+    protected override holdsHardReconnectPoint(): boolean {
+        return this.unansweredSpeechAtMs !== null;
+    }
+
+    /**
+     * @inheritdoc
+     *
+     * Adds the unanswered words: the meter reads the user only at the instant it is read, not in the second after they
+     * stop and before Google answers.
+     */
+    protected override isTurnActiveForReconnect(): boolean {
+        return this.unansweredSpeechAtMs !== null || super.isTurnActiveForReconnect();
     }
 
     /** Sends one base64 PCM16 mic chunk on `session`; a failed send is logged, not thrown. */
@@ -1052,24 +1338,47 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
 
     /** Holds a mic chunk during a move, keeping the latest {@link HELD_MIC_AUDIO_SECONDS} seconds; older audio goes first. */
     private holdMicChunk(base64Pcm16: string): void {
-        this.heldMicAudio.push(base64Pcm16);
+        // The meter is read now, as for a live chunk: it hears the user only at the instant it is read.
+        this.heldMicAudio.push({ Pcm: base64Pcm16, Speech: this.isUserSpeaking() });
         this.heldMicAudioChars += base64Pcm16.length;
         while (this.heldMicAudioChars > MAX_HELD_MIC_AUDIO_BASE64_CHARS && this.heldMicAudio.length > 1) {
-            this.heldMicAudioChars -= this.heldMicAudio.shift()?.length ?? 0;
+            this.heldMicAudioChars -= this.heldMicAudio.shift()?.Pcm.length ?? 0;
         }
     }
 
-    /** Sends the mic audio held during a move on the connection now in use, oldest first. */
-    private sendHeldMicAudio(): void {
+    /**
+     * Sends the mic audio held during a move on the connection now in use, oldest first.
+     *
+     * @returns Whether the audio sent carried the user's voice.
+     */
+    private sendHeldMicAudio(): boolean {
         const held = this.heldMicAudio;
         this.heldMicAudio = [];
         this.heldMicAudioChars = 0;
         if (!this.session) {
-            return;
+            return false;
         }
         for (const chunk of held) {
-            this.sendAudio(this.session, chunk);
+            this.sendAudio(this.session, chunk.Pcm);
         }
+        return held.some((chunk) => chunk.Speech);
+    }
+
+    /**
+     * Whether an unexpected close or `goAway` can be recovered via `TriggerReconnect` / `NotifyConnectionEnding`:
+     * a reconnect cycle is running, native resumption has a recorded handle, or history seeding is active
+     * (`TrustsNativeResumption === false` or `hasResumedOnce === true`). A running cycle takes the loss of the
+     * connection it may go back to whatever handle is left: after a failed native attempt it has dropped the handle
+     * and seeds, though this session has never resumed.
+     */
+    private canRecoverConnection(allowEmptySeed = false): boolean {
+        if (this.IsReconnectCycleActive || this.ResumptionHandle !== null) {
+            return true;
+        }
+        if (this.TrustsNativeResumption && !this.hasResumedOnce) {
+            return false;
+        }
+        return allowEmptySeed || this.hasResumedOnce || this.conversationMemory.Seed().Entries.length > 0;
     }
 
     /**
@@ -1080,7 +1389,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private handleTransportError(event: ErrorEvent): void {
         const detail = GeminiRealtimeClient.transportErrorDetail(event);
         RealtimeDiagLog(`[GeminiRealtimeClient] Transport error: ${detail}`);
-        if (this.resumption?.Handle) {
+        if (this.canRecoverConnection()) {
             return;
         }
         this.emitError({ Message: `Gemini Live transport error: ${detail}`, Fatal: true });
@@ -1090,8 +1399,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     /**
      * Handles a close of the current connection that the consumer did not ask for. MJAPI's relay
      * closing at the session's time limit ends the call with a `time-limit` error. Otherwise, when
-     * Google issued a resumption handle, the session reconnects with it; else the close ends the
-     * session, as an error when it was abnormal.
+     * Google issued a resumption handle (or history seeding is active), the session reconnects;
+     * else the close ends the session, as an error when it was abnormal.
      */
     private handleTransportClose(event?: CloseEvent): void {
         const code = event?.code;
@@ -1111,7 +1420,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             this.setState('error');
             return;
         }
-        if (this.resumption?.ConnectionLost()) {
+        if (this.canRecoverConnection()) {
+            void this.TriggerReconnect('connection-lost');
             return;
         }
         const isAbnormal = (code !== undefined && code !== 0 && code !== 1000 && code !== 1005) || (wasClean === false && code !== 1000 && code !== 0 && code !== 1005 && code !== undefined);
@@ -1139,10 +1449,13 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         // handle; an update without the flag is treated as resumable.
         if (message.sessionResumptionUpdate) {
             const update = message.sessionResumptionUpdate;
-            this.resumption?.RecordHandle(update.newHandle, update.resumable !== false);
+            this.RecordResumptionHandle(update.newHandle, update.resumable !== false);
         }
         if (message.goAway) {
-            this.resumption?.ConnectionEnding(ParseDurationToMs(message.goAway.timeLeft));
+            const timeLeftMs = ParseDurationToMs(message.goAway.timeLeft);
+            if (this.canRecoverConnection(true)) {
+                this.NotifyConnectionEnding(timeLeftMs);
+            }
         }
 
         if (message.serverContent) {
@@ -1156,42 +1469,159 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         }
     }
 
+    protected override onReconnecting(reason: RealtimeReconnectReason): void {
+        RealtimeDiagLog(`[GeminiRealtimeClient] Resuming the session on a new connection (${reason})`);
+        this.connectionReady = false;
+        this.currentState = 'connecting';
+        // The hold belongs to the connection being left. The user's words transcribed so far go into conversation memory
+        // now, before the controller builds the seed: their turn never completes on the new connection.
+        this.clearUnansweredSpeech();
+        this.finalizeUserTranscript();
+        super.onReconnecting(reason);
+    }
+
     /**
-     * Opens a replacement connection that resumes the session from `handle`, switches to it once
-     * Google confirms its setup, and closes the old one. Until then the old connection stays in
-     * use, so what it still sends (the rest of a turn the deadline cut, its usage) is handled.
-     * Mic capture and playout carry over untouched. Rejects when the connection can't be opened or
-     * its setup fails, so {@link RealtimeSessionResumption} can retry.
-     *
-     * The resume reuses the session's ephemeral token, which Google accepts until the token's
-     * `expireTime` (the server driver mints 30 minutes). After that every attempt fails and the
-     * session ends with a fatal error.
-     *
-     * @param handle The resumption handle Google issued.
-     * @param attempt Marks the attempt abandoned after a timeout or a consumer close; a
-     *                connection that opens after that is closed instead of used.
+     * A planned move's attempt failed and the old connection is still the one in use: the call goes on there until the
+     * next attempt. Input flows again (the mic audio held during the attempt goes out first, then queued sends), and
+     * the state the move replaced is reported again. Held audio that carried the user's voice holds the next attempt
+     * as live speech does ({@link noteUnansweredSpeech}): the old connection has not answered those words yet. `false`
+     * when the attempt tore the old connection down (a relay session closes its tunnel before a seeded reopen) or the
+     * session has ended.
      */
-    protected async resumeSession(handle: string, attempt: RealtimeResumeAttempt): Promise<void> {
+    protected override ResumeOnOldConnection(): boolean {
+        if (!this.session || this.currentConnection === 0 || this.currentState === 'closed' || this.currentState === 'error') {
+            return false;
+        }
+        this.connectionReady = true;
+        const restore = this.StateToRestoreOnOldConnection;
+        if (restore) {
+            this.setState(restore);
+        }
+        if (this.sendHeldMicAudio()) {
+            this.noteUnansweredSpeech();
+        }
+        this.releaseHeldBatchCommitAfterMove();
+        this.flushQueuedSends();
+        return true;
+    }
+
+    /**
+     * Re-establishes the underlying Gemini Live WebSocket mid-call via `BaseRealtimeClient.reconnectController`
+     * (proactive connection-duration timer, `goAway`, unexpected close, or Attempt 2 seed fallback).
+     *
+     * - Preserves `sessionResumption` only when present on the initial connect config or when `handle` is set
+     *   (never adding `sessionResumption: {}` on ZDR sessions that omitted it).
+     * - On a relay session falling back to history seeding (`!handle && target.Transport === 'relay'`), closes the
+     *   old tunnel first, awaits its close callback, requests `context.RefreshCredential({ AllowFreshReopen: true })`
+     *   so the relay resets `FreshOpened` once `ExpiresAtListeners.size === 0`, and seeds via
+     *   `RenderRealtimeMemorySeedAsContextNote`.
+     */
+    protected override async Reconnect(context: RealtimeClientReconnectContext): Promise<void> {
         const target = this.connectTarget;
         if (!target) {
-            throw new Error('there is no Gemini Live session to resume');
+            throw new Error('there is no Gemini Live session to reconnect');
         }
-        const resumeTarget: GeminiConnectTarget = {
+        this.connectionReady = false;
+        const handle = context.UseNativeResumption && context.ResumptionHandle ? context.ResumptionHandle : undefined;
+
+        let refreshedRelayUrl = context.Credential.RelayUrl || target.RelayUrl;
+        if (!handle && target.Transport === 'relay') {
+            const prevClosed = this.currentClosedPromise;
+            this.currentClosedPromise = null;
+            this.currentConnection = 0;
+            if (this.session) {
+                GeminiRealtimeClient.closeQuietly(this.session);
+                this.session = null;
+            }
+            if (prevClosed) {
+                await prevClosed;
+            }
+            const freshRelayCred = await context.RefreshCredential({ AllowFreshReopen: true });
+            if (freshRelayCred.RelayUrl) {
+                refreshedRelayUrl = freshRelayCred.RelayUrl;
+            }
+        }
+
+        const refreshedToken = context.Credential.EphemeralToken || target.EphemeralToken;
+        const existingResumption = target.Config.sessionResumption;
+        let nextConfig: LiveConnectConfig;
+        if (handle) {
+            nextConfig = {
+                ...target.Config,
+                sessionResumption: { ...existingResumption, handle },
+            };
+        } else if (existingResumption !== undefined) {
+            const { handle: _omitted, ...withoutHandle } = existingResumption;
+            nextConfig = {
+                ...target.Config,
+                sessionResumption: withoutHandle,
+            };
+        } else {
+            nextConfig = { ...target.Config };
+        }
+
+        const reconnectTarget: GeminiConnectTarget = {
             ...target,
-            Config: { ...target.Config, sessionResumption: { ...target.Config.sessionResumption, handle } },
+            EphemeralToken: refreshedToken,
+            ...(refreshedRelayUrl ? { RelayUrl: refreshedRelayUrl } : {}),
+            Config: nextConfig,
         };
-        const opened = await this.openConnection(resumeTarget);
-        await GeminiRealtimeClient.awaitSetup(opened);
-        if (attempt.Abandoned || this.connectTarget !== target) {
+        const opened = await this.openConnection(reconnectTarget);
+        const onAbort = () => {
             GeminiRealtimeClient.closeQuietly(opened.Session);
-            return;
+        };
+        if (context.Signal.aborted) {
+            onAbort();
+            throw new Error('GeminiRealtimeClient: reconnect attempt aborted');
+        }
+        context.Signal.addEventListener('abort', onAbort, { once: true });
+        try {
+            await GeminiRealtimeClient.awaitSetup(opened);
+        } finally {
+            context.Signal.removeEventListener('abort', onAbort);
+        }
+        if (context.Abandoned || this.connectTarget !== target) {
+            GeminiRealtimeClient.closeQuietly(opened.Session);
+            throw new Error('GeminiRealtimeClient: reconnect attempt abandoned');
         }
         const previous = this.session;
         this.useConnection(opened);
-        this.connectTarget = resumeTarget;
+        this.connectTarget = reconnectTarget;
         if (previous) {
             GeminiRealtimeClient.closeQuietly(previous);
         }
+        if (!handle) {
+            // Marked only once the seeded connection is in use: after a failed attempt the call can go back to the old
+            // connection (ResumeOnOldConnection), where these calls still take a normal function response.
+            for (const callID of this.pendingToolCallNames.keys()) {
+                this.callsFromBeforeReseed.add(callID);
+            }
+            // The new connection never asked for these calls: their late results each start a reply, so none skips the wait.
+            this.closeBlockingBatch();
+        }
+        if (!handle && context.ConversationSeed && context.ConversationSeed.Entries.length > 0) {
+            if (target.Transport === 'relay') {
+                const note = RenderRealtimeMemorySeedAsContextNote(context.ConversationSeed);
+                if (note) {
+                    this.session?.sendClientContent({
+                        turns: [{ role: 'user', parts: [{ text: note }] }],
+                        turnComplete: false,
+                    });
+                    this.openClientTurn = true;
+                }
+            } else {
+                const seedTurns = RenderRealtimeMemorySeed(context.ConversationSeed);
+                if (seedTurns.length > 0) {
+                    const turns: Content[] = seedTurns.map((t) => ({
+                        role: t.Role,
+                        parts: t.Texts.map((text) => ({ text })),
+                    }));
+                    this.session?.sendClientContent({ turns, turnComplete: false });
+                    this.openClientTurn = true;
+                }
+            }
+        }
+        this.handleResumed();
     }
 
     /**
@@ -1205,6 +1635,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         const number = ++this.issuedConnections;
         const isCurrent = (): boolean => number === this.currentConnection;
         const setup = new RealtimeConnectionSetup();
+        let markClosed!: () => void;
+        const closed = new Promise<void>((resolve) => {
+            markClosed = resolve;
+        });
         const session = await this.connectLiveSession({
             ...target,
             OnMessage: (message) => {
@@ -1222,13 +1656,14 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
                 }
             },
             OnClose: (event) => {
+                markClosed();
                 setup.Fail(new Error(`Gemini Live closed the connection before confirming its setup (${event?.code}): ${event?.reason || 'no reason given'}`));
                 if (isCurrent()) {
                     this.handleTransportClose(event);
                 }
             },
         });
-        return { Session: session, ConnectionNumber: number, Setup: setup };
+        return { Session: session, ConnectionNumber: number, Setup: setup, Closed: closed };
     }
 
     /** Waits for Google to confirm a new connection's setup. On failure the connection is closed and the error rethrown. */
@@ -1250,24 +1685,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private useConnection(opened: GeminiOpenedConnection): void {
         this.session = opened.Session;
         this.currentConnection = opened.ConnectionNumber;
-    }
-
-    /**
-     * Builds the resumption helper for a newly connected session; see {@link resumption}. From the
-     * moment a move starts, input waits for the new connection ({@link connectionReady}).
-     */
-    private createResumption(): RealtimeSessionResumption {
-        return new RealtimeSessionResumption({
-            Reconnect: (handle, attempt) => this.resumeSession(handle, attempt),
-            OnReconnecting: (reason) => {
-                RealtimeDiagLog(`[GeminiRealtimeClient] Resuming the session on a new connection (${reason})`);
-                this.connectionReady = false;
-                this.setState('connecting');
-            },
-            OnReconnected: () => this.handleResumed(),
-            OnReconnectFailed: (error) => this.handleResumeFailed(error),
-            Log: (message) => RealtimeDiagLog(message),
-        });
+        this.currentClosedPromise = opened.Closed;
     }
 
     /**
@@ -1278,6 +1696,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * last frame.
      */
     private handleResumed(): void {
+        this.hasResumedOnce = true;
+        this.videoCapActive = false;
         this.avatarOutput?.Resumed();
         this.emitAvatarVideoSeconds();
         this.finalizeUserTranscript();
@@ -1290,15 +1710,20 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.connectionReady = true;
         this.setState('listening');
         this.sendHeldMicAudio();
+        this.releaseHeldBatchCommitAfterMove();
         this.flushQueuedSends();
     }
 
     /** Every resume attempt failed: the session ends with a fatal error. */
-    private handleResumeFailed(error: Error): void {
+    protected override onReconnectFailed(error: Error, code?: RealtimeReconnectFailureCode): void {
         if (this.currentState === 'closed' || this.currentState === 'error') {
             return;
         }
-        this.emitError({ Message: `Gemini Live connection was lost and could not be resumed: ${error.message}`, Fatal: true });
+        this.emitError({
+            Message: `Gemini Live connection was lost and could not be resumed: ${error.message}`,
+            ...(code ? { Code: code } : {}),
+            Fatal: true,
+        });
         this.setState('error');
     }
 
@@ -1339,8 +1764,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
                 this.scheduleSafetyBackstop();
             }
         } else if (status === 'IDLE') {
-            this.clearSafetyBackstop();
             if (this.idleSignal === 'interactionStatus') {
+                this.clearSafetyBackstop();
                 this.handleIdleTerminal();
             } else {
                 this.interactionInProgress = false;
@@ -1549,6 +1974,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         }
         for (const part of modelTurn.parts) {
             if (part.thought && part.text) {
+                if (this.tracksBlockingBatch && this.assistantSafetyBackstopTimer) {
+                    // The model is working on the reply, not silent: the no-output backstop starts again.
+                    this.scheduleSafetyBackstop(GeminiRealtimeClient.BLOCKING_TOOL_REPLY_BACKSTOP_MS);
+                }
                 this.pendingThoughtText += part.text;
                 this.emitTranscript({
                     Role: 'Assistant',
@@ -1620,7 +2049,15 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             if (this.currentState === 'speaking') {
                 this.currentState = 'connected';
             }
-            this.responseActive = false;
+            // A frame that joins a started batch leaves the client busy: the reply is still next once the batch is
+            // complete, so a note must not go out between the batch's results.
+            if (!this.blockingBatchInProgress) {
+                this.responseActive = false;
+            }
+        }
+        if (this.tracksBlockingBatch) {
+            // Before any call is emitted: a host that answers synchronously finds the whole batch owed.
+            this.openBlockingBatch(functionCalls.map((call) => call.id ?? ''));
         }
         for (const call of functionCalls) {
             const callID = call.id ?? '';
@@ -1649,11 +2086,13 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.finalizeAssistantTranscript();
         this.finalizeThoughtTranscript();
         if (this.idleSignal === 'turnComplete') {
+            this.clearSafetyBackstop();
             // Before the drain: a queued send that starts a new turn opens it again.
             this.endTurnUnlessToolCallPending();
             this.responseActive = false;
             this.activeResponseKind = 'normal';
             this.openClientTurn = false; // the completed generation consumed any open client content
+            this.blockingBatchCommitHeld = false;
             this.flushQueuedSends();
             if (this.currentState === 'speaking') {
                 this.setState('listening');
@@ -1674,11 +2113,22 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.endTurnUnlessToolCallPending();
         this.interactionInProgress = false;
         this.responseActive = false;
+        // The interaction is over, so its reply is final now, under the kind it was requested with:
+        // IDLE can arrive in the same frame as `turnComplete`, and is handled first, so resetting the
+        // kind before finalizing would turn a narration reply into a normal, persisted turn.
+        this.finalizeAssistantTranscript();
         this.activeResponseKind = 'normal';
         this.finalizeThoughtTranscript();
-        if (this.openClientTurn) {
-            this.session?.sendClientContent({ turnComplete: true });
+        // While the session moves to a new connection a held batch commit stays held, and the move's completion sends
+        // it (releaseHeldBatchCommitAfterMove). The NON_BLOCKING commit (toolResponseAwaitsCommit) keeps its behaviour.
+        const keepBatchCommitForMove = this.blockingBatchCommitHeld && this.openClientTurn && !this.connectionReady;
+        if (!keepBatchCommitForMove) {
+            if (this.openClientTurn && (this.toolResponseAwaitsCommit || this.blockingBatchCommitHeld)) {
+                this.session?.sendClientContent({ turnComplete: true });
+            }
             this.openClientTurn = false;
+            this.toolResponseAwaitsCommit = false;
+            this.blockingBatchCommitHeld = false;
         }
         this.flushQueuedSends();
         if (this.currentState === 'speaking' && !this.IsAudioPlaying) {
@@ -1697,6 +2147,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         if (this.idleSignal === 'interactionStatus') {
             this.interactionInProgress = true;
             this.scheduleSafetyBackstop();
+        } else {
+            this.clearSafetyBackstop(); // the reply to a blocking batch has started
         }
         if (this.currentState !== 'speaking') {
             this.setState('speaking');
@@ -1765,7 +2217,9 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private markTurnOpen(): void {
         this.turnOpen = true;
         this.turnEndAwaitsToolResults = false;
-        this.resumption?.TurnStarted();
+        this.reconnectController.TurnStarted();
+        // The open turn holds a move from here; speech after this starts a hold of its own.
+        this.clearUnansweredSpeech();
     }
 
     /** The turn's `turnComplete` (or true idle): it ends now, or once the results of the tool calls still pending go out. */
@@ -1778,17 +2232,21 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     }
 
     /** A tool result went out: a turn whose `turnComplete` waited on the pending calls ends once none is left. */
-    private endTurnIfToolResultsIn(): void {
+    private endTurnIfToolResultsIn(expectsReply = true): void {
         if (this.turnEndAwaitsToolResults && this.pendingToolCallNames.size === 0) {
-            this.endTurn();
+            this.endTurn(expectsReply);
         }
     }
 
     /** The turn is over: a planned move happens at the next resumable handle Google issues. */
-    private endTurn(): void {
+    private endTurn(keepPostToolTurnWait = false): void {
         this.turnOpen = false;
         this.turnEndAwaitsToolResults = false;
-        this.resumption?.TurnEnded();
+        this.reconnectController.TurnEnded(keepPostToolTurnWait);
+    }
+
+    protected override isToolResultSilent(outputJson: string): boolean {
+        return this.supportsScheduling && super.isToolResultSilent(outputJson);
     }
 
     // ── Collision-safe send machinery ──────────────────────────────────────────
@@ -1802,11 +2260,12 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      *
      * @param send The send.
      * @param waitsForTurn Whether the send waits for a turn in flight (`false` for a non-blocking
-     *   tool result, which goes out while the model talks).
+     *   tool result, which goes out while the model talks, and for a blocking batch's later results).
+     * @param toolCallID The call a tool-result send answers, so {@link drainBlockingBatchResults} can find it.
      */
-    private enqueueOrRun(send: () => void, waitsForTurn = true): void {
+    private enqueueOrRun(send: () => void, waitsForTurn = true, toolCallID?: string): void {
         if (!this.connectionReady || (waitsForTurn && this.responseActive)) {
-            this.queuedSends.push(send);
+            this.queuedSends.push({ Run: send, ToolCallID: toolCallID });
             return;
         }
         send();
@@ -1820,8 +2279,100 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private flushQueuedSends(): void {
         while (!this.responseActive && this.connectionReady && this.queuedSends.length > 0) {
             const send = this.queuedSends.shift();
-            send?.();
+            send?.Run();
         }
+    }
+
+    // ── Blocking tool-call batch (see tracksBlockingBatch) ─────────────────────
+
+    /** A `toolCall` frame: open a batch, or join the open one while its results are still owed. */
+    private openBlockingBatch(callIDs: string[]): void {
+        this.clearSafetyBackstop();
+        this.blockingBatchExpired.clear();
+        if (this.blockingBatchOwed.size === 0) {
+            this.blockingBatchStarted = false;
+        }
+        for (const callID of callIDs) {
+            this.blockingBatchOwed.add(callID);
+        }
+    }
+
+    /**
+     * Whether a blocking result goes out without waiting for the turn in flight: once the batch's first result
+     * went out (and marked the client busy for the reply), the batch's other results do; so does a late result of
+     * a batch the barrier expired. Before the first result nothing skips, so a user turn that took the floor first
+     * keeps it. A call from before a re-seed never skips: its late result starts a reply of its own.
+     */
+    private skipsTurnWaitInBatch(callID: string): boolean {
+        if (!this.tracksBlockingBatch || this.callsFromBeforeReseed.has(callID)) {
+            return false;
+        }
+        return (this.blockingBatchStarted && this.blockingBatchOwed.has(callID)) || this.blockingBatchExpired.has(callID);
+    }
+
+    /**
+     * Whether the open batch still owes results other than this call's, so the reply is not next yet. Only OTHER
+     * owed calls count: a result the batch does not owe (a duplicate, or a stale result of an expired batch) does not
+     * complete it.
+     */
+    private batchOwesOtherResults(callID: string): boolean {
+        return this.blockingBatchOwed.size - (this.blockingBatchOwed.has(callID) ? 1 : 0) > 0;
+    }
+
+    /** A started batch still owes results: the reply comes after them, so the client stays busy for it. */
+    private get blockingBatchInProgress(): boolean {
+        return this.tracksBlockingBatch && this.blockingBatchStarted && this.blockingBatchOwed.size > 0;
+    }
+
+    /** A queued send is a batch result that skips the turn wait (see {@link drainBlockingBatchResults}). */
+    private isQueuedBatchResult(send: GeminiQueuedSend): boolean {
+        return send.ToolCallID !== undefined && this.skipsTurnWaitInBatch(send.ToolCallID);
+    }
+
+    /**
+     * Whether a batch result other than this call's is still queued and about to be drained (the barrier expired the
+     * batch, or results were queued while the session moved): the commit waits for the last of them.
+     */
+    private batchResultQueuedAfter(callID: string): boolean {
+        return this.queuedSends.some((send) => send.ToolCallID !== callID && this.isQueuedBatchResult(send));
+    }
+
+    /**
+     * A blocking result went out: when the batch still owes results, send the ones already queued (only those,
+     * in queue order); when it is complete, arm the no-output backstop for the reply.
+     */
+    private afterBlockingResult(callID: string): void {
+        if (!this.tracksBlockingBatch) {
+            return;
+        }
+        this.blockingBatchExpired.delete(callID);
+        if (this.blockingBatchOwed.delete(callID) && this.blockingBatchOwed.size > 0) {
+            this.blockingBatchStarted = true;
+        }
+        this.drainBlockingBatchResults();
+        if (this.blockingBatchOwed.size === 0 && this.responseActive) {
+            this.scheduleSafetyBackstop(GeminiRealtimeClient.BLOCKING_TOOL_REPLY_BACKSTOP_MS);
+        }
+    }
+
+    /** Sends the batch's queued results in queue order; every other queued send stays where it is. Re-entrant. */
+    private drainBlockingBatchResults(): void {
+        while (this.connectionReady) {
+            const index = this.queuedSends.findIndex((send) => this.isQueuedBatchResult(send));
+            if (index < 0) {
+                return;
+            }
+            const [send] = this.queuedSends.splice(index, 1);
+            send.Run();
+        }
+    }
+
+    /** No batch any more (connect, disconnect, re-seed). */
+    private closeBlockingBatch(): void {
+        this.blockingBatchOwed.clear();
+        this.blockingBatchExpired.clear();
+        this.blockingBatchStarted = false;
+        this.blockingBatchCommitHeld = false;
     }
 
     /**
@@ -1848,6 +2399,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         if (this.idleSignal === 'interactionStatus') {
             this.interactionInProgress = true;
             this.scheduleSafetyBackstop();
+        } else {
+            this.clearSafetyBackstop(); // a new user turn: its own turnComplete releases it
         }
         this.activeResponseKind = kind;
         if (emitSpeaking) {
@@ -1907,6 +2460,19 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             return;
         }
         this.toolBatchBarrier.RecordResult(callID);
+        if (this.callsFromBeforeReseed.delete(callID)) {
+            session.sendRealtimeInput({
+                text: RenderLateToolResultNote(name || callID, outputJson),
+            });
+            if (!this.isNonBlocking) {
+                this.responseActive = true;
+                this.activeResponseKind = 'normal';
+                this.setState('speaking');
+            }
+            this.pendingToolCallNames.delete(callID);
+            this.endTurnIfToolResultsIn(true);
+            return;
+        }
         const parsed = this.parseToolOutput(outputJson);
         const sched = this.resolveFunctionScheduling(parsed as Record<string, unknown>, name);
         const functionResponse: FunctionResponse = {
@@ -1920,18 +2486,32 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             functionResponses: [functionResponse],
         });
 
-        if (!this.isNonBlocking) {
-            if (this.openClientTurn) {
+        if (this.isNonBlocking) {
+            // The commit that releases this response's continuation waits for true IDLE (see above).
+            this.toolResponseAwaitsCommit = this.toolResponseAwaitsCommit || this.openClientTurn;
+        } else {
+            // Committing while the batch still owes results, or before its queued results go out, would tell Gemini to
+            // answer early: commit after the last one.
+            const othersOwed = this.tracksBlockingBatch && this.batchOwesOtherResults(callID);
+            const batchResultsFollow = othersOwed || (this.tracksBlockingBatch && this.batchResultQueuedAfter(callID));
+            const holdCommit = this.openClientTurn && batchResultsFollow;
+            if (this.openClientTurn && !holdCommit) {
                 session.sendClientContent({ turnComplete: true });
                 this.openClientTurn = false;
             }
-            this.responseActive = true;
-            this.activeResponseKind = 'normal';
-            this.setState('speaking');
+            this.blockingBatchCommitHeld = holdCommit;
+            // A result the open batch does not owe, while it owes others, is not what Gemini answers: the client is not
+            // busy for a reply until the batch's own results are in.
+            if (!(othersOwed && !this.blockingBatchOwed.has(callID))) {
+                this.responseActive = true;
+                this.activeResponseKind = 'normal';
+                this.setState('speaking');
+            }
         }
 
         this.pendingToolCallNames.delete(callID);
-        this.endTurnIfToolResultsIn();
+        this.endTurnIfToolResultsIn(sched !== FunctionResponseScheduling.SILENT);
+        this.afterBlockingResult(callID);
     }
 
     /**
@@ -1972,14 +2552,71 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.handleIdleTerminal();
     }
 
+    /**
+     * The tool-batch barrier stopped waiting for a result. It records a result at SEND time, so the missing ones may
+     * be slow, never coming (a cancelled call), or queued behind another turn. A blocking batch expires: its queued
+     * results go out whatever {@link responseActive} is (a late one still skips the turn wait), a held commit goes
+     * out, and the backstop guards the reply.
+     */
     private handleToolBatchTimeout(): void {
+        if (this.tracksBlockingBatch) {
+            for (const callID of this.blockingBatchOwed) {
+                this.blockingBatchExpired.add(callID);
+            }
+            this.blockingBatchOwed.clear();
+            this.blockingBatchStarted = false;
+            this.drainBlockingBatchResults();
+            this.releaseHeldBatchCommit();
+        }
         if (this.idleSignal === 'turnComplete') {
             this.flushQueuedSends();
+        }
+        if (this.tracksBlockingBatch && this.responseActive) {
+            this.scheduleSafetyBackstop(GeminiRealtimeClient.BLOCKING_TOOL_REPLY_BACKSTOP_MS);
+        }
+    }
+
+    /**
+     * Sends a commit held for a batch that will not reach its last result; a turn that already ended needs none. The
+     * commit asks for the reply, so the client is busy for it and the no-output backstop guards it.
+     */
+    private releaseHeldBatchCommit(): void {
+        if (!this.blockingBatchCommitHeld) {
+            return;
+        }
+        if (!this.openClientTurn) {
+            this.blockingBatchCommitHeld = false;
+            return;
+        }
+        if (!this.connectionReady) {
+            return; // still held: the move's completion sends it (releaseHeldBatchCommitAfterMove), or the next result does
+        }
+        this.session?.sendClientContent({ turnComplete: true });
+        this.openClientTurn = false;
+        this.blockingBatchCommitHeld = false;
+        this.responseActive = true;
+        this.activeResponseKind = 'normal';
+        this.scheduleSafetyBackstop(GeminiRealtimeClient.BLOCKING_TOOL_REPLY_BACKSTOP_MS);
+    }
+
+    /**
+     * The session continues on a connection (a completed move, or the old one after a failed attempt). Batch results
+     * queued during the move go out first; a commit still held while the batch owes nothing then goes out, so it is
+     * not stranded. A re-seed closed the batch already, so this does nothing there.
+     */
+    private releaseHeldBatchCommitAfterMove(): void {
+        if (!this.tracksBlockingBatch) {
+            return;
+        }
+        this.drainBlockingBatchResults();
+        if (this.blockingBatchOwed.size === 0) {
+            this.releaseHeldBatchCommit();
         }
     }
 
     /** Resets the per-session response state machine (used on Disconnect). */
     private resetResponseState(): void {
+        this.clearUnansweredSpeech();
         this.pendingAssistantText = '';
         this.pendingUserText = '';
         this.pendingThoughtText = '';
@@ -1987,9 +2624,11 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.interactionInProgress = false;
         this.activeResponseKind = 'normal';
         this.openClientTurn = false;
+        this.toolResponseAwaitsCommit = false;
         this.queuedSends = [];
         this.pendingToolCallNames.clear();
         this.toolBatchBarrier.Clear();
+        this.closeBlockingBatch();
         this.clearSafetyBackstop();
     }
 

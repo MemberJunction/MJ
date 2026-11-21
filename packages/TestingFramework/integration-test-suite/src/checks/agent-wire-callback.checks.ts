@@ -13,7 +13,7 @@
  * TRANSPORT: CLIENT (IT record transport:'client'). The integration client bootstrap installs a
  * full GraphQLDataProvider, which DOES implement PushStatusUpdates + WebSockets in Node — so the
  * real fire-and-forget + WS-completion path runs. Under any non-GraphQL provider these checks
- * skip-as-pass loudly (they cannot exercise the wire).
+ * record a skip (they cannot exercise the wire).
  *
  * LIVE-MODEL tier: real model calls (IT: Echo Agent on its cheap/fast binding). Marker-isolated,
  * self-cleaning.
@@ -23,7 +23,7 @@ import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import type { ExecuteAgentParams, ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import type { MJAIAgentEntity } from '@memberjunction/core-entities';
-import { Assert } from '@memberjunction/testing-integration';
+import { Assert, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -82,8 +82,7 @@ export const AgentWireCallbackChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const client = wireClient(ctx.Provider);
             if (!client) {
-                console.warn('  ⚠ agent-wire-callback.WC1 SKIPPED — not on client (GraphQL) transport; the wire callback path is unexercisable in-process.');
-                return;
+                SkipCheck('not on client (GraphQL) transport; the wire callback path is unexercisable in-process — run with the client transport against MJAPI');
             }
             const agent = await echoAgent(ctx.User);
             Assert(!!agent, "IT: Echo Agent not seeded (mj sync push --dir=metadata-optional/integration-test)");
@@ -112,8 +111,7 @@ export const AgentWireCallbackChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const client = wireClient(ctx.Provider);
             if (!client) {
-                console.warn('  ⚠ agent-wire-callback.WC2 SKIPPED — not on client (GraphQL) transport.');
-                return;
+                SkipCheck('not on client (GraphQL) transport; the streaming progress path is unexercisable in-process — run with the client transport against MJAPI');
             }
             const agent = await echoAgent(ctx.User);
             Assert(!!agent, 'IT: Echo Agent not seeded');

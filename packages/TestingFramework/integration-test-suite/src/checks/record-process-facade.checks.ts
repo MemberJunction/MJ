@@ -52,7 +52,7 @@ export const RecordProcessFacadeChecks: NamedCheck[] = [
         Name: 'RPF1: executor.Run(definition) persists a Completed ProcessRun linked to the Record Process',
         Fn: async (ctx: IntegrationCheckContext) => {
             const { Rp } = fx(ctx);
-            const result = await new RecordProcessExecutor().Run(Rp, { contextUser: ctx.User, triggeredBy: 'OnDemand' });
+            const result = await new RecordProcessExecutor().Run(Rp, { ContextUser: ctx.User, TriggeredBy: 'OnDemand' });
             AssertEqual(result.Status, 'Completed', 'result status');
             AssertEqual(result.Processed, 0, 'result processed count');
             const run = await verifyRun(ctx, result.ProcessRunID, 'Run');
@@ -64,7 +64,7 @@ export const RecordProcessFacadeChecks: NamedCheck[] = [
         Name: 'RPF2: executor.RunByID(id) resolves the definition from its ID and runs it the same way',
         Fn: async (ctx: IntegrationCheckContext) => {
             const { Rp } = fx(ctx);
-            const result = await new RecordProcessExecutor().RunByID(Rp.ID, { contextUser: ctx.User, triggeredBy: 'OnDemand' });
+            const result = await new RecordProcessExecutor().RunByID(Rp.ID, { ContextUser: ctx.User, TriggeredBy: 'OnDemand' });
             const run = await verifyRun(ctx, result.ProcessRunID, 'RunByID');
             console.log(`      → RunByID(): ProcessRun ${run.ID} linked to RP ${Rp.ID}`);
         }

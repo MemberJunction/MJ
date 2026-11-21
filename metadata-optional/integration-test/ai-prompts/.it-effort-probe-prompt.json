@@ -1,0 +1,24 @@
+[
+  {
+    "fields": {
+      "Name": "IT: Effort Probe",
+      "Description": "Tiny reasoning prompt for the ai-vendor-effort live bundle: each run names its model and vendor through the override, so the prompt binds no models. Failover is off so a run cannot quietly land on another vendor. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=IT: Integration Test",
+      "TemplateText": "@file:templates/it-effort-probe.template.md",
+      "Status": "Active",
+      "PromptRole": "User",
+      "PromptPosition": "First",
+      "SelectionStrategy": "Default",
+      "OutputType": "string",
+      "ValidationBehavior": "None",
+      "FailoverStrategy": "None",
+      "MaxRetries": 0,
+      "RetryDelayMS": 0,
+      "RetryStrategy": "Fixed"
+    },
+    "primaryKey": {
+      "ID": "A3493A94-A6B2-4922-AEE9-112812C57100"
+    }
+  }
+]

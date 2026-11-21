@@ -283,6 +283,18 @@ export class AWSFileStorage extends FileStorageBase {
   }
 
   /**
+   * The canonical key for the storage access checks: the S3 key this driver would address for `objectKey`, relative to
+   * its key prefix. Mirrors {@link _normalizeKey} — which keeps a key that already starts with the prefix and prepends
+   * the prefix to anything else — then removes the prefix, so `hr/secret.pdf`, `/hr/secret.pdf` and (with prefix
+   * `tenant1/`) `tenant1/hr/secret.pdf` all canonicalize to `hr/secret.pdf`, while `/tenant1/hr/secret.pdf` (which this
+   * driver serves from `tenant1/tenant1/hr/secret.pdf`) canonicalizes to `tenant1/hr/secret.pdf`.
+   */
+  public override NormalizeObjectKey(objectKey: string): string {
+    const trimmed = (objectKey ?? '').trim();
+    return super.NormalizeObjectKey(this._removePrefix(this._normalizeKey(trimmed)));
+  }
+
+  /**
    * Creates a pre-authenticated upload URL for an object in S3.
    *
    * This method generates a pre-signed URL that allows for uploading

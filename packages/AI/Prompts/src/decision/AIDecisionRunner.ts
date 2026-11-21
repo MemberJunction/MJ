@@ -5,10 +5,13 @@ import { TemplateEngineServer } from '@memberjunction/templates';
 import {
   AIErrorType,
   BaseDecision,
+  BuildCancellationErrorInfo,
+  DecisionConfigurationSettings,
   DecisionParams,
   DecisionQuestion,
   DecisionResult,
   ErrorAnalyzer,
+  IsRequestAborted,
   ModelUsage,
 } from '@memberjunction/ai';
 import {
@@ -29,6 +32,14 @@ import {
   AIDecisionRunResult,
 } from './decision-runner.types';
 import { LLMDecision } from './LLMDecision';
+import {
+  CheckDecisionLimits,
+  DEFAULT_DECISION_TIMEOUT_MS,
+  DescribeDecisionMediaForRun,
+  MergeChunkedDecisionResults,
+  SplitDecisionQuestions,
+} from './decision-limits';
+import { AIPromptRunner } from '../AIPromptRunner';
 
 /**
  * The result of running a decision, the candidate that produced it (after any failover), and what
@@ -70,15 +81,36 @@ interface DecisionSelection {
 /**
  * Runs typed decisions (Likelihood, Choice, Score) on `Decision`-type models. It does for a decision
  * what `AIPromptRunner` does for a chat call: selects a model from the decision prompt's bindings,
- * resolves credentials, bounds each call with the caller's cancellation and `params.timeoutMS` (when
- * set; there is no default timeout, as for chat prompts), fails over, and writes an
- * `MJ: AI Prompt Runs` row with tokens and cost.
+ * resolves credentials, bounds each call with the caller's cancellation and a timeout
+ * (`params.timeoutMS`, else the prompt's `TimeoutMS`, else {@link DEFAULT_DECISION_TIMEOUT_MS}), fails
+ * over, and writes an `MJ: AI Prompt Runs` row with tokens and cost.
+ *
+ * It fits each request to the candidate model's declared limits (`ModelConfiguration.Decision`): a
+ * request with more questions than `MaxQuestionsPerCall` is split into several calls to the same model
+ * and merged; one over the option, level or estimated state-token limits fails over to the next model.
  *
  * It owns no parsing: drivers return typed answers and `BaseDecision` validates them. The
  * configuration carrier is an `MJ: AI Prompts` row whose template renders the state when the caller
  * does not pass one.
  */
 export class AIDecisionRunner extends BaseModelRunner {
+  /**
+   * The most chunk calls made at once when a request is split for a model's `MaxQuestionsPerCall`.
+   * Enough to keep a split request close to one call's latency, few enough not to trip a provider's
+   * per-second limit (Perplexity allows 10 requests per second per organization).
+   */
+  public static readonly MAX_CONCURRENT_CHUNK_CALLS = 4;
+
+  /**
+   * The timeout of each decision call when neither the caller (`timeoutMS`) nor the prompt
+   * (`TimeoutMS`) sets one: {@link DEFAULT_DECISION_TIMEOUT_MS}. Chat prompts have no default
+   * timeout, but a decision is a sub-second call, so an unbounded one means a stalled provider stalls
+   * the agent run or request waiting on it. A caller passing `0` still opts out.
+   */
+  protected override get DefaultPromptTimeoutMS(): number | undefined {
+    return DEFAULT_DECISION_TIMEOUT_MS;
+  }
+
   /** Decisions run only on `Decision`-type models. */
   public override get RequiredModelType(): string {
     return 'Decision';
@@ -162,7 +194,7 @@ export class AIDecisionRunner extends BaseModelRunner {
       const state = resolved.State;
       const selectionInfo = this.buildSelectionInfo(prompt, candidates, selection);
       promptRun = await this.CreateRunRecord(prompt, selected.model, params, startTime, selected.vendorId, selectionInfo, run => {
-        run.Messages = JSON.stringify({ State: state, Questions: params.Questions });
+        run.Messages = JSON.stringify({ State: state, Questions: params.Questions, ...DescribeDecisionMediaForRun(params.Media) });
       });
       const run = await this.runDecision(prompt, params, candidates, selection, state, promptRun);
       const endTime = new Date();
@@ -216,21 +248,17 @@ export class AIDecisionRunner extends BaseModelRunner {
   /** Candidates already warned about for lacking credentials, so each warning appears once per process. */
   private static readonly warnedMissingCredentials = new Set<string>();
 
-  /** Selects the first candidate with credentials, or returns an error listing every candidate. */
+  /** Selects the candidate to run (see SelectCandidate), or returns an error listing every candidate. */
   private selectCandidate(
     prompt: MJAIPromptEntityExtended,
     candidates: ModelVendorCandidate[],
     params: AIDecisionParams
   ): DecisionSelection | string {
-    const credentialAvailability = new Map<string, boolean>();
-    let selected: ModelVendorCandidate | undefined;
-    for (const candidate of candidates) {
-      const available = this.HasCredentialsAvailable(candidate.driverClass, prompt.ID, candidate.model.ID, candidate.vendorId, params);
-      credentialAvailability.set(this.candidateKey(candidate), available);
-      if (available && !selected) {
-        selected = candidate;
-      }
-    }
+    const { Candidate: selected, CredentialAvailability: credentialAvailability } = this.SelectCandidate(
+      candidates,
+      c => this.HasCredentialsAvailable(c.driverClass, prompt.ID, c.model.ID, c.vendorId, params),
+      true
+    );
     this.warnSkippedCandidates(candidates, selected, credentialAvailability);
     if (!selected) {
       const summary = candidates
@@ -248,14 +276,15 @@ export class AIDecisionRunner extends BaseModelRunner {
    */
   private warnSkippedCandidates(
     candidates: ModelVendorCandidate[],
-    selected: ModelVendorCandidate | undefined,
+    selected: ModelVendorCandidate | null,
     credentialAvailability: Map<string, boolean>
   ): void {
     for (const candidate of candidates) {
-      if (candidate === selected) {
+      const key = this.CandidateKey(candidate);
+      // Stop at the first credentialed candidate: it decided the model, even when its row vendor runs it.
+      if (candidate === selected || credentialAvailability.get(key) === true) {
         return;
       }
-      const key = this.candidateKey(candidate);
       if (credentialAvailability.get(key) === false && !AIDecisionRunner.warnedMissingCredentials.has(key)) {
         AIDecisionRunner.warnedMissingCredentials.add(key);
         LogStatus(`AIDecisionRunner: skipping '${candidate.model.Name}' (${candidate.driverClass}): no credential. ` +
@@ -340,12 +369,46 @@ export class AIDecisionRunner extends BaseModelRunner {
     prompt: MJAIPromptEntityExtended,
     promptRun: MJAIPromptRunEntityExtended
   ): Promise<CandidateAttempt> {
-    const driver = await this.driverForCandidate(candidate, params, prompt);
+    const limits = this.decisionLimitsFor(candidate);
+    const driver = await this.driverForCandidate(candidate, state, params, prompt, limits);
     if (driver instanceof DecisionResult) {
       return { Result: driver, LinkedChildRun: false };
     }
     const linkedChildRun = await this.linkChildRun(driver, promptRun);
-    return { Result: await this.callDriver(driver, candidate, state, params, prompt), LinkedChildRun: linkedChildRun };
+    const chunks = SplitDecisionQuestions(params.Questions, limits?.MaxQuestionsPerCall);
+    const result = chunks.length === 1
+      ? await this.callDriver(driver, candidate, state, params.Questions, params, prompt)
+      : await this.callDriverInChunks(driver, candidate, state, chunks, params, prompt);
+    return { Result: result, LinkedChildRun: linkedChildRun };
+  }
+
+  /**
+   * Asks a request with more questions than the model's `MaxQuestionsPerCall` in several calls to the
+   * same driver, at most {@link MAX_CONCURRENT_CHUNK_CALLS} at a time, and merges them into one result:
+   * every answer, the summed usage, and the first resolved model. Any chunk that fails fails the whole
+   * attempt with its error, so the failover loop moves on and the caller never acts on part of the
+   * answers.
+   */
+  private async callDriverInChunks(
+    driver: BaseDecision,
+    candidate: ModelVendorCandidate,
+    state: string | Record<string, unknown>,
+    chunks: Record<string, DecisionQuestion>[],
+    params: AIDecisionParams,
+    prompt: MJAIPromptEntityExtended
+  ): Promise<DecisionResult> {
+    const results: DecisionResult[] = [];
+    for (let i = 0; i < chunks.length; i += AIDecisionRunner.MAX_CONCURRENT_CHUNK_CALLS) {
+      const batch = chunks.slice(i, i + AIDecisionRunner.MAX_CONCURRENT_CHUNK_CALLS);
+      const batchResults = await Promise.all(batch.map(chunk => this.callDriver(driver, candidate, state, chunk, params, prompt)));
+      const failed = batchResults.find(r => !r.success);
+      if (failed) {
+        failed.Answers = {};
+        return failed;
+      }
+      results.push(...batchResults);
+    }
+    return MergeChunkedDecisionResults(results);
   }
 
   /**
@@ -354,12 +417,14 @@ export class AIDecisionRunner extends BaseModelRunner {
    */
   private async driverForCandidate(
     candidate: ModelVendorCandidate,
+    state: string | Record<string, unknown>,
     params: AIDecisionParams,
-    prompt: MJAIPromptEntityExtended
+    prompt: MJAIPromptEntityExtended,
+    limits: DecisionConfigurationSettings | undefined
   ): Promise<BaseDecision | DecisionResult> {
-    const limitError = this.checkModelLimits(candidate, params.Questions);
+    const limitError = CheckDecisionLimits(candidate.model.Name, limits, state, params.Questions);
     if (limitError) {
-      return this.failedDecision(limitError, 'InvalidRequest');
+      return this.failedDecision(limitError.Message, limitError.ErrorType);
     }
     let apiKey = '';
     if (this.DriverRequiresCredentials(candidate.driverClass)) {
@@ -370,38 +435,21 @@ export class AIDecisionRunner extends BaseModelRunner {
       }
     }
     const driver = this.createDriver(candidate, apiKey, params);
-    return typeof driver === 'string' ? this.failedDecision(driver, 'ModelError') : driver;
+    if (typeof driver === 'string') {
+      return this.failedDecision(driver, 'ModelError');
+    }
+    const unsupportedMedia = driver.DescribeUnsupportedMedia(params.Media);
+    return unsupportedMedia
+      ? this.failedDecision(`'${candidate.model.Name}' cannot take this request's media: ${unsupportedMedia}`, 'InvalidRequest')
+      : driver;
   }
 
-  /**
-   * Checks the request against the model's declared `Decision` limits. A breach is an error that
-   * allows failover, because another model may accept the request. `MaxStateTokens` is not checked
-   * yet: the runner has no token counter.
-   */
-  private checkModelLimits(candidate: ModelVendorCandidate, questions: Record<string, DecisionQuestion>): string | undefined {
+  /** The model's declared `Decision` settings for this candidate's vendor row, or undefined when it declares none. */
+  private decisionLimitsFor(candidate: ModelVendorCandidate): DecisionConfigurationSettings | undefined {
     const modelVendorRow = candidate.vendorId
       ? (candidate.model.ModelVendors ?? []).find(mv => UUIDsEqual(mv.VendorID, candidate.vendorId))
       : undefined;
-    const limits = AIEngine.Instance.GetEffectiveModelConfiguration(candidate.model.ID, modelVendorRow?.ID)?.Decision;
-    if (!limits) {
-      return undefined;
-    }
-    const exceeds = (limit: number | null | undefined, count: number): boolean =>
-      typeof limit === 'number' && limit > 0 && count > limit;
-    const model = candidate.model.Name;
-    const questionCount = Object.keys(questions).length;
-    if (exceeds(limits.MaxQuestionsPerCall, questionCount)) {
-      return `${questionCount} questions exceed the limit of ${limits.MaxQuestionsPerCall} per call for '${model}'`;
-    }
-    for (const [key, q] of Object.entries(questions)) {
-      if (q.Kind === 'Choice' && exceeds(limits.MaxChoiceOptions, q.Options.length)) {
-        return `Choice '${key}' has ${q.Options.length} options, over the limit of ${limits.MaxChoiceOptions} for '${model}'`;
-      }
-      if (q.Kind === 'Score' && exceeds(limits.MaxScoreLevels, q.Levels.length)) {
-        return `Score '${key}' has ${q.Levels.length} levels, over the limit of ${limits.MaxScoreLevels} for '${model}'`;
-      }
-    }
-    return undefined;
+    return AIEngine.Instance.GetEffectiveModelConfiguration(candidate.model.ID, modelVendorRow?.ID)?.Decision ?? undefined;
   }
 
   /**
@@ -432,11 +480,15 @@ export class AIDecisionRunner extends BaseModelRunner {
     return driver;
   }
 
-  /** Calls the driver, bounded by the caller's cancellation and `params.timeoutMS` when set. */
+  /**
+   * Calls the driver with these questions, bounded by the caller's cancellation and the timeout
+   * (`params.timeoutMS`, else the prompt's `TimeoutMS`, else {@link DEFAULT_DECISION_TIMEOUT_MS}).
+   */
   private async callDriver(
     driver: BaseDecision,
     candidate: ModelVendorCandidate,
     state: string | Record<string, unknown>,
+    questions: Record<string, DecisionQuestion>,
     params: AIDecisionParams,
     prompt: MJAIPromptEntityExtended
   ): Promise<DecisionResult> {
@@ -445,13 +497,18 @@ export class AIDecisionRunner extends BaseModelRunner {
       const driverParams: DecisionParams = {
         Model: candidate.apiName ?? candidate.model.APIName,
         State: state,
-        Questions: params.Questions,
+        Questions: questions,
+        Media: params.Media,
         CancellationToken: bound.Signal,
       };
       return await driver.Decide(driverParams);
     } catch (err: unknown) {
       const failed = this.failedDecision(err instanceof Error ? err.message : String(err), 'Unknown');
-      failed.errorInfo = ErrorAnalyzer.AnalyzeError(err, candidate.vendorName);
+      // An abort is classified by the bound's signal: a caller cancellation is not failed over, a
+      // timeout is.
+      failed.errorInfo = IsRequestAborted(err, bound.Signal)
+        ? BuildCancellationErrorInfo({ error: err, signal: bound.Signal, provider: candidate.vendorName })
+        : ErrorAnalyzer.AnalyzeError(err, candidate.vendorName);
       return failed;
     } finally {
       bound.Dispose();
@@ -598,11 +655,6 @@ export class AIDecisionRunner extends BaseModelRunner {
     };
   }
 
-  /** The key format BaseModelRunner's failover credential cache uses. */
-  private candidateKey(candidate: ModelVendorCandidate): string {
-    return `${candidate.driverClass}:${candidate.model.ID}:${candidate.vendorId || 'default'}`;
-  }
-
   /** Records which candidate was chosen and why, for the run row. */
   private buildSelectionInfo(
     prompt: MJAIPromptEntityExtended,
@@ -617,7 +669,7 @@ export class AIDecisionRunner extends BaseModelRunner {
     info.SelectionReason = 'First candidate with available credentials';
     info.FallbackUsed = false;
     info.ModelsConsidered = candidates.map(c => {
-      const available = selection.CredentialAvailability.get(this.candidateKey(c)) ?? false;
+      const available = selection.CredentialAvailability.get(this.CandidateKey(c)) ?? false;
       return {
         model: c.model,
         vendor: c.vendorId ? AIEngine.Instance.VendorsByID.get(NormalizeUUID(c.vendorId)) : undefined,
@@ -652,7 +704,7 @@ export class AIDecisionRunner extends BaseModelRunner {
       }
       const systemPlaceholders = await SystemPlaceholderManager.resolveAllPlaceholders(params);
       const mergedData = { ...systemPlaceholders, ...params.data, ...params.templateData };
-      const rendered = await TemplateEngineServer.Instance.RenderTemplate(template, content, mergedData, true, false);
+      const rendered = await TemplateEngineServer.Instance.RenderTemplate(template, content, mergedData, true, false, AIPromptRunner.RenderOptions(params));
       if (!rendered?.Success) {
         return { success: false, errorMessage: `Failed to render the template for prompt '${prompt.Name}': ${rendered?.Message ?? 'unknown error'}` };
       }

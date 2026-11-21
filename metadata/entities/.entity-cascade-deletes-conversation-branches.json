@@ -6,6 +6,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Conversation Branches"
+    },
+    "sync": {
+      "lastModified": "2026-10-13T19:00:08.660Z",
+      "checksum": "6b78b64ff55d005e6b5973bc6c386f14ecaa44c8c63cdac86ef961f005865117"
     }
   }
 ]

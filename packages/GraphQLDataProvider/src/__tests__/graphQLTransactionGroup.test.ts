@@ -60,12 +60,18 @@ import { GraphQLTransactionGroup } from '../graphQLTransactionGroup';
 import { SafeJSONParse } from '@memberjunction/global';
 
 describe('GraphQLTransactionGroup', () => {
-  let mockProvider: { ExecuteGQL: ReturnType<typeof vi.fn> };
+  let mockProvider: {
+    ExecuteGQL: ReturnType<typeof vi.fn>;
+    IsFieldDirtyOnChain: ReturnType<typeof vi.fn>;
+    ClearISAParentPreSaveSnapshots: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
     mockProvider = {
       ExecuteGQL: vi.fn(),
+      IsFieldDirtyOnChain: vi.fn((_entity: unknown, field: { Dirty: boolean }) => field.Dirty),
+      ClearISAParentPreSaveSnapshots: vi.fn(),
     };
   });
 
@@ -251,6 +257,69 @@ describe('GraphQLTransactionGroup', () => {
     expect(registered[0].Message).toContain('You may only assign a role that you hold yourself');
   });
 
+  it('sends an item\'s OldValues when the queued update carries them, and omits the key otherwise', async () => {
+    mockProvider.ExecuteGQL.mockResolvedValue({
+      ExecuteTransactionGroup: { Success: true, ErrorMessages: [], ResultsJSON: ['{"ID":"1"}', '{"ID":"2"}'] },
+    });
+    const group = new GraphQLTransactionGroup(mockProvider as never);
+    const oldValues = [{ Key: 'ID', Value: '1' }, { Key: 'Name', Value: 'Old Name' }];
+    group.PendingTransactions = [
+      {
+        BaseEntity: { EntityInfo: { Name: 'Users' }, GetDataObjectJSON: vi.fn().mockResolvedValue('{"ID":"1","Name":"New"}') },
+        OperationType: 'Update',
+        ExtraData: { ignoreDirtyState: true, oldValues },
+      },
+      {
+        BaseEntity: { EntityInfo: { Name: 'Users' }, GetDataObjectJSON: vi.fn().mockResolvedValue('{"Name":"Created"}') },
+        OperationType: 'Create',
+      },
+    ] as never;
+
+    const handleSubmit = (group as Record<string, Function>)['HandleSubmit'].bind(group);
+    await handleSubmit();
+
+    const items = mockProvider.ExecuteGQL.mock.calls[0][1].group.Items;
+    expect(items[0].OldValues).toEqual(oldValues);
+    expect(Object.prototype.hasOwnProperty.call(items[1], 'OldValues')).toBe(false);
+  });
+
+  it("keeps the server's concurrency conflict details on the refused item's result", async () => {
+    mockProvider.ExecuteGQL.mockResolvedValue({
+      ExecuteTransactionGroup: {
+        Success: false,
+        ErrorMessages: [
+          JSON.stringify({
+            Success: false,
+            Type: 'update',
+            Message: 'Concurrent modification conflict on Users for field(s): Name.',
+            ConcurrencyConflict: { ConflictingFields: ['Name'] },
+          }),
+        ],
+        ResultsJSON: ['{"ID":"1"}'],
+      },
+    });
+    const registered: Array<{ ConcurrencyConflict?: { ConflictingFields: string[] } }> = [];
+    const group = new GraphQLTransactionGroup(mockProvider as never);
+    group.PendingTransactions = [
+      {
+        BaseEntity: {
+          EntityInfo: { Name: 'Users' },
+          IsSaved: true,
+          GetDataObjectJSON: vi.fn().mockResolvedValue('{}'),
+          RegisterResultHistoryEntry: (r: { ConcurrencyConflict?: { ConflictingFields: string[] } }) => registered.push(r),
+        },
+        OperationType: 'Update',
+        ExtraData: { ignoreDirtyState: true },
+      },
+    ] as never;
+
+    const handleSubmit = (group as Record<string, Function>)['HandleSubmit'].bind(group);
+    await handleSubmit();
+
+    expect(registered).toHaveLength(1);
+    expect(registered[0].ConcurrencyConflict).toEqual({ ConflictingFields: ['Name'] });
+  });
+
   it('registers nothing for an item the server did NOT refuse, so no phantom failure is invented', async () => {
     // A partially-refused group: item 0 was ACCEPTED, item 1 was refused. Only the refusal has a
     // reason to report.
@@ -380,4 +449,102 @@ describe('GraphQLTransactionGroup', () => {
     expect(vars.group.Variables[0].FieldName).toBe('TargetID');
     expect(vars.group.Variables[0].Type).toBe('output');
   });
+
+  it('excludes clean, read-only, and NotLoaded non-PK fields from EntityObjectJSON on Update', async () => {
+    const mockResults = {
+      ExecuteTransactionGroup: {
+        Success: true,
+        ErrorMessages: [],
+        ResultsJSON: [JSON.stringify({ ID: 'act-1', Name: 'Action 1', Description: 'Updated' })],
+      },
+    };
+    mockProvider.ExecuteGQL.mockResolvedValue(mockResults);
+
+    const getDataObjectJSON = vi.fn().mockImplementation(async (params?: { excludeFields?: string[] }) => {
+      const full: Record<string, unknown> = {
+        ID: 'act-1',
+        Name: 'Action 1',
+        Description: 'Updated',
+        DriverClass: 'MyDriver',
+        __mj_UpdatedAt: '2026-04-20T00:00:00Z',
+      };
+      for (const excluded of params?.excludeFields ?? []) {
+        delete full[excluded];
+      }
+      return JSON.stringify(full);
+    });
+
+    const group = new GraphQLTransactionGroup(mockProvider as never);
+    group.PendingTransactions = [
+      {
+        BaseEntity: {
+          EntityInfo: { Name: 'MJ: Actions' },
+          Fields: [
+            { Name: 'ID', IsPrimaryKey: true, ReadOnly: true, NotLoaded: false, Dirty: false },
+            { Name: 'Name', IsPrimaryKey: false, ReadOnly: false, NotLoaded: false, Dirty: false },
+            { Name: 'Description', IsPrimaryKey: false, ReadOnly: false, NotLoaded: false, Dirty: true },
+            { Name: 'DriverClass', IsPrimaryKey: false, ReadOnly: false, NotLoaded: false, Dirty: false },
+            { Name: '__mj_UpdatedAt', IsPrimaryKey: false, ReadOnly: true, NotLoaded: false, Dirty: false },
+          ],
+          GetDataObjectJSON: getDataObjectJSON,
+          RegisterResultHistoryEntry: vi.fn(),
+        },
+        OperationType: 'Update',
+      },
+    ] as unknown as typeof group.PendingTransactions;
+
+    const handleSubmit = (group as Record<string, Function>)['HandleSubmit'].bind(group);
+    await handleSubmit();
+
+    expect(getDataObjectJSON).toHaveBeenCalledWith(
+      expect.objectContaining({
+        excludeFields: ['Name', 'DriverClass', '__mj_UpdatedAt'],
+      })
+    );
+    const callArgs = mockProvider.ExecuteGQL.mock.calls[0];
+    const sentItem = callArgs[1].group.Items[0];
+    expect(JSON.parse(sentItem.EntityObjectJSON)).toEqual({
+      ID: 'act-1',
+      Description: 'Updated',
+    });
+  });
+
+  it('sends all loaded fields on Update when ExtraData.ignoreDirtyState is true', async () => {
+    const mockResults = {
+      ExecuteTransactionGroup: {
+        Success: true,
+        ErrorMessages: [],
+        ResultsJSON: [JSON.stringify({ ID: 'act-1', Name: 'Action 1', Description: 'Updated' })],
+      },
+    };
+    mockProvider.ExecuteGQL.mockResolvedValue(mockResults);
+
+    const getDataObjectJSON = vi.fn().mockResolvedValue(
+      JSON.stringify({ ID: 'act-1', Name: 'Action 1', Description: 'Updated' })
+    );
+
+    const group = new GraphQLTransactionGroup(mockProvider as never);
+    group.PendingTransactions = [
+      {
+        BaseEntity: {
+          EntityInfo: { Name: 'MJ: Actions' },
+          Fields: [
+            { Name: 'ID', IsPrimaryKey: true, ReadOnly: true, NotLoaded: false, Dirty: false },
+            { Name: 'Name', IsPrimaryKey: false, ReadOnly: false, NotLoaded: false, Dirty: false },
+            { Name: 'Description', IsPrimaryKey: false, ReadOnly: false, NotLoaded: false, Dirty: true },
+          ],
+          GetDataObjectJSON: getDataObjectJSON,
+          RegisterResultHistoryEntry: vi.fn(),
+        },
+        OperationType: 'Update',
+        ExtraData: { ignoreDirtyState: true },
+      },
+    ] as unknown as typeof group.PendingTransactions;
+
+    const handleSubmit = (group as Record<string, Function>)['HandleSubmit'].bind(group);
+    await handleSubmit();
+
+    expect(getDataObjectJSON).toHaveBeenCalledWith();
+  });
 });
+

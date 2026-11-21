@@ -1,0 +1,36 @@
+{
+  "id": "D1r",
+  "namespace": "9c4bd608-7b9a-4a2b-badf-c3f22b91eb9b",
+  "seed": 2211,
+  "description": "Planted regression drift: intercept shift of +2.0 from period 3 onward.",
+  "kind": "regression",
+  "nEntities": 4000,
+  "periodsPerEntity": 6,
+  "startYear": 2019,
+  "shiftFrom": 3,
+  "deltaIntercept": 2.0,
+  "sigma": 4.0,
+  "features": {
+    "EngagementZ": {
+      "dist": "normal",
+      "mean": 0,
+      "sd": 1
+    },
+    "TenureZ": {
+      "dist": "normal",
+      "mean": 0,
+      "sd": 1
+    },
+    "AutoRenew": {
+      "dist": "bernoulli",
+      "p": 0.35
+    }
+  },
+  "betas": {
+    "EngagementZ": 2.5,
+    "TenureZ": 1.0,
+    "AutoRenew": 1.5
+  },
+  "intercept": 20.0,
+  "sizingNote": "4,000 entities x 6 periods = 24,000 rows (Ruling Q9: >= 3,000 x 6), shift in the later 3 periods (12,000 rows each side). The shift (2.0 = half a noise SD) has SE about 0.05, and each period's mean has SE about 0.08, so a monitor that misses it is failing on a large, stable effect."
+}

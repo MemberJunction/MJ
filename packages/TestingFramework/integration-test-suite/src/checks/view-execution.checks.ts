@@ -43,7 +43,7 @@
 import { RunView, CompositeKey } from '@memberjunction/core';
 import type { UserInfo, EntityInfo, RunViewResult, AggregateResult } from '@memberjunction/core';
 import type { MJUserViewEntityExtended } from '@memberjunction/core-entities';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -400,8 +400,7 @@ const V11: NamedCheck = {
     Fn: async (ctx: IntegrationCheckContext) => {
         const entity = await findReadableCompositePkEntity(ctx);
         if (!entity) {
-            console.log('      → SKIPPED: this deployment has no readable composite-PK entity, so the AfterKeyNotSupportedError(CompositePK) branch is unreachable here.');
-            return;
+            SkipCheck('this deployment has no readable composite-PK entity, so the AfterKeyNotSupportedError(CompositePK) branch is unreachable here.');
         }
 
         let refusal = '';

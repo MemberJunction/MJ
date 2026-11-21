@@ -1,7 +1,19 @@
 :host {
-    display: block;
+    display: flex;
+    flex-direction: column;
     height: 100%;
     width: 100%;
+}
+
+/* The form fills what the remote-delete banner leaves. */
+mj-entity-form-host {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.single-record-deleted-banner {
+    flex: 0 0 auto;
+    margin: var(--mj-space-3) var(--mj-space-4) 0;
 }
 
 .single-record-error {

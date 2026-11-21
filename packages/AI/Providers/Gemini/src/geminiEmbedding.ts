@@ -9,9 +9,12 @@ import {
     EmbedContentParams,
     EmbedContentResult,
     FileCapabilities,
+    AbortableDelay,
+    IsRequestAborted,
+    ThrowIfAborted,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
-import { GoogleGenAI, Content } from '@google/genai';
+import { GoogleGenAI, Content, EmbedContentConfig } from '@google/genai';
 import { GeminiLLM } from '.';
 
 /**
@@ -41,9 +44,6 @@ const DEFAULT_MODEL = 'gemini-embedding-2';
  * while keeping throughput reasonable.
  */
 const EMBED_TEXTS_MAX_CONCURRENCY = 4;
-
-/** Sleep helper for exponential backoff between per-text embed retries. */
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 @RegisterClass(BaseEmbeddings, 'GeminiEmbedding')
 export class GeminiEmbedding extends BaseEmbeddings {
@@ -102,7 +102,7 @@ export class GeminiEmbedding extends BaseEmbeddings {
             const response = await this._gemini.models.embedContent({
                 model,
                 contents: params.text,
-                ...(params.dimensions ? { config: { outputDimensionality: params.dimensions } } : {}),
+                ...this.embedConfig(params.dimensions, params.CancellationToken),
             });
             return {
                 object: 'object',
@@ -111,6 +111,8 @@ export class GeminiEmbedding extends BaseEmbeddings {
                 vector: response.embeddings?.[0]?.values ?? [],
             };
         } catch (error) {
+            // An aborted request is reported as cancelled, not as an empty (failed) vector.
+            this.ThrowIfRequestAborted(error, params.CancellationToken);
             console.error('Gemini embedding error:', ErrorAnalyzer.analyzeError(error, 'Gemini'));
             return { object: 'object', model, ModelUsage: new ModelUsage(0, 0), vector: [] };
         }
@@ -130,6 +132,9 @@ export class GeminiEmbedding extends BaseEmbeddings {
      * batch pipelines degrade gracefully instead of aborting. A SUCCESSFUL run is then hard-asserted
      * to be 1:1 with the inputs and throws on mismatch — so the batch-collapse bug can never again
      * silently return a short/blended array that downstream code mis-pairs by index.
+     *
+     * Once `params.CancellationToken` fires, no further text is sent, no retry or backoff continues,
+     * and this throws a cancellation error rather than returning the empty result.
      */
     public async EmbedTexts(params: EmbedTextsParams): Promise<EmbedTextsResult> {
         const model = params.model || DEFAULT_MODEL;
@@ -137,8 +142,10 @@ export class GeminiEmbedding extends BaseEmbeddings {
 
         let vectors: number[][];
         try {
-            vectors = await this.embedTextsConcurrently(texts, model, EMBED_TEXTS_MAX_CONCURRENCY, params.dimensions);
+            vectors = await this.embedTextsConcurrently(texts, model, EMBED_TEXTS_MAX_CONCURRENCY, params.dimensions, params.CancellationToken);
         } catch (error) {
+            // A cancellation is the caller's decision, not a failed batch: it is thrown, not degraded.
+            this.ThrowIfRequestAborted(error, params.CancellationToken);
             // Preserve the original contract: empty result on failure (no throw), so existing
             // callers that don't wrap EmbedTexts keep degrading gracefully rather than aborting.
             console.error('Gemini embedding error:', ErrorAnalyzer.analyzeError(error, 'Gemini'));
@@ -166,7 +173,13 @@ export class GeminiEmbedding extends BaseEmbeddings {
      * Embeds each text with its own `embedContent` call while capping the number of concurrent
      * in-flight requests at `maxConcurrency`. Results are returned in the same order as `texts`.
      */
-    private async embedTextsConcurrently(texts: string[], model: string, maxConcurrency: number, dimensions?: number): Promise<number[][]> {
+    private async embedTextsConcurrently(
+        texts: string[],
+        model: string,
+        maxConcurrency: number,
+        dimensions?: number,
+        signal?: AbortSignal,
+    ): Promise<number[][]> {
         const vectors: number[][] = new Array<number[]>(texts.length);
         let nextIndex = 0;
         let failed = false;
@@ -178,7 +191,8 @@ export class GeminiEmbedding extends BaseEmbeddings {
             // embedContent calls after the batch is already doomed to reject.
             for (let index = nextIndex++; !failed && index < texts.length; index = nextIndex++) {
                 try {
-                    vectors[index] = await this.embedSingleText(texts[index], model, dimensions);
+                    ThrowIfAborted(signal, 'Gemini'); // a cancelled batch claims no further texts
+                    vectors[index] = await this.embedSingleText(texts[index], model, dimensions, signal);
                 } catch (error) {
                     failed = true;
                     throw error;
@@ -197,18 +211,21 @@ export class GeminiEmbedding extends BaseEmbeddings {
      * its failure rate otherwise scales with the text count. Retries {@link maxEmbedTextsRetries}
      * times, then throws; {@link EmbedTexts} catches that to apply the batch-level empty-result
      * contract, so a batch never ends up with a silently-corrupt (empty or blended) vector for one text.
+     * An aborted `signal` ends the retries: the backoff wait rejects as soon as it fires, and a failure
+     * caused by an abort is rethrown rather than retried.
      */
-    private async embedSingleText(text: string, model: string, dimensions?: number): Promise<number[]> {
+    private async embedSingleText(text: string, model: string, dimensions?: number, signal?: AbortSignal): Promise<number[]> {
         let lastError: unknown;
         for (let n = 0; n <= this.maxEmbedTextsRetries; n++) {
+            ThrowIfAborted(signal, 'Gemini');
             if (n > 0) {
-                await sleep(this.embedRetryBaseDelayMs * 2 ** (n - 1));
+                await AbortableDelay(this.embedRetryBaseDelayMs * 2 ** (n - 1), signal);
             }
             try {
                 const response = await this._gemini.models.embedContent({
                     model,
                     contents: text,
-                    ...(dimensions ? { config: { outputDimensionality: dimensions } } : {}),
+                    ...this.embedConfig(dimensions, signal),
                 });
                 const vector = response.embeddings?.[0]?.values;
                 if (!vector || vector.length === 0) {
@@ -217,7 +234,7 @@ export class GeminiEmbedding extends BaseEmbeddings {
                 return vector;
             } catch (error) {
                 lastError = error;
-                if (n >= this.maxEmbedTextsRetries) {
+                if (n >= this.maxEmbedTextsRetries || IsRequestAborted(error, signal)) {
                     throw error; // out of retries — let EmbedTexts apply the empty-batch contract
                 }
                 // else: back off and retry
@@ -244,7 +261,7 @@ export class GeminiEmbedding extends BaseEmbeddings {
             const response = await this._gemini.models.embedContent({
                 model,
                 contents,
-                ...(params.dimensions ? { config: { outputDimensionality: params.dimensions } } : {}),
+                ...this.embedConfig(params.dimensions, params.CancellationToken),
             });
             return {
                 object: 'object',
@@ -253,6 +270,7 @@ export class GeminiEmbedding extends BaseEmbeddings {
                 vector: response.embeddings?.[0]?.values ?? [],
             };
         } catch (error) {
+            this.ThrowIfRequestAborted(error, params.CancellationToken);
             console.error('Gemini embedding (content) error:', ErrorAnalyzer.analyzeError(error, 'Gemini'));
             // design considerations: propagate error in addition to returning an empty vector or throw error from the get-go
             return {
@@ -262,6 +280,19 @@ export class GeminiEmbedding extends BaseEmbeddings {
                 vector: [],
             };
         }
+    }
+
+    /**
+     * The `config` of an `embedContent` request: the output dimension when one was asked for, and the
+     * abort signal, which the SDK forwards to its `fetch` so an abort tears the request down. Spread
+     * into the request; empty when there is neither.
+     */
+    private embedConfig(dimensions?: number, signal?: AbortSignal): { config?: EmbedContentConfig } {
+        const config: EmbedContentConfig = {
+            ...(dimensions ? { outputDimensionality: dimensions } : {}),
+            ...(signal ? { abortSignal: signal } : {}),
+        };
+        return Object.keys(config).length > 0 ? { config } : {};
     }
 
     public async GetEmbeddingModels(): Promise<EmbeddingModelInfo[]> {

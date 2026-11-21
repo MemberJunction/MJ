@@ -1,0 +1,37 @@
+[
+  {
+    "fields": {
+      "Name": "IT: VS Data Caller",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
+      "Description": "Loop agent fixture that invokes Video Studio as a related sub-agent with a tabular data payload. Used by IT151 VSP2. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExposeAsAction": false,
+      "InvocationMode": "Any",
+      "ModelSelectionMode": "Agent",
+      "ArtifactCreationMode": "Never",
+      "IconClass": "fa-solid fa-vial",
+      "InjectNotes": false,
+      "InjectExamples": false,
+      "MaxIterationsPerRun": 6
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=IT: Handoff Agent - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "8A901B4F-B8BA-4442-86EB-F70A08AA2CAA"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "03D214B1-51E5-416A-A2E3-B6F06B4AE8F1"
+    }
+  }
+]

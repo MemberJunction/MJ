@@ -11,6 +11,13 @@
  */
 
 import { BaseSingleton } from './BaseSingleton';
+import {
+  ScanSQLForScreening,
+  SQL_SCREENING_DIALECTS,
+  SQLScreeningDialect,
+  SQLScreeningScan,
+  SQLScreeningSpan,
+} from './SQLScreeningScanner';
 
 /**
  * Dangerous SQL keywords that are never allowed in user-provided expressions
@@ -87,7 +94,8 @@ export const FULL_QUERY_ALLOWED_KEYWORDS = [
  * a schema-enumeration and credential-exfiltration primitive
  * (e.g. `SELECT name, password_hash FROM sys.sql_logins`,
  *  `SELECT * FROM INFORMATION_SCHEMA.COLUMNS`, `SELECT * FROM pg_catalog.pg_authid`).
- * String literals are stripped before this check runs, so a literal value like `'sys.x'` is safe.
+ * The check reads {@link SQLScreeningScan.CodeWithIdentifiers}: string literals are removed, so a
+ * literal value like `'sys.x'` is safe, and quoted names are unwrapped, so `[sys].[x]` is caught.
  */
 export const BLOCKED_SYSTEM_OBJECT_PATTERNS: RegExp[] = [
   /\bSYS\s*\.\s*\w/i,                      // SQL Server system catalog schema: sys.sql_logins, sys.objects, sys.fn_*, ...
@@ -98,75 +106,120 @@ export const BLOCKED_SYSTEM_OBJECT_PATTERNS: RegExp[] = [
 ];
 
 /**
- * Matches SQL string literals the way SQL Server and PostgreSQL (with the default
- * `standard_conforming_strings=on`) actually parse them: a literal is closed by the next
- * single quote, `''` is an embedded quote, and a backslash is an ORDINARY character that
- * does NOT escape the closing quote. Double-quoted runs are matched with the same doubling
- * rule so a delimited identifier can't hide a payload either.
- *
- * @see StripSQLStringLiterals — use that, not this constant, so every caller gets the
- * documented semantics and the two validators in MJ can never drift apart again.
+ * The keywords a full query may open with. Without the `u` flag, the `i` flag matches ASCII letters
+ * only, so no other letter is case-mapped to S, E, L, C, T, W, I or H.
  */
-const SQL_STRING_LITERAL_PATTERN = /'(?:[^']|'')*'|"(?:[^"]|"")*"/g;
+const FULL_QUERY_OPENING_KEYWORD = /^(?:SELECT|WITH)$/i;
 
 /**
- * Removes SQL string literals from a clause or expression so that a keyword denylist can be
- * applied to the *code* portion without tripping over keywords that appear inside quoted data
- * (e.g. `Comments LIKE '%--%'`).
+ * Replaces each SQL string literal with one space so that a keyword denylist can be applied to the
+ * rest without tripping over keywords inside quoted data (e.g. `Comments LIKE '%--%'`). Quoted
+ * identifiers and comments are left as written.
  *
- * 🚨 SECURITY — this is the single implementation of literal-stripping for MJ's SQL screens, and
- * it MUST stay byte-for-byte consistent with how the database parses literals. If the stripper
- * removes a span the database does NOT treat as a literal, everything hidden inside that span
- * bypasses the denylist while the database still executes it.
- *
- * An earlier version of this logic (duplicated in two places, which is how it survived) honored
- * **backslash escaping** — `/(['"])(?:(?=(\\?))\2[\s\S])*?\1/g`. SQL Server and PostgreSQL do not
- * treat `\` as an escape character, so `x = 'a\') ; DROP TABLE Users; --'` was swallowed whole as
- * one "literal" and stripped to `x = `, which passed every denylist — while the database closed
- * the literal at the real quote and executed the stacked statement.
- *
- * **Do NOT reintroduce backslash-escape handling here, and do NOT inline a second copy of this
- * regex anywhere else — call this function.**
+ * 🚨 SECURITY — literals are found by {@link ScanSQLForScreening}, which reads the text the way the
+ * database does: a quote inside a T-SQL `[…]` identifier, a comment or a PostgreSQL `$$…$$` string
+ * opens no literal, and a backslash escapes a quote only inside a PostgreSQL `E'…'` string. A
+ * stripper that removes a span the database does NOT treat as a literal hides everything inside it
+ * from the denylist while the database still runs it. Screens should call
+ * {@link ScanSQLForScreening} directly, which also reports comments and text it cannot classify.
  *
  * @param sql The clause, expression, or query to strip literals from
- * @returns The input with every complete string literal removed. An UNTERMINATED literal is left
- *          in place on purpose: the stray quote and everything after it stay visible to the
- *          denylist rather than being silently swallowed.
+ * @param dialect The dialect that will run the SQL. Without one, the text must read the same way
+ *                under every dialect the scanner knows.
+ * @returns The input with each string literal replaced by a space. The input is returned unchanged
+ *          when it cannot be classified (for example an unterminated literal) or when the dialects
+ *          disagree on where its literals are, so a denylist still sees all of it.
  */
-export function StripSQLStringLiterals(sql: string): string {
-  return sql.replace(SQL_STRING_LITERAL_PATTERN, '');
+export function StripSQLStringLiterals(sql: string, dialect?: SQLScreeningDialect): string {
+  const scans = (dialect ? [dialect] : SQL_SCREENING_DIALECTS).map(d => ScanSQLForScreening(sql, d));
+  if (scans.some(scan => !scan.Classified)) return sql;
+  const readings = scans.map(scan => replaceStringSpans(sql, scan.Spans));
+  return readings.every(reading => reading === readings[0]) ? readings[0] : sql;
+}
+
+/** Writes `sql` with each string span replaced by one space. */
+function replaceStringSpans(sql: string, spans: SQLScreeningSpan[]): string {
+  let result = '';
+  let from = 0;
+  for (const span of spans) {
+    if (span.Kind !== 'string') continue;
+    result += sql.slice(from, span.Start) + ' ';
+    from = span.End;
+  }
+  return result + sql.slice(from);
 }
 
 /**
- * Safe SQL functions allowed in expressions, organized by category
+ * Safe SQL functions allowed in expressions, organized by category.
+ *
+ * WHY THIS IS A UNION RATHER THAN A PER-DIALECT TABLE
+ * ---------------------------------------------------
+ * This is a deny-by-default SAFETY list, not a dialect grammar. Its job is to
+ * stop a user-supplied expression from smuggling in something that is not a
+ * read-only scalar/aggregate call — it is not, and must not become, a
+ * per-platform parser. So it carries the union of every supported dialect's
+ * read-only vocabulary, and `checkFunctionNames` consults the flattened union.
+ *
+ * Keying the buckets off `ResolvePlatformKey` is the alternative, and it costs
+ * more than it buys: a PostgreSQL name that reaches a SQL Server tenant is
+ * rejected by the SQL Server parser on its own — `DATE_TRUNC(...)` simply never
+ * parses there. The union therefore cannot widen the blast radius past what the
+ * target server will already accept, whereas a dialect switch here would add a
+ * second independent place for the dialect to be resolved, and so a second place
+ * for it to be wrong.
+ *
+ * Before this list held the PostgreSQL names, a perfectly ordinary PG filter
+ * such as `DATE_TRUNC('month', CreatedAt)` was rejected outright with
+ * "Function 'DATE_TRUNC' is not allowed" on every PostgreSQL tenant.
+ *
+ * Every name here is read-only by construction. Anything that writes, escalates,
+ * or reaches outside the statement stays on {@link DANGEROUS_SQL_KEYWORDS}, which
+ * is checked FIRST (step 2 of `validate`) — a name added here can never unblock
+ * one that is denied there.
  */
 export const ALLOWED_SQL_FUNCTIONS = {
-  // Aggregate functions
-  aggregates: ['COUNT', 'COUNT_BIG', 'SUM', 'AVG', 'MIN', 'MAX', 'STDEV', 'STDEVP', 'VAR', 'VARP', 'STRING_AGG', 'CHECKSUM_AGG'],
+  // Aggregate functions. PG: ARRAY_AGG / JSONB_AGG / JSON_AGG / BOOL_AND / BOOL_OR /
+  // EVERY / PERCENTILE_* / MODE.
+  aggregates: ['COUNT', 'COUNT_BIG', 'SUM', 'AVG', 'MIN', 'MAX', 'STDEV', 'STDEVP', 'VAR', 'VARP', 'STRING_AGG', 'CHECKSUM_AGG',
+    'ARRAY_AGG', 'JSONB_AGG', 'JSON_AGG', 'BOOL_AND', 'BOOL_OR', 'EVERY', 'PERCENTILE_CONT', 'PERCENTILE_DISC', 'MODE'],
 
-  // Math functions
-  math: ['ABS', 'CEILING', 'FLOOR', 'ROUND', 'POWER', 'SQRT', 'LOG', 'LOG10', 'EXP', 'SIGN', 'RAND'],
+  // Math functions. PG: CEIL (vs CEILING), RANDOM (vs RAND), TRUNC, MOD, DIV,
+  // GREATEST, LEAST, WIDTH_BUCKET.
+  math: ['ABS', 'CEILING', 'FLOOR', 'ROUND', 'POWER', 'SQRT', 'LOG', 'LOG10', 'EXP', 'SIGN', 'RAND',
+    'CEIL', 'RANDOM', 'TRUNC', 'MOD', 'DIV', 'GREATEST', 'LEAST', 'WIDTH_BUCKET'],
 
-  // String functions (read-only)
-  string: ['LEN', 'LENGTH', 'UPPER', 'LOWER', 'LTRIM', 'RTRIM', 'TRIM', 'LEFT', 'RIGHT', 'SUBSTRING', 'CHARINDEX', 'REPLACE', 'CONCAT', 'STUFF'],
+  // String functions (read-only). PG: POSITION / STRPOS (vs CHARINDEX), SPLIT_PART,
+  // INITCAP, LPAD, RPAD, REPEAT, REVERSE, TRANSLATE, REGEXP_*, TO_CHAR, MD5, ASCII, CHR.
+  string: ['LEN', 'LENGTH', 'UPPER', 'LOWER', 'LTRIM', 'RTRIM', 'TRIM', 'LEFT', 'RIGHT', 'SUBSTRING', 'CHARINDEX', 'REPLACE', 'CONCAT', 'STUFF',
+    'POSITION', 'STRPOS', 'SPLIT_PART', 'INITCAP', 'LPAD', 'RPAD', 'REPEAT', 'REVERSE', 'TRANSLATE',
+    'REGEXP_REPLACE', 'REGEXP_MATCHES', 'REGEXP_SUBSTR', 'TO_CHAR', 'MD5', 'ASCII', 'CHR'],
 
-  // Date functions
-  date: ['DATEPART', 'DATEDIFF', 'DATEADD', 'YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE', 'SECOND', 'GETDATE', 'GETUTCDATE', 'SYSDATETIME', 'EOMONTH'],
+  // Date functions. PG: NOW / CURRENT_* / LOCALTIMESTAMP (vs GETDATE), DATE_TRUNC,
+  // DATE_PART / EXTRACT (vs DATEPART), AGE, TO_DATE, TO_TIMESTAMP, MAKE_*, JUSTIFY_DAYS.
+  date: ['DATEPART', 'DATEDIFF', 'DATEADD', 'YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE', 'SECOND', 'GETDATE', 'GETUTCDATE', 'SYSDATETIME', 'EOMONTH',
+    'NOW', 'CURRENT_DATE', 'CURRENT_TIME', 'CURRENT_TIMESTAMP', 'LOCALTIMESTAMP', 'DATE_TRUNC', 'DATE_PART', 'EXTRACT', 'AGE',
+    'TO_DATE', 'TO_TIMESTAMP', 'MAKE_DATE', 'MAKE_TIMESTAMP', 'JUSTIFY_DAYS'],
 
-  // Type conversion (safe subset)
-  conversion: ['CAST', 'CONVERT', 'TRY_CAST', 'TRY_CONVERT', 'FORMAT'],
+  // Type conversion (safe subset). PG: TO_CHAR / TO_DATE / TO_NUMBER / TO_TIMESTAMP
+  // (vs CAST/CONVERT/FORMAT).
+  conversion: ['CAST', 'CONVERT', 'TRY_CAST', 'TRY_CONVERT', 'FORMAT', 'TO_CHAR', 'TO_DATE', 'TO_NUMBER', 'TO_TIMESTAMP'],
 
-  // Null handling
-  nullHandling: ['ISNULL', 'COALESCE', 'NULLIF', 'IIF'],
+  // Null handling. PG has no ISNULL/IIF; GREATEST/LEAST are its null-tolerant pickers.
+  nullHandling: ['ISNULL', 'COALESCE', 'NULLIF', 'IIF', 'GREATEST', 'LEAST'],
 
   // Case expressions
   conditional: ['CASE', 'WHEN', 'THEN', 'ELSE', 'END'],
 
-  // Logical operators (as keywords)
-  logical: ['AND', 'OR', 'NOT', 'IS', 'NULL', 'LIKE', 'BETWEEN', 'IN'],
+  // Logical operators (as keywords). PG: ILIKE, SIMILAR TO. ANY/ALL/SOME/EXISTS are
+  // listed so that the full-query context, which unblocks them from
+  // DANGEROUS_SQL_KEYWORDS via FULL_QUERY_ALLOWED_KEYWORDS, does not then trip over
+  // them here as unknown function-shaped tokens.
+  logical: ['AND', 'OR', 'NOT', 'IS', 'NULL', 'LIKE', 'BETWEEN', 'IN', 'ILIKE', 'SIMILAR', 'ANY', 'ALL', 'SOME', 'EXISTS'],
 
-  // Sort/order and windowing
-  ordering: ['ASC', 'ASCENDING', 'DESC', 'DESCENDING', 'OVER', 'PARTITION', 'BY', 'ORDER', 'ROWS', 'RANGE', 'UNBOUNDED', 'PRECEDING', 'FOLLOWING', 'CURRENT', 'ROW']
+  // Sort/order and windowing. PG: NULLS FIRST/LAST, aggregate FILTER (WHERE …),
+  // WITHIN GROUP, GROUPING.
+  ordering: ['ASC', 'ASCENDING', 'DESC', 'DESCENDING', 'OVER', 'PARTITION', 'BY', 'ORDER', 'ROWS', 'RANGE', 'UNBOUNDED', 'PRECEDING', 'FOLLOWING', 'CURRENT', 'ROW',
+    'NULLS', 'FIRST', 'LAST', 'FILTER', 'WITHIN', 'GROUPING']
 } as const;
 
 /**
@@ -214,6 +267,12 @@ export interface SQLValidationOptions {
 
   /** Custom blocked keywords to add */
   additionalBlocked?: string[];
+
+  /**
+   * The dialect that will run the SQL, which decides how quotes, identifiers and comments are read.
+   * Without one, the SQL must pass under every dialect {@link ScanSQLForScreening} knows.
+   */
+  Dialect?: SQLScreeningDialect;
 }
 
 /**
@@ -269,46 +328,116 @@ export class SQLExpressionValidator extends BaseSingleton<SQLExpressionValidator
       return { valid: false, error: 'Expression cannot be empty' };
     }
 
-    // Step 1: Remove string literals to avoid false positives
-    const withoutStrings = this.removeStringLiterals(trimmed);
+    // Read the text the way the database will. When the dialect is unknown, every reading must pass.
+    const dialects = options.Dialect ? [options.Dialect] : SQL_SCREENING_DIALECTS;
+    for (const dialect of dialects) {
+      const result = this.validateReading(ScanSQLForScreening(trimmed, dialect), options);
+      if (!result.valid) return result;
+    }
+    return { valid: true };
+  }
 
-    // Step 2: Check for dangerous patterns
-    const dangerCheck = this.checkDangerousPatterns(withoutStrings, options);
+  /**
+   * Runs every check against one dialect's reading of the expression.
+   *
+   * 🚨 SECURITY: the checks read the scanner's projections, never the raw text. Do not add a regex
+   * that finds literals, identifiers or comments here; see {@link ScanSQLForScreening}.
+   */
+  private validateReading(scan: SQLScreeningScan, options: SQLValidationOptions): SQLValidationResult {
+    if (!scan.Classified) {
+      return {
+        valid: false,
+        error: `SQL could not be read safely as ${scan.Dialect}: ${scan.Error}`,
+        trigger: 'unclassified'
+      };
+    }
+
+    const dangerCheck = this.checkDangerousPatterns(scan, options);
     if (!dangerCheck.valid) return dangerCheck;
 
-    // Step 3: Validate function names are in allowlist (skip for full queries —
-    // the function allowlist is designed for expression fragments, not full SQL statements)
+    // The function allowlist is designed for expression fragments, not full SQL statements.
+    // Quoted names are unwrapped, so a quoted function call is checked too.
     if (options.context !== 'full_query') {
-      const functionCheck = this.checkFunctionNames(withoutStrings, options);
+      const functionCheck = this.checkFunctionNames(scan.CodeWithIdentifiers, options);
       if (!functionCheck.valid) return functionCheck;
     }
 
-    // Step 4: Context-specific validation
-    const contextCheck = this.checkContextRules(withoutStrings, options);
+    const contextCheck = this.checkContextRules(scan, options);
     if (!contextCheck.valid) return contextCheck;
 
-    // Step 5: Optional field reference validation (lenient - just logs warnings)
+    // Optional field reference validation (lenient - just logs warnings)
     if (options.entityFields?.length) {
-      this.checkFieldReferences(withoutStrings, options.entityFields);
+      this.checkFieldReferences(scan.Code, options.entityFields);
     }
 
     return { valid: true };
   }
 
   /**
-   * Remove string literals to avoid false positives in keyword detection.
-   *
-   * 🚨 SECURITY: delegates to {@link StripSQLStringLiterals} — read the warning there before
-   * changing anything about how literals are matched. This must never grow its own regex again.
+   * Check for dangerous SQL patterns that indicate injection attempts
    */
-  private removeStringLiterals(expression: string): string {
-    return StripSQLStringLiterals(expression);
+  private checkDangerousPatterns(scan: SQLScreeningScan, options: SQLValidationOptions): SQLValidationResult {
+    const isFullQuery = options.context === 'full_query';
+    const textToCheck = scan.Code.toUpperCase();
+
+    // Full queries may carry comments (agent SQL has header comment blocks); the scan has already
+    // blanked them. In expressions, comments are rejected outright as injection vectors, and so is
+    // a stray `*/`, which is code.
+    if (!isFullQuery && (scan.CommentCount > 0 || textToCheck.includes('*/'))) {
+      return {
+        valid: false,
+        error: 'Comments are not allowed in SQL expressions',
+        trigger: 'comment'
+      };
+    }
+
+    for (const keyword of this.blockedKeywords(options)) {
+      // Use word boundaries to avoid false positives (e.g., "DESCRIPTION" containing "EXEC")
+      const pattern = new RegExp(`\\b${this.escapeRegex(keyword)}\\b`, 'i');
+      if (pattern.test(textToCheck)) {
+        return {
+          valid: false,
+          error: `Dangerous SQL keyword detected: ${keyword}`,
+          trigger: keyword,
+          suggestion: keyword === 'SELECT' ? 'Subqueries are not allowed. Use a direct expression instead.' : undefined
+        };
+      }
+    }
+
+    // Block references to database system catalogs / metadata objects in ALL contexts
+    // (including full_query). These live outside MemberJunction's entity-permission model, so
+    // permitting them turns a validated SELECT into a schema-enumeration / credential-exfiltration
+    // primitive. Literals are blanked and quoted names unwrapped, so `[sys].[x]` is caught too.
+    const namesToCheck = scan.CodeWithIdentifiers.toUpperCase();
+    for (const sysPattern of BLOCKED_SYSTEM_OBJECT_PATTERNS) {
+      if (sysPattern.test(namesToCheck)) {
+        return {
+          valid: false,
+          error: 'Access to database system catalogs / metadata objects is not allowed',
+          trigger: 'system-object'
+        };
+      }
+    }
+
+    // Check statement terminator (prevents multi-statement injection). Comments are already
+    // blanked, so a full query may end with one semicolon even when a comment follows it
+    // (`ORDER BY x DESC; -- highest first`). A semicolon anywhere else indicates injection.
+    const textForSemicolonCheck = isFullQuery ? textToCheck.replace(/;\s*$/, '') : textToCheck;
+    if (textForSemicolonCheck.includes(';')) {
+      return {
+        valid: false,
+        error: 'Semicolons are not allowed in SQL expressions',
+        trigger: ';'
+      };
+    }
+
+    return { valid: true };
   }
 
   /**
-   * Check for dangerous SQL patterns that indicate injection attempts
+   * The keywords {@link checkDangerousPatterns} rejects in this context.
    */
-  private checkDangerousPatterns(expression: string, options: SQLValidationOptions): SQLValidationResult {
+  private blockedKeywords(options: SQLValidationOptions): string[] {
     const isFullQuery = options.context === 'full_query';
 
     // Build blocked list - explicitly typed as string[] for mutability
@@ -327,67 +456,7 @@ export class SQLExpressionValidator extends BaseSingleton<SQLExpressionValidator
     if (!isFullQuery && !options.allowSubqueries && !blocked.includes('SELECT')) {
       blocked.push('SELECT');
     }
-
-    // For full_query, strip comments before keyword checking (agent SQL has header comment blocks).
-    // For expressions, comments are still rejected outright as injection vectors.
-    let textToCheck: string;
-    if (isFullQuery) {
-      textToCheck = this.stripSQLComments(expression).toUpperCase();
-    } else {
-      const upper = expression.toUpperCase();
-      if (upper.includes('--') || upper.includes('/*') || upper.includes('*/')) {
-        return {
-          valid: false,
-          error: 'Comments are not allowed in SQL expressions',
-          trigger: 'comment'
-        };
-      }
-      textToCheck = upper;
-    }
-
-    for (const keyword of blocked) {
-      // Use word boundaries to avoid false positives (e.g., "DESCRIPTION" containing "EXEC")
-      const pattern = new RegExp(`\\b${this.escapeRegex(keyword)}\\b`, 'i');
-      if (pattern.test(textToCheck)) {
-        return {
-          valid: false,
-          error: `Dangerous SQL keyword detected: ${keyword}`,
-          trigger: keyword,
-          suggestion: keyword === 'SELECT' ? 'Subqueries are not allowed. Use a direct expression instead.' : undefined
-        };
-      }
-    }
-
-    // Block references to database system catalogs / metadata objects in ALL contexts
-    // (including full_query). These live outside MemberJunction's entity-permission model, so
-    // permitting them turns a validated SELECT into a schema-enumeration / credential-exfiltration
-    // primitive. String literals were already stripped upstream, so legitimate literal values are safe.
-    for (const sysPattern of BLOCKED_SYSTEM_OBJECT_PATTERNS) {
-      if (sysPattern.test(textToCheck)) {
-        return {
-          valid: false,
-          error: 'Access to database system catalogs / metadata objects is not allowed',
-          trigger: 'system-object'
-        };
-      }
-    }
-
-    // Check statement terminator (prevents multi-statement injection).
-    // For full_query context, strip comments first (a trailing semicolon may be followed by
-    // an inline comment like `ORDER BY x DESC; -- highest first`), then strip the trailing
-    // semicolon. Only reject if semicolons remain mid-statement, indicating injection.
-    const textForSemicolonCheck = isFullQuery
-      ? this.stripSQLComments(expression).replace(/;\s*$/, '')   // strip comments then trailing semicolon
-      : expression;
-    if (textForSemicolonCheck.includes(';')) {
-      return {
-        valid: false,
-        error: 'Semicolons are not allowed in SQL expressions',
-        trigger: ';'
-      };
-    }
-
-    return { valid: true };
+    return blocked;
   }
 
   /**
@@ -423,12 +492,12 @@ export class SQLExpressionValidator extends BaseSingleton<SQLExpressionValidator
   /**
    * Context-specific validation rules
    */
-  private checkContextRules(expression: string, options: SQLValidationOptions): SQLValidationResult {
+  private checkContextRules(scan: SQLScreeningScan, options: SQLValidationOptions): SQLValidationResult {
     // For aggregate context, require at least one aggregate function (unless explicitly disabled)
     if (options.context === 'aggregate' && options.requireAggregate !== false) {
       const hasAggregate = ALLOWED_SQL_FUNCTIONS.aggregates.some(fn => {
         const pattern = new RegExp(`\\b${fn}\\s*\\(`, 'i');
-        return pattern.test(expression);
+        return pattern.test(scan.Code);
       });
 
       if (!hasAggregate) {
@@ -440,17 +509,15 @@ export class SQLExpressionValidator extends BaseSingleton<SQLExpressionValidator
       }
     }
 
-    // For full_query context, the query must start with SELECT or WITH (CTE)
-    if (options.context === 'full_query') {
-      const stripped = this.stripSQLComments(expression).trim();
-      const upper = stripped.toUpperCase();
-      if (!upper.startsWith('SELECT') && !upper.startsWith('WITH')) {
-        return {
-          valid: false,
-          error: 'Ad-hoc query must start with SELECT or WITH',
-          suggestion: 'Only SELECT statements and CTEs (WITH ... AS) are allowed'
-        };
-      }
+    // For full_query context, the first token (after comments) must be the unquoted keyword SELECT or
+    // WITH, compared in ASCII. SQL Server runs a batch that opens with any other name, quoted or not,
+    // as a procedure call.
+    if (options.context === 'full_query' && !FULL_QUERY_OPENING_KEYWORD.test(scan.LeadingWord ?? '')) {
+      return {
+        valid: false,
+        error: 'Ad-hoc query must start with SELECT or WITH',
+        suggestion: 'Only SELECT statements and CTEs (WITH ... AS) are allowed'
+      };
     }
 
     return { valid: true };
@@ -488,17 +555,6 @@ export class SQLExpressionValidator extends BaseSingleton<SQLExpressionValidator
   }
 
   /**
-   * Strip SQL comments (single-line -- and multi-line block comments) from a query.
-   * Used by full_query context to allow agent-generated header comments
-   * without triggering the comment injection check.
-   */
-  private stripSQLComments(sql: string): string {
-    return sql
-      .replace(/--[^\n]*/g, '')          // Single-line comments
-      .replace(/\/\*[\s\S]*?\*\//g, ''); // Block comments
-  }
-
-  /**
    * Escape special regex characters in a string
    */
   private escapeRegex(str: string): string {
@@ -525,13 +581,17 @@ export class SQLExpressionValidator extends BaseSingleton<SQLExpressionValidator
    * Validate a full SQL query (SELECT or WITH/CTE statement).
    * Blocks mutations, dangerous operations, and multi-statement injection.
    * Allows SELECT, subqueries, set operations, and SQL comments.
+   *
+   * @param sql The query to validate
+   * @param dialect The dialect that will run the query. Without one, the query must pass under
+   *                every dialect {@link ScanSQLForScreening} knows.
    */
-  public ValidateFullQuery(sql: string): SQLValidationResult {
+  public ValidateFullQuery(sql: string, dialect?: SQLScreeningDialect): SQLValidationResult {
     // Normalize literal escape sequences before validation — agent-generated
     // SQL may arrive with literal \n instead of real newlines, which breaks
     // comment stripping and the "must start with SELECT" check.
     const normalized = this.normalizeSQLWhitespace(sql);
-    return this.validate(normalized, { context: 'full_query' });
+    return this.validate(normalized, { context: 'full_query', Dialect: dialect });
   }
 
   /** @deprecated Use {@link ValidateFullQuery}. */

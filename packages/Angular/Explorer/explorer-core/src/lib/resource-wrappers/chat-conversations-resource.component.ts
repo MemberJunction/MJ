@@ -1,19 +1,21 @@
 import { Component, ViewEncapsulation, OnDestroy, ViewChild, ChangeDetectorRef, HostListener } from '@angular/core';
 import { Metadata, CompositeKey } from '@memberjunction/core';
-import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual, IsValidUUID } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { ResolveDeepLinkParam } from './chat-deeplink-params.js';
 import { ResolveChatSearchRoute } from './chat-search-routing.js';
+import { BuildExportArtifactLink } from './chat-export-artifact-link.js';
 import { ResolveComposeEmailDraft, BuildComposeEmailFallbackNotice } from './compose-email-fallback.js';
-import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService, SearchResult, ActionableCommandRequest } from '@memberjunction/ng-conversations';
+import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService, SearchResult, ActionableCommandRequest, ExportArtifactLinkTarget } from '@memberjunction/ng-conversations';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '@memberjunction/ng-conversations';
 import { ComposeEmailCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
+import type { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { Subject, takeUntil } from 'rxjs';
+import { firstValueFrom, Subject, takeUntil } from 'rxjs';
 /**
  * Chat Conversations Resource - wraps the conversation chat area for tab-based display
  * Extends BaseResourceComponent to work with the resource type system
@@ -88,6 +90,7 @@ import { Subject, takeUntil } from 'rxjs';
               [pendingArtifactId]="pendingArtifactId"
               [pendingArtifactConversationId]="pendingArtifactConversationId"
               [pendingArtifactVersionNumber]="pendingArtifactVersionNumber"
+              [ExportArtifactLink]="ExportArtifactLink"
               [showSidebarToggle]="isSidebarCollapsed && isSidebarSettingsLoaded"
               (sidebarToggleClicked)="expandSidebar()"
               (conversationRenamed)="onConversationRenamed($event)"
@@ -503,6 +506,10 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
   private engine = ConversationEngine.Instance;
 
+  /** Deep link written into conversation exports for each artifact; opens it in this resource. */
+  public readonly ExportArtifactLink = (target: ExportArtifactLinkTarget): string | null =>
+    typeof window === 'undefined' ? null : BuildExportArtifactLink(window.location.href, target);
+
   // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
   private mentionAutocompleteService = MentionAutocompleteService.Instance;
 
@@ -584,6 +591,8 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     }, 100);
   }
 
+  private renameAnimationTimeout: ReturnType<typeof setTimeout> | null = null;
+
   ngOnDestroy() {
     super.ngOnDestroy();
     this.bridge.NotifyWorkspaceActive(false);
@@ -591,6 +600,10 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // Clear any pending save timeout
     if (this.saveSettingsTimeout) {
       clearTimeout(this.saveSettingsTimeout);
+    }
+    if (this.renameAnimationTimeout) {
+      clearTimeout(this.renameAnimationTimeout);
+      this.renameAnimationTimeout = null;
     }
 
     // Clean up resize event listeners
@@ -638,6 +651,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     if (conversation) {
       this.SelectedConversation = conversation;
       this.updateTabTitle();
+      this.cdr.detectChanges();
     }
     // If not in cache, the chat area component will handle loading it
   }
@@ -829,19 +843,34 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // which conversation the workspace is viewing
     this.bridge.SetActiveFromWorkspace(conversationId);
 
-    // Load the conversation entity from data service
+    // Load the conversation entity from the engine's list; an unlisted one is loaded below.
     const conversation = this.engine.GetConversation(conversationId);
-    if (conversation) {
-      this.SelectedConversation = conversation;
-    } else {
-      // Conversation might not be loaded yet - the chat area will handle loading
-      this.SelectedConversation = null;
-    }
+    this.SelectedConversation = conversation ?? null;
 
     // Update URL if not skipping
     if (!this.skipUrlUpdate) {
       this.updateUrl();
     }
+
+    if (!conversation) {
+      await this.loadUnlistedConversation(conversationId);
+    }
+  }
+
+  /**
+   * Loads a selected conversation the engine's list does not hold. The list carries only Global
+   * and Both scope; an application-scoped conversation (a routine's wake thread, a cockpit chat)
+   * is reachable only by deep link, and without its entity the chat shows no title and no pinned
+   * agent. Applied only while the same conversation is still selected.
+   */
+  private async loadUnlistedConversation(conversationId: string): Promise<void> {
+    const loaded = await this.engine.EnsureConversationLoaded(conversationId, this.CurrentUser);
+    if (!loaded || !UUIDsEqual(this.SelectedConversationId, conversationId)) {
+      return;
+    }
+    this.SelectedConversation = loaded;
+    this.updateTabTitle();
+    this.cdr.detectChanges();
   }
 
   /**
@@ -1240,6 +1269,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     if (this.IsMobileView || !this.IsSidebarPinned) {
       this.CollapseSidebar();
     }
+    this.cdr.detectChanges();
   }
 
   /** @deprecated Use {@link OnNewConversationRequested}. */
@@ -1265,6 +1295,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.bridge.SetActiveFromWorkspace(event.conversation.ID);
     this.updateUrl();
     this.updateTabTitle();
+    this.cdr.detectChanges();
   }
 
   /** @deprecated Use {@link OnConversationCreated}. */
@@ -1288,9 +1319,17 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       this.NotifyDisplayNameChanged(event.name);
     }
 
+    this.cdr.detectChanges();
+
+    if (this.renameAnimationTimeout) {
+      clearTimeout(this.renameAnimationTimeout);
+    }
+
     // Clear the animation trigger after it completes
-    setTimeout(() => {
+    this.renameAnimationTimeout = setTimeout(() => {
+      this.renameAnimationTimeout = null;
       this.RenamedConversationId = null;
+      this.cdr.detectChanges();
     }, 1500);
   }
 
@@ -1308,6 +1347,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.PendingArtifactVersionNumber = null;
     // Update URL to remove artifact params
     this.updateUrl();
+    this.cdr.detectChanges();
   }
 
   /** @deprecated Use {@link OnPendingArtifactConsumed}. */
@@ -1321,6 +1361,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   OnPendingMessageConsumed(): void {
     this.PendingMessageToSend = null;
     this.PendingAttachmentsToSend = null;
+    this.cdr.detectChanges();
   }
 
   /** @deprecated Use {@link OnPendingMessageConsumed}. */
@@ -1347,27 +1388,36 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     artifactId?: string;
     versionNumber?: number;
   }): void {
-    // Map the link type to the nav item name
-    const navItemName = event.type === 'conversation' ? 'Conversations' : 'Collections';
-
-    // Build configuration params to pass to the target resource
-    const params: Record<string, unknown> = {};
-    if (event.type === 'conversation') {
-      params['conversationId'] = event.id;
-    } else {
-      params['collectionId'] = event.id;
+    if (event.type === 'collection') {
+      const queryParams: Record<string, string> = { collectionId: event.id };
+      if (event.artifactId) {
+        queryParams['artifactId'] = event.artifactId;
+        if (event.versionNumber) {
+          queryParams['version'] = String(event.versionNumber);
+        }
+      }
+      void this.navigateToDriverClassOrFallback(
+        ['LibraryResource', 'ChatCollectionsResource'],
+        'Library',
+        queryParams,
+        'Collections',
+      );
+      return;
     }
 
-    // Include artifact info so destination can open it
+    // Build configuration params to pass to the Conversations resource
+    const params: Record<string, string | number> = { conversationId: event.id };
+    const queryParams: Record<string, string> = { conversationId: event.id };
     if (event.artifactId) {
       params['artifactId'] = event.artifactId;
+      queryParams['artifactId'] = event.artifactId;
       if (event.versionNumber) {
         params['versionNumber'] = event.versionNumber;
+        queryParams['version'] = String(event.versionNumber);
       }
     }
 
-    // Navigate using the generic nav item method
-    this.navigationService.OpenNavItemByName(navItemName, params);
+    void this.navigationService.OpenNavItemByName('Conversations', params, undefined, { queryParams });
   }
 
   /** @deprecated Use {@link OnArtifactLinkClicked}. */
@@ -1430,15 +1480,128 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
         break;
       case 'message':
         this.openMessageResult(route.ConversationId, route.BranchId, route.Sequence)
-          .catch((error: unknown) => console.error('Failed to open the message from search:', error));
+          .catch((error: Error | string) => console.error('Failed to open the message from search:', error));
         break;
       case 'artifact':
         this.navigationService.OpenArtifact(route.ArtifactId, route.Title);
         break;
       case 'nav-item':
-        void this.navigationService.OpenNavItemByName(route.NavItemName, route.Configuration);
+        if (route.NavItemName === 'Library' || route.NavItemName === 'Collections') {
+          void this.navigateToDriverClassOrFallback(
+            ['LibraryResource', 'ChatCollectionsResource'],
+            'Library',
+            route.Configuration,
+            'Collections',
+          );
+        } else if (route.NavItemName === 'Agent Activity') {
+          void this.navigateToDriverClassOrFallback(
+            ['ChatTasksResource'],
+            'Agent Activity',
+            route.Configuration,
+            'Tasks',
+          );
+        } else {
+          void this.navigationService.OpenNavItemByName(route.NavItemName, route.Configuration);
+        }
         break;
     }
+  }
+
+  /**
+   * Resolves a destination application and nav item across `appManager.Applications` (falling back
+   * to `ProviderToUse.Applications`) by `DriverClass` so `Library`, `Collections`, and
+   * `Agent Activity` navigation never depends on hardcoded application names.
+   */
+  private async navigateToDriverClassOrFallback(
+    driverClasses: readonly string[],
+    fallbackNavItemName: string,
+    queryParams: Record<string, string>,
+    legacyFallbackNavItemName?: string,
+  ): Promise<void> {
+    const resolved = await this.resolveNavTargetByDriverClass(driverClasses);
+    if (resolved) {
+      await this.navigationService.SwitchToApp(resolved.AppId, resolved.NavLabel, queryParams);
+      return;
+    }
+
+    const tabId = await this.navigationService.OpenNavItemByName(
+      fallbackNavItemName,
+      queryParams,
+      undefined,
+      { queryParams },
+    );
+    if (!tabId && legacyFallbackNavItemName) {
+      await this.navigationService.OpenNavItemByName(
+        legacyFallbackNavItemName,
+        queryParams,
+        undefined,
+        { queryParams },
+      );
+    }
+  }
+
+  private async resolveNavTargetByDriverClass(
+    driverClasses: readonly string[],
+  ): Promise<{ AppId: string; NavLabel: string } | null> {
+    const manager = this.navigationService?.AppManager;
+
+    if (manager) {
+      const activeApps: BaseApplication[] =
+        typeof manager.GetAllApps === 'function' && manager.GetAllApps().length > 0
+          ? manager.GetAllApps()
+          : manager.Applications
+            ? await firstValueFrom(manager.Applications).catch(() => [])
+            : [];
+
+      if (activeApps.length > 0) {
+        const navLists = await Promise.all(
+          activeApps.map(async (app) => ({
+            app,
+            items: await app.GetNavItems().catch(() => []),
+          })),
+        );
+
+        for (const driverClass of driverClasses) {
+          for (const entry of navLists) {
+            const match = entry.items.find(
+              (item) =>
+                item.DriverClass === driverClass && (item.Status ?? 'Active') === 'Active',
+            );
+            if (match?.Label) {
+              return { AppId: entry.app.ID, NavLabel: match.Label };
+            }
+          }
+        }
+        return null;
+      }
+    }
+
+    // Fallback when appManager is not attached in isolated harnesses
+    const apps = this.ProviderToUse?.Applications ?? [];
+    for (const driverClass of driverClasses) {
+      for (const app of apps) {
+        if ((app.Status ?? 'Active') !== 'Active' || !app.DefaultNavItems) {
+          continue;
+        }
+        try {
+          const parsed = JSON.parse(app.DefaultNavItems) as Array<{
+            Label?: string;
+            DriverClass?: string;
+            Status?: string;
+          }>;
+          const match = parsed.find(
+            (item) =>
+              item.DriverClass === driverClass && (item.Status ?? 'Active') === 'Active',
+          );
+          if (match?.Label) {
+            return { AppId: app.ID, NavLabel: match.Label };
+          }
+        } catch {
+          // Ignore malformed DefaultNavItems JSON
+        }
+      }
+    }
+    return null;
   }
 
   /**
@@ -1457,14 +1620,29 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   }
 
   /**
-   * Handle navigation request from artifact viewer plugins.
-   * Opens the target nav item (switching apps if needed) then applies query params to the URL.
+   * Handle navigation request from artifact viewer plugins or actionable commands.
+   * Opens the requested artifact in its own tab, or the target nav item or application (switching apps
+   * if needed) then applies query params to the URL.
    */
   async OnNavigationRequest(event: NavigationRequest): Promise<void> {
+    if (event.ArtifactID) {
+      this.navigationService.OpenArtifact(event.ArtifactID, event.ArtifactName);
+      return;
+    }
     const appId = event.appName ? this.resolveAppId(event.appName) : undefined;
-    await this.navigationService.OpenNavItemByName(event.navItemName, undefined, appId, {
+    if (appId && (!event.navItemName || this.normalizeNavToken(event.navItemName) === this.normalizeNavToken(event.appName))) {
+      await this.navigationService.SwitchToApp(appId, undefined, event.queryParams);
+      return;
+    }
+    const resolvedNavName = appId && event.navItemName
+      ? (this.resolveNavItemLabelInApp(appId, event.navItemName) ?? event.navItemName)
+      : event.navItemName;
+    const tabId = await this.navigationService.OpenNavItemByName(resolvedNavName, undefined, appId, {
       queryParams: event.queryParams
     });
+    if (!tabId && appId) {
+      await this.navigationService.SwitchToApp(appId, resolvedNavName || undefined, event.queryParams);
+    }
   }
 
   /** @deprecated Use {@link OnNavigationRequest}. */
@@ -1472,14 +1650,138 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     return this.OnNavigationRequest(event);
   }
 
+  private normalizeNavToken(value: string | null | undefined): string {
+    return String(value ?? '')
+      .toLowerCase()
+      .replace(/[-_]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private stripActionVerbPrefix(label: string | null | undefined): string {
+    return String(label ?? '')
+      .replace(/^(open|view|go\s+to|launch|show|explore)\s+/i, '')
+      .trim();
+  }
+
   /**
-   * Resolve an application name to its ID.
+   * Resolve an application name, URL slug/path, or UUID to its ID.
    */
-  private resolveAppId(appName: string): string | undefined {
+  private resolveAppId(appNameOrId: string): string | undefined {
+    const raw = String(appNameOrId ?? '').trim();
+    if (!raw) {
+      return undefined;
+    }
     const md = this.ProviderToUse;
-    const apps = md.Applications;
-    const app = apps.find(a => a.Name.toLowerCase() === appName.toLowerCase());
+    const apps = md.Applications || [];
+    const lower = raw.toLowerCase();
+    const normalized = this.normalizeNavToken(raw);
+    const app = apps.find(a =>
+      UUIDsEqual(a.ID, raw) ||
+      a.Name?.toLowerCase() === lower ||
+      a.Path?.toLowerCase() === lower ||
+      this.normalizeNavToken(a.Name) === normalized ||
+      this.normalizeNavToken(a.Path) === normalized
+    );
     return app?.ID;
+  }
+
+  /**
+   * Resolves a nav item label inside a specific application's DefaultNavItems by case/slug-insensitive match.
+   */
+  private resolveNavItemLabelInApp(appId: string, navItemTarget: string): string | undefined {
+    const raw = String(navItemTarget ?? '').trim();
+    if (!raw) {
+      return undefined;
+    }
+    const app = (this.ProviderToUse.Applications || []).find(a => UUIDsEqual(a.ID, appId));
+    if (!app?.DefaultNavItems) {
+      return undefined;
+    }
+    try {
+      const items = JSON.parse(app.DefaultNavItems) as Array<{ Label?: string; Route?: string }>;
+      const normalized = this.normalizeNavToken(raw);
+      const matched = items.find(item =>
+        this.normalizeNavToken(item.Label) === normalized ||
+        this.normalizeNavToken(item.Route) === normalized
+      );
+      return matched?.Label;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private toQueryParamsRecord(params?: OpenResourceCommand['parameters']): Record<string, string> | undefined {
+    if (!params || Object.keys(params).length === 0) {
+      return undefined;
+    }
+    const result: Record<string, string> = {};
+    for (const [k, v] of Object.entries(params)) {
+      if (v != null) {
+        result[k] = String(v);
+      }
+    }
+    return Object.keys(result).length > 0 ? result : undefined;
+  }
+
+  /**
+   * Navigates to an Application or NavItem referenced by an `open:resource` command,
+   * matching by ID, Name, URL Path slug (e.g. `"data-explorer"` -> `"Data Explorer"`),
+   * or NavItem label across applications.
+   */
+  private async handleAppOrNavItemCommand(command: OpenResourceCommand): Promise<void> {
+    const queryParams = this.toQueryParamsRecord(command.parameters);
+    const rt = (command.resourceType ?? '').trim().toLowerCase();
+    const strippedLabel = this.stripActionVerbPrefix(command.label);
+
+    // 1. Try resolving as an Application directly
+    const appCandidates = rt === 'navitem'
+      ? [command.entityName, command.resourceId, strippedLabel]
+      : [command.resourceId, command.entityName, strippedLabel];
+
+    for (const candidate of appCandidates) {
+      if (!candidate) continue;
+      const appId = this.resolveAppId(candidate);
+      if (appId) {
+        const navHint = rt === 'navitem' ? command.resourceId : command.entityName;
+        const resolvedNavLabel = navHint ? this.resolveNavItemLabelInApp(appId, navHint) : undefined;
+        await this.navigationService.SwitchToApp(appId, resolvedNavLabel, queryParams);
+        return;
+      }
+    }
+
+    // 2. Search across all applications' DefaultNavItems for a matching NavItem label or route slug
+    const navCandidates = [command.resourceId, command.entityName, strippedLabel].filter(
+      (c): c is string => !!c && c.trim().length > 0
+    );
+    for (const candidate of navCandidates) {
+      for (const app of this.ProviderToUse.Applications || []) {
+        const matchedLabel = this.resolveNavItemLabelInApp(app.ID, candidate);
+        if (matchedLabel) {
+          await this.navigationService.SwitchToApp(app.ID, matchedLabel, queryParams);
+          return;
+        }
+      }
+    }
+
+    // 3. Fallback to OpenNavItemByName in the active app
+    for (const candidate of navCandidates) {
+      const tabId = await this.navigationService.OpenNavItemByName(
+        candidate,
+        command.parameters,
+        undefined,
+        queryParams ? { queryParams } : undefined
+      );
+      if (tabId) {
+        return;
+      }
+    }
+
+    MJNotificationService.Instance?.CreateSimpleNotification(
+      `Unable to open "${command.label || command.resourceId}": destination was not found.`,
+      'info',
+      4000
+    );
   }
 
   /**
@@ -1491,15 +1793,84 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     const command = request.command;
     if (command.type === 'open:resource') {
       const resourceCommand = command as OpenResourceCommand;
-      if (resourceCommand.resourceType === 'Record') {
+      const rt = (resourceCommand.resourceType ?? '').trim().toLowerCase();
+      if (rt === 'record') {
         // Record opens are emitted as openEntityRecord from mj-conversation-chat-area
         // (composite-key aware). Handling them here too would open the record twice.
         return;
-      } else if (resourceCommand.resourceType === 'Report' || resourceCommand.resourceType === 'Dashboard') {
-        // Reports and dashboards from agents are stored as conversation artifacts.
-        // Find the most recent artifact in the active conversation and open it.
-        this.openMostRecentArtifact();
       }
+      const resourceId = resourceCommand.resourceId;
+      if (rt === 'artifact' || rt === 'file') {
+        if (this.ChatArea?.OpenConversationArtifactForCommand(resourceCommand)) {
+          return;
+        }
+        if (resourceId && IsValidUUID(resourceId)) {
+          this.navigationService.OpenArtifact(resourceId, resourceCommand.label);
+          return;
+        }
+        this.openMostRecentArtifact();
+        return;
+      }
+      if (rt === 'report' || rt === 'dashboard') {
+        if (this.ChatArea?.OpenConversationArtifactForCommand(resourceCommand)) {
+          return;
+        }
+        if (rt === 'dashboard' && resourceId && IsValidUUID(resourceId)) {
+          this.navigationService.OpenDashboard(resourceId, resourceCommand.label || 'Dashboard');
+          return;
+        }
+        this.openMostRecentArtifact();
+        return;
+      }
+      if (rt === 'app' || rt === 'navitem') {
+        void this.handleAppOrNavItemCommand(resourceCommand);
+        return;
+      }
+      if (rt === 'view') {
+        if (resourceId && IsValidUUID(resourceId)) {
+          this.navigationService.OpenView(resourceId, resourceCommand.label || 'View');
+        } else if (resourceCommand.entityName) {
+          const extraFilter = typeof resourceCommand.parameters?.['ExtraFilter'] === 'string'
+            ? resourceCommand.parameters['ExtraFilter']
+            : undefined;
+          this.navigationService.OpenDynamicView(resourceCommand.entityName, extraFilter);
+        } else {
+          void this.handleAppOrNavItemCommand(resourceCommand);
+        }
+        return;
+      }
+      if (rt === 'query') {
+        if (resourceId && IsValidUUID(resourceId)) {
+          this.navigationService.OpenQuery(resourceId, resourceCommand.label || 'Query');
+        } else {
+          void this.handleAppOrNavItemCommand(resourceCommand);
+        }
+        return;
+      }
+      if (rt === 'search') {
+        const query = String(
+          resourceCommand.resourceId ||
+          resourceCommand.parameters?.['query'] ||
+          this.stripActionVerbPrefix(resourceCommand.label) ||
+          ''
+        ).trim();
+        if (query) {
+          this.navigationService.OpenSearch(query);
+        }
+        return;
+      }
+      if (rt === 'form') {
+        if (resourceCommand.entityName) {
+          this.navigationService.OpenNewEntityRecord(resourceCommand.entityName, {
+            newRecordValues: resourceCommand.parameters
+          });
+        } else {
+          void this.handleAppOrNavItemCommand(resourceCommand);
+        }
+        return;
+      }
+      // Fallback for any unrecognized open:resource type
+      void this.handleAppOrNavItemCommand(resourceCommand);
     } else if (command.type === 'compose:email') {
       // The service handles compose:email directly whenever the draft fits in a mailto: URL, so
       // reaching here means it did NOT fit. Opening the mail client would hand the user a draft
@@ -1553,6 +1924,11 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       this.ChatArea.onArtifactClicked(latestArtifact);
     } else {
       console.warn('No artifacts found in conversation to open for Report/Dashboard command');
+      MJNotificationService.Instance?.CreateSimpleNotification(
+        'No artifact found in this conversation to open.',
+        'info',
+        3500
+      );
     }
   }
 }

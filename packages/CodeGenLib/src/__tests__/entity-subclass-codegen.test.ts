@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs'; // mocked below (vi.mock('fs')) — used to capture generated file content
 
 // Mock all external dependencies
@@ -83,7 +83,14 @@ vi.mock('../Misc/status_logging', () => ({
 }));
 
 vi.mock('../Database/manage-metadata', () => ({
-    ValidatorResult: class {},
+    ValidatorResult: class {
+        entityName = '';
+        sourceCheckConstraint = '';
+        functionText = '';
+        functionName = '';
+        functionDescription = '';
+        generatedCodeId = '';
+    },
     ManageMetadataBase: class {
         static generatedValidators: unknown[] = [];
     }
@@ -112,7 +119,17 @@ vi.mock('../Misc/util', () => ({
     get sortBySequenceAndCreatedAt() { return this.SortBySequenceAndCreatedAt; }
 }));
 
+import ts from 'typescript';
+import { Metadata } from '@memberjunction/core';
 import { EntitySubClassGeneratorBase } from '../Misc/entity_subclasses_codegen';
+import { ManageMetadataBase, ValidatorResult } from '../Database/manage-metadata';
+import { LogWarning } from '../Misc/status_logging';
+
+/** Syntax diagnostics of a TypeScript source, read the same way the generator validates JSON types. */
+function SyntaxErrors(source: string): string[] {
+    const sf = ts.createSourceFile('out.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS) as ts.SourceFile & { parseDiagnostics?: ts.Diagnostic[] };
+    return (sf.parseDiagnostics ?? []).map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'));
+}
 
 describe('EntitySubClassGeneratorBase', () => {
     let generator: EntitySubClassGeneratorBase;
@@ -151,6 +168,14 @@ describe('EntitySubClassGeneratorBase', () => {
             const header = generator.generateEntitySubClassFileHeader(false);
             expect(header).not.toContain('export const loadModule');
             expect(header).toContain('import { z } from "zod"');
+        });
+
+        it('omits zod import when includeZodImport is false', () => {
+            const header = generator.GenerateEntitySubClassFileHeader(false, false, false);
+            expect(header).not.toContain('import { z } from "zod"');
+            expect(header).not.toContain('export const loadModule');
+            expect(header).toContain('BaseEntity');
+            expect(header).toContain('RegisterClass');
         });
 
         it('should import from @memberjunction/core', () => {
@@ -494,6 +519,238 @@ describe('EntitySubClassGeneratorBase', () => {
             // Zod key should use Config_ to match the getter/setter
             expect(result).toContain('Config_: z.');
             expect(result).not.toMatch(/(?<![_])Config: z\./);
+        });
+
+        it('AssembleSchemaFile emits standalone Zod schema file without entity classes', () => {
+            const entity = {
+                Name: 'Actions',
+                ClassName: 'Action',
+                PrimaryKeys: [{ Name: 'ID', CodeName: 'ID' }],
+                Fields: [
+                    { Name: 'ID', CodeName: 'ID', Type: 'nvarchar', SQLFullType: 'nvarchar(50)', AllowsNull: false, ReadOnly: true, IsPrimaryKey: true, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: false, ValueListType: '', ValueListTypeEnum: 'None', EntityFieldValues: [], Status: 'Active', NeedsQuotes: true, DisplayName: 'ID', RelatedEntity: '', DefaultValue: '', Description: '' },
+                    { Name: 'Name', CodeName: 'Name', Type: 'nvarchar', SQLFullType: 'nvarchar(50)', AllowsNull: false, ReadOnly: false, IsPrimaryKey: false, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: true, ValueListType: '', ValueListTypeEnum: 'None', EntityFieldValues: [], Status: 'Active', NeedsQuotes: true, DisplayName: 'Name', RelatedEntity: '', DefaultValue: '', Description: '' }
+                ]
+            };
+
+            const fileContent = generator.AssembleSchemaFile([entity as Parameters<typeof generator.AssembleSchemaFile>[0][0]]);
+            expect(fileContent).toContain('import { z } from "zod";');
+            expect(fileContent).toContain('export const ActionSchema = z.object({');
+            expect(fileContent).toContain('export type ActionEntityType = z.infer<typeof ActionSchema>;');
+            expect(fileContent).not.toContain('class ActionEntity');
+            expect(fileContent).not.toContain('@RegisterClass');
+            expect(fileContent).not.toContain('BaseEntity');
+        });
+
+        it('AssembleEntitySubclassFile omits zod and re-exports split schemas when splitSchemaFileName is given', async () => {
+            vi.mocked(Metadata).mockImplementation(function () { return { EntityByName: () => undefined } as unknown as Metadata; });
+            const entity = {
+                Name: 'Actions',
+                ClassName: 'Action',
+                PrimaryKeys: [{ Name: 'ID', CodeName: 'ID' }],
+                Fields: [
+                    { Name: 'ID', CodeName: 'ID', Type: 'nvarchar', SQLFullType: 'nvarchar(50)', AllowsNull: false, ReadOnly: true, IsPrimaryKey: true, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: false, ValueListType: '', ValueListTypeEnum: 'None', EntityFieldValues: [], Status: 'Active', NeedsQuotes: true, DisplayName: 'ID', RelatedEntity: '', DefaultValue: '', Description: '' },
+                    { Name: 'Name', CodeName: 'Name', Type: 'nvarchar', SQLFullType: 'nvarchar(50)', AllowsNull: false, ReadOnly: false, IsPrimaryKey: false, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: true, ValueListType: '', ValueListTypeEnum: 'None', EntityFieldValues: [], Status: 'Active', NeedsQuotes: true, DisplayName: 'Name', RelatedEntity: '', DefaultValue: '', Description: '' }
+                ],
+                EntityObjectSubclassName: '', EntityObjectSubclassImport: '', ExternalDataSourceID: null, AllowDeleteAPI: true,
+                AllowCreateAPI: true, AllowUpdateAPI: true, CascadeDeletes: false, IsChildType: false, Status: 'Active',
+                SchemaName: '__mj', BaseTable: 'Action', BaseView: 'vwActions', Description: '',
+            };
+
+            const splitContent = await generator.AssembleEntitySubclassFile(
+                {} as Parameters<typeof generator.AssembleEntitySubclassFile>[0],
+                [entity as Parameters<typeof generator.AssembleEntitySubclassFile>[1][0]],
+                true,
+                false,
+                '__mj',
+            );
+            expect(SyntaxErrors(splitContent)).toEqual([]);
+            expect(splitContent).not.toContain('import { z } from "zod";');
+            expect(splitContent).not.toContain('export const ActionSchema = z.object(');
+            expect(splitContent).toContain("export * from '../schemas/__mj.js';");
+            expect(splitContent).toContain("import type {\n  ActionEntityType\n} from '../schemas/__mj.js';");
+            expect(splitContent).toContain("export class ActionEntity extends BaseEntity<ActionEntityType>");
+
+            const monolithContent = await generator.AssembleEntitySubclassFile(
+                {} as Parameters<typeof generator.AssembleEntitySubclassFile>[0],
+                [entity as Parameters<typeof generator.AssembleEntitySubclassFile>[1][0]],
+                true,
+                true,
+            );
+            expect(monolithContent).toContain('import { z } from "zod";');
+            expect(monolithContent).toContain('export const ActionSchema = z.object({');
+            expect(monolithContent).not.toContain("from '../schemas/");
+        });
+
+        it('GenerateAllEntitySubClasses skips creating a brand-new empty schemas.ts when entities is empty', async () => {
+            const writeMock = vi.mocked(fs.writeFileSync);
+            const existsMock = vi.mocked(fs.existsSync);
+
+            writeMock.mockClear();
+            existsMock.mockImplementation((p) => !String(p).endsWith('schemas.ts'));
+            await generator.GenerateAllEntitySubClasses(
+                {} as Parameters<typeof generator.GenerateAllEntitySubClasses>[0],
+                [],
+                '/out',
+                true,
+            );
+            expect(writeMock.mock.calls.some((c) => String(c[0]).endsWith('entity_subclasses.ts'))).toBe(true);
+            expect(writeMock.mock.calls.some((c) => String(c[0]).endsWith('schemas.ts'))).toBe(false);
+
+            // Restores overwrite behavior if schemas.ts already exists on disk (so orphaned exports get cleared)
+            writeMock.mockClear();
+            existsMock.mockReturnValue(true);
+            await generator.GenerateAllEntitySubClasses(
+                {} as Parameters<typeof generator.GenerateAllEntitySubClasses>[0],
+                [],
+                '/out',
+                true,
+            );
+            expect(writeMock.mock.calls.some((c) => String(c[0]).endsWith('schemas.ts'))).toBe(true);
+        });
+    });
+    describe('generated validators', () => {
+        type FieldSpec = { Name: string; Type: string; AllowsNull?: boolean; IsPrimaryKey?: boolean };
+        const field = (f: FieldSpec) => ({
+            Name: f.Name, CodeName: f.Name, Type: f.Type, SQLFullType: f.Type, AllowsNull: f.AllowsNull ?? false, ReadOnly: false,
+            IsPrimaryKey: f.IsPrimaryKey ?? false, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: true, ValueListType: '',
+            ValueListTypeEnum: 'None', EntityFieldValues: [], Status: 'Active', NeedsQuotes: true,
+            IsUniqueIdentifier: f.Type === 'uniqueidentifier',
+        });
+        const entity = () => ({
+            Name: 'Tasks', ClassName: 'Task', PrimaryKeys: [{ Name: 'ID', CodeName: 'ID' }],
+            Fields: [
+                field({ Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true }),
+                field({ Name: 'ParentID', Type: 'uniqueidentifier', AllowsNull: true }),
+                field({ Name: 'Name', Type: 'nvarchar' }),
+            ],
+            EntityObjectSubclassName: '', EntityObjectSubclassImport: '', ExternalDataSourceID: null, AllowDeleteAPI: true,
+            AllowCreateAPI: true, AllowUpdateAPI: true, CascadeDeletes: false, IsChildType: false, Status: 'Active',
+            SchemaName: 'app', BaseTable: 'Task', BaseView: 'vwTasks', Description: '',
+        });
+        const validator = (v: Partial<ValidatorResult>): ValidatorResult => Object.assign(new ValidatorResult(), {
+            entityName: 'Tasks', sourceCheckConstraint: '([ParentID]<>[ID])', functionDescription: 'A task cannot be its own parent',
+            generatedCodeId: '', success: true, wasGenerated: false, ...v,
+        });
+        const notSelf = (name: string, comparison: string) =>
+            `public ${name}(result: ValidationResult) {\n\tif (this.ParentID != null && ${comparison}) {\n\t\tresult.Errors.push(new ValidationErrorInfo("ParentID", "A task cannot be its own parent", this.ParentID, ValidationErrorType.Failure));\n\t}\n}`;
+        const setValidators = (validators: ValidatorResult[]) => {
+            (ManageMetadataBase as unknown as { generatedValidators: ValidatorResult[] }).generatedValidators = validators;
+        };
+        const generateValidate = () =>
+            generator.GenerateValidateFunction(entity() as Parameters<typeof generator.GenerateValidateFunction>[0]);
+
+        beforeEach(() => {
+            vi.mocked(Metadata).mockImplementation(function () { return { EntityByName: () => undefined } as unknown as Metadata; });
+        });
+        afterEach(() => setValidators([]));
+
+        it('emits UUIDsEqual for a UUID self-reference compared with === (#3984)', () => {
+            setValidators([validator({ fieldName: 'ParentID', functionName: 'ValidateParentIDNotSelf', functionText: notSelf('ValidateParentIDNotSelf', 'this.ParentID === this.ID') })]);
+            const code = generateValidate()!.code;
+            expect(code).toContain('this.ParentID != null && UUIDsEqual(this.ParentID, this.ID)');
+            expect(code).not.toContain('this.ParentID === this.ID');
+        });
+
+        it('keeps the stored function text unchanged so only the emitted class is rewritten', () => {
+            const text = notSelf('ValidateParentIDNotSelf', 'this.ParentID === this.ID');
+            setValidators([validator({ fieldName: 'ParentID', functionName: 'ValidateParentIDNotSelf', functionText: text })]);
+            expect(generateValidate()!.validators[0].functionText).toBe(text);
+        });
+
+        it('imports UUIDsEqual in the file header only when a validator calls it', async () => {
+            const writeMock = vi.mocked(fs.writeFileSync);
+            const emit = async () => {
+                writeMock.mockClear();
+                await generator.generateAllEntitySubClasses(
+                    {} as Parameters<typeof generator.generateAllEntitySubClasses>[0],
+                    [entity()] as Parameters<typeof generator.generateAllEntitySubClasses>[1],
+                    '/out',
+                    true,
+                );
+                return String(writeMock.mock.calls.find((c) => String(c[0]).endsWith('app.ts'))![1]);
+            };
+
+            setValidators([validator({ fieldName: 'ParentID', functionName: 'ValidateParentIDNotSelf', functionText: notSelf('ValidateParentIDNotSelf', 'this.ParentID === this.ID') })]);
+            const withUUID = await emit();
+            expect(withUUID).toContain('import { RegisterClass, UUIDsEqual } from "@memberjunction/global";');
+            expect(SyntaxErrors(withUUID)).toEqual([]);
+
+            setValidators([validator({ fieldName: 'Name', sourceCheckConstraint: "([Name]<>'')", functionName: 'ValidateNameNotEmpty', functionText: "public ValidateNameNotEmpty(result: ValidationResult) {\n\tif (this.Name === '') { return; }\n}" })]);
+            const without = await emit();
+            expect(without).toContain('import { RegisterClass } from "@memberjunction/global";');
+            expect(without).not.toContain('UUIDsEqual');
+            expect(without).not.toContain('import { z } from "zod";');
+            expect(without).toContain("export * from '../schemas/app.js';");
+        });
+
+        it('emits one method for two stored rows of the same field-level CHECK and logs the dropped row (#5834)', () => {
+            setValidators([
+                validator({ fieldName: 'ParentID', functionName: 'ValidateParentIDNotSelf', generatedCodeId: 'AAAA', functionText: notSelf('ValidateParentIDNotSelf', 'UUIDsEqual(this.ParentID, this.ID)') }),
+                validator({ fieldName: 'ParentID', functionName: 'ValidateParentIDNotEqualToID', generatedCodeId: 'BBBB', functionText: notSelf('ValidateParentIDNotEqualToID', 'UUIDsEqual(this.ParentID, this.ID)') }),
+            ]);
+            const result = generateValidate()!;
+            expect(result.validators.map((v) => v.functionName)).toEqual(['ValidateParentIDNotEqualToID']);
+            expect(result.code).not.toContain('ValidateParentIDNotSelf');
+            expect(vi.mocked(LogWarning)).toHaveBeenCalledWith(expect.stringMatching(/Tasks\.ParentID: .*emitting ValidateParentIDNotEqualToID \(GeneratedCode BBBB\).*dropping GeneratedCode AAAA/));
+        });
+
+        it('dedupes two table-level rows of the same CHECK', () => {
+            const tableLevel = (name: string, id: string) => validator({ fieldName: undefined, sourceCheckConstraint: '([StartDate]<[EndDate])', functionName: name, generatedCodeId: id, functionText: `public ${name}(result: ValidationResult) {\n}` });
+            setValidators([tableLevel('ValidateDates', 'AAAA'), tableLevel('ValidateStartBeforeEnd', 'BBBB')]);
+            expect(generateValidate()!.validators.map((v) => v.functionName)).toEqual(['ValidateDates']);
+            expect(vi.mocked(LogWarning)).toHaveBeenCalledWith(expect.stringContaining('Tasks (table level)'));
+        });
+
+        it('keeps two methods for two different CHECK constraints on one field', () => {
+            setValidators([
+                validator({ fieldName: 'ParentID', functionName: 'ValidateParentIDNotSelf', functionText: notSelf('ValidateParentIDNotSelf', 'UUIDsEqual(this.ParentID, this.ID)') }),
+                validator({ fieldName: 'ParentID', sourceCheckConstraint: "([ParentID]<>'00000000-0000-0000-0000-000000000000')", functionName: 'ValidateParentIDNotEmptyGuid', functionText: notSelf('ValidateParentIDNotEmptyGuid', "this.ParentID === '00000000-0000-0000-0000-000000000000'") }),
+            ]);
+            expect(generateValidate()!.validators.map((v) => v.functionName)).toEqual(['ValidateParentIDNotEmptyGuid', 'ValidateParentIDNotSelf']);
+            expect(vi.mocked(LogWarning)).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('value-list escaping (#5952)', () => {
+        const values = ['PASS', '\\', "Women's Network", 'a*/b', 'back`tick', '${x}'];
+        const valueListEntity = () => ({
+            Name: 'Grades', ClassName: 'Grade', PrimaryKeys: [{ Name: 'ID', CodeName: 'ID' }],
+            Fields: [
+                { Name: 'ID', CodeName: 'ID', Type: 'uniqueidentifier', SQLFullType: 'uniqueidentifier', AllowsNull: false, ReadOnly: false, IsPrimaryKey: true, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: true, ValueListType: '', ValueListTypeEnum: 'None', EntityFieldValues: [], Status: 'Active', NeedsQuotes: true, DisplayName: '', RelatedEntity: '', DefaultValue: '', Description: '' },
+                { Name: 'Grade', CodeName: 'Grade', Type: 'nvarchar', SQLFullType: 'nvarchar(50)', AllowsNull: true, ReadOnly: false, IsPrimaryKey: false, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: true, ValueListType: 'List', ValueListTypeEnum: 'List', EntityFieldValues: values.map((Value) => ({ Value, Description: '' })), Status: 'Active', NeedsQuotes: true, DisplayName: '', RelatedEntity: '', DefaultValue: '', Description: '' },
+            ],
+            EntityObjectSubclassName: '', EntityObjectSubclassImport: '', ExternalDataSourceID: null, AllowDeleteAPI: true,
+            AllowCreateAPI: true, AllowUpdateAPI: true, CascadeDeletes: false, IsChildType: false, Status: 'Active',
+            SchemaName: 'app', BaseTable: 'Grade', BaseView: 'vwGrades', Description: '',
+        });
+
+        it('emits a Zod schema that parses, with every value as an escaped literal', () => {
+            const out = generator.GenerateSchemaAndType(valueListEntity() as Parameters<typeof generator.GenerateSchemaAndType>[0]);
+            expect(SyntaxErrors(out)).toEqual([]);
+            expect(out).toContain("z.literal('\\\\')");
+            expect(out).toContain("z.literal('Women\\'s Network')");
+            expect(out).toContain("z.literal('PASS')");
+            expect(out).toContain('*   * \\\\');
+            expect(out).toContain('*   * back\\`tick');
+            expect(out).toContain('*   * \\${x}');
+        });
+
+        it('emits an entity class whose union type and doc comment parse', async () => {
+            vi.mocked(Metadata).mockImplementation(function () { return { EntityByName: () => undefined } as unknown as Metadata; });
+            const out = await generator.generateEntitySubClass(
+                {} as Parameters<typeof generator.generateEntitySubClass>[0],
+                valueListEntity() as Parameters<typeof generator.generateEntitySubClass>[1],
+                false,
+                true,
+            );
+            expect(SyntaxErrors(out)).toEqual([]);
+            expect(out).toContain("'PASS' | '\\\\' | 'Women\\'s Network' | 'a*/b' | 'back`tick' | '${x}' | null");
+            expect(out).toContain('*   * a*\\/b');
+        });
+
+        it('escapes line terminators in a single-quoted value', () => {
+            const escaped = (EntitySubClassGeneratorBase as unknown as { EscapeSingleQuotes(v: string): string }).EscapeSingleQuotes('a\nb\rc\u2028d\u2029e');
+            expect(escaped).toBe('a\\nb\\rc\\u2028d\\u2029e');
         });
     });
 });

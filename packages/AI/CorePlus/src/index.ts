@@ -1,7 +1,10 @@
 export * from './model-run.types';
 export * from './prompt.types';
+export * from './prompt-run-messages.types';
 export * from './agent-types';
+export * from './agent-run-data-keys';
 export * from './agent-failure-message';
+export * from './agent-reply-text';
 export * from './agent-payload-change-request';
 export * from './prompt.system-placeholders';
 export * from './agent-spec';
@@ -11,6 +14,7 @@ export * from './ui-commands';
 export * from './conversation-utility';
 export * from './decision-calibration';
 export * from './conversation-routing-decision';
+export * from './edge-pre-discovery';
 export * from './foreach-operation';
 export * from './while-operation';
 export * from './agent-scratchpad';
@@ -41,9 +45,11 @@ export * from './task-graph/condition-roots';
 export * from './task-graph/decision-conditions';
 export * from './task-graph/decision-answers';
 export * from './task-graph/task-graph-spec';
+export * from './human-task-provider';
 export * from './task-graph/task-graph-validator';
 export * from './task-graph/flow-decision-step';
 export * from './task-graph/flow-graph-compiler';
+export * from './task-graph/task-security-envelope';
 export * from './task-graph/task-graph-submitter';
 export * from './task-graph/graph-traversal-engine';
 export * from './task-graph/payload-mapping';
@@ -55,8 +61,17 @@ export * from './task-graph/task-rows-to-spec';
 export * from './task-graph/task-graph-to-agent-spec';
 export * from './task-graph/workflow-spec';
 export * from './task-graph/workflow-spec-validator';
+export * from './task-graph/dag-similarity';
+export * from './task-graph/workflow-telemetry';
 
 // The conversation-attachment blob seam. Lives here rather than in `@memberjunction/aiengine`
 // because browser and React Native hosts implement it, and a package they can reach must not
 // declare a server-only dependency — not even for a type. See the file header for the incident.
 export * from './attachment-blob-store';
+
+// MJOPUS1 realtime-recording shard wire format, shared by the browser recorder and MJAPI.
+export * from './realtime-recording-shard-format';
+export * from './AgentUserPolicyEngine';
+export * from './TypedActionPolicyGuard';
+
+

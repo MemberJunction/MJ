@@ -3,12 +3,21 @@
 # CI gate: hardcoded-color enforcement
 #
 # Fails if any changed .css or .scss file contains hardcoded color values
-# (hex, rgb, rgba, hsl, hsla) outside the documented allowlist or outside
+# (hex, rgb, rgba, hsl, hsla, or a named colour such as `white` on a colour
+# property) outside the documented allowlist or outside
 # `var(--token, <fallback>)` syntax.
 #
 # Exception: rgba(0, 0, 0, X) and rgba(255, 255, 255, X) are allowed —
 # these are neutral black/white opacities used for shadows/overlays where
-# no semantic token equivalent exists.
+# no semantic token equivalent exists. For the same reason `black` and
+# `white` are allowed as a color-mix() partner (a neutral shade or tint of a
+# token). transparent, currentColor, inherit, initial, unset and revert are
+# not colours of their own and are allowed.
+#
+# A single declaration can be exempted by putting a line comment directly
+# above it: `// color-exception: <reason>`. Use it only for a value that
+# cannot change yet (for example a published legacy class); the reason is
+# required so the exception can be found and removed later.
 #
 # Files under any `docs/`, `plans/`, or `guides/` directory are skipped
 # entirely — they hold mockups, prototypes, and documentation snippets,
@@ -34,7 +43,7 @@ while [ $# -gt 0 ]; do
         --all) MODE="all"; shift ;;
         --file) MODE="single"; SINGLE_FILE="$2"; shift 2 ;;
         -h|--help)
-            sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'
             exit 0 ;;
         *) echo "Unknown arg: $1" >&2; exit 2 ;;
     esac
@@ -63,6 +72,14 @@ find_offending_hex() {
     #        semantic token equivalent)
     #      - hsl()/hsla() with any value
     perl -0777 -ne '
+        BEGIN {
+            # Properties whose value is (or contains) a colour.
+            our $color_props = qr{(?:color|background(?:-color)?|border(?:-(?:top|right|bottom|left|block|inline)(?:-(?:start|end))?)?(?:-color)?|outline(?:-color)?|fill|stroke|box-shadow|text-shadow|caret-color|accent-color|column-rule(?:-color)?|text-decoration(?:-color)?|text-emphasis(?:-color)?|stop-color|flood-color|lighting-color|scrollbar-color)}i;
+            # The CSS named-colour list (CSS Color Module Level 4), minus
+            # transparent and currentColor.
+            our $named_colors = qr{(?:aliceblue|antiquewhite|aqua|aquamarine|azure|beige|bisque|black|blanchedalmond|blue|blueviolet|brown|burlywood|cadetblue|chartreuse|chocolate|coral|cornflowerblue|cornsilk|crimson|cyan|darkblue|darkcyan|darkgoldenrod|darkgray|darkgreen|darkgrey|darkkhaki|darkmagenta|darkolivegreen|darkorange|darkorchid|darkred|darksalmon|darkseagreen|darkslateblue|darkslategray|darkslategrey|darkturquoise|darkviolet|deeppink|deepskyblue|dimgray|dimgrey|dodgerblue|firebrick|floralwhite|forestgreen|fuchsia|gainsboro|ghostwhite|gold|goldenrod|gray|green|greenyellow|grey|honeydew|hotpink|indianred|indigo|ivory|khaki|lavender|lavenderblush|lawngreen|lemonchiffon|lightblue|lightcoral|lightcyan|lightgoldenrodyellow|lightgray|lightgreen|lightgrey|lightpink|lightsalmon|lightseagreen|lightskyblue|lightslategray|lightslategrey|lightsteelblue|lightyellow|lime|limegreen|linen|magenta|maroon|mediumaquamarine|mediumblue|mediumorchid|mediumpurple|mediumseagreen|mediumslateblue|mediumspringgreen|mediumturquoise|mediumvioletred|midnightblue|mintcream|mistyrose|moccasin|navajowhite|navy|oldlace|olive|olivedrab|orange|orangered|orchid|palegoldenrod|palegreen|paleturquoise|palevioletred|papayawhip|peachpuff|peru|pink|plum|powderblue|purple|rebeccapurple|red|rosybrown|royalblue|saddlebrown|salmon|sandybrown|seagreen|seashell|sienna|silver|skyblue|slateblue|slategray|slategrey|snow|springgreen|steelblue|tan|teal|thistle|tomato|turquoise|violet|wheat|white|whitesmoke|yellow|yellowgreen)}i;
+        }
+        our ($color_props, $named_colors);
         # Strip block comments globally (across newlines)
         s{/\*.*?\*/}{ "\n" x ($& =~ tr/\n//) }gse;
         my @lines = split /\n/, $_, -1;
@@ -98,6 +115,40 @@ find_offending_hex() {
             # hsl()/hsla() — always flag (no legitimate hardcoded-hsl use case yet)
             if (!$flagged && $line =~ /\bhsla?\(/) {
                 $flagged = 1;
+            }
+
+            # Named colour keywords (white, black, red, ...) used as the value
+            # of a colour-taking property. A keyword background stays light in
+            # dark mode while the text token turns light, so these break dark
+            # mode as surely as a hex literal. transparent, currentColor and
+            # the CSS-wide keywords (inherit, initial, unset, revert) are not
+            # colours of their own and stay allowed. Custom-property
+            # declarations (--x: white) are not checked here.
+            if (!$flagged) {
+                my $scan = $line;
+                # Quoted strings and url(...) can hold words like "red".
+                $scan =~ s/"[^"]*"|\x27[^\x27]*\x27//g;
+                $scan =~ s/\burl\([^)]*\)//gi;
+                # black and white as a color-mix() partner are neutral
+                # shades/tints of a token, the same allowance as the
+                # rgba(0,0,0,X) / rgba(255,255,255,X) neutrals above.
+                $scan =~ s{\bcolor-mix\(([^()]*)\)}{
+                    my $args = $1;
+                    $args =~ s/(?<![\w-])(?:black|white)(?![\w-])//gi;
+                    "color-mix($args)";
+                }gie;
+                while ($scan =~ /(?:^|[\s;{])$color_props\s*:\s*([^;{}]*)/gi) {
+                    my $value = $1;
+                    if ($value =~ /(?<![\w\$\@.#-])$named_colors(?![\w-])/i) {
+                        $flagged = 1;
+                        last;
+                    }
+                }
+            }
+
+            # A documented per-declaration exception on the line above.
+            if ($flagged && $i > 0 && $lines[$i - 1] =~ m{//\s*color-exception:\s*\S}) {
+                $flagged = 0;
             }
 
             printf "%d:%s\n", $i + 1, $lines[$i] if $flagged;
@@ -138,7 +189,12 @@ ALLOWLISTED=0
 
 while IFS= read -r file; do
     [ -z "$file" ] && continue
-    [ ! -f "$REPO_ROOT/$file" ] && continue
+    # --file accepts an absolute path as well as a repo-relative one.
+    case "$file" in
+        /*) path="$file" ;;
+        *)  path="$REPO_ROOT/$file" ;;
+    esac
+    [ ! -f "$path" ] && continue
 
     if is_allowlisted "$file"; then
         ALLOWLISTED=$((ALLOWLISTED + 1))
@@ -146,7 +202,7 @@ while IFS= read -r file; do
     fi
 
     CHECKED=$((CHECKED + 1))
-    offending=$(find_offending_hex "$REPO_ROOT/$file")
+    offending=$(find_offending_hex "$path")
     if [ -n "$offending" ]; then
         echo "::error file=$file::Hardcoded color values detected. Use design tokens instead."
         echo ""
@@ -166,9 +222,11 @@ if [ "$VIOLATIONS" -gt 0 ]; then
     cat <<EOF
 
 Hardcoded color values are not allowed in component CSS/SCSS.
-Detected forms: hex (#fff), rgb(...), rgba(...), hsl(...), hsla(...).
+Detected forms: hex (#fff), rgb(...), rgba(...), hsl(...), hsla(...), and
+named colours (white, black, red, ...) on colour properties.
 Exception: rgba(0, 0, 0, X) and rgba(255, 255, 255, X) are allowed for
-shadow/overlay neutrals (no semantic token equivalent).
+shadow/overlay neutrals (no semantic token equivalent), as are black and
+white inside color-mix(). transparent and currentColor are allowed.
 
 Use design tokens instead:
   • Text:        var(--mj-text-primary), var(--mj-text-secondary), ...

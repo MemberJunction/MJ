@@ -152,7 +152,7 @@ export class GraphQLConsoleComponent extends BaseResourceComponent implements On
         super();
     }
 
-    public ngOnInit(): void {
+    public override ngOnInit(): void {
         super.ngOnInit();
         this.loadFromStorage();
         try {
@@ -162,7 +162,7 @@ export class GraphQLConsoleComponent extends BaseResourceComponent implements On
         this.NotifyLoadComplete();
     }
 
-    public ngOnDestroy(): void {
+    public override ngOnDestroy(): void {
         super.ngOnDestroy();
         this.saveToStorage();
         this.detachResizeListeners();
@@ -306,7 +306,7 @@ export class GraphQLConsoleComponent extends BaseResourceComponent implements On
         // Tiny pretty-printer: collapse multiple blank lines + trim trailing whitespace
         this.Query = this.Query
             .split('\n')
-            .map(line => line.replace(/\s+$/, ''))
+            .map(line => line.trimEnd())
             .join('\n')
             .replace(/\n{3,}/g, '\n\n')
             .trim() + '\n';

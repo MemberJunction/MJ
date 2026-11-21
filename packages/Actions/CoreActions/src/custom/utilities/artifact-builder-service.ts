@@ -10,6 +10,7 @@
  * with a TTL safety net for abandoned runs.
  */
 import { marked } from 'marked';
+import { BaseSingleton } from '@memberjunction/global';
 import { PDFOptions, PDFNodeType, DEFAULT_PDF_OPTIONS, RenderPDFFromNodes, ParseHTML } from './pdf-renderer';
 import { WordOptions, DocxSection, DocxContentItem, DEFAULT_WORD_OPTIONS, RenderDocxFromSections } from './docx-renderer';
 import { SheetInputDefinition, ExcelOptions, RenderExcelFromSheets } from './xlsx-renderer';
@@ -81,20 +82,21 @@ const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // Check every 5 minutes
  * Each document is identified by a UUID handle and persists across agent turns
  * within the same Node.js process.
  */
-export class ArtifactBuilderService {
-    private static _instance: ArtifactBuilderService | null = null;
-    private documents: Map<string, InProgressDocument> = new Map();
-    private cleanupTimer: ReturnType<typeof setInterval> | null = null;
+export class ArtifactBuilderService extends BaseSingleton<ArtifactBuilderService> {
+    private documents!: Map<string, InProgressDocument>;
+    private cleanupTimer!: ReturnType<typeof setInterval> | null;
 
-    private constructor() {
-        this.startCleanupTimer();
+    protected constructor() {
+        super();
+        if (!this.documents) {
+            this.documents = new Map();
+            this.cleanupTimer = null;
+            this.startCleanupTimer();
+        }
     }
 
     public static get Instance(): ArtifactBuilderService {
-        if (!ArtifactBuilderService._instance) {
-            ArtifactBuilderService._instance = new ArtifactBuilderService();
-        }
-        return ArtifactBuilderService._instance;
+        return super.getInstance<ArtifactBuilderService>();
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────

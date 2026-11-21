@@ -1,6 +1,6 @@
 import { Arg, Ctx, Field, InputType, Int, ObjectType, Query, Resolver } from 'type-graphql';
-import { AppContext } from '../types.js';
-import { LogError, Metadata } from '@memberjunction/core';
+import { AppContext, UserPayload } from '../types.js';
+import { DatabaseProviderBase, DatasetItemFilterType, DatasetItemResultType, LogError, Metadata, UserInfo } from '@memberjunction/core';
 import { GetReadOnlyProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 
@@ -34,9 +34,117 @@ export class DatasetItemFilterTypeGQL {
   Filter: string;
 }
 
+export const DatasetItemJsonCache = new WeakMap<
+  object,
+  { code: string; entityName: string; entityId: string; dateIso: string; rowCount: number; itemJson: string }
+>();
+
+/**
+ * Request handling shared by the dataset queries. Every read runs as the session's user, so the
+ * provider applies that user's entity read permission and row-level security per item, and every
+ * client ItemFilter passes the same AST screen as a RunView ExtraFilter before a provider sees it.
+ */
+export abstract class DatasetResolverBase extends ResolverBase {
+  /** The session's user. A dataset read never runs without one: the provider applies no read checks then. */
+  protected RequireDatasetUser(userPayload: UserPayload): UserInfo {
+    const user = this.GetUserFromPayload(userPayload);
+    if (!user) {
+      throw new Error('Dataset request refused: the session resolves to no user');
+    }
+    return user;
+  }
+
+  /**
+   * Screens every client ItemFilter: one statement, read-only, and subqueries only over entity base
+   * views the user can read. Throws on the first refusal. Returns the filters without null entries.
+   */
+  protected ScreenItemFilters(
+    itemFilters: DatasetItemFilterTypeGQL[] | undefined,
+    provider: DatabaseProviderBase,
+    user: UserInfo,
+  ): DatasetItemFilterType[] | undefined {
+    if (!itemFilters) return undefined;
+    itemFilters.forEach((itemFilter, index) => {
+      if (itemFilter) {
+        this.assertClientClauseUsesEntityBaseViews(itemFilter.Filter, `ItemFilters[${index}].Filter`, provider, user);
+      }
+    });
+    return itemFilters.filter((itemFilter) => itemFilter != null);
+  }
+
+  /**
+   * Applies the API encryption policy to each item's rows, as every other GraphQL read path does:
+   * an encrypted field the entity does not allow decrypted over the API leaves as ciphertext or the
+   * sentinel. Works on copies, because the rows can be the server cache's own frozen objects.
+   */
+  protected async ProtectEncryptedFields(
+    items: DatasetItemResultType[],
+    provider: DatabaseProviderBase,
+    user: UserInfo,
+  ): Promise<DatasetItemResultType[]> {
+    return Promise.all(
+      items.map(async (item) => {
+        const entity = provider.EntityByName(item.EntityName);
+        if (!item.Results?.length || !entity?.EncryptedFields.some((field) => !field.AllowDecryptInAPI)) {
+          return item;
+        }
+        const rows = item.Results.map((row: Record<string, unknown>) => ({ ...row }));
+        return { ...item, Results: await this.ArrayFilterEncryptedFieldsForAPI(item.EntityName, rows, user, provider, 'Name') };
+      }),
+    );
+  }
+
+  /**
+   * Serializes dataset items to JSON, caching the JSON representation of items whose Results
+   * array is frozen and only contains standard fields.
+   */
+  protected SerializeDatasetItems(items: DatasetItemResultType[]): string {
+    const standardKeys = new Set(['Code', 'EntityName', 'EntityID', 'LatestUpdateDate', 'Results']);
+    const serializedItems: string[] = [];
+
+    for (const item of items) {
+      const isArrayAndFrozen = Array.isArray(item.Results) && Object.isFrozen(item.Results);
+      const hasOnlyStandardKeys = isArrayAndFrozen && Object.keys(item).every((k) => standardKeys.has(k));
+
+      if (hasOnlyStandardKeys) {
+        const dateIso = item.LatestUpdateDate instanceof Date
+          ? item.LatestUpdateDate.toISOString()
+          : String(item.LatestUpdateDate ?? '');
+        const cached = DatasetItemJsonCache.get(item.Results);
+
+        if (
+          cached &&
+          cached.code === item.Code &&
+          cached.entityName === item.EntityName &&
+          cached.entityId === item.EntityID &&
+          cached.dateIso === dateIso &&
+          cached.rowCount === item.Results.length
+        ) {
+          serializedItems.push(cached.itemJson);
+          continue;
+        }
+
+        const itemJson = JSON.stringify(item);
+        DatasetItemJsonCache.set(item.Results, {
+          code: item.Code,
+          entityName: item.EntityName,
+          entityId: item.EntityID,
+          dateIso,
+          rowCount: item.Results.length,
+          itemJson,
+        });
+        serializedItems.push(itemJson);
+      } else {
+        serializedItems.push(JSON.stringify(item));
+      }
+    }
+
+    return `[${serializedItems.join(',')}]`;
+  }
+}
 
 @Resolver(DatasetResultType)
-export class DatasetResolverExtended extends ResolverBase {
+export class DatasetResolverExtended extends DatasetResolverBase {
   @Query(() => DatasetResultType)
   async GetDatasetByName(
     @Arg('DatasetName', () => String) DatasetName: string,
@@ -45,10 +153,12 @@ export class DatasetResolverExtended extends ResolverBase {
   ) {
     // Check API key scope authorization for dataset read
     await this.CheckAPIKeyScopeAuthorization('dataset:read', DatasetName, userPayload);
+    const md = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
+    const user = this.RequireDatasetUser(userPayload);
+    const itemFilters = this.ScreenItemFilters(ItemFilters, md, user);
 
     try {
-      const md = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
-      const result = await md.GetDatasetByName(DatasetName, ItemFilters);
+      const result = await md.GetDatasetByName(DatasetName, itemFilters, user);
       if (result) {
         return {
           DatasetID: result.DatasetID,
@@ -56,7 +166,7 @@ export class DatasetResolverExtended extends ResolverBase {
           Success: result.Success,
           Status: result.Status,
           LatestUpdateDate: result.LatestUpdateDate,
-          Results: JSON.stringify(result.Results),
+          Results: this.SerializeDatasetItems(await this.ProtectEncryptedFields(result.Results, md, user)),
         };
       } else {
         throw new Error('Error retrieving Dataset: ' + DatasetName);
@@ -90,7 +200,7 @@ export class DatasetStatusResultType {
 }
 
 @Resolver(DatasetStatusResultType)
-export class DatasetStatusResolver extends ResolverBase {
+export class DatasetStatusResolver extends DatasetResolverBase {
   @Query(() => DatasetStatusResultType)
   async GetDatasetStatusByName(
     @Arg('DatasetName', () => String) DatasetName: string,
@@ -99,10 +209,12 @@ export class DatasetStatusResolver extends ResolverBase {
   ) {
     // Check API key scope authorization for dataset read
     await this.CheckAPIKeyScopeAuthorization('dataset:read', DatasetName, userPayload);
+    const md = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
+    const user = this.RequireDatasetUser(userPayload);
+    const itemFilters = this.ScreenItemFilters(ItemFilters, md, user);
 
     try {
-      const md = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
-      const result = await md.GetDatasetStatusByName(DatasetName, ItemFilters);
+      const result = await md.GetDatasetStatusByName(DatasetName, itemFilters, user);
       if (result) {
         return {
           DatasetID: result.DatasetID,
@@ -131,12 +243,13 @@ export class DatasetStatusResolver extends ResolverBase {
     @Ctx() { providers, userPayload }: AppContext,
   ): Promise<DatasetStatusResultType[]> {
     const md = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
+    const user = this.RequireDatasetUser(userPayload);
     const results: DatasetStatusResultType[] = [];
 
     // Execute all status checks in parallel
     const statusPromises = DatasetNames.map(async (name) => {
       await this.CheckAPIKeyScopeAuthorization('dataset:read', name, userPayload);
-      return md.GetDatasetStatusByName(name);
+      return md.GetDatasetStatusByName(name, undefined, user);
     });
 
     const statuses = await Promise.all(statusPromises);

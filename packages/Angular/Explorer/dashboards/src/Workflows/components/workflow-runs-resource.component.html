@@ -190,6 +190,7 @@
                       [LiveUpdates]="selected.Status === 'Running' || selected.Status === 'In Progress'"
                       [ReplayAt]="ReplayAt"
                       [ShowLegend]="Layout.ShowLegend"
+                      [ShowVariables]="false"
                       Height="100%"
                       (NodeSelected)="OnGraphNodeSelected($event)"
                       (ConnectionSelected)="OnGraphConnectionSelected($event)"

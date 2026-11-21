@@ -89,4 +89,47 @@ describe('ProviderBase preValidateAndRefresh after a cold boot', () => {
 
         expect(checkSpy).toHaveBeenCalledTimes(1);
     });
+
+    it('runs CheckToSeeIfRefreshNeeded and RefreshCurrentUser concurrently on warm validation', async () => {
+        const provider = new TestMetadataProvider();
+        const events: string[] = [];
+
+        vi.spyOn(provider, 'CheckToSeeIfRefreshNeeded').mockImplementation(async () => {
+            events.push('check:start');
+            await new Promise(resolve => setTimeout(resolve, 20));
+            events.push('check:end');
+            return false;
+        });
+        vi.spyOn(provider, 'RefreshCurrentUser').mockImplementation(async () => {
+            events.push('user:start');
+            await new Promise(resolve => setTimeout(resolve, 20));
+            events.push('user:end');
+        });
+
+        await provider.preValidateAndRefresh();
+
+        // Both must start before either finishes (concurrent Promise.all execution)
+        expect(events.slice(0, 2)).toEqual(['check:start', 'user:start']);
+    });
+
+    it('RefreshCurrentUser skips SaveLocalMetadataToStorage when user is unchanged and saves when user changes', async () => {
+        const provider = new TestMetadataProvider();
+        await provider.Config(testConfig);
+
+        const saveSpy = vi.spyOn(provider, 'SaveLocalMetadataToStorage').mockResolvedValue(undefined);
+        const existingUser = provider.CurrentUser;
+
+        // 1. Unchanged user -> should NOT re-serialize and save full metadata
+        vi.spyOn(provider as never, 'GetCurrentUser' as never).mockResolvedValue(existingUser as never);
+        await provider.RefreshCurrentUser();
+        expect(saveSpy).not.toHaveBeenCalled();
+
+        // 2. Modified user -> SHOULD save updated metadata snapshot
+        const updatedUser = Object.assign(Object.create(Object.getPrototypeOf(existingUser)), existingUser, {
+            Name: 'Updated Name',
+        });
+        vi.spyOn(provider as never, 'GetCurrentUser' as never).mockResolvedValue(updatedUser as never);
+        await provider.RefreshCurrentUser();
+        expect(saveSpy).toHaveBeenCalledTimes(1);
+    });
 });

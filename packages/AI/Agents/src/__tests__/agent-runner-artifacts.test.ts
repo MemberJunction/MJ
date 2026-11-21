@@ -10,7 +10,14 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { UserInfo, IMetadataProvider, RunViewParams, RunViewResult } from '@memberjunction/core';
-import type { ExecuteAgentResult } from '@memberjunction/ai-core-plus';
+import type {
+    BaseAgentNextStep,
+    ExecuteAgentParams,
+    ExecuteAgentResult,
+    MJAIAgentEntityExtended,
+    MJAIAgentRunEntityExtended,
+} from '@memberjunction/ai-core-plus';
+import type { MJAIAgentRelationshipEntity } from '@memberjunction/core-entities';
 
 // Controllable agent cache — ProcessAgentArtifacts reads ArtifactCreationMode from it.
 const engineAgents: Array<{ ID: string; Name: string; ArtifactCreationMode?: string; DefaultArtifactTypeID?: string }> = [];
@@ -25,7 +32,9 @@ vi.mock('@memberjunction/aiengine', () => ({
     },
 }));
 
+import { ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { AgentRunner } from '../AgentRunner';
+import { BaseAgent } from '../base-agent';
 
 interface FakeEntity {
     [key: string]: unknown;
@@ -68,7 +77,15 @@ interface ArtifactWorld {
 }
 
 function world(overrides: Partial<ArtifactWorld> = {}): ArtifactWorld {
-    return { owners: new Map(), grants: new Set(), ...overrides };
+    const defaultOwners = new Map<string, string>([
+        [SOURCE_UUID.toLowerCase(), '11111111-0001-4000-8000-000000000001'],
+        [PRIOR_UUID.toLowerCase(), '11111111-0001-4000-8000-000000000001'],
+    ]);
+    return {
+        owners: overrides.owners ?? defaultOwners,
+        grants: overrides.grants ?? new Set(),
+        throws: overrides.throws,
+    };
 }
 
 /** Pulls the value out of a `Field='value'` fragment so the fake can answer by id. */
@@ -91,34 +108,44 @@ function makeProvider(factory: (entityName: string) => FakeEntity, w: ArtifactWo
 } {
     const requested: string[] = [];
     const runViewsCalls: RunViewParams[][] = [];
+    const answerView = (view: RunViewParams): RunViewResult => {
+        if (view.EntityName === 'MJ: Artifacts') {
+            const id = filterValue(view.ExtraFilter as string, 'ID');
+            const owner = w.owners.get(id.toLowerCase());
+            return {
+                Success: true,
+                Results: owner === undefined ? [] : [{ ID: id, UserID: owner }],
+            } as unknown as RunViewResult;
+        }
+        if (view.EntityName === 'MJ: Artifact Permissions') {
+            const id = filterValue(view.ExtraFilter as string, 'ArtifactID');
+            return {
+                Success: true,
+                Results: w.grants.has(id.toLowerCase())
+                    ? [{ ID: 'perm-1', CanRead: true, CanEdit: true, CanDelete: false, CanShare: false }]
+                    : [],
+            } as unknown as RunViewResult;
+        }
+        return { Success: true, Results: [] } as unknown as RunViewResult;
+    };
     const provider = {
         GetEntityObject: vi.fn(async (entityName: string) => {
             requested.push(entityName);
             return factory(entityName);
+        }),
+        RunView: vi.fn(async (view: RunViewParams): Promise<RunViewResult> => {
+            runViewsCalls.push([view]);
+            if (w.throws) {
+                throw new Error(w.throws);
+            }
+            return answerView(view);
         }),
         RunViews: vi.fn(async (params: RunViewParams[]): Promise<RunViewResult[]> => {
             runViewsCalls.push(params);
             if (w.throws) {
                 throw new Error(w.throws);
             }
-            return params.map((view) => {
-                if (view.EntityName === 'MJ: Artifacts') {
-                    const id = filterValue(view.ExtraFilter as string, 'ID');
-                    const owner = w.owners.get(id.toLowerCase());
-                    return {
-                        Success: true,
-                        Results: owner === undefined ? [] : [{ ID: id, UserID: owner }],
-                    } as unknown as RunViewResult;
-                }
-                if (view.EntityName === 'MJ: Artifact Permissions') {
-                    const id = filterValue(view.ExtraFilter as string, 'ArtifactID');
-                    return {
-                        Success: true,
-                        Results: w.grants.has(id.toLowerCase()) ? [{ ID: 'perm-1' }] : [],
-                    } as unknown as RunViewResult;
-                }
-                return { Success: false, Results: [] } as unknown as RunViewResult;
-            });
+            return params.map(answerView);
         }),
     } as unknown as IMetadataProvider;
     return { provider, requested, runViewsCalls };
@@ -160,9 +187,39 @@ class TestableAgentRunner extends AgentRunner {
         this.DuplicateSpy(artifactId);
         return this.DuplicateVersionId;
     }
+
+    /** artifactId (lowercased) → TypeID for an existing artifact being versioned. */
+    public ExistingArtifactTypes = new Map<string, string>();
+
+    protected override async GetArtifactTypeIDForArtifact(artifactId: string): Promise<string | null> {
+        return this.ExistingArtifactTypes.get(artifactId.toLowerCase()) ?? null;
+    }
 }
 
-const contextUser = { ID: 'user-1', Email: 'u@example.com' } as unknown as UserInfo;
+/** Artifact types the engine answers with; ids are the runner's built-in JSON type plus two others. */
+const JSON_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
+const IMAGE_TYPE_ID = 'b1b2b3b4-c5c6-4d7d-8e8e-f9f9f0f0a1a1';
+const HTML_TYPE_ID = 'c1c2c3c4-d5d6-4e7e-8f8f-a9a9a0a0b1b1';
+type EngineTypes = { _artifactTypes: Array<{ ID: string; Name: string; ContentType: string }> };
+let priorEngineTypes: EngineTypes['_artifactTypes'];
+
+beforeEach(() => {
+    vi.spyOn(ArtifactMetadataEngine.Instance, 'Config').mockResolvedValue(undefined);
+    const internals = ArtifactMetadataEngine.Instance as unknown as EngineTypes;
+    priorEngineTypes = internals._artifactTypes;
+    internals._artifactTypes = [
+        { ID: JSON_TYPE_ID, Name: 'JSON', ContentType: 'application/json' },
+        { ID: IMAGE_TYPE_ID, Name: 'Image', ContentType: 'image/*' },
+        { ID: HTML_TYPE_ID, Name: 'HTML', ContentType: 'text/html' },
+    ];
+});
+
+afterEach(() => {
+    (ArtifactMetadataEngine.Instance as unknown as EngineTypes)._artifactTypes = priorEngineTypes;
+    vi.restoreAllMocks();
+});
+
+const contextUser = { ID: '11111111-0001-4000-8000-000000000001', Email: 'u@example.com' } as unknown as UserInfo;
 
 function makeResult(overrides: Partial<ExecuteAgentResult> = {}): ExecuteAgentResult {
     return {
@@ -194,7 +251,7 @@ describe('AgentRunner.ProcessAgentArtifacts — conversationDetailId-optional wi
         // The artifact header and version were still created.
         expect(artifact.Save).toHaveBeenCalledTimes(1);
         expect(artifact.Visibility).toBe('Always');
-        expect(artifact.UserID).toBe('user-1');
+        expect(artifact.UserID).toBe('11111111-0001-4000-8000-000000000001');
         expect(version.Save).toHaveBeenCalledTimes(1);
         expect(version.ArtifactID).toBe('art-1');
         expect(version.VersionNumber).toBe(1);
@@ -373,6 +430,13 @@ describe('AgentRunner.ProcessAgentArtifacts — duplicate content reuses the ver
             }),
             RunView: vi.fn(async (params: RunViewParams): Promise<RunViewResult> => {
                 runViewCalls.push(params);
+                if (params.EntityName === 'MJ: Artifacts') {
+                    const id = filterValue(params.ExtraFilter as string, 'ID');
+                    return {
+                        Success: true,
+                        Results: [{ ID: id, UserID: '11111111-0001-4000-8000-000000000001' }],
+                    } as unknown as RunViewResult;
+                }
                 if (params.EntityName !== 'MJ: Conversation Detail Artifacts') {
                     return { Success: true, Results: [] } as unknown as RunViewResult;
                 }
@@ -380,6 +444,18 @@ describe('AgentRunner.ProcessAgentArtifacts — duplicate content reuses the ver
                     return { Success: false, Results: [], ErrorMessage: readError } as unknown as RunViewResult;
                 }
                 return { Success: true, Results: existingLinks } as unknown as RunViewResult;
+            }),
+            RunViews: vi.fn(async (params: RunViewParams[]): Promise<RunViewResult[]> => {
+                return params.map((view) => {
+                    if (view.EntityName === 'MJ: Artifacts') {
+                        const id = filterValue(view.ExtraFilter as string, 'ID');
+                        return {
+                            Success: true,
+                            Results: [{ ID: id, UserID: '11111111-0001-4000-8000-000000000001' }],
+                        } as unknown as RunViewResult;
+                    }
+                    return { Success: true, Results: [] } as unknown as RunViewResult;
+                });
             }),
         } as unknown as IMetadataProvider;
         return { provider, requested, junctions, runViewCalls };
@@ -496,7 +572,7 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
         const version = makeEntity('ver-9');
         const { provider, requested, runViewsCalls } = makeProvider(
             () => version,
-            world({ owners: new Map([[TARGET_UUID, 'user-1']]) })
+            world({ owners: new Map([[TARGET_UUID, '11111111-0001-4000-8000-000000000001']]) })
         );
         const runner = new TestableAgentRunner(provider);
         runner.MaxVersion = 4;
@@ -508,9 +584,9 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
 
         expect(info).toEqual({ artifactId: TARGET_UUID, versionId: 'ver-9', versionNumber: 5 });
         expect(version.ArtifactID).toBe(TARGET_UUID);
-        // Existence and authorization in ONE round trip, not a full-entity Load.
+        // Existence and owner authorization resolved via ArtifactPermissionEngine in a single MJ: Artifacts query.
         expect(runViewsCalls).toHaveLength(1);
-        expect(runViewsCalls[0].map((v) => v.EntityName)).toEqual(['MJ: Artifacts', 'MJ: Artifact Permissions']);
+        expect(runViewsCalls[0].map((v) => v.EntityName)).toEqual(['MJ: Artifacts']);
         // Writable target -> versioned in place; no new artifact header was created.
         expect(requested).not.toContain('MJ: Artifacts');
     });
@@ -628,8 +704,11 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
 
     it("falls back to the run's sourceArtifactId when the directive-named target does not exist", async () => {
         const version = makeEntity('ver-12');
-        // Empty world: the target id resolves to no row.
-        const { provider, requested, runViewsCalls } = makeProvider(() => version, world());
+        // Target id resolves to no row; sourceArtifactId belongs to 11111111-0001-4000-8000-000000000001.
+        const { provider, requested, runViewsCalls } = makeProvider(
+            () => version,
+            world({ owners: new Map([[SOURCE_UUID.toLowerCase(), '11111111-0001-4000-8000-000000000001']]) })
+        );
         const runner = new TestableAgentRunner(provider);
         runner.MaxVersion = 6;
 
@@ -638,7 +717,7 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
             'detail-1', SOURCE_UUID, contextUser, provider
         );
 
-        expect(runViewsCalls).toHaveLength(1);
+        expect(runViewsCalls).toHaveLength(2);
         expect(info).toEqual({ artifactId: SOURCE_UUID, versionId: 'ver-12', versionNumber: 7 });
         expect(version.ArtifactID).toBe(SOURCE_UUID);
         // The missing target never reached either raw ExtraFilter, and nothing new was created.
@@ -685,18 +764,27 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
             );
 
             expect(info).toEqual({ artifactId: TARGET_UUID, versionId: 'ver-20', versionNumber: 2 });
-            // The grant lookup is scoped to BOTH the artifact and this user.
-            const grantFilter = runViewsCalls[0][1].ExtraFilter as string;
+            // The grant lookup via ArtifactPermissionEngine is scoped to BOTH the artifact and this user.
+            const permQuery = runViewsCalls
+                .flat()
+                .find((v) => v.EntityName === 'MJ: Artifact Permissions');
+            expect(permQuery).toBeDefined();
+            const grantFilter = permQuery?.ExtraFilter as string;
             expect(grantFilter).toContain(`ArtifactID='${TARGET_UUID}'`);
-            expect(grantFilter).toContain("UserID='user-1'");
-            expect(grantFilter).toContain('CanEdit=1');
+            expect(grantFilter).toContain("UserID='11111111-0001-4000-8000-000000000001'");
+            expect(permQuery?.Fields).toContain('CanEdit');
         });
 
         it("REFUSES an artifact owned by another user with no grant, and falls back", async () => {
             const version = makeEntity('ver-21');
             const { provider, requested } = makeProvider(
                 () => version,
-                world({ owners: new Map([[TARGET_UUID, 'somebody-else']]) })
+                world({
+                    owners: new Map([
+                        [TARGET_UUID.toLowerCase(), 'somebody-else'],
+                        [SOURCE_UUID.toLowerCase(), '11111111-0001-4000-8000-000000000001'],
+                    ]),
+                })
             );
             const runner = new TestableAgentRunner(provider);
             runner.MaxVersion = 3;
@@ -714,10 +802,14 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
 
         it('falls back rather than losing the artifact when the lookup THROWS', async () => {
             // BaseEntity.Load throws on a permission denial, a SQL conversion error or any transient
-            // fault. A throw here used to reach the method-wide catch and return undefined: no
-            // artifact, no version, no link — the deliverable survived only in the run's payload.
+            // fault. When RunViews throws continuously, every version rung fails closed and degrades
+            // cleanly to create-new so the deliverable is never lost.
+            const artifact = makeEntity('art-fresh-fallback');
             const version = makeEntity('ver-22');
-            const { provider } = makeProvider(() => version, world({ throws: 'Conversion failed when converting from a character string to uniqueidentifier' }));
+            const { provider } = makeProvider(
+                (name) => (name === 'MJ: Artifacts' ? artifact : version),
+                world({ throws: 'Conversion failed when converting from a character string to uniqueidentifier' })
+            );
             const runner = new TestableAgentRunner(provider);
             runner.MaxVersion = 8;
 
@@ -726,7 +818,7 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
                 'detail-1', SOURCE_UUID, contextUser, provider
             );
 
-            expect(info).toEqual({ artifactId: SOURCE_UUID, versionId: 'ver-22', versionNumber: 9 });
+            expect(info).toEqual({ artifactId: 'art-fresh-fallback', versionId: 'ver-22', versionNumber: 1 });
         });
 
         it('does not re-admit a rejected id when the agent echoed the run\'s own sourceArtifactId', async () => {
@@ -738,7 +830,7 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
             const version = makeEntity('ver-23');
             const { provider } = makeProvider(
                 (name) => (name === 'MJ: Artifacts' ? artifact : version),
-                world() // the echoed id resolves to nothing
+                world({ owners: new Map() }) // the echoed id resolves to nothing
             );
             const runner = new TestableAgentRunner(provider);
 
@@ -753,13 +845,54 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
             expect(runner.DuplicateSpy).not.toHaveBeenCalled();
         });
 
+        it('Blocker 5: falls back to create-new with logged reason when user B continues user A\'s artifact via sourceArtifactId or legacy look-behind without CanEdit', async () => {
+            const artifact = makeEntity('art-user-b-fork');
+            const version = makeEntity('ver-user-b-1');
+            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+            const permGrant = makeEntity('perm-user-a-read');
+            const { provider } = makeProvider(
+                (name) =>
+                    name === 'MJ: Artifacts'
+                        ? artifact
+                        : name === 'MJ: Artifact Versions'
+                          ? version
+                          : permGrant,
+                world({
+                    owners: new Map([
+                        [SOURCE_UUID.toLowerCase(), '11111111-0002-4000-8000-000000000002'],
+                        [PRIOR_UUID.toLowerCase(), '11111111-0002-4000-8000-000000000002'],
+                    ]),
+                })
+            );
+            const runner = new TestableAgentRunner(provider);
+            runner.PreviousArtifact = { artifactId: PRIOR_UUID, versionNumber: 2 };
+
+            // Both sourceArtifactId AND legacy previousArtifact are owned by 11111111-0002-4000-8000-000000000002 without CanEdit -> creates new artifact!
+            const info = await runner.ProcessAgentArtifacts(
+                makeResult(),
+                'detail-shared',
+                SOURCE_UUID,
+                contextUser,
+                provider
+            );
+
+            expect(info).toEqual({ artifactId: 'art-user-b-fork', versionId: 'ver-user-b-1', versionNumber: 1 });
+            expect(artifact.Save).toHaveBeenCalledTimes(1);
+            expect(version.Save).toHaveBeenCalledTimes(1);
+            const loggedErrors = errorSpy.mock.calls.map((c) => String(c[0])).join('\n');
+            expect(loggedErrors).toContain('no CanEdit grant on it');
+            expect(loggedErrors).toContain('falling back to create-new');
+            errorSpy.mockRestore();
+        });
+
         it('trims a target id before it reaches a filter or the version row', async () => {
             // IsValidUUID tolerates surrounding whitespace, so a model writing the id on its own
             // line passes validation; the raw value would then land in ArtifactID='<uuid>\n'.
             const version = makeEntity('ver-24');
             const { provider, runViewsCalls } = makeProvider(
                 () => version,
-                world({ owners: new Map([[TARGET_UUID, 'user-1']]) })
+                world({ owners: new Map([[TARGET_UUID, '11111111-0001-4000-8000-000000000001']]) })
             );
             const runner = new TestableAgentRunner(provider);
             runner.MaxVersion = 0;
@@ -1013,7 +1146,10 @@ describe('AgentRunner.ProcessAgentArtifacts — unrecognized directive behavior 
 
     it('an unrecognized behavior still versions the run sourceArtifactId, exactly like no directive', async () => {
         const version = makeEntity('ver-2');
-        const { provider } = makeProvider(() => version);
+        const { provider } = makeProvider(
+            () => version,
+            world({ owners: new Map([[TARGET_UUID.toLowerCase(), '11111111-0001-4000-8000-000000000001']]) })
+        );
         const runner = new TestableAgentRunner(provider);
         runner.MaxVersion = 1;
 
@@ -1067,5 +1203,1039 @@ describe('AgentRunner.CheckForDuplicateVersion — non-numeric version guard (#4
         expect(runView).toHaveBeenCalledTimes(1);
         const params = runView.mock.calls[0][0] as RunViewParams;
         expect(params.ExtraFilter).toContain('VersionNumber=3');
+    });
+});
+
+describe('AgentRunner.ProcessAgentArtifacts — payload title/description fallback & version naming', () => {
+    it('adopts payload.title and payload.interpretation onto both artifact header and version when directive name is omitted', async () => {
+        const artifact = makeEntity('art-1');
+        const version = makeEntity('ver-1');
+        const { provider } = makeProvider((name) => (name === 'MJ: Artifacts' ? artifact : version));
+        const runner = new TestableAgentRunner(provider);
+
+        await runner.ProcessAgentArtifacts(
+            makeResult({
+                payload: {
+                    title: 'Top 10 Customers by Total Spend',
+                    interpretation: 'Enterprise customers account for 74% of lifetime order value.',
+                    columns: [{ field: 'Customer' }],
+                    rows: [{ Customer: 'Acme Corp' }],
+                },
+            }),
+            'detail-1',
+            undefined,
+            contextUser,
+            provider
+        );
+
+        expect(artifact.Name).toBe('Top 10 Customers by Total Spend');
+        expect(artifact.Description).toBe('Enterprise customers account for 74% of lifetime order value.');
+        expect(version.Name).toBe('Top 10 Customers by Total Spend');
+        expect(version.Description).toBe('Enterprise customers account for 74% of lifetime order value.');
+    });
+
+    it('populates version.Name and version.Description when versioning an existing artifact', async () => {
+        const version = makeEntity('ver-2');
+        const { provider } = makeProvider(() => version, world({ owners: new Map([[TARGET_UUID.toLowerCase(), '11111111-0001-4000-8000-000000000001']]) }));
+        const runner = new TestableAgentRunner(provider);
+        runner.MaxVersion = 1;
+
+        await runner.ProcessAgentArtifacts(
+            makeResult({
+                artifactDirective: {
+                    behavior: 'version-source',
+                    targetArtifactId: TARGET_UUID,
+                    name: 'Top 10 Customers — Q4 Only',
+                    description: 'Filtered to Q4 orders',
+                },
+            }),
+            'detail-2',
+            undefined,
+            contextUser,
+            provider
+        );
+
+        expect(version.ArtifactID).toBe(TARGET_UUID);
+        expect(version.VersionNumber).toBe(2);
+        expect(version.Name).toBe('Top 10 Customers — Q4 Only');
+        expect(version.Description).toBe('Filtered to Q4 orders');
+    });
+});
+
+import { LoopAgentType } from '../agent-types/loop-agent-type';
+import { QueryBuilderAgent } from '../query-builder-agent';
+
+describe('LoopAgentType.DetermineNextStep — artifactDirective forwarding', () => {
+    it('forwards artifactDirective on Chat, Success, and Sub-Agent steps', async () => {
+        const loopType = new LoopAgentType();
+
+        const chatStep = await loopType.DetermineNextStep(
+            {
+                success: true,
+                result: JSON.stringify({
+                    taskComplete: false,
+                    message: 'Here are your results.',
+                    artifactDirective: {
+                        behavior: 'create-new',
+                        name: 'Top 10 Customers by Total Spend',
+                        description: 'Ranks top customers by lifetime spend',
+                    },
+                    payloadChangeRequest: {
+                        replaceElements: {
+                            title: 'Top 10 Customers by Total Spend',
+                            columns: [{ field: 'Customer' }],
+                            rows: [{ Customer: 'Acme' }],
+                        },
+                    },
+                    nextStep: { type: 'Chat' },
+                }),
+            } as unknown as Parameters<LoopAgentType['DetermineNextStep']>[0],
+            {} as unknown as Parameters<LoopAgentType['DetermineNextStep']>[1],
+            {}
+        );
+
+        expect(chatStep.step).toBe('Chat');
+        expect(chatStep.artifactDirective).toEqual({
+            behavior: 'create-new',
+            name: 'Top 10 Customers by Total Spend',
+            description: 'Ranks top customers by lifetime spend',
+        });
+
+        const subAgentStep = await loopType.DetermineNextStep(
+            {
+                success: true,
+                result: JSON.stringify({
+                    taskComplete: false,
+                    artifactDirective: {
+                        behavior: 'version-source',
+                        targetArtifactId: 'A',
+                        name: 'Refined Dashboard',
+                    },
+                    nextStep: {
+                        type: 'Sub-Agent',
+                        subAgent: {
+                            name: 'Query Strategist',
+                            message: 'Filter by Q4',
+                            terminateAfter: false,
+                        },
+                    },
+                }),
+            } as unknown as Parameters<LoopAgentType['DetermineNextStep']>[0],
+            {} as unknown as Parameters<LoopAgentType['DetermineNextStep']>[1],
+            {}
+        );
+
+        expect(subAgentStep.step).toBe('Sub-Agent');
+        expect(subAgentStep.artifactDirective).toEqual({
+            behavior: 'version-source',
+            targetArtifactId: 'A',
+            name: 'Refined Dashboard',
+        });
+    });
+});
+
+describe('QueryBuilderAgent — single-table vs multi-table payload normalization', () => {
+    class TestableQueryBuilderAgent extends QueryBuilderAgent {
+        public normalize(payload: Record<string, unknown>, replaceElements: Record<string, unknown>): Record<string, unknown> {
+            return this.normalizePayloadFormat(payload, {
+                step: 'Success',
+                payloadChangeRequest: { replaceElements },
+            });
+        }
+    }
+
+    it('strips stale multi-table fields (tables, computations, interpretation) when transitioning to single-table', () => {
+        const agent = new TestableQueryBuilderAgent();
+        const prev = {
+            title: 'Executive Dashboard',
+            tables: [{ name: 't1', rows: [] }],
+            computations: [{ name: 'c1' }],
+            interpretation: 'Multi-table summary',
+        };
+        const next = {
+            source: 'query',
+            title: 'Top 10 Customers',
+            columns: [{ field: 'Name' }],
+            rows: [{ Name: 'Acme' }],
+            metadata: { sql: 'SELECT Name FROM vwCustomers' },
+        };
+        // Simulate merged payload where PayloadManager kept prev.tables alongside next.columns/rows
+        const merged = agent.normalize({ ...prev, ...next }, next);
+
+        expect(merged.tables).toBeUndefined();
+        expect(merged.computations).toBeUndefined();
+        expect(merged.interpretation).toBeUndefined();
+        expect(merged.columns).toEqual([{ field: 'Name' }]);
+        expect(merged.rows).toEqual([{ Name: 'Acme' }]);
+    });
+
+    it('strips stale single-table fields (columns, rows, metadata) when transitioning to multi-table', () => {
+        const agent = new TestableQueryBuilderAgent();
+        const prev = {
+            source: 'query',
+            title: 'Top 10 Customers',
+            columns: [{ field: 'Name' }],
+            rows: [{ Name: 'Acme' }],
+            metadata: { sql: 'SELECT Name FROM vwCustomers' },
+        };
+        const next = {
+            title: 'Executive Dashboard',
+            tables: [{ name: 't1', rows: [] }],
+        };
+        const merged = agent.normalize({ ...prev, ...next }, next);
+
+        expect(merged.columns).toBeUndefined();
+        expect(merged.rows).toBeUndefined();
+        expect(merged.metadata).toBeUndefined();
+        expect(merged.tables).toEqual([{ name: 't1', rows: [] }]);
+    });
+});
+
+describe('AgentRunner.ProcessAgentArtifacts — payloadArtifactTypeID precedence', () => {
+    it('prefers agentResult.payloadArtifactTypeID over parent agent.DefaultArtifactTypeID when creating an artifact header', async () => {
+        engineAgents[0].DefaultArtifactTypeID = 'type-component-parent';
+        const artifact = makeEntity('art-delegated');
+        const version = makeEntity('ver-1');
+        const { provider } = makeProvider((name) => (name === 'MJ: Artifacts' ? artifact : version));
+        const runner = new TestableAgentRunner(provider);
+
+        await runner.ProcessAgentArtifacts(
+            makeResult({
+                payloadArtifactTypeID: 'type-data-child',
+                artifactDirective: {
+                    behavior: 'create-new',
+                    name: 'Top 10 Customers',
+                },
+            }),
+            'detail-1',
+            undefined,
+            contextUser,
+            provider
+        );
+
+        expect(artifact.TypeID).toBe('type-data-child');
+        expect(artifact.Name).toBe('Top 10 Customers');
+    });
+
+    it('falls back to parent agent.DefaultArtifactTypeID when agentResult.payloadArtifactTypeID is undefined', async () => {
+        engineAgents[0].DefaultArtifactTypeID = 'type-component-parent';
+        const artifact = makeEntity('art-parent');
+        const version = makeEntity('ver-1');
+        const { provider } = makeProvider((name) => (name === 'MJ: Artifacts' ? artifact : version));
+        const runner = new TestableAgentRunner(provider);
+
+        await runner.ProcessAgentArtifacts(
+            makeResult(),
+            'detail-1',
+            undefined,
+            contextUser,
+            provider
+        );
+
+        expect(artifact.TypeID).toBe('type-component-parent');
+    });
+
+    it('skips Execute Related Sub-Agent steps in the step-scan fallback when parent has no DefaultArtifactTypeID', async () => {
+        engineAgents[0].DefaultArtifactTypeID = undefined;
+        engineAgents.push({
+            ID: '88888888-8888-4888-8888-888888888888',
+            Name: 'Related Helper',
+            ArtifactCreationMode: 'Always',
+            DefaultArtifactTypeID: 'type-related-should-not-win',
+        });
+
+        const artifact = makeEntity('art-step-scan');
+        const version = makeEntity('ver-step-scan');
+        const { provider } = makeProvider((name) => (name === 'MJ: Artifacts' ? artifact : version));
+        const runner = new TestableAgentRunner(provider);
+
+        const baseRes = makeResult();
+        const resultWithRelatedStep: ExecuteAgentResult<Record<string, unknown>> = {
+            ...baseRes,
+            agentRun: {
+                ...baseRes.agentRun,
+                Steps: [
+                    {
+                        StepType: 'Sub-Agent',
+                        StepName: 'Execute Related Sub-Agent: Related Helper',
+                        Success: true,
+                        TargetID: '88888888-8888-4888-8888-888888888888',
+                    },
+                ],
+            } as unknown as MJAIAgentRunEntityExtended,
+        };
+
+        await runner.ProcessAgentArtifacts(
+            resultWithRelatedStep,
+            'detail-1',
+            undefined,
+            contextUser,
+            provider
+        );
+
+        // Related step skipped -> falls back to JSON_TYPE_ID rather than 'type-related-should-not-win'
+        expect(artifact.TypeID).toBe(JSON_TYPE_ID);
+    });
+});
+
+describe('BaseAgent — delegated sub-agent artifactDirective and payloadArtifactTypeID propagation', () => {
+    class DelegatingTestAgent extends BaseAgent {
+        public SimulatedSubAgentResult!: ExecuteAgentResult<Record<string, unknown>>;
+
+        public attachParentAgentRun(runId = 'parent-run-1', agentId = 'parent-router-id'): MJAIAgentRunEntityExtended {
+            const run = {
+                ID: runId,
+                AgentID: agentId,
+                Status: 'Running',
+                Success: false,
+                Message: null as string | null | undefined,
+                FinalStep: null as string | null | undefined,
+                FinalPayload: null as string | null | undefined,
+                FinalPayloadObject: null as unknown,
+                ErrorMessage: null as string | null | undefined,
+                CompletedAt: null as Date | null | undefined,
+                Steps: [],
+                Save: vi.fn(async () => true),
+            } as unknown as MJAIAgentRunEntityExtended;
+            this._agentRun = run;
+            return run;
+        }
+
+        protected override async createStepEntity(
+            options: { stepName?: string; inputData?: unknown }
+        ): Promise<never> {
+            return {
+                ID: 'step-sub-1',
+                StepName: options?.stepName ?? 'Execute Sub-Agent',
+                InputData: options?.inputData ? JSON.stringify(options.inputData) : null,
+                Save: vi.fn(async () => true),
+            } as unknown as never;
+        }
+
+        protected override async finalizeStepEntity(): Promise<void> {
+            // no-op in unit test
+        }
+
+        protected override cachePriorTurnToolResults(): void {
+            // no-op in unit test
+        }
+
+        protected override startPostTurnCompaction(): void {
+            // no-op in unit test
+        }
+
+        public override async ExecuteSubAgent(): Promise<ExecuteAgentResult<Record<string, unknown>>> {
+            return this.SimulatedSubAgentResult;
+        }
+
+        public async runChildSubAgentStep(
+            params: ExecuteAgentParams,
+            previousDecision: BaseAgentNextStep<Record<string, unknown>>,
+            subAgentEntity: MJAIAgentEntityExtended
+        ): Promise<BaseAgentNextStep<Record<string, unknown>>> {
+            if (!this._agentRun) {
+                this.attachParentAgentRun();
+            }
+            return await this.executeChildSubAgentStep(
+                params,
+                previousDecision,
+                undefined,
+                { rows: [{ id: 1 }] },
+                0,
+                subAgentEntity
+            );
+        }
+
+        public async runRelatedSubAgentStep(
+            params: ExecuteAgentParams,
+            previousDecision: BaseAgentNextStep<Record<string, unknown>>,
+            subAgentEntity: MJAIAgentEntityExtended,
+            relationship: MJAIAgentRelationshipEntity
+        ): Promise<BaseAgentNextStep<Record<string, unknown>>> {
+            if (!this._agentRun) {
+                this.attachParentAgentRun();
+            }
+            return await this.executeRelatedSubAgentStep(
+                params,
+                previousDecision,
+                subAgentEntity,
+                relationship,
+                undefined,
+                undefined,
+                0
+            );
+        }
+
+        public async finalizeParentRun(
+            finalStep: BaseAgentNextStep<Record<string, unknown>>,
+            payload?: Record<string, unknown>
+        ): Promise<ExecuteAgentResult<Record<string, unknown>>> {
+            if (!this._agentRun) {
+                this.attachParentAgentRun();
+            }
+            return await this.finalizeAgentRun(finalStep, payload, contextUser);
+        }
+    }
+
+    const parentAgentEntity = {
+        ID: 'parent-router-id',
+        Name: 'Skip',
+        DefaultArtifactTypeID: 'type-component',
+        PayloadDownstreamPaths: '*',
+        PayloadUpstreamPaths: '*',
+    } as unknown as MJAIAgentEntityExtended;
+
+    const childAgentEntity = {
+        ID: 'child-specialist-id',
+        Name: 'Data Answerer',
+        Status: 'Active',
+        ParentID: 'parent-router-id',
+        DefaultArtifactTypeID: 'type-json-data',
+        PayloadDownstreamPaths: '*',
+        PayloadUpstreamPaths: '*',
+    } as unknown as MJAIAgentEntityExtended;
+
+    it('propagates child message, artifactDirective, and DefaultArtifactTypeID through finalizeAgentRun -> ExecuteAgentResult -> ProcessAgentArtifacts when terminateAfter is true', async () => {
+        const agent = new DelegatingTestAgent();
+        agent.SimulatedSubAgentResult = {
+            success: true,
+            payload: { rows: [{ id: 1 }] },
+            artifactDirective: {
+                behavior: 'create-new',
+                name: 'Revenue By Region',
+                description: 'Regional breakdown',
+            },
+            agentRun: {
+                ID: 'child-run-1',
+                Status: 'Completed',
+                FinalStep: 'Success',
+                Message: 'Total revenue across 4 regions is $1.2M.',
+                Steps: [],
+            } as unknown as MJAIAgentRunEntityExtended,
+        };
+
+        const params: ExecuteAgentParams = {
+            agent: parentAgentEntity,
+            conversationMessages: [],
+            contextUser,
+        };
+
+        const stepResult = await agent.runChildSubAgentStep(
+            params,
+            {
+                step: 'Sub-Agent',
+                terminate: false,
+                newPayload: {},
+                previousPayload: {},
+                subAgent: {
+                    name: 'Data Answerer',
+                    message: 'Get revenue by region',
+                    terminateAfter: true,
+                },
+            },
+            childAgentEntity
+        );
+
+        expect(stepResult.terminate).toBe(true);
+        expect(stepResult.message).toBe('Total revenue across 4 regions is $1.2M.');
+        expect(stepResult.artifactDirective).toEqual({
+            behavior: 'create-new',
+            name: 'Revenue By Region',
+            description: 'Regional breakdown',
+        });
+        expect(stepResult.payloadArtifactTypeID).toBe('type-json-data');
+
+        // Verify BaseAgent.finalizeAgentRun copies payloadArtifactTypeID, artifactDirective, and Message onto ExecuteAgentResult
+        const finalResult = await agent.finalizeParentRun(stepResult, stepResult.newPayload);
+        expect(finalResult.payloadArtifactTypeID).toBe('type-json-data');
+        expect(finalResult.artifactDirective?.name).toBe('Revenue By Region');
+        expect(finalResult.agentRun.Message).toBe('Total revenue across 4 regions is $1.2M.');
+
+        // Verify ProcessAgentArtifacts consumes that ExecuteAgentResult over parent's DefaultArtifactTypeID
+        engineAgents[0].ID = 'parent-router-id';
+        engineAgents[0].DefaultArtifactTypeID = 'type-component';
+        const artifact = makeEntity('art-e2e');
+        const version = makeEntity('ver-e2e');
+        const { provider } = makeProvider((name) => (name === 'MJ: Artifacts' ? artifact : version));
+        const runner = new TestableAgentRunner(provider);
+
+        await runner.ProcessAgentArtifacts(finalResult, 'detail-1', undefined, contextUser, provider);
+        expect(artifact.TypeID).toBe('type-json-data');
+        expect(artifact.Name).toBe('Revenue By Region');
+    });
+
+    it('drops child message, artifactDirective, and payloadArtifactTypeID when terminateAfter is false (and ignores DefaultArtifactTypeID when child ArtifactCreationMode is Never)', async () => {
+        const agent = new DelegatingTestAgent();
+        agent.SimulatedSubAgentResult = {
+            success: true,
+            payload: { rows: [{ id: 1 }] },
+            artifactDirective: {
+                behavior: 'create-new',
+                name: 'Intermediate Query',
+            },
+            payloadArtifactTypeID: 'type-json-data',
+            agentRun: {
+                ID: 'child-run-2',
+                Status: 'Completed',
+                FinalStep: 'Success',
+                Message: 'Fetched 42 intermediate rows.',
+                Steps: [],
+            } as unknown as MJAIAgentRunEntityExtended,
+        };
+
+        const params: ExecuteAgentParams = {
+            agent: parentAgentEntity,
+            conversationMessages: [],
+            contextUser,
+        };
+
+        const stepResult = await agent.runChildSubAgentStep(
+            params,
+            {
+                step: 'Sub-Agent',
+                terminate: false,
+                newPayload: {},
+                previousPayload: {},
+                subAgent: {
+                    name: 'Data Answerer',
+                    message: 'Fetch intermediate rows',
+                    terminateAfter: false,
+                },
+            },
+            childAgentEntity
+        );
+
+        expect(stepResult.terminate).toBe(false);
+        expect(stepResult.message).toBeUndefined();
+        expect(stepResult.artifactDirective).toBeUndefined();
+        expect(stepResult.payloadArtifactTypeID).toBeUndefined();
+
+        // Child with ArtifactCreationMode === 'Never' does not lend its DefaultArtifactTypeID to the parent
+        const neverChildEntity = {
+            ...childAgentEntity,
+            ArtifactCreationMode: 'Never',
+            DefaultArtifactTypeID: 'type-never-child',
+        } as unknown as MJAIAgentEntityExtended;
+        agent.SimulatedSubAgentResult = {
+            success: true,
+            payload: { rows: [{ id: 1 }] },
+            agentRun: {
+                ID: 'child-run-never',
+                Status: 'Completed',
+                FinalStep: 'Success',
+                Message: 'Done silently.',
+                Steps: [],
+            } as unknown as MJAIAgentRunEntityExtended,
+        };
+        const neverStep = await agent.runChildSubAgentStep(
+            params,
+            {
+                step: 'Sub-Agent',
+                terminate: false,
+                newPayload: {},
+                previousPayload: {},
+                subAgent: { name: 'Data Answerer', message: 'Run', terminateAfter: true },
+            },
+            neverChildEntity
+        );
+        expect(neverStep.payloadArtifactTypeID).toBeUndefined();
+    });
+
+    it('captures _lastSubAgentPayloadArtifactTypeID and _lastSubAgentArtifactDirective on folded 1-node taskGraph steps and surfaces them via finalizeAgentRun', async () => {
+        const agent = new DelegatingTestAgent();
+        agent.SimulatedSubAgentResult = {
+            success: true,
+            payload: { report: 'Q4 Analysis' },
+            artifactDirective: {
+                behavior: 'create-new',
+                name: 'Q4 Analysis Report',
+            },
+            agentRun: {
+                ID: 'folded-run-1',
+                Status: 'Completed',
+                FinalStep: 'Success',
+                Message: 'Completed Q4 analysis.',
+                Steps: [],
+            } as unknown as MJAIAgentRunEntityExtended,
+        };
+
+        const params: ExecuteAgentParams = {
+            agent: parentAgentEntity,
+            conversationMessages: [],
+            contextUser,
+        };
+
+        // Folded 1-node task graph runs with terminateAfter=false so the orchestrator synthesizes its reply on the next turn
+        const foldedStep = await agent.runChildSubAgentStep(
+            params,
+            {
+                step: 'Sub-Agent',
+                terminate: false,
+                newPayload: {},
+                previousPayload: {},
+                taskGraph: {
+                    folded: true,
+                    workflowName: 'Q4 Analysis',
+                    tasks: [{ id: 't1', name: 'Analyze', agentName: 'Data Answerer' }],
+                },
+                subAgent: {
+                    name: 'Data Answerer',
+                    message: 'Run Q4 analysis',
+                    terminateAfter: false,
+                },
+            },
+            childAgentEntity
+        );
+
+        expect(foldedStep.terminate).toBe(false);
+        expect(foldedStep.payloadArtifactTypeID).toBeUndefined();
+
+        // Next turn ends with parent's own Success step (no payloadArtifactTypeID or artifactDirective on finalStep)
+        const finalResult = await agent.finalizeParentRun(
+            {
+                step: 'Success',
+                terminate: true,
+                message: 'Here is your Q4 analysis.',
+                newPayload: { report: 'Q4 Analysis' },
+                previousPayload: {},
+            },
+            { report: 'Q4 Analysis' }
+        );
+
+        expect(finalResult.payloadArtifactTypeID).toBe('type-json-data');
+        expect(finalResult.artifactDirective?.name).toBe('Q4 Analysis Report');
+    });
+
+    it('propagates payloadArtifactTypeID, artifactDirective, and launch message when a child sub-agent parks on a durable workflow (Status === Paused)', async () => {
+        const agent = new DelegatingTestAgent();
+        agent.SimulatedSubAgentResult = {
+            success: true,
+            payload: { workflowId: 'wf-99' },
+            artifactDirective: {
+                behavior: 'create-new',
+                name: 'Workflow Plan',
+            },
+            agentRun: {
+                ID: 'parked-child-run',
+                Status: 'Paused',
+                FinalStep: 'Success',
+                Message: 'Started durable workflow wf-99.',
+                Steps: [],
+            } as unknown as MJAIAgentRunEntityExtended,
+        };
+
+        const params: ExecuteAgentParams = {
+            agent: parentAgentEntity,
+            conversationMessages: [],
+            contextUser,
+        };
+
+        const parkedStep = await agent.runChildSubAgentStep(
+            params,
+            {
+                step: 'Sub-Agent',
+                terminate: false,
+                newPayload: {},
+                previousPayload: {},
+                subAgent: {
+                    name: 'Data Answerer',
+                    message: 'Launch workflow',
+                    terminateAfter: false,
+                },
+            },
+            childAgentEntity
+        );
+
+        expect(parkedStep.terminate).toBe(true);
+        expect(parkedStep.message).toBe('Started durable workflow wf-99.');
+        expect(parkedStep.payloadArtifactTypeID).toBe('type-json-data');
+        expect(parkedStep.artifactDirective?.name).toBe('Workflow Plan');
+
+        const finalResult = await agent.finalizeParentRun(parkedStep, parkedStep.newPayload);
+        expect(finalResult.payloadArtifactTypeID).toBe('type-json-data');
+    });
+
+    it('propagates payloadArtifactTypeID on propagated child Chat steps, and clears it on Consult rounds and Retry remappings', async () => {
+        const chatChildResult: ExecuteAgentResult<Record<string, unknown>> = {
+            success: true,
+            payload: { draft: true },
+            artifactDirective: {
+                behavior: 'create-new',
+                name: 'Clarification Draft',
+            },
+            agentRun: {
+                ID: 'chat-child-run',
+                Status: 'AwaitingFeedback',
+                FinalStep: 'Chat',
+                Message: 'Which fiscal year would you like?',
+                Steps: [],
+            } as unknown as MJAIAgentRunEntityExtended,
+        };
+
+        const baseDecision: BaseAgentNextStep<Record<string, unknown>> = {
+            step: 'Sub-Agent',
+            terminate: false,
+            newPayload: {},
+            previousPayload: {},
+            subAgent: {
+                name: 'Data Answerer',
+                message: 'Ask if ambiguous',
+                terminateAfter: false,
+            },
+        };
+
+        // 1. Default propagate (ChatHandlingOption: null) -> step === 'Chat', carries child's payloadArtifactTypeID
+        const propagateAgent = new DelegatingTestAgent();
+        propagateAgent.SimulatedSubAgentResult = chatChildResult;
+        const propagated = await propagateAgent.runChildSubAgentStep(
+            {
+                agent: { ...parentAgentEntity, ChatHandlingOption: null } as unknown as MJAIAgentEntityExtended,
+                conversationMessages: [],
+                contextUser,
+            },
+            baseDecision,
+            childAgentEntity
+        );
+        expect(propagated.step).toBe('Chat');
+        expect(propagated.terminate).toBe(true);
+        expect(propagated.payloadArtifactTypeID).toBe('type-json-data');
+        expect(propagated.artifactDirective?.name).toBe('Clarification Draft');
+
+        // 2. Active Consult round (ChatHandlingOption: 'Consult') -> clears both directive and payloadArtifactTypeID
+        const consultAgent = new DelegatingTestAgent();
+        consultAgent.SimulatedSubAgentResult = chatChildResult;
+        const consulted = await consultAgent.runChildSubAgentStep(
+            {
+                agent: {
+                    ...parentAgentEntity,
+                    ChatHandlingOption: 'Consult',
+                    MaxSubAgentConsultRounds: 3,
+                } as unknown as MJAIAgentEntityExtended,
+                conversationMessages: [],
+                contextUser,
+            },
+            baseDecision,
+            childAgentEntity
+        );
+        expect(consulted.terminate).toBe(false);
+        expect(consulted.artifactDirective).toBeUndefined();
+        expect(consulted.payloadArtifactTypeID).toBeUndefined();
+
+        // 3. Remapped to Retry (ChatHandlingOption: 'Retry') -> resets both directive and payloadArtifactTypeID
+        const retryAgent = new DelegatingTestAgent();
+        retryAgent.SimulatedSubAgentResult = chatChildResult;
+        const retried = await retryAgent.runChildSubAgentStep(
+            {
+                agent: { ...parentAgentEntity, ChatHandlingOption: 'Retry' } as unknown as MJAIAgentEntityExtended,
+                conversationMessages: [],
+                contextUser,
+            },
+            baseDecision,
+            childAgentEntity
+        );
+        expect(retried.step).toBe('Retry');
+        expect(retried.terminate).toBe(false);
+        expect(retried.artifactDirective).toBeUndefined();
+        expect(retried.payloadArtifactTypeID).toBeUndefined();
+    });
+
+    it('does NOT stamp related sub-agent artifact type on AgentRelationships delegations (normal, parked, or Chat), while still propagating terminating message', async () => {
+        const relatedAgentEntity = {
+            ID: 'related-specialist-id',
+            Name: 'Related Specialist',
+            Status: 'Active',
+            ParentID: null,
+            DefaultArtifactTypeID: 'type-related-child',
+        } as unknown as MJAIAgentEntityExtended;
+
+        const relationship = {
+            ID: 'rel-1',
+            AgentID: 'parent-router-id',
+            SubAgentID: 'related-specialist-id',
+            Status: 'Active',
+            SubAgentInputMapping: null,
+            SubAgentOutputMapping: null,
+            SubAgentContextPaths: null,
+            ChatHandlingOption: null,
+        } as unknown as MJAIAgentRelationshipEntity;
+
+        const params: ExecuteAgentParams = {
+            agent: parentAgentEntity,
+            conversationMessages: [],
+            contextUser,
+        };
+
+        // 1. Terminating related sub-agent (even when subAgentResult.payloadArtifactTypeID is set!)
+        const agent = new DelegatingTestAgent();
+        agent.SimulatedSubAgentResult = {
+            success: true,
+            payload: { childField: 'abc' },
+            payloadArtifactTypeID: 'type-related-child',
+            artifactDirective: {
+                behavior: 'create-new',
+                name: 'Parent Artifact With Related Assist',
+            },
+            agentRun: {
+                ID: 'rel-run-1',
+                Status: 'Completed',
+                FinalStep: 'Success',
+                Message: 'Related specialist finished analysis.',
+                Steps: [],
+            } as unknown as MJAIAgentRunEntityExtended,
+        };
+
+        const relatedStep = await agent.runRelatedSubAgentStep(
+            params,
+            {
+                step: 'Sub-Agent',
+                terminate: false,
+                newPayload: { parentShape: true },
+                previousPayload: { parentShape: true },
+                subAgent: {
+                    name: 'Related Specialist',
+                    message: 'Assist parent',
+                    terminateAfter: true,
+                },
+            },
+            relatedAgentEntity,
+            relationship
+        );
+
+        expect(relatedStep.terminate).toBe(true);
+        expect(relatedStep.message).toBe('Related specialist finished analysis.');
+        expect(relatedStep.newPayload).toEqual({ parentShape: true });
+        expect(relatedStep.payloadArtifactTypeID).toBeUndefined();
+
+        // 2. Parked related sub-agent (Status === 'Paused')
+        const parkedAgent = new DelegatingTestAgent();
+        parkedAgent.SimulatedSubAgentResult = {
+            success: true,
+            payload: { childField: 'abc' },
+            payloadArtifactTypeID: 'type-related-child',
+            agentRun: {
+                ID: 'rel-run-parked',
+                Status: 'Paused',
+                FinalStep: 'Success',
+                Message: 'Related workflow started.',
+                Steps: [],
+            } as unknown as MJAIAgentRunEntityExtended,
+        };
+        const relatedParked = await parkedAgent.runRelatedSubAgentStep(
+            params,
+            {
+                step: 'Sub-Agent',
+                terminate: false,
+                newPayload: { parentShape: true },
+                previousPayload: { parentShape: true },
+                subAgent: { name: 'Related Specialist', message: 'Launch', terminateAfter: false },
+            },
+            relatedAgentEntity,
+            relationship
+        );
+        expect(relatedParked.terminate).toBe(true);
+        expect(relatedParked.payloadArtifactTypeID).toBeUndefined();
+
+        // 3. Propagated Chat on related sub-agent
+        const chatAgent = new DelegatingTestAgent();
+        chatAgent.SimulatedSubAgentResult = {
+            success: true,
+            payload: { childField: 'abc' },
+            payloadArtifactTypeID: 'type-related-child',
+            agentRun: {
+                ID: 'rel-run-chat',
+                Status: 'AwaitingFeedback',
+                FinalStep: 'Chat',
+                Message: 'Need clarification from user.',
+                Steps: [],
+            } as unknown as MJAIAgentRunEntityExtended,
+        };
+        const relatedChat = await chatAgent.runRelatedSubAgentStep(
+            params,
+            {
+                step: 'Sub-Agent',
+                terminate: false,
+                newPayload: { parentShape: true },
+                previousPayload: { parentShape: true },
+                subAgent: { name: 'Related Specialist', message: 'Clarify', terminateAfter: false },
+            },
+            relatedAgentEntity,
+            relationship
+        );
+        expect(relatedChat.step).toBe('Chat');
+        expect(relatedChat.payloadArtifactTypeID).toBeUndefined();
+    });
+});
+
+
+
+
+/** Payload versions carry their artifact type's concrete ContentType so preview plugins can match it (#4597). */
+describe('AgentRunner.ProcessAgentArtifacts — payload version MimeType', () => {
+    it('stamps application/json on a new artifact of the default JSON type', async () => {
+        const artifact = makeEntity('art-1');
+        const version = makeEntity('ver-1');
+        const { provider } = makeProvider((name) => (name === 'MJ: Artifacts' ? artifact : version));
+        const runner = new TestableAgentRunner(provider);
+
+        await runner.ProcessAgentArtifacts(makeResult(), undefined, undefined, contextUser, provider);
+
+        expect(artifact.TypeID).toBe(JSON_TYPE_ID);
+        expect(version.MimeType).toBe('application/json');
+    });
+
+    it('leaves MimeType null when the artifact type is a wildcard (Image → image/*)', async () => {
+        engineAgents[0].DefaultArtifactTypeID = IMAGE_TYPE_ID;
+        const artifact = makeEntity('art-1');
+        const version = makeEntity('ver-1');
+        const { provider } = makeProvider((name) => (name === 'MJ: Artifacts' ? artifact : version));
+        const runner = new TestableAgentRunner(provider);
+
+        await runner.ProcessAgentArtifacts(makeResult(), undefined, undefined, contextUser, provider);
+
+        expect(artifact.TypeID).toBe(IMAGE_TYPE_ID);
+        expect(version.MimeType).toBeNull();
+    });
+
+    it("gives a new version of an existing artifact that artifact's type, not the agent default", async () => {
+        const version = makeEntity('ver-5');
+        const { provider } = makeProvider(() => version);
+        const runner = new TestableAgentRunner(provider);
+        runner.MaxVersion = 4;
+        runner.ExistingArtifactTypes.set(SOURCE_UUID, HTML_TYPE_ID);
+
+        await runner.ProcessAgentArtifacts(makeResult(), undefined, SOURCE_UUID, contextUser, provider);
+
+        expect(version.MimeType).toBe('text/html');
+    });
+
+    it('leaves MimeType null when the existing artifact type cannot be read', async () => {
+        const version = makeEntity('ver-5');
+        const { provider } = makeProvider(() => version);
+        const runner = new TestableAgentRunner(provider);
+        runner.MaxVersion = 4;
+
+        const info = await runner.ProcessAgentArtifacts(makeResult(), undefined, SOURCE_UUID, contextUser, provider);
+
+        expect(info?.versionNumber).toBe(5);
+        expect(version.MimeType).toBeNull();
+    });
+
+    it('PayloadVersionMimeType keeps concrete types and drops wildcards and blanks', () => {
+        expect(AgentRunner.PayloadVersionMimeType('application/json')).toBe('application/json');
+        expect(AgentRunner.PayloadVersionMimeType(' text/html ')).toBe('text/html');
+        expect(AgentRunner.PayloadVersionMimeType('image/*')).toBeNull();
+        expect(AgentRunner.PayloadVersionMimeType('*/*')).toBeNull();
+        expect(AgentRunner.PayloadVersionMimeType('')).toBeNull();
+        expect(AgentRunner.PayloadVersionMimeType(null)).toBeNull();
+        expect(AgentRunner.PayloadVersionMimeType(undefined)).toBeNull();
+    });
+});
+
+describe('AgentRunner.ProcessAgentArtifacts — touchedArtifacts clobber guard', () => {
+    beforeEach(() => {
+        engineAgents.length = 0;
+        engineAgents.push({ ID: 'agent-1', Name: 'Sage', ArtifactCreationMode: 'Always' });
+    });
+
+    it('skips versioning an artifact already persisted via governed artifact tools in touchedArtifacts', async () => {
+        const version = makeEntity('ver-should-not-save');
+        const { provider } = makeProvider(() => version, world({
+            owners: new Map([[SOURCE_UUID.toLowerCase(), '11111111-0001-4000-8000-000000000001']]),
+        }));
+        const runner = new TestableAgentRunner(provider);
+        runner.MaxVersion = 5;
+
+        const info = await runner.ProcessAgentArtifacts(
+            makeResult({
+                payload: { D: { sheets: [] }, E: { blocks: [] } },
+                artifactDirective: {
+                    behavior: 'version-source',
+                    targetArtifactId: SOURCE_UUID,
+                    description: 'Re-added embed',
+                },
+                touchedArtifacts: [
+                    {
+                        ArtifactID: SOURCE_UUID,
+                        ArtifactVersionID: 'ver-5',
+                        VersionNumber: 5,
+                        Name: 'The Silk Road',
+                        ArtifactTypeName: 'Markdown Document',
+                        Operation: 'mutated',
+                    },
+                ],
+            }),
+            'detail-1',
+            undefined,
+            contextUser,
+            provider,
+        );
+
+        expect(info).toBeUndefined();
+        expect(version.Save).not.toHaveBeenCalled();
+    });
+
+    it('skips creating a legacy payload artifact when governed artifact tools already persisted touchedArtifacts', async () => {
+        const artifact = makeEntity('art-should-not-create');
+        const version = makeEntity('ver-should-not-create');
+        const { provider } = makeProvider((name) => (name === 'MJ: Artifacts' ? artifact : version));
+        const runner = new TestableAgentRunner(provider);
+
+        const info = await runner.ProcessAgentArtifacts(
+            makeResult({
+                payload: { D: { sheets: [] }, E: { blocks: [] } },
+                touchedArtifacts: [
+                    {
+                        ArtifactID: SOURCE_UUID,
+                        ArtifactVersionID: 'ver-5',
+                        VersionNumber: 5,
+                        Name: 'The Silk Road',
+                        ArtifactTypeName: 'Markdown Document',
+                        Operation: 'mutated',
+                    },
+                ],
+            }),
+            'detail-1',
+            undefined,
+            contextUser,
+            provider,
+        );
+
+        expect(info).toBeUndefined();
+        expect(artifact.Save).not.toHaveBeenCalled();
+        expect(version.Save).not.toHaveBeenCalled();
+    });
+
+    it('still honors explicit create-new deliverable directive even when touchedArtifacts is non-empty', async () => {
+        const artifact = makeEntity('art-new-deliverable');
+        const version = makeEntity('ver-new-deliverable');
+        const { provider } = makeProvider((name) => (name === 'MJ: Artifacts' ? artifact : version));
+        const runner = new TestableAgentRunner(provider);
+
+        const info = await runner.ProcessAgentArtifacts(
+            makeResult({
+                payload: { summary: 'Final analysis' },
+                artifactDirective: {
+                    behavior: 'create-new',
+                    name: 'Trade Summary',
+                },
+                touchedArtifacts: [
+                    {
+                        ArtifactID: SOURCE_UUID,
+                        ArtifactVersionID: 'ver-5',
+                        VersionNumber: 5,
+                        Name: 'The Silk Road',
+                        ArtifactTypeName: 'Markdown Document',
+                        Operation: 'mutated',
+                    },
+                ],
+            }),
+            'detail-1',
+            undefined,
+            contextUser,
+            provider,
+        );
+
+        expect(info?.artifactId).toBe('art-new-deliverable');
+        expect(version.Save).toHaveBeenCalledTimes(1);
     });
 });

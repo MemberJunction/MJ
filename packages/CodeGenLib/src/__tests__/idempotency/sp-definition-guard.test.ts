@@ -24,14 +24,10 @@ describe('T16 — Proc Definition Contract and Drift Guard (C1, §0.3, D16)', ()
       }
       walkDir(migrationsDir);
 
-      // Filter to migrations that define spUpdateExistingEntityFieldsFromSchema
-      const matching = migrationFiles.filter(filePath => {
-         const content = fs.readFileSync(filePath, 'utf8');
-         return (
-            content.includes('spUpdateExistingEntityFieldsFromSchema') &&
-            /CREATE\s+(OR\s+ALTER\s+)?PROC/i.test(content)
-         );
-      });
+      // Filter to migrations that define spUpdateExistingEntityFieldsFromSchema. The CREATE must name
+      // this proc: a CodeGen migration that only EXECs it while creating other procs is not a definition.
+      const definesProc = /CREATE\s+(OR\s+ALTER\s+)?PROC(EDURE)?\s+[^\s(]*spUpdateExistingEntityFieldsFromSchema\b/i;
+      const matching = migrationFiles.filter(filePath => definesProc.test(fs.readFileSync(filePath, 'utf8')));
 
       expect(matching.length).toBeGreaterThan(0);
 

@@ -1,7 +1,34 @@
 import { configInfo } from '../config.js';
 import { AuthProviderConfig, LogError, LogStatus, LogStatusEx, UserInfo, type IMetadataProvider } from '@memberjunction/core';
-import { AuthProviderFactory } from '@memberjunction/auth-providers';
+import { AuthProviderFactory, LocalDevProvider } from '@memberjunction/auth-providers';
 import { AuthProviderEngine } from './AuthProviderEngine.js';
+
+/**
+ * Returns true when local development auth is enabled via `MJ_DEV_AUTH_ENABLED=true`
+ * or `configInfo.devAuth?.enabled === true`.
+ */
+export function IsLocalDevAuthEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const rawEnv = env.MJ_DEV_AUTH_ENABLED?.trim().toLowerCase();
+  if (rawEnv === 'true' || rawEnv === '1') {
+    return true;
+  }
+  if (rawEnv === 'false' || rawEnv === '0') {
+    return false;
+  }
+  return configInfo?.devAuth?.enabled === true;
+}
+
+/**
+ * Enforces the production safety invariant: throws a fatal error if local dev auth
+ * is enabled while `NODE_ENV === 'production'`.
+ */
+export function AssertLocalDevAuthAllowed(env: NodeJS.ProcessEnv = process.env): void {
+  if (IsLocalDevAuthEnabled(env) && env.NODE_ENV?.trim().toLowerCase() === 'production') {
+    throw new Error(
+      '[SECURITY] Local dev auth (MJ_DEV_AUTH_ENABLED) is strictly forbidden when NODE_ENV=production. Refusing to start.'
+    );
+  }
+}
 
 /**
  * Initialize authentication providers from configuration.
@@ -15,6 +42,8 @@ import { AuthProviderEngine } from './AuthProviderEngine.js';
  * connection and a system user exist.
  */
 export function InitializeAuthProviders(): void {
+  AssertLocalDevAuthAllowed();
+
   const factory = AuthProviderFactory.Instance;
 
   // Clear any existing providers
@@ -37,6 +66,19 @@ export function InitializeAuthProviders(): void {
         message: `[Auth] Configured ${discovered.length} provider(s) from environment variables: ${discovered.map((p) => p.name).join(', ')}`,
         verboseOnly: true
       });
+    }
+  }
+
+  if (IsLocalDevAuthEnabled()) {
+    configInfo.authProviders = configInfo.authProviders ?? [];
+    if (!configInfo.authProviders.some((p) => p.type === 'local' || p.name === 'local')) {
+      const localConfig = LocalDevProvider.ConfigFromEnvironment({
+        ...process.env,
+        MJ_DEV_AUTH_ENABLED: 'true',
+      });
+      if (localConfig) {
+        configInfo.authProviders.push(localConfig);
+      }
     }
   }
 

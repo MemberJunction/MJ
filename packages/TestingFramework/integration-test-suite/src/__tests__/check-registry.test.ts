@@ -5,12 +5,14 @@ import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testin
 // file sees the complete registry (the explicit imports below cover only the hand-pinned
 // table's bundles — the barrel covers all of them).
 import '../index';
+import { SKIP_ALLOWLIST } from '../skip-allowlist';
 import { ServerCacheChecks } from '../checks/server-cache.checks';
 import { CacheImmutabilityChecks } from '../checks/cache-immutability.checks';
 import { ClientCacheChecks } from '../checks/client-cache.checks';
 import { RunQueryCacheChecks } from '../checks/runquery-cache.checks';
 import { RlsIsolationChecks, RlsIsolationClientChecks } from '../checks/rls-isolation.checks';
 import { KeyRowFilterChecks } from '../checks/keyrowfilter.checks'; // must be imported AFTER rls-isolation.checks: registry order = RLS* then KF*
+import { RoleRowFilterChecks } from '../checks/rolerowfilter.checks'; // after keyrowfilter.checks: registry order = RLS*, KF*, then RF*
 import { RecordProcessChecks } from '../checks/record-process.checks';
 import { RecordProcessFacadeChecks } from '../checks/record-process-facade.checks';
 import { ScheduledJobsChecks } from '../checks/scheduled-jobs.checks';
@@ -18,18 +20,31 @@ import { FieldRulesBulkUpdateChecks } from '../checks/field-rules-bulk-update.ch
 import { RemoteOperationsChecks } from '../checks/remote-operations.checks';
 import { AiSkillsChecks } from '../checks/ai-skills.checks';
 import { ApiKeysChecks } from '../checks/api-keys.checks';
+import { DiagnosticsChecks } from '../checks/diagnostics.checks';
 import { PredictiveStudioChecks } from '../checks/predictive-studio.checks';
+import { PredictiveShadowDriftChecks } from '../checks/predictive-shadow-drift.checks';
 import { RemoteOpWireProgressChecks } from '../checks/remote-op-wire-progress.checks';
 import { PromptRunnerChecks } from '../checks/prompt-runner.checks';
+import { AiVendorEffortChecks } from '../checks/ai-vendor-effort.checks';
+import { NativeToolCallingLiveChecks } from '../checks/native-tool-calling-live.checks';
+import { NativeToolLoopChecks } from '../checks/native-tool-loop.checks';
+import { NativeToolLoopLiveChecks } from '../checks/native-tool-loop-live.checks';
 import { ConcurrentChecks } from '../checks/concurrent.checks';
 import { AgentRunnerChecks } from '../checks/agent-runner.checks';
 import { RemoteOpAiAuthoringChecks } from '../checks/remote-op-ai-authoring.checks';
 import { ConversationCompactionChecks } from '../checks/conversation-compaction.checks';
 import { TrailingRuntimeStateChecks } from '../checks/trailing-runtime-state.checks';
 import { AgentDecisionsSwitchChecks } from '../checks/agent-decisions-switch.checks';
+import { AgentPromptCancellationChecks } from '../checks/agent-prompt-cancellation.checks';
 import { ListsChecks } from '../checks/lists.checks';
+import { ListRefreshChecks } from '../checks/list-refresh.checks';
+import { ListFromQueryChecks } from '../checks/list-from-query.checks';
+import { OpenAppLocalSourceChecks } from '../checks/open-app-local-source.checks';
 import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
 import { UserRoutinesChecks } from '../checks/user-routines.checks';
+import { ChiefOfStaffChecks } from '../checks/chief-of-staff.checks';
+import { ChiefOfStaffWorldChecks } from '../checks/chief-of-staff-world.checks';
+import { ChiefOfStaffLiveChecks } from '../checks/chief-of-staff-live.checks';
 import { WorkQueueRuntimeChecks } from '../checks/work-queue-runtime.checks';
 import { AgentLoopLiveChecks } from '../checks/agent-loop-live.checks';
 import { ShippedAgentsLiveChecks } from '../checks/shipped-agents-live.checks';
@@ -42,24 +57,31 @@ import { AgentCompactionE2EChecks } from '../checks/agent-compaction-e2e.checks'
 import { AgentMemoryGuardsChecks } from '../checks/agent-memory-guards.checks';
 import { AgentNoteCacheTypeChecks } from '../checks/agent-note-cache-types.checks';
 import { CacheArchitectureChecks } from '../checks/cache-architecture.checks';
-import { AgentRagSearchChecks } from '../checks/agent-rag-search.checks';
+import { AgentRagSearchChecks, AgentRagGateChecks } from '../checks/agent-rag-search.checks';
+import { AgentRunAudienceChecks } from '../checks/agent-run-audience.checks';
 import { AgentWireCallbackChecks } from '../checks/agent-wire-callback.checks';
 import { ViewSecurityChecks } from '../checks/view-security.checks';
 import { AiProvidersChecks } from '../checks/ai-providers.checks';
 import { CloudflareClefChecks } from '../checks/cloudflare-clef.checks';
 import { SystemOneKevChecks } from '../checks/systemone-kev.checks';
 import { PerplexityDeciderChecks } from '../checks/perplexity-decider.checks';
+import { SubQMercuryDecisionsChecks } from '../checks/subq-mercury-decisions.checks';
 import { AppBehavioralChecks } from '../checks/app-behavioral.checks';
 import { ContentVectorizationChecks } from '../checks/content-vectorization.checks';
 import { MaterializedReadChecks } from '../checks/materialized-read.checks';
 import { MaterializedEntityReadChecks } from '../checks/materialized-entity-read.checks';
 import { FormContributionsChecks } from '../checks/form-contributions.checks';
 import { ScopedAnonElevationChecks } from '../checks/scoped-anon-elevation.checks';
+import { WidgetGuestIsolationChecks } from '../checks/widget-guest-isolation.checks';
 import { EntityGraphChecks } from '../checks/entity-graph.checks';
 import { EntityEmbeddedChecks } from '../checks/entity-embedded.checks';
 import { EntityGraphClientChecks } from '../checks/entity-graph-client.checks';
 import { JSONTypeLiveSyncChecks, JSONTypeLiveSyncClientChecks } from '../checks/jsontype-live-sync.checks';
 import { SelfAvatarClientChecks } from '../checks/self-avatar-client.checks';
+import { ViewPropertiesClientChecks } from '../checks/view-properties-client.checks';
+import { CalendarEventLinksChecks } from '../checks/calendar-event-links.checks';
+import { ConversationAuthorshipClientChecks } from '../checks/conversation-authorship-client.checks';
+import { ConversationDeleteClientChecks } from '../checks/conversation-delete-client.checks';
 import { RecordCloningChecks } from '../checks/record-cloning.checks';
 import { BinaryFieldsChecks } from '../checks/binary-fields.checks';
 import { TaskGraphOrchestrationChecks } from '../checks/task-graph-orchestration.checks';
@@ -67,8 +89,51 @@ import { EntityActionChecks } from '../checks/entity-actions.checks';
 import { FlsEnforcementChecks } from '../checks/fls-enforcement.checks';
 import { FlsLifecycleChecks } from '../checks/fls-lifecycle.checks';
 import { FlsClientChecks } from '../checks/fls-client.checks';
+import { FlsCloseoutChecks } from '../checks/fls-closeout.checks';
+import { FlsCloseoutPendingChecks } from '../checks/fls-closeout-pending.checks';
+import { FlsCloseoutClientChecks } from '../checks/fls-closeout-client.checks';
 import { MetadataSyncPushChecks } from '../checks/metadata-sync-push.checks';
 import { TaskGraphExecutionChecks } from '../checks/task-graph-execution.checks';
+import { TaskGraphWaitingStepChecks } from '../checks/task-graph-waiting-steps.checks';
+import { TaskGraphDurableRetryChecks } from '../checks/task-graph-durable-retry.checks';
+import { PerformanceBenchmarkChecks } from '../checks/performance-benchmark.checks';
+import { SearchOriginGateChecks } from '../checks/search-origin-gate.checks';
+import { SearchProviderTrustChecks } from '../checks/search-provider-trust.checks';
+import { SearchScopeBoundChecks } from '../checks/search-scope-bound.checks';
+import { QueryExtractionChecks } from '../checks/query-extraction.checks';
+import { QueryRefreshChecks } from '../checks/query-refresh.checks';
+import { MetadataSyncQueriesChecks } from '../checks/metadata-sync-queries.checks';
+import { QueryApiLifecycleChecks } from '../checks/query-api-lifecycle.checks';
+import { QuerySecurityChecks } from '../checks/query-security.checks';
+import { SqlPipeMatrixChecks, SqlPipeMatrixCrossChecks } from '../checks/sqlpipe-matrix.checks';
+import { SqlPipeMatrixClientChecks } from '../checks/sqlpipe-matrix-client.checks';
+import { CiphertextCacheChecks } from '../checks/ciphertext-cache.checks';
+import { RecordChangeSnapshotChecks } from '../checks/record-change-snapshot.checks';
+import { ArchivePagingChecks } from '../checks/archive-paging.checks';
+import { ConcurrencyConflictClientChecks } from '../checks/concurrency-conflict-client.checks';
+import { QueryMetadataClientChecks } from '../checks/query-metadata-client.checks';
+import { MetadataPayloadClientChecks } from '../checks/metadata-payload-client.checks';
+import { TransactionGroupConcurrencyClientChecks } from '../checks/transaction-group-concurrency-client.checks';
+import { EntityStatusFanoutClientChecks } from '../checks/entity-status-fanout-client.checks';
+import { EncryptedReadClientChecks } from '../checks/encrypted-read-client.checks';
+import { SqlPipeExtractionFixtureChecks } from '../checks/sqlpipe-extraction-fixtures.checks';
+import { AgentExecutionPrimitivesChecks } from '../checks/agent-execution-primitives.checks';
+import { AgentExecutionPrimitivesLiveChecks } from '../checks/agent-execution-primitives-live.checks';
+import { AgentConsultChecks } from '../checks/agent-consult.checks';
+import { AgentHandoffChecks } from '../checks/agent-handoff.checks';
+import { VideoDataSnapshotChecks } from '../checks/video-data-snapshot.checks';
+import { VideoGenerationCostChecks } from '../checks/video-generation-cost.checks';
+import { VideoStudioHandoffChecks } from '../checks/video-studio-handoff.checks';
+import { VideoStudioProductionChecks } from '../checks/video-studio-production.checks';
+import { VideoStudioLiveSmokeChecks } from '../checks/video-studio-live-smoke.checks';
+import { SemanticGraphChecks } from '../checks/semantic-graph.checks';
+import { GraphRuntimeChecks } from '../checks/graph-runtime.checks';
+import { TaskGraphSecurityChecks } from '../checks/task-graph-security.checks';
+import { DocsSlidesSheetsLibraryChecks, DocsSlidesSheetsLibraryClientChecks } from '../checks/docs-slides-sheets-library.checks';
+import { RunViewFeatureChecks } from '../checks/runview-features.checks';
+import { WorkBusCoreChecks } from '../checks/work-bus-core.checks';
+import { IntegrationSchemaPipelineChecks } from '../checks/integration-schema-pipeline.checks';
+import { GeminiDecisionsChecks } from '../checks/gemini-decisions.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -118,12 +183,13 @@ describe('IntegrationCheckRegistry', () => {
 
 describe('migrated bundles (coverage-loss guard)', () => {
     const bundles: Array<[string, NamedCheck[], number]> = [
-        ['server-cache', ServerCacheChecks, 32],
+        ['server-cache', ServerCacheChecks, 35],
         ['cache-immutability', CacheImmutabilityChecks, 15], // F1-F15 freeze-on-write runtime contract (IT81); F13/F14 cover review findings C1/C2, F15 covers M3 (dataset key collision)
-        ['client-cache', ClientCacheChecks, 14],
-        ['runquery-cache', RunQueryCacheChecks, 12], // Q11 (B46 category collision) + Q12 (B45 hit-vs-miss permission parity) added 2026-07-20
-        // RLS1–RLS10 (rls-isolation.checks.ts) + KF1–KF6 (keyrowfilter.checks.ts, API-key row filters) share one bundle
-        ['rls-isolation', [...RlsIsolationChecks, ...KeyRowFilterChecks], 16],
+        ['client-cache', ClientCacheChecks, 26],
+        ['runquery-cache', RunQueryCacheChecks, 21], // Q11 (B46 category collision) + Q12 (B45 hit-vs-miss permission parity) added 2026-07-20; Q13–Q21 (query definition changes) added 2026-10-14
+        // RLS1–RLS14 (rls-isolation.checks.ts) + KF1–KF6 (keyrowfilter.checks.ts, API-key row filters)
+        // + RF1–RF3 (rolerowfilter.checks.ts, role filter edits) share one bundle
+        ['rls-isolation', [...RlsIsolationChecks, ...KeyRowFilterChecks, ...RoleRowFilterChecks], 22],
         ['rls-isolation-client', RlsIsolationClientChecks, 1],
         ['record-process', RecordProcessChecks, 12],
         ['record-process-facade', RecordProcessFacadeChecks, 2],
@@ -132,24 +198,37 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['remote-operations', RemoteOperationsChecks, 7],
         ['ai-skills', AiSkillsChecks, 21],
         ['api-keys', ApiKeysChecks, 3],
+        ['diagnostics', DiagnosticsChecks, 4], // DIAG1-DIAG4 session capture, bundle assembly, encrypted intake (IT163)
         ['predictive-studio', PredictiveStudioChecks, 5],
+        ['predictive-shadow-drift', PredictiveShadowDriftChecks, 2], // PSD1-PSD2 shadow scoring Role=Challenger isolation and PredictiveStudioEvaluateDriftAction over MJ: Feature Values (IT166)
         ['remote-op-wire-progress', RemoteOpWireProgressChecks, 1],
         ['prompt-runner', PromptRunnerChecks, 1],
+        ['ai-vendor-effort', AiVendorEffortChecks, 2],
+        ['native-tool-calling-live', NativeToolCallingLiveChecks, 4],
+        ['native-tool-loop', NativeToolLoopChecks, 14],
+        ['native-tool-loop-live', NativeToolLoopLiveChecks, 3],
         ['concurrent', ConcurrentChecks, 2],
         ['agent-runner', AgentRunnerChecks, 1],
         ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3],
         ['lists', ListsChecks, 3],
+        ['list-refresh', ListRefreshChecks, 7], // LR1-LR7 source fingerprint, routine, approval (IT175)
+        ['list-from-query', ListFromQueryChecks, 5], // LQ1-LQ5 conversation SQL saved Pending, list linked, refresh, edit stops it (IT179)
+        ['open-app-local-source', OpenAppLocalSourceChecks, 11], // OLS1-OLS11 install, upgrade and remove from a local folder (IT178)
         ['open-app-teardown', OpenAppTeardownChecks, 2],
-        ['user-routines', UserRoutinesChecks, 16],
+        ['user-routines', UserRoutinesChecks, 18],
+        ['chief-of-staff', ChiefOfStaffChecks, 14], // COS1-COS14 ownership guards, run-now, policy cache, email approval-before-transport, extensible skills, rhythms, agent channels, two-user inter-agent round-trip, sub-agent policy ceiling (IT157)
+        ['chief-of-staff-world', ChiefOfStaffWorldChecks, 3], // COSW1-COSW3 idempotent persistent Chief of Staff world seed: Jordan & Elena personas, active Coordinator policies, routines, suggestions, notes, Agent Channel (IT183)
+        ['chief-of-staff-live', ChiefOfStaffLiveChecks, 4], // COSL1-COSL4 live-model heuristic verification of shipped Chief of Staff via AgentRunner: typed actions, DraftOnly refusal, Agent Channel reply, zero raw SQL/CRUD (IT184)
         ['work-queue-runtime', WorkQueueRuntimeChecks, 19], // WR1-WR19 host, RunOnce, partitions, cancel, operators, sweeper, REST (IT105)
         ['conversation-compaction', ConversationCompactionChecks, 23], // CC1-CC23
         ['trailing-runtime-state', TrailingRuntimeStateChecks, 6], // TRS1-TRS6
         ['agent-decisions-switch', AgentDecisionsSwitchChecks, 9], // DS1-DS9 the decisionsEnabled master switch, scripted chat and decision drivers (IT97)
+        ['agent-prompt-cancellation', AgentPromptCancellationChecks, 2], // APC1-APC2 a run cancelled mid-call stops there and is recorded cancelled (IT122)
         ['agent-loop-live', AgentLoopLiveChecks, 7],
         ['shipped-agents-live', ShippedAgentsLiveChecks, 4],
         ['agent-carry-forward', AgentCarryForwardChecks, 6],
         ['agent-payload-guards', PayloadGuardsChecks, 9],
-        ['agent-artifact-tools', ArtifactToolsChecks, 9],
+        ['agent-artifact-tools', ArtifactToolsChecks, 14],
         ['agent-skills-live', AgentSkillsLiveChecks, 5],
         ['agent-plan-mode', AgentPlanModeChecks, 6],
         ['agent-compaction-e2e', AgentCompactionE2EChecks, 3],
@@ -157,18 +236,22 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['agent-note-cache-types', AgentNoteCacheTypeChecks, 5], // NC1-NC3 entity_object cache-event invariant, NC4-NC5 identical-payload skip (IT84)
         ['cache-architecture', CacheArchitectureChecks, 11], // CA1-CA11 engine/cache architecture pins (IT107)
         ['agent-rag-search', AgentRagSearchChecks, 7], // extended-agents suite (live-model, IT53-62)
+        ['agent-rag-gate', AgentRagGateChecks, 2], // RG1-RG2 pre-execution RAG permission gate, run directly with no model (IT117)
+        ['agent-run-audience', AgentRunAudienceChecks, 9], // AU1-AU6, AU8 a run's audience; AU7, AU9 its tenant binds the search actions (IT119)
         ['agent-wire-callback', AgentWireCallbackChecks, 2], // over-the-wire fire-and-forget callback (IT63)
         ['view-security', ViewSecurityChecks, 4], // two-identity V14/V15/V16 + RV17 (IT64)
         ['ai-providers', AiProvidersChecks, 3], // AI7/AI13/AI15 model-resolution seams (IT65)
         ['cloudflare-clef', CloudflareClefChecks, 6], // CF1-CF6 Clef/Clef-flash metadata, driver registration, runner calls through an HTTP stand-in: envelope failures and failover, a bare response, a JSON credential's account (IT108)
         ['systemone-kev', SystemOneKevChecks, 10], // KV1-KV10 Kev metadata, SystemOneDecision registration, runner calls against loopback System One servers: Default Decision selection, bound credentials, per-row routing, failover and error classification, Kev-4B on OpenRouter, a binding on the serving row of a two-row model (IT109)
         ['perplexity-decider', PerplexityDeciderChecks, 5], // PX1-PX5 Perplexity Decider metadata, PerplexityDecision registration, runner calls through an HTTP stand-in: the quickstart request and response, a bound credential's token, Default Decision selection and failover (IT110)
+        ['subq-mercury-decisions', SubQMercuryDecisionsChecks, 8], // SM1-SM8 SubQ Snap and Mercury Decide metadata, SubQDecision and InceptionDecision registration, runner calls through guarded SubQ, Inception and OpenRouter stand-ins: request and answer mapping per route, bound credentials, 422 and 402 failing over, Default Decision's order with the new models last (IT121, provisional)
         ['app-behavioral', AppBehavioralChecks, 3], // S4/S6/S8 Application behaviors (IT66)
         ['content-vectorization', ContentVectorizationChecks, 10], // CV1-CV10 content vectorization pipeline (IT67)
         ['materialized-read', MaterializedReadChecks, 3], // MR1-MR2 served-from-snapshot proof + MR3 delete-path FK cleanup (IT79)
         ['materialized-entity-read', MaterializedEntityReadChecks, 2], // EMR1-EMR2 entity base-view RunView redirect (IT78)
         ['form-contributions', FormContributionsChecks, 17], // FC1-FC17 metadata form contributions: schema, actions, clamp, kill switch, scoping, section claims, component guard (IT104)
-        ['scoped-anon-elevation', ScopedAnonElevationChecks, 6], // SA1-SA6 scoped-anonymous elevation permission contract (IT68)
+        ['scoped-anon-elevation', ScopedAnonElevationChecks, 7], // SA1-SA6 scoped-anonymous elevation permission contract + SA7 magic-link single-use consume (IT68)
+        ['widget-guest-isolation', WidgetGuestIsolationChecks, 6], // WG1-WG6 widget guests read and update only their own session's rows (IT156)
         ['entity-graph', EntityGraphChecks, 11], // EG1-EG8 related-record collection graph saves (IT72)
         ['entity-embedded', EntityEmbeddedChecks, 6], // EE1-EE6 owner-held embedded records
         ['entity-graph-client', EntityGraphClientChecks, 9], // EGC1-EGC9 graph saves over the GraphQL wire (IT73)
@@ -181,14 +264,63 @@ describe('migrated bundles (coverage-loss guard)', () => {
         // so it triggers the same run-half `defer` verdict through an unreadable run instead. Every
         // move of this count has been deliberate, which is what the guard is for.
         ['task-graph-execution', TaskGraphExecutionChecks, 27],
+        ['task-graph-waiting-steps', TaskGraphWaitingStepChecks, 7], // WS1-WS7 External / Wait / provider-Human steps on the live dispatcher (IT180)
+        ['task-graph-durable-retry', TaskGraphDurableRetryChecks, 3], // DR1-DR3 durable step retry across dispatcher instances (IT181)
         ['entity-actions', EntityActionChecks, 8], // EA1-EA8 the entity-action substrate end to end (IT75)
-        ['fls-enforcement', FlsEnforcementChecks, 24], // FLS1-FLS24 field-level security against a live DB (IT90); FLS22/FLS23 cover the Record Changes payload projection, FLS24 record names, FLS21 measures metadata-refresh cost
+        ['fls-enforcement', FlsEnforcementChecks, 27], // FLS1-FLS27 field-level security against a live DB (IT90); FLS22/FLS23 cover the Record Changes payload projection, FLS24 record names, FLS25-FLS27 related rows, constraint errors and re-enable, FLS21 measures metadata-refresh cost
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
+        ['fls-closeout', FlsCloseoutChecks, 20], // CO1-CO20 FLS close-out, server tier: object width, the clause gate, datasets, Record Changes by ViewID and full-width snapshots of restricted saves, config guards (CO14-CO16 mutation-gated), agent data sources, search projection, anchored record comments (IT133)
+        ['fls-closeout-client', FlsCloseoutClientChecks, 9], // CW1-CW9 FLS close-out over the wire: client-input rejection (GraphQL, transaction groups, REST), transport projection, wire filter gate (IT134)
+        ['fls-closeout-pending', FlsCloseoutPendingChecks, 7], // PC1-PC3 cache segmentation + PQ1-PQ4 RunQuery FLS (IT135)
         ['self-avatar-client', SelfAvatarClientChecks, 6], // AV1-AV6 self-service avatar mutation over the wire via per-user API keys (IT106)
-        ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
+        ['view-properties-client', ViewPropertiesClientChecks, 5], // VP1-VP5 User View properties over the wire: values, locked refusal, token default, RLS on top, cache keying (IT136)
+        ['calendar-event-links', CalendarEventLinksChecks, 2], // CL1 UI role over GraphQL reads but cannot create; CL2 links, sync with a moved time and an RSVP, resync on a refused token, cancel (IT127)
+        ['conversation-authorship-client', ConversationAuthorshipClientChecks, 13], // CA1-CA12 who a conversation message is from, owner + Edit grantee over the wire via per-user API keys; CA7-CA10 are the bypasses: forged OldValues___, transaction variables, role casing, moving a message; CA11-CA12 only the server writes agent replies; CA13 the owner cannot hand the conversation to someone else (IT115)
+        ['conversation-delete-client', ConversationDeleteClientChecks, 3], // CD1-CD3 who may delete a conversation for everyone, over the wire via per-user API keys: View and Edit grantees refused, the owner deletes (IT174)
+        ['metadata-sync-push', MetadataSyncPushChecks, 12], // MSP1-MSP12 sync push atomicity, in-transaction metadata reload, one row-level security filter, and declared folder overrides, mutation tier (IT94)
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
         ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT101)
+        ['performance-benchmark', PerformanceBenchmarkChecks, 23], // PB1-PB23 MJ primitives microbenchmarks + Sage/Query Builder/Research Agent deterministic and live runs + SaveReturnMode datestamps_only & Phase 2/Wave 4/Wave 5.2/Wave 5.4/Wave 6A/Wave 6B/Wave 6C regression guards + longitudinal baseline gate (IT128)
+        ['search-origin-gate', SearchOriginGateChecks, 4], // SOG1-SOG4 the search origin-record gate against the live views (IT116)
+        ['search-provider-trust', SearchProviderTrustChecks, 2], // SPT1 external-index hits verified, SPT2 unresolvable scope refused (IT118)
+        ['search-scope-bound', SearchScopeBoundChecks, 3], // SSB1-SSB3 a scoped search is bounded by its scope's rows (IT123)
+        ['agent-consult', AgentConsultChecks, 1], // AC1 deterministic sub-agent consult, escalation, request resume, open-consult reload, and resumeRunId chain (IT153)
+        ['agent-handoff', AgentHandoffChecks, 6], // AH1-AH6 top-level peer-to-peer handoff, FollowHandoffs, preset precedence, continuity, refusals, and non-handoff host guard (IT125)
+        ['video-data-snapshot', VideoDataSnapshotChecks, 3], // VDS1-VDS3 CaptureDataSnapshot + LoadDataSnapshotValues RLS and permission enforcement per contextUser (IT154)
+        ['video-generation-cost', VideoGenerationCostChecks, 2], // VGC1-VGC2 AIVideoRunner.RunGenerateVideo server-calculated Per Second cost and driver-reported cost preservation (IT155)
+        ['video-studio-handoff', VideoStudioHandoffChecks, 3], // VSH1-VSH3 top-level transfer to shipped Video Studio agent, preset resolution (Standard/High), and conversation continuity (IT150)
+        ['video-studio-production', VideoStudioProductionChecks, 5], // VSP1-VSP5 end-to-end Video Studio production pipeline with fakes (IT151)
+        ['video-studio-live-smoke', VideoStudioLiveSmokeChecks, 1], // VSLS1 live Draft 15s Social Short smoke test (IT152)
+        ['query-extraction', QueryExtractionChecks, 15], // QE1-QE15 exact fields, entities, parameters, doc comments and dependencies a query save extracts, both platforms (IT138)
+        ['query-refresh', QueryRefreshChecks, 16], // QR1-QR16 refresh and re-bind against a fixture schema the checks alter, dry run, order, drift, nullability, field deletes, authorization (IT139)
+        ['metadata-sync-queries', MetadataSyncQueriesChecks, 11], // MSQ1-MSQ11 declared query children through PushService, re-push, pull, shipped-tree no-ops and the fingerprint after related dialect rows (IT140)
+        ['query-api-lifecycle', QueryApiLifecycleChecks, 12], // QAL1-QAL12 create / edit / refresh through GraphQL, every column of every child row (IT141)
+        ['query-security', QuerySecurityChecks, 10], // QS1-QS10 write gate, forbidden functions, injection into shipped queries, EDS screen, FLS on queries (IT142)
+        ['sqlpipe-matrix', SqlPipeMatrixChecks, 2], // SPM1 all pairs over every scenario dimension, SPM5 extraction properties (IT143)
+        ['sqlpipe-extraction-fixtures', SqlPipeExtractionFixtureChecks, 40], // EF01-EF40 hand-written expected metadata per fixture query, both platforms (IT144)
+        ['sqlpipe-matrix-client', SqlPipeMatrixClientChecks, 2], // SPC1-SPC2 the scenario matrix over GraphQL (IT145)
+        ['sqlpipe-matrix-cross', SqlPipeMatrixCrossChecks, 4], // SPM2-SPM4 full cross products, SPM5 extraction properties (IT146)
+        ['agent-execution-primitives', AgentExecutionPrimitivesChecks, 6], // AEP1-AEP6 native tool-calling JSON bridge, multi-step loop steps[], durable TaskGraph settlement, Flow graduation round-trip (IT147)
+        ['agent-execution-primitives-live', AgentExecutionPrimitivesLiveChecks, 4], // AEPL1-AEPL4 live native-tool-calling providers running Pipeline, multi-step ForEach, and durable Tasks (IT148)
+        ['concurrency-conflict-client', ConcurrencyConflictClientChecks, 5], // CC1-CC5 optimistic concurrency across two GraphQL sessions (IT158)
+        ['entity-status-fanout-client', EntityStatusFanoutClientChecks, 3], // SF1-SF3 entity save pushes reach every session of the user (IT159)
+        ['encrypted-read-client', EncryptedReadClientChecks, 4], // ER1-ER4 encrypted field plaintext over GraphQL, miss and hit (IT160)
+        ['ciphertext-cache', CiphertextCacheChecks, 7], // CT0-CT4 ciphertext at rest in the RunViewCache, plaintext to the caller; CT5-CT6 a peer's cache event leaves CredentialEngine plaintext (IT161)
+        ['semantic-graph', SemanticGraphChecks, 7], // SG1-SG7 Semantic Graph substrate, Content Pipeline GraphStage overlay, and Executable Canon DAG similarity & telemetry (IT162)
+        ['graph-runtime', GraphRuntimeChecks, 6], // GR1-GR6 MJ Canon traversal, per-caller query visibility, the edge approval gate on a real Save, Get Graph Context, JoinEntity and QueryEdgeProvider fixtures (IT167)
+        ['task-graph-security', TaskGraphSecurityChecks, 10], // TGS1-TGS10 envelope on every row and immutable, one compensation per step, A2A store row boundary, dispatcher taint gate & compensation, the real action runner's taint gate, a person's review clears taint, a server-answered request clears nothing, an early settle clears nothing, only the service makes workflows, REST edits ordinary tasks (IT168)
+        ['docs-slides-sheets-library', DocsSlidesSheetsLibraryChecks, 10], // DSL1-DSL10 Collaborative Docs, Slides, Sheets, Yjs working states, delegated OLE permissions, NW-2/NW-5 ACL & synthesis, and engine security guards (IT170)
+        ['docs-slides-sheets-library-client', DocsSlidesSheetsLibraryClientChecks, 14], // DSLC1-DSLC14 Client-transport GraphQL, Remote Ops, Pre-auth Guest Share, Collaboration Resolver, WS meta/lock rejection, API-key scope, ClientClauseScreen, Collection ACL, Realtime IDOR, B4 default-off guest share refusal, and R1/R2 count_only + stored queries (IT171)
+        ['runview-features', RunViewFeatureChecks, 12], // RVF1-RVF12 RunView cross-feature edges and RunViewParams.Parameters wire binding (IT32)
+        ['work-bus-core', WorkBusCoreChecks, 10], // WBC1-WBC10 Conversation Types, Comments IS-A Conversation, Comment Types, Field Suggestions IS-A Comment, SubtypeSelector AutoEnsureOnSave/Refuse, PostSaveHook superseding, and Workstream wakes (IT164)
+        ['record-change-snapshot', RecordChangeSnapshotChecks, 4], // RCS1-RCS4 Record Change snapshots record the stored row: server-set values, another writer's change, apostrophes, ciphertext (IT169)
+        ['archive-paging', ArchivePagingChecks, 3], // ARP1-ARP3 one archive run strips (ARP1) or deletes (ARP3) every row past the cutoff page by page; a second run loads nothing (IT182)
+        ['query-metadata-client', QueryMetadataClientChecks, 3], // QM1-QM3 a client leaves the saved-query metadata items unread, the server reports none of their rows, a saved query leaves the client current (IT177)
+        ['metadata-payload-client', MetadataPayloadClientChecks, 3], // MP1-MP3 entity, field and application rows reach a client without nested child collections (IT176)
+        ['transaction-group-concurrency-client', TransactionGroupConcurrencyClientChecks, 4], // TGC1-TGC4 optimistic concurrency for transaction groups across two GraphQL sessions: a stale overlapping update refuses the group, non-overlapping and converging updates commit, SkipOldValuesCheck is honored (IT173)
+        ['integration-schema-pipeline', IntegrationSchemaPipelineChecks, 4], // ISP1-ISP4 live SQL native typing, key capping, and Soft PK/FK/Organic Key auto-indexing (IT165)
+        ['gemini-decisions', GeminiDecisionsChecks, 8], // GD1-GD8 Gemini Decision 1 catalog, ClassFactory, guarded Google & OpenRouter runner calls, bound credentials, block_reason & 400/403 failover, and Default Decision ordering (IT175)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -213,9 +345,9 @@ describe('migrated bundles (coverage-loss guard)', () => {
         });
     }
 
-    it('server-cache marks exactly S17/S23/S24/S29/S30/S31b as RequiresMutation', () => {
+    it('server-cache marks exactly S17/S23/S24/S29/S30/S31b/S34 as RequiresMutation', () => {
         const mutating = ServerCacheChecks.filter(c => c.RequiresMutation).map(c => c.Id);
-        expect(mutating.sort()).toEqual(['server-cache.S17', 'server-cache.S23', 'server-cache.S24', 'server-cache.S29', 'server-cache.S30', 'server-cache.S31b']);
+        expect(mutating.sort()).toEqual(['server-cache.S17', 'server-cache.S23', 'server-cache.S24', 'server-cache.S29', 'server-cache.S30', 'server-cache.S31b', 'server-cache.S34']);
     });
 
     it('client-cache marks exactly C10 and C14 as RequiresMutation', () => {
@@ -237,19 +369,25 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     // the failure message prints a paste-ready copy of the actual registry state.
     const EXPECTED_BUNDLE_COUNTS: Record<string, number> = {
         'actions-pipeline': 6,
-        'agent-artifact-tools': 9,
+        'agent-artifact-tools': 14,
         'agent-carry-forward': 6,
         'agent-compaction-e2e': 3,
+        'agent-consult': 1,
         'agent-decisions-switch': 9,
+        'agent-execution-primitives': 6,
+        'agent-execution-primitives-live': 4,
         'agent-external-harness': 7,
+        'agent-handoff': 6,
         'agent-loop-live': 7,
-        'agent-loop-standin': 11,
-        'prompt-eval-harness': 7,
+        'agent-loop-standin': 14,
         'agent-memory-guards': 5,
         'agent-note-cache-types': 5,
         'agent-payload-guards': 9,
         'agent-plan-mode': 6,
+        'agent-prompt-cancellation': 2,
+        'agent-rag-gate': 2,
         'agent-rag-search': 7,
+        'agent-run-audience': 9,
         'agent-runner': 1,
         'agent-skills-live': 5,
         'agent-wire-callback': 2,
@@ -259,94 +397,229 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ai-permissions': 6,
         'ai-providers': 3,
         'ai-skills': 21,
+        'ai-vendor-effort': 2,
+        'alternate-base-views': 6,
         'api-keys': 3,
         'app-behavioral': 3,
-        'app-wiring': 10,
+        'app-wiring': 11,
+        'archive-paging': 3,
         'auth-validation': 7,
         'binary-fields': 6,
         'cache-architecture': 11,
         'cache-gauntlet': 8,
         'cache-immutability': 15,
+        'calendar-event-links': 2,
+        'chief-of-staff': 14,
+        'chief-of-staff-live': 4,
+        'chief-of-staff-world': 3,
+        'ciphertext-cache': 7,
         'class-resolution': 5,
-        'client-cache': 14,
+        'client-cache': 26,
         'cloudflare-clef': 6,
         'codegen-determinism': 6,
         'communication': 5,
+        'concurrency-conflict-client': 5,
         'concurrent': 2,
+        'content-pipeline': 21,
         'content-vectorization': 10,
+        'conversation-authorship-client': 13,
+        'conversation-delete-client': 3,
         'conversation-compaction': 23,
-        'trailing-runtime-state': 6,
         'dataset-cache': 4,
+        'diagnostics': 4,
+        'docs-slides-sheets-library': 10,
+        'docs-slides-sheets-library-client': 14,
+        'encrypted-read-client': 4,
         'entity-actions': 8,
         'entity-embedded': 6,
         'entity-graph': 11,
         'entity-graph-client': 9,
-        'jsontype-live-sync': 9,
-        'jsontype-live-sync-client': 9,
         'entity-server-invariants': 9,
-        'entity-writes': 9,
+        'entity-status-fanout-client': 3,
+        'entity-writes': 13,
+        'feature-pipeline-core': 9,
+        'feature-value-only': 5,
         'field-rules-bulk-update': 3,
-        'fls-enforcement': 24,
+        'fls-closeout-client': 9,
+        'fls-closeout-pending': 7,
+        'fls-closeout': 20,
+        'fls-enforcement': 27,
         'fls-enforcement-client': 6,
         'fls-lifecycle': 9,
         'form-contributions': 17,
+        'fp-gate-c2-1': 6,
+        'fp-gate-c2-2': 3,
+        'fp-gate-c2-3': 3,
+        'fp-gate-c2-5': 3,
+        'fp-live-jobtitle': 1,
+        'gemini-decisions': 8,
+        'graph-runtime': 6,
+        'integration-schema-pipeline': 4,
+        'jsontype-live-sync': 9,
+        'jsontype-live-sync-client': 9,
         'layered-base-views': 6,
+        'list-from-query': 5,
+        'list-refresh': 7,
         'lists': 3,
         'livekit-room': 1,
         'materialized-entity-read': 2,
         'materialized-read': 3,
-        'metadata-consistency': 7,
+        'metadata-consistency': 8,
+        'metadata-payload-client': 3,
         'metadata-sync': 9,
-        'metadata-sync-push': 10,
+        'metadata-sync-push': 12,
+        'metadata-sync-queries': 11,
+        'native-tool-calling-live': 4,
+        'native-tool-loop': 14,
+        'native-tool-loop-live': 3,
         'nested-transactions': 11,
+        'open-app-local-source': 11,
         'open-app-teardown': 2,
+        'performance-benchmark': 23,
         'permission-engine': 15,
         'perplexity-decider': 5,
+        'predictive-shadow-drift': 2,
         'predictive-studio': 5,
+        'prompt-eval-harness': 7,
         'prompt-runner': 1,
+        'ps-gate-c1-s1-1': 1,
+        'ps-gate-c1-s1-3': 1,
+        'ps-gate-c1-s2-2': 1,
+        'ps-gate-c1-s2-3': 1,
+        'ps-gate-c1-s2-6': 1,
+        'ps-gate-c1-s3-1': 1,
+        'ps-gate-c1-s4-2': 1,
+        'ps-gate-c1-s6-1': 1,
+        'ps-gate-c1-s6-4': 1,
+        'ps-gate-c2-s1-2': 1,
+        'ps-gate-c2-s2-5': 1,
+        'ps-gate-c2-s4-1': 1,
+        'ps-gate-c2-s4-5': 1,
+        'ps-gate-c2-s6-2': 1,
+        'ps-gate-c2-s6-2-2': 1,
+        'ps-gate-c3-s4-1': 1,
+        'ps-gate-c4-s2-4': 1,
+        'ps-gate-d1c-s6-4': 1,
+        'ps-gate-n1c-s6-5': 1,
+        'ps-gate-n1r-s6-5': 1,
+        'ps-gate-r1-s6-6': 1,
+        'ps-gate-r2-real-s4-4': 1,
+        'ps-gate-r2p-s4-3': 1,
+        'ps-gate-r3-s1-4': 1,
+        'ps-gate-r3-s4-3': 1,
+        'ps-gate-t1p-s-t-2': 1,
+        'ps-gate-t1p-s-t-3': 1,
+        'ps-gate-t2p-s-t-4': 1,
+        'ps-gate-t2p-s-t-5': 1,
+        'ps-gate-t2p-s-t-6': 1,
+        'ps-gate-t2p-s2-6': 1,
+        'ps-gate-t3-s-t-1': 1,
+        'ps-gate-t4-s-t-3': 1,
+        'ps-gate-t4-s6-5': 1,
+        'ps-gate-w1-s1-4': 1,
+        'ps-gate-w1-s3-2': 1,
+        'ps-gate-w1-s5-1': 1,
+        'ps-gate-w1-s5-3': 1,
+        'ps-gate-w1-s5-4': 1,
+        'ps-gate-w1-s5-4-2': 1,
+        'ps-gate-w1-s5-4-3': 1,
+        'ps-gate-w1-s5-5': 1,
+        'ps-gate-w1-s6-3': 1,
+        'ps-gate-w1-s7-3': 1,
+        'ps-gate-w1-s7-5': 1,
+        'ps-gate-w1-s7-5-2': 1,
+        'ps-gate-w1-s9-3': 1,
+        'ps-gate-w1-s9-4': 1,
+        'ps-gate-w1-s9-5': 1,
+        'ps-gate-w2-c1-1': 1,
+        'ps-gate-w2-s5-2': 1,
+        'ps-gate-w2-s5-3': 1,
+        'ps-gate-w2-s6-5': 1,
+        'ps-gate-w3-c1-1': 1,
+        'ps-gate-w3-s2-4': 1,
+        'ps-gate-w4-s2-1': 1,
+        'ps-gate-w4-s2-1-2': 1,
+        'ps-gate-w5-s2-2': 1,
+        'ps-gate-w6-s6-1': 1,
+        'ps-gate-w7-s4-2': 1,
+        'ps-gate-w7-s4-2-2': 1,
+        'ps-gate-w7-s6-2': 1,
+        'ps-gate-w8-s3-4': 1,
+        'ps-gate-w8-s9-4': 1,
+        'ps-gate-w9-s6-3': 1,
+        'ps-truth-datasets': 68,
+        'query-api-lifecycle': 12,
+        'query-approvals': 5,
+        'query-extraction': 15,
+        'query-metadata-client': 3,
+        'query-refresh': 16,
+        'query-security': 10,
         'queue': 7,
-        'realtime-deterministic': 18,
+        'realtime-deterministic': 20,
         'realtime-session-guard': 2,
         'realtime-session-verification': 6,
+        'record-change-snapshot': 4,
         'record-cloning': 13,
         'record-process': 12,
         'record-process-facade': 2,
         'remote-op-ai-authoring': 3,
         'remote-op-wire-progress': 1,
         'remote-operations': 7,
-        'rls-isolation': 16,
+        'rls-isolation': 22,
         'rls-isolation-client': 1,
-        'runquery-cache': 12,
+        'role-elevation': 6,
+        'rubrics': 15,
+        'runquery-cache': 21,
         'runquery-catalog': 6,
-        'runquery-features': 16,
+        'runquery-features': 17,
         'runquery-params': 10,
         'runquery-rendering': 13,
         'runquery-rendering-client': 10,
-        'runview-features': 6,
-        'role-elevation': 6,
-        'rubrics': 15,
+        'runview-features': 12,
         'runview-matrix': 19,
         'scheduled-jobs': 2,
         'scheduling-concurrency': 3,
-        'scope-enforcement': 5,
-        'scoped-anon-elevation': 6,
-        'search': 7,
+        'scope-enforcement': 6,
+        'scoped-anon-elevation': 7,
+        'search': 8,
+        'search-origin-gate': 4,
+        'search-provider-trust': 2,
+        'search-scope-bound': 3,
         'self-avatar-client': 6,
-        'server-cache': 32,
+        'semantic-graph': 7,
+        'server-cache': 35,
         'shipped-agents-live': 4,
+        'sqlpipe-extraction-fixtures': 40,
+        'sqlpipe-matrix': 2,
+        'sqlpipe-matrix-client': 2,
+        'sqlpipe-matrix-cross': 4,
         'startup-mode': 3,
-        'storage': 6,
+        'storage': 9,
+        'subq-mercury-decisions': 8,
         'subscription-isolation': 2,
         'systemone-kev': 10,
         'task-graph-execution': 27,
         'task-graph-orchestration': 18,
+        'task-graph-security': 10,
+        'task-graph-waiting-steps': 7,
+        'task-graph-durable-retry': 3,
         'templates': 8,
+        'trailing-runtime-state': 6,
+        'transaction-group-concurrency-client': 4,
         'transaction-groups': 6,
         'transaction-groups-batched': 5,
-        'user-elevation': 4,
-        'user-routines': 16,
+        'user-elevation': 5,
+        'user-routines': 18,
+        'video-data-snapshot': 3,
+        'video-generation-cost': 2,
+        'video-studio-handoff': 3,
+        'video-studio-live-smoke': 1,
+        'video-studio-production': 5,
         'view-execution': 12,
+        'view-properties-client': 5,
         'view-security': 4,
+        'widget-guest-isolation': 6,
+        'work-bus-core': 10,
         'work-queue-runtime': 19,
         'workflow-demo-agents': 5,
     };
@@ -372,7 +645,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(113);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(254);
     });
 });
 
@@ -413,6 +686,9 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'actions-pipeline.AP2',
         'app-behavioral.AB1',
         'app-behavioral.AB2',
+        'archive-paging.ARP1',
+        'archive-paging.ARP2',
+        'archive-paging.ARP3',
         'binary-fields.BF4',
         'binary-fields.BF6',
         'cache-architecture.CA10',
@@ -432,8 +708,41 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'cache-gauntlet.CG7',
         'cache-gauntlet.CG8',
         'cache-immutability.F12',
+        'ciphertext-cache.CT0',
+        'ciphertext-cache.CT1',
+        'ciphertext-cache.CT2',
+        'ciphertext-cache.CT3',
+        'ciphertext-cache.CT4',
+        'ciphertext-cache.CT5',
+        'ciphertext-cache.CT6',
         'client-cache.C10',
         'client-cache.C14',
+        'concurrency-conflict-client.CC1',
+        'concurrency-conflict-client.CC2',
+        'concurrency-conflict-client.CC3',
+        'concurrency-conflict-client.CC4',
+        'concurrency-conflict-client.CC5',
+        'content-pipeline.CP1',
+        'content-pipeline.CP10',
+        'content-pipeline.CP11',
+        'content-pipeline.CP12',
+        'content-pipeline.CP13',
+        'content-pipeline.CP14',
+        'content-pipeline.CP15',
+        'content-pipeline.CP16',
+        'content-pipeline.CP17',
+        'content-pipeline.CP19',
+        'content-pipeline.CP2',
+        'content-pipeline.CP20',
+        'content-pipeline.CP21',
+        'content-pipeline.CP22',
+        'content-pipeline.CP3',
+        'content-pipeline.CP4',
+        'content-pipeline.CP5',
+        'content-pipeline.CP6',
+        'content-pipeline.CP7',
+        'content-pipeline.CP8',
+        'content-pipeline.CP9',
         'content-vectorization.CV1',
         'content-vectorization.CV10',
         'content-vectorization.CV2',
@@ -444,6 +753,28 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'content-vectorization.CV7',
         'content-vectorization.CV8',
         'content-vectorization.CV9',
+        'conversation-authorship-client.CA1',
+        'conversation-authorship-client.CA10',
+        'conversation-authorship-client.CA11',
+        'conversation-authorship-client.CA12',
+        'conversation-authorship-client.CA13',
+        'conversation-authorship-client.CA2',
+        'conversation-authorship-client.CA3',
+        'conversation-authorship-client.CA4',
+        'conversation-authorship-client.CA5',
+        'conversation-authorship-client.CA6',
+        'conversation-authorship-client.CA7',
+        'conversation-authorship-client.CA8',
+        'conversation-authorship-client.CA9',
+        'conversation-delete-client.CD1',
+        'conversation-delete-client.CD2',
+        'conversation-delete-client.CD3',
+        'docs-slides-sheets-library.DSL3',
+        'docs-slides-sheets-library.DSL8',
+        'encrypted-read-client.ER1',
+        'encrypted-read-client.ER2',
+        'encrypted-read-client.ER3',
+        'encrypted-read-client.ER4',
         'entity-actions.EA1',
         'entity-actions.EA2',
         'entity-actions.EA3',
@@ -477,13 +808,37 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'entity-server-invariants.ESI3',
         'entity-server-invariants.ESI4',
         'entity-server-invariants.ESI9',
+        'entity-status-fanout-client.SF1',
+        'entity-status-fanout-client.SF2',
+        'entity-status-fanout-client.SF3',
         'entity-writes.EW1',
+        'entity-writes.EW10',
+        'entity-writes.EW11',
+        'entity-writes.EW12',
+        'entity-writes.EW13',
         'entity-writes.EW2',
         'entity-writes.EW3',
         'entity-writes.EW5',
         'entity-writes.EW6',
         'entity-writes.EW7',
         'entity-writes.EW9',
+        'feature-pipeline-core.FP1',
+        'feature-pipeline-core.FP2',
+        'feature-pipeline-core.FP3',
+        'feature-pipeline-core.FP4',
+        'feature-pipeline-core.FP5',
+        'feature-pipeline-core.FP6',
+        'feature-pipeline-core.FP7',
+        'feature-pipeline-core.FP8',
+        'feature-pipeline-core.FP9',
+        'feature-value-only.FV1',
+        'feature-value-only.FV2',
+        'feature-value-only.FV3',
+        'feature-value-only.FV4',
+        'feature-value-only.FV5',
+        'fls-closeout.CO14',
+        'fls-closeout.CO15',
+        'fls-closeout.CO16',
         'fls-lifecycle.LC1',
         'fls-lifecycle.LC2',
         'fls-lifecycle.LC3',
@@ -493,6 +848,23 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'fls-lifecycle.LC7',
         'fls-lifecycle.LC8',
         'fls-lifecycle.LC9',
+        'fp-gate-c2-1.G1',
+        'fp-gate-c2-1.G2',
+        'fp-gate-c2-1.G3',
+        'fp-gate-c2-1.G4',
+        'fp-gate-c2-1.G5',
+        'fp-gate-c2-1.G6',
+        'fp-gate-c2-2.C2.2.d',
+        'fp-gate-c2-2.G1',
+        'fp-gate-c2-2.G2',
+        'fp-gate-c2-3.G1',
+        'fp-gate-c2-3.G2',
+        'fp-gate-c2-3.G3',
+        'fp-gate-c2-5.G1',
+        'fp-gate-c2-5.G2',
+        'fp-gate-c2-5.G3',
+        'graph-runtime.GR5',
+        'graph-runtime.GR6',
         'jsontype-live-sync-client.JL1',
         'jsontype-live-sync-client.JL2',
         'jsontype-live-sync-client.JL3',
@@ -514,6 +886,8 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'livekit-room.LKR1',
         'metadata-sync-push.MSP1',
         'metadata-sync-push.MSP10',
+        'metadata-sync-push.MSP11',
+        'metadata-sync-push.MSP12',
         'metadata-sync-push.MSP2',
         'metadata-sync-push.MSP3',
         'metadata-sync-push.MSP4',
@@ -536,6 +910,140 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'permission-engine.PE11',
         'permission-engine.PE12',
         'permission-engine.PE13',
+        'ps-gate-c1-s1-1.G1.1',
+        'ps-gate-c1-s1-3.G2.22',
+        'ps-gate-c1-s2-2.G1.2',
+        'ps-gate-c1-s2-3.G1.6',
+        'ps-gate-c1-s2-6.G2.25',
+        'ps-gate-c1-s3-1.G1.12',
+        'ps-gate-c1-s4-2.G2.7',
+        'ps-gate-c1-s6-1.G2.6',
+        'ps-gate-c1-s6-4.G2.36',
+        'ps-gate-c2-s1-2.G2.21',
+        'ps-gate-c2-s2-5.G2.23',
+        'ps-gate-c2-s4-1.G2.19',
+        'ps-gate-c2-s4-5.G2.8',
+        'ps-gate-c2-s6-2-2.G2.35',
+        'ps-gate-c2-s6-2.G2.34',
+        'ps-gate-c3-s4-1.G2.18',
+        'ps-gate-c4-s2-4.G2.9',
+        'ps-gate-d1c-s6-4.G2.37',
+        'ps-gate-n1c-s6-5.G2.1',
+        'ps-gate-n1r-s6-5.G2.2',
+        'ps-gate-r1-s6-6.G2.17',
+        'ps-gate-r2-real-s4-4.G2.28',
+        'ps-gate-r2p-s4-3.G2.16',
+        'ps-gate-r3-s1-4.G1.8',
+        'ps-gate-r3-s4-3.G2.15',
+        'ps-gate-t1p-s-t-2.G2.12',
+        'ps-gate-t1p-s-t-3.G2.20',
+        'ps-gate-t2p-s-t-4.G2.26',
+        'ps-gate-t2p-s-t-5.G2.13',
+        'ps-gate-t2p-s-t-6.G2.14',
+        'ps-gate-t2p-s2-6.G2.24',
+        'ps-gate-t3-s-t-1.G1.5',
+        'ps-gate-t4-s-t-3.G2.11',
+        'ps-gate-t4-s6-5.G0.11',
+        'ps-gate-w1-s1-4.G1.7',
+        'ps-gate-w1-s3-2.G1.11',
+        'ps-gate-w1-s5-1.G2.29',
+        'ps-gate-w1-s5-3.G2.30',
+        'ps-gate-w1-s5-4-2.G2.31',
+        'ps-gate-w1-s5-4-3.G2.32',
+        'ps-gate-w1-s5-4.G0.10',
+        'ps-gate-w1-s5-5.G1.10',
+        'ps-gate-w1-s6-3.G2.39',
+        'ps-gate-w1-s7-3.G0.7',
+        'ps-gate-w1-s7-5-2.G1.9',
+        'ps-gate-w1-s7-5.G0.1',
+        'ps-gate-w1-s9-3.G0.6',
+        'ps-gate-w1-s9-4.G0.4',
+        'ps-gate-w1-s9-5.G0.5',
+        'ps-gate-w2-c1-1.G0.2',
+        'ps-gate-w2-s5-2.G2.4',
+        'ps-gate-w2-s5-3.G0.9',
+        'ps-gate-w2-s6-5.G2.3',
+        'ps-gate-w3-c1-1.G0.3',
+        'ps-gate-w3-s2-4.G2.10',
+        'ps-gate-w4-s2-1-2.G1.4',
+        'ps-gate-w4-s2-1.G0.8',
+        'ps-gate-w5-s2-2.G1.3',
+        'ps-gate-w6-s6-1.G2.41',
+        'ps-gate-w7-s4-2-2.G2.5',
+        'ps-gate-w7-s4-2.G0.12',
+        'ps-gate-w7-s6-2.G2.33',
+        'ps-gate-w8-s3-4.G2.27',
+        'ps-gate-w8-s9-4.G2.40',
+        'ps-gate-w9-s6-3.G2.38',
+        'ps-truth-datasets.C2-s2201',
+        'ps-truth-datasets.C4-s2202',
+        'ps-truth-datasets.D1c-s2210',
+        'ps-truth-datasets.D1r-s2211',
+        'ps-truth-datasets.D2-s2214',
+        'ps-truth-datasets.N1c-s2212',
+        'ps-truth-datasets.N1r-s2213',
+        'ps-truth-datasets.R1-s2203',
+        'ps-truth-datasets.R2p-s2204',
+        'ps-truth-datasets.R3-s2205',
+        'ps-truth-datasets.T1p-s2206',
+        'ps-truth-datasets.T2p-s2207',
+        'ps-truth-datasets.T3-lag-s2208',
+        'ps-truth-datasets.T3-s2208',
+        'ps-truth-datasets.T4-s2209',
+        'ps-truth-datasets.W1-signal-s42',
+        'ps-truth-datasets.W1-signal-s43',
+        'ps-truth-datasets.W1-signal-s44',
+        'ps-truth-datasets.W1-signal-s9042',
+        'ps-truth-datasets.W2-noise-s100',
+        'ps-truth-datasets.W2-noise-s101',
+        'ps-truth-datasets.W2-noise-s102',
+        'ps-truth-datasets.W2-noise-s103',
+        'ps-truth-datasets.W2-noise-s104',
+        'ps-truth-datasets.W2-noise-s105',
+        'ps-truth-datasets.W2-noise-s106',
+        'ps-truth-datasets.W2-noise-s107',
+        'ps-truth-datasets.W2-noise-s108',
+        'ps-truth-datasets.W2-noise-s109',
+        'ps-truth-datasets.W2-noise-s110',
+        'ps-truth-datasets.W2-noise-s111',
+        'ps-truth-datasets.W2-noise-s112',
+        'ps-truth-datasets.W2-noise-s113',
+        'ps-truth-datasets.W2-noise-s114',
+        'ps-truth-datasets.W2-noise-s115',
+        'ps-truth-datasets.W2-noise-s116',
+        'ps-truth-datasets.W2-noise-s117',
+        'ps-truth-datasets.W2-noise-s118',
+        'ps-truth-datasets.W2-noise-s119',
+        'ps-truth-datasets.W2-noise-s9100',
+        'ps-truth-datasets.W3-leak-row-s42',
+        'ps-truth-datasets.W3-leak-row-s43',
+        'ps-truth-datasets.W3-leak-row-s44',
+        'ps-truth-datasets.W3-leak-row-s9042',
+        'ps-truth-datasets.W4-pit-s42',
+        'ps-truth-datasets.W4-pit-s43',
+        'ps-truth-datasets.W4-pit-s44',
+        'ps-truth-datasets.W4-pit-s9042',
+        'ps-truth-datasets.W5-censor-s42',
+        'ps-truth-datasets.W5-censor-s43',
+        'ps-truth-datasets.W5-censor-s44',
+        'ps-truth-datasets.W5-censor-s9042',
+        'ps-truth-datasets.W6-drift-s42',
+        'ps-truth-datasets.W6-drift-s43',
+        'ps-truth-datasets.W6-drift-s44',
+        'ps-truth-datasets.W6-drift-s9042',
+        'ps-truth-datasets.W7-small-imbalanced-s42',
+        'ps-truth-datasets.W7-small-imbalanced-s43',
+        'ps-truth-datasets.W7-small-imbalanced-s44',
+        'ps-truth-datasets.W7-small-imbalanced-s9042',
+        'ps-truth-datasets.W8-highcard-s42',
+        'ps-truth-datasets.W8-highcard-s43',
+        'ps-truth-datasets.W8-highcard-s44',
+        'ps-truth-datasets.W8-highcard-s9042',
+        'ps-truth-datasets.W9-multiclass-s42',
+        'ps-truth-datasets.W9-multiclass-s43',
+        'ps-truth-datasets.W9-multiclass-s44',
+        'ps-truth-datasets.W9-multiclass-s9042',
+        'query-metadata-client.QM3',
         'realtime-session-guard.RSG1',
         'realtime-session-guard.RSG2',
         'realtime-session-verification.RSV1',
@@ -544,6 +1052,10 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'realtime-session-verification.RSV4',
         'realtime-session-verification.RSV5',
         'realtime-session-verification.RSV6',
+        'record-change-snapshot.RCS1',
+        'record-change-snapshot.RCS2',
+        'record-change-snapshot.RCS3',
+        'record-change-snapshot.RCS4',
         'record-cloning.RC1',
         'record-cloning.RC2',
         'record-cloning.RC4',
@@ -552,6 +1064,9 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'record-cloning.RC7',
         'record-cloning.RC8',
         'record-cloning.RC9',
+        'rls-isolation.RF1',
+        'rls-isolation.RF2',
+        'rls-isolation.RF3',
         'role-elevation.RE6',
         'rubrics.R13',
         'rubrics.R14',
@@ -559,18 +1074,24 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'rubrics.R8',
         'rubrics.R9',
         'rubrics.W1',
+        'scoped-anon-elevation.SA7',
         'self-avatar-client.AV1',
         'self-avatar-client.AV2',
         'self-avatar-client.AV3',
         'self-avatar-client.AV4',
         'self-avatar-client.AV5',
         'self-avatar-client.AV6',
+        'semantic-graph.SG4',
         'server-cache.S17',
         'server-cache.S23',
         'server-cache.S24',
         'server-cache.S29',
         'server-cache.S30',
         'server-cache.S31b',
+        'server-cache.S34',
+        'task-graph-durable-retry.DR1',
+        'task-graph-durable-retry.DR2',
+        'task-graph-durable-retry.DR3',
         'task-graph-execution.TX1',
         'task-graph-execution.TX10',
         'task-graph-execution.TX11',
@@ -602,6 +1123,27 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'task-graph-orchestration.TG15',
         'task-graph-orchestration.TG16',
         'task-graph-orchestration.TG18',
+        'task-graph-security.TGS1',
+        'task-graph-security.TGS10',
+        'task-graph-security.TGS2',
+        'task-graph-security.TGS3',
+        'task-graph-security.TGS4',
+        'task-graph-security.TGS5',
+        'task-graph-security.TGS6',
+        'task-graph-security.TGS7',
+        'task-graph-security.TGS8',
+        'task-graph-security.TGS9',
+        'task-graph-waiting-steps.WS1',
+        'task-graph-waiting-steps.WS2',
+        'task-graph-waiting-steps.WS3',
+        'task-graph-waiting-steps.WS4',
+        'task-graph-waiting-steps.WS5',
+        'task-graph-waiting-steps.WS6',
+        'task-graph-waiting-steps.WS7',
+        'transaction-group-concurrency-client.TGC1',
+        'transaction-group-concurrency-client.TGC2',
+        'transaction-group-concurrency-client.TGC3',
+        'transaction-group-concurrency-client.TGC4',
         'transaction-groups-batched.TGB1',
         'transaction-groups-batched.TGB2',
         'transaction-groups-batched.TGB3',
@@ -622,6 +1164,11 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
     // Checks skipped in the deterministic lane unless RUN_AGENT_TESTS=1 arms the weekly live-model lane.
     const EXPECTED_LIVE_MODEL_GATED: string[] = [
         'agent-artifact-tools.AT1',
+        'agent-artifact-tools.AT10',
+        'agent-artifact-tools.AT11',
+        'agent-artifact-tools.AT12',
+        'agent-artifact-tools.AT13',
+        'agent-artifact-tools.AT14',
         'agent-artifact-tools.AT2',
         'agent-artifact-tools.AT3',
         'agent-artifact-tools.AT4',
@@ -638,6 +1185,10 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'agent-carry-forward.CF6',
         'agent-compaction-e2e.CE2',
         'agent-compaction-e2e.CE9',
+        'agent-execution-primitives-live.AEPL1',
+        'agent-execution-primitives-live.AEPL2',
+        'agent-execution-primitives-live.AEPL3',
+        'agent-execution-primitives-live.AEPL4',
         'agent-loop-live.AL1',
         'agent-loop-live.AL2',
         'agent-loop-live.AL3',
@@ -676,10 +1227,27 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'agent-skills-live.SL5',
         'agent-wire-callback.WC1',
         'agent-wire-callback.WC2',
+        'chief-of-staff-live.COSL1',
+        'chief-of-staff-live.COSL2',
+        'chief-of-staff-live.COSL3',
+        'chief-of-staff-live.COSL4',
+        'fp-live-jobtitle.L1',
+        'native-tool-calling-live.NTC1',
+        'native-tool-calling-live.NTC2',
+        'native-tool-calling-live.NTC3',
+        'native-tool-calling-live.NTC4',
+        'native-tool-loop-live.NTLL1',
+        'native-tool-loop-live.NTLL2',
+        'native-tool-loop-live.NTLL3',
+        'performance-benchmark.PB10',
+        'performance-benchmark.PB11',
+        'performance-benchmark.PB12',
+        'ps-gate-w1-s9-3.G0.6',
         'shipped-agents-live.SA1',
         'shipped-agents-live.SA2',
         'shipped-agents-live.SA3',
         'shipped-agents-live.SA4',
+        'video-studio-live-smoke.VSLS1',
     ];
 
     it('the mutation-gated (RequiresMutation) set is exactly the pinned snapshot', () => {
@@ -690,5 +1258,92 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
     it('the live-model-gated (RequiresLiveModel) set is exactly the pinned snapshot', () => {
         const actual = collectGated('RequiresLiveModel');
         expect(actual, `Live-model-gated set drifted (a check newly self-skips or un-gated). Paste over EXPECTED_LIVE_MODEL_GATED if deliberate:\n${pasteReady(actual)}`).toEqual(EXPECTED_LIVE_MODEL_GATED);
+    });
+});
+
+describe('skip allowlist', () => {
+    const ALLOWLIST_TEST_LOCAL_PREFIXES = new Set(['regtest', 'bundleX', 'bundleY', 'lifecycletest', 'self-test']);
+
+    // Mutation-gated checks that call SkipCheck(...) directly inside their body without a
+    // SKIP_ALLOWLIST entry. On PRs (RUN_MUTATION_TESTS unset) the driver skips these at the
+    // mutation-tier gate and passes; on the nightly lane (RUN_MUTATION_TESTS=1) their body runs,
+    // so any secondary SkipCheck(...) they hit will FAIL the nightly unless the precondition is
+    // guaranteed in CI or the check is in SKIP_ALLOWLIST.
+    //
+    // Every check pinned below has been audited as a defensive guard against a corrupted fixture
+    // or a transport mismatch that the suite metadata already filters out. If a new
+    // RequiresMutation check calls SkipCheck(...), either:
+    //   1. Add an entry in skip-allowlist.ts (with a tracking issue if CI should satisfy it), OR
+    //   2. Confirm the precondition is guaranteed on nightly CI and paste the updated list below.
+    const EXPECTED_UNALLOWLISTED_MUTATION_SKIP_CHECKS: string[] = [
+        'app-behavioral.AB1',
+        'app-behavioral.AB2',
+        'binary-fields.BF4',
+        'binary-fields.BF6',
+        'conversation-authorship-client.CA12',
+        'graph-runtime.GR6',
+        'livekit-room.LKR1',
+        'nested-transactions.NT9',
+        'permission-engine.PE11',
+        'permission-engine.PE12',
+        'permission-engine.PE13',
+        'query-metadata-client.QM3',
+        'realtime-session-guard.RSG1',
+        'realtime-session-guard.RSG2',
+        'server-cache.S29',
+        'server-cache.S31b',
+        'task-graph-security.TGS10',
+        'task-graph-security.TGS4',
+        'task-graph-security.TGS5',
+        'task-graph-security.TGS6',
+        'task-graph-security.TGS7',
+        'task-graph-security.TGS8',
+        'task-graph-security.TGS9',
+        'transaction-groups-batched.TGB1',
+        'transaction-groups-batched.TGB2',
+        'transaction-groups-batched.TGB3',
+        'transaction-groups-batched.TGB4',
+        'transaction-groups-batched.TGB5',
+        'user-elevation.UE4',
+    ];
+
+    it('every allowlist entry names a registered check, gives a reason, and uses a valid transport when scoped', () => {
+        const reg = IntegrationCheckRegistry.Instance;
+        const entries = reg.GetAllowedSkips();
+        expect(entries.length).toBe(SKIP_ALLOWLIST.length);
+        const bundles = new Set(reg.GetBundleNames());
+        const stale = entries.filter(e => !reg.Get(e.CheckId) && !bundles.has(e.CheckId)).map(e => e.CheckId);
+        expect(stale, `Allowlist entries for checks that are not registered: ${stale.join(', ')}`).toEqual([]);
+        expect(entries.filter(e => e.Reason.trim().length < 20).map(e => e.CheckId)).toEqual([]);
+        const invalidTransports = entries
+            .filter(e => e.Transport !== undefined && e.Transport !== 'server' && e.Transport !== 'client')
+            .map(e => e.CheckId);
+        expect(invalidTransports).toEqual([]);
+    });
+
+    it('pins every RequiresMutation check whose body calls SkipCheck without a SKIP_ALLOWLIST entry (PR-vs-nightly asymmetry guard)', () => {
+        const reg = IntegrationCheckRegistry.Instance;
+        const actual: string[] = [];
+        for (const name of reg.GetBundleNames()) {
+            if (ALLOWLIST_TEST_LOCAL_PREFIXES.has(name)) {
+                continue;
+            }
+            for (const c of reg.GetBundle(name)) {
+                const bundleId = name;
+                const isAllowlisted = Boolean(reg.GetAllowedSkip(c.Id) || reg.GetAllowedSkip(bundleId));
+                if (c.RequiresMutation && !isAllowlisted && /\bSkipCheck\b/.test(c.Fn.toString())) {
+                    actual.push(c.Id);
+                }
+            }
+        }
+        actual.sort();
+        const pasteReady = actual.map(id => `        '${id}',`).join('\n');
+        expect(
+            actual,
+            `RequiresMutation checks calling SkipCheck() without a SKIP_ALLOWLIST entry changed.\n` +
+            `On PRs these skip at the mutation gate and stay green, but on nightly (RUN_MUTATION_TESTS=1) ` +
+            `any SkipCheck() they hit fails the run. Add a SKIP_ALLOWLIST entry or, if nightly CI satisfies ` +
+            `the precondition, paste over EXPECTED_UNALLOWLISTED_MUTATION_SKIP_CHECKS:\n${pasteReady}`,
+        ).toEqual(EXPECTED_UNALLOWLISTED_MUTATION_SKIP_CHECKS);
     });
 });

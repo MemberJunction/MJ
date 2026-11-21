@@ -418,10 +418,10 @@ export class PasswordStrengthAction extends BaseAction {
      * Get random characters from charset
      */
     private getRandomChars(charset: string, length: number): string {
+        // randomInt draws uniformly; a byte taken modulo the charset length favors the low indexes
         let result = '';
-        const bytes = crypto.randomBytes(length);
         for (let i = 0; i < length; i++) {
-            result += charset[bytes[i] % charset.length];
+            result += charset[crypto.randomInt(charset.length)];
         }
         return result;
     }
@@ -431,10 +431,9 @@ export class PasswordStrengthAction extends BaseAction {
      */
     private shuffleString(str: string): string {
         const arr = str.split('');
-        const bytes = crypto.randomBytes(arr.length);
-        
+
         for (let i = arr.length - 1; i > 0; i--) {
-            const j = bytes[i] % (i + 1);
+            const j = crypto.randomInt(i + 1);
             [arr[i], arr[j]] = [arr[j], arr[i]];
         }
         

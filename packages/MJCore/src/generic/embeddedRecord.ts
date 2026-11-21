@@ -19,6 +19,8 @@ import { EntityCompanion, EntityCompanionDeserializeMode, EntityCompanionPayload
 import type { EntitySavePlan } from './entitySavePlan';
 import { ValidationErrorInfo, ValidationErrorType, ValidationResult } from './entityInfo';
 import type { EntitySaveOptions, IEntityDataProvider, IMetadataProvider } from './interfaces';
+import type { UserInfo } from './securityInfo';
+import { AssertClientInputWritableForUser, OmitFieldsUnreadableByActiveUser } from './entityValueFieldSecurity';
 
 /** What clearing the relationship does to the embedded row. */
 export type EmbeddedRecordClearMode = 'delete' | 'orphan' | 'refuse';
@@ -171,6 +173,16 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
         this.exposed = false;
         this.cleared = true;
         this.Owner.Set(this.ForeignKeyField, null);
+    }
+
+    /**
+     * Called when the owner is given a different user: the embedded record gets the same one,
+     * which narrows what it already holds to that user (see `BaseEntity.ContextCurrentUser`).
+     */
+    public override OnOwnerContextUserChanged(user: UserInfo): void {
+        if (this.instance) {
+            this.instance.ContextCurrentUser = user;
+        }
     }
 
     /**
@@ -341,7 +353,7 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
         const companions = await this.instance.SerializeCompanions(mode);
         return {
             EntityName: this.instance.EntityInfo?.Name ?? this.RelatedEntityName,
-            Fields: this.instance.GetAll(),
+            Fields: OmitFieldsUnreadableByActiveUser(this.instance, this.instance.GetAll()),
             IsNew: !this.instance.IsSaved,
             Cleared: false,
             Companions: companions.length > 0 ? companions : null,
@@ -393,6 +405,10 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
             }
             return;
         }
+        // A request carries client input: a caller with any field denial may send only the fields
+        // they can read, and a denied key and an unknown key get the same refusal. A no-op without
+        // a context user (no server-side caller).
+        AssertClientInputWritableForUser(target.EntityInfo, data.Fields, this.Owner.ContextCurrentUser);
         if (data.IsNew) {
             target.NewRecord();
             target.SetMany(data.Fields, true);

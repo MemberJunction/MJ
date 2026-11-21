@@ -6,6 +6,207 @@ import type { IFileSystemProvider } from './interfaces';
 const __defaultLogger: Debugger = debug('MJGlobal');
 
 /**
+ * Normalized severity level for structured diagnostic log sinks.
+ */
+export type LogSeverity = 'debug' | 'info' | 'warning' | 'error' | 'critical';
+
+/**
+ * Correlation and capture control context propagated across async boundaries
+ * (via AsyncLocalStorage on Node.js or flight-recorder state in the browser).
+ */
+export interface DiagnosticContext {
+    sessionId?: string;
+    SessionID?: string;
+    traceId?: string;
+    TraceID?: string;
+    spanId?: string;
+    SpanID?: string;
+    userId?: string;
+    UserID?: string;
+    userEmail?: string;
+    CompanyID?: string;
+    BrowserSessionID?: string;
+    SessionEndsAtMs?: number;
+    Level?: string;
+    IsCaptured?: boolean;
+    suppressCapture?: boolean;
+    SuppressCapture?: boolean;
+    captureStackTraces?: boolean;
+    scrubLiterals?: boolean;
+}
+
+/**
+ * Isomorphic provider interface for reading and scoping DiagnosticContext.
+ * Registered by `@memberjunction/diagnostics-server` on Node.js.
+ */
+export interface IDiagnosticContextProvider {
+    GetContext?(): DiagnosticContext | undefined;
+    GetCurrentContext?(): DiagnosticContext | undefined;
+    RunWithContext?<T>(ctx: DiagnosticContext | undefined, fn: () => T): T;
+    WithoutDiagnosticCapture?<T>(fn: () => T): T;
+    RunDetached?<T>(fn: () => T): T;
+}
+
+/**
+ * Structured log entry delivered to registered diagnostic log sinks.
+ */
+export interface LogEntry {
+    ts: number;
+    timestamp: string;
+    severity: LogSeverity;
+    category?: string;
+    message: string;
+    error?: { name: string; message: string; stack?: string };
+    metadata?: Record<string, unknown>;
+    additionalArgsCount?: number;
+    verboseOnly?: boolean;
+    sessionId?: string;
+    traceId?: string;
+}
+
+/**
+ * Callback signature for a structured log sink.
+ */
+export type LogSink = (entry: LogEntry, context?: DiagnosticContext) => void;
+
+const _logSinks = new Set<LogSink>();
+let _diagnosticContextProvider: IDiagnosticContextProvider | null = null;
+let _suppressCaptureDepth = 0;
+let _inMJLogToConsole = false;
+let _verboseLoggingOverride: boolean | null = null;
+
+/**
+ * Registers a structured log sink that receives all LogStatusEx / LogWarning / LogErrorEx entries,
+ * including `verboseOnly: true` entries even when console verbose output is off.
+ * Returns an unsubscribe function.
+ */
+export function RegisterLogSink(sink: LogSink): () => void {
+    _logSinks.add(sink);
+    return () => {
+        _logSinks.delete(sink);
+    };
+}
+
+/**
+ * Sets or clears the ambient diagnostic context provider (e.g., Node AsyncLocalStorage).
+ */
+export function SetDiagnosticContextProvider(provider: IDiagnosticContextProvider | null): void {
+    _diagnosticContextProvider = provider;
+}
+
+/**
+ * Returns the active DiagnosticContext for the current async execution chain, if any.
+ */
+export function GetDiagnosticContext(): DiagnosticContext | undefined {
+    return _diagnosticContextProvider?.GetContext?.() ?? _diagnosticContextProvider?.GetCurrentContext?.();
+}
+
+/**
+ * Returns true when diagnostic capture is currently suppressed (to prevent recursion
+ * when flushing diagnostic chunks or writing diagnostic records).
+ */
+export function IsDiagnosticCaptureSuppressed(): boolean {
+    if (_suppressCaptureDepth > 0) {
+        return true;
+    }
+    const ctx = GetDiagnosticContext();
+    return ctx?.suppressCapture === true || ctx?.SuppressCapture === true;
+}
+
+/**
+ * Executes `fn` with diagnostic capture suppressed for both synchronous and async work
+ * inside the current context. Prevents infinite recursion when diagnostic writers
+ * perform database or logging operations.
+ *
+ * With a context provider registered, suppression lives only in the async-local context, so
+ * other requests keep capturing. Without one, a process-wide counter suppresses capture until `fn` settles.
+ */
+export function WithoutDiagnosticCapture<T>(fn: () => T): T {
+    if (_diagnosticContextProvider?.WithoutDiagnosticCapture) {
+        return _diagnosticContextProvider.WithoutDiagnosticCapture(fn);
+    }
+    if (_diagnosticContextProvider?.RunWithContext) {
+        const current = GetDiagnosticContext();
+        return _diagnosticContextProvider.RunWithContext(
+            { ...(current ?? {}), suppressCapture: true, SuppressCapture: true, IsCaptured: false },
+            fn
+        );
+    }
+    return runWithSuppressionCounter(fn);
+}
+
+/** Runs `fn` with the process-wide suppression counter raised until it returns or its promise settles. */
+function runWithSuppressionCounter<T>(fn: () => T): T {
+    _suppressCaptureDepth++;
+    const release = (): void => {
+        _suppressCaptureDepth = Math.max(0, _suppressCaptureDepth - 1);
+    };
+    try {
+        const result = fn();
+        if (result != null && typeof (result as unknown as Promise<unknown>).then === 'function') {
+            return (result as unknown as Promise<unknown>).finally(release) as unknown as T;
+        }
+        release();
+        return result;
+    } catch (err) {
+        release();
+        throw err;
+    }
+}
+
+/**
+ * Runs `fn` detached from any active request/session DiagnosticContext.
+ * Use when spawning fire-and-forget background timers or daemons from inside a request
+ * so they do not keep the request's diagnostic session context alive indefinitely.
+ */
+export function RunDetachedFromDiagnosticContext<T>(fn: () => T): T {
+    if (_diagnosticContextProvider?.RunDetached) {
+        return _diagnosticContextProvider.RunDetached(fn);
+    }
+    if (_diagnosticContextProvider?.RunWithContext) {
+        return _diagnosticContextProvider.RunWithContext(undefined, fn);
+    }
+    return fn();
+}
+
+export const RunDetachedDiagnosticContext = RunDetachedFromDiagnosticContext;
+
+/**
+ * Returns true while `logToConsole()` is actively invoking `console.log` / `console.error`.
+ * Used by the server console tap to avoid capturing duplicate entries for logs already
+ * routed through `RegisterLogSink`.
+ */
+export function IsInMJLogToConsole(): boolean {
+    return _inMJLogToConsole;
+}
+
+function dispatchToLogSinks(entry: Omit<LogEntry, 'timestamp'> & { timestamp?: string }): void {
+    if (_logSinks.size === 0 || IsDiagnosticCaptureSuppressed()) {
+        return;
+    }
+    const fullEntry: LogEntry = {
+        ...entry,
+        timestamp: entry.timestamp ?? new Date(entry.ts).toISOString(),
+    };
+    const ctx = GetDiagnosticContext();
+    if (ctx) {
+        if (fullEntry.sessionId === undefined && (ctx.sessionId ?? ctx.SessionID) !== undefined) {
+            fullEntry.sessionId = ctx.sessionId ?? ctx.SessionID;
+        }
+        if (fullEntry.traceId === undefined && (ctx.traceId ?? ctx.TraceID) !== undefined) {
+            fullEntry.traceId = ctx.traceId ?? ctx.TraceID;
+        }
+    }
+    for (const sink of _logSinks) {
+        try {
+            sink(fullEntry, ctx);
+        } catch {
+            // Sinks must never disrupt application logging
+        }
+    }
+}
+
+/**
  * Logs a debug message using the default 'MJGlobal' namespace logger.
  *
  * This function wraps the debug library's logger for the 'MJGlobal' namespace.
@@ -86,9 +287,36 @@ export interface LogErrorOptions {
 export function LogErrorEx(options: LogErrorOptions | string): void {
     // Handle simple string message for backward compatibility
     if (typeof options === 'string') {
+        dispatchToLogSinks({
+            ts: Date.now(),
+            severity: 'error',
+            message: options,
+        });
         logToConsole(options, true);
         return;
     }
+
+    const severity: LogSeverity = options.severity === 'warning'
+        ? 'warning'
+        : options.severity === 'critical'
+            ? 'critical'
+            : 'error';
+
+    dispatchToLogSinks({
+        ts: Date.now(),
+        severity,
+        category: options.category,
+        message: options.message,
+        error: options.error
+            ? {
+                name: options.error.name || 'Error',
+                message: options.error.message,
+                stack: options.includeStack !== false ? options.error.stack : undefined,
+            }
+            : undefined,
+        metadata: options.metadata,
+        additionalArgsCount: options.additionalArgs?.length,
+    });
     
     // Build the error message with optional metadata
     let fullMessage = options.message;
@@ -214,18 +442,54 @@ export interface LogStatusOptions {
  *   logToFileName: '/logs/batch.log'
  * });
  */
+function mapStatusSeverity(sev?: SeverityType, verboseOnly?: boolean): LogSeverity {
+    switch (sev) {
+        case SeverityType.Trace:
+        case SeverityType.Debug:
+            return 'debug';
+        case SeverityType.Warning:
+            return 'warning';
+        case SeverityType.Critical:
+            return 'critical';
+        case SeverityType.Info:
+            return 'info';
+        default:
+            return verboseOnly ? 'debug' : 'info';
+    }
+}
+
 export function LogStatusEx(options: LogStatusOptions | string): void {
     // Handle simple string message for backward compatibility
     if (typeof options === 'string') {
+        dispatchToLogSinks({
+            ts: Date.now(),
+            severity: 'info',
+            message: options,
+        });
         logToConsole(options, false);
         return;
     }
+
+    dispatchToLogSinks({
+        ts: Date.now(),
+        severity: mapStatusSeverity(options.severity, options.verboseOnly),
+        category: options.category,
+        message: options.message,
+        additionalArgsCount: options.additionalArgs?.length,
+        verboseOnly: options.verboseOnly,
+    });
     
     // Check if this is a verbose-only message
     if (options.verboseOnly) {
         const checkVerbose = options.isVerboseEnabled || IsVerboseLoggingEnabled;
         if (!checkVerbose()) {
-            return; // Skip verbose messages when verbose mode is off
+            // In a real browser (non-Node) dev session, emit verbose-only messages via
+            // console.debug so Chrome DevTools' native "Verbose" log level filter controls
+            // their visibility while keeping the default "Info" console clean.
+            if (!options.isVerboseEnabled && !runningOnNode() && runningInBrowser() && !GetProductionStatus() && (options.logToFileName === null || options.logToFileName === undefined)) {
+                console.debug(options.message, ...(options.additionalArgs || []));
+            }
+            return; // Skip standard console.log when verbose mode is off
         }
     }
     
@@ -243,6 +507,10 @@ export function LogStatusEx(options: LogStatusOptions | string): void {
  * @returns true if verbose logging is enabled
  */
 export function IsVerboseLoggingEnabled(): boolean {
+    if (_verboseLoggingOverride !== null) {
+        return _verboseLoggingOverride;
+    }
+
     // Node.js environment
     if (runningOnNode()) {
         const verbose = process.env.MJ_VERBOSE;
@@ -254,8 +522,8 @@ export function IsVerboseLoggingEnabled(): boolean {
     // Browser environment
     if (runningInBrowser()) {
         // Check global variable
-        if ((window as any).MJ_VERBOSE !== undefined) {
-            return (window as any).MJ_VERBOSE === true;
+        if ((window as unknown as Record<string, unknown>).MJ_VERBOSE !== undefined) {
+            return (window as unknown as Record<string, unknown>).MJ_VERBOSE === true;
         }
         
         // Check localStorage
@@ -282,12 +550,16 @@ export function IsVerboseLoggingEnabled(): boolean {
 }
 
 /**
- * Sets verbose logging mode in browser environments
+ * Sets verbose logging mode in both Node.js and browser environments
  * @param enabled Whether to enable verbose logging
  */
 export function SetVerboseLogging(enabled: boolean): void {
+    _verboseLoggingOverride = enabled;
+    if (runningOnNode()) {
+        process.env.MJ_VERBOSE = enabled ? 'true' : 'false';
+    }
     if (runningInBrowser()) {
-        (window as any).MJ_VERBOSE = enabled;
+        (window as unknown as Record<string, unknown>).MJ_VERBOSE = enabled;
         try {
             localStorage.setItem('MJ_VERBOSE', enabled ? 'true' : 'false');
         } catch {
@@ -307,10 +579,15 @@ export function LogStatus(message: any, logToFileName: string = null, ...args: a
 }
 
 function logToConsole(message: any, isError: boolean, ...args: any[]) {
-    if (isError) // always do console.error() for errors even in production
-        console.error(message, ...args);
-    else if (!GetProductionStatus()) // only do console.log() if we're not in production
-        console.log(message, ...args);
+    _inMJLogToConsole = true;
+    try {
+        if (isError) // always do console.error() for errors even in production
+            console.error(message, ...args);
+        else if (!GetProductionStatus()) // only do console.log() if we're not in production
+            console.log(message, ...args);
+    } finally {
+        _inMJLogToConsole = false;
+    }
 }
 /**
  * Retrieves the FileSystemProvider from the global Metadata provider.

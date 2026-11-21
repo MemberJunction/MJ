@@ -19,6 +19,23 @@ import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 // FeatureAssembly executor + as-of / leakage-guard correctness primitives (§5/§6).
 export * from './feature-assembly';
 
+// Training Snapshot — the matrix (with the header the trainer reads), row manifest and per-value provenance files,
+// their hashes and the snapshot content hash, the assembly code-version stamp, the write-once file stores, the
+// holdout carver, the snapshot builder, and training and retraining from a snapshot.
+export * from './snapshot/index';
+
+// Predictive Studio file storage — PredictiveStudioStorage: the one MJ storage provider (PS_STORAGE_PROVIDER) Training
+// Snapshot and trained model files are written to, and the providers stored files' MJ: Files rows name.
+export * from './storage/ps-storage-provider';
+
+// Evaluation Protocol version rows — EvaluationProtocolVersioning: version 1 as its own lineage root, every later
+// version under it, written the way Prediction Unit versions are.
+export * from './protocol';
+
+// Prediction Unit rows — PredictionUnitRowReader: one row per grain record (or grain record x period) with its
+// decision date, outcome window and label; censored, label-known and empty-label rows are excluded and counted.
+export * from './prediction-unit';
+
 // Feature Pipeline discovery + monitoring — FeaturePipelineEngine (BaseEngine cache
 // over the categorized MJ: Record Processes rows) + its projection types (§5.4 / SP6).
 export * from './feature-pipelines';
@@ -41,6 +58,10 @@ export * from './experiment';
 // Action boundaries — thin MJ Actions over the engine service classes (train /
 // score / experiment / promote), so agents / UI / workflows can invoke them (§12).
 export * from './actions';
+
+// The legacy-pipeline data migration — PipelineMigration: version-1 Prediction Units and Evaluation Protocols for
+// pipelines that predate them (or an archive or hold with the reason), run by the Migrate Pipelines Action.
+export * from './migration';
 
 // Remote Operations — the six Manual-mode server bodies for the CodeGen-emitted
 // `PredictiveStudio.*` operation bases. The typed peers of the Actions (same engine
@@ -92,9 +113,4 @@ export const PredictiveStudioEngineVersion = '5.43.0';
  */
 export function IsModelingPlanApproved(plan: ModelingPlanSpec): boolean {
   return plan.Approved === true;
-}
-
-/** @deprecated Use {@link IsModelingPlanApproved}. */
-export function isModelingPlanApproved(plan: ModelingPlanSpec): boolean {
-  return IsModelingPlanApproved(plan);
 }

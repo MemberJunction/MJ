@@ -27,3 +27,6 @@ export * from './generators/index.js';
 
 // Utilities
 export * from './utils/index.js';
+
+// Plugin system
+export * from './plugins/index.js';

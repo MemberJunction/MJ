@@ -200,6 +200,7 @@
   left: 50%;
   transform: translateX(-50%) translateY(8px);
   display: flex;
+  align-items: center;
   gap: 10px;
   padding: 10px;
   border-radius: var(--mj-radius-lg, 16px);
@@ -210,6 +211,10 @@
   pointer-events: none;
   transition: opacity 200ms ease, transform 200ms ease;
   z-index: 5;
+}
+.lean-sheet__media {
+  align-items: center;
+  gap: 8px;
 }
 .lean-more--open .lean-sheet {
   opacity: 1;

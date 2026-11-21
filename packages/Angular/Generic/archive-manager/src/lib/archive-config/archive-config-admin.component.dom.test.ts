@@ -46,10 +46,10 @@ const CONFIG_ROW: Row = {
 };
 const STORAGE_ROW: Row = { ID: 'sa-1', Name: 'Cold Storage' };
 
-function providerWithConfigs() {
+function providerWithConfigs(configOverrides: Row = {}) {
   return createFakeProvider<Row>({
     runViewResults: (params) => {
-      if (params.EntityName === 'MJ: Archive Configurations') return [CONFIG_ROW];
+      if (params.EntityName === 'MJ: Archive Configurations') return [{ ...CONFIG_ROW, ...configOverrides }];
       if (params.EntityName === 'MJ: File Storage Accounts') return [STORAGE_ROW];
       // 'MJ: Archive Configuration Entities' (detail load) -> none
       return [];
@@ -141,6 +141,33 @@ describe('ArchiveConfigAdminComponent (DOM, data-bound)', () => {
     f.detectChanges();
 
     expect(queryAll(f, '.entity-table tbody tr').length).toBe(1);
+  });
+
+  it('shows the storage account fields for a Store configuration', async () => {
+    const f = renderComponentFixture(ArchiveConfigAdminComponent, {
+      imports: MODULES,
+      declarations: [ArchiveConfigAdminComponent],
+      inputs: { Provider: providerWithConfigs({ StorageMode: 'Store' }) },
+    });
+    await settle(f);
+
+    expect(query(f, '#config-storage-mode')).not.toBeNull();
+    expect(query(f, '#config-storage')).not.toBeNull();
+    expect(query(f, '.detail-purge-note')).toBeNull();
+    expect(query(f, '.config-purge-tag')).toBeNull();
+  });
+
+  it('hides the storage account fields and shows the purge note for a Purge configuration', async () => {
+    const f = renderComponentFixture(ArchiveConfigAdminComponent, {
+      imports: MODULES,
+      declarations: [ArchiveConfigAdminComponent],
+      inputs: { Provider: providerWithConfigs({ StorageMode: 'Purge' }) },
+    });
+    await settle(f);
+
+    expect(query(f, '#config-storage')).toBeNull();
+    expect(query(f, '.detail-purge-note')).not.toBeNull();
+    expect(query(f, '.config-purge-tag')).not.toBeNull();
   });
 
   // NOTE: the status banner's status-success/-error modifier classes are intentionally NOT

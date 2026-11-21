@@ -26,6 +26,7 @@ export type RoutineStatusFilter = 'all' | MJUserRoutineEntity['Status'];
 export interface RoutineCounts {
     Filtered: number;
     Total: number;
+    AgentWakeCount?: number;
 }
 
 /**
@@ -77,6 +78,20 @@ export class MyRoutinesListComponent extends BaseAngularComponent implements OnI
     public set StatusFilter(value: RoutineStatusFilter) {
         if (value !== this._statusFilter) {
             this._statusFilter = value ?? 'all';
+            this.applyFilters();
+        }
+    }
+
+    private _showAgentWakes = false;
+    /** Whether self-scheduled `AgentWake` routines are shown alongside user routines. Defaults to false. */
+    public get ShowAgentWakes(): boolean {
+        return this._showAgentWakes;
+    }
+    @Input()
+    public set ShowAgentWakes(value: boolean) {
+        const normalized = value === true;
+        if (normalized !== this._showAgentWakes) {
+            this._showAgentWakes = normalized;
             this.applyFilters();
         }
     }
@@ -339,6 +354,17 @@ export class MyRoutinesListComponent extends BaseAngularComponent implements OnI
         return routine.Status !== 'Active' || this.BusyRoutineIDs.has(routine.ID);
     }
 
+    /** Human-readable schedule summary supporting Cron, OneShot, and Adaptive AgentWake rows. */
+    public ScheduleDescription(routine: MJUserRoutineEntity): string {
+        if (routine.CronExpression && routine.CronExpression.trim().length > 0) {
+            return DescribeCronExpression(routine.CronExpression);
+        }
+        if (routine.ScheduleMode === 'OneShot') {
+            return 'One-shot wake';
+        }
+        return 'Adaptive self-scheduled wake';
+    }
+
     /** Chip variant helper narrowed for the template. */
     public ChipClass(variant: RoutineChipVariant): string {
         return `routine-chip routine-chip--${variant}`;
@@ -378,7 +404,11 @@ export class MyRoutinesListComponent extends BaseAngularComponent implements OnI
     private applyFilters(): void {
         this.rebuildRelativeText();
         const search = this._searchText.trim().toLowerCase();
-        this.FilteredRoutines = this.Routines.filter((r) => {
+        const agentWakeCount = this.Routines.filter((r) => r.RoutineType === 'AgentWake').length;
+        const visiblePool = this._showAgentWakes
+            ? this.Routines
+            : this.Routines.filter((r) => r.RoutineType !== 'AgentWake');
+        this.FilteredRoutines = visiblePool.filter((r) => {
             if (this._statusFilter !== 'all' && r.Status !== this._statusFilter) {
                 return false;
             }
@@ -390,7 +420,11 @@ export class MyRoutinesListComponent extends BaseAngularComponent implements OnI
             }
             return true;
         });
-        this.CountsChanged.emit({ Filtered: this.FilteredRoutines.length, Total: this.Routines.length });
+        this.CountsChanged.emit({
+            Filtered: this.FilteredRoutines.length,
+            Total: visiblePool.length,
+            AgentWakeCount: agentWakeCount,
+        });
         this.cdr.markForCheck();
     }
 }

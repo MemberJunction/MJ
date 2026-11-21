@@ -1,8 +1,4 @@
 import {
-  AccountSASPermissions,
-  AccountSASResourceTypes,
-  AccountSASServices,
-  AccountSASSignatureValues,
   BlobClient,
   BlobGenerateSasUrlOptions,
   BlobSASPermissions,
@@ -10,7 +6,7 @@ import {
   ContainerClient,
   SASProtocol,
   StorageSharedKeyCredential,
-  generateAccountSASQueryParameters,
+  generateBlobSASQueryParameters,
 } from '@azure/storage-blob';
 import { RegisterClass } from '@memberjunction/global';
 import env from 'env-var';
@@ -249,23 +245,9 @@ export class AzureFileStorage extends FileStorageBase {
    * ```
    */
   public CreatePreAuthUploadUrl(objectName: string): Promise<CreatePreAuthUploadUrlPayload> {
-    const now = new Date();
-    const sasOptions: AccountSASSignatureValues = {
-      services: AccountSASServices.parse('b').toString(), // blobs
-      resourceTypes: AccountSASResourceTypes.parse('o').toString(), // object
-      permissions: AccountSASPermissions.parse('w'), // write-only permissions
-      protocol: SASProtocol.Https,
-      startsOn: new Date(now.valueOf() - 60 * 1000), // now minus 1 minute
-      expiresOn: new Date(now.valueOf() + 10 * 60 * 1000), // 10 minutes from now
-    };
-
-    // Using the SAS url to upload e.g.
-    // curl -H "x-ms-blob-type: BlockBlob" --upload-file 1236.txt --url "https://bccdpfiles.blob.core.windows.net/ca-temp/1236.txt?sv=2023-11-03&ss=btqf&srt=sco&spr=https&st=2024-03-18T15%3A59%3A19Z&se=2024-03-18T16%3A09%3A19Z&sp=rwdlacupi&sig=Vu68WUzRmVDsTLXpFvRUKiZVQgjWtds1FFiRDXiwtug%3D"
-
-    const sasToken = generateAccountSASQueryParameters(sasOptions, this._sharedKeyCredential).toString();
-    const queryString = sasToken[0] === '?' ? sasToken : `?${sasToken}`;
-    const UploadUrl = `https://${this._azureAccountName}.blob.core.windows.net/${this._container}/${objectName}${queryString}`;
-
+    // Create + write on THIS blob only — never an account SAS, which would write every blob in the storage account.
+    // Use e.g.: curl -H "x-ms-blob-type: BlockBlob" --upload-file report.pdf --url "<UploadUrl>"
+    const UploadUrl = this._blobSasUrl(objectName, BlobSASPermissions.parse('cw'));
     return Promise.resolve({
       UploadUrl,
       HttpMethod: 'PUT',
@@ -293,21 +275,32 @@ export class AzureFileStorage extends FileStorageBase {
    * ```
    */
   public CreatePreAuthDownloadUrl(objectName: string): Promise<string> {
+    // Read on THIS blob only — never an account SAS, which would read every blob in the storage account.
+    return Promise.resolve(this._blobSasUrl(objectName, BlobSASPermissions.parse('r')));
+  }
+
+  /**
+   * A pre-authenticated URL for exactly one blob: a service SAS scoped to `objectName` in this driver's container
+   * (`sr=b`), HTTPS only, valid from one minute ago (clock skew) for 10 minutes. The URL is the SDK's own blob URL, so
+   * the blob name is path-escaped the same way every other call addresses it.
+   *
+   * @param objectName - The blob the URL grants access to
+   * @param permissions - What the URL may do to that blob (`r` to download, `cw` to upload)
+   */
+  private _blobSasUrl(objectName: string, permissions: BlobSASPermissions): string {
     const now = new Date();
-    const sasOptions: AccountSASSignatureValues = {
-      services: AccountSASServices.parse('b').toString(), // blobs
-      resourceTypes: AccountSASResourceTypes.parse('o').toString(), // object
-      permissions: AccountSASPermissions.parse('r'), // read-only permissions
-      protocol: SASProtocol.Https,
-      startsOn: new Date(now.valueOf() - 60 * 1000), // now minus 1 minute
-      expiresOn: new Date(now.valueOf() + 10 * 60 * 1000), // 10 minutes from now
-    };
-
-    const sasToken = generateAccountSASQueryParameters(sasOptions, this._sharedKeyCredential).toString();
-    const queryString = sasToken[0] === '?' ? sasToken : `?${sasToken}`;
-    const url = `https://${this._azureAccountName}.blob.core.windows.net/${this._container}/${objectName}${queryString}`;
-
-    return Promise.resolve(url);
+    const sasToken = generateBlobSASQueryParameters(
+      {
+        containerName: this._container,
+        blobName: objectName,
+        permissions,
+        protocol: SASProtocol.Https,
+        startsOn: new Date(now.valueOf() - 60 * 1000), // now minus 1 minute
+        expiresOn: new Date(now.valueOf() + 10 * 60 * 1000), // 10 minutes from now
+      },
+      this._sharedKeyCredential,
+    ).toString();
+    return `${this._getBlobClient(objectName).url}?${sasToken}`;
   }
 
   /**

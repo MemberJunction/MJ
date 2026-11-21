@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   type DataFeatureSpec,
+  ValidateSpec,
   validateMaterializationTargets,
   type TargetValidationMetadataProvider,
   type EntityInfoLike,
@@ -335,6 +336,49 @@ describe('validateMaterializationTargets (P1-4)', () => {
     expect(error).toBeDefined();
   });
 
+  // #5831: lookup settings on a field that is not a foreign key were accepted, and every record got NULL.
+  it('rejects LookupMatchField / OnLookupMiss on a non-FK target, once, through both validators', () => {
+    const spec: DataFeatureSpec = {
+      Name: 'Lookup on non-FK',
+      Description: 'SeniorityLevelID has no related entity',
+      Context: { Fields: ['Name'] },
+      PromptID: 'p1',
+      Outputs: [
+        {
+          Ref: '$.level',
+          Name: 'Level',
+          Target: { Mode: 'field', EntityFieldName: 'ChurnRiskBand', LookupMatchField: 'Name', OnLookupMiss: 'null' },
+        },
+      ],
+      Caching: { Cacheable: false },
+    };
+
+    const fromTargets = validateMaterializationTargets(spec, mockProvider, 'Customers').filter((i) => i.Message.includes('is not a foreign key'));
+    expect(fromTargets).toHaveLength(1);
+    expect(fromTargets[0].Severity).toBe('error');
+    expect(fromTargets[0].Message).toContain('LookupMatchField and OnLookupMiss');
+
+    const fromSpec = ValidateSpec(spec, {
+      Name: customerEntity.Name,
+      Fields: customerEntity.Fields.map((f) => ({ Name: f.Name, TSType: f.TSType ?? undefined, IsVirtual: f.IsVirtual ?? false })),
+    }).filter((i) => i.Message.includes('is not a foreign key'));
+    expect(fromSpec).toHaveLength(1);
+  });
+
+  it('accepts lookup settings on a foreign-key target', () => {
+    const spec: DataFeatureSpec = {
+      Name: 'Lookup on FK',
+      Description: 'AccountManagerID points at Employees',
+      Context: { Fields: ['Name'] },
+      PromptID: 'p1',
+      Outputs: [
+        { Ref: '$.manager', Name: 'Manager', Target: { Mode: 'field', EntityFieldName: 'AccountManagerID', LookupMatchField: 'FullName' } },
+      ],
+      Caching: { Cacheable: false },
+    };
+    expect(validateMaterializationTargets(spec, mockProvider, 'Customers').some((i) => i.Message.includes('is not a foreign key'))).toBe(false);
+  });
+
   it('validates foreign key targets and rejects virtual or missing LookupMatchField', () => {
     // 1. Missing match field
     const missingFieldSpec: DataFeatureSpec = {
@@ -640,5 +684,38 @@ describe('validateMaterializationTargets (P1-4)', () => {
     };
     const issues3 = validateMaterializationTargets(validTagSpec, mockProvider, 'Customers');
     expect(issues3.filter((i) => i.Severity === 'error')).toHaveLength(0);
+  });
+});
+
+describe('validateMaterializationTargets with a feature-value-only output', () => {
+  const people: EntityInfoLike = {
+    ID: 'people-uuid',
+    Name: 'People',
+    Fields: [
+      { Name: 'ID', TSType: 'string', IsPrimaryKey: true, IsVirtual: false },
+      { Name: 'Score', Type: 'decimal', Precision: 5, Scale: 4, TSType: 'number', IsVirtual: false },
+    ],
+  };
+  const provider: TargetValidationMetadataProvider = {
+    EntityByID: (id: string) => (id === people.ID ? people : undefined),
+    EntityByName: (name: string) => (name.toLowerCase() === 'people' ? people : undefined),
+    Entities: [people],
+  };
+
+  it('validates only the field output; nothing mentions the target-less one', () => {
+    const spec: DataFeatureSpec = {
+      Name: 'Mixed',
+      Description: 'One field output and one feature-value-only output',
+      Context: { Fields: ['ID'] },
+      PromptID: 'prompt-1',
+      Outputs: [
+        { Ref: '$.Years', Name: 'Years', Constraint: { Type: 'numeric', Min: 0, Max: 60, OnViolation: 'null' } },
+        { Ref: '$.Score', Name: 'Score', Target: { Mode: 'field', EntityFieldName: 'Score' }, Constraint: { Type: 'numeric', Min: 0, Max: 1, OnViolation: 'fail' } },
+      ],
+      Caching: { Cacheable: false },
+    };
+    const issues = validateMaterializationTargets(spec, provider, 'People');
+    expect(issues.filter((i) => i.Severity === 'error')).toEqual([]);
+    expect(issues.filter((i) => i.Path.startsWith('Outputs[0]') || i.Message.includes("'Years'"))).toEqual([]);
   });
 });

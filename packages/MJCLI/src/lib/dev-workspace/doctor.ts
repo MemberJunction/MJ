@@ -1,12 +1,14 @@
 /**
  * Health checks for `mj dev workspace doctor`.
  *
- * SIDE EFFECTS: READ-ONLY filesystem access, and nothing else. Two reads happen
+ * SIDE EFFECTS: READ-ONLY filesystem access, and nothing else. Three reads happen
  * here — the workspace state collection delegated to `status.ts` (existence checks
- * plus small file reads), and ONE `readdirSync` of the parent's pnpm virtual store
- * for the one-copy census. Doctor never writes, never deletes, never spawns a
- * process (the active pnpm version is probed by the command and passed in, the same
- * contract `CollectWorkspaceStatus` uses) and never touches the network.
+ * plus small file reads), ONE `readdirSync` of the parent's pnpm virtual store
+ * for the one-copy census, and the file-time walk of member `src/` and output
+ * folders delegated to `build-output.ts`. Doctor never writes, never deletes,
+ * never spawns a process (the active pnpm version is probed by the command and
+ * passed in, the same contract `CollectWorkspaceStatus` uses) and never touches
+ * the network.
  *
  * The census exists because the failure that actually bites a joined workspace is
  * not a missing file — it is TWO COPIES of a package the runtime requires exactly
@@ -22,12 +24,14 @@ import path from 'node:path';
 import chalk from 'chalk';
 import type { Dirent } from 'node:fs';
 import { CollectOpenAppClientPackages, IndexWorkspacePackages, SENTINEL_MARKER } from './build.js';
+import { CollectBuildOutputCensus } from './build-output.js';
 import { LOCKFILE_NAME, NODE_MODULES_NAME } from './clean.js';
 import { DetectCandidates } from './detect.js';
 import { DescribeDirSource } from './dir-flag.js';
+import { DescribePrebundleRecords, FindPrebundleDrift, PrebundleRecordsOf } from './prebundle.js';
 import { CollectWorkspaceStatus } from './status.js';
 import { SENTINEL_FILE_NAME } from './write.js';
-import type { ClientPackageCensus, DirSource, WorkspaceStatus } from './types.js';
+import type { BuildOutputEntry, ClientPackageCensus, DirSource, WorkspaceStatus } from './types.js';
 
 /**
  * Packages that MUST resolve to exactly one copy across a joined workspace.
@@ -278,6 +282,29 @@ function checkSentinel(status: WorkspaceStatus): DoctorCheck {
   };
 }
 
+/**
+ * The `angular.json` prebundle-exclude entries the join added (#3875) must still be there: without
+ * them the dev server serves rebuilt linked packages from its prebundle cache. A missing entry means
+ * the file was reset (often by git) after the join.
+ */
+function checkPrebundleExcludes(parentDir: string, status: WorkspaceStatus): DoctorCheck {
+  const name = 'prebundle exclude';
+  const records = PrebundleRecordsOf(status.Sentinel);
+  if (records.length === 0) {
+    return { Name: name, Severity: 'skip', Detail: 'the sentinel records no angular.json prebundle entries' };
+  }
+  const drift = FindPrebundleDrift(parentDir, records);
+  if (drift.length === 0) {
+    return { Name: name, Severity: 'pass', Detail: `present: ${DescribePrebundleRecords(records).join('; ')}` };
+  }
+  const missing = drift.map((d) => `${d.Missing.join(', ')} from ${d.File} (project ${d.Project})`).join('; ');
+  return {
+    Name: name,
+    Severity: 'warn',
+    Detail: `missing ${missing} — rebuilt linked packages may be served stale. Re-run \`dev workspace --force\` to add them back`,
+  };
+}
+
 /** The generated pin and the pnpm actually running at the parent must be the same version. */
 function checkPnpmVersion(status: WorkspaceStatus): DoctorCheck {
   const pinned = status.PinnedPnpm === null ? null : status.PinnedPnpm.slice('pnpm@'.length);
@@ -500,6 +527,65 @@ function checkClientPackages(census: ClientPackageCensus, installed: boolean): D
   };
 }
 
+/** Most packages a build-output detail names before summarising the rest as a count. */
+const MAX_LISTED_PACKAGES = 10;
+
+/** `pkg (repo/relPath)` for each entry, capped at {@link MAX_LISTED_PACKAGES}. Pure. */
+function listPackages(entries: readonly BuildOutputEntry[]): string {
+  const listed = entries.slice(0, MAX_LISTED_PACKAGES).map((e) => `${e.Package} (${e.Repo}/${e.RelPath})`);
+  const more = entries.length - listed.length;
+  return listed.join(', ') + (more > 0 ? `, and ${more} more` : '');
+}
+
+/** The rebuild command for the first listed package, as an example the developer can run. */
+function rebuildHint(entries: readonly BuildOutputEntry[]): string {
+  const rest = entries.length > 1 ? ', and the same for each one listed' : '';
+  return `\`pnpm --filter ${entries[0].Package} run build\` at the parent${rest}`;
+}
+
+/**
+ * Every member package with a `build` script and a `src/` folder must have build output that is
+ * not older than its source (#5494). Linking a package links its source folder, so an unbuilt or
+ * stale one installs cleanly and fails only when a host loads it — a missing export, or "No form is
+ * registered for …" in Explorer. Missing output FAILS: that load always breaks. Stale output WARNS: a branch
+ * switch rewrites file times without changing anything, so a newer source file is a strong hint,
+ * not proof.
+ */
+function checkBuildOutput(entries: readonly BuildOutputEntry[], installed: boolean): DoctorCheck {
+  const name = 'build output';
+  if (entries.length === 0) {
+    return { Name: name, Severity: 'skip', Detail: 'no member package has both a build script and a src/ folder' };
+  }
+  // Nothing can be built before `pnpm install`, so "not built" here is the expected state, not a defect.
+  if (!installed) {
+    return {
+      Name: name,
+      Severity: 'skip',
+      Detail: `${entries.length} buildable package(s), but the parent has no node_modules — run \`pnpm install\` at the parent, then build`,
+    };
+  }
+  const missing = entries.filter((e) => e.State === 'missing');
+  const stale = entries.filter((e) => e.State === 'stale');
+  if (missing.length > 0) {
+    const staleNote = stale.length > 0 ? ` Also older than their source (${stale.length}): ${listPackages(stale)}.` : '';
+    return {
+      Name: name,
+      Severity: 'fail',
+      Detail:
+        `not built: ${listPackages(missing)} — imports resolve to a package's build output, so these fail when ` +
+        `Explorer or MJAPI loads them, after a clean install.${staleNote} Fix: ${rebuildHint(missing)}.`,
+    };
+  }
+  if (stale.length > 0) {
+    return {
+      Name: name,
+      Severity: 'warn',
+      Detail: `older than their source: ${listPackages(stale)} — a source file changed after the last build. Fix: ${rebuildHint(stale)}.`,
+    };
+  }
+  return { Name: name, Severity: 'pass', Detail: `all ${entries.length} buildable package(s) built and not older than their source` };
+}
+
 /**
  * Runs every health check at a parent directory. `activePnpmVersion` comes from the
  * caller (a spawn — see `pnpm.ts`) and `dirSource` likewise, so this module reads
@@ -524,12 +610,14 @@ export function CollectDoctorReport(
       checkGeneratedFiles(status),
       checkInstallArtifacts(status),
       checkSentinel(status),
+      checkPrebundleExcludes(parentDir, status),
       checkPnpmVersion(status),
       checkMemberDirs(status),
       checkCandidates(status),
       checkStandaloneInstalls(status),
       checkOneCopyCensus(census),
       checkClientPackages(CollectClientPackageCensus(parentDir, status.Members), status.NodeModulesExists),
+      checkBuildOutput(CollectBuildOutputCensus(parentDir, status.Members), status.NodeModulesExists),
     ],
   };
 }

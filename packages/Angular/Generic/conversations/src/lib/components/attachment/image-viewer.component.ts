@@ -331,12 +331,16 @@ export class ImageViewerComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Download the image
+   * Download the image. A browser ignores `download` on a cross-origin URL (an image from a
+   * message's text, served by the API host) and navigates instead, so the link opens a new tab
+   * rather than replacing the app; a data: or same-origin URL still downloads.
    */
   DownloadImage(): void {
     const link = document.createElement('a');
     link.href = this.ImageUrl;
     link.download = this.FileName;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
     link.click();
   }
 

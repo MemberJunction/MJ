@@ -135,3 +135,42 @@ describe('ParseTaskInputPayload: an unparseable InputPayload is a refusal, not a
         expect('ErrorMessage' in result && result.ErrorMessage).toMatch(/Task T-1.*InputPayload.*not valid JSON/i);
     });
 });
+
+describe('mergedPayload: template placeholder resolution against upstream dependencyOutputs', () => {
+    it('resolves {{output.taskX.field}}, nested array/object placeholders, and @taskX.output references', async () => {
+        const actionRunner = actionRunnerStub();
+        const dispatcher = dispatcherWith(actionRunner);
+
+        const deps = new Map<string, unknown>([
+            ['task-2', { totalSales: 2703745, summary: 'Total sales over the last 5 years: $2,703,745.00' }],
+            ['task-3', { handle: 'doc-uuid-123', documentType: 'pdf' }],
+        ]);
+
+        const inputPayload = {
+            Handle: '{{output.create_report_doc.handle}}',
+            Operations: [
+                { type: 'paragraph', text: '{{output.task2.summary}}' },
+            ],
+            SalesTotal: '@query_sales.output.totalSales',
+            RawData: '@task2.output',
+        };
+
+        const result = await dispatcher.runTaskBody(actionTask('Action'), provider, inputPayload, deps);
+
+        expect(result.Success).toBe(true);
+        expect(actionRunner.RunActionForTask).toHaveBeenCalledTimes(1);
+        const passedInput = actionRunner.RunActionForTask.mock.calls[0][0].InputPayload;
+        expect(() => JSON.stringify(passedInput)).not.toThrow();
+        expect(passedInput.Handle).toBe('doc-uuid-123');
+        expect(passedInput.SalesTotal).toBe(2703745);
+        expect(passedInput.Operations).toEqual([
+            { type: 'paragraph', text: 'Total sales over the last 5 years: $2,703,745.00' },
+        ]);
+        expect(passedInput.RawData).toMatchObject({
+            totalSales: 2703745,
+            summary: 'Total sales over the last 5 years: $2,703,745.00',
+            handle: 'doc-uuid-123',
+        });
+    });
+});
+

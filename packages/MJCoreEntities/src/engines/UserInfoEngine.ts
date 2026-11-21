@@ -9,7 +9,7 @@ import {
   RunView,
   UserInfo,
 } from '@memberjunction/core';
-import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID, NormalizeUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { Observable } from 'rxjs';
 
 /**
@@ -142,6 +142,13 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   private _pendingSettings: Map<string, { value: string; contextUser?: UserInfo; timestamp: number }> = new Map();
 
   /**
+   * Engine properties already reported as permission-constrained by
+   * {@link readIfPermitted}, so the notice is logged once per property per process
+   * rather than on every read (notification badges re-read on every emission).
+   */
+  private _permissionNoticesLogged: Set<string> = new Set();
+
+  /**
    * Timer handle for the debounce flush
    */
   private _settingsDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -169,16 +176,20 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       return;
     }
 
-    // Check if we need to reload due to user change
-    if (this._loadedForUserId && this._loadedForUserId !== userId) {
-      forceRefresh = true; // Force refresh if user changed
-    }
-
     // On the client (Network/GraphQL provider), filter user-specific entities by UserID
     // to avoid loading all users' data. On the server (Database provider), load everything
     // because the server handles multiple users from a single process.
-    const isClientSide = this.ProviderToUse.ProviderType === 'Network';
-    const userFilter = isClientSide && userId ? `UserID='${userId}'` : undefined;
+    const isClientSide = md.ProviderType === 'Network';
+
+    // Check if we need to reload due to user change.
+    // Only client-side instances filter by UserID (`userFilter` below); server-side instances
+    // hold the full unfiltered multi-user dataset in memory, so a different caller's contextUser
+    // must NOT force an 8-table BypassCache reload or clobber `_loadedForUserId`.
+    if (isClientSide && this._loadedForUserId && !UUIDsEqual(this._loadedForUserId, userId)) {
+      forceRefresh = true; // Force refresh if client user changed
+    }
+
+    const userFilter = isClientSide && userId ? `UserID='${EscapeSQLString(userId)}'` : undefined;
 
     const configs: Partial<BaseEnginePropertyConfig>[] = [
       {
@@ -246,7 +257,9 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     ];
 
     await super.Load(configs, provider, forceRefresh, contextUser);
-    this._loadedForUserId = userId;
+    if (isClientSide || forceRefresh || !this._loadedForUserId) {
+      this._loadedForUserId = userId;
+    }
   }
 
   // ========================================================================
@@ -314,23 +327,64 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * synchronously (e.g. form-variant picker → form reload) depend on
    * this freshness guarantee.
    *
+   * A user who cannot read `MJ: User Settings` (a permission-constrained session such as an
+   * external magic-link user) gets `undefined` — "not set", so callers fall back to their
+   * defaults — instead of a thrown `PermissionConstrainedError`. The denial is logged once.
+   *
    * @param settingKey - The setting key to find (e.g., "default-view-setting/Contacts")
    * @returns The setting value string, or undefined if not found
    */
   public GetSetting(settingKey: string): string | undefined {
     const pending = this._pendingSettings.get(settingKey);
     if (pending !== undefined) return pending.value;
-    const setting = this.UserSettings.find((s) => s.Setting === settingKey);
+    const setting = this.readIfPermitted('_userSettings', () => this.UserSettings).find((s) => s.Setting === settingKey);
     return setting?.Value ?? undefined;
   }
 
   /**
    * Get a user setting entity by key.
+   *
+   * Like {@link GetSetting}, a user who cannot read `MJ: User Settings` (e.g. an external
+   * magic-link session) gets `undefined` — "not set" — instead of a thrown
+   * `PermissionConstrainedError`; the denial is logged once.
    * @param settingKey - The setting key to find
    * @returns The MJUserSettingEntity, or undefined if not found
    */
   public GetSettingEntity(settingKey: string): MJUserSettingEntity | undefined {
-    return this.UserSettings.find((s) => s.Setting === settingKey);
+    return this.readIfPermitted('_userSettings', () => this.UserSettings).find((s) => s.Setting === settingKey);
+  }
+
+  /**
+   * Reads a permission-gated engine property for a LOOKUP whose empty answer is safe
+   * ("no such setting", "no notifications"). When the current user lacks read permission
+   * on the property's entity, returns `[]` and logs the denial once per property instead
+   * of letting `PermissionConstrainedError` escape.
+   *
+   * Engines are permission-constrained by design for restricted sessions (external
+   * magic-link users hold only 'Magic Link Baseline' plus a granted role), so these
+   * lookups run at every boot for such users and must not throw.
+   *
+   * Also used by the read-only display collections whose empty answer is equally safe —
+   * {@link UserFavorites}, {@link NotificationPreferences} and {@link NotificationTypes}: no
+   * caller treats an empty one as a cue to create records, and their consumers (Home,
+   * profile, notification settings, Data Explorer) run inside a restricted session too.
+   *
+   * Deliberately NOT used by the raw collection getters whose emptiness means "brand-new
+   * user" (`UserSettings`, `Workspaces`, `UserApplications`, ...): those keep throwing,
+   * because such a caller would otherwise auto-create records for a user who simply cannot
+   * see them. Those callers must check {@link IsPermissionConstrained} first.
+   */
+  private readIfPermitted<E>(propertyName: string, read: () => E[]): E[] {
+    if (!this.IsPropertyPermissionConstrained(propertyName)) {
+      return read();
+    }
+    if (!this._permissionNoticesLogged.has(propertyName)) {
+      this._permissionNoticesLogged.add(propertyName);
+      LogStatus(
+        `UserInfoEngine: current user cannot read ${propertyName} (permission-constrained session); treating it as empty.`,
+      );
+    }
+    return [];
   }
 
   /**
@@ -575,7 +629,18 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * Get unread notifications for the current user
    */
   public get UnreadNotifications(): MJUserNotificationEntity[] {
-    return this.UserNotifications.filter((n) => n.Unread);
+    return this.UserNotificationsIfPermitted.filter((n) => n.Unread);
+  }
+
+  /**
+   * The current user's notifications (same filter and order as {@link UserNotifications}),
+   * or `[]` when the user cannot read `MJ: User Notifications` — a permission-constrained
+   * session such as an external magic-link user. Never throws `PermissionConstrainedError`;
+   * the denial is logged once. Use this for badges, counts and lists that should simply
+   * show nothing for such users.
+   */
+  public get UserNotificationsIfPermitted(): MJUserNotificationEntity[] {
+    return this.readIfPermitted('_userNotifications', () => this.UserNotifications);
   }
 
   /**
@@ -641,11 +706,12 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   }
 
   /**
-   * Get all favorites for the current user, ordered by creation date (newest first)
+   * Get all favorites for the current user, ordered by creation date (newest first).
+   * Empty (not a thrown `PermissionConstrainedError`) for a session that cannot read them.
    */
   public get UserFavorites(): MJUserFavoriteEntity[] {
     if (!this._loadedForUserId) return [];
-    return this.GetConfigData<MJUserFavoriteEntity>('_userFavorites')
+    return this.readIfPermitted('_userFavorites', () => this.GetConfigData<MJUserFavoriteEntity>('_userFavorites'))
       .filter((f) => UUIDsEqual(f.UserID, this._loadedForUserId))
       .sort((a, b) => new Date(b.Get('__mj_CreatedAt')).getTime() - new Date(a.Get('__mj_CreatedAt')).getTime());
   }
@@ -1319,6 +1385,11 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     // Calculate starting sequence based on existing apps
     const maxExistingSequence = this._userApplications.filter((ua) => UUIDsEqual(ua.UserID, userId)).reduce((max, ua) => Math.max(max, ua.Sequence), -1);
 
+    // Saves that failed, kept until the database is re-read: the server's own new-user provisioning
+    // may have created the same rows a moment earlier (the unique key on UserID + ApplicationID then
+    // refuses ours), and that is not an error.
+    const failed: Array<{ App: ApplicationInfo; Detail: string }> = [];
+
     for (const [index, appInfo] of defaultApps.entries()) {
       try {
         const userApp = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications', contextUser);
@@ -1334,22 +1405,72 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
           createdUserApps.push(userApp);
           console.log(`UserInfoEngine.CreateDefaultApplications: Created UserApplication for ${appInfo.Name}`);
         } else {
-          console.error(`UserInfoEngine.CreateDefaultApplications: Failed to create for ${appInfo.Name}:`, userApp.LatestResult);
+          failed.push({ App: appInfo, Detail: userApp.LatestResult?.CompleteMessage ?? 'unknown error' });
         }
       } catch (error) {
-        console.error(`UserInfoEngine.CreateDefaultApplications: Error for ${appInfo.Name}:`, error instanceof Error ? error.message : String(error));
+        failed.push({ App: appInfo, Detail: error instanceof Error ? error.message : String(error) });
       }
+    }
+
+    if (failed.length > 0) {
+      createdUserApps.push(...(await this.reconcileFailedDefaultApplications(userId, failed, contextUser)));
     }
 
     return createdUserApps;
   }
 
   /**
-   * Get all notification preferences for the current user
+   * After some default-app saves failed, re-reads the user's rows from the database (bypassing the
+   * cache) and keeps the ones that now exist — created by the server's new-user provisioning in the
+   * same window. Only an app that is still missing is reported as an error.
+   *
+   * @returns The database rows that stand in for the failed saves.
+   */
+  private async reconcileFailedDefaultApplications(
+    userId: string,
+    failed: ReadonlyArray<{ App: ApplicationInfo; Detail: string }>,
+    contextUser?: UserInfo,
+  ): Promise<MJUserApplicationEntity[]> {
+    let existing: MJUserApplicationEntity[] = [];
+    try {
+      const rv = new RunView(this.RunViewProviderToUse);
+      const result = await rv.RunView<MJUserApplicationEntity>({
+        EntityName: 'MJ: User Applications',
+        ExtraFilter: `UserID='${userId}'`,
+        ResultType: 'entity_object',
+        BypassCache: true
+      }, contextUser ?? this.ContextUser);
+      existing = result.Success ? result.Results : [];
+    } catch (error) {
+      console.error('UserInfoEngine.CreateDefaultApplications: re-reading UserApplications failed:', error instanceof Error ? error.message : String(error));
+    }
+
+    const existingByApp = IndexByUUID(existing, (ua) => ua.ApplicationID);
+    const cachedIds = new UUIDSet(this._userApplications.map((ua) => ua.ID));
+    const recovered: MJUserApplicationEntity[] = [];
+    for (const { App, Detail } of failed) {
+      const row = existingByApp.Get(App.ID);
+      if (!row) {
+        console.error(`UserInfoEngine.CreateDefaultApplications: Failed to create for ${App.Name}: ${Detail}`);
+        continue;
+      }
+      if (!cachedIds.Has(row.ID)) {
+        this._userApplications.push(row);
+        cachedIds.Add(row.ID);
+      }
+      recovered.push(row);
+      LogStatus(`UserInfoEngine.CreateDefaultApplications: ${App.Name} was already created for this user (by the server); keeping that row`);
+    }
+    return recovered;
+  }
+
+  /**
+   * Get all notification preferences for the current user.
+   * Empty (not a thrown `PermissionConstrainedError`) for a session that cannot read them.
    */
   public get NotificationPreferences(): MJUserNotificationPreferenceEntity[] {
     if (!this._loadedForUserId) return [];
-    return this.GetConfigData<MJUserNotificationPreferenceEntity>('_userNotificationPreferences')
+    return this.readIfPermitted('_userNotificationPreferences', () => this.GetConfigData<MJUserNotificationPreferenceEntity>('_userNotificationPreferences'))
       .filter((p) => UUIDsEqual(p.UserID, this._loadedForUserId));
   }
 
@@ -1368,8 +1489,9 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   /**
    * Get all notification types.
    * Notification types are global (not user-specific) and define the available notification categories.
+   * Empty (not a thrown `PermissionConstrainedError`) for a session that cannot read them.
    */
   public get NotificationTypes(): MJUserNotificationTypeEntity[] {
-    return this.GetConfigData<MJUserNotificationTypeEntity>('_notificationTypes');
+    return this.readIfPermitted('_notificationTypes', () => this.GetConfigData<MJUserNotificationTypeEntity>('_notificationTypes'));
   }
 }

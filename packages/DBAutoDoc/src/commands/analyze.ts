@@ -43,6 +43,10 @@ export default class Analyze extends Command {
     'pruning-only': Flags.boolean({
       description: 'Skip discovery and analysis iterations. Only run the FK pruning pass on an existing state file. Requires --resume.',
       default: false
+    }),
+    'skip-sampling': Flags.boolean({
+      description: 'Skip table data sampling pass (useful for large databases or when schema/dictionary is already provided)',
+      default: false
     })
   };
 
@@ -79,6 +83,8 @@ export default class Analyze extends Command {
         resumeFromState: flags.resume,
         reanalyzeBelowConfidence,
         maxIterations,
+        // --pruning-only runs the FK pruning pass alone; sampling would be new work it never asked for
+        skipSampling: flags['skip-sampling'] || flags['pruning-only'],
         onProgress: (message, data) => {
           if (data) {
             spinner.succeed(`${message}: ${JSON.stringify(data)}`);

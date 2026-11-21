@@ -14,6 +14,7 @@ import { parseBase64DataUrl } from '@memberjunction/ai';
 import { LogStatus } from '@memberjunction/core';
 import { MarkdownToBlocks } from './slack-formatter.js';
 import { BuildExplorerDeepLink, IsOpenableURI } from '../base/message-formatter.js';
+import { TrimTrailingSlashes } from '@memberjunction/global';
 
 /** Slack enforces a hard 50-block limit per message. */
 const SLACK_MAX_BLOCKS = 50;
@@ -514,7 +515,7 @@ function buildExplorerArtifactLink(
   if (!explorerBaseURL) return null;
   if (!conversationId && !artifactId) return null;
 
-  const base = explorerBaseURL.replace(/\/+$/, '');
+  const base = TrimTrailingSlashes(explorerBaseURL);
   const links: string[] = [];
 
   if (conversationId) {

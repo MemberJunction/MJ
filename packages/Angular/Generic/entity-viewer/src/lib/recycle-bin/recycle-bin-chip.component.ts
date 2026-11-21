@@ -2,13 +2,19 @@ import {
   Component,
   ChangeDetectionStrategy,
   ChangeDetectorRef,
+  ElementRef,
   EventEmitter,
+  inject,
   Input,
+  OnDestroy,
   OnInit,
   Output,
   ViewEncapsulation,
 } from '@angular/core';
-import { Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, BaseEntityEvent, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
+import { Subscription } from 'rxjs';
+import { debounceTime, filter } from 'rxjs/operators';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import {
   AfterRecordRestoreEventArgs,
@@ -59,6 +65,7 @@ import {
       </button>
 
       <mj-recycle-bin
+        [Provider]="Provider"
         [Visible]="PanelVisible"
         [EntityName]="EntityName"
         [ContextUser]="ContextUser"
@@ -107,7 +114,14 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None,
 })
-export class RecycleBinChipComponent extends BaseAngularComponent implements OnInit  {
+export class RecycleBinChipComponent extends BaseAngularComponent implements OnInit, OnDestroy {
+  /**
+   * By default in automated test environments (Vitest/happy-dom/jsdom), IntersectionObserver callbacks
+   * do not fire without real browser layout engines. Tests wanting to verify intersection observer logic
+   * can set this to false.
+   */
+  public static SkipIntersectionObserverInTest = true;
+
   /**
    * Entity name whose deleted records will be surfaced. When null/empty,
    * the chip hides itself entirely.
@@ -117,7 +131,11 @@ export class RecycleBinChipComponent extends BaseAngularComponent implements OnI
   set EntityName(value: string | null) {
     if (value !== this._entityName) {
       this._entityName = value;
-      if (this.isInitialized) this.refreshCount();
+      if (this.isInitialized) {
+        if (this.isVisibleInViewport || typeof IntersectionObserver === 'undefined') {
+          this.refreshCount();
+        }
+      }
     }
   }
   get EntityName(): string | null {
@@ -148,17 +166,95 @@ export class RecycleBinChipComponent extends BaseAngularComponent implements OnI
   public TracksChanges = false;
 
   private isInitialized = false;
+  private isVisibleInViewport = false;
+  private intersectionObserver: IntersectionObserver | null = null;
+  private deleteSub: Subscription | null = null;
+  private elementRef = inject(ElementRef<HTMLElement>);
 
   constructor(private cdr: ChangeDetectorRef) {
-  super();}
+    super();
+  }
 
   ngOnInit(): void {
     this.isInitialized = true;
-    this.refreshCount();
+    this.initVisibilityObserver();
+
+    // A record of this entity deleted anywhere — its form in another tab, a grid row, or
+    // another session — lands in the bin, so the badge recounts. Debounced: a burst of
+    // deletes recounts once.
+    this.deleteSub = MJGlobal.Instance.GetEventListener()
+      .pipe(filter(event => this.isDeleteOfThisEntity(event)), debounceTime(300))
+      .subscribe(() => {
+        if (this.isVisibleInViewport || typeof IntersectionObserver === 'undefined') {
+          this.refreshCount();
+        }
+      });
+  }
+
+  ngOnDestroy(): void {
+    this.deleteSub?.unsubscribe();
+    this.deleteSub = null;
+    this.intersectionObserver?.disconnect();
+    this.intersectionObserver = null;
+  }
+
+  /**
+   * Defer count query until the chip element is visible in the viewport
+   * (e.g. not inside a collapsed section, hidden tab, or off-screen).
+   * Falls back to immediate execution in test environments or if observer is unavailable.
+   */
+  private initVisibilityObserver(): void {
+    const isTestEnv = RecycleBinChipComponent.SkipIntersectionObserverInTest &&
+      ((typeof process !== 'undefined' && (process.env?.NODE_ENV === 'test' || process.env?.VITEST === 'true')) ||
+      (typeof navigator !== 'undefined' && /happy-dom|jsdom/i.test(navigator.userAgent)));
+
+    if (!isTestEnv && typeof IntersectionObserver !== 'undefined') {
+      try {
+        this.intersectionObserver = new IntersectionObserver((entries) => {
+          const isIntersecting = entries.some(entry => entry.isIntersecting);
+          if (isIntersecting) {
+            this.isVisibleInViewport = true;
+            this.intersectionObserver?.disconnect();
+            this.intersectionObserver = null;
+            this.refreshCount();
+          }
+        });
+        this.intersectionObserver.observe(this.elementRef.nativeElement);
+      } catch {
+        this.isVisibleInViewport = true;
+        this.refreshCount();
+      }
+    } else {
+      this.isVisibleInViewport = true;
+      this.refreshCount();
+    }
+  }
+
+  /**
+   * True for a delete of this chip's entity: a local `delete` (raised once the delete has
+   * succeeded, so its Delete record change is already written) or a remote one (a
+   * `remote-invalidate` whose action is `delete`).
+   */
+  private isDeleteOfThisEntity(event: MJEvent): boolean {
+    if (!this._entityName || event.event !== MJEventType.ComponentEvent || event.eventCode !== BaseEntity.BaseEventCode) {
+      return false;
+    }
+    const entityEvent = event.args as BaseEntityEvent | undefined;
+    const isDelete = entityEvent?.type === 'delete'
+      || (entityEvent?.type === 'remote-invalidate' && (entityEvent.payload as { action?: string } | null)?.action === 'delete');
+    if (!isDelete) {
+      return false;
+    }
+    const entityName = entityEvent?.baseEntity?.EntityInfo?.Name ?? entityEvent?.entityName;
+    return !!entityName && entityName.trim().toLowerCase() === this._entityName.trim().toLowerCase();
   }
 
   public Toggle(): void {
     this.PanelVisible = !this.PanelVisible;
+    if (this.PanelVisible && !this.isVisibleInViewport) {
+      this.isVisibleInViewport = true;
+      this.refreshCount();
+    }
     this.cdr.markForCheck();
   }
 
@@ -225,16 +321,17 @@ export class RecycleBinChipComponent extends BaseAngularComponent implements OnI
       return;
     }
 
-    // Cheap count query — just IDs, capped low
+    // Cheap count query — just RecordID, capped low, skipping total row count query
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const result = await rv.RunView<{ ID: string; RecordID: string }>({
+      const result = await rv.RunView<{ RecordID: string }>({
         EntityName: 'MJ: Record Changes',
-        Fields: ['ID', 'RecordID'],
+        Fields: ['RecordID'],
         ExtraFilter: `EntityID='${entityInfo.ID}' AND Type='Delete'`,
         OrderBy: 'ChangedAt DESC',
         MaxRows: 500,
         ResultType: 'simple',
+        SkipTotalRowCount: true,
       }, this.ContextUser ?? undefined);
 
       if (result.Success) {

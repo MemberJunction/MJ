@@ -589,13 +589,12 @@ MemberJunction's full source code is public on GitHub (Business Source License 1
 
 ### Build your application on MJ
 
-You're encouraged to build on MJ, whether your app is **commercial or community-driven**. The platform gives you the data layer, API, security, UI, Actions, and AI; you bring the domain. Several **apps in the MemberJunction org** show this in practice and are worth studying as references (and reusing):
+You're encouraged to build on MJ, whether your app is **commercial or community-driven**. The platform gives you the data layer, API, security, UI, Actions, and AI; you bring the domain. The **BizApps** in the MemberJunction org show this in practice and are worth studying as references (and reusing): accounting, orders, sales, contracts, tasks, forms, committees and more, each an MJ Open App that other apps build on. Start with the foundations:
 
 - **[BizApps Common](https://github.com/MemberJunction/bizapps-common)** — a production-ready, schema-complete, fully-typed set of **foundational business entities** (people, organizations, addresses, relationships) packaged as an MJ Open App, so applications share these core entities instead of reinventing them.
 - **[BizApps Tasks](https://github.com/MemberJunction/bizapps-tasks)** — a complete, reusable **task-management system** as an MJ Open App: multi-person assignment, sub-task hierarchies, dependency tracking, and templating that any MJ app can integrate without building its own.
-- **[Committees](https://github.com/MemberJunction/committees)** — a **governance platform** built on MJ that unifies committee structure, membership, meetings, motions and voting, action tracking, and document linking.
 
-These are real, working examples of the patterns in this guide — clone them, read how they're structured, and build on or alongside them.
+**[MemberJunction BizApps](BIZAPPS_GUIDE.md)** lists every one of them, generated from each app's `mj-app.json`, with a map of how they build on each other. These are real, working examples of the patterns in this guide — clone them, read how they're structured, and build on or alongside them.
 
 ### Help shape the platform
 
@@ -614,6 +613,7 @@ And of course, because MJ's source is fully public, you can always **read, fork,
 These apply no matter which layer you're working in. The **[guides/ index](README.md)** is the full list; the essentials:
 
 - **[UUID Comparison Guide](UUID_COMPARISON_GUIDE.md)** — Always use `UUIDsEqual()`; SQL Server and PostgreSQL case UUIDs differently.
+- **[Alternate Base Views Guide](ALTERNATE_BASE_VIEWS_GUIDE.md)** — Expose multiple governed SQL views (`Active`, `OpenBalance`, `OpenPipeline`, `DueNow`) on an entity with 100% column parity across `RunView`, `BaseEngine`, User Views, Stored Queries, and AI Agents.
 - **[Caching & Real-Time Synchronization Guide](CACHING_AND_PUBSUB_GUIDE.md)** — Server cache + reactive `BaseEngine` patterns for live UIs.
 - **[BaseEntity Server-Side Patterns](BASE_ENTITY_SERVER_PATTERNS.md)** — The right way to extend entities on the server.
 - The foundational **[CLAUDE.md](../CLAUDE.md)** at the repo root — coding standards, type-safety rules, naming conventions, and the architectural guardrails that keep an MJ app maintainable.

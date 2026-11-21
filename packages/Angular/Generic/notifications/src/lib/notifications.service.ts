@@ -3,7 +3,7 @@ import { IMetadataProvider, LogError, Metadata, StartupManager } from '@memberju
 import { UserInfoEngine, MJUserNotificationEntity } from '@memberjunction/core-entities';
 import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal, GetGlobalObjectStore } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { BehaviorSubject, Observable, Subject } from 'rxjs';
+import { BehaviorSubject, Observable, Subject, Subscription } from 'rxjs';
 import { map, shareReplay } from 'rxjs/operators';
 
 /**
@@ -67,6 +67,7 @@ export interface MJRichNotificationOptions {
 export class MJNotificationService {
   private static readonly _globalStoreKey = '___SINGLETON__MJNotificationService';
   private static _loaded: boolean = false;
+  private _pushStatusSub: Subscription | null = null;
 
   private _provider: IMetadataProvider | null = null;
   public get Provider(): IMetadataProvider {
@@ -98,7 +99,11 @@ export class MJNotificationService {
    */
   public static readonly Notifications$: Observable<MJUserNotificationEntity[]> =
     UserInfoEngine.Instance.UserNotifications$.pipe(
-      map(() => UserInfoEngine.Instance.UserNotifications),
+      // ...IfPermitted, not UserNotifications: a permission-constrained session (an external
+      // magic-link user) cannot read notifications, and the throwing getter errored this
+      // stream at shell boot — an uncaught PermissionConstrainedError that also terminated
+      // the shared replay for every later subscriber. Such users simply have no badge.
+      map(() => UserInfoEngine.Instance.UserNotificationsIfPermitted),
       shareReplay({ bufferSize: 1, refCount: false })
     );
 
@@ -159,6 +164,7 @@ export class MJNotificationService {
           break;
         case MJEventType.LoggedIn:
           if (MJNotificationService._loaded === false) {
+            MJNotificationService._loaded = true;
             // Wait for StartupManager to complete before refreshing notifications.
             // UserInfoEngine (which backs RefreshUserNotifications) is @RegisterForStartup
             // and its _metadataConfigs are only populated during Config() which runs
@@ -173,8 +179,10 @@ export class MJNotificationService {
           // at static-init time, so they auto-update whenever the engine's cache mutates.
           // No per-login subscription wiring is needed.
 
-          // got the login, now subscribe to push status updates here so we can then raise them as events in MJ Global locally
-          this.PushStatusUpdates().subscribe( (message: string) => {
+          // got the login, now subscribe to push status updates here so we can then raise them as events in MJ Global locally.
+          // Unsubscribe any prior subscription first so replayed or repeated LoggedIn events do not stack duplicate listeners.
+          this._pushStatusSub?.unsubscribe();
+          this._pushStatusSub = this.PushStatusUpdates().subscribe( (message: string) => {
             // Handle undefined/null messages gracefully
             if (!message) {
               return;
@@ -244,10 +252,11 @@ export class MJNotificationService {
  
   /**
    * The current user's notifications, delegated to UserInfoEngine which owns the
-   * cache. Applies the per-user filter and newest-first sort on each access.
+   * cache. Applies the per-user filter and newest-first sort on each access. Empty
+   * (never a thrown PermissionConstrainedError) for a user who cannot read notifications.
    */
   public static get UserNotifications(): MJUserNotificationEntity[] {
-    return UserInfoEngine.Instance.UserNotifications;
+    return UserInfoEngine.Instance.UserNotificationsIfPermitted;
   }
 
   /**

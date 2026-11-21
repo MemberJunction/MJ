@@ -211,6 +211,25 @@ describe('SummarizeExplanation', () => {
         expect(text).toMatch(/none declared/i);
         expect(text).toMatch(/passes through unchecked/i);
     });
+
+    it('summarises a scope that could not be resolved as REFUSED — not as a legacy scope with no lanes', () => {
+        // Its rows were never loaded, so "no dimensions" and "no lanes" describe nothing about it.
+        const text = SummarizeExplanation({
+            ...base,
+            ScopeName: 'Retired Scope',
+            Entitlement: {
+                ...base.Entitlement!, Allowed: false, Level: 'None', Source: 'ScopeUnresolvable',
+                Reason: 'the scope is inactive, expired, or does not exist, so no search can use it',
+            },
+            Dimensions: [],
+            Lanes: [],
+            Reachable: false,
+            Diagnostics: ['scope "scope-1" is not an active scope — a search naming it is refused, never widened to a global search'],
+        }).join('\n');
+        expect(text).toContain('Reachable: NO — REFUSED: the scope is inactive, expired, or does not exist');
+        expect(text).toContain('a search naming this scope is refused');
+        expect(text).not.toMatch(/NONE CONFIGURED|legacy scope|entitlement DENIED/);
+    });
 });
 
 describe('principal parity between the dry run and the real search (regression)', () => {

@@ -13,10 +13,11 @@
 import { Router, json, type Request, type Response } from 'express';
 import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import { LogStatus } from '@memberjunction/core';
+import type { ProofPublicJwk } from '@memberjunction/global';
 import { configInfo, type WidgetConfig } from '../config.js';
 import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
 import { RegisterMagicLinkAuthProvider } from '../auth/magicLink/MagicLinkRouter.js';
-import { WidgetSessionService, type MintGuestSessionResult } from './WidgetSessionService.js';
+import { WidgetSessionService, WIDGET_REFRESH_PATH, type MintGuestSessionResult } from './WidgetSessionService.js';
 import { LooksLikeBot } from './widgetCore.js';
 
 /** The mount path for the widget public router (`/widget`). */
@@ -54,7 +55,9 @@ function ensureWidgetSigning(publicUrl: string, widgetConfig: WidgetConfig): voi
 export function CreateWidgetHandler(publicUrl: string, config: WidgetConfig): { publicRouter: Router; authenticatedRouter: Router } {
   ensureWidgetSigning(publicUrl, config);
 
-  const service = new WidgetSessionService(publicUrl, config);
+  // A widget may hand an anonymous guest only a scope-isolated role (MJ#6043); the opt-in list is the one
+  // magic-link invites already use, so an admin declares "safe for anonymous visitors" in one place.
+  const service = new WidgetSessionService(publicUrl, config, { GrantableRoleNames: configInfo.magicLink?.grantableRoleNames ?? [] });
 
   // Per-instance DYNAMIC mint limiter (W6 hardening): keyed by (widgetKey + IP) so each widget
   // deployment gets its own bucket and one abusive IP can't exhaust a shared instance's budget for
@@ -80,7 +83,7 @@ export function CreateWidgetHandler(publicUrl: string, config: WidgetConfig): { 
     await handleMint(service, req, res, false);
   });
 
-  publicRouter.post('/session/refresh', json(), mintLimiter, async (req: Request, res: Response) => {
+  publicRouter.post(WIDGET_REFRESH_PATH, json(), mintLimiter, async (req: Request, res: Response) => {
     await handleMint(service, req, res, true);
   });
 
@@ -171,14 +174,26 @@ async function handleUpgrade(service: WidgetSessionService, req: Request, res: R
   res.status(status).json(result);
 }
 
+/** Extracts a raw JWT from an `Authorization: Bearer <token>` header, or undefined when absent/malformed. */
+function extractBearerToken(authHeader: string | undefined): string | undefined {
+  if (!authHeader) {
+    return undefined;
+  }
+  const match = /^Bearer\s+(\S+)$/i.exec(authHeader.trim());
+  const token = match?.[1]?.trim();
+  return token && token.length > 0 ? token : undefined;
+}
+
 /** Shared mint/refresh handler — parses the request, calls the service, maps the status. */
 async function handleMint(service: WidgetSessionService, req: Request, res: Response, refresh: boolean): Promise<void> {
-  const body = (req.body ?? {}) as { widgetKey?: string; hostAssertion?: string; visitorKey?: string };
+  const body = (req.body ?? {}) as { widgetKey?: string; hostAssertion?: string; visitorKey?: string; proofKey?: unknown };
   const widgetKey = typeof body.widgetKey === 'string' ? body.widgetKey : '';
   if (!widgetKey) {
     res.status(400).json({ success: false, errorCode: 'not_found', error: 'widgetKey is required.' });
     return;
   }
+  // The service validates the key's shape (ToProofPublicJwk) and refuses anything that is not a public P-256 JWK.
+  const proofKey = body.proofKey === undefined ? undefined : (body.proofKey as ProofPublicJwk);
 
   // W6 hardening: coarse bot/automation rejection before any DB lookup or token mint. Returns the same
   // 403 as a policy rejection so a probe can't distinguish "bot-blocked" from "bad key/origin".
@@ -193,6 +208,9 @@ async function handleMint(service: WidgetSessionService, req: Request, res: Resp
     origin,
     hostAssertion: typeof body.hostAssertion === 'string' ? body.hostAssertion : undefined,
     visitorKey: typeof body.visitorKey === 'string' ? body.visitorKey : undefined,
+    BearerToken: refresh ? extractBearerToken(req.get('authorization')) : undefined,
+    Proof: refresh ? req.get('dpop') : undefined,
+    ProofKey: refresh ? undefined : proofKey,
     audit: { ipAddress: req.ip, userAgent: req.get('user-agent') ?? undefined, origin },
   };
   const result = refresh ? await service.RefreshGuestSession(input) : await service.MintGuestSession(input);

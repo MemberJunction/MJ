@@ -73,6 +73,8 @@ export class UserRoutinesCommandCenterComponent extends BaseAngularComponent {
     @Input() SearchText = '';
     /** Status filter applied to the list view. */
     @Input() StatusFilter: RoutineStatusFilter = 'all';
+    /** Whether self-scheduled `AgentWake` routines are shown alongside user routines. Defaults to false. */
+    @Input() ShowAgentWakes = false;
 
     // ---------------------------------------------------------------
     // Outputs — bubbled child events + view changes
@@ -112,6 +114,7 @@ export class UserRoutinesCommandCenterComponent extends BaseAngularComponent {
     public HistoryRoutineName: string | null = null;
     public TotalCount = 0;
     public FilteredCount = 0;
+    public AgentWakeCount = 0;
 
     // ---------------------------------------------------------------
     // Navigation (public so hosts can drive the surface programmatically)
@@ -142,6 +145,11 @@ export class UserRoutinesCommandCenterComponent extends BaseAngularComponent {
         }
     }
 
+    public ToggleAgentWakes(): void {
+        this.ShowAgentWakes = !this.ShowAgentWakes;
+        this.cdr.markForCheck();
+    }
+
     /** Force-refreshes the active view's data. */
     public async Refresh(): Promise<void> {
         if (this.ActiveView === 'history') {
@@ -157,6 +165,7 @@ export class UserRoutinesCommandCenterComponent extends BaseAngularComponent {
     public OnCountsChanged(counts: RoutineCounts): void {
         this.TotalCount = counts.Total;
         this.FilteredCount = counts.Filtered;
+        this.AgentWakeCount = counts.AgentWakeCount ?? 0;
         this.CountsChanged.emit(counts);
         this.cdr.markForCheck();
     }

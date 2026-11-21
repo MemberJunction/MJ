@@ -88,6 +88,7 @@ export class YourComponent {}
 | `TaskComponent` | `mj-task` | Composite wrapper with view toggle |
 | `SimpleTaskViewerComponent` | `mj-simple-task-viewer` | Hierarchical list view |
 | `GanttTaskViewerComponent` | `mj-gantt-task-viewer` | Gantt chart timeline |
+| `TaskDetailPanelComponent` | `mj-task-detail-panel` | Slide-over task inspector panel with separated instructions, agent output/error sections, progress bar, and AI Agent Run deep-link |
 
 ## TaskComponent API
 

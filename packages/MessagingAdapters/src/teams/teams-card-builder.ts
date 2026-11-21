@@ -15,6 +15,7 @@
 
 import { ExecuteAgentResult, MJAIAgentEntityExtended, ActionableCommand, OpenResourceCommand, ComposeEmailCommand, AutomaticCommand, MediaOutput, AgentResponseForm, FormQuestion } from '@memberjunction/ai-core-plus';
 import { BuildExplorerDeepLink, IsOpenableURI, SplitMarkdownIntoSections } from '../base/message-formatter.js';
+import { TrimTrailingSlashes } from '@memberjunction/global';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -253,7 +254,7 @@ export function BuildArtifactCard(
     artifactId: string,
     explorerBaseURL: string
 ): Record<string, unknown> {
-    const base = explorerBaseURL.replace(/\/+$/, '');
+    const base = TrimTrailingSlashes(explorerBaseURL);
     const artifactLink = `${base}/resource/artifact/${encodeURIComponent(artifactId)}`;
 
     return {
@@ -407,7 +408,7 @@ export function BuildExplorerLink(
     if (!explorerBaseURL) return null;
     if (!conversationId && !artifactId) return null;
 
-    const base = explorerBaseURL.replace(/\/+$/, '');
+    const base = TrimTrailingSlashes(explorerBaseURL);
 
     if (artifactId) {
         return {

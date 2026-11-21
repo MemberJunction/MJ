@@ -6,6 +6,7 @@ import { simpleGit, SimpleGit } from 'simple-git';
 import { z } from 'zod';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
+import { DEFAULT_MIGRATION_REQUEST_TIMEOUT_MS } from './lib/migration-timeout';
 
 export type MJConfig = z.infer<typeof mjConfigSchema>;
 
@@ -73,6 +74,22 @@ const dynamicPackageEntrySchema = z.object({
   // (or prefixes — `cli:sync` covers every `mj sync` command) the entry loads in / never loads in.
   Processes: z.array(z.string()).optional(),
   ExcludeProcesses: z.array(z.string()).optional(),
+});
+
+// Schema for top-level `publicPages` entries managed by `mj app install/remove/enable/disable`.
+// Read by `mj codegen manifest --open-app-client-bootstrap` and `mj explorer postbuild`.
+// A page has a `Slug`. An error page has `Role: 'error'` and a `Scope` in its place.
+export const PublicPageEntrySchema = z.object({
+  AppName: z.string(),
+  Slug: z.string().optional(),
+  Role: z.literal('error').optional(),
+  Scope: z.string().optional(),
+  PackageName: z.string(),
+  ExportName: z.string(),
+  Title: z.string().optional(),
+  Description: z.string().optional(),
+  SubPaths: z.boolean().optional(),
+  Enabled: z.boolean().default(true),
 });
 
 // Schema for Open App configuration section
@@ -164,6 +181,7 @@ const mjConfigSchema = z.object({
   }).passthrough().optional(),
   openApps: openAppsConfigSchema,
   dynamicPackages: DynamicPackagesSchema,
+  publicPages: z.array(PublicPageEntrySchema).optional(),
 });
 
 // Schema for non-database commands (all fields optional)
@@ -199,6 +217,7 @@ const mjConfigSchemaOptional = z.object({
   }).passthrough().optional(),
   openApps: openAppsConfigSchema,
   dynamicPackages: DynamicPackagesSchema,
+  publicPages: z.array(PublicPageEntrySchema).optional(),
 });
 
 // Don't validate at module load - let commands decide when they need validated config
@@ -370,7 +389,7 @@ export const GetSkywayConfig = async (
     Options: {
       Encrypt: mjConfig.dbEncrypt,
       TrustServerCertificate: mjConfig.dbTrustServerCertificate,
-      ...(mjConfig.dbRequestTimeout ? { RequestTimeout: mjConfig.dbRequestTimeout } : {}),
+      RequestTimeout: mjConfig.dbRequestTimeout ?? DEFAULT_MIGRATION_REQUEST_TIMEOUT_MS,
     },
   };
 

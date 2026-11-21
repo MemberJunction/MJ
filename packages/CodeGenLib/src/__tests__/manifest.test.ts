@@ -3,7 +3,12 @@ import ts from 'typescript';
 import * as fs from 'fs';
 import * as path from 'path';
 import { glob } from 'glob';
-import { GenerateClassRegistrationsManifest, ResolveSubpathExports, ResolveLazySubpathExports } from '../Manifest/GenerateClassRegistrationsManifest';
+import {
+    GenerateClassRegistrationsManifest,
+    ResolveSubpathExports,
+    ResolveLazySubpathExports,
+    IsTestOrMockFilePath,
+} from '../Manifest/GenerateClassRegistrationsManifest';
 
 // We test the pure functions from the manifest generator by importing via a module-level mock setup.
 // Many functions in the manifest generator are module-private, but we can test the exported types
@@ -1358,6 +1363,56 @@ describe('Lazy Config Generation - Integration', () => {
         expect(content).toMatch(/'BaseResourceComponent::AlphaPlugin':\s*loadAlphaPlugins/);
         expect(content).toMatch(/'BaseResourceComponent::BetaPlugin':\s*loadBetaPlugins/);
     });
+
+    it('should not collapse packages with non-class subpath exports (e.g. ./schemas) into whole-package lazy chunks', async () => {
+        const entitiesDir = `${appDir}/node_modules/@test/entities`;
+        virtualFiles[`${appDir}/package.json`] = JSON.stringify({
+            name: 'test-lazy-app',
+            dependencies: {
+                '@test/dashboards': '1.0.0',
+                '@test/entities': '1.0.0',
+            }
+        }, null, 2);
+
+        virtualFiles[`${entitiesDir}/package.json`] = JSON.stringify({
+            name: '@test/entities',
+            version: '1.0.0',
+            exports: {
+                '.': { types: './dist/index.d.ts', default: './dist/index.js' },
+                './schemas': { types: './dist/schemas.d.ts', default: './dist/schemas.js' }
+            },
+            dependencies: {}
+        });
+        virtualFiles[`${entitiesDir}/dist/index.d.ts`] = 'export declare class UserEntity {}\n';
+        virtualFiles[`${entitiesDir}/dist/schemas.d.ts`] = 'export declare const UserSchema: object;\n';
+        virtualFiles[`${entitiesDir}/src/index.ts`] = [
+            "import { RegisterClass } from '@memberjunction/global';",
+            "@RegisterClass(BaseEntity, 'Users')",
+            "export class UserEntity extends BaseEntity {}",
+            "@RegisterClass(BaseEntity, 'Users')",
+            "export class UserEntityExtended extends UserEntity {}"
+        ].join('\n');
+
+        const result = await GenerateClassRegistrationsManifest({
+            outputPath,
+            appDir,
+            verbose: false,
+            syncDependencies: false,
+            excludePackages: ['@test/'],
+            lazyConfigPath,
+            lazyBaseClasses: ['BaseResourceComponent', 'BaseEntity'],
+        });
+
+        expect(result.success).toBe(true);
+        const lazyWrite = writtenFiles.find(w => w.path === lazyConfigPath);
+        expect(lazyWrite).toBeDefined();
+        const content = lazyWrite!.content;
+
+        // Genuine lazy subpaths remain, while non-class subpath packages do NOT fall into a `.` chunk
+        expect(content).toContain("'BaseResourceComponent::AIModels'");
+        expect(content).not.toContain('@test/entities');
+        expect(content).not.toContain('BaseEntity::Users');
+    });
 });
 
 // =============================================================================
@@ -1577,7 +1632,11 @@ describe('Manifest Generator - lazy subpath resolution refuses to guess', () => 
     const PKG_DIR = '/repo/packages/Angular/Explorer/dashboards';
 
     /** Route existsSync/readFileSync by path: package.json present, every .d.ts absent unless listed. */
-    function mockPackage(packageJson: Record<string, unknown>, presentDtsFiles: string[] = []): void {
+    function mockPackage(
+        packageJson: Record<string, unknown>,
+        presentDtsFiles: string[] = [],
+        dtsContents: Record<string, string> = {}
+    ): void {
         const present = new Set(presentDtsFiles);
         vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
             const s = String(p);
@@ -1587,7 +1646,7 @@ describe('Manifest Generator - lazy subpath resolution refuses to guess', () => 
         vi.mocked(fs.readFileSync).mockImplementation(((p: fs.PathOrFileDescriptor) => {
             const s = String(p);
             if (s.endsWith('package.json')) return JSON.stringify(packageJson);
-            return 'export declare class Whatever {}';
+            return dtsContents[s] ?? 'export declare class Whatever {}';
         }) as unknown as typeof fs.readFileSync);
     }
 
@@ -1678,6 +1737,39 @@ describe('Manifest Generator - lazy subpath resolution refuses to guess', () => 
 
         expect(() => ResolveLazySubpathExports('@memberjunction/ng-dashboards', PKG_DIR)).not.toThrow();
     });
+
+    it('does NOT throw when a built subpath .d.ts exists on disk with 0 exported classes, while still throwing if a subpath .d.ts is missing on disk', () => {
+        const builtSchemasDts = path.resolve(PKG_DIR, './dist/schemas.d.ts');
+        mockPackage(
+            {
+                name: '@memberjunction/core-entities',
+                exports: {
+                    '.': { types: './dist/index.d.ts', default: './dist/index.js' },
+                    './schemas': { types: './dist/schemas.d.ts', default: './dist/schemas.js' }
+                }
+            },
+            [builtSchemasDts],
+            { [builtSchemasDts]: 'export declare const UserSchema: Record<string, string>;' }
+        );
+
+        const resolved = ResolveLazySubpathExports('@memberjunction/core-entities', PKG_DIR);
+        expect(resolved.size).toBe(0);
+
+        mockPackage(
+            {
+                name: '@memberjunction/core-entities',
+                exports: {
+                    '.': { types: './dist/index.d.ts', default: './dist/index.js' },
+                    './schemas': { types: './dist/schemas.d.ts', default: './dist/schemas.js' },
+                    './unbuilt': { types: './dist/unbuilt.d.ts', default: './dist/unbuilt.js' }
+                }
+            },
+            [builtSchemasDts],
+            { [builtSchemasDts]: 'export declare const UserSchema: Record<string, string>;' }
+        );
+
+        expect(() => ResolveLazySubpathExports('@memberjunction/core-entities', PKG_DIR)).toThrow(/has not been built/);
+    });
 });
 
 // ============================================================================
@@ -1754,3 +1846,158 @@ describe('generateClassRegistrationsManifest - types entry when the checkout liv
         expect(manifest!.content).toContain('TestWidget');
     });
 });
+
+// ============================================================================
+// Test / Spec / Mock File Exclusion
+// ============================================================================
+
+describe('IsTestOrMockFilePath and test/spec/mock file exclusion', () => {
+    it('correctly identifies __tests__, __mocks__, .test.*, and .spec.* paths across TS/JS/Windows formats', () => {
+        expect(IsTestOrMockFilePath('/pkg/src/__tests__/foo.ts')).toBe(true);
+        expect(IsTestOrMockFilePath('/pkg/src/__mocks__/bar.ts')).toBe(true);
+        expect(IsTestOrMockFilePath('/pkg/src/foo.test.ts')).toBe(true);
+        expect(IsTestOrMockFilePath('/pkg/src/foo.spec.ts')).toBe(true);
+        expect(IsTestOrMockFilePath('/pkg/dist/foo.test.js')).toBe(true);
+        expect(IsTestOrMockFilePath('/pkg/dist/foo.spec.mjs')).toBe(true);
+        expect(IsTestOrMockFilePath('/pkg/dist/__tests__/foo.cjs')).toBe(true);
+        expect(IsTestOrMockFilePath('C:\\pkg\\src\\__mocks__\\mockEntity.ts')).toBe(true);
+        expect(IsTestOrMockFilePath('C:\\pkg\\dist\\entity.test.js')).toBe(true);
+
+        expect(IsTestOrMockFilePath('/pkg/src/Entity.ts')).toBe(false);
+        expect(IsTestOrMockFilePath('/pkg/src/testing-helpers.ts')).toBe(false);
+        expect(IsTestOrMockFilePath('/pkg/dist/index.js')).toBe(false);
+    });
+
+    it('excludes @RegisterClass classes inside __tests__, __mocks__, .test.*, and .spec.* files in both src/ and dist/', async () => {
+        const appDir = path.resolve('/test-exclude-tests-app').replace(/\\/g, '/');
+        const srcLibDir = `${appDir}/node_modules/@test/src-lib`;
+        const distLibDir = `${appDir}/node_modules/@test/dist-lib`;
+        const outputPath = `${appDir}/src/generated/manifest.ts`;
+        const norm = (p: string) => p.replace(/\\/g, '/');
+
+        const virtualFiles: Record<string, string> = {
+            [`${appDir}/package.json`]: JSON.stringify({
+                name: 'test-exclude-tests-app',
+                version: '1.0.0',
+                dependencies: {
+                    '@test/src-lib': '1.0.0',
+                    '@test/dist-lib': '1.0.0',
+                },
+            }),
+            // Package 1: scanned via src/
+            [`${srcLibDir}/package.json`]: JSON.stringify({
+                name: '@test/src-lib',
+                version: '1.0.0',
+                dependencies: {},
+            }),
+            [`${srcLibDir}/src/RealEntity.ts`]: [
+                "import { RegisterClass } from '@memberjunction/global';",
+                "@RegisterClass(BaseEntity, 'RealEntity')",
+                'export class RealEntity extends BaseEntity {}',
+            ].join('\n'),
+            [`${srcLibDir}/src/__tests__/TestOnlyEntity.ts`]: [
+                "import { RegisterClass } from '@memberjunction/global';",
+                "@RegisterClass(BaseEntity, 'TestOnlyEntity')",
+                'export class TestOnlyEntity extends BaseEntity {}',
+            ].join('\n'),
+            [`${srcLibDir}/src/__mocks__/MockOnlyEntity.ts`]: [
+                "import { RegisterClass } from '@memberjunction/global';",
+                "@RegisterClass(BaseEntity, 'MockOnlyEntity')",
+                'export class MockOnlyEntity extends BaseEntity {}',
+            ].join('\n'),
+            [`${srcLibDir}/src/Inline.test.ts`]: [
+                "import { RegisterClass } from '@memberjunction/global';",
+                "@RegisterClass(BaseEntity, 'InlineTestEntity')",
+                'export class InlineTestEntity extends BaseEntity {}',
+            ].join('\n'),
+            [`${srcLibDir}/src/Inline.spec.ts`]: [
+                "import { RegisterClass } from '@memberjunction/global';",
+                "@RegisterClass(BaseEntity, 'InlineSpecEntity')",
+                'export class InlineSpecEntity extends BaseEntity {}',
+            ].join('\n'),
+
+            // Package 2: dist-only package scanned when scanDist: true
+            [`${distLibDir}/package.json`]: JSON.stringify({
+                name: '@test/dist-lib',
+                version: '1.0.0',
+                main: './dist/index.js',
+                dependencies: {},
+            }),
+            [`${distLibDir}/dist/RealDistEntity.js`]: [
+                'let RealDistEntity = class RealDistEntity extends BaseEntity {};',
+                "RealDistEntity = __decorate([RegisterClass(BaseEntity, 'RealDistEntity')], RealDistEntity);",
+                'export { RealDistEntity };',
+            ].join('\n'),
+            [`${distLibDir}/dist/__tests__/DistTestEntity.js`]: [
+                'let DistTestEntity = class DistTestEntity extends BaseEntity {};',
+                "DistTestEntity = __decorate([RegisterClass(BaseEntity, 'DistTestEntity')], DistTestEntity);",
+                'export { DistTestEntity };',
+            ].join('\n'),
+            [`${distLibDir}/dist/__mocks__/DistMockEntity.js`]: [
+                'let DistMockEntity = class DistMockEntity extends BaseEntity {};',
+                "DistMockEntity = __decorate([RegisterClass(BaseEntity, 'DistMockEntity')], DistMockEntity);",
+                'export { DistMockEntity };',
+            ].join('\n'),
+            [`${distLibDir}/dist/DistInline.test.js`]: [
+                'let DistInlineTestEntity = class DistInlineTestEntity extends BaseEntity {};',
+                "DistInlineTestEntity = __decorate([RegisterClass(BaseEntity, 'DistInlineTestEntity')], DistInlineTestEntity);",
+                'export { DistInlineTestEntity };',
+            ].join('\n'),
+            [`${distLibDir}/dist/DistInline.spec.js`]: [
+                'let DistInlineSpecEntity = class DistInlineSpecEntity extends BaseEntity {};',
+                "DistInlineSpecEntity = __decorate([RegisterClass(BaseEntity, 'DistInlineSpecEntity')], DistInlineSpecEntity);",
+                'export { DistInlineSpecEntity };',
+            ].join('\n'),
+        };
+
+        const writtenFiles: Array<{ path: string; content: string }> = [];
+
+        vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
+            const pathStr = norm(p.toString());
+            if (pathStr in virtualFiles) return true;
+            return Object.keys(virtualFiles).some(f => f.startsWith(pathStr + '/'));
+        });
+        vi.mocked(fs.readFileSync).mockImplementation((p: fs.PathLike) => {
+            const pathStr = norm(p.toString());
+            if (pathStr in virtualFiles) return virtualFiles[pathStr] as string & Buffer;
+            const err = new Error(`ENOENT: no such file or directory, open '${pathStr}'`);
+            (err as NodeJS.ErrnoException).code = 'ENOENT';
+            throw err;
+        });
+        vi.mocked(fs.writeFileSync).mockImplementation((p: fs.PathLike, content: string | NodeJS.ArrayBufferView) => {
+            writtenFiles.push({ path: norm(p.toString()), content: content.toString() });
+        });
+        vi.mocked(fs.mkdirSync).mockImplementation(() => undefined as unknown as string);
+        vi.mocked(fs.realpathSync).mockImplementation((p: fs.PathLike) => norm(p.toString()) as string & Buffer);
+        // Deliberately return ALL matching virtual files without applying glob's `ignore` option,
+        // proving that both the glob ignore list and the post-glob IsTestOrMockFilePath guard work.
+        vi.mocked(glob).mockImplementation(async (_pattern: string | string[], opts?: Record<string, unknown>) => {
+            const cwd = norm((opts?.cwd as string) || '');
+            return Object.keys(virtualFiles).filter(
+                f => f.startsWith(cwd + '/') && (f.endsWith('.ts') || f.endsWith('.js')) && !f.endsWith('.d.ts')
+            );
+        });
+
+        const result = await GenerateClassRegistrationsManifest({
+            outputPath,
+            appDir,
+            verbose: false,
+            syncDependencies: false,
+            scanDist: true,
+        });
+
+        expect(result.success).toBe(true);
+        const classNames = result.classes.map(c => c.className);
+        expect(classNames).toContain('RealEntity');
+        expect(classNames).toContain('RealDistEntity');
+        expect(classNames).not.toContain('TestOnlyEntity');
+        expect(classNames).not.toContain('MockOnlyEntity');
+        expect(classNames).not.toContain('InlineTestEntity');
+        expect(classNames).not.toContain('InlineSpecEntity');
+        expect(classNames).not.toContain('DistTestEntity');
+        expect(classNames).not.toContain('DistMockEntity');
+        expect(classNames).not.toContain('DistInlineTestEntity');
+        expect(classNames).not.toContain('DistInlineSpecEntity');
+    });
+});
+

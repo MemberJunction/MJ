@@ -216,6 +216,67 @@ export function ExtractOpenAICompatibleToolCalls(
     return calls.length > 0 ? calls : undefined;
 }
 
+/** What {@link ReadOpenAICompatibleToolCalls} found on a response. */
+export interface OpenAICompatibleToolCallReadout {
+    /** The normalized calls, or undefined when the model called nothing or a call was unreadable. */
+    Calls?: ChatToolCall[];
+    /**
+     * Set when a call's arguments were not a JSON object: what the model sent, clipped, for the
+     * caller to show it. The turn is then a malformed tool call — no call runs, none with `{}`.
+     */
+    Malformed?: string;
+}
+
+/** The longest argument preview a malformed-call description carries. */
+const MALFORMED_ARGUMENT_PREVIEW = 200;
+
+/** A call's arguments as an object, or undefined when they are not a JSON object. */
+function parseArgumentObject(raw: string | undefined): Record<string, unknown> | undefined {
+    try {
+        const parsed: unknown = JSON.parse(raw || '{}');
+        // Some endpoints send `null` for a call with no parameters; that is an empty argument set.
+        if (parsed === null) {
+            return {};
+        }
+        return typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+/**
+ * Normalizes raw response tool calls, reporting a call whose arguments do not parse instead of
+ * running it with empty arguments — a tool run with `{}` fails for a reason the model cannot see.
+ * A driver reports {@link OpenAICompatibleToolCallReadout.Malformed} as a
+ * `malformed_tool_call` finish, which the agent loop answers with a corrective retry.
+ *
+ * Custom (non-function) tool types are skipped: they are not part of the neutral surface.
+ *
+ * @param toolCalls Raw calls from the response, if any
+ * @param providerName Used in the warning, so a log line names the provider
+ */
+export function ReadOpenAICompatibleToolCalls(
+    toolCalls: RawOpenAICompatibleToolCall[] | undefined | null,
+    providerName: string
+): OpenAICompatibleToolCallReadout {
+    const calls: ChatToolCall[] = [];
+    for (const call of toolCalls ?? []) {
+        const name = call.function?.name;
+        if ((call.type !== undefined && call.type !== 'function') || !name) {
+            continue;
+        }
+        const args = parseArgumentObject(call.function?.arguments);
+        if (!args) {
+            const raw = call.function?.arguments ?? '';
+            console.warn(`${providerName}: the arguments of tool call '${name}' are not a JSON object; reporting a malformed tool call.`);
+            const preview = raw.length > MALFORMED_ARGUMENT_PREVIEW ? `${raw.slice(0, MALFORMED_ARGUMENT_PREVIEW)}…` : raw;
+            return { Malformed: `The arguments of ${name} were not a JSON object: ${preview}` };
+        }
+        calls.push({ id: call.id ?? '', name, arguments: args });
+    }
+    return calls.length > 0 ? { Calls: calls } : {};
+}
+
 /** @deprecated Use {@link ExtractOpenAICompatibleToolCalls}. */
 export function extractOpenAICompatibleToolCalls(
     toolCalls: RawOpenAICompatibleToolCall[] | undefined | null,

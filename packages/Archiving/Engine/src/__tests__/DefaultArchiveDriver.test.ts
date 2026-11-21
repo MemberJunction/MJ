@@ -10,6 +10,7 @@ import {
 // ---- Mock state for Metadata ----
 
 let mockGetEntityObjectResult: MockBaseEntity;
+let mockChildRunViewResult: { Success: boolean; Results: unknown[] } = { Success: true, Results: [] };
 
 vi.mock('@memberjunction/core', () => {
     return {
@@ -28,6 +29,10 @@ vi.mock('@memberjunction/core', () => {
             };
             return MockMetadata;
         })(),
+        RunView: class MockRunView {
+            RunView = vi.fn().mockImplementation(() => Promise.resolve(mockChildRunViewResult));
+        },
+        EntityFieldTSType: { String: 'string', Number: 'number', Date: 'Date', Boolean: 'boolean' },
         CompositeKey: class MockCompositeKey {
             KeyValuePairs: Array<{ FieldName: string; Value: string }>;
             constructor(pairs: Array<{ FieldName: string; Value: string }>) {
@@ -89,6 +94,22 @@ function createMockRecord(overrides?: Partial<MockBaseEntity>): MockBaseEntity {
     };
 }
 
+interface MockRelatedEntity {
+    Type: string;
+    RelatedEntityID: string;
+    RelatedEntity: string;
+    RelatedEntityJoinField: string;
+}
+
+function createDeletableRecord(id: string, entityId: string, relatedEntities: MockRelatedEntity[]) {
+    const record = createMockRecord({ ID: id });
+    return Object.assign(record, {
+        EntityInfo: { ...record.EntityInfo, ID: entityId, RelatedEntities: relatedEntities },
+        PrimaryKey: { KeyValuePairs: [{ FieldName: 'ID', Value: id }], Values: () => id },
+        Delete: vi.fn().mockResolvedValue(true),
+    });
+}
+
 interface MockStorageDriver {
     PutObject: ReturnType<typeof vi.fn>;
     GetObject: ReturnType<typeof vi.fn>;
@@ -116,12 +137,14 @@ function createFieldConfig(overrides?: Partial<ArchiveFieldConfiguration>): Arch
 function createArchiveContext(overrides?: Partial<{
     record: MockBaseEntity;
     fieldConfig: ArchiveFieldConfiguration;
-    storageDriver: MockStorageDriver;
+    storageDriver: MockStorageDriver | null;
+    storageMode: 'Store' | 'Purge';
+    mode: 'StripFields' | 'HardDelete' | 'ArchiveOnly';
 }>): ArchiveRecordContext {
     const record = overrides?.record ?? createMockRecord();
     const configEntity = createMockRecord({ ID: 'config-entity-1' });
     configEntity.Get.mockImplementation((field: string) => {
-        if (field === 'Mode') return 'StripFields';
+        if (field === 'Mode') return overrides?.mode ?? 'StripFields';
         return null;
     });
 
@@ -131,16 +154,49 @@ function createArchiveContext(overrides?: Partial<{
         return null;
     });
 
+    const storageDriver = overrides?.storageDriver === undefined ? createMockStorageDriver() : overrides.storageDriver;
+
     return {
         Record: record as unknown as import('@memberjunction/core').BaseEntity,
         FieldConfig: overrides?.fieldConfig ?? createFieldConfig(),
         ConfigEntity: configEntity as unknown as import('@memberjunction/core').BaseEntity,
         Config: config as unknown as import('@memberjunction/core').BaseEntity,
-        StorageDriver: (overrides?.storageDriver ?? createMockStorageDriver()) as unknown as import('@memberjunction/storage').FileStorageBase,
+        StorageDriver: storageDriver as unknown as import('@memberjunction/storage').FileStorageBase | null,
+        StorageMode: overrides?.storageMode ?? 'Store',
         BasePath: 'archives',
         ContextUser: { ID: 'user-1' } as unknown as import('@memberjunction/core').UserInfo,
         ArchiveRun: createMockRecord({ ID: 'run-1' }) as unknown as import('@memberjunction/core').BaseEntity,
     };
+}
+
+interface MockTypedFieldInfo {
+    Name: string;
+    AllowsNull: boolean;
+    TSType: 'string' | 'number' | 'Date' | 'boolean';
+}
+
+/** An EntityInfo stand-in whose FieldByName finds fields case-insensitively, as the real one does. */
+function createEntityInfo(fields: MockTypedFieldInfo[]): import('@memberjunction/core').EntityInfo {
+    return {
+        Name: 'Test Entity',
+        FieldByName: (name: string) => fields.find(f => f.Name.toLowerCase() === name.toLowerCase()),
+    } as unknown as import('@memberjunction/core').EntityInfo;
+}
+
+/** A record whose entity has a NOT NULL string column ChangesJSON, as Record Changes does. */
+function createRecordWithNotNullColumn(value: string | null): MockBaseEntity {
+    const fields = [
+        { Name: 'ChangesJSON', AllowsNull: false },
+        { Name: 'Description', AllowsNull: true },
+    ];
+    const record = createMockRecord();
+    record.EntityInfo = {
+        ...record.EntityInfo,
+        Fields: fields,
+        FieldByName: (name: string) => fields.find(f => f.Name === name),
+    } as MockBaseEntity['EntityInfo'];
+    record.Get.mockImplementation((field: string) => (field === 'ChangesJSON' ? value : null));
+    return record;
 }
 
 // ---- Tests ----
@@ -153,6 +209,7 @@ describe('DefaultArchiveDriver', () => {
         driver = new DefaultArchiveDriver();
         // Reset the shared mock state
         mockGetEntityObjectResult = createMockRecord();
+        mockChildRunViewResult = { Success: true, Results: [] };
     });
 
     describe('ShouldArchiveRecord', () => {
@@ -230,6 +287,110 @@ describe('DefaultArchiveDriver', () => {
             const context = createArchiveContext({ record });
 
             expect(driver.ShouldArchiveRecord(context)).toBe(true);
+        });
+
+        it('should treat an empty string in a NOT NULL column as no value in StripFields mode, since StripFields writes it there', () => {
+            const record = createRecordWithNotNullColumn('');
+            const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'ChangesJSON' }] });
+
+            expect(driver.ShouldArchiveRecord(createArchiveContext({ record, fieldConfig }))).toBe(false);
+        });
+
+        it.each(['HardDelete', 'ArchiveOnly'] as const)('should treat an empty string in a NOT NULL column as a value in %s mode', (mode) => {
+            const record = createRecordWithNotNullColumn('');
+            const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'ChangesJSON' }] });
+
+            expect(driver.ShouldArchiveRecord(createArchiveContext({ record, fieldConfig, mode }))).toBe(true);
+        });
+
+        it('should treat whitespace in a NOT NULL column as a value, as the SQL filter does', () => {
+            const record = createRecordWithNotNullColumn('   ');
+            const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'ChangesJSON' }] });
+
+            expect(driver.ShouldArchiveRecord(createArchiveContext({ record, fieldConfig }))).toBe(true);
+        });
+
+        it('should treat text in a NOT NULL column as a value', () => {
+            const record = createRecordWithNotNullColumn('{"a":1}');
+            const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'ChangesJSON' }] });
+
+            expect(driver.ShouldArchiveRecord(createArchiveContext({ record, fieldConfig }))).toBe(true);
+        });
+    });
+
+    describe('BuildEligibilityFilter', () => {
+        const fields: MockTypedFieldInfo[] = [
+            { Name: 'Description', AllowsNull: true, TSType: 'string' },
+            { Name: 'Notes', AllowsNull: true, TSType: 'string' },
+            { Name: 'ChangesJSON', AllowsNull: false, TSType: 'string' },
+            { Name: 'RunCount', AllowsNull: false, TSType: 'number' },
+            { Name: 'Order', AllowsNull: true, TSType: 'string' },
+            { Name: 'Ship Date', AllowsNull: true, TSType: 'Date' },
+            { Name: 'Odd]Name', AllowsNull: true, TSType: 'string' },
+        ];
+
+        function filterFor(fieldConfig: ArchiveFieldConfiguration, mode: 'StripFields' | 'HardDelete' | 'ArchiveOnly' = 'StripFields'): string | null {
+            const context = createArchiveContext({ fieldConfig, mode });
+            return driver.BuildEligibilityFilter({
+                FieldConfig: fieldConfig,
+                EntityInfo: createEntityInfo(fields),
+                ConfigEntity: context.ConfigEntity,
+                Config: context.Config,
+            });
+        }
+
+        it('should OR a bracketed IS NOT NULL test over the active nullable fields', () => {
+            expect(filterFor(createFieldConfig())).toBe('[Description] IS NOT NULL OR [Notes] IS NOT NULL');
+        });
+
+        it('should bracket column names that are reserved words or contain spaces', () => {
+            const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'Order' }, { FieldName: 'Ship Date' }] });
+            expect(filterFor(fieldConfig)).toBe('[Order] IS NOT NULL OR [Ship Date] IS NOT NULL');
+        });
+
+        it('should return null for a column name holding a bracket', () => {
+            expect(filterFor(createFieldConfig({ Fields: [{ FieldName: 'Odd]Name' }] }))).toBeNull();
+        });
+
+        it("should test a NOT NULL string field with LIKE '_%' in StripFields mode", () => {
+            const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'ChangesJSON' }, { FieldName: 'Notes' }] });
+            expect(filterFor(fieldConfig)).toBe("[ChangesJSON] LIKE '_%' OR [Notes] IS NOT NULL");
+        });
+
+        it.each(['HardDelete', 'ArchiveOnly'] as const)('should return null in %s mode when a checked field is a NOT NULL column, which always holds a value', (mode) => {
+            const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'ChangesJSON' }, { FieldName: 'Notes' }] });
+            expect(filterFor(fieldConfig, mode)).toBeNull();
+        });
+
+        it('should keep the IS NOT NULL test for nullable fields in every mode', () => {
+            expect(filterFor(createFieldConfig(), 'HardDelete')).toBe('[Description] IS NOT NULL OR [Notes] IS NOT NULL');
+        });
+
+        it('should use SkipIfAllNullFields over the field list', () => {
+            expect(filterFor(createFieldConfig({ SkipIfAllNullFields: ['Notes'] }))).toBe('[Notes] IS NOT NULL');
+        });
+
+        it('should leave out inactive fields', () => {
+            const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'Description' }, { FieldName: 'Notes', IsActive: false }] });
+            expect(filterFor(fieldConfig)).toBe('[Description] IS NOT NULL');
+        });
+
+        it('should write the metadata field name, not the configured spelling', () => {
+            expect(filterFor(createFieldConfig({ Fields: [{ FieldName: 'description' }] }))).toBe('[Description] IS NOT NULL');
+        });
+
+        it('should return null when a checked field is not on the entity', () => {
+            const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'Description' }, { FieldName: 'Missing; DROP TABLE x' }] });
+            expect(filterFor(fieldConfig)).toBeNull();
+        });
+
+        it('should return null when a checked field is a NOT NULL column that is not a string', () => {
+            const fieldConfig = createFieldConfig({ Fields: [{ FieldName: 'Description' }, { FieldName: 'RunCount' }] });
+            expect(filterFor(fieldConfig)).toBeNull();
+        });
+
+        it('should return null for a full-record configuration with no fields', () => {
+            expect(filterFor(createFieldConfig({ Fields: [], ArchiveFullRecord: true }))).toBeNull();
         });
     });
 
@@ -371,6 +532,35 @@ describe('DefaultArchiveDriver', () => {
             expect(record.Set).toHaveBeenCalledWith('Description', null);
             expect(record.Set).not.toHaveBeenCalledWith('Notes', null);
         });
+
+        it('should write the parent document and the cascade batch before deleting leaf-first in HardDelete mode', async () => {
+            const child = createDeletableRecord('child-1', 'child-entity-id', []);
+            child.EntityInfo.Name = 'Child Entity';
+            mockChildRunViewResult = { Success: true, Results: [child] };
+            const parent = createDeletableRecord('record-1', 'entity-id-1', [
+                { Type: 'One To Many', RelatedEntityID: 'child-entity-id', RelatedEntity: 'Child Entity', RelatedEntityJoinField: 'ParentID' },
+            ]);
+            parent.Get.mockReturnValue('value');
+            const storageDriver = createMockStorageDriver();
+            const context = createArchiveContext({ record: parent, storageDriver, storageMode: 'Store', mode: 'HardDelete' });
+
+            const result = await driver.ArchiveRecord(context);
+
+            expect(result.Success).toBe(true);
+            expect(storageDriver.PutObject).toHaveBeenCalledTimes(2);
+            const [parentPath] = storageDriver.PutObject.mock.calls[0] as [string, Buffer, string];
+            const [batchPath, batchBuffer] = storageDriver.PutObject.mock.calls[1] as [string, Buffer, string];
+            expect(parentPath).toContain('Test_Entity/record-1/');
+            expect(batchPath).toContain('Child_Entity/cascade_record-1_');
+            expect(JSON.parse(batchBuffer.toString('utf8'))).toMatchObject({ batchType: 'cascade-delete', recordCount: 1 });
+
+            const [parentWriteOrder, batchWriteOrder] = storageDriver.PutObject.mock.invocationCallOrder;
+            const childDeleteOrder = child.Delete.mock.invocationCallOrder[0];
+            const parentDeleteOrder = parent.Delete.mock.invocationCallOrder[0];
+            expect(parentWriteOrder).toBeLessThan(batchWriteOrder);
+            expect(batchWriteOrder).toBeLessThan(childDeleteOrder);
+            expect(childDeleteOrder).toBeLessThan(parentDeleteOrder);
+        });
     });
 
     describe('RestoreRecord', () => {
@@ -479,6 +669,50 @@ describe('DefaultArchiveDriver', () => {
             expect(result.Success).toBe(false);
             expect(result.ErrorMessage).toContain('Failed to load record');
             expect(result.RestoredFields).toEqual([]);
+        });
+    });
+
+    describe('ArchiveRecord with StorageMode Purge', () => {
+        it('should report that it supports purge', () => {
+            expect(driver.SupportsPurge).toBe(true);
+        });
+
+        it('should clear the fields and save without writing to storage', async () => {
+            const record = createMockRecord();
+            record.Get.mockImplementation((field: string) => (field === 'Description' ? 'Some text' : null));
+            const context = createArchiveContext({ record, storageDriver: null, storageMode: 'Purge' });
+
+            const result = await driver.ArchiveRecord(context);
+
+            expect(result).toEqual({ Success: true, StoragePath: null, BytesArchived: 0 });
+            expect(record.Set).toHaveBeenCalledWith('Description', null);
+            expect(record.Set).toHaveBeenCalledWith('Notes', null);
+            expect(record.Save).toHaveBeenCalledOnce();
+        });
+
+        it('should return failure when the record save fails', async () => {
+            const record = createMockRecord({ Save: vi.fn().mockResolvedValue(false) });
+            const context = createArchiveContext({ record, storageDriver: null, storageMode: 'Purge' });
+
+            const result = await driver.ArchiveRecord(context);
+
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('Failed to save record after nullifying');
+        });
+
+        it('should delete the record and its children without writing to storage in HardDelete mode', async () => {
+            const child = createDeletableRecord('child-1', 'child-entity-id', []);
+            mockChildRunViewResult = { Success: true, Results: [child] };
+            const parent = createDeletableRecord('record-1', 'entity-id-1', [
+                { Type: 'One To Many', RelatedEntityID: 'child-entity-id', RelatedEntity: 'Child Entity', RelatedEntityJoinField: 'ParentID' },
+            ]);
+            const context = createArchiveContext({ record: parent, storageDriver: null, storageMode: 'Purge', mode: 'HardDelete' });
+
+            const result = await driver.ArchiveRecord(context);
+
+            expect(result).toEqual({ Success: true, StoragePath: null, BytesArchived: 0 });
+            expect(child.Delete).toHaveBeenCalledOnce();
+            expect(parent.Delete).toHaveBeenCalledOnce();
         });
     });
 });

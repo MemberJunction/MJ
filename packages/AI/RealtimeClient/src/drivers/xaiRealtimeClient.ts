@@ -88,16 +88,66 @@ export class xAIRealtimeClient extends OpenAIProtocolWebSocketRealtimeClient {  
      */
     private lastUserTranscript = '';
 
+    /**
+     * Provider item id of the transcript that set {@link userTurnTranscribed}, or `undefined` when the
+     * frame carried none. A late transcript for an EARLIER item can land after the next
+     * `speech_started` reset the flag; the next item's first transcript must not then read that flag as
+     * its own and replace the earlier turn (MJ#5940).
+     */
+    private userTurnItemId: string | undefined = undefined;
+
     /** @inheritdoc — used in the shared diagnostics + close messages. */
     protected override get providerDebugLabel(): string {
         return 'xAIRealtimeClient';
     }
 
+    protected override get DefaultCallDurationSeconds(): number | undefined {
+        return 7200;
+    }
+
+    /**
+     * Defaults to `false`: xAI's `?conversation_id=<id>` server-side resumption currently drops
+     * `conversation.item.create` `message` items (`SendContextNote`, `SendText`, and post-drop
+     * `seedConversationAfterMove` history), causing Grok Voice to forget injected context and
+     * replayed turns across reconnects. Text-seed replay into a fresh conversation preserves both
+     * spoken and injected turns losslessly; callers can still opt into native resumption explicitly
+     * via `TrustNativeResumption: true` on `ClientRealtimeSessionConfig`.
+     */
+    protected override get DefaultTrustsNativeResumption(): boolean {
+        return false;
+    }
+
     // ── Transport hooks ────────────────────────────────────────────────────────
 
+    protected override resolveSessionObject(config: ClientRealtimeSessionConfig): ReturnType<OpenAIProtocolWebSocketRealtimeClient['resolveSessionObject']> {
+        const sessionObj = super.resolveSessionObject(config);
+        const explicitlyTrusted =
+            config.TrustNativeResumption === true ||
+            config.SessionConfig?.['trustNativeResumption'] === true ||
+            config.SessionConfig?.['TrustNativeResumption'] === true;
+        if (
+            explicitlyTrusted &&
+            this.TrustsNativeResumption &&
+            Object.keys(sessionObj).length > 0 &&
+            sessionObj['resumption'] === undefined
+        ) {
+            return {
+                ...sessionObj,
+                resumption: { enabled: true },
+            };
+        }
+        return sessionObj;
+    }
+
     /** @inheritdoc — model on the URL, ephemeral secret as the subprotocol. */
-    protected openProviderSocket(config: ClientRealtimeSessionConfig): IOpenAIProtocolClientSocket {
-        const url = `${XAI_REALTIME_WS_URL}?model=${encodeURIComponent(config.Model)}`;
+    protected openProviderSocket(
+        config: ClientRealtimeSessionConfig,
+        resumptionHandle?: string | null
+    ): IOpenAIProtocolClientSocket {
+        let url = `${XAI_REALTIME_WS_URL}?model=${encodeURIComponent(config.Model)}`;
+        if (resumptionHandle && resumptionHandle.trim().length > 0) {
+            url += `&conversation_id=${encodeURIComponent(resumptionHandle.trim())}`;
+        }
         const subprotocol = `${XAI_CLIENT_SECRET_SUBPROTOCOL_PREFIX}${config.EphemeralToken}`;
         return this.createSocket(url, subprotocol);
     }
@@ -146,22 +196,30 @@ export class xAIRealtimeClient extends OpenAIProtocolWebSocketRealtimeClient {  
      * ReplacesPrevious, collapsing the stream into ONE in-place-updating user bubble. The
      * per-turn flag resets on the next `speech_started` ({@link onSpeechStartedFrame}).
      */
-    protected override onUserTranscriptFrame(transcript: string): void {
-        if (transcript && transcript.trim().length > 0) {
-            // Two ways this caption REPLACES rather than appends: another already landed in this turn,
-            // OR it continues the previous utterance (the provider re-emits the whole thing with more
-            // words). The second case rescues a mid-sentence pause — the VAD fires speech_started and
-            // clears the flag even though the user never stopped, which would otherwise split one
-            // spoken thought into several growing bubbles. Mirrors the server session exactly so both
-            // topologies collapse the stream identically.
-            const replacesPrevious = this.userTurnTranscribed || IsTranscriptContinuation(this.lastUserTranscript, transcript);
-            this.emitTranscript({
-                Role: 'User', Text: transcript, IsFinal: true, Kind: 'normal',
-                ReplacesPrevious: replacesPrevious,
-            });
-            this.userTurnTranscribed = true;
-            this.lastUserTranscript = transcript;
+    protected override onUserTranscriptFrame(transcript: string, itemId?: string): void {
+        if (!transcript || transcript.trim().length === 0) {
+            // An empty transcription (a VAD false positive) passes through as a plain final, like the
+            // OpenAI base: the host releases the speech onset it stamped (MJ#5483). It is not part of
+            // the streamed utterance, so the per-turn flags stay as they are.
+            super.onUserTranscriptFrame(transcript ?? '', itemId);
+            return;
         }
+        // Two ways this caption REPLACES rather than appends: another already landed in this turn
+        // (for the same item, when the frames name one), OR it continues the previous utterance (the
+        // provider re-emits the whole thing with more words). The second case rescues a mid-sentence
+        // pause — the VAD fires speech_started and clears the flag even though the user never
+        // stopped, which would otherwise split one spoken thought into several growing bubbles. The
+        // server session (packages/AI/Providers/OpenAI, which xAI's server session extends) makes the same item check.
+        const sameItem = itemId === undefined || this.userTurnItemId === undefined || itemId === this.userTurnItemId;
+        const replacesPrevious = (this.userTurnTranscribed && sameItem) || IsTranscriptContinuation(this.lastUserTranscript, transcript);
+        this.emitTranscript({
+            Role: 'User', Text: transcript, IsFinal: true, Kind: 'normal',
+            ReplacesPrevious: replacesPrevious,
+            ...(itemId !== undefined ? { ItemId: itemId } : {}),
+        });
+        this.userTurnTranscribed = true;
+        this.userTurnItemId = itemId;
+        this.lastUserTranscript = transcript;
     }
 
     /**

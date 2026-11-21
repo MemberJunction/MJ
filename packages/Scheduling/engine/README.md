@@ -182,8 +182,8 @@ The v5.39 release decoupled the poll loop from job execution to fix a bug where 
 
 The poll loop calls `DispatchScheduledJobs(contextUser)`, which:
 
-1. **Sweeps** stale in-flight entries (jobs whose DB lease has expired) — untracks them so their concurrency slot is freed, and fire-and-forget abandons their orphaned `Status='Running'` run records. The sweep is decoupled from `isJobDue` and from the cap; it runs unconditionally at the top of every poll.
-2. **Dispatches** each due job under a cap (`MaxConcurrentJobs`, default 5), atomically acquiring its lock via `spAcquireScheduledJobLock`. Dispatched jobs run in the background; the poll loop returns immediately so the next poll fires on schedule.
+1. **Sweeps** stale in-flight entries (jobs whose DB lease has expired) — untracks them so their concurrency slot is freed, counts the abandoned run as failed and moves the job to its next occurrence, and fire-and-forget abandons their orphaned `Status='Running'` run records. The sweep is decoupled from `isJobDue` and from the cap; it runs unconditionally at the top of every poll.
+2. **Dispatches** each due job under a cap (`MaxConcurrentJobs`, default 5), atomically acquiring its lock via `spAcquireScheduledJobLock`. A job this process is still running is skipped, whatever its entry says (see [Job-list refresh](#job-list-refresh)). Dispatched jobs run in the background; the poll loop returns immediately so the next poll fires on schedule.
 
 Jobs that legitimately fail (throw) still recover via the existing try/catch in `executeJobWithLock`. The lock release uses `spReleaseScheduledJobLockIfTokenMatches` — atomic and token-checked, so a stale holder's late settlement after lease expiry can't clobber a fresh holder's lock.
 
@@ -201,7 +201,7 @@ If you need a hard ceiling, set `MaxConcurrentJobs` slightly below your true lim
 
 - **Raise the cap** when scheduled work backs up despite plenty of headroom — many short, lightweight jobs.
 - **Lower the cap** on memory / DB connection / rate-limit pressure, or when each job spawns heavy work (agent runs, LLM calls).
-- **Shorten the lease** (`LeaseTimeoutMs` / `LeaseTimeoutMinutes`) to reduce the worst-case starvation window (see below), but never below the maximum runtime of any legitimate job — premature reclaim would re-dispatch healthy long jobs.
+- **Shorten the lease** (`LeaseTimeoutMs` / `LeaseTimeoutMinutes`) to reduce the worst-case starvation window (see below), but never below the maximum runtime of any legitimate job — premature reclaim counts a healthy long job as failed and lets its next occurrence start while it is still running.
 
 Configure via MJServer's `scheduledJobs` config block:
 
@@ -274,12 +274,15 @@ When the sweep reclaims a hung job's lease:
 3. Bounded by the count of distinct hanging jobs. Process restart on deploy clears them.
 4. **Operational signal**: each sweep emits a `[sweep] Untracking inflight job <name>` log line. A spike in these is a canary for a misbehaving plugin — wire to monitoring if hangs are a concern.
 5. **Orphaned run records are NOT leaked.** The sweep marks them `Status='Failed'` with an explanatory message via `abandonOrphanedRunRecords`. The DB litter pattern (phantom `Running` rows accumulating over months) is prevented going forward.
+6. **The job moves on.** The swept run counts as a failed run (`RunCount`, `FailureCount`) and the job's `NextRunAt` moves to its next occurrence, so the job is retried at its next scheduled time rather than re-dispatched by the tick that swept it (and every lease interval after). A run is counted once: if the hung execution settles later, its run record is updated as before but its statistics are not counted again, and a run that finished just as the sweep looked is not counted as failed.
 
 `Promise.race([plugin.Execute(), timeout])` does NOT solve the leak — `Promise.race` returns when the timeout wins, but the underlying `plugin.Execute()` promise is still alive. Same heap leak, different surface. Worker-thread isolation would let us terminate a hung plugin's execution context, but that's a multi-week design effort tracked separately.
 
 ### Job-list refresh
 
 The engine loads the job list ONCE at `StartPolling` time. Runtime changes to the `MJ: Scheduled Jobs` table (adds, deletions, cron edits) are NOT picked up automatically by the engine. Callers must explicitly invoke `await engine.OnJobChanged(contextUser)` after making such changes. This is pre-existing behavior — not changed by v5.39 — but worth calling out because the per-poll `Config(false)` no-op was moved out of the poll path, making the explicit `OnJobChanged` trigger the only refresh mechanism.
+
+A reload can land in the middle of a run: any `ScheduledJob` save (`advancePastMissedRuns`, `expireFinishedJobs`, a schedule toggle) fires `OnJobChanged` → `Config(true)`, which replaces the job entities with ones read from the database, still carrying the running job's pre-run `NextRunAt`. Two rules keep that from producing a second run. A job this process is still running is never dispatched again by it, whatever its entry says. And when the run finishes, its statistics and new `NextRunAt` are applied to the live `ScheduledJobs` entry as well as to the object the run started with (the stats sproc raises no entity event, so nothing else would correct the entry).
 
 ### Graceful shutdown
 

@@ -2,8 +2,10 @@
   {
     "fields": {
       "Name": "Customer Insight Specialist Prompt",
-      "Description": "Analyzes customer profile data and recent orders to provide executive account insights.",
+      "Description": "System prompt for the Customer Insight Specialist agent. Analyzes customer profile data and recent activity to provide executive account insights.",
       "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Agent Type System Prompts",
+      "PromptRole": "System",
+      "PromptPosition": "First",
       "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
       "Status": "Active",
       "TemplateText": "@file:templates/customer-insight.template.md"

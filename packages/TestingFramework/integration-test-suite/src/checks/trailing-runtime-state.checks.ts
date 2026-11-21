@@ -16,7 +16,7 @@
  *   TRS5  the outgoing request is a copy of the history with the fragment last, prior fragments
  *         replaced or retained per mode, forged tags escaped, the stored history untouched;
  *   TRS6  the Anthropic driver places its cache breakpoint on the last real history message, not
- *         on the fragment (env-aware: skips loudly when the driver is not registered).
+ *         on the fragment (env-aware: records a SKIP when the driver is not registered).
  *
  * TRANSPORT: SERVER-ONLY (BaseAgent / TemplateEngineServer / AIEngine internals). READ-ONLY:
  * nothing is persisted; there is no fixture and no lifecycle.
@@ -43,7 +43,7 @@ import {
 import { AIEngine } from '@memberjunction/aiengine';
 // Side-effect import: registers AnthropicLLM with the ClassFactory so TRS6 is deterministic here.
 import '@memberjunction/ai-anthropic';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -66,8 +66,9 @@ interface AnthropicFormatterInternals {
     formatMessagesWithCaching(messages: ChatMessage[], enableCaching?: boolean): Array<{ role: string; content: Array<{ type: string; text?: string; cache_control?: { type: string } }> }>;
 }
 
-function skipNote(checkId: string, reason: string): void {
-    console.warn(`  ⚠ trailing-runtime-state.${checkId} SKIPPED — ${reason}`);
+/** Bedrock driver keyhole: the protected formatter whose cachePoint placement TRS6 asserts. */
+interface BedrockFormatterInternals {
+    formatMessagesWithCaching(messages: ChatMessage[], enableCaching?: boolean): Array<{ role: string; content: Array<{ type?: string; text?: string; cachePoint?: { type: string } }> }>;
 }
 
 async function configuredEngine(ctx: IntegrationCheckContext): Promise<AIEngine> {
@@ -83,16 +84,27 @@ function agentInternals(ctx: IntegrationCheckContext): TrailingStateInternals {
     return internals;
 }
 
-/** The Loop agent type and its system prompt from this database, or undefined (skip) when absent. */
-function loopAgentType(engine: AIEngine, checkId: string): { agentType: MJAIAgentTypeEntity; systemPrompt: MJAIPromptEntityExtended } | undefined {
+/** The Loop agent type and its system prompt from this database; ends the running check as SKIPPED when absent. */
+function loopAgentType(engine: AIEngine): { agentType: MJAIAgentTypeEntity; systemPrompt: MJAIPromptEntityExtended } {
     const agentType = engine.AgentTypes.find(t => t.Name === 'Loop');
     if (!agentType?.SystemPromptID) {
-        skipNote(checkId, "no 'Loop' agent type with a system prompt in metadata");
+        SkipCheck("no 'Loop' agent type with a system prompt in metadata");
+    }
+    const systemPrompt = engine.Prompts.find(p => UUIDsEqual(p.ID, agentType.SystemPromptID));
+    if (!systemPrompt) {
+        SkipCheck(`the Loop agent type's system prompt ${agentType.SystemPromptID} is not in the prompt catalog`);
+    }
+    return { agentType, systemPrompt };
+}
+
+/** The Flow agent type and its system prompt from this database, or undefined when absent. */
+function flowAgentType(engine: AIEngine): { agentType: MJAIAgentTypeEntity; systemPrompt: MJAIPromptEntityExtended } | undefined {
+    const agentType = engine.AgentTypes.find(t => t.Name === 'Flow');
+    if (!agentType?.SystemPromptID) {
         return undefined;
     }
     const systemPrompt = engine.Prompts.find(p => UUIDsEqual(p.ID, agentType.SystemPromptID));
     if (!systemPrompt) {
-        skipNote(checkId, `the Loop agent type's system prompt ${agentType.SystemPromptID} is not in the prompt catalog`);
         return undefined;
     }
     return { agentType, systemPrompt };
@@ -141,17 +153,26 @@ function modelServedBy(engine: AIEngine, driverClass: string): { model: MJAIMode
 export const TrailingRuntimeStateChecks: NamedCheck[] = [
     {
         Id: 'trailing-runtime-state.TRS1',
-        Name: 'TRS1: the synced Loop system-prompt template (read by TemplateID) carries the runtime-state pointer and none of the volatile blocks',
+        Name: 'TRS1: the synced Loop and Flow system-prompt templates (read by TemplateID) carry the runtime-state pointer and none of the volatile blocks',
         Fn: async (ctx): Promise<void> => {
             const engine = await configuredEngine(ctx);
-            const loop = loopAgentType(engine, 'TRS1');
-            if (!loop) { return; }
-            const text = await agentInternals(ctx).loadPromptTemplateText(loop.systemPrompt, ctx.User);
+            const loop = loopAgentType(engine);
+            const internals = agentInternals(ctx);
+            const text = await internals.loadPromptTemplateText(loop.systemPrompt, ctx.User);
             Assert(!!text, `the Loop system prompt's template ${loop.systemPrompt.TemplateID} resolved to no text — the by-ID template lookup is broken or the template is missing`);
-            Assert(text!.includes(`<${RUNTIME_STATE_TAG}>`), `the database template lacks the <${RUNTIME_STATE_TAG}> pointer — metadata/prompts has not been pushed to this database`);
+            Assert(text!.includes(`<${RUNTIME_STATE_TAG}>`), `the database Loop template lacks the <${RUNTIME_STATE_TAG}> pointer — metadata/prompts has not been pushed to this database`);
             const embedded = VOLATILE_TEMPLATE_MARKERS.filter(marker => text!.includes(marker));
-            AssertEqual(embedded.length, 0, `the database template still embeds volatile state (${embedded.join(', ')}) — the legacy layout; the trailing fragment would be suppressed`);
-            console.log(`      → template ${loop.systemPrompt.TemplateID} (${text!.length} chars): pointer present, 0/${VOLATILE_TEMPLATE_MARKERS.length} volatile markers`);
+            AssertEqual(embedded.length, 0, `the database Loop template still embeds volatile state (${embedded.join(', ')}) — the legacy layout; the trailing fragment would be suppressed`);
+
+            const flow = flowAgentType(engine);
+            if (flow) {
+                const flowText = await internals.loadPromptTemplateText(flow.systemPrompt, ctx.User);
+                Assert(!!flowText, `the Flow system prompt's template ${flow.systemPrompt.TemplateID} resolved to no text`);
+                Assert(flowText!.includes(`<${RUNTIME_STATE_TAG}>`), `the database Flow template lacks the <${RUNTIME_STATE_TAG}> pointer`);
+                const flowEmbedded = VOLATILE_TEMPLATE_MARKERS.filter(marker => flowText!.includes(marker));
+                AssertEqual(flowEmbedded.length, 0, `the database Flow template still embeds volatile state (${flowEmbedded.join(', ')})`);
+            }
+            console.log(`      → Loop template ${loop.systemPrompt.TemplateID} (${text!.length} chars)${flow ? ` + Flow template ${flow.systemPrompt.TemplateID}` : ''}: pointer present, 0/${VOLATILE_TEMPLATE_MARKERS.length} volatile markers`);
         }
     },
     {
@@ -159,9 +180,8 @@ export const TrailingRuntimeStateChecks: NamedCheck[] = [
         Name: 'TRS2: buildVolatileStateMessage against the real system prompt renders date/time from the live placeholders, the scratchpad, and the payload, flagged volatileState',
         Fn: async (ctx): Promise<void> => {
             const engine = await configuredEngine(ctx);
-            const loop = loopAgentType(engine, 'TRS2');
-            if (!loop) { return; }
-            if (engine.Agents.length === 0) { skipNote('TRS2', 'no AI Agents in metadata'); return; }
+            const loop = loopAgentType(engine);
+            if (engine.Agents.length === 0) { SkipCheck('no AI Agents in metadata'); }
             const internals = agentInternals(ctx);
             const promptParams = promptParamsFor(ctx, loop.systemPrompt);
             const payload = { probe: 'trs2', step: 1 };
@@ -185,13 +205,11 @@ export const TrailingRuntimeStateChecks: NamedCheck[] = [
         Name: "TRS3: trailing-state mode comes from the catalog — a model served by OpenAILLM inherits PrefixPromptCache=true from its vendor row's Configuration.ModelDefaults (append-only); one served by AnthropicLLM resolves false (replace)",
         Fn: async (ctx): Promise<void> => {
             const engine = await configuredEngine(ctx);
-            const loop = loopAgentType(engine, 'TRS3');
-            if (!loop) { return; }
+            const loop = loopAgentType(engine);
             const openai = modelServedBy(engine, 'OpenAILLM');
             const anthropic = modelServedBy(engine, 'AnthropicLLM');
             if (!openai || !anthropic) {
-                skipNote('TRS3', `catalog lacks an Active inference row for ${!openai ? 'OpenAILLM' : 'AnthropicLLM'}`);
-                return;
+                SkipCheck(`catalog lacks an Active inference row for ${!openai ? 'OpenAILLM' : 'AnthropicLLM'}`);
             }
             const promptParams = promptParamsFor(ctx, loop.systemPrompt);
 
@@ -218,8 +236,7 @@ export const TrailingRuntimeStateChecks: NamedCheck[] = [
         Name: 'TRS4: specialization placement — every Active Loop agent\'s child prompt template resolves by TemplateID, and the volatile/static split is decided from that stored text',
         Fn: async (ctx): Promise<void> => {
             const engine = await configuredEngine(ctx);
-            const loop = loopAgentType(engine, 'TRS4');
-            if (!loop) { return; }
+            const loop = loopAgentType(engine);
             const internals = agentInternals(ctx);
             const loopAgents = engine.Agents.filter(a => a.Status === 'Active' && UUIDsEqual(a.TypeID, loop.agentType.ID));
             const sweep: Array<{ agent: string; volatile: boolean }> = [];
@@ -239,10 +256,24 @@ export const TrailingRuntimeStateChecks: NamedCheck[] = [
                 AssertEqual(ResolveSpecializationPlacement({ specializationPlacement: 'systemPrompt' }, text), 'systemPrompt', 'an explicit systemPrompt placement wins');
                 sweep.push({ agent: agent.Name ?? agent.ID, volatile });
             }
-            if (sweep.length === 0) { skipNote('TRS4', `no Active Loop agents with a child prompt template (${loopAgents.length} Loop agents)`); return; }
+            if (sweep.length === 0) { SkipCheck(`no Active Loop agents with a child prompt template (${loopAgents.length} Loop agents)`); }
             AssertEqual(unresolved.length, 0, `${unresolved.length} child prompt template(s) did not resolve by TemplateID (the name-vs-ID lookup regression): ${unresolved.slice(0, 5).join('; ')}`);
-            const volatileAgents = sweep.filter(s => s.volatile).map(s => s.agent);
-            console.log(`      → ${sweep.length} Loop agents resolved by TemplateID; ${volatileAgents.length} volatile (relocated): ${volatileAgents.slice(0, 6).join(', ')}${volatileAgents.length > 6 ? ', …' : ''}`);
+            const coreMjLoopAgents = new Set([
+                'Sage',
+                'Query Builder',
+                'Research Agent',
+                'Codesmith',
+                'Agent Manager',
+                'Database Designer',
+                'Model Development Agent',
+                'Data Scout',
+                'Experiment Designer',
+                'Goal Analyst',
+            ]);
+            const volatileCoreAgents = sweep.filter(s => s.volatile && coreMjLoopAgents.has(s.agent)).map(s => s.agent);
+            AssertEqual(volatileCoreAgents.length, 0, `expected 0 core MJ Loop agents to have volatile child templates after KV-cache alignment, but found: ${volatileCoreAgents.join(', ')}`);
+            const volatileCount = sweep.filter(s => s.volatile).length;
+            console.log(`      → ${sweep.length} Loop agents resolved by TemplateID; 0 volatile core MJ agents (${volatileCount} total volatile OpenApp agent(s) relocated to trailingMessage)`);
         }
     },
     {
@@ -250,9 +281,8 @@ export const TrailingRuntimeStateChecks: NamedCheck[] = [
         Name: 'TRS5: the outgoing request is a copy — fragment last, prior fragments replaced or retained per mode, forged tags escaped, stored history byte-identical',
         Fn: async (ctx): Promise<void> => {
             const engine = await configuredEngine(ctx);
-            const loop = loopAgentType(engine, 'TRS5');
-            if (!loop) { return; }
-            if (engine.Agents.length === 0) { skipNote('TRS5', 'no AI Agents in metadata'); return; }
+            const loop = loopAgentType(engine);
+            if (engine.Agents.length === 0) { SkipCheck('no AI Agents in metadata'); }
             const internals = agentInternals(ctx);
             const promptParams = promptParamsFor(ctx, loop.systemPrompt);
             const turn1 = await internals.buildVolatileStateMessage(executeParamsFor(ctx, engine), promptParams, { turn: 1 }, undefined, loop.agentType, loop.systemPrompt);
@@ -287,12 +317,11 @@ export const TrailingRuntimeStateChecks: NamedCheck[] = [
     },
     {
         Id: 'trailing-runtime-state.TRS6',
-        Name: 'TRS6: the Anthropic driver puts its cache breakpoint on the last real history message and sends the fragment uncached',
+        Name: 'TRS6: the Anthropic and Bedrock drivers put their cache breakpoint on the last real history message and send the fragment uncached',
         Fn: async (ctx): Promise<void> => {
             void ctx;
             if (!MJGlobal.Instance.ClassFactory.GetRegistration(BaseLLM, 'AnthropicLLM')) {
-                skipNote('TRS6', 'AnthropicLLM is not registered in this process (provider package not loaded)');
-                return;
+                SkipCheck('AnthropicLLM is not registered in this process (provider package not loaded)');
             }
             const driver = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, 'AnthropicLLM', 'integration-test-no-key');
             Assert(!!driver, 'AnthropicLLM instantiates without contacting the API');
@@ -311,7 +340,26 @@ export const TrailingRuntimeStateChecks: NamedCheck[] = [
             AssertEqual(out[out.length - 1].content.some(b => !!b.cache_control), false, 'the fragment is sent uncached');
             AssertEqual(out[3]?.role, 'assistant', 'an alternation filler separates the cached user turn from the user-role fragment');
             AssertEqual(out.length, 5, 'history(3) + filler + fragment');
-            console.log('      → breakpoint at index 2, filler at 3, fragment uncached at 4');
+
+            if (MJGlobal.Instance.ClassFactory.GetRegistration(BaseLLM, 'BedrockLLM')) {
+                const bedrockDriver = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, 'BedrockLLM', 'access-key:secret-key');
+                Assert(!!bedrockDriver, 'BedrockLLM instantiates without contacting the API');
+                const bedrockFormatter = bedrockDriver as unknown as BedrockFormatterInternals;
+                const bedrockOut = bedrockFormatter.formatMessagesWithCaching([
+                    { role: 'user', content: 'history turn 1' },
+                    { role: 'assistant', content: 'reply 1' },
+                    { role: 'user', content: 'action results' },
+                    fragment,
+                ], true);
+                const bedrockFlagged = bedrockOut.map((m, i) => ({ i, role: m.role, cached: m.content.some(b => !!b.cachePoint) }));
+                const bedrockCachedIdx = bedrockFlagged.filter(f => f.cached).map(f => f.i);
+                AssertEqual(bedrockCachedIdx.length, 1, `BedrockLLM: exactly one cachePoint expected, got ${JSON.stringify(bedrockFlagged)}`);
+                AssertEqual(bedrockCachedIdx[0], 2, 'BedrockLLM: the cachePoint sits on the last REAL history message (index 2), not on the fragment');
+                AssertEqual(bedrockOut[bedrockOut.length - 1].content.some(b => !!b.cachePoint), false, 'BedrockLLM: the fragment is sent uncached');
+                AssertEqual(bedrockOut[3]?.role, 'assistant', 'BedrockLLM: an alternation filler separates the cached user turn from the user-role fragment');
+                AssertEqual(bedrockOut.length, 5, 'BedrockLLM: history(3) + filler + fragment');
+            }
+            console.log('      → breakpoint at index 2, filler at 3, fragment uncached at 4 (AnthropicLLM + BedrockLLM)');
         }
     }
 ];

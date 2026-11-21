@@ -1,0 +1,11 @@
+[
+  {
+    "fields": {
+      "Name": "Integration Test: Conversation Authorship",
+      "Description": "Integration-test-only role for the conversation message authorship rules (who a message is from). Mirrors what the shipped UI role grants on the three entities a shared conversation touches: full Create/Read/Update/Delete on 'MJ: Conversations', 'MJ: Conversation Details' and 'MJ: Resource Permissions', with no row filter. Full CRUD on 'MJ: Conversation Details' is deliberate: it means every refusal the conversation-authorship-client bundle sees comes from the server's authorship rules, never from the role. Safe to delete; assign only to the seeded it-authorship-* test accounts."
+    },
+    "primaryKey": {
+      "ID": "F3195935-31A6-48D1-BD6F-16E42667B8C1"
+    }
+  }
+]

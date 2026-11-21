@@ -45,6 +45,11 @@ import { UICommandHandlerService } from '../../services/ui-command-handler.servi
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationTab, WorkspaceLayout } from '../../models/conversation-state.model';
 import { SearchResult } from '../../services/search.service';
+import {
+  BuildConversationTasksFilter,
+  InvalidateAgentActivityScopeCache,
+  OwnTasksFilter,
+} from '../../services/conversation-tasks-filter';
 import { ConversationChatAreaComponent } from '../conversation/conversation-chat-area.component';
 import { Subject, takeUntil } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -534,7 +539,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   private saveSettingsTimeout: ReturnType<typeof setTimeout> | null = null;
   private isLoadingSettings: boolean = false;
 
-  // Task filter for conversation-specific filtering
+  /** The user's own top-level tasks; the Tasks tab's fallback filter (see {@link TasksFilterResolver}). */
   public TasksFilter: string = '1=1';
 
   /** @deprecated Use {@link TasksFilter}. */
@@ -784,6 +789,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
    */
   async OnRealtimeConversationReady(event: { conversationId: string; select: boolean }): Promise<void> {
     try {
+      InvalidateAgentActivityScopeCache(this.CurrentUser?.ID);
       await ConversationEngine.Instance.LoadConversations(this.EnvironmentId, this.CurrentUser, true);
       if (event.select && this.IsSidebarVisible) {
         const conversation = ConversationEngine.Instance.Conversations.find(
@@ -821,6 +827,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       this.SelectedConversationId = event.conversation.ID;
       this.SelectedConversation = event.conversation;
       this.IsNewUnsavedConversation = false;
+      InvalidateAgentActivityScopeCache(this.CurrentUser?.ID);
       // The conversation is already added to ConversationEngine by the chat area
     } catch (error) {
       console.error('onConversationCreated ERROR:', error);
@@ -844,6 +851,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.PendingMessageToSend = event.text;
     this.PendingAttachmentsToSend = event.attachments;
     this.PendingMessageConversationId = this.SelectedConversationId;
+    InvalidateAgentActivityScopeCache(this.CurrentUser?.ID);
   }
 
   async ngOnInit() {
@@ -857,6 +865,12 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     // This establishes the single PubSub connection for all conversations
     this.streamingService.initialize();
     console.log('✅ Global streaming service initialized');
+
+    this.streamingService.CompletionEvents$
+      ?.pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        InvalidateAgentActivityScopeCache(this.CurrentUser?.ID);
+      });
 
     // Subscribe to command events from UI Command Handler service
     // These will be bubbled up to the host application
@@ -913,7 +927,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
         ArtifactMetadataEngine.Instance.Config(false)
       ]);
 
-      console.log('✅ AI Engine initialized with', AIEngineBase.Instance.Agents?.length || 0, 'agents');
+      console.log('✅ AI Engine initialized with', AIEngineBase.Instance.ReadableAgents.length, 'agents');
       console.log('✅ Artifact Metadata Engine initialized with',
         ArtifactMetadataEngine.Instance.ArtifactTypes?.length || 0, 'artifact types');
 
@@ -976,30 +990,24 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   /**
-   * Builds the SQL filter for tasks in conversations the user has access to
+   * Sets {@link TasksFilter} to the user's own tasks. The Tasks tab builds its full filter with
+   * {@link TasksFilterResolver} each time it loads.
    */
   private buildTasksFilter(): void {
-    // Filter tasks by conversations the user owns or is a participant in, or tasks owned
-    // by the user
-    const md = this.ProviderToUse;
-    const cd = md.EntityByName('MJ: Conversation Details');
-    const c = md.EntityByName('MJ: Conversations');
-    if (!cd || !c) {
-      console.warn('⚠️ Missing metadata for Conversations or Conversation Details');
-      this.TasksFilter = `ParentID IS NULL AND UserID = '${this.CurrentUser.ID}'`; // Fallback to user-owned tasks only
-      return;
-    }
-
-    this.TasksFilter = `ParentID IS NULL AND (UserID = '${this.CurrentUser.ID}' OR ConversationDetailID IN (
-      SELECT ID FROM [${cd.SchemaName}].[${cd.BaseView}] 
-      WHERE 
-      UserID ='${this.CurrentUser.ID}' OR 
-      ConversationID IN (
-        SELECT ID FROM [${c.SchemaName}].[${c.BaseView}] WHERE UserID='${this.CurrentUser.ID}'
-      )
-    ))`;
-    console.log('📝 Conversations domain tasks filter built:', this.TasksFilter);
+    this.TasksFilter = OwnTasksFilter(this.CurrentUser);
   }
+
+  /**
+   * Builds the Tasks tab filter (see {@link BuildConversationTasksFilter}). The tasks view calls it
+   * on every load and refresh, so a task linked to a message created after the workspace opened
+   * appears on the next refresh. The same function is returned every time, so the input binding
+   * does not change.
+   */
+  public get TasksFilterResolver(): () => Promise<string> {
+    this.tasksFilterResolver ??= () => BuildConversationTasksFilter(this.ProviderToUse, this.CurrentUser);
+    return this.tasksFilterResolver;
+  }
+  private tasksFilterResolver: (() => Promise<string>) | null = null;
 
   ngDoCheck() {
     // Detect new unsaved conversation state changes
@@ -1059,6 +1067,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
+    InvalidateAgentActivityScopeCache(this.CurrentUser?.ID);
 
     // Clear any pending save timeout
     if (this.saveSettingsTimeout) {
@@ -1298,6 +1307,9 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
         }
       }
     } else if (tab === 'tasks') {
+      if (wasOnDifferentTab) {
+        InvalidateAgentActivityScopeCache(this.CurrentUser?.ID);
+      }
       navEvent.taskId = this.ActiveTaskId || undefined;
     }
 
@@ -1368,7 +1380,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       // Refresh the mention autocomplete service to pick up new agents
       await this.mentionAutocompleteService.refresh(this.CurrentUser);
 
-      const agentCount = AIEngineBase.Instance.Agents?.length || 0;
+      const agentCount = AIEngineBase.Instance.ReadableAgents.length;
       this.notificationService.CreateSimpleNotification(`Agent cache refreshed (${agentCount} agents)`, 'success', 3000);
       this.cdr.detectChanges();
     } catch (error) {
@@ -1644,10 +1656,12 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     console.log('✨ Workspace received rename event:', event);
     // Trigger animation in sidebar by setting the ID
     this.RenamedConversationId = event.conversationId;
+    this.cdr.detectChanges();
 
     // Clear after animation completes (1500ms)
     setTimeout(() => {
       this.RenamedConversationId = null;
+      this.cdr.detectChanges();
     }, 1500);
   }
 
@@ -1707,6 +1721,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   OnTaskClicked(task: MJTaskEntity): void {
+    InvalidateAgentActivityScopeCache(this.CurrentUser?.ID);
     // Switch to Tasks tab and set active task ID
     this.ActiveTab = 'tasks';
     this._activeTaskId = task.ID;

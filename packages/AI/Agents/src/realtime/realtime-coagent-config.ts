@@ -42,14 +42,17 @@
  * @author MemberJunction.com
  */
 
-// Type-only import from the pure @memberjunction/ai model layer — erased at runtime, so the
-// module keeps its framework-free / pure-transformation contract.
+// From the pure @memberjunction/ai model layer: the type import is erased at runtime, and the one value
+// import is the dependency-free turn-detection normalizer, so the module keeps its framework-free /
+// pure-transformation contract.
 import type { AIModelConfiguration, RealtimeTurnDetectionSettings } from '@memberjunction/ai';
+import { ExtractRealtimeTimingConfig, NormalizeTurnDetectionSettings } from '@memberjunction/ai';
 import {
     AccumulateRealtimeChannelsConfig,
     type RealtimeChannelDisplayPolicy,
     type RealtimeChannelsConfig,
 } from '@memberjunction/ai-core-plus';
+import { SafeDeepMerge } from '@memberjunction/global';
 
 /**
  * The MJ Authorization name that gates RUNTIME overrides on realtime session start:
@@ -236,6 +239,18 @@ export interface RealtimeModeratorConfig {
      * hand-off pays ~zero added latency. A human barge-in discards the pre-staged decision.
      */
     prestageOnAgentSpeech?: boolean;
+    /**
+     * How a decision model takes part in the moderator's call (`RunDecisionUse` in
+     * `@memberjunction/ai-prompts`): `'Prompt'` runs only the moderator prompt; `'Shadow'` (default) runs
+     * the prompt and asks one Likelihood per roster agent beside it, recording the agreement for a
+     * calibration fit; `'Decision'` lets the calibrated decision pick the speakers and falls back to the
+     * prompt when the answering model has no `realtime-turn-moderator` calibration or the call fails. The
+     * shadow decision runs in parallel and never adds latency; `'Decision'` stays inside
+     * {@link RealtimeModeratorConfig.timeoutMs}.
+     */
+    decisionMode?: 'Prompt' | 'Shadow' | 'Decision';
+    /** The decision prompt the moderator's decision asks, by name. Default `'Default Decision'`. */
+    decisionPromptName?: string;
 }
 
 /** Default moderator settings, applied per-field when a {@link RealtimeModeratorConfig} omits a value. */
@@ -246,6 +261,8 @@ export const REALTIME_MODERATOR_DEFAULTS = {
     timeoutMs: 800,
     onError: 'silent' as 'silent' | 'addressed-only',
     prestageOnAgentSpeech: true,
+    decisionMode: 'Shadow' as 'Prompt' | 'Shadow' | 'Decision',
+    decisionPromptName: 'Default Decision',
 } as const;
 
 /**
@@ -388,6 +405,13 @@ export interface RealtimeSessionTuningConfig {
     /** Per-session input-transcription model override (OpenAI-protocol providers). */
     inputTranscriptionModel?: string;
     /**
+     * The languages callers and the agent are expected to speak, as BCP-47 codes (e.g. `["en-US"]`).
+     * A hint for the live captions, not a lock. Without it, providers that caption by auto-detecting
+     * each utterance's language (Gemini Live) can caption English speech in another script. Gemini
+     * maps it to `languageCodes` on both caption streams; other providers scrub it.
+     */
+    transcriptionLanguages?: string[];
+    /**
      * Normalized turn-detection override (mode/eagerness/threshold/silence). Layers ABOVE the
      * model catalog's `ModelConfiguration.Realtime.TurnDetection` default and BELOW the runtime
      * bag — agents/apps refine what the catalog declares. Profiles translate the normalized
@@ -414,7 +438,7 @@ export interface RealtimeSessionTuningConfig {
 /**
  * Projects the effective config's `realtime.session` tuning section onto the FLAT Config-bag keys
  * the realtime drivers consume (`effortLevel`, `parallelToolCalls`, `mcpTools`,
- * `inputTranscriptionModel`). Returns `null` when the section is absent or contributes nothing —
+ * `inputTranscriptionModel`, `transcriptionLanguages`). Returns `null` when the section is absent or contributes nothing —
  * callers then skip the merge entirely, preserving the prior bag byte-for-byte.
  *
  * @param config The effective configuration.
@@ -438,6 +462,10 @@ export function GetSessionTuningSettings(config: RealtimeCoAgentConfig | null | 
     if (typeof tuning.inputTranscriptionModel === 'string' && tuning.inputTranscriptionModel.trim().length > 0) {
         bag['inputTranscriptionModel'] = tuning.inputTranscriptionModel.trim();
     }
+    const languages = readLanguageCodes(tuning.transcriptionLanguages);
+    if (languages) {
+        bag['transcriptionLanguages'] = languages;
+    }
     if (isPlainObject(tuning.turnDetection)) {
         bag['turnDetection'] = { ...tuning.turnDetection } as JSONObjectLike;
     }
@@ -460,17 +488,34 @@ export function GetSessionTuningSettings(config: RealtimeCoAgentConfig | null | 
  */
 export function GetModelCatalogSessionSettings(config: AIModelConfiguration | null | undefined): JSONObjectLike | null {
     const bag: JSONObjectLike = {};
-    const turnDetection = config?.Realtime?.TurnDetection;
+    const rt = config?.Realtime;
+    const turnDetection = rt?.TurnDetection;
     if (isPlainObject(turnDetection)) {
         bag['turnDetection'] = { ...turnDetection } as JSONObjectLike;
     }
-    const reasoning = config?.Realtime?.Reasoning;
+    const reasoning = rt?.Reasoning;
     if (isPlainObject(reasoning)) {
         bag['reasoning'] = { ...reasoning } as JSONObjectLike;
     }
-    const tooling = config?.Realtime?.Tooling;
+    const tooling = rt?.Tooling;
     if (isPlainObject(tooling)) {
         bag['tooling'] = { ...tooling } as JSONObjectLike;
+    }
+    const timing = ExtractRealtimeTimingConfig(rt ? (rt as Record<string, unknown>) : undefined);
+    if (timing.ConnectionMaxSeconds !== undefined) {
+        bag['connectionMaxSeconds'] = timing.ConnectionMaxSeconds;
+    }
+    if (timing.SessionMaxSeconds !== undefined) {
+        bag['sessionMaxSeconds'] = timing.SessionMaxSeconds;
+    }
+    if (timing.ReconnectBufferSeconds !== undefined) {
+        bag['reconnectBufferSeconds'] = timing.ReconnectBufferSeconds;
+    }
+    if (timing.TrustNativeResumption !== undefined) {
+        bag['trustNativeResumption'] = timing.TrustNativeResumption;
+    }
+    if (config?.Privacy?.ZeroDataRetention === true) {
+        bag['zeroDataRetention'] = true;
     }
     return Object.keys(bag).length > 0 ? bag : null;
 }
@@ -527,45 +572,18 @@ function idsEqual(a: string | null | undefined, b: string | null | undefined): b
  * - plain object vs plain object → recursive deep merge;
  * - anything else (arrays, strings, numbers, booleans, `null`) → the later value REPLACES;
  * - `null` is a real JSON value and replaces like any primitive;
- * - `undefined` values in a later layer are skipped (they cannot exist in parsed JSON anyway).
+ * - `undefined` values in a later layer are skipped (they cannot exist in parsed JSON anyway);
+ * - `__proto__`, `constructor` and `prototype` keys are skipped at every depth (the runtime-override
+ *   layer is client-supplied JSON, so it must not reach `Object.prototype`).
  *
  * `null`/`undefined` LAYERS are skipped entirely. The inputs are never mutated; the result is a
- * fresh object graph.
+ * fresh object graph. Delegates to `SafeDeepMerge` in `@memberjunction/global`.
  *
  * @param layers The configuration layers, base first, most-specific last.
  * @returns The merged configuration object (empty object when every layer is absent).
  */
 export function DeepMergeConfigs(...layers: Array<JSONObjectLike | null | undefined>): JSONObjectLike {
-    const result: JSONObjectLike = {};
-    for (const layer of layers) {
-        if (!isPlainObject(layer)) {
-            continue;
-        }
-        mergeInto(result, layer);
-    }
-    return result;
-}
-
-/** Recursive worker for {@link DeepMergeConfigs} — merges `source` into `target` in place. */
-function mergeInto(target: JSONObjectLike, source: JSONObjectLike): void {
-    for (const key of Object.keys(source)) {
-        const incoming = source[key];
-        if (incoming === undefined) {
-            continue;
-        }
-        const existing = target[key];
-        if (isPlainObject(existing) && isPlainObject(incoming)) {
-            mergeInto(existing, incoming);
-        } else if (isPlainObject(incoming)) {
-            const copy: JSONObjectLike = {};
-            mergeInto(copy, incoming);
-            target[key] = copy;
-        } else if (Array.isArray(incoming)) {
-            target[key] = incoming.slice();
-        } else {
-            target[key] = incoming;
-        }
-    }
+    return SafeDeepMerge(...layers);
 }
 
 /**
@@ -607,9 +625,10 @@ export function ParseRealtimeTypeConfiguration(json: string | null | undefined):
  * (Sage, Marketing Agent, …) carry its own persisted voice/model that the shared co-agent then speaks with;
  * it wins over the co-agent's defaults but yields to an explicit per-session runtime override.
  *
- * One key is the agents' alone: the runtime override can't turn `realtime.video.enabled` on (it can turn it off), so a
- * picked avatar (`realtime.video.avatarId`) shows only when the layers below it already have video on. A picked
- * avatar's billed video is the agent's call, not the caller's.
+ * Authorized per-session runtime overrides (gated behind `Realtime: Advanced Session Controls`
+ * on `StartRealtimeClientSession`) win over lower layers — including enabling `realtime.video`
+ * (`enabled: true`) when an authorized user explicitly selects an avatar-enabled voice in the
+ * picker, while default calls leave the agent's own `realtime.video.enabled` untouched.
  *
  * @param typeDefaultJson The agent TYPE's `DefaultConfiguration` JSON (base layer).
  * @param agentJson The CO-AGENT's `TypeConfiguration` JSON (shared per-co-agent layer).
@@ -637,7 +656,7 @@ export function ResolveEffectiveRealtimeConfig(
     const agentLayer = ParseRealtimeTypeConfiguration(agentJson);
     const targetLayer = ParseRealtimeTypeConfiguration(targetAgentJson);
     const appLayer = ParseRealtimeTypeConfiguration(appSettingsJson);
-    const overrideLayer = withoutVideoTurnedOn(ParseRealtimeTypeConfiguration(overridesJson));
+    const overrideLayer = ParseRealtimeTypeConfiguration(overridesJson);
 
     // Scalar fields: merge order = precedence (later wins):
     //   type-default < co-agent < target < app < runtime-override.
@@ -666,20 +685,6 @@ export function ResolveEffectiveRealtimeConfig(
     }
 
     return config;
-}
-
-/**
- * A runtime-override layer without a `realtime.video.enabled: true`, which only the layers below it may set (see
- * {@link ResolveEffectiveRealtimeConfig}). The layer is copied, never changed; any other value of the key stays.
- */
-function withoutVideoTurnedOn(layer: JSONObjectLike | null): JSONObjectLike | null {
-    const realtime = realtimeSectionOf(layer);
-    const video = realtime?.['video'];
-    if (!layer || !realtime || !isPlainObject(video) || video['enabled'] !== true) {
-        return layer;
-    }
-    const { enabled: _ignored, ...rest } = video;
-    return { ...layer, realtime: { ...realtime, video: rest } };
 }
 
 /** The raw `realtime` section of a parsed layer, or `undefined` when the layer has none. */
@@ -1114,7 +1119,12 @@ function normalizeSession(raw: unknown): RealtimeSessionTuningConfig | undefined
         tuning.inputTranscriptionModel = itModel.trim();
     }
 
-    const turnDetection = normalizeTurnDetection(raw['turnDetection']);
+    const languages = readLanguageCodes(raw['transcriptionLanguages']);
+    if (languages) {
+        tuning.transcriptionLanguages = languages;
+    }
+
+    const turnDetection = NormalizeTurnDetectionSettings(raw['turnDetection']);
     if (turnDetection) {
         tuning.turnDetection = turnDetection;
     }
@@ -1131,37 +1141,18 @@ function normalizeSession(raw: unknown): RealtimeSessionTuningConfig | undefined
     return Object.keys(tuning).length > 0 ? tuning : undefined;
 }
 
+/** The non-blank strings of an array, trimmed — or `undefined` when none remain (a lone string is not a list). */
+function readLanguageCodes(value: unknown): string[] | undefined {
+    if (!Array.isArray(value)) {
+        return undefined;
+    }
+    const codes = value.filter((v): v is string => typeof v === 'string' && v.trim().length > 0).map((v) => v.trim());
+    return codes.length > 0 ? codes : undefined;
+}
+
 /** A finite, positive, whole number — or `undefined` for anything else (a limit of 0, -5 or 1.5 is a typo, not a limit). */
 function readPositiveInteger(value: unknown): number | undefined {
     return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
-}
-
-/**
- * Normalizes the `session.turnDetection` block — only the recognized, correctly-typed knobs of the
- * MJ-normalized turn-detection vocabulary survive. Returns `undefined` when nothing valid is
- * present (tolerant, like every other cascade input). The drivers re-validate on extraction, so
- * this is belt-and-braces plus a typed authoring surface.
- */
-function normalizeTurnDetection(raw: unknown): RealtimeTurnDetectionSettings | undefined {
-    if (!isPlainObject(raw)) {
-        return undefined;
-    }
-    const result: RealtimeTurnDetectionSettings = {};
-    const mode = raw['Mode'];
-    if (mode === 'default' || mode === 'serverVad' || mode === 'semanticVad' || mode === 'native') {
-        result.Mode = mode;
-    }
-    const eagerness = raw['Eagerness'];
-    if (eagerness === 'low' || eagerness === 'auto' || eagerness === 'high') {
-        result.Eagerness = eagerness;
-    }
-    if (typeof raw['Threshold'] === 'number' && Number.isFinite(raw['Threshold'])) {
-        result.Threshold = raw['Threshold'];
-    }
-    if (typeof raw['SilenceDurationMs'] === 'number' && Number.isFinite(raw['SilenceDurationMs'])) {
-        result.SilenceDurationMs = raw['SilenceDurationMs'];
-    }
-    return Object.keys(result).length > 0 ? result : undefined;
 }
 
 /** Normalizes the `turnTaking` block (participation mode + room moderator); returns `null` when nothing usable survives. */
@@ -1218,6 +1209,12 @@ function normalizeModerator(raw: unknown): RealtimeModeratorConfig | null {
     if (typeof raw['prestageOnAgentSpeech'] === 'boolean') {
         m.prestageOnAgentSpeech = raw['prestageOnAgentSpeech'];
     }
+    if (raw['decisionMode'] === 'Prompt' || raw['decisionMode'] === 'Shadow' || raw['decisionMode'] === 'Decision') {
+        m.decisionMode = raw['decisionMode'];
+    }
+    if (typeof raw['decisionPromptName'] === 'string' && raw['decisionPromptName'].trim().length > 0) {
+        m.decisionPromptName = raw['decisionPromptName'].trim();
+    }
 
     return Object.keys(m).length > 0 ? m : null;
 }
@@ -1248,6 +1245,8 @@ export function GetEffectiveModeratorConfig(
         timeoutMs: m.timeoutMs ?? REALTIME_MODERATOR_DEFAULTS.timeoutMs,
         onError: m.onError ?? REALTIME_MODERATOR_DEFAULTS.onError,
         prestageOnAgentSpeech: m.prestageOnAgentSpeech ?? REALTIME_MODERATOR_DEFAULTS.prestageOnAgentSpeech,
+        decisionMode: m.decisionMode ?? REALTIME_MODERATOR_DEFAULTS.decisionMode,
+        decisionPromptName: m.decisionPromptName ?? REALTIME_MODERATOR_DEFAULTS.decisionPromptName,
     };
 }
 
@@ -1535,16 +1534,16 @@ export function BuildVoiceMannerSection(config: RealtimeCoAgentConfig | null | u
  * two are kept in lockstep by `realtime-convergence-drift.test.ts`); the
  * server-bridged hosts (LiveKit, Zoom/Teams) build it here so both funnel into the one override slot.
  *
- * Envelope: `{"realtime":{"modelPreference":"<id>","voice":{"default":{"voice":"<v>"}},"video":{"avatarId":"<a>"}}}`.
+ * Envelope: `{"realtime":{"modelPreference":"<id>","voice":{"default":{"voice":"<v>"}},"video":{"enabled":true,"avatarId":"<a>"}}}`.
  *
  * The voice is filed PROVIDER-AGNOSTICALLY, which is what lets a host carry a voice at all: the vendor
  * is not known here (and on the default-model path is not known to the caller at any point before the
  * session is prepared), so naming one would be a guess. {@link GetProviderVoiceSettings} files this onto
  * whichever driver the framework resolves. See issue #3530.
  *
- * A picked avatar leaves video to the agent: it shows only when the voiced agent's own video setting is on (a runtime
- * override can't turn it on), and only when it names a Video binding on the resolved vendor. With the setting off the
- * call says why (reason `video-off`).
+ * Picking an avatar-enabled voice sets `video.enabled: true` alongside `avatarId` so the avatar shows by
+ * default for authorized callers even when the agent keeps video off on ordinary audio calls (while
+ * leaving `video` absent when an audio-only voice is picked).
  *
  * @param modelId The `MJ: AI Models` Name or ID to prefer, or null/empty for none.
  * @param voice The provider-native voice id (e.g. `echo`), or null/empty for none.
@@ -1562,7 +1561,7 @@ export function BuildRealtimeOverridesJson(
     if (m.length === 0 && v.length === 0 && a.length === 0) {
         return null;
     }
-    const realtime: { modelPreference?: string; voice?: { default: { voice: string } }; video?: { avatarId: string } } = {};
+    const realtime: { modelPreference?: string; voice?: { default: { voice: string } }; video?: { enabled: boolean; avatarId: string } } = {};
     if (m.length > 0) {
         realtime.modelPreference = m;
     }
@@ -1570,7 +1569,7 @@ export function BuildRealtimeOverridesJson(
         realtime.voice = { default: { voice: v } };
     }
     if (a.length > 0) {
-        realtime.video = { avatarId: a };
+        realtime.video = { enabled: true, avatarId: a };
     }
     return JSON.stringify({ realtime });
 }

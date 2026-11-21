@@ -46,7 +46,7 @@ vi.mock('@memberjunction/ai-prompts', () => ({ AIPromptRunner: class AIPromptRun
 import { RunAdhocQueryAction } from '../custom/data/run-adhoc-query.action';
 
 type Caller = { ID: string; IsMagicLinkAnonymous?: boolean; MagicLinkScope?: MagicLinkScope };
-type Param = { Name: string; Type: 'Input'; Value: unknown };
+type Param = { Name: string; Type: 'Input' | 'Output' | 'Both'; Value: unknown };
 type Result = { Success: boolean; ResultCode: string; Message?: string; RowCount?: number; WasTruncated?: boolean };
 type Runnable = { InternalRunAction(params: { ContextUser: Caller; Params: Param[] }): Promise<Result> };
 
@@ -218,5 +218,83 @@ describe('Run Ad-hoc Query: refusals from the read path', () => {
 
         expect(result.Success).toBe(false);
         expect(result.ResultCode).toBe('QUERY_TIMEOUT');
+    });
+});
+
+describe('Run Ad-hoc Query: output parameters and markdown truncation', () => {
+    it('populates structured Output parameters on params.Params for Flow agent ActionOutputMapping', async () => {
+        const params: Param[] = [{ Name: 'Query', Type: 'Input', Value: SQL }];
+        const action = new RunAdhocQueryAction() as unknown as Runnable;
+
+        const result = await action.InternalRunAction({ ContextUser: USER, Params: params });
+
+        expect(result.Success).toBe(true);
+        const resultsParam = params.find(p => p.Name === 'Results');
+        const rowCountParam = params.find(p => p.Name === 'RowCount');
+        const formattedParam = params.find(p => p.Name === 'FormattedResults');
+        const columnsParam = params.find(p => p.Name === 'Columns');
+        expect(resultsParam?.Type).toBe('Output');
+        expect(resultsParam?.Value).toEqual(ROWS);
+        expect(rowCountParam?.Value).toBe(2);
+        expect(columnsParam?.Value).toEqual([
+            { ColumnName: 'Month', DataType: 'string', IsNullable: false },
+            { ColumnName: 'Total', DataType: 'number', IsNullable: false },
+        ]);
+        // No format was asked for, so the rows travel once: no rendered copy alongside Results.
+        expect(formattedParam).toBeUndefined();
+        expect(result.Message).not.toContain('FormattedResults');
+    });
+
+    it('renders FormattedResults only when a format is asked for', async () => {
+        const params: Param[] = [
+            { Name: 'Query', Type: 'Input', Value: SQL },
+            { Name: 'DataFormat', Type: 'Input', Value: 'csv' },
+        ];
+        const action = new RunAdhocQueryAction() as unknown as Runnable;
+
+        await action.InternalRunAction({ ContextUser: USER, Params: params });
+
+        const formatted = params.find(p => p.Name === 'FormattedResults')?.Value as string;
+        expect(formatted).toContain('Month');
+        expect(formatted).toContain('Jan');
+    });
+
+    it('keeps the rows out of Message: they travel once, in the Results (and FormattedResults) output parameters', async () => {
+        const params: Param[] = [
+            { Name: 'Query', Type: 'Input', Value: SQL },
+            { Name: 'OutputFormat', Type: 'Input', Value: 'markdown' },
+        ];
+        const action = new RunAdhocQueryAction() as unknown as Runnable;
+
+        const result = await action.InternalRunAction({ ContextUser: USER, Params: params });
+
+        expect(result.Success).toBe(true);
+        expect(result.Message).toContain('**Rows Returned:** 2');
+        expect(result.Message).toContain('2 rows in the `Results` output parameter');
+        expect(result.Message).not.toContain('Jan');
+        expect(result.Message).not.toContain('Feb');
+        expect(params.find(p => p.Name === 'Results')?.Value).toEqual(ROWS);
+        expect(params.find(p => p.Name === 'FormattedResults')?.Value).toContain('Jan');
+    });
+
+    it('uses a default ColumnMaxLength of 200 and appends [...truncated] plus a note when markdown cells exceed the limit', async () => {
+        const longText = 'A'.repeat(250);
+        h.readOnlyRunQuery.mockResolvedValue(queryResult({
+            Results: [{ Summary: longText }],
+            RowCount: 1,
+            TotalRowCount: 1,
+        }));
+
+        const params: Param[] = [
+            { Name: 'Query', Type: 'Input', Value: 'SELECT Summary FROM Reports' },
+            { Name: 'OutputFormat', Type: 'Input', Value: 'markdown' },
+        ];
+        const action = new RunAdhocQueryAction() as unknown as Runnable;
+        const result = await action.InternalRunAction({ ContextUser: USER, Params: params });
+
+        expect(result.Success).toBe(true);
+        const formatted = params.find(p => p.Name === 'FormattedResults')?.Value as string;
+        expect(formatted).toContain('[...truncated]');
+        expect(formatted).toContain('ColumnMaxLength: 0');
     });
 });

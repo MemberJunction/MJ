@@ -1,0 +1,11 @@
+.mj-folded-subtype-warning {
+  margin-bottom: var(--mj-space-3, 12px);
+}
+
+.mj-folded-subtype-driver-host {
+  display: block;
+}
+
+.mj-folded-subtype-fields {
+  display: contents;
+}

@@ -1,0 +1,25 @@
+/* Shared styles of the Predictive Studio protocol/unit widgets (components/*). Semantic tokens only. */
+.ps-eval { display: flex; flex-direction: column; gap: 8px; color: var(--mj-text-primary); }
+.ps-eval h4 { margin: 12px 0 4px; font-size: var(--mj-text-sm); color: var(--mj-text-secondary); }
+.ps-eval-outcome { display: flex; flex-direction: column; gap: 4px; padding: 12px 16px; border-radius: var(--mj-radius-md); border: 1px solid var(--mj-border-default); }
+.ps-eval-outcome.outcome-model, .ps-eval-outcome.outcome-keep-simple-baseline { background: var(--mj-status-success-bg); border-color: var(--mj-status-success-border); color: var(--mj-status-success-text); }
+.ps-eval-outcome.outcome-no-signal { background: var(--mj-status-error-bg); border-color: var(--mj-status-error-border); color: var(--mj-status-error-text); }
+.ps-eval-reason { margin: 0; font-size: var(--mj-text-sm); color: var(--mj-text-secondary); }
+.ps-eval-table { width: 100%; border-collapse: collapse; font-size: var(--mj-text-sm); }
+.ps-eval-table th, .ps-eval-table td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--mj-border-subtle); }
+.ps-eval-optimistic { font-size: var(--mj-text-xs); color: var(--mj-status-warning-text); background: var(--mj-status-warning-bg); border-radius: var(--mj-radius-full); padding: 1px 8px; }
+.ps-eval-flags li { color: var(--mj-status-error-text); }
+.ps-eval-empty, .ps-muted { color: var(--mj-text-muted); }
+.ps-form { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; align-items: center; }
+.ps-form-actions { display: flex; gap: 8px; margin-top: 12px; }
+.ps-refusals { color: var(--mj-status-error-text); background: var(--mj-status-error-bg); border: 1px solid var(--mj-status-error-border); border-radius: var(--mj-radius-sm); padding: 8px 12px; }
+.ps-note { font-size: var(--mj-text-sm); color: var(--mj-text-secondary); }
+.ps-versions { display: flex; gap: 16px; }
+.ps-version-list { list-style: none; margin: 0; padding: 0; min-width: 160px; }
+.ps-row-button { display: block; width: 100%; text-align: left; padding: 6px 10px; border: none; border-radius: var(--mj-radius-sm); background: transparent; color: var(--mj-text-secondary); font: inherit; cursor: pointer; }
+.ps-row-button:hover { background: var(--mj-bg-surface-hover); }
+.ps-row-button:focus-visible { outline: none; box-shadow: var(--mj-focus-ring); }
+.ps-row-button.active { background: var(--mj-bg-surface-active); color: var(--mj-text-primary); }
+.ps-summary { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; font-size: var(--mj-text-sm); }
+.ps-summary dt { color: var(--mj-text-secondary); }
+.ps-summary dd { margin: 0; }

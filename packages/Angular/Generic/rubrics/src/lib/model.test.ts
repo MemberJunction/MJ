@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { AddCriterion, AddNode, AnchorsForLevel, AnswerLevel, BandFor, CanSubmit, CatalogRow, ChosenPublishBump, ScoringShortcutApplies, ComparisonCohortFilter, ComparisonMatrix, DisplayScore, DraftProblems, IncompleteAnswers, ScoringCompleteness, MatrixColumnsFromRows, MoveNode, MoveProblem, NodeFields, NodeFromRow, PatchNode, PlanBandSave, PlanNodeSave, PreviewScore, PublishPreview, QueueNodeSave, RemoveBand, RemoveNode, SampleMatchesTree, ScaleFromRow, SetAnchor, SetGate, SetScale, SetWeight, VersionRows, VersionShownWithoutDraft, WeightShares } from './model.js';
+import { AddCriterion, AddNode, AnchorsForLevel, AnswerLevel, BandFor, CanSubmit, CatalogRow, ChosenPublishBump, ScoringShortcutApplies, ComparisonCohortFilter, ComparisonMatrix, ComparisonScoresFilter, DisplayScore, DraftProblems, IncompleteAnswers, ScoringCompleteness, MatrixColumnsFromRows, MoveNode, MoveProblem, NodeFields, NodeFromRow, PatchNode, PlanBandSave, PlanNodeSave, PreviewScore, PublishPreview, QueueNodeSave, RemoveBand, RemoveNode, SampleMatchesTree, ScaleFromRow, SetAnchor, SetGate, SetScale, SetWeight, VersionRows, VersionShownWithoutDraft, WeightShares } from './model.js';
 
 const scale: RubricScaleSnapshot = {
     id: 'scale',
@@ -379,5 +379,17 @@ describe('sampleMatchesTree', () => {
         expect(SampleMatchesTree(published, draftAnswers)).toBe(false);
         expect(SampleMatchesTree(published, [{ criterionId: 'published-accuracy' }])).toBe(true);
         expect(SampleMatchesTree(published, [])).toBe(false);
+    });
+});
+
+describe('comparison scores filter', () => {
+    it('reads the scores of the given evaluations by ID, with no subquery', () => {
+        expect(ComparisonScoresFilter(['e1', 'e2'])).toBe("IsComputed=0 AND EvaluationID IN ('e1','e2')");
+        expect(ComparisonScoresFilter(["o'brien"])).toBe("IsComputed=0 AND EvaluationID IN ('o''brien')");
+    });
+
+    it('is empty when there is no evaluation to read', () => {
+        expect(ComparisonScoresFilter([])).toBe('');
+        expect(ComparisonScoresFilter([''])).toBe('');
     });
 });

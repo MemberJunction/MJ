@@ -32,7 +32,8 @@
 import { BaseEntity, RunView } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJListEntity, MJListDetailEntity, MJActionEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { MJListEntityServer } from '@memberjunction/core-entities-server';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -47,9 +48,13 @@ interface MJActionParamLike { ID: string }
  * The declaration under test. Deliberately mirrors the shape the guide documents for an order
  * header's lines — explicit load, delete-on-remove, and a renumbered sequence field — so what this
  * bundle proves is what an adopter would actually write.
+ *
+ * Extends {@link MJListEntityServer} (`BaseEntity -> MJListEntity -> MJListEntityExtended ->
+ * MJListEntityServer -> GraphTestListEntity`) so the registration for `MJ: Lists` forms a single
+ * linear inheritance chain with no unrelated sibling collision.
  */
 @RegisterClass(BaseEntity, LIST_ENTITY)
-export class GraphTestListEntity extends MJListEntity {
+export class GraphTestListEntity extends MJListEntityServer {
     public readonly Details = this.DeclareRelatedRecords<MJListDetailEntity>({
         Name: 'Details',
         RelatedEntity: LIST_DETAIL_ENTITY,
@@ -378,10 +383,9 @@ export const EntityGraphChecks: NamedCheck[] = [
                     fromCache = action.Params.Items as readonly MJActionParamLike[];
                 } catch {
                     // A lazy collection throws when no engine caches the entity. In a bootstrap that
-                    // never configured ActionEngine that is expected, so skip-as-pass loudly rather
-                    // than fail on an environment difference.
-                    console.log('      → ActionEngine not configured in this process; EG10 skipped');
-                    return;
+                    // never configured ActionEngine that is expected, so skip rather than fail on an
+                    // environment difference.
+                    SkipCheck('ActionEngine is not configured in this process, so the lazy Action Params collection has no cache to read');
                 }
 
                 const truth = await rv.RunView({

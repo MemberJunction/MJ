@@ -93,14 +93,6 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="SuggestedResponses"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
             FieldName="OriginalMessageChanged"
             Type="checkbox"
             [EditMode]="EditMode"
@@ -171,24 +163,6 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="UserID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ArtifactID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ArtifactVersionID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -591,6 +565,31 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTasks', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Agent Channel Participants Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAgentChannelParticipants"
+        SectionName="Agent Channel Participants"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAgentChannelParticipants')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Agent Channel Participants','LastSeenDetailID')"
+                [NewRecordValues]="NewRecordValues('MJ: Agent Channel Participants','LastSeenDetailID')"
+                [AllowLoad]="IsSectionExpanded('mJAgentChannelParticipants')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAgentChannelParticipants', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

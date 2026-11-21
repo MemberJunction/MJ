@@ -174,6 +174,14 @@ class BudgetedConsumer<TPayload extends WorkJson = WorkJson> implements ITranspo
         return this.settle(this.inner.DeadLetter(delivery, reason, error));
     }
 
+    public DiscardExhausted(delivery: ReceivedDelivery<TPayload>, reason: string, error: string | null): Promise<SettleResult> {
+        return this.settle(
+            this.inner.DiscardExhausted
+                ? this.inner.DiscardExhausted(delivery, reason, error)
+                : this.inner.DeadLetter(delivery, reason, error),
+        );
+    }
+
     public Release(delivery: ReceivedDelivery<TPayload>): Promise<SettleResult> {
         return this.settle(this.inner.Release(delivery));
     }
@@ -320,7 +328,7 @@ export class WorkQueueHost implements IShutdownable {
         return this.reconciling;
     }
 
-    /** Never throws: a failed pass is logged and reported as {}. */
+    /** Never throws: a pass that threw is logged and reported as { Pass: -1 }; a held lock is {}. */
     public RunSweeperOnce(): Promise<Record<string, number>> {
         if (!this.sweeping) {
             this.sweeping = this.sweepNow().finally(() => {
@@ -372,7 +380,7 @@ export class WorkQueueHost implements IShutdownable {
             return await this.sweeper.RunOnce();
         } catch (error) {
             this.log.Error('Sweeper pass failed', AsError(error));
-            return {};
+            return { Pass: -1 };
         }
     }
 

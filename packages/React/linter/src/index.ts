@@ -1,4 +1,4 @@
-export { ComponentLinter, LintResult, Violation } from './component-linter';
+export { ComponentLinter, LintResult, Violation, ViolationDetails, FieldAccessViolationDetails } from './component-linter';
 export { BaseLintRule } from './lint-rule';
 export {
   LibraryLintCache,
@@ -6,6 +6,21 @@ export {
   CompiledValidator,
 } from './library-lint-cache';
 export type { LinterOptions } from './linter-options';
+export {
+  SemanticValidator,
+  SemanticValidatorRegistry,
+  RequiredWhenValidator,
+  SqlWhereClauseValidator,
+  SubsetOfEntityFieldsValidator,
+} from './schema-validation/semantic-validators';
+export type {
+  ValidationContext,
+  EntityMetadata,
+  EntityFieldInfo,
+  QueryMetadata,
+  QueryParameter,
+} from './schema-validation/semantic-validators';
+export type { DynamicValue, ExtractedValue } from './prop-value-extractor';
 // Side-effect import — ensures all built-in @RegisterClass rules are registered
 // when the package is imported. The barrel pulls in component-linter, which
 // already has this side-effect import internally, so this line is defensive.

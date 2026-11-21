@@ -185,4 +185,15 @@ describe('AIPromptRunner — fire-and-forget prompt-run saves', () => {
   it('WaitForPendingPromptRunSaves resolves even with no queued saves', async () => {
     await expect(runner.WaitForPendingPromptRunSaves()).resolves.toBeUndefined();
   });
+
+  it('FlushPendingSaves awaits queued INSERT and UPDATE operations on AIPromptRunner', async () => {
+    const log: string[] = [];
+    const entity = new FakePromptRun(log);
+
+    internals(runner)._promptRunQueue.Insert(entity);
+    internals(runner)._promptRunQueue.Update(entity);
+
+    await runner.FlushPendingSaves();
+    expect(log).toEqual(['start:1', 'end:1', 'start:2', 'end:2']);
+  });
 });

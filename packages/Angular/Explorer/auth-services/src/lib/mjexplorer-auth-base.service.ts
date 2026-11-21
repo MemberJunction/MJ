@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Observable, BehaviorSubject, from } from 'rxjs';
+import { Metadata } from '@memberjunction/core';
 import { IAngularAuthProvider, AngularAuthProviderConfig } from './IAuthProvider';
 import {
   StandardUserInfo,
@@ -232,7 +233,11 @@ export abstract class MJAuthBase implements IAngularAuthProvider {
     // 'mj-theme-overlay' mirrors the active org brand overlay id for the same
     // pre-paint script — the org brand persists across logout (ThemeService.Reset
     // deliberately keeps the overlay), so its pre-paint mirror must too.
-    return new Set(['mj-theme', 'mj-theme-overlay']);
+    // 'mj-theme-overlay-css' is the overlay's emitted CSS persisted beside that id
+    // (ThemeService.ApplyBrandOverlay) so a cold load can re-inject it before first
+    // paint. Wiping it at logout leaves the next sign-in with the attribute and no
+    // stylesheet behind it: the sign-in page and the loading screen flash stock.
+    return new Set(['mj-theme', 'mj-theme-overlay', 'mj-theme-overlay-css']);
   }
 
   /**
@@ -241,8 +246,18 @@ export abstract class MJAuthBase implements IAngularAuthProvider {
    * Removes all localStorage entries except those returned by
    * `preservedLocalStorageKeys`, and deletes the `MJ_Metadata` IndexedDB
    * database so a subsequent user session starts with a clean slate.
+   *
+   * First, while the session is still authenticated, it sends this user's
+   * unsent realtime-call recording shards (a few seconds at most) and deletes
+   * whatever is left, so their call audio is neither left on a shared browser
+   * nor re-sent from the next user's session.
    */
   protected async clearClientCaches(): Promise<void> {
+    // Genuine bundle-size deferral: realtime-runtime (and @google/genai) is only needed
+    // to flush call-recording shards at logout, keeping it out of the initial login bundle.
+    const { ReleaseRecordingShardsAtLogout } = await import('@memberjunction/realtime-runtime');
+    await ReleaseRecordingShardsAtLogout(Metadata.Provider); // global-provider-ok: logout ends the single signed-in Explorer session, whose provider is the global one
+
     const preserved = this.preservedLocalStorageKeys;
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {

@@ -270,13 +270,24 @@ describe('parseMetadataReference — the REAL production parser', () => {
       expect(parsed!.value).toBe('');
     });
 
-    it('documents the substring quirk: any "?create" occurrence in the value activates create mode', () => {
-      // Real behavior pinned on purpose: hasCreate is a substring test, so a
-      // value containing "?create..." (here "What?createdBy") trips it and the
-      // value is truncated at the first "?".
+    it('splits the criteria at the first "?" like push: "What?createdBy" holds a flag, not create', () => {
       const parsed = ParseMetadataReference('@lookup:Notes.Title=What?createdBy');
-      expect(parsed!.createIfMissing).toBe(true);
+      expect(parsed!.createIfMissing).toBe(false);
       expect(parsed!.fields).toEqual([{ field: 'Title', value: 'What' }]);
+      expect(parsed!.UnknownFlags).toEqual(['createdby']);
+    });
+
+    it('splits the criteria at the first "?" without ?create', () => {
+      const parsed = ParseMetadataReference('@lookup:Notes.Title=Foo?allowDefer');
+      expect(parsed!.fields).toEqual([{ field: 'Title', value: 'Foo' }]);
+      expect(parsed!.createIfMissing).toBe(false);
+      expect(parsed!.UnknownFlags).toBeUndefined();
+    });
+
+    it('reports ?optional as an unknown flag', () => {
+      const parsed = ParseMetadataReference('@lookup:MJ: Users.Email=@env:E?optional');
+      expect(parsed!.fields).toEqual([{ field: 'Email', value: '@env:E' }]);
+      expect(parsed!.UnknownFlags).toEqual(['optional']);
     });
   });
 
@@ -325,6 +336,17 @@ describe('parseMetadataReference — the REAL production parser', () => {
         type: METADATA_KEYWORDS.ENV,
         value: 'DATABASE_CONNECTION_STRING',
       });
+    });
+
+    it('parses an optional env reference to the bare variable name', () => {
+      expect(ParseMetadataReference('@env:API_KEY?optional')).toEqual({
+        type: METADATA_KEYWORDS.ENV,
+        value: 'API_KEY',
+      });
+    });
+
+    it('rejects an env reference with an unknown modifier', () => {
+      expect(ParseMetadataReference('@env:API_KEY?bogus')).toBeNull();
     });
   });
 
@@ -726,5 +748,97 @@ describe('ValidationService - Dependency Order Checking (real implementation)', 
     expect(svc['entityDependencies'].get('Categories')?.dependsOn.size).toBe(0);
     // ...so processing order can never violate it
     expect(svc['checkDependencyOrder'](['Categories'])).toHaveLength(0);
+  });
+});
+
+describe('ValidationService - @env:VAR?optional', () => {
+  function service(): ValidationService {
+    const svc = new ValidationService({ checkBestPractices: true });
+    svc['errors'] = [];
+    svc['warnings'] = [];
+    return svc;
+  }
+
+  it('reports ?optional in a primary key as an error', () => {
+    const svc = service();
+
+    svc['validatePrimaryKeyEnvReferences']({ ID: '@env:TAG_ID?optional' }, 'MJ: Tags', '/test/tags.json');
+
+    expect(svc['errors']).toHaveLength(1);
+    expect(svc['errors'][0].field).toBe('ID');
+    expect(svc['errors'][0].message).toContain('cannot use ?optional');
+  });
+
+  it('reports a bad modifier in a primary key as an invalid reference', () => {
+    const svc = service();
+
+    svc['validatePrimaryKeyEnvReferences']({ ID: '@env:TAG_ID?bogus' }, 'MJ: Tags', '/test/tags.json');
+
+    expect(svc['errors']).toHaveLength(1);
+    expect(svc['errors'][0].message).toContain('Invalid reference format');
+  });
+
+  it('accepts a plain @env: reference in a primary key', () => {
+    const svc = service();
+
+    svc['validatePrimaryKeyEnvReferences']({ ID: '@env:TAG_ID' }, 'MJ: Tags', '/test/tags.json');
+
+    expect(svc['errors']).toHaveLength(0);
+  });
+
+  it('does not warn about an unset optional variable in nested JSON', () => {
+    const svc = service();
+
+    svc['validateNestedEnvReference']('@env:MJ_VALIDATE_UNSET?optional', '/test/a.json', 'MJ: Tags', 'Key');
+
+    expect(svc['warnings']).toHaveLength(0);
+    expect(svc['errors']).toHaveLength(0);
+  });
+
+  it('warns about an unset required variable in nested JSON', () => {
+    const svc = service();
+
+    svc['validateNestedEnvReference']('@env:MJ_VALIDATE_UNSET', '/test/a.json', 'MJ: Tags', 'Key');
+
+    expect(svc['warnings']).toHaveLength(1);
+    expect(svc['warnings'][0].message).toContain('MJ_VALIDATE_UNSET');
+  });
+
+  it('reports a nested reference with an unknown modifier as an error', () => {
+    const svc = service();
+
+    svc['validateNestedEnvReference']('@env:X?bogus', '/test/a.json', 'MJ: Tags', 'Key');
+
+    expect(svc['errors']).toHaveLength(1);
+    expect(svc['errors'][0].message).toContain('Invalid reference format');
+  });
+});
+
+describe('ValidationService - ?optional inside @lookup:', () => {
+  function service(): ValidationService {
+    const svc = new ValidationService({ checkBestPractices: true });
+    svc['errors'] = [];
+    svc['warnings'] = [];
+    return svc;
+  }
+
+  it('reports ?optional in a lookup as an error', async () => {
+    const svc = service();
+    const parsed = ParseMetadataReference('@lookup:MJ: Users.Email=@env:E?optional');
+
+    await svc['validateLookupReference'](parsed!, '/test/a.json', 'MJ: Tags', 'UserID');
+
+    const errors = svc['errors'].filter((e) => e.message.includes('?optional is not supported in @lookup:'));
+    expect(errors).toHaveLength(1);
+    expect(errors[0].field).toBe('UserID');
+  });
+
+  it('does not report a lookup without ?optional', async () => {
+    const svc = service();
+    const parsed = ParseMetadataReference('@lookup:MJ: Users.Email=@env:E?create');
+
+    await svc['validateLookupReference'](parsed!, '/test/a.json', 'MJ: Tags', 'UserID');
+
+    expect(svc['errors'].filter((e) => e.message.includes('?optional'))).toEqual([]);
   });
 });

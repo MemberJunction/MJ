@@ -1,0 +1,299 @@
+[
+  {
+    "fields": {
+      "Name": "Start Diagnostic Session",
+      "OperationKey": "Diagnostics.StartSession",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Diagnostics",
+      "Description": "Starts a bounded diagnostic recording session targeting users, API keys, operations, a browser session, or the instance. Implemented by DiagnosticsStartSessionServerOperation in @memberjunction/diagnostics-server.",
+      "InputTypeName": "DiagnosticsStartSessionInput",
+      "InputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "DiagnosticsStartSessionOutput",
+      "OutputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "diagnostics:manage",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-207000000001"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:22.732Z",
+      "checksum": "4e58b7767568029576aea0133f37bf03586fbc5cc2d09016652422bc751e39aa"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Stop Diagnostic Session",
+      "OperationKey": "Diagnostics.StopSession",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Diagnostics",
+      "Description": "Stops an active diagnostic session immediately and broadcasts a multi-instance flush so all server nodes write their pending chunks. Implemented by DiagnosticsStopSessionServerOperation in @memberjunction/diagnostics-server.",
+      "InputTypeName": "DiagnosticsStopSessionInput",
+      "InputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "DiagnosticsStopSessionOutput",
+      "OutputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "diagnostics:manage",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-207000000002"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:22.756Z",
+      "checksum": "917627fbebfce2b357dc8b489f3f9d4ab508264f271187eb7a892778bc4130e1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get My Diagnostic Session Status",
+      "OperationKey": "Diagnostics.GetMySessionStatus",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Diagnostics",
+      "Description": "Returns whether the calling user or browser session is currently targeted by an active diagnostic recording session, plus whether self-service recording is enabled. Implemented by DiagnosticsGetMySessionStatusServerOperation in @memberjunction/diagnostics-server.",
+      "InputTypeName": "DiagnosticsGetMySessionStatusInput",
+      "InputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "DiagnosticsGetMySessionStatusOutput",
+      "OutputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": null,
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-207000000003"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:22.786Z",
+      "checksum": "119bd61fe027275548fabac4dfacc20150357d8b47881c3eee118f96eb35c65b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Upload Client Diagnostic Capture",
+      "OperationKey": "Diagnostics.UploadClientCapture",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Diagnostics",
+      "Description": "Uploads client-side flight-recorder buffers (logs, GraphQL waterfall, telemetry, startup marks, reproduction notes) into a diagnostic session as re-scrubbed compressed chunks. Implemented by DiagnosticsUploadClientCaptureServerOperation in @memberjunction/diagnostics-server.",
+      "InputTypeName": "DiagnosticsUploadClientCaptureInput",
+      "InputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "DiagnosticsUploadClientCaptureOutput",
+      "OutputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": null,
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-207000000004"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:22.810Z",
+      "checksum": "7831ef81ad68b6f2733ff9350f4af1c830b367acb7e2ea4196aa9b4c8aa8a190"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Build Diagnostic Bundle",
+      "OperationKey": "Diagnostics.BuildBundle",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Diagnostics",
+      "Description": "Flushes all participating server instances, assembles session chunks into a .mjdiag ZIP archive, runs the two-stage credential/literal scrubber and automated findings engine, verifies the archive with VerifyBundleArchive, and persists the bundle. Implemented by DiagnosticsBuildBundleServerOperation in @memberjunction/diagnostics-server.",
+      "InputTypeName": "DiagnosticsBuildBundleInput",
+      "InputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "DiagnosticsBuildBundleOutput",
+      "OutputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "LongRunning",
+      "RequiredScope": "diagnostics:manage",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-207000000005"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:22.832Z",
+      "checksum": "97748ff60d0fb6dced2740adbf1c26443caa4bd363a6d7f63a84a0542893fdf2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Diagnostic Bundle Preview",
+      "OperationKey": "Diagnostics.GetBundlePreview",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Diagnostics",
+      "Description": "Returns a diagnostic bundle's manifest, scrubbing summary, README text, automated findings, and an optional short-lived single-use signed download token. Implemented by DiagnosticsGetBundlePreviewServerOperation in @memberjunction/diagnostics-server.",
+      "InputTypeName": "DiagnosticsGetBundlePreviewInput",
+      "InputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "DiagnosticsGetBundlePreviewOutput",
+      "OutputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "diagnostics:read",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-207000000006"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:22.855Z",
+      "checksum": "216d6136baa77fbe4f40f0f069cc5f7294e8bfafcf56ec292c15198beac1b28e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Send Diagnostic Bundle",
+      "OperationKey": "Diagnostics.SendBundle",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Diagnostics",
+      "Description": "Encrypts a verified .mjdiag bundle using X25519+HKDF-SHA256+AES-256-GCM with AAD and transmits it to an allowed external destination (MJC, CustomerCollector, or StorageAccount). Implemented by DiagnosticsSendBundleServerOperation in @memberjunction/diagnostics-server.",
+      "InputTypeName": "DiagnosticsSendBundleInput",
+      "InputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "DiagnosticsSendBundleOutput",
+      "OutputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "LongRunning",
+      "RequiredScope": "diagnostics:send",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-207000000007"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:22.880Z",
+      "checksum": "b3cd6bd83efe580f2a4408cb1def9acbb9cf25600c5e8b1a0e43dc236ce73c04"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Issue Diagnostic Sender Registration Code",
+      "OperationKey": "Diagnostics.IssueSenderRegistrationCode",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Diagnostics",
+      "Description": "Issues a one-time registration code for a MJ: Diagnostic Sender Registrations row on this collector: 32 random bytes as base64url, valid for 24 hours. Only the SHA-256 hash is stored; the plain code is returned once. Requires the Diagnostics: Manage Intake authorization. Implemented by DiagnosticsIssueSenderRegistrationCodeServerOperation in @memberjunction/diagnostics-server.",
+      "InputTypeName": "DiagnosticsIssueSenderRegistrationCodeInput",
+      "InputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "DiagnosticsIssueSenderRegistrationCodeOutput",
+      "OutputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "diagnostics:manage",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "E7D8A509-CD90-4B7D-ACDB-8252B2C39070"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:22.902Z",
+      "checksum": "582afa9df4ac52d2970160e7f9d3b90301d4ef6def458c520a2bb8452f6fc28d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Enrol Diagnostic Sender",
+      "OperationKey": "Diagnostics.EnrolSender",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Diagnostics",
+      "Description": "Enrols this installation as a sender with the collector at Diagnostics.External.CollectorUrl using a one-time registration code: generates an Ed25519 key pair, stores the private key in MJ: Credentials, proves possession of the key to the collector and pins the collector's public keys. Requires the Diagnostics: Manage Intake authorization. Implemented in @memberjunction/diagnostics-server.",
+      "InputTypeName": "DiagnosticsEnrolSenderInput",
+      "InputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "DiagnosticsEnrolSenderOutput",
+      "OutputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "diagnostics:manage",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "CFCA928A-30D0-407C-B2D9-2F7794FE0254"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:22.923Z",
+      "checksum": "ac8753597374547d3bb6e381da5e08e655b284437c8bf03486f1297312cfc4c1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Revoke Diagnostic Sender",
+      "OperationKey": "Diagnostics.RevokeSender",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Diagnostics",
+      "Description": "Revokes a sender registration on this collector: sets the MJ: Diagnostic Sender Registrations row to Revoked, sets RevokedAt, and clears any outstanding registration code. Requires the Diagnostics: Manage Intake authorization. Implemented in @memberjunction/diagnostics-server.",
+      "InputTypeName": "DiagnosticsRevokeSenderInput",
+      "InputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "DiagnosticsRevokeSenderOutput",
+      "OutputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "diagnostics:manage",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B650BFF3-3184-4488-B30F-114DAC63F1F8"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:22.945Z",
+      "checksum": "9c2409f1ce7607b69c9ea23c3df22f452449d97ef7db0e45780b6687062cc2b3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Reactivate Diagnostic Sender",
+      "OperationKey": "Diagnostics.ReactivateSender",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Diagnostics",
+      "Description": "Sets a Revoked sender registration that still has an enrolled key back to Active. A registration without a key needs a new registration code instead. Requires the Diagnostics: Manage Intake authorization. Implemented in @memberjunction/diagnostics-server.",
+      "InputTypeName": "DiagnosticsReactivateSenderInput",
+      "InputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "DiagnosticsReactivateSenderOutput",
+      "OutputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "diagnostics:manage",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "3FC834E5-0304-4698-9B51-C0A03AB76080"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:22.968Z",
+      "checksum": "d0d9ce0c2b82723e46745b3b6deec3d2ba0bba6ce853f33e7db1cb22c6dbe0f8"
+    }
+  }
+]

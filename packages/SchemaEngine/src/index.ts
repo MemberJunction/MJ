@@ -14,6 +14,7 @@ export type {
   ForeignKeyDefinition,
   ExistingTableInfo,
   ExistingColumnInfo,
+  IndexDefinition,
   SchemaDiff,
   ColumnModification,
   SchemaEvolutionInput,
@@ -38,7 +39,14 @@ export { SoftFKConfigEmitter } from './SoftFKConfigEmitter.js';
 export type { SoftFKEntry } from './SoftFKConfigEmitter.js';
 
 // ─── Runtime Schema Manager ─────────────────────────────────────────
-export { RuntimeSchemaManager, ValidateMigrationSQL, RSUError } from './RuntimeSchemaManager.js';
+export {
+  RuntimeSchemaManager,
+  ValidateMigrationSQL,
+  RSUError,
+  ResolveRSUAdditionalSchemaInfoPath,
+  FindTablesWithoutEntities,
+  DEFAULT_ADDITIONAL_SCHEMA_INFO_FILE,
+} from './RuntimeSchemaManager.js';
 export type {
   RSUPipelineBatchResult,
   RSUPipelineInput,

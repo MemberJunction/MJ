@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W2 -> S5.3",
+    "Description": "Gate G0.9 (owner PR 2, phase 0, dataset W2, criterion S5.3): on W2-noise s100, kfold and holdout validation report an AUC whose 95% Hanley-McNeil interval contains 0.5, 2 of 2. The interval uses the sidecar's own metrics: auc, and n / n_positive, the label counts of the rows the validation AUC was computed on (the pooled out-of-fold rows for kfold, the held-out split for holdout). No refusal code applies to noise data, so a failed training is an error.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G0.9\",\"owner:PR2\",\"phase:0\",\"dataset:W2\",\"criterion:S5.3\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Both strategies' validation AUC intervals contain 0.5."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w2-s5-3"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "02AD598A-7115-4845-B452-ACEA56527F58"
+  }
+}

@@ -1,5 +1,17 @@
-import { BaseEntity, UserInfo } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
 import { FileStorageBase } from '@memberjunction/storage';
+import type { MJArchiveConfigurationEntity } from '@memberjunction/core-entities';
+
+/**
+ * Whether an archive run keeps a copy of the data it removes:
+ * 'Store' writes each record's archive document to storage, 'Purge' keeps no copy.
+ */
+export type ArchiveStorageMode = MJArchiveConfigurationEntity['StorageMode'];
+
+/** True only when the mode is the Purge value; any other value is treated as Store. */
+export function IsPurgeStorageMode(mode: ArchiveStorageMode): boolean {
+    return mode === 'Purge';
+}
 
 /**
  * Configuration for which fields to archive on an entity.
@@ -47,7 +59,7 @@ export interface ArchiveDocument {
     archiveConfigurationEntityId: string;
     /** ID of the parent ArchiveConfiguration */
     archiveConfigurationId: string;
-    /** Archive mode (e.g. 'archive', 'purge') */
+    /** Archive mode: StripFields, HardDelete or ArchiveOnly */
     mode: string;
     /** Map of field names to their archived values */
     archivedFields: Record<string, unknown>;
@@ -75,14 +87,30 @@ export interface ArchiveRecordContext {
     ConfigEntity: BaseEntity;
     /** The parent ArchiveConfiguration record */
     Config: BaseEntity;
-    /** Initialized storage driver for writing archive documents */
-    StorageDriver: FileStorageBase;
+    /** Initialized storage driver for writing archive documents; null when StorageMode is 'Purge' */
+    StorageDriver: FileStorageBase | null;
+    /** Whether this run writes a copy to storage ('Store') or keeps no copy ('Purge') */
+    StorageMode: ArchiveStorageMode;
     /** Base path prefix in storage */
     BasePath: string;
     /** User context for server-side operations */
     ContextUser: UserInfo;
     /** The current ArchiveRun record */
     ArchiveRun: BaseEntity;
+}
+
+/**
+ * What a driver needs to build its eligibility filter for one entity configuration.
+ */
+export interface EligibilityFilterContext {
+    /** Field configuration for this entity */
+    FieldConfig: ArchiveFieldConfiguration;
+    /** Metadata for the entity being archived */
+    EntityInfo: EntityInfo;
+    /** The ArchiveConfigurationEntity record */
+    ConfigEntity: BaseEntity;
+    /** The parent ArchiveConfiguration record */
+    Config: BaseEntity;
 }
 
 /**
@@ -145,4 +173,6 @@ export interface ArchiveRunResult {
     TotalBytesArchived: number;
     /** Error message if Success is false */
     ErrorMessage?: string;
+    /** The configuration's StorageMode; absent when the run never loaded a configuration */
+    StorageMode?: ArchiveStorageMode;
 }

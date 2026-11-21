@@ -7,7 +7,7 @@
  * These private methods don't touch AIEngine, so no engine mock is needed — only a real
  * AIPromptRunner instance reached via cast.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AIPromptRunner } from '../AIPromptRunner';
 import type { ValidationErrorInfo } from '@memberjunction/global';
 
@@ -18,6 +18,7 @@ type ParseInternals = {
   parseDateOutput(s: string, skip: boolean, errs: ValidationErrorInfo[]): Date;
   parseObjectOutput(s: string, prompt: unknown, skip: boolean, clean: boolean, errs: ValidationErrorInfo[], run: unknown, params?: unknown): Promise<unknown>;
   validateAgainstSchema(parsed: unknown, outputExample: string, promptId: string): Promise<ValidationErrorInfo[]>;
+  parsesAsJSON(text: string): boolean;
   parseAndValidateResultEnhanced(
     modelResult: unknown, prompt: unknown, skipValidation: boolean, cleanValidationSyntax: boolean,
     currentPromptRun: unknown, params?: unknown
@@ -99,6 +100,34 @@ describe('parseObjectOutput', () => {
     expect(res).toEqual({ ok: true });
   });
 
+  // Output that starts with '{' or '[' is tried with a plain JSON.parse first; only when that fails
+  // does CleanJSON's recovery run, so recoverable output must still parse.
+  it('parses an object with surrounding whitespace on the direct-parse path', async () => {
+    const res = await priv(runner).parseObjectOutput('  \n{"a":[1,{"b":null}]}\n', prompt(), false, false, [], {});
+    expect(res).toEqual({ a: [1, { b: null }] });
+  });
+
+  it('still recovers output that starts with "{" but is not valid JSON (an extra closing brace)', async () => {
+    const res = await priv(runner).parseObjectOutput('{"ok":true}}', prompt(), false, false, [], {});
+    expect(res).toEqual({ ok: true });
+  });
+
+  it('keeps a complete JSON object followed by a stray fragment and drops the fragment (#3065)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const reply = '{"taskComplete":true,"message":"done"}\n"message":"done"}';
+    const res = await priv(runner).parseObjectOutput(reply, prompt(), false, false, [], {});
+    expect(res).toEqual({ taskComplete: true, message: 'done' });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('stray text'));
+    warn.mockRestore();
+  });
+
+  it('leaves a non-object output type to the CleanJSON path (no trailing-fragment recovery)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await priv(runner).parseObjectOutput('{"a":1}\n"a":1}', prompt({ OutputType: 'string' }), true, false, [], {});
+    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('stray text'));
+    warn.mockRestore();
+  });
+
   it('throws + records an error on invalid JSON when validation is on and repair is off', async () => {
     const errs: ValidationErrorInfo[] = [];
     await expect(priv(runner).parseObjectOutput('{broken', prompt(), false, false, errs, {})).rejects.toThrow();
@@ -125,6 +154,47 @@ describe('parseObjectOutput', () => {
     expect(Object.keys(res).sort()).toEqual(['age', 'items', 'name']);
     expect(res.name).toBe('John');
     expect(res.age).toBe(42);
+  });
+});
+
+describe('parseObjectOutput — key cleaning and ValidationBehavior (#4827)', () => {
+  const example = '{"time":"10:30","question":"Is it urgent?"}';
+  const reply = '{"10:30":"meeting","Is it urgent?":"yes","name?":"John"}';
+
+  it("leaves reply keys as written when ValidationBehavior is 'None', even with an OutputExample", async () => {
+    const res = await priv(runner).parseObjectOutput(reply, { OutputType: 'object', OutputExample: example, ValidationBehavior: 'None' }, false, false, [], {});
+    expect(res).toEqual({ '10:30': 'meeting', 'Is it urgent?': 'yes', 'name?': 'John' });
+  });
+
+  it("honors a per-call validationBehavior of 'None' over the prompt's value", async () => {
+    const res = await priv(runner).parseObjectOutput(reply, { OutputType: 'object', OutputExample: example, ValidationBehavior: 'Warn' }, false, false, [], {}, { validationBehavior: 'None' });
+    expect(res).toEqual({ '10:30': 'meeting', 'Is it urgent?': 'yes', 'name?': 'John' });
+  });
+
+  it("still cleans under 'Warn'", async () => {
+    const res = await priv(runner).parseObjectOutput('{"name?":"John"}', { OutputType: 'object', OutputExample: example, ValidationBehavior: 'Warn' }, false, false, [], {});
+    expect(res).toEqual({ name: 'John' });
+  });
+
+  it("still cleans under 'None' when cleanValidationSyntax is set explicitly", async () => {
+    const res = await priv(runner).parseObjectOutput('{"name?":"John"}', { OutputType: 'object', OutputExample: example, ValidationBehavior: 'None' }, false, true, [], {});
+    expect(res).toEqual({ name: 'John' });
+  });
+});
+
+describe('parsesAsJSON', () => {
+  it('accepts valid JSON, including with surrounding whitespace', () => {
+    expect(priv(runner).parsesAsJSON('{"a":1}')).toBe(true);
+    expect(priv(runner).parsesAsJSON('  [1, 2]  ')).toBe(true);
+  });
+
+  it('accepts output CleanJSON can recover even when it starts with "{"', () => {
+    expect(priv(runner).parsesAsJSON('{"a":1}}')).toBe(true);
+    expect(priv(runner).parsesAsJSON('```json\n{"a":1}\n```')).toBe(true);
+  });
+
+  it('rejects plain prose', () => {
+    expect(priv(runner).parsesAsJSON('The answer is forty-two.')).toBe(false);
   });
 });
 

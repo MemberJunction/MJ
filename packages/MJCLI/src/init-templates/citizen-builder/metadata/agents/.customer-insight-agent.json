@@ -3,13 +3,13 @@
     "fields": {
       "Name": "Customer Insight Specialist",
       "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant",
-      "Description": "Deterministic flow agent that summarizes customer activity, evaluates account standing, and suggests next actions.",
-      "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
+      "Description": "Interactive Loop agent that summarizes customer activity, evaluates account standing, and suggests next actions.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
       "ExecutionOrder": 0,
       "ExposeAsAction": false,
       "IconClass": "mj-icon-user-check",
-      "ArtifactCreationMode": "None",
+      "ArtifactCreationMode": "Never",
       "PayloadDownstreamPaths": "*",
       "PayloadUpstreamPaths": "*",
       "EnableContextCompression": false,
@@ -22,28 +22,32 @@
             "AgentID": "@parent:ID",
             "PromptID": "@lookup:MJ: AI Prompts.Name=Customer Insight Specialist Prompt",
             "Status": "Active",
-            "ExecutionOrder": 1
+            "ExecutionOrder": 0
           },
           "primaryKey": {
             "ID": "E9A0C381-645F-4D2A-883F-E19C69D3B511"
           }
         }
       ],
-      "MJ: AI Agent Steps": [
+      "MJ: AI Agent Actions": [
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "Name": "Generate Customer Insights",
-            "Description": "Evaluates account data using the Customer Insight Specialist Prompt",
-            "StepType": "Prompt",
-            "StartingStep": true,
-            "PromptID": "@lookup:MJ: AI Prompts.Name=Customer Insight Specialist Prompt",
-            "Status": "Active",
-            "PositionX": 100,
-            "PositionY": 100
+            "ActionID": "@lookup:MJ: Actions.Name=Run Ad-hoc Query",
+            "Status": "Active"
           },
           "primaryKey": {
             "ID": "D2E49B18-091A-4832-B81E-A38C91307D55"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Run Stored Query",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C8B29A14-312E-4981-9B1F-55913A7C2044"
           }
         }
       ]

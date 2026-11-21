@@ -74,6 +74,16 @@ describe('UserInfo', () => {
         expect(user.FirstName).toBe('Jane');
         expect(user.LastName).toBe('Smith');
     });
+
+    it('should store AnonymousVisitorID as a non-enumerable per-session property', () => {
+        const user = new UserInfo(null, { ID: 'u-anon' });
+        expect(user.AnonymousVisitorID).toBeUndefined();
+        expect(Object.keys(new UserInfo())).not.toContain('AnonymousVisitorID');
+
+        user.AnonymousVisitorID = 'sid-visitor-1';
+        expect(user.AnonymousVisitorID).toBe('sid-visitor-1');
+        expect(Object.keys(user)).not.toContain('AnonymousVisitorID');
+    });
 });
 
 describe('UserRoleInfo', () => {
@@ -555,6 +565,23 @@ describe('RowLevelSecurityFilterInfo — $ in substituted values (#3171)', () =>
             user.APIKeyActingContext = { ActingCompanyIDs: ['a$&b', 'c$`d'] };
 
             expect(filter.MarkupFilterText(user)).toBe("CompanyID IN ('a$&b','c$`d')");
+        });
+    });
+
+    describe('UserInfo LinkedEntityID and LinkedEntityRecordID typing', () => {
+        it('accepts UUID strings and null on LinkedEntityID and LinkedEntityRecordID', () => {
+            const linkedEntityId: string | null = '11111111-1111-1111-1111-111111111111';
+            const linkedRecordId: string | null = '22222222-2222-2222-2222-222222222222';
+            const user = new UserInfo(null, {
+                ID: 'u-linked',
+                LinkedEntityID: linkedEntityId,
+                LinkedEntityRecordID: linkedRecordId,
+            });
+
+            const readEntityId: string = user.LinkedEntityID;
+            const readRecordId: string = user.LinkedEntityRecordID;
+            expect(readEntityId).toBe(linkedEntityId);
+            expect(readRecordId).toBe(linkedRecordId);
         });
     });
 });

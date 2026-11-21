@@ -135,18 +135,20 @@ Plain async functions over the MJ object model. They pick the right primitive:
   one round trip. Read-only card lists use `ResultType: 'simple'` with a narrowed
   `Fields` set for performance; anything that will be inspected/mutated uses
   `ResultType: 'entity_object'`.
-- **`Metadata`** — in-memory entity/query definitions (the Explorer entity and
-  query pickers read `Metadata.Entities` / `Metadata.Queries`; no network).
+- **`Metadata`** — in-memory entity definitions (the Explorer entity picker
+  reads `Metadata.Entities`; no network). The query picker reads saved-query
+  definitions from `QueryEngine`.
 - **`GetEntityObject` + `Load`/`InnerLoad`** — a single strongly-typed record
   (conversation thread, record detail, dashboard, artifact).
 - **`RunQuery`** — executes a saved, approved query by id (Explorer query runner
   and dashboard "query" parts).
 - **`GraphQLDataProvider.Instance.AI.RunAIAgentFromConversationDetail`** — the
   agent runner. `agents.ts#sendMessage` writes a `Role='User'`
-  `Conversation Detail`, pre-creates a `Role='AI' Status='In-Progress'`
-  placeholder detail, then triggers the run; the **server owns** filling the AI
-  detail. Because the push WebSocket is unreliable on RN, a failed WS wait is
-  **not** a hard error — the UI polls the detail's `Status` for completion.
+  `Conversation Detail`, then triggers the run with `userMessageId`; the **server
+  creates and fills** the `Role='AI'` reply row (returning its ID in the
+  fire-and-forget acknowledgement via `onAccepted`). Because the push WebSocket
+  is unreliable on RN, a failed WS wait is **not** a hard error — the UI polls
+  the acknowledged reply detail's `Status` (via `GetConversationDetailStatus(replyId)`) for completion.
 
 Entities touched (all via the strongly-typed generated classes): `MJ:
 Conversations`, `MJ: Conversation Details`, `MJ: Conversation Artifacts`, `MJ:

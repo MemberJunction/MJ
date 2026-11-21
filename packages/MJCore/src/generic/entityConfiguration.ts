@@ -50,6 +50,7 @@ export type FormInclusion = 'Primary' | 'More' | 'None';
 export type FormWhenEmpty = 'show' | 'hide' | 'more';
 
 import {
+    EntitySaveReturnMode,
     IEntityConfiguration,
     IEntityUIConfiguration,
     IEntityFormConfiguration
@@ -66,7 +67,7 @@ import {
 export * from './JSONType-interfaces/IEntityConfiguration';
 export * from './JSONType-interfaces/IEntityFieldConfiguration';
 export * from './JSONType-interfaces/IEntityRelationshipConfiguration';
-export type { IJsonRemapSpec, IJsonRemapColumn, ICloneFieldRules, ICloneRelationshipPolicy, ICloneRowExclusion } from './JSONType-interfaces/IEntityConfiguration';
+export type { EntitySaveReturnMode, IJsonRemapSpec, IJsonRemapColumn, ICloneFieldRules, ICloneRelationshipPolicy, ICloneRowExclusion } from './JSONType-interfaces/IEntityConfiguration';
 
 export interface IEntityRelationshipJoin {
     mode: 'any';
@@ -163,6 +164,18 @@ export function ParseEntityConfiguration(raw: string | IEntityConfiguration | nu
     if (typeof raw === 'object') return raw;
     if (typeof raw !== 'string' || raw.trim().length === 0) return null;
     return SafeJSONParse<IEntityConfiguration>(raw, false) ?? null;
+}
+
+/**
+ * Resolves the effective {@link EntitySaveReturnMode} from an entity configuration bag or JSON string.
+ * Any value other than `'datestamps_only'` (including `null`, `undefined`, or unrecognized strings)
+ * resolves to `'full'`.
+ */
+export function ResolveEntitySaveReturnMode(
+    raw: string | IEntityConfiguration | null | undefined,
+): EntitySaveReturnMode {
+    const parsed = ParseEntityConfiguration(raw);
+    return parsed?.SaveReturnMode === 'datestamps_only' ? 'datestamps_only' : 'full';
 }
 
 export function ParseEntityRelationshipConfiguration(

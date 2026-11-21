@@ -45,3 +45,93 @@ describe('AzureEmbedding.EmbedTexts (real BaseEmbeddings dispatch → embedBatch
         await expect(e.EmbedTexts({ texts: ['a', 'b', 'c'], model: 'm' })).rejects.toThrow(/1:1|misaligned/i);
     });
 });
+
+/** Builds the error `fetch` and the SDKs reject an aborted request with. */
+function abortError(): Error {
+    const error = new Error('This operation was aborted');
+    error.name = 'AbortError';
+    return error;
+}
+
+/** The classification a cancellation error carries, read from the error a call rejected with. */
+async function rejectionTypeOf(operation: Promise<unknown>): Promise<string | undefined> {
+    try {
+        await operation;
+    } catch (error) {
+        const info: { errorType?: string } | undefined = (error as { errorInfo?: { errorType?: string } }).errorInfo;
+        return info?.errorType;
+    }
+    throw new Error('expected the call to reject');
+}
+
+/**
+ * The `dimensions` parameter (#5234). With no model name the driver calls its default,
+ * text-embedding-ada-002, which has one width and rejects `dimensions`. A named model is a deployment,
+ * which could be any model, so its width is sent as requested.
+ */
+describe('AzureEmbedding and the dimensions parameter', () => {
+    let e: AzureEmbedding;
+    beforeEach(() => {
+        mockPost.mockReset();
+        mockPost.mockResolvedValue(postResponse([Array<number>(1536).fill(0.1)]));
+        e = new AzureEmbedding('k');
+        e.SetAdditionalSettings({ endpoint: 'https://example.openai.azure.com' });
+    });
+
+    it('omits dimensions for the default model when asked for its own width', async () => {
+        const r = await e.EmbedTexts({ texts: ['a'], model: '', dimensions: 1536 });
+
+        expect(mockPost.mock.calls[0][0].body).toMatchObject({ model: 'text-embedding-ada-002' });
+        expect(mockPost.mock.calls[0][0].body).not.toHaveProperty('dimensions');
+        expect(r.vectors[0]).toHaveLength(1536);
+
+        await e.EmbedTexts({ texts: ['a'], model: 'text-embedding-ada-002', dimensions: 1536 });
+        expect(mockPost.mock.calls[1][0].body).not.toHaveProperty('dimensions');
+    });
+
+    it('does the same for a single text', async () => {
+        await e.EmbedText({ text: 'a', model: '', dimensions: 1536 });
+
+        expect(mockPost.mock.calls[0][0].body).not.toHaveProperty('dimensions');
+    });
+
+    it('refuses a width the default model cannot produce before calling the API', async () => {
+        await expect(e.EmbedTexts({ texts: ['a'], model: '', dimensions: 512 })).rejects.toThrow(/can't produce 512-dimension vectors/);
+        await expect(e.EmbedText({ text: 'a', model: '', dimensions: 512 })).rejects.toThrow(/can't produce 512-dimension vectors/);
+        expect(mockPost).not.toHaveBeenCalled();
+    });
+
+    it('sends the width as requested to a named deployment', async () => {
+        await e.EmbedTexts({ texts: ['a'], model: 'my-embedding-deployment', dimensions: 512 });
+
+        expect(mockPost.mock.calls[0][0].body).toMatchObject({ model: 'my-embedding-deployment', dimensions: 512 });
+    });
+});
+
+describe('AzureEmbedding cancellation', () => {
+    let e: AzureEmbedding;
+    beforeEach(() => {
+        mockPost.mockReset();
+        e = new AzureEmbedding('k');
+        e.SetAdditionalSettings({ endpoint: 'https://example.openai.azure.com' });
+    });
+
+    it('forwards the CancellationToken to post() as its abortSignal', async () => {
+        mockPost.mockResolvedValue(postResponse([[1, 0]]));
+        const controller = new AbortController();
+        await e.EmbedTexts({ texts: ['a'], model: 'm', CancellationToken: controller.signal });
+        await e.EmbedText({ text: 'a', model: 'm', CancellationToken: controller.signal });
+        expect(mockPost.mock.calls[0][0]).toMatchObject({ abortSignal: controller.signal });
+        expect(mockPost.mock.calls[1][0]).toMatchObject({ abortSignal: controller.signal });
+    });
+
+    it('reports an aborted request as cancelled rather than as an empty result', async () => {
+        const controller = new AbortController();
+        mockPost.mockImplementation(async () => {
+            controller.abort('stop');
+            throw abortError();
+        });
+        expect(await rejectionTypeOf(e.EmbedTexts({ texts: ['a', 'b'], model: 'm', CancellationToken: controller.signal }))).toBe('Cancelled');
+        expect(await rejectionTypeOf(e.EmbedText({ text: 'a', model: 'm', CancellationToken: controller.signal }))).toBe('Cancelled');
+    });
+});

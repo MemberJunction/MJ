@@ -61,7 +61,8 @@ export class TabStripLabComponent extends BaseResourceComponent implements OnIni
      */
     public DraftTabs: MJWorkspaceTab<{ Note: string }>[] = [];
 
-    public ngOnInit(): void {
+    public override ngOnInit(): void {
+        super.ngOnInit();
         this.ResetDraftTabs();
         this.NotifyLoadComplete();
     }

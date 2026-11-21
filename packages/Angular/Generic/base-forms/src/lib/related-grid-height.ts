@@ -31,8 +31,8 @@ export const RELATED_GRID_BOTTOM_PAD_PX = 2;
  * shown — with zero rows there is no row to clip.
  */
 export const RELATED_GRID_HSCROLLBAR_PX = 17;
-/** Empty-state body when there are no rows (inline icon + title, no 200px floor). */
-export const RELATED_GRID_EMPTY_BODY_PX = 56;
+/** Empty-state body when there are no rows (inline icon + 1–2 line title, no 200px floor). */
+export const RELATED_GRID_EMPTY_BODY_PX = 76;
 /** Default cap for nav-related grids. `null` on the input means unbounded. */
 export const RELATED_GRID_DEFAULT_MAX_PX = 560;
 

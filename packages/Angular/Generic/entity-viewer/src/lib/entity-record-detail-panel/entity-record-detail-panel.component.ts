@@ -1,11 +1,35 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef, NgZone } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { EntityInfo, EntityRelationshipInfo, EntityOrganicKeyInfo, EntityOrganicKeyRelatedEntityInfo, RunView, Metadata, RunViewParams, EntityFieldValueListType, EntityFieldInfo, CompositeKey, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
-import { BuildCompositeKey, BuildPkString } from '../utils/record.util';
+import { IndexByUUID } from '@memberjunction/global';
+import {
+  BuildCompositeKey,
+  BuildPkString,
+  ResolvePolymorphicTargetEntity,
+  BuildPolymorphicCompositeKey,
+  PolymorphicCacheKey,
+  BatchResolvePolymorphicRecordNames
+} from '../utils/record.util';
 
 interface RelatedEntityData {
   relationship: EntityRelationshipInfo;
+  /**
+   * The related entity's technical NAME. Used to address data — metadata lookups, the
+   * `navigateToRelated` / `openRelatedRecord` payloads — and therefore NOT unique across this
+   * list: two foreign keys pointing at the same entity produce two rows with the same value.
+   */
   relatedEntityName: string;
+  /**
+   * What the user reads. Disambiguated by the foreign-key field when more than one
+   * relationship targets the same entity — see {@link buildRelatedEntityDisplayNames}.
+   */
+  displayName: string;
+  /**
+   * Stable, unique identity for this ROW (the relationship's own ID). The template tracks on
+   * this; tracking on {@link relatedEntityName} gave Angular a duplicate key for two FKs to
+   * one entity (NG0955) and let it reuse the wrong DOM node between them.
+   */
+  key: string;
   count: number;
   isExpanded: boolean;
   records: Record<string, unknown>[];
@@ -220,11 +244,90 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
   constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {
   super();}
 
+  private _polymorphicRecordNames = new Map<string, string>();
+
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['record'] && this.record && this.entity) {
       this.loadRelationshipCounts();
       this.loadOrganicKeyCounts();
+      void this.resolvePolymorphicNamesForRecord();
     }
+  }
+
+  private async resolvePolymorphicNamesForRecord(): Promise<void> {
+    if (!this.record || !this.entity) return;
+    const sizeBefore = this._polymorphicRecordNames.size;
+    await BatchResolvePolymorphicRecordNames(
+      [this.record],
+      this.entity,
+      this.ProviderToUse,
+      this._polymorphicRecordNames,
+    );
+    if (this._polymorphicRecordNames.size !== sizeBefore) {
+      this.ngZone.run(() => this.cdr.detectChanges());
+    }
+  }
+
+  /**
+   * Label for each related-records grid, in the same order as `relationships`.
+   *
+   * Two foreign keys from one entity to another are two genuinely different record sets — an
+   * Invoice's `BillToContactID` rows are not its `ShipToContactID` rows — but both were
+   * labelled with the bare related-entity name, so the panel showed two identically titled
+   * grids with different counts and nothing to tell them apart. (Collapsing them into one
+   * grid, which the bare label implies, would be data loss.)
+   *
+   * The disambiguation rule is CodeGen's, reused rather than reinvented: an explicit
+   * `DisplayName` on the relationship wins; otherwise use the entity's display name, and when
+   * more than one relationship targets that same entity, append the foreign-key field's own
+   * display name — `Contacts (Bill To Contact)` / `Contacts (Ship To Contact)`. See
+   * `generateRelatedEntityTabName` in `packages/CodeGenLib/src/Angular/angular-codegen.ts`.
+   */
+  private buildRelatedEntityDisplayNames(relationships: EntityRelationshipInfo[]): string[] {
+    // How many relationships in THIS list point at each related entity. Only a collision
+    // needs the suffix; a single relationship reads better without it.
+    // Keyed case-insensitively: UUIDs reach the client in whatever case the provider wrote,
+    // and two spellings of one id would each look like a single, unambiguous relationship.
+    const perTarget = new Map<string, number>();
+    for (const rel of relationships) {
+      const id = (rel.RelatedEntityID ?? '').toLowerCase();
+      perTarget.set(id, (perTarget.get(id) ?? 0) + 1);
+    }
+
+    // One index, built once per call: a per-relationship scan over every entity is the nested UUID
+    // comparison the compliance gate (MJGlobal UUIDCompliance) rejects, and it is quadratic for no reason.
+    const entitiesByID = IndexByUUID(this.metadata.Entities);
+    return relationships.map(rel => {
+      if (rel.DisplayName && rel.DisplayName.trim().length > 0) {
+        return rel.DisplayName;
+      }
+
+      const relatedEntity = entitiesByID.Get(rel.RelatedEntityID);
+      let label = relatedEntity?.DisplayNameOrName ?? rel.RelatedEntity;
+
+      if ((perTarget.get((rel.RelatedEntityID ?? '').toLowerCase()) ?? 0) > 1) {
+        // Strip the SQL brackets CodeGen also strips — `[ContactID]` is how some
+        // schemas spell the join field.
+        const joinField = rel.RelatedEntityJoinField?.trim().replace(/[[\]]/g, '');
+        if (joinField) {
+          const field = relatedEntity?.Fields.find(f => f.Name.trim().toLowerCase() === joinField.toLowerCase());
+          label += ` (${field?.DisplayNameOrName ?? joinField})`;
+        }
+      }
+
+      return label;
+    });
+  }
+
+  /**
+   * Unique row identity for a related-records grid.
+   *
+   * The relationship's own ID, which is unique by construction. Falls back to
+   * entity + join field for a relationship whose ID is somehow absent, because the one thing
+   * this must never do is return the same key for two rows — that is the NG0955 it fixes.
+   */
+  private relationshipRowKey(rel: EntityRelationshipInfo): string {
+    return rel.ID ?? `${rel.RelatedEntityID}|${rel.RelatedEntityJoinField ?? ''}`;
   }
 
   /**
@@ -266,12 +369,15 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
       const results = await rv.RunViews(viewParams);
 
       // Map results back to relationship data
+      const displayNames = this.buildRelatedEntityDisplayNames(relationships);
       this.RelatedEntities = relationships.map((rel, index) => {
         const result = results[index];
         return {
           relationship: rel,
           relatedEntityName: rel.RelatedEntity,
-          count: result.Success ? result.TotalRowCount : 0,
+          displayName: displayNames[index],
+          key: this.relationshipRowKey(rel),
+          count: result.Success ? result.TotalRowCount ?? 0 : 0,
           isExpanded: false,
           records: [],
           isLoadingRecords: false
@@ -280,9 +386,12 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
     } catch (error) {
       console.warn('Failed to load relationship counts:', error);
       // Initialize with zero counts on error
-      this.RelatedEntities = relationships.map(rel => ({
+      const displayNames = this.buildRelatedEntityDisplayNames(relationships);
+      this.RelatedEntities = relationships.map((rel, index) => ({
         relationship: rel,
         relatedEntityName: rel.RelatedEntity,
+        displayName: displayNames[index],
+        key: this.relationshipRowKey(rel),
         count: 0,
         isExpanded: false,
         records: [],
@@ -353,7 +462,7 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
           organicKey: pair.organicKey,
           relatedEntity: pair.relatedEntity,
           relatedEntityName: pair.relatedEntity.DisplayName || pair.relatedEntity.RelatedEntity,
-          count: result.Success ? result.TotalRowCount : 0,
+          count: result.Success ? result.TotalRowCount ?? 0 : 0,
           isExpanded: false,
           records: [],
           isLoadingRecords: false,
@@ -577,8 +686,8 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
     for (const field of this.entity.Fields) {
       // Skip system fields and sensitive fields
       if (excludePatterns.some(p => field.Name.toLowerCase().includes(p))) continue;
-      // Skip very long text fields (but not FK fields which are usually GUIDs)
-      if (field.Length && field.Length > 500 && !field.RelatedEntityID) continue;
+      // Skip very long text fields (but not FK fields or polymorphic FK fields)
+      if (field.Length && field.Length > 500 && !field.RelatedEntityID && !field.EntityIDFieldName) continue;
 
       const value = this.record[field.Name];
 
@@ -600,6 +709,30 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
           fields.push(fkDisplay);
         }
         continue;
+      }
+
+      // Handle Polymorphic Foreign Key fields (EntityField.EntityIDFieldName)
+      if (field.EntityIDFieldName && field.EntityIDFieldName.trim().length > 0) {
+        if (value !== null && value !== undefined && String(value).trim() !== '') {
+          const rawId = String(value).trim();
+          const targetEntity = ResolvePolymorphicTargetEntity(this.record, field, this.ProviderToUse);
+          if (targetEntity) {
+            const compositeKey = BuildPolymorphicCompositeKey(rawId, targetEntity);
+            const resolvedName = compositeKey
+              ? this._polymorphicRecordNames.get(PolymorphicCacheKey(targetEntity.Name, compositeKey))
+              : undefined;
+            fields.push({
+              type: 'foreign-key',
+              name: field.Name,
+              label: this.formatFieldLabel(field),
+              value: rawId,
+              displayValue: resolvedName || rawId,
+              relatedEntityName: targetEntity.Name,
+              relatedRecordId: rawId
+            });
+            continue;
+          }
+        }
       }
 
       // Skip empty values for regular fields

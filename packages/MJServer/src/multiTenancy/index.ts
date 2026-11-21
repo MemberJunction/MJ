@@ -9,7 +9,9 @@
 
 import type { RequestHandler } from 'express';
 import type { PreRunViewHook, PreSaveHook } from '@memberjunction/core';
-import { Metadata, type UserInfo, type TenantContext } from '@memberjunction/core';
+import { DatabaseProviderBase, Metadata, type UserInfo, type TenantContext } from '@memberjunction/core';
+import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
+import { IsBalancedSQLFragment } from '@memberjunction/sql-parser';
 import type { MultiTenancyConfig } from '../config.js';
 import type { UserPayload } from '../types.js';
 import { CloneUserForSessionContext } from '../auth/sessionUserClone.js';
@@ -67,21 +69,36 @@ export function CreateTenantMiddleware(config: MultiTenancyConfig): RequestHandl
         return;
       }
       const tenantId = rawHeader;
-      if (tenantId) {
-        if (!IsValidTenantId(tenantId)) {
-          // Reject the REQUEST, never degrade to an unscoped session: a malformed
-          // tenant header that silently attaches nothing produces a session with NO
-          // tenant filter at all — strictly worse than failing loudly.
-          res.status(400).json({ error: 'Invalid tenant identifier' });
+      if (!tenantId) {
+        // An ABSENT header is the same fail-open case as a malformed one: the tenant
+        // hooks treat a user with no TenantContext as unscoped, so a client that simply
+        // omits the header would see every tenant's rows. With multi-tenancy enabled and
+        // header context configured, every non-admin request must name its tenant.
+        // Admin-role users are exempt because the hooks already bypass filtering for them, and
+        // so is the system user: the system API key is the server-to-server credential (jobs,
+        // callbacks) and belongs to no tenant.
+        if (userPayload.isSystemUser || isAdminUser(userPayload.userRecord as UserInfo, config.adminRoles)) {
+          next();
           return;
         }
-        // Clone before stamping: userRecord is very often the SHARED UserCache
-        // instance, and stamping it in place races concurrent requests for the
-        // same user (one request's tenant becomes another's, same-instant).
-        const sessionUser = CloneUserForSessionContext(userPayload.userRecord as UserInfo);
-        AttachTenantContext(sessionUser, tenantId, 'header');
-        userPayload.userRecord = sessionUser;
+        res.status(400).json({
+          error: `Missing ${config.tenantHeader} header: multi-tenancy is enabled with header context, so every request must identify its tenant.`,
+        });
+        return;
       }
+      if (!IsValidTenantId(tenantId)) {
+        // Reject the REQUEST, never degrade to an unscoped session: a malformed
+        // tenant header that silently attaches nothing produces a session with NO
+        // tenant filter at all — strictly worse than failing loudly.
+        res.status(400).json({ error: 'Invalid tenant identifier' });
+        return;
+      }
+      // Clone before stamping: userRecord is very often the SHARED UserCache
+      // instance, and stamping it in place races concurrent requests for the
+      // same user (one request's tenant becomes another's, same-instant).
+      const sessionUser = CloneUserForSessionContext(userPayload.userRecord as UserInfo);
+      AttachTenantContext(sessionUser, tenantId, 'header');
+      userPayload.userRecord = sessionUser;
     }
     next();
   };
@@ -161,6 +178,25 @@ function isAdminUser(user: UserInfo, adminRoles: string[]): boolean {
   );
 }
 
+/** Dialects to read an ExtraFilter with when the active provider's dialect cannot be resolved. */
+const ALL_FILTER_DIALECTS: SQLParserDialect[] = [new SQLServerDialect(), new PostgreSQLDialect()];
+
+/**
+ * Throws unless the caller's ExtraFilter stays inside the parentheses the tenant predicate is
+ * ANDed after. A filter such as `1=1) OR (1=1` would close them early and leave the tenant
+ * predicate on one side of an OR the caller controls.
+ */
+function assertExtraFilterBalanced(extraFilter: string): void {
+  const provider = Metadata.Provider; // global-provider-ok: same rationale as isEntityScoped above — hooks carry no per-request provider
+  const dialects = provider instanceof DatabaseProviderBase ? [provider.Dialect] : ALL_FILTER_DIALECTS;
+  for (const dialect of dialects) {
+    const check = IsBalancedSQLFragment(extraFilter, dialect);
+    if (!check.IsBalanced) {
+      throw new Error(`[MultiTenancy] Invalid ExtraFilter: ${check.Reason}`);
+    }
+  }
+}
+
 /**
  * Creates a PreRunViewHook that auto-injects tenant WHERE clauses
  * into RunView queries for scoped entities.
@@ -206,7 +242,8 @@ export function CreateTenantPreRunViewHook(config: MultiTenancyConfig): PreRunVi
 
     // Inject the tenant filter
     if (params.ExtraFilter && typeof params.ExtraFilter === 'string' && params.ExtraFilter.trim().length > 0) {
-      params.ExtraFilter = `(${params.ExtraFilter}) AND ${tenantFilter}`;
+      assertExtraFilterBalanced(params.ExtraFilter);
+      params.ExtraFilter = `(${params.ExtraFilter}) AND (${tenantFilter})`;
     } else {
       params.ExtraFilter = tenantFilter;
     }

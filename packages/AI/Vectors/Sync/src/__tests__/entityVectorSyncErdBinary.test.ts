@@ -49,6 +49,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 vi.mock('@memberjunction/core-entities', () => ({}));
 vi.mock('@memberjunction/ai', () => ({}));
 vi.mock('@memberjunction/ai-prompts', () => ({
+  EmbeddingCarrierPrompts: { VectorSync: 'Vector Sync Embedding', DuplicateDetection: 'Duplicate Detection Embedding', VectorSearch: 'Vector Search Embedding' },
   AIEmbeddingRunner: class {
     async RunEmbedding() {
       return { Success: true, Vectors: [] };
@@ -86,8 +87,10 @@ class FakeErd {
   ContextCurrentUser: UserInfo | null = null;
   LatestResult = null;
   savedSnapshot: { VectorJSON: string | null; VectorBinary: string | null } | null = null;
+  lastSaveOptions: { SaveReturnMode?: string } | undefined = undefined;
   NewRecord(): void {}
-  async Save(): Promise<boolean> {
+  async Save(options?: { SaveReturnMode?: string }): Promise<boolean> {
+    this.lastSaveOptions = options;
     this.savedSnapshot = { VectorJSON: this.VectorJSON, VectorBinary: this.VectorBinary };
     return true;
   }
@@ -147,6 +150,7 @@ describe('EntityVectorSyncer.saveEntityRecordDocument persists both vector colum
     }
     expect(erd.RecordID).toBe('rec-1');
     expect(erd.VectorIndexID).toBe('vi-1');
+    expect(erd.lastSaveOptions).toEqual({ SaveReturnMode: 'datestamps_only' });
   });
 
   it('writes both columns on a newly created ERD too', async () => {

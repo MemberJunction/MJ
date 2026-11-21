@@ -22,8 +22,8 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Personas&Name=StyleDescriptors"
           },
           "sync": {
-            "lastModified": "2026-09-13T20:06:59.228Z",
-            "checksum": "ddb6a38093de1cc098134ca9f8b25a08b91f6d1f5abd76cfc33e3fbb3bb795f0"
+            "lastModified": "2026-10-13T19:00:08.970Z",
+            "checksum": "dc8dae29d2e53c9425d59140220fd61561a9802296d9bacd14f65c0225018d19"
           }
         }
       ]
@@ -55,8 +55,8 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Persona Vendors&Name=VendorSettings"
           },
           "sync": {
-            "lastModified": "2026-09-11T18:26:12.827Z",
-            "checksum": "b85e6798025d11d710446b7e85b008c3c0f8d90d673967a0c9e2caa3700db6ab"
+            "lastModified": "2026-10-13T19:00:08.988Z",
+            "checksum": "a5edadd9cca0cd9486835b7397807bfd05865fa4b74f920fff92adca9a4f12f7"
           }
         }
       ]
@@ -88,8 +88,8 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Personas&Name=StyleOverride"
           },
           "sync": {
-            "lastModified": "2026-09-11T18:26:12.827Z",
-            "checksum": "abbeb6cc065855c8eb01480e9886c5eada458ad9b34075277fac1db7a6632635"
+            "lastModified": "2026-10-13T19:00:09.005Z",
+            "checksum": "2bce79faaad7318bea256c8822dc1832d95c69cbd51ce531f9b022a6da54572a"
           }
         }
       ]

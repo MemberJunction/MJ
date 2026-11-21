@@ -7,8 +7,13 @@ import {
     ImageVariationParams,
     ImageModelInfo,
     GeneratedImage,
-    ErrorAnalyzer
+    ModelUsage,
+    ErrorAnalyzer,
+    AbortableDelay,
+    IsRequestAborted,
+    ThrowIfAborted
 } from "@memberjunction/ai";
+import { IsValidBFLPollingUrl } from "./flux3-video.js";
 
 /**
  * Configuration for BFL API polling
@@ -21,24 +26,44 @@ interface BFLPollingConfig {
 }
 
 /**
- * BFL API task response
+ * BFL API task response returned by task submission endpoints.
  */
 interface BFLTaskResponse {
     id: string;
+    polling_url?: string;
+    cost?: number | null;
+    input_mp?: number | null;
+    output_mp?: number | null;
     status?: string;
 }
 
 /**
- * BFL API result response
+ * BFL API result response returned by `/v1/get_result` or a regional `polling_url`.
  */
 interface BFLResultResponse {
     id: string;
-    status: 'Ready' | 'Pending' | 'Error' | 'Request Moderated' | 'Content Moderated' | 'Task not found';
+    status:
+        | 'Ready'
+        | 'Pending'
+        | 'Reasoning'
+        | 'Generating'
+        | 'Error'
+        | 'Request Moderated'
+        | 'Content Moderated'
+        | 'No Card Generated'
+        | 'Task not found';
     result?: {
-        sample: string; // URL to the generated image
+        sample: string; // Signed URL to the generated media
         prompt?: string;
         seed?: number;
+        start_time?: number;
+        end_time?: number;
+        duration?: number;
     };
+    progress?: number | null;
+    details?: Record<string, unknown> | null;
+    preview?: Record<string, unknown> | null;
+    cost?: number | null;
 }
 
 /**
@@ -46,9 +71,13 @@ interface BFLResultResponse {
  * Supports FLUX.2 Pro, FLUX 1.1 Pro, and other FLUX models via the BFL API.
  *
  * BFL uses an async task-based API:
- * 1. Submit generation request -> get task ID
- * 2. Poll for result until ready
- * 3. Retrieve generated image URL
+ * 1. Submit generation request -> get task ID and regional `polling_url`
+ * 2. Poll `polling_url` (or `/get_result`) until ready
+ * 3. Retrieve generated image from the signed delivery URL
+ *
+ * A request's `CancellationToken` is handed to every `fetch` (submit, poll and download), and the
+ * wait between polls ends as soon as it aborts, so cancelling a request stops it at once. The call
+ * then resolves as cancelled, never as a failure to fail over.
  */
 @RegisterClass(BaseImageGenerator, 'FLUXImageGenerator')
 export class FLUXImageGenerator extends BaseImageGenerator {
@@ -84,22 +113,22 @@ export class FLUXImageGenerator extends BaseImageGenerator {
         const startTime = new Date();
 
         try {
+            ThrowIfAborted(params.CancellationToken, 'Black Forest Labs');
             const modelEndpoint = this.getModelEndpoint(params.model || 'flux-2-pro');
             const requestBody = this.buildGenerationRequest(params);
 
             // Submit generation task
-            const taskResponse = await this.submitTask(modelEndpoint, requestBody);
+            const taskResponse = await this.submitTask(modelEndpoint, requestBody, params.CancellationToken);
 
             if (!taskResponse.id) {
                 return this.createErrorResult(startTime, 'No task ID returned from BFL API');
             }
 
-            // Poll for result
-            const resultResponse = await this.waitForResult(taskResponse.id);
+            // Poll for result using BFL's returned polling_url when present
+            const resultResponse = await this.pollForResult(taskResponse, params.CancellationToken);
 
-            if (resultResponse.status === 'Error' || resultResponse.status === 'Request Moderated' ||
-                resultResponse.status === 'Content Moderated') {
-                return this.createErrorResult(startTime, `Generation failed: ${resultResponse.status}`);
+            if (this.isFailureStatus(resultResponse.status)) {
+                return this.createErrorResult(startTime, this.formatFailureMessage('Generation failed', resultResponse));
             }
 
             if (!resultResponse.result?.sample) {
@@ -107,18 +136,18 @@ export class FLUXImageGenerator extends BaseImageGenerator {
             }
 
             // Download image and create result
-            const generatedImage = await this.downloadImage(resultResponse.result.sample, 0);
+            const generatedImage = await this.downloadImage(
+                resultResponse.result.sample,
+                0,
+                params.CancellationToken
+            );
 
             const result = this.createSuccessResult(startTime, [generatedImage]);
-
-            // Include seed if available for reproducibility in metadata
-            if (resultResponse.result.seed !== undefined) {
-                result.metadata = { seed: resultResponse.result.seed };
-            }
+            this.applyUsageAndMetadata(result, taskResponse, resultResponse);
 
             return result;
         } catch (error) {
-            return this.handleError(error, startTime);
+            return this.handleError(error, startTime, params.CancellationToken);
         }
     }
 
@@ -130,12 +159,13 @@ export class FLUXImageGenerator extends BaseImageGenerator {
         const startTime = new Date();
 
         try {
+            ThrowIfAborted(params.CancellationToken, 'Black Forest Labs');
             // Normalize input images
             const imageInput = await this.normalizeImageInput(params.image);
             const maskInput = params.mask ? await this.normalizeImageInput(params.mask) : undefined;
 
-            // Use FLUX Fill for editing
-            const endpoint = '/flux-pro-1.1-fill';
+            // Use FLUX.1 Fill [pro] (/v1/flux-pro-1.0-fill) for editing
+            const endpoint = '/flux-pro-1.0-fill';
 
             const requestBody: Record<string, unknown> = {
                 prompt: params.prompt,
@@ -148,24 +178,26 @@ export class FLUXImageGenerator extends BaseImageGenerator {
             }
 
             // Submit task
-            const taskResponse = await this.submitTask(endpoint, requestBody);
+            const taskResponse = await this.submitTask(endpoint, requestBody, params.CancellationToken);
 
             if (!taskResponse.id) {
                 return this.createErrorResult(startTime, 'No task ID returned from BFL API');
             }
 
             // Wait for result
-            const resultResponse = await this.waitForResult(taskResponse.id);
+            const resultResponse = await this.pollForResult(taskResponse, params.CancellationToken);
 
             if (resultResponse.status !== 'Ready' || !resultResponse.result?.sample) {
-                return this.createErrorResult(startTime, `Edit failed: ${resultResponse.status}`);
+                return this.createErrorResult(startTime, this.formatFailureMessage('Edit failed', resultResponse));
             }
 
-            const generatedImage = await this.downloadImage(resultResponse.result.sample, 0);
+            const generatedImage = await this.downloadImage(resultResponse.result.sample, 0, params.CancellationToken);
 
-            return this.createSuccessResult(startTime, [generatedImage]);
+            const result = this.createSuccessResult(startTime, [generatedImage]);
+            this.applyUsageAndMetadata(result, taskResponse, resultResponse);
+            return result;
         } catch (error) {
-            return this.handleError(error, startTime);
+            return this.handleError(error, startTime, params.CancellationToken);
         }
     }
 
@@ -177,6 +209,7 @@ export class FLUXImageGenerator extends BaseImageGenerator {
         const startTime = new Date();
 
         try {
+            ThrowIfAborted(params.CancellationToken, 'Black Forest Labs');
             const imageInput = await this.normalizeImageInput(params.image);
 
             // For variations, we use the Kontext model or img2img endpoint
@@ -186,29 +219,31 @@ export class FLUXImageGenerator extends BaseImageGenerator {
 
             const requestBody: Record<string, unknown> = {
                 prompt: variationPrompt,
-                image: imageInput.base64,
+                input_image: imageInput.base64,
                 output_format: 'png'
             };
 
             // Submit task
-            const taskResponse = await this.submitTask(endpoint, requestBody);
+            const taskResponse = await this.submitTask(endpoint, requestBody, params.CancellationToken);
 
             if (!taskResponse.id) {
                 return this.createErrorResult(startTime, 'No task ID returned from BFL API');
             }
 
             // Wait for result
-            const resultResponse = await this.waitForResult(taskResponse.id);
+            const resultResponse = await this.pollForResult(taskResponse, params.CancellationToken);
 
             if (resultResponse.status !== 'Ready' || !resultResponse.result?.sample) {
-                return this.createErrorResult(startTime, `Variation failed: ${resultResponse.status}`);
+                return this.createErrorResult(startTime, this.formatFailureMessage('Variation failed', resultResponse));
             }
 
-            const generatedImage = await this.downloadImage(resultResponse.result.sample, 0);
+            const generatedImage = await this.downloadImage(resultResponse.result.sample, 0, params.CancellationToken);
 
-            return this.createSuccessResult(startTime, [generatedImage]);
+            const result = this.createSuccessResult(startTime, [generatedImage]);
+            this.applyUsageAndMetadata(result, taskResponse, resultResponse);
+            return result;
         } catch (error) {
-            return this.handleError(error, startTime);
+            return this.handleError(error, startTime, params.CancellationToken);
         }
     }
 
@@ -218,9 +253,20 @@ export class FLUXImageGenerator extends BaseImageGenerator {
     public async GetModels(): Promise<ImageModelInfo[]> {
         return [
             {
+                id: 'flux-3-image',
+                name: 'FLUX 3 Image',
+                description: 'Black Forest Labs FLUX 3 image generation and multi-reference image editing model (up to 10 reference images, 768sq to 4k resolution).',
+                supportedSizes: ['1024x1024', '1024x768', '768x1024', '1536x1024', '1024x1536', '2048x2048'],
+                maxImages: 1,
+                supportsEditing: true,
+                supportsVariations: true,
+                supportsNegativePrompt: false,
+                supportsSeed: false
+            },
+            {
                 id: 'flux-2-pro',
                 name: 'FLUX.2 Pro',
-                description: 'Black Forest Labs\' most capable model. 32B parameter transformer delivering photorealistic 4MP images with exceptional detail accuracy.',
+                description: 'Black Forest Labs\' most capable FLUX 2 model. 32B parameter transformer delivering photorealistic 4MP images with exceptional detail accuracy.',
                 supportedSizes: ['1024x1024', '1024x768', '768x1024', '1536x1024', '1024x1536', '2048x2048'],
                 maxImages: 1, // BFL API generates one image per request
                 supportsEditing: true,
@@ -265,21 +311,51 @@ export class FLUXImageGenerator extends BaseImageGenerator {
      */
     private getModelEndpoint(model: string): string {
         const modelEndpoints: Record<string, string> = {
-            'flux-2-pro': '/flux-pro-2',
+            'flux-3-image': '/flux-3-image',
+            'flux-2-pro': '/flux-2-pro',
             'flux-1.1-pro': '/flux-pro-1.1',
-            'flux-pro': '/flux-pro',
             'flux-dev': '/flux-dev',
-            'flux-schnell': '/flux-schnell',
-            'flux-ultra': '/flux-ultra'
+            'flux-ultra': '/flux-pro-1.1-ultra'
         };
 
         return modelEndpoints[model.toLowerCase()] || '/flux-pro-1.1';
     }
 
+    private static readonly FLUX3_IMAGE_ASPECT_RATIOS: ReadonlySet<string> = new Set([
+        'auto',
+        '21:9',
+        '2:1',
+        '16:9',
+        '3:2',
+        '7:5',
+        '4:3',
+        '5:4',
+        '1:1',
+        '4:5',
+        '3:4',
+        '5:7',
+        '2:3',
+        '9:16',
+        '1:2',
+        '9:21'
+    ]);
+
+    private static readonly FLUX3_IMAGE_RESOLUTIONS: ReadonlySet<string> = new Set([
+        '768sq',
+        '1k',
+        '1.5k',
+        '2k',
+        '4k'
+    ]);
+
     /**
      * Build the generation request body.
      */
     private buildGenerationRequest(params: ImageGenerationParams): Record<string, unknown> {
+        if ((params.model || '').toLowerCase() === 'flux-3-image') {
+            return this.buildFlux3ImageRequest(params);
+        }
+
         const request: Record<string, unknown> = {
             prompt: params.prompt,
             output_format: 'png'
@@ -321,16 +397,115 @@ export class FLUXImageGenerator extends BaseImageGenerator {
     }
 
     /**
+     * Build the request body for `POST /v1/flux-3-image` (`Flux3ImageInputs`, `additionalProperties: false`).
+     * Never sends `width`, `height`, `seed`, or `output_format`, and always sets `grounding: false`.
+     */
+    private buildFlux3ImageRequest(params: ImageGenerationParams): Record<string, unknown> {
+        const request: Record<string, unknown> = {
+            prompt: params.prompt,
+            grounding: false
+        };
+
+        if (params.ReferenceImages && params.ReferenceImages.length > 0) {
+            if (params.ReferenceImages.length > 10) {
+                const err = new Error(
+                    `FLUX 3 Image supports at most 10 ReferenceImages (got ${params.ReferenceImages.length})`
+                ) as Error & { errorInfo?: unknown };
+                err.errorInfo = {
+                    errorType: 'InvalidRequest',
+                    severity: 'Fatal',
+                    canFailover: false,
+                    error: err,
+                    context: { provider: 'Black Forest Labs' }
+                };
+                throw err;
+            }
+
+            request.images = params.ReferenceImages.map((ref) => {
+                if ('URL' in ref) {
+                    return ref.URL;
+                }
+                if (Buffer.isBuffer(ref.Data)) {
+                    return ref.Data.toString('base64');
+                }
+                return ref.Data;
+            });
+        }
+
+        const aspectRatio = this.resolveFlux3ImageAspectRatio(params);
+        if (aspectRatio) {
+            request.aspect_ratio = aspectRatio;
+        }
+
+        const requestedResolution = params.providerOptions?.resolution;
+        if (
+            typeof requestedResolution === 'string' &&
+            FLUXImageGenerator.FLUX3_IMAGE_RESOLUTIONS.has(requestedResolution)
+        ) {
+            request.resolution = requestedResolution;
+        } else if (params.quality === 'hd') {
+            request.resolution = '2k';
+        } else {
+            request.resolution = '1k';
+        }
+
+        const safetyTolerance = params.providerOptions?.safety_tolerance;
+        if (
+            typeof safetyTolerance === 'number' &&
+            Number.isInteger(safetyTolerance) &&
+            safetyTolerance >= 0 &&
+            safetyTolerance <= 7
+        ) {
+            request.safety_tolerance = safetyTolerance;
+        }
+
+        if (params.providerOptions?.version === 'latest') {
+            request.version = 'latest';
+        }
+
+        return request;
+    }
+
+    private resolveFlux3ImageAspectRatio(params: ImageGenerationParams): string | undefined {
+        if (params.aspectRatio && FLUXImageGenerator.FLUX3_IMAGE_ASPECT_RATIOS.has(params.aspectRatio)) {
+            return params.aspectRatio;
+        }
+        if (params.size) {
+            const parts = params.size.split('x').map(Number);
+            if (parts.length === 2 && Number.isInteger(parts[0]) && Number.isInteger(parts[1]) && parts[0] > 0 && parts[1] > 0) {
+                const divisor = this.gcd(parts[0], parts[1]);
+                const ratio = `${parts[0] / divisor}:${parts[1] / divisor}`;
+                if (FLUXImageGenerator.FLUX3_IMAGE_ASPECT_RATIOS.has(ratio)) {
+                    return ratio;
+                }
+            }
+        }
+        return undefined;
+    }
+
+    private gcd(a: number, b: number): number {
+        let x = Math.abs(a);
+        let y = Math.abs(b);
+        while (y !== 0) {
+            const t = y;
+            y = x % y;
+            x = t;
+        }
+        return x;
+    }
+
+    /**
      * Submit a task to the BFL API.
      */
-    private async submitTask(endpoint: string, body: Record<string, unknown>): Promise<BFLTaskResponse> {
+    private async submitTask(endpoint: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<BFLTaskResponse> {
         const response = await fetch(`${this._baseUrl}${endpoint}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-Key': this.apiKey
             },
-            body: JSON.stringify(body)
+            body: JSON.stringify(body),
+            signal
         });
 
         if (!response.ok) {
@@ -342,17 +517,24 @@ export class FLUXImageGenerator extends BaseImageGenerator {
     }
 
     /**
-     * Poll for task completion.
+     * Poll for task completion using BFL's returned `polling_url` (or `${this._baseUrl}/get_result?id=${id}`
+     * when `polling_url` is omitted). Only an `https://` URL whose hostname ends in `.bfl.ai` or matches the
+     * configured `_baseUrl` origin is polled. The signal aborts the poll in flight and the wait between polls.
      */
-    private async waitForResult(taskId: string): Promise<BFLResultResponse> {
+    private async pollForResult(
+        task: { id: string; polling_url?: string },
+        signal?: AbortSignal
+    ): Promise<BFLResultResponse> {
         const startTime = Date.now();
+        const pollUrl = this.resolvePollingUrl(task);
 
         while (Date.now() - startTime < this._pollingConfig.maxWaitTime) {
-            const response = await fetch(`${this._baseUrl}/get_result?id=${taskId}`, {
+            const response = await fetch(pollUrl, {
                 method: 'GET',
                 headers: {
                     'X-Key': this.apiKey
-                }
+                },
+                signal
             });
 
             if (!response.ok) {
@@ -362,28 +544,107 @@ export class FLUXImageGenerator extends BaseImageGenerator {
 
             const result = await response.json() as BFLResultResponse;
 
-            if (result.status === 'Ready' || result.status === 'Error' ||
-                result.status === 'Request Moderated' || result.status === 'Content Moderated' ||
-                result.status === 'Task not found') {
+            if (result.status === 'Ready' || this.isFailureStatus(result.status)) {
                 return result;
             }
 
-            // Wait before next poll
-            await this.sleep(this._pollingConfig.pollInterval);
+            // Wait before next poll, ending the wait as soon as the request is cancelled
+            await AbortableDelay(this._pollingConfig.pollInterval, signal);
         }
 
         throw new Error(`Timeout waiting for result after ${this._pollingConfig.maxWaitTime}ms`);
     }
 
     /**
-     * Download an image from URL and convert to GeneratedImage.
+     * Validate and resolve the polling URL for a submitted task. Falls back to
+     * `${this._baseUrl}/get_result?id=${id}` only when `polling_url` is missing.
+     * Any non-`https:` URL or host outside `.bfl.ai` and the configured `_baseUrl` origin throws without sending the API key.
      */
-    private async downloadImage(url: string, index: number): Promise<GeneratedImage> {
-        const response = await fetch(url);
+    private resolvePollingUrl(task: { id: string; polling_url?: string }): string {
+        const candidate = task.polling_url ?? `${this._baseUrl}/get_result?id=${task.id}`;
+        if (!this.isValidBflPollingUrl(candidate)) {
+            throw new Error(`Refusing to poll non-BFL or non-HTTPS URL: ${candidate}`);
+        }
+        return candidate;
+    }
+
+    private isValidBflPollingUrl(url: string): boolean {
+        return IsValidBFLPollingUrl(url, this._baseUrl);
+    }
+
+    private isFailureStatus(status: BFLResultResponse['status']): boolean {
+        return (
+            status === 'Error' ||
+            status === 'Request Moderated' ||
+            status === 'Content Moderated' ||
+            status === 'No Card Generated' ||
+            status === 'Task not found'
+        );
+    }
+
+    private formatFailureMessage(prefix: string, resultResponse: BFLResultResponse): string {
+        const reasons = resultResponse.details?.['Moderation Reasons'];
+        const reasonText = Array.isArray(reasons)
+            ? reasons.map(String).join(', ')
+            : typeof reasons === 'string' && reasons.length > 0
+                ? reasons
+                : undefined;
+        return reasonText
+            ? `${prefix}: ${resultResponse.status} (${reasonText})`
+            : `${prefix}: ${resultResponse.status}`;
+    }
+
+    private applyUsageAndMetadata(
+        result: ImageGenerationResult,
+        taskResponse: BFLTaskResponse,
+        resultResponse: BFLResultResponse
+    ): void {
+        const settledOrSubmitCost = resultResponse.cost ?? taskResponse.cost;
+        if (typeof settledOrSubmitCost === 'number') {
+            const usage = ModelUsage.ForMedia('Images', 0, 1);
+            usage.cost = settledOrSubmitCost / 100;
+            usage.costCurrency = 'USD';
+            result.usage = usage;
+        }
+
+        const metadata: Record<string, unknown> = {};
+        if (resultResponse.result?.seed !== undefined) {
+            metadata.seed = resultResponse.result.seed;
+        }
+        if (typeof settledOrSubmitCost === 'number') {
+            metadata.cost = settledOrSubmitCost;
+        }
+        if (Object.keys(metadata).length > 0) {
+            result.metadata = metadata;
+        }
+    }
+
+    /**
+     * Download an image from URL and convert to GeneratedImage, inferring `format`
+     * from the response `Content-Type` header before falling back to `'png'`.
+     */
+    private async downloadImage(
+        url: string,
+        index: number,
+        signal?: AbortSignal
+    ): Promise<GeneratedImage> {
+        const response = await fetch(url, { signal });
 
         if (!response.ok) {
             await response.body?.cancel().catch(() => { /* nothing to drain */ });
             throw new Error(`Failed to download image: ${response.status}`);
+        }
+
+        const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
+        let format: GeneratedImage['format'] = 'png';
+        if (contentType.includes('image/jpeg') || contentType.includes('image/jpg')) {
+            format = 'jpeg';
+        } else if (contentType.includes('image/png')) {
+            format = 'png';
+        } else if (contentType.includes('image/webp')) {
+            format = 'webp';
+        } else if (contentType.includes('image/gif')) {
+            format = 'gif';
         }
 
         const arrayBuffer = await response.arrayBuffer();
@@ -394,23 +655,21 @@ export class FLUXImageGenerator extends BaseImageGenerator {
         generatedImage.data = buffer;
         generatedImage.base64 = base64;
         generatedImage.url = url;
-        generatedImage.format = 'png';
+        generatedImage.format = format;
         generatedImage.index = index;
 
         return generatedImage;
     }
 
     /**
-     * Sleep for specified milliseconds.
+     * Handle errors and create error result. A request its signal aborted is classified by why it was
+     * aborted, not as a provider error: a caller cancellation is reported as cancelled (never failed
+     * over), and an abort caused by a timeout as a retriable network error.
      */
-    private sleep(ms: number): Promise<void> {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    /**
-     * Handle errors and create error result.
-     */
-    private handleError(error: unknown, startTime: Date): ImageGenerationResult {
+    private handleError(error: unknown, startTime: Date, signal?: AbortSignal): ImageGenerationResult {
+        if (IsRequestAborted(error, signal)) {
+            return this.CancelledResult(signal, error);
+        }
         const errorInfo = ErrorAnalyzer.analyzeError(error, 'Black Forest Labs');
         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
 
@@ -423,3 +682,11 @@ export class FLUXImageGenerator extends BaseImageGenerator {
     }
 }
 
+export {
+    FLUX3VideoGenerator,
+    FLUX3_VIDEO_DIMENSIONS,
+    IsValidBFLPollingUrl,
+    type FLUX3VideoAspectRatio,
+    type FLUX3VideoResolution,
+} from './flux3-video.js';
+export { HasC2PAManifest } from './c2pa.js';

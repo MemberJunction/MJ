@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT157 - Chief of Staff Core Layers",
+    "Description": "Deterministic proof of the Chief of Staff's MJ-core layers, with no LLM calls and no Open App dependency: ownership guards on agent policies and agent requests, Run User Routine Now, AgentUserPolicyEngine cache sync, email approval-before-transport, typed core actions + Assemble My Briefing + zero raw SQL/generic CRUD, offered rhythms & declined suggestion dedup, Agent Channels loop-guard & human-intervention reset, and the code-enforced recurring routine gate.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "All COS1-COS12 checks pass: ownership guards hold, run-now respects ownership and preserves schedule, policy cache tracks saves, email approvals queue before transport, Chief of Staff holds zero raw SQL/CRUD, Assemble My Briefing/Rhythms/Suggestions/Agent Channels enforce every guardrail, and autonomous recurring routine creation without confirmation returns APPROVAL_REQUIRED."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "chief-of-staff"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "9EDD405A-B13A-463B-B566-7ACCD2678979"
+  },
+  "sync": {
+    "lastModified": "2026-11-20T22:12:53.654Z",
+    "checksum": "d78c7c5e7c868cb4ca5260ecfd3212a2a89ef4672bf155724f5b661d8c65b9e4"
+  }
+}

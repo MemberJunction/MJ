@@ -20,6 +20,7 @@ export class MJComponentFormComponent extends BaseFormComponent {
             { sectionKey: 'specificationDesign', sectionName: 'Specification & Design', isExpanded: true },
             { sectionKey: 'developerOwnership', sectionName: 'Developer & Ownership', isExpanded: true },
             { sectionKey: 'registrySynchronization', sectionName: 'Registry & Synchronization', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJComponentDependenciesComponentID', sectionName: 'Component Dependencies (Component ID)', isExpanded: false },
             { sectionKey: 'mJComponentLibraryLinks', sectionName: 'Component Library Links', isExpanded: false },

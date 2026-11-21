@@ -212,5 +212,23 @@ describe('ClientToolRequestManager', () => {
             manager.ClearSession('session-clear');
             expect(manager.GetSessionTools('session-clear')).toEqual([]);
         });
+
+        it('should evict the least-recently-used session beyond the session cap', () => {
+            const tool = { Name: 'X', Description: 'X', InputSchema: {} };
+            const max = (ClientToolRequestManager as unknown as { MAX_SESSIONS: number }).MAX_SESSIONS;
+            for (let i = 0; i < max + 5; i++) {
+                manager.SetSessionTools(`cap-${i}`, [tool]);
+            }
+            expect(manager.GetSessionTools('cap-0')).toEqual([]);
+            expect(manager.GetSessionTools(`cap-${max + 4}`)).toHaveLength(1);
+        });
+
+        it('should cap the number of tool definitions stored per session', () => {
+            const tools = Array.from({ length: ClientToolRequestManager.MAX_TOOLS_PER_SESSION + 50 }, (_, i) => (
+                { Name: `T${i}`, Description: 'd', InputSchema: {} }
+            ));
+            manager.SetSessionTools('big-session', tools);
+            expect(manager.GetSessionTools('big-session')).toHaveLength(ClientToolRequestManager.MAX_TOOLS_PER_SESSION);
+        });
     });
 });

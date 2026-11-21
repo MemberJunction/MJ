@@ -1,0 +1,231 @@
+<!-- The colors of whatever is selected: only the ones it uses (Colors), with the contrast warnings about them. -->
+<ng-template #colors>
+  @if (Colors.length) {
+    <div class="lsi__colors" role="group" aria-label="Colors">
+      <span class="lsi__section">Colors</span>
+      @if (ColorScope; as scope) { <p class="lsi__help">{{ scope }}</p> }
+      @for (k of Colors; track k.Key) {
+        <div class="lsi__color-row">
+          <span>{{ k.Name }}</span>
+          @if (Design.Colors[k.Key]; as c) {
+            <input type="color" [value]="c" [attr.aria-label]="ColorLabel[k.Key]" (input)="SetColor(k.Key, ValueOf($event))" />
+            <input class="mj-input lsi__hex" type="text" maxlength="7" [value]="c" [attr.aria-label]="ColorLabel[k.Key] + ', hex value'" (change)="SetColor(k.Key, ValueOf($event))" />
+            <button type="button" mjButton Variant="icon" Size="sm" title="Back to the default" [AriaLabel]="'Reset ' + ColorLabel[k.Key] + ' to the default'" (click)="SetColor(k.Key, null)"><i class="fa-solid fa-rotate-left"></i></button>
+          } @else {
+            <span class="lsi__optional">Default</span>
+            <button type="button" mjButton Variant="outline" Size="sm" class="lsi__set" [AriaLabel]="'Choose a custom ' + ColorLabel[k.Key]" (click)="StartColor(k.Key)">Choose</button>
+          }
+        </div>
+      }
+      <p class="lsi__help">Default follows the theme. A color you choose stays the same in light and dark mode.</p>
+      @if (ContrastWarnings.length) {
+        <mj-alert Variant="warning" Size="sm" Role="status">
+          <ul class="lsi__list">
+            @for (w of ContrastWarnings; track $index) { <li>{{ w }}</li> }
+          </ul>
+        </mj-alert>
+      }
+    </div>
+  }
+</ng-template>
+
+<div class="lsi">
+  @if (Selected; as sel) {
+    <!-- A BLOCK -->
+    @if (SelectedProblems.length) {
+      <mj-alert Variant="warning" Size="sm" Role="status">
+        <ul class="lsi__list">
+          @for (p of SelectedProblems; track $index) { <li>{{ p }}</li> }
+        </ul>
+      </mj-alert>
+    }
+
+    @if (AsLogo; as b) {
+      <div class="lsi__field"><span class="lsi__label" id="lsi-logo">Which logo</span>
+        <mj-dropdown [Data]="LogoSourceOptions" TextField="Label" ValueField="Value" [ValuePrimitive]="true" AriaLabelledBy="lsi-logo"
+                     [ngModel]="b.Source" (ngModelChange)="SetBlock('Source', $event)"></mj-dropdown>
+      </div>
+      <p class="lsi__help">Logos come from the default theme in Theme Studio. A variant that is not set falls back to the light mark, and a theme with no logos shows the stock one.</p>
+    }
+
+    @if (AsHeadline; as b) {
+      <label class="lsi__field"><span class="lsi__label">Headline</span>
+        <input class="mj-input" type="text" [value]="b.Text" [maxLength]="Limits.Headline" (input)="SetBlock('Text', ValueOf($event))" />
+      </label>
+    }
+
+    @if (AsText; as b) {
+      <label class="lsi__field"><span class="lsi__label">Text</span>
+        <textarea class="mj-textarea" rows="4" [value]="b.Text" [maxLength]="Limits.Text" (input)="SetBlock('Text', ValueOf($event))"></textarea>
+      </label>
+      <div class="lsi__switch"><mj-switch AriaLabel="Softer color" [ngModel]="b.Muted" (ngModelChange)="SetBlock('Muted', $event)"></mj-switch> Softer color</div>
+    }
+
+    @if (AsCard; as b) {
+      <div class="lsi__field"><span class="lsi__label" id="lsi-icon">Icon</span>
+        <mj-dropdown [Data]="IconOptions" TextField="Label" ValueField="Value" [ValuePrimitive]="true" AriaLabelledBy="lsi-icon"
+                     [ngModel]="b.Icon ?? ''" (ngModelChange)="SetBlockOptional('Icon', $event)"></mj-dropdown>
+      </div>
+      <label class="lsi__field"><span class="lsi__label">Title</span>
+        <input class="mj-input" type="text" [value]="b.Title" [maxLength]="Limits.CardTitle" (input)="SetBlock('Title', ValueOf($event))" />
+      </label>
+      <label class="lsi__field"><span class="lsi__label">Note <span class="lsi__optional">optional</span></span>
+        <textarea class="mj-textarea" rows="2" [value]="b.Text ?? ''" [maxLength]="Limits.CardText" (input)="SetBlockOptional('Text', ValueOf($event))"></textarea>
+      </label>
+      <label class="lsi__field"><span class="lsi__label">Link <span class="lsi__optional">optional</span></span>
+        <input class="mj-input" type="url" placeholder="https://… or mailto:…" [value]="b.Href ?? ''" (input)="SetBlockOptional('Href', ValueOf($event).trim())" />
+      </label>
+      <div class="lsi__switch"><mj-switch AriaLabel="Open in a new tab" [ngModel]="b.NewTab" (ngModelChange)="SetBlock('NewTab', $event)"></mj-switch> Open in a new tab (keeps the sign-in page open)</div>
+    }
+
+    @if (AsLinks; as b) {
+      @for (l of b.Links; track $index; let i = $index) {
+        <div class="lsi__link">
+          <input class="mj-input" type="text" aria-label="Link label" placeholder="Label" [value]="l.Label" [maxLength]="Limits.LinkLabel" (input)="SetLink(i, 'Label', ValueOf($event))" />
+          <input class="mj-input" type="url" aria-label="Link address" placeholder="https://…" [value]="l.Href" (input)="SetLink(i, 'Href', ValueOf($event).trim())" />
+          <button type="button" mjButton Variant="icon" Size="sm" AriaLabel="Remove link" title="Remove link" (click)="RemoveLink(i)"><i class="fa-regular fa-trash-can"></i></button>
+        </div>
+      }
+      <button type="button" mjButton Variant="outline" Size="sm" (click)="AddLink()" [disabled]="b.Links.length >= Limits.Links"><i class="fa-solid fa-plus"></i> Add link</button>
+    }
+
+    @if (AsImage; as b) {
+      <label class="lsi__field"><span class="lsi__label">Image address</span>
+        <input class="mj-input" type="url" placeholder="https://…/picture.png" [value]="b.URL" (input)="SetBlock('URL', ValueOf($event).trim())" />
+      </label>
+      <label class="lsi__field"><span class="lsi__label">Description for screen readers</span>
+        <input class="mj-input" type="text" [value]="b.Alt" [maxLength]="Limits.Alt" (input)="SetBlock('Alt', ValueOf($event))" />
+      </label>
+    }
+
+    @if (SelectedSize; as size) {
+      <div class="lsi__field" role="group" aria-labelledby="lsi-size"><span class="lsi__label" id="lsi-size">Size</span>
+        <mj-view-toggle [Options]="SizeOptions" [ActiveKey]="size" (KeyChange)="SetBlock('Size', $event)"></mj-view-toggle>
+      </div>
+    }
+
+    <div class="lsi__field" role="group" aria-labelledby="lsi-width"><span class="lsi__label" id="lsi-width">Width</span>
+      <mj-view-toggle [Options]="WidthOptions" [ActiveKey]="sel.Width" (KeyChange)="SetBlock('Width', $event)"></mj-view-toggle>
+    </div>
+    <p class="lsi__help">Half or Third puts two or three blocks side by side. On a phone each block takes its own row.</p>
+
+    <ng-container [ngTemplateOutlet]="colors"></ng-container>
+
+    @if (AsCard) {
+      <div class="lsi__field" role="group" aria-labelledby="lsi-corners"><span class="lsi__label" id="lsi-corners">Corners <span class="lsi__optional">every card</span></span>
+        <mj-view-toggle [Options]="RadiusOptions" [ActiveKey]="Design.CardRadius" (KeyChange)="SetPage('CardRadius', $event)"></mj-view-toggle>
+      </div>
+    }
+
+    <div class="lsi__switch"><mj-switch AriaLabel="Hide on small screens" [ngModel]="sel.HideWhenStacked" (ngModelChange)="SetBlock('HideWhenStacked', $event)"></mj-switch> Hide on small screens</div>
+    <p class="lsi__help">Tablets and phones show a short banner above the sign-in options, so keep it to the essentials.</p>
+
+    <div class="lsi__row">
+      <button type="button" mjButton Variant="outline" Size="sm" (click)="Run('duplicate')"><i class="fa-regular fa-clone"></i> Duplicate</button>
+      <button type="button" mjButton Variant="outline" Size="sm" (click)="Run('delete')"><i class="fa-regular fa-trash-can"></i> Delete</button>
+    </div>
+
+  } @else if (Surface === 'Banner') {
+    <!-- THE STORY PANEL -->
+    <div class="lsi__field" role="group" aria-labelledby="lsi-bg"><span class="lsi__label" id="lsi-bg">Background</span>
+      <mj-view-toggle [Options]="BackgroundOptions" [ActiveKey]="Design.Background.Kind" (KeyChange)="SetBackground('Kind', $event)"></mj-view-toggle>
+    </div>
+    @switch (Design.Background.Kind) {
+      @case ('brand') { <p class="lsi__help">The default theme's brand gradient, from Theme Studio.</p> }
+      @case ('color') {
+        <div class="lsi__field"><span class="lsi__label">Color</span>
+          <span class="lsi__color">
+            <input type="color" aria-label="Background color" [value]="Design.Background.Color ?? ''" (input)="SetBackground('Color', ValueOf($event))" />
+            <input class="mj-input lsi__hex" type="text" maxlength="7" aria-label="Background color, hex value" [value]="Design.Background.Color ?? ''" (change)="SetBackground('Color', ValueOf($event))" />
+          </span>
+        </div>
+      }
+      @case ('gradient') {
+        <div class="lsi__field"><span class="lsi__label">From</span>
+          <span class="lsi__color">
+            <input type="color" aria-label="Gradient start color" [value]="Design.Background.Color ?? ''" (input)="SetBackground('Color', ValueOf($event))" />
+            <input class="mj-input lsi__hex" type="text" maxlength="7" aria-label="Gradient start, hex value" [value]="Design.Background.Color ?? ''" (change)="SetBackground('Color', ValueOf($event))" />
+          </span>
+        </div>
+        <div class="lsi__field"><span class="lsi__label">To</span>
+          <span class="lsi__color">
+            <input type="color" aria-label="Gradient end color" [value]="Design.Background.Color2 ?? ''" (input)="SetBackground('Color2', ValueOf($event))" />
+            <input class="mj-input lsi__hex" type="text" maxlength="7" aria-label="Gradient end, hex value" [value]="Design.Background.Color2 ?? ''" (change)="SetBackground('Color2', ValueOf($event))" />
+          </span>
+        </div>
+      }
+      @case ('image') {
+        <label class="lsi__field"><span class="lsi__label">Image address</span>
+          <input class="mj-input" type="url" placeholder="https://…/photo.jpg" [value]="Design.Background.ImageURL ?? ''" (input)="SetBackground('ImageURL', ValueOf($event))" />
+        </label>
+        <div class="lsi__field"><span class="lsi__label" id="lsi-overlay">Darken the image (%)</span>
+          <mj-numeric-input [Min]="0" [Max]="Limits.OverlayMax" [Step]="5" [Decimals]="0" AriaLabelledBy="lsi-overlay"
+                            [ngModel]="Design.Background.Overlay" (ngModelChange)="SetBackground('Overlay', $event)"></mj-numeric-input>
+        </div>
+      }
+    }
+
+    <div class="lsi__field" role="group" aria-labelledby="lsi-tone"><span class="lsi__label" id="lsi-tone">Light or dark text</span>
+      <mj-view-toggle [Options]="ToneOptions" [ActiveKey]="Design.Tone" (KeyChange)="SetPage('Tone', $event)"></mj-view-toggle>
+    </div>
+
+    <ng-container [ngTemplateOutlet]="colors"></ng-container>
+
+    <div class="lsi__field" role="group" aria-labelledby="lsi-align"><span class="lsi__label" id="lsi-align">Alignment</span>
+      <mj-view-toggle [Options]="AlignmentOptions" [ActiveKey]="Design.Alignment" (KeyChange)="SetPage('Alignment', $event)"></mj-view-toggle>
+    </div>
+
+    @if (Design.Layout !== 'centered') {
+      <div class="lsi__field" role="group" aria-labelledby="lsi-share"><span class="lsi__label" id="lsi-share">Width</span>
+        <mj-view-toggle [Options]="BannerShareOptions" [ActiveKey]="Design.BannerShare" (KeyChange)="SetPage('BannerShare', $event)"></mj-view-toggle>
+      </div>
+    }
+
+    <p class="lsi__help">To change the color of the cards here, select one.</p>
+
+  } @else if (Surface === 'Panel') {
+    <!-- THE SIGN-IN COLUMN -->
+    <ng-container [ngTemplateOutlet]="colors"></ng-container>
+    <p class="lsi__help">The sign-in button uses the default theme's brand color.</p>
+
+    <label class="lsi__field"><span class="lsi__label">Heading above the sign-in options <span class="lsi__optional">optional</span></span>
+      <input class="mj-input" type="text" placeholder="None" [value]="Design.Heading ?? ''" [maxLength]="Limits.Heading" (input)="SetHeading(ValueOf($event))" />
+    </label>
+
+    <div class="lsi__field" role="group" aria-labelledby="lsi-panel-width"><span class="lsi__label" id="lsi-panel-width">Width</span>
+      <mj-view-toggle [Options]="PanelWidthOptions" [ActiveKey]="Design.PanelWidth" (KeyChange)="SetPage('PanelWidth', $event)"></mj-view-toggle>
+    </div>
+
+    <p class="lsi__help">To change the color of the cards here, select one.</p>
+
+  } @else {
+    <!-- THE PAGE -->
+    <div class="lsi__field" role="group" aria-label="Layout"><span class="lsi__label">Layout</span>
+      <div class="lsi__layouts">
+        @for (l of Layouts; track l) {
+          <button type="button" mjButton Variant="outline" Size="sm" class="lsi__layout" [Toggleable]="true" [Selected]="Design.Layout === l"
+                  (click)="SetPage('Layout', l)">
+            <span class="lsi__layout-art" [attr.data-layout]="l" aria-hidden="true"><span></span><span></span></span>
+            {{ LayoutLabel[l] }}
+          </button>
+        }
+      </div>
+    </div>
+
+    <div class="lsi__field" role="group" aria-label="Parts of the page"><span class="lsi__label">Change a part of the page</span>
+      <div class="lsi__row">
+        <button type="button" mjButton Variant="outline" Size="sm" (click)="SurfaceSelectRequested.emit('Banner')"><i class="fa-solid fa-image" aria-hidden="true"></i> Story panel</button>
+        <button type="button" mjButton Variant="outline" Size="sm" (click)="SurfaceSelectRequested.emit('Panel')"><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i> Sign-in column</button>
+      </div>
+    </div>
+    <p class="lsi__help">Or click it in the preview (the story panel, the sign-in column or any block) to see its settings and colors. Alt+↑/↓ moves the focused block; Delete removes it.</p>
+
+    @if (CanReset) {
+      <div class="lsi__row lsi__row--reset">
+        <button type="button" mjButton Variant="outline" Size="sm" (click)="StockPageRequested.emit()" [disabled]="Saving">
+          <i class="fa-solid fa-arrow-rotate-left"></i> Use the stock sign-in page
+        </button>
+      </div>
+    }
+  }
+</div>

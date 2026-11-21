@@ -1,7 +1,8 @@
 import { Component, Input, Output, EventEmitter, ViewChild, ChangeDetectionStrategy, ChangeDetectorRef, HostListener } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Metadata, CompositeKey, KeyValuePair, BaseEntity } from '@memberjunction/core';
-import { MJQueryEntity, MJQueryCategoryEntity } from '@memberjunction/core-entities';
+import { MJQueryEntity, MJQueryCategoryEntity, ParseQuerySaveMessage } from '@memberjunction/core-entities';
+import type { QueryDiagnosticLine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { TreeBranchConfig, TreeNode } from '@memberjunction/ng-trees';
 import { TreeDropdownComponent } from '@memberjunction/ng-trees';
@@ -138,7 +139,9 @@ export interface SaveQueryResult {
           </textarea>
         </div>
 
-        @if (ErrorMessage) {
+        @if (ErrorDiagnostics.length > 0) {
+          <mj-query-diagnostics class="sqp-diagnostics" [Headline]="ErrorMessage" [Diagnostics]="ErrorDiagnostics" Severity="error" />
+        } @else if (ErrorMessage) {
           <div class="sqp-error">
             <i class="fa-solid fa-exclamation-circle"></i>
             {{ ErrorMessage }}
@@ -443,6 +446,13 @@ export interface SaveQueryResult {
     }
 
     /* Error */
+    .sqp-diagnostics {
+      display: block;
+      margin-top: var(--mj-space-3);
+      max-height: 40vh;
+      overflow: auto;
+    }
+
     .sqp-error {
       display: flex;
       align-items: center;
@@ -502,6 +512,8 @@ export class SaveQueryPanelComponent extends BaseAngularComponent {
   public Description = '';
   public IsSaving = false;
   public ErrorMessage = '';
+  /** Why the server refused the save: one finding per rule the SQL broke, with its line, column and fix. */
+  public ErrorDiagnostics: QueryDiagnosticLine[] = [];
   public IsVisible = false;
 
   // Category selection
@@ -660,6 +672,7 @@ export class SaveQueryPanelComponent extends BaseAngularComponent {
 
     this.IsSaving = true;
     this.ErrorMessage = '';
+    this.ErrorDiagnostics = [];
     this.cdr.markForCheck();
 
     try {
@@ -695,8 +708,8 @@ export class SaveQueryPanelComponent extends BaseAngularComponent {
         }, 300);
       } else {
         const errorMsg = this.getEntityErrorMessage(query, 'save query');
-        this.ErrorMessage = errorMsg;
-        MJNotificationService.Instance.CreateSimpleNotification(errorMsg, 'error', 5000);
+        this.showSaveFailure(errorMsg);
+        MJNotificationService.Instance.CreateSimpleNotification(this.ErrorMessage, 'error', 5000);
         console.error('Failed to save query:', query.LatestResult);
       }
     } catch (error) {
@@ -720,6 +733,17 @@ export class SaveQueryPanelComponent extends BaseAngularComponent {
   // =========================================================================
   // Helpers
   // =========================================================================
+
+  /**
+   * Shows why the save failed: the server's findings when the query's rules refused it (the
+   * headline above them), otherwise its message.
+   */
+  private showSaveFailure(message: string): void {
+    const parsed = ParseQuerySaveMessage(message);
+    const isRuleRefusal = parsed.Diagnostics.some(d => d.Code !== null);
+    this.ErrorDiagnostics = isRuleRefusal ? [...parsed.Diagnostics] : [];
+    this.ErrorMessage = isRuleRefusal ? (parsed.Headline ?? 'The query was not saved:') : message;
+  }
 
   private getEntityErrorMessage(entity: BaseEntity, operation: string): string {
     const result = entity.LatestResult;

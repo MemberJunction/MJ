@@ -86,6 +86,7 @@ function providerStore(test: MJTestEntity, user: UserInfo, provider: IMetadataPr
                 ExtraFilter: `Name='${BINARY_SCALE_NAME.replace(/'/g, "''")}'`,
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             }, user);
             if (!found.Success) throw new Error(found.ErrorMessage || 'Could not read MJ: Rubric Scales.');
             const existing = found.Results?.[0] as { ID?: string } | undefined;

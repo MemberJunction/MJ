@@ -1,7 +1,27 @@
+/**
+ * Replaces each `<...>` tag with a space, in one pass. Equivalent to
+ * `html.replace(/<[^>]*>/g, ' ')`, whose backtracking is quadratic on input with many `<` and
+ * no closing `>`: a `<` with no `>` after it is not a tag, so the rest is kept as text.
+ */
+function replaceTagsWithSpaces(html: string): string {
+  let result = '';
+  let position = 0;
+  while (position < html.length) {
+    const open = html.indexOf('<', position);
+    const close = open < 0 ? -1 : html.indexOf('>', open + 1);
+    if (close < 0) {
+      result += html.slice(position);
+      break;
+    }
+    result += html.slice(position, open) + ' ';
+    position = close + 1;
+  }
+  return result;
+}
+
 export class AssertionHelpers {
   static ContainsText(html: string, text: string): boolean {
-    const textContent = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-    return textContent.includes(text);
+    return AssertionHelpers.ExtractTextContent(html).includes(text);
   }
 
   /** @deprecated Use {@link ContainsText}. */
@@ -67,7 +87,7 @@ export class AssertionHelpers {
   }
 
   static ExtractTextContent(html: string): string {
-    return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    return replaceTagsWithSpaces(html).replace(/\s+/g, ' ').trim();
   }
 
   /** @deprecated Use {@link ExtractTextContent}. */

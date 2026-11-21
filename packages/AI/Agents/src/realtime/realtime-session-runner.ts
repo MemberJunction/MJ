@@ -32,6 +32,8 @@ import {
     RealtimeToolDefinition,
     RealtimeSessionError,
     RealtimeInputFrame,
+    RealtimeConversationMemory,
+    RenderRealtimeMemorySeedAsContextNote,
     JSONObject
 } from '@memberjunction/ai';
 import { RealtimeRecordingController } from './realtime-recording-capture';
@@ -286,6 +288,9 @@ export class RealtimeSessionRunner {
     /** Count of transcript turns persisted, surfaced in the result. */
     private transcriptTurnCount = 0;
 
+    /** Rolling conversation memory across turns, used to seed InitialContext on transport reconnect. */
+    private readonly conversationMemory = new RealtimeConversationMemory();
+
     /** Whether {@link Stop} has been initiated, to make finalization idempotent. */
     private stopped = false;
 
@@ -532,7 +537,15 @@ export class RealtimeSessionRunner {
             this.session = null;
 
             const tools = this.BuildToolSet();
-            const params: RealtimeSessionParams = { ...this.deps.SessionParams, Tools: tools };
+            const seedNote = RenderRealtimeMemorySeedAsContextNote(this.conversationMemory.Seed());
+            const combinedInitialContext = [this.deps.SessionParams.InitialContext, seedNote]
+                .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+                .join('\n\n') || undefined;
+            const params: RealtimeSessionParams = {
+                ...this.deps.SessionParams,
+                Tools: tools,
+                ...(combinedInitialContext !== undefined ? { InitialContext: combinedInitialContext } : {}),
+            };
             const fresh = await this.deps.Model.StartSession(params);
 
             // SEAM-1: the runner may have been Stop()ed (consumer abort / a second fatal) WHILE we
@@ -547,7 +560,10 @@ export class RealtimeSessionRunner {
             this.session = fresh;
             this.wireHandlers(fresh);
             this.attachRecording(fresh);
-            fresh.SendContextNote?.('NOTE: the audio connection dropped briefly and has been re-established. Briefly acknowledge the interruption if the user was mid-conversation, then continue where things left off.');
+            fresh.SendContextNote?.(
+                'NOTE: the audio connection dropped briefly and has been re-established. Briefly acknowledge the interruption if the user was mid-conversation, then continue where things left off.',
+                { Ephemeral: true },
+            );
             this.deps.LogStatus?.('🔁 Realtime transport reconnected after a fatal drop — session resumed.', false);
         } catch (reconnectError) {
             this.logError(reconnectError, 'reconnecting after a fatal transport drop');
@@ -600,6 +616,18 @@ export class RealtimeSessionRunner {
      * @param transcript The transcript event (partial or final) emitted by the model.
      */
     private async handleTranscript(transcript: RealtimeTranscript): Promise<void> {
+        if (
+            transcript.IsFinal &&
+            !transcript.IsThought &&
+            transcript.Kind !== 'narration' &&
+            transcript.Text?.trim()
+        ) {
+            this.conversationMemory.Record({
+                Kind: transcript.Role === 'user' ? 'user' : 'assistant',
+                Text: transcript.Text,
+                ReplacesPrevious: transcript.ReplacesPrevious === true,
+            });
+        }
         try {
             // The persistence collaborator drives the create-on-start/update-on-complete lifecycle and
             // returns the new row id only when a DISTINCT turn is first created — so the count reflects
@@ -665,15 +693,13 @@ export class RealtimeSessionRunner {
      * @param usage The incremental usage update reported by the provider.
      */
     private handleUsage(usage: RealtimeUsage): void {
+        const inputDetails = this.sumModalityDetail(this.accumulatedUsage.InputTokenDetails, usage.InputTokenDetails);
+        const outputDetails = this.sumModalityDetail(this.accumulatedUsage.OutputTokenDetails, usage.OutputTokenDetails);
         this.accumulatedUsage = {
             InputTokens: this.accumulatedUsage.InputTokens + usage.InputTokens,
             OutputTokens: this.accumulatedUsage.OutputTokens + usage.OutputTokens,
-            ...(this.sumModalityDetail(this.accumulatedUsage.InputTokenDetails, usage.InputTokenDetails)
-                ? { InputTokenDetails: this.sumModalityDetail(this.accumulatedUsage.InputTokenDetails, usage.InputTokenDetails)! }
-                : {}),
-            ...(this.sumModalityDetail(this.accumulatedUsage.OutputTokenDetails, usage.OutputTokenDetails)
-                ? { OutputTokenDetails: this.sumModalityDetail(this.accumulatedUsage.OutputTokenDetails, usage.OutputTokenDetails)! }
-                : {}),
+            ...(inputDetails ? { InputTokenDetails: inputDetails } : {}),
+            ...(outputDetails ? { OutputTokenDetails: outputDetails } : {}),
         };
         this.usageDirty = true;
         this.scheduleUsageCheckpoint();
@@ -692,7 +718,7 @@ export class RealtimeSessionRunner {
             return undefined;
         }
         const sum: RealtimeUsageModalityDetail = {};
-        for (const key of ['TextTokens', 'AudioTokens', 'ImageTokens', 'CachedTokens'] as const) {
+        for (const key of ['TextTokens', 'AudioTokens', 'ImageTokens', 'VideoTokens', 'VideoSeconds', 'CachedTokens', 'CachedAudioTokens'] as const) {
             const av = a?.[key];
             const bv = b?.[key];
             if (typeof av === 'number' || typeof bv === 'number') {

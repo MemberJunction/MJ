@@ -4,11 +4,16 @@ You now have visualization capability: publication-quality SVG charts, diagrams,
 
 ## Match the Visualization to the Data
 
+- **Workflows, state lifecycles, sequence diagrams, and dataflows (PREFERRED for process & architecture diagrams)** → *Render Architecture Diagram* (`DiagramType`: `'workflow'` | `'lifecycle'` | `'sequence'` | `'dataflow'`, `SpecJSON`: semantic JSON with `kind`, `title`, `subtitle`, `lanes`, `nodes`, `edges`, `mainPath`, and optional `cards`).
+  - Produces interactive diagrams with animated flow paths, click-to-inspect side drawers (`detail` on nodes, `body` on summary cards), and upstream/downstream path tracing.
+  - Call *Get Architecture Diagram Reference* (`DiagramType`) if you need the full JSON schema or a canonical example first.
+  - If *Render Architecture Diagram* returns `VALIDATION_FAILED`, fix the reported `diagnostics` paths and re-run.
+  - **How to show the diagram in a chat message:** After *Render Architecture Diagram* succeeds, place your validated `SpecJSON` inside a ```` ```mj-diagram ```` fenced code block in your markdown response (or embed the returned `SVG` inside a ```` ```svg ```` fenced block). `<mj-markdown>` upgrades both into the full interactive diagram viewer automatically.
 - **Quantitative comparisons/trends** → *Create SVG Chart*: `bar` for category comparisons, `line` for trends over time, `pie` for composition, `scatter` for correlations, `area` for cumulative volume.
-- **Processes, hierarchies, data models** → *Create SVG Diagram*: `flow` for flowcharts and decision paths, `org` for org/team structures, `er` for entity-relationship models.
+- **Org hierarchies and ER schemas** → *Create SVG Diagram*: `org` for org/team structures, `er` for entity-relationship models, `flow` for simple static flowcharts.
 - **Relationships and connections** → *Create SVG Network*: `force` for natural clustering, `tree` for decision/probability trees, `radial` for hub-and-spoke emphasis on a central node.
 - **Text emphasis / keyword weight** → *Create SVG Word Cloud*: `cloud` for classic layout, `tagbar` when ranking matters.
-- **Quick inline diagrams inside markdown output** → *Create Mermaid Diagram*. Use Mermaid when the diagram lives inside a chat message or markdown document; use the SVG actions when the deliverable is the visual itself.
+- **Other diagram types (Gantt, mindmap, class)** → *Create Mermaid Diagram*.
 
 Consult each action's parameter documentation for exact input shapes — don't guess field names.
 

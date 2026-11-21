@@ -105,6 +105,8 @@ Thumbs.db
 # workspace and creates .env FROM this .env.example. Without the negation the file exists only on
 # the machine that authored it — every clean checkout (and CI) scaffolds a workspace with no .env.
 !packages/MJCLI/src/init-templates/citizen-builder/.env.example
+# Template for the gitignored docker/regression/.env.test (QUICKSTART step 2 copies it).
+!docker/regression/.env.test.example
 mj server info.txt
 member_junction_code_for_documentation.pdf
 member_junction_code_for_documentation.txt
@@ -120,6 +122,8 @@ Schema Files/
 # generated TypeDoc output — but hand-written decision records are tracked
 /docs/*
 !/docs/decisions/
+!/docs/telemetry-shareable-schema.md
+!/docs/opentelemetry-setup.md
 SQL Scripts/generated/
 **/SQL Scripts/generated/
 *.old
@@ -142,7 +146,6 @@ SQL Scripts/internal_only/schema to-do.txt
 SQL Scripts/internal_only/spCreateUpdateAccountCompanyIntegration.sql
 SQL Scripts/internal_only/Trim 990 Raw Data.sql
 packages/GraphQLDataProvider/dist-browser/
-packages/MJExplorer/kendo-ui-license.txt
 build.log.json
 
 packages/Templates-Old/.angular/
@@ -177,7 +180,6 @@ packages/AI/MCPServer/build/Server.js
 sql_logging/
 .sql-log-push/
 .sql-log-watch/
-kendo-license.txt
 metadata/demo-prompt.md
 .mj-ai/
 notes.txt
@@ -193,6 +195,7 @@ report.json
 report.html
 packages/MJAPI/src/generated/class-registrations-manifest.ts
 packages/MJExplorer/src/app/generated/class-registrations-manifest.ts
+packages/MJExplorer/src/app/generated/public-pages.generated.ts
 .needs-manifest-rebuild
 
 # Test coverage output
@@ -215,6 +218,9 @@ packages/DBAutoDoc/autocare-config.json
 # Local test/credential directories
 amith-sf/
 benchmark-*/
+!packages/TestingFramework/integration-test-suite/benchmark-logs/
+!packages/TestingFramework/integration-test-suite/benchmark-logs/**
+packages/TestingFramework/integration-test-suite/benchmark-logs/benchmark-*
 Demos/sample-skip-code-fix-prompt.json
 
 # Per-run artifacts from /audit-memory-leaks
@@ -269,3 +275,4 @@ dist-stricttmpl/
 # Local one-off verification scripts (e.g. scratch-4946-e2e.mjs). They read a local .env and
 # hard-coded test data, so they never belong in the repo.
 scratch-*.mjs
+gen-lang-client-0516550786-6a039e3b0346.json

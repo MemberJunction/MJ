@@ -136,10 +136,10 @@ export class FormBuilderDesignerAgent extends BaseAgent {
 
             // Defensive — well-known bogus RunView shapes seen in the wild.
             if (code) {
-                if (/utilities\.rv\.RunView\([^)]*\bFilters\s*:/.test(code)) {
+                if (this.hasRunViewArgProperty(code, /\bFilters\s*:/)) {
                     errors.push(`❌ Invalid RunView call: \`Filters: [...]\` is not a property. Use \`ExtraFilter: '<SQL fragment>'\` instead.`);
                 }
-                if (/utilities\.rv\.RunView\([^)]*\bFilter\s*:/.test(code) && !/ExtraFilter/.test(code)) {
+                if (this.hasRunViewArgProperty(code, /\bFilter\s*:/) && !/ExtraFilter/.test(code)) {
                     errors.push(`❌ Invalid RunView call: \`Filter: ...\` is not a property. The valid property is \`ExtraFilter: '<SQL fragment>'\`.`);
                 }
                 if (/utilities\.React\b/.test(code)) {
@@ -162,6 +162,25 @@ export class FormBuilderDesignerAgent extends BaseAgent {
         }
 
         return errors;
+    }
+
+    private hasRunViewArgProperty(code: string, propPattern: RegExp): boolean {
+        const marker = 'utilities.rv.RunView(';
+        let searchFrom = 0;
+        while (searchFrom < code.length) {
+            const start = code.indexOf(marker, searchFrom);
+            if (start === -1) {
+                return false;
+            }
+            const argsStart = start + marker.length;
+            const closeParen = code.indexOf(')', argsStart);
+            const end = closeParen === -1 ? code.length : closeParen;
+            if (propPattern.test(code.slice(argsStart, end))) {
+                return true;
+            }
+            searchFrom = closeParen === -1 ? code.length : closeParen + 1;
+        }
+        return false;
     }
 
     private formatRetry(errors: string[]): string {

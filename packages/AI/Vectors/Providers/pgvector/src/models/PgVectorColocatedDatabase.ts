@@ -415,16 +415,20 @@ export class PgVectorColocatedDatabase extends VectorDBBase {
         }
     }
 
-    public async UpdateRecord(record: UpdateOptions): Promise<BaseResponse> {
+    public async UpdateRecord(
+        record: UpdateOptions,
+        indexName?: string,
+        _providerConfig?: Record<string, unknown>,
+    ): Promise<BaseResponse> {
         try {
-            const indexName = (record as Record<string, unknown>)['indexName'] as string;
-            if (!indexName) {
-                return this.failure('indexName property is required on the UpdateOptions object');
+            const resolvedIndex = indexName || ((record as Record<string, unknown>)['indexName'] as string | undefined);
+            if (!resolvedIndex) {
+                return this.failure('indexName is required on UpdateRecord or the UpdateOptions object');
             }
             const setClauses: string[] = [];
             const queryParams: unknown[] = [];
             let paramIndex = 1;
-            if (record.values) {
+            if (record.values && record.values.length > 0) {
                 setClauses.push(`embedding = $${paramIndex}::vector`);
                 queryParams.push(VectorLiteral(record.values));
                 paramIndex++;
@@ -442,7 +446,7 @@ export class PgVectorColocatedDatabase extends VectorDBBase {
             }
             queryParams.push(record.id);
             await this.run(
-                `UPDATE ${this.qualify(indexName)} SET ${setClauses.join(', ')} WHERE id = $${paramIndex}`,
+                `UPDATE ${this.qualify(resolvedIndex)} SET ${setClauses.join(', ')} WHERE id = $${paramIndex}`,
                 queryParams
             );
             return this.success(null);
@@ -452,8 +456,19 @@ export class PgVectorColocatedDatabase extends VectorDBBase {
         }
     }
 
-    public async UpdateRecords(records: UpdateOptions): Promise<BaseResponse> {
-        return this.UpdateRecord(records);
+    public async UpdateRecords(
+        records: UpdateOptions | UpdateOptions[],
+        indexName?: string,
+        providerConfig?: Record<string, unknown>,
+    ): Promise<BaseResponse> {
+        const list = Array.isArray(records) ? records : [records];
+        for (const rec of list) {
+            const result = await this.UpdateRecord(rec, indexName, providerConfig);
+            if (!result.success) {
+                return result;
+            }
+        }
+        return this.success(null);
     }
 
     public async DeleteRecord(record: VectorRecord, indexName?: string): Promise<BaseResponse> {

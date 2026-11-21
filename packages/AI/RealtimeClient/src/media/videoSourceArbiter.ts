@@ -32,7 +32,13 @@
  * @module @memberjunction/ai-realtime-client
  */
 
-import { VideoSourceSeenNote, VideoSourceTurnedOffNote, VideoSourceTurnedOnNote, type RealtimeTrackDirection } from '@memberjunction/ai';
+import {
+    VideoSourceSeenNote,
+    VideoSourceTurnedOffNote,
+    VideoSourceTurnedOnNote,
+    type RealtimeContextNoteOptions,
+    type RealtimeTrackDirection,
+} from '@memberjunction/ai';
 import { MinVideoFrameSpacingMs } from './videoPacing';
 
 /**
@@ -61,7 +67,7 @@ export interface IVideoFrameSink {
     SendVideoFrame?(base64Image: string, mimeType?: string, sourceId?: string): boolean;
 
     /** Injects a context note into the conversation without triggering a reply. */
-    SendContextNote(text: string): void;
+    SendContextNote(text: string, options?: RealtimeContextNoteOptions): void;
 }
 
 /**
@@ -353,7 +359,15 @@ export class VideoSourceArbiter {
         // would tell the model the same thing twice.
         this.reconcile(true);
         if (notify) {
-            this.sendNote(enabled ? this.formatEnabledNote(source.Label) : this.formatDisabledNote(source.Label));
+            const activeLabels = this.computeActive().map((id) => this.sources.get(id)?.Label ?? id);
+            const activeSnapshot = activeLabels.length > 0 ? VideoSourceSeenNote(activeLabels) : undefined;
+            this.sendNote(
+                enabled ? this.formatEnabledNote(source.Label) : this.formatDisabledNote(source.Label),
+                {
+                    StateKey: 'video-source',
+                    ...(activeSnapshot ? { MemoryText: activeSnapshot } : {}),
+                }
+            );
         }
         this.emitChange();
         return true;
@@ -516,7 +530,10 @@ export class VideoSourceArbiter {
             return;
         }
         const labels = active.map((id) => this.sources.get(id)?.Label ?? id);
-        this.sendNote(this.options.FormatSwitchNote ? this.options.FormatSwitchNote(labels) : VideoSourceSeenNote(labels));
+        this.sendNote(
+            this.options.FormatSwitchNote ? this.options.FormatSwitchNote(labels) : VideoSourceSeenNote(labels),
+            { StateKey: 'video-source' }
+        );
     }
 
     // ── plumbing ────────────────────────────────────────────────────────────
@@ -542,13 +559,13 @@ export class VideoSourceArbiter {
         }
     }
 
-    private sendNote(note: string | null): void {
+    private sendNote(note: string | null, options?: RealtimeContextNoteOptions): void {
         const sink = this.sink;
         if (!note || !sink) {
             return;
         }
         try {
-            sink.SendContextNote(note);
+            sink.SendContextNote(note, options);
         } catch (error) {
             this.reportError('sending a source note', error);
         }

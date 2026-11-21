@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { GetGlobalObjectStore } from '@memberjunction/global';
 import { ConversationEngine } from '@memberjunction/core-entities';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { FallbackContent, ShapeContent, TestRunContent } from '../content.js';
@@ -76,6 +77,17 @@ describe('content providers', () => {
 });
 
 describe('RubricEngine', () => {
+    it('stores RubricEngine.Instance in GlobalObjectStore while keeping direct construction independent', () => {
+        const singleton = RubricEngine.Instance;
+        const globalStore = GetGlobalObjectStore();
+        expect(globalStore?.['___SINGLETON__RubricEngine']).toBe(singleton);
+        expect(RubricEngine.Instance).toBe(singleton);
+
+        const custom = new RubricEngine();
+        expect(custom).not.toBe(singleton);
+        expect(RubricEngine.Instance).toBe(singleton);
+    });
+
     it('saves a draft and submits the deterministic result', async () => {
         const calls: string[] = [];
         const store: RubricEvaluationStore = {

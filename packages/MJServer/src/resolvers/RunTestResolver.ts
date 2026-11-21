@@ -15,6 +15,7 @@ import { AppContext, UserPayload } from '../types.js';
 import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { TestEngine } from '@memberjunction/testing-engine';
 import { ResolverBase } from '../generic/ResolverBase.js';
+import { ProjectEntityObjectForCaller, ProjectableEntityObject } from '../generic/fieldSecurityTransport.js';
 import { StartLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
 import { TestRunVariables, TestLogMessage, TestRunResult as EngineTestRunResult } from '@memberjunction/testing-engine-base';
 
@@ -447,7 +448,8 @@ export class RunTestResolver extends ResolverBase {
                 testRunId: (testRun as { ID?: string })?.ID || testId,
                 type: 'progress',
                 testRun: testRun && typeof (testRun as { GetAll?: () => Record<string, unknown> }).GetAll === 'function'
-                    ? (testRun as { GetAll: () => Record<string, unknown> }).GetAll()
+                    // projected for the recipient: the run object comes from the test engine, not a load bound to them
+                    ? ProjectEntityObjectForCaller(testRun as unknown as ProjectableEntityObject, userPayload.userRecord)
                     : undefined,
                 progress: {
                     currentStep: progress.step,

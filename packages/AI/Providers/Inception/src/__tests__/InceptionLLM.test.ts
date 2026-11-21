@@ -3,6 +3,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 /* ------------------------------------------------------------------ */
 /*  Hoisted mocks                                                     */
 /* ------------------------------------------------------------------ */
+// The cancellation classification is pure and shared, so the stand-in parent below builds its
+// cancelled results from the real module rather than from a hand-copied shape.
+import * as actualCancellation from '../../../../Core/src/generic/cancellation';
+
 vi.mock('@memberjunction/global', () => ({
   RegisterClass: () => (_target: unknown) => {},
 }));
@@ -90,30 +94,27 @@ vi.mock('@memberjunction/ai-openai', () => {
       return messages.map((m) => ({ role: m.role, content: m.content }));
     }
 
-    // --- cancellation helpers inherited from the real OpenAILLM ---
+    // --- cancellation surface inherited from the real OpenAILLM / BaseLLM ---
     // InceptionLLM overrides both chat paths without calling super, so it must forward
-    // the cancellation token itself using these. Mirrored here so the mock parent
-    // exposes the same protected surface the real one does.
-    protected activeStreamCancellationToken: AbortSignal | undefined = undefined;
-
+    // the cancellation token itself and report an abort through BaseLLM's helpers.
+    // Mirrored here so the mock parent exposes the same protected surface the real one does.
     protected buildRequestOptions(params: { cancellationToken?: AbortSignal }): { signal?: AbortSignal } {
       return params.cancellationToken ? { signal: params.cancellationToken } : {};
     }
 
-    protected isCancellationError(error: unknown, cancellationToken?: AbortSignal): boolean {
-      if (error instanceof Error && error.name === 'AbortError') return true;
-      return cancellationToken?.aborted === true;
+    protected IsCancellationError(error: unknown, signal?: AbortSignal | null): boolean {
+      return signal?.aborted === true || actualCancellation.IsAbortError(error);
     }
 
-    protected buildCancelledChatResult(error: unknown, startTime: Date) {
+    protected BuildCancelledChatResult(startTime: Date, options: { error?: unknown; signal?: AbortSignal | null; message?: string } = {}) {
       return {
         success: false,
         startTime,
         endTime: new Date(),
         statusText: 'cancelled',
-        errorMessage: error instanceof Error ? error.message : 'Request was cancelled',
-        exception: error,
-        errorInfo: { errorType: 'Unknown', severity: 'Fatal', canFailover: false, providerErrorCode: 'request_cancelled' },
+        errorMessage: options.message || actualCancellation.DescribeCancellation(options.signal),
+        exception: options.error,
+        errorInfo: actualCancellation.BuildCancellationErrorInfo({ error: options.error, signal: options.signal, provider: 'InceptionLLM' }),
         data: { choices: [], usage: { promptTokens: 0, completionTokens: 0 } },
       };
     }
@@ -255,22 +256,25 @@ describe('InceptionLLM', () => {
       expect(captured.lastOptions?.signal).toBe(controller.signal);
     });
 
-    it('stashes the token so the inherited finalizeStreamingResponse can detect an abort', async () => {
-      const controller = new AbortController();
-      const params = { ...baseChatParams(), cancellationToken: controller.signal } as never;
-      await (llm as unknown as { createStreamingRequest: (p: unknown) => Promise<unknown> }).createStreamingRequest(params);
-      expect((llm as unknown as { activeStreamCancellationToken?: AbortSignal }).activeStreamCancellationToken).toBe(controller.signal);
-    });
-
     it('returns a cancelled ChatResult rather than throwing when the request is aborted', async () => {
       const controller = new AbortController();
       controller.abort();
       const params = { ...baseChatParams(), cancellationToken: controller.signal } as never;
       const result = await (llm as unknown as {
-        nonStreamingChatCompletion: (p: unknown) => Promise<{ success: boolean; statusText: string }>;
+        nonStreamingChatCompletion: (p: unknown) => Promise<{
+          success: boolean;
+          statusText: string;
+          errorMessage: string;
+          errorInfo: { errorType: string; severity: string; canFailover: boolean; providerErrorCode?: string };
+        }>;
       }).nonStreamingChatCompletion(params);
       expect(result.success).toBe(false);
       expect(result.statusText).toBe('cancelled');
+      expect(result.errorMessage).toMatch(/^Request was cancelled/);
+      expect(result.errorInfo.errorType).toBe('Cancelled');
+      expect(result.errorInfo.severity).toBe('Fatal');
+      expect(result.errorInfo.canFailover).toBe(false);
+      expect(result.errorInfo.providerErrorCode).toBe('request_cancelled');
     });
 
     it('passes no signal when the caller supplies no token (unchanged legacy behavior)', async () => {

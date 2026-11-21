@@ -1,7 +1,7 @@
 import { Component, Input, OnChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { ComparisonCohortFilter, ComparisonMatrix, MatrixColumnsFromRows, type MatrixColumn, type MatrixModel } from './model.js';
+import { ComparisonCohortFilter, ComparisonMatrix, ComparisonScoresFilter, MatrixColumnsFromRows, type MatrixColumn, type MatrixModel } from './model.js';
 
 /** Evaluators across, criteria down. Disagreeing cells are marked. Self is its own column. */
 @Component({
@@ -40,20 +40,38 @@ export class RubricComparisonMatrixComponent implements OnChanges {
             this.loadedKeys = null;
             return;
         }
-        const filter = ComparisonCohortFilter(this.RubricId, this.Major, this.SubjectEntityId);
         const view = RunView.FromMetadataProvider(this.Provider);
-        const [evaluations, scores] = await view.RunViews([
-            { EntityName: 'MJ: Rubric Evaluations', ExtraFilter: filter, ResultType: 'simple', MaxRows: 200 },
-            { EntityName: 'MJ: Rubric Evaluation Scores', ExtraFilter: `IsComputed=0 AND EvaluationID IN (SELECT ID FROM vwRubricEvaluations WHERE ${filter})`, ResultType: 'simple', MaxRows: 2000 },
-        ], this.Provider.CurrentUser as UserInfo);
+        const user = this.Provider.CurrentUser as UserInfo;
+        const evaluations = await view.RunView<Record<string, unknown>>({
+            EntityName: 'MJ: Rubric Evaluations',
+            ExtraFilter: ComparisonCohortFilter(this.RubricId, this.Major, this.SubjectEntityId),
+            ResultType: 'simple',
+            MaxRows: 200,
+        }, user);
         if (!evaluations.Success) throw new Error(evaluations.ErrorMessage || 'Could not read rubric evaluations.');
-        if (!scores.Success) throw new Error(scores.ErrorMessage || 'Could not read rubric evaluation scores.');
-        const rows = (evaluations.Results ?? []) as Record<string, unknown>[];
-        const columns = MatrixColumnsFromRows(rows, (scores.Results ?? []) as Record<string, unknown>[]);
+        const rows = evaluations.Results ?? [];
+        const columns = MatrixColumnsFromRows(rows, await this.loadScores(view, rows, user));
         this.loadedColumns = columns;
         this.loadedKeys = this.Keys.length === 0 ? [...new Set(columns.flatMap(column => column.scores.map(score => score.key)))] : null;
         const cohort = rows.find(row => row.CohortMeanScore != null);
         this.CohortMean = cohort == null ? null : Number(cohort.CohortMeanScore);
+    }
+
+    /**
+     * The criterion scores of the loaded evaluations, read by evaluation ID. RunView applies the
+     * row filters on both entities, so only evaluations the viewer can read contribute scores.
+     */
+    private async loadScores(view: RunView, evaluations: Record<string, unknown>[], user: UserInfo): Promise<Record<string, unknown>[]> {
+        const filter = ComparisonScoresFilter(evaluations.map(row => String(row.ID ?? '')));
+        if (!filter) return [];
+        const scores = await view.RunView<Record<string, unknown>>({
+            EntityName: 'MJ: Rubric Evaluation Scores',
+            ExtraFilter: filter,
+            ResultType: 'simple',
+            MaxRows: 2000,
+        }, user);
+        if (!scores.Success) throw new Error(scores.ErrorMessage || 'Could not read rubric evaluation scores.');
+        return scores.Results ?? [];
     }
 
     public ScoreText(column: MatrixColumn, key: string): string {

@@ -2,6 +2,15 @@ import type { BaseEntity } from '@memberjunction/core';
 import { ValidationErrorInfo } from '@memberjunction/global';
 
 /**
+ * Host-supplied callback for switching between the entity's default (custom) form
+ * and its CodeGen standard form when a standard alternative exists.
+ */
+export interface FormModeSwitch {
+  Mode: 'default' | 'standard';
+  Switch: (mode: 'default' | 'standard') => boolean;
+}
+
+/**
  * Width mode for the form panels container.
  * - 'centered': Max-width constrained and centered (default, good for readability)
  * - 'full-width': No max-width constraint, uses full available width

@@ -1,13 +1,13 @@
-import { SQLParser } from '@memberjunction/sql-parser';
+import { SqlDocument, type IdentifierPath, type SqlToken } from '@memberjunction/sql-parser';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import type { ParamRole } from './materializationAnalysis';
 import {
-    COMPARISON_OPS, IsObject, NodeType, IsLiteralNode, ColumnName, IsAllLiteralBag,
-    type AstNode, type AstObject,
+    IsReadableCondition, LiteralCategoryOf, LiteralListClose, PathColumn, ReadComparison, ReadConditionTree, ToParserDialect,
+    type ConditionLeaf, type ConditionNode,
 } from './materializationSqlAst';
 
 /**
- * Phase 2b — the render-and-diff verifier (the AST oracle for query parameterization).
+ * Phase 2b — the render-and-diff verifier (the structural oracle for query parameterization).
  *
  * This is the **soundness-critical** core of parameterized materialization (plan
  * /plans/query-entity-materialization.md §9 Bucket 1, §10 asymmetric-risk). Given a stored
@@ -64,51 +64,22 @@ export interface VerifiedParamRole {
     reason: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
-/** Flips a scalar comparison operator so a `value <op> column` predicate reads canonically as `column <flip> value`. */
-function flipOperator(op: string): string {
-    switch (op) {
-        case '<': return '>';
-        case '>': return '<';
-        case '<=': return '>=';
-        case '>=': return '<=';
-        // =, !=, <> are symmetric so need no flip. IN/BETWEEN/IS never appear as `value <op> column`.
-        // NOTE: LIKE is NOT symmetric (`value LIKE column` ≠ `column LIKE value`), so this default would
-        // MIS-normalize a column-on-right LIKE — safe only because LIKE is excluded from
-        // SAFE_READ_FILTER_OPERATORS (refused → live-only) and never reaches read-time injection. If LIKE
-        // (or any non-symmetric op) is ever whitelisted, handle its column-on-right form explicitly here.
-        default: return op;
-    }
-}
+// The conjunct reader (ReadConditionTree / ReadComparison) and the literal readers live in
+// ./materializationSqlAst — a single source of truth shared with broad-render, so the "clean RowFilter"
+// classification and the predicate remover can never drift apart (see that module's header).
 
-// AST-walking primitives (AstNode/AstObject, LITERAL_NODE_TYPES, COMPARISON_OPS, isObject, nodeType,
-// isLiteralNode, columnName, isAllLiteralBag) live in ./materializationSqlAst — a single source of truth
-// shared with broad-render so the "clean RowFilter" classification and the predicate stripper can never
-// drift apart (see that module's header).
-
-/** Walk context: where in the tree we are, w.r.t. clean read-time-filterable position. */
-interface WalkCtx {
-    /** Inside the top-level SELECT's WHERE subtree (not a subquery / other clause). */
-    topWhere: boolean;
-    /** Reached only through `AND` nodes from the WHERE root (no `OR`/`NOT` above us). */
-    conjClean: boolean;
-    /** When set, we are the *value* operand of a `column <op> value` predicate on this column. */
-    predColumn: string | null;
-    /** The comparison operator of the enclosing predicate, normalized to the `column <op> value` reading. */
-    predOperator: string | null;
-}
-
-/** A literal (or all-literal `IN`/`BETWEEN` bag) whose value differs between two variants. */
+/** A literal (or all-literal `IN (…)` list) whose value differs between two variants. */
 interface VaryingSite {
     /** Bound column when the site is a clean top-level conjunctive WHERE predicate; null = tainted. */
     column: string | null;
     /** Normalized `column <op> value` operator for a clean site; null when tainted. */
     operator: string | null;
-    /** Whether the varying value is a scalar literal or an all-literal list bag. */
+    /** Whether the varying value is a scalar literal or a list of literals. */
     kind: FilterKind;
 }
 
 interface PairDiff {
-    /** True when the two ASTs are identical except for literal *values* (structure preserved). */
+    /** True when the two variants are identical except for literal *values* (structure preserved). */
     structurallyEqual: boolean;
     /** Sites whose literal value actually differs between the two variants. */
     varyingSites: VaryingSite[];
@@ -116,247 +87,199 @@ interface PairDiff {
     hardRefuse?: string;
 }
 
-/** The column attributed to a varying site, given the context it was found in. */
-function siteColumn(ctx: WalkCtx): string | null {
-    return ctx.topWhere && ctx.conjClean ? ctx.predColumn : null;
+/** The top-level WHERE of a variant whose statement is one plain SELECT block (no set operation, no INTO). */
+interface CleanWhere {
+    /** The condition's significant tokens. */
+    Tokens: readonly SqlToken[];
+    /** The condition read as AND-ed conjuncts. */
+    Tree: ConditionNode;
+    /** The condition's identifier paths (nested subqueries excluded). */
+    Paths: readonly IdentifierPath[];
+}
+
+/** One parsed variant: its significant tokens, and its top-level WHERE when a literal there can be a clean row filter. */
+interface ParsedVariant {
+    Tokens: readonly SqlToken[];
+    Where: CleanWhere | null;
+}
+
+/** A literal position whose value differs: its index in the first variant's tokens, and its shape. */
+interface DiffSite {
+    Index: number;
+    Kind: FilterKind;
+}
+
+/** Result of comparing two variants' tokens. */
+interface TokenDiff {
+    /** True when the tokens agree everywhere except literal values. */
+    Equal: boolean;
+    Sites: DiffSite[];
+}
+
+/** One aligned step of a token comparison: where each side continues, and whether a literal value differed. */
+interface DiffStep {
+    NextA: number;
+    NextB: number;
+    Varies: boolean;
+    Kind: FilterKind;
 }
 
 /**
- * Builds a varying site from the walk context. A site is *clean* (read-time-filterable) only inside the
- * top-level conjunctive WHERE as the value operand of a `column <op> value` predicate; otherwise its
- * column/operator are null (tainted → the parameter becomes Unbounded). `kind` records scalar vs list bag.
+ * The top-level WHERE of a document whose statement is one plain SELECT block; null for anything else
+ * (a set operation, `SELECT … INTO`, a statement that is not a query, a SELECT with no WHERE or with a
+ * WHERE that is not one condition). A literal
+ * outside the returned condition is never a clean read-time filter.
  */
-function makeSite(ctx: WalkCtx, kind: FilterKind): VaryingSite {
-    const clean = ctx.topWhere && ctx.conjClean;
-    return {
-        column: clean ? ctx.predColumn : null,
-        operator: clean ? ctx.predOperator : null,
-        kind,
-    };
-}
-
-/** Whether a bag's literal contents differ (length or any element value) between two variants. */
-function bagVaries(a: AstObject, b: AstObject): boolean {
-    const av = a.value as unknown[];
-    const bv = b.value as unknown[];
-    if (av.length !== bv.length) {
-        return true;
+function cleanWhereOf(document: SqlDocument): CleanWhere | null {
+    const statement = document.Statements[0];
+    const top = document.TopLevelQuery();
+    if (statement === undefined || statement.StatementKind !== 'Select' || top === null || top.Kind !== 'Select') {
+        return null;
     }
-    for (let i = 0; i < av.length; i++) {
-        const ai = av[i];
-        const bi = bv[i];
-        if (IsObject(ai) && IsObject(bi) && ai.value !== bi.value) {
-            return true;
-        }
+    if (top.Into !== null || top.Where === null) {
+        return null;
     }
-    return false;
-}
-
-/** Recursively diffs two AST nodes in lockstep, collecting varying-literal sites. Returns structural equality. */
-function walk(a: AstNode, b: AstNode, ctx: WalkCtx, sites: VaryingSite[]): boolean {
-    // Both absent.
-    if (a == null && b == null) {
-        return true;
+    const tokens = top.Where.Condition.Tokens();
+    if (!IsReadableCondition(tokens)) {
+        return null;
     }
-    if (a == null || b == null) {
-        return false;
-    }
-    // Scalars (operator names, aliases, flags). A mismatch here is a structural difference.
-    if (!IsObject(a) && !Array.isArray(a)) {
-        return a === b;
-    }
-    if (Array.isArray(a) || Array.isArray(b)) {
-        return walkArray(a, b, ctx, sites);
-    }
-    // Both objects from here on.
-    if (IsLiteralNode(a) && IsLiteralNode(b)) {
-        return walkLiteral(a as AstObject, b as AstObject, ctx, sites);
-    }
-    if (IsAllLiteralBag(a) && IsAllLiteralBag(b)) {
-        return walkBag(a as AstObject, b as AstObject, ctx, sites);
-    }
-    const ta = NodeType(a);
-    const tb = NodeType(b);
-    if (ta !== tb) {
-        return false; // shape change (e.g., column_ref → number, select → binary_expr)
-    }
-    if (ta === 'binary_expr') {
-        return walkBinaryExpr(a as AstObject, b as AstObject, ctx, sites);
-    }
-    if (ta === 'select') {
-        // A nested SELECT (subquery / derived table) — its insides are never the top-level WHERE.
-        return walkObjectKeys(a as AstObject, b as AstObject, plainSubtreeCtx(), sites);
-    }
-    return walkObjectKeys(a as AstObject, b as AstObject, plainSubtreeCtx(), sites);
-}
-
-/** A context for any subtree that cannot host a clean read-time filter (resets all flags). */
-function plainSubtreeCtx(): WalkCtx {
-    return { topWhere: false, conjClean: false, predColumn: null, predOperator: null };
-}
-
-function walkArray(a: AstNode, b: AstNode, ctx: WalkCtx, sites: VaryingSite[]): boolean {
-    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
-        return false;
-    }
-    let ok = true;
-    for (let i = 0; i < a.length; i++) {
-        ok = walk(a[i], b[i], ctx, sites) && ok;
-    }
-    return ok;
-}
-
-function walkLiteral(a: AstObject, b: AstObject, ctx: WalkCtx, sites: VaryingSite[]): boolean {
-    if (a.type !== b.type) {
-        return false; // literal category changed (string ↔ number) — treat as structural
-    }
-    if (a.value !== b.value) {
-        sites.push(makeSite(ctx, 'scalar'));
-    }
-    return true;
-}
-
-function walkBag(a: AstObject, b: AstObject, ctx: WalkCtx, sites: VaryingSite[]): boolean {
-    // Collapse the bag: a differing length/content is allowed *literal* variation, not a shape change.
-    if (bagVaries(a, b)) {
-        sites.push(makeSite(ctx, 'list'));
-    }
-    return true;
-}
-
-/** Context for the value operand of a clean comparison: keep AND/where flags, attach the column + normalized operator. */
-function valueOperandCtx(ctx: WalkCtx, column: string, operator: string | null): WalkCtx {
-    return { topWhere: ctx.topWhere, conjClean: ctx.conjClean, predColumn: column, predOperator: operator };
-}
-
-/** Context for the column operand (and any non-value child): keep flags, no predicate column/operator. */
-function plainOperandCtx(ctx: WalkCtx): WalkCtx {
-    return { topWhere: ctx.topWhere, conjClean: ctx.conjClean, predColumn: null, predOperator: null };
-}
-
-/** Context below a non-AND combinator (`OR`, etc.): still in where, but no longer conjunctive-clean. */
-function disjunctiveCtx(ctx: WalkCtx): WalkCtx {
-    return { topWhere: ctx.topWhere, conjClean: false, predColumn: null, predOperator: null };
-}
-
-function walkBinaryExpr(a: AstObject, b: AstObject, ctx: WalkCtx, sites: VaryingSite[]): boolean {
-    const op = a.operator;
-    if (op !== b.operator || typeof op !== 'string') {
-        return false; // operator change is structural
-    }
-    if (op === 'AND') {
-        // Conjunction preserves clean context down both sides.
-        const left = walk(a.left, b.left, ctx, sites);
-        const right = walk(a.right, b.right, ctx, sites);
-        return left && right;
-    }
-    if (COMPARISON_OPS.has(op)) {
-        return walkComparison(a, b, ctx, sites);
-    }
-    // OR / XOR / any other combinator → descendants are not conjunctive-clean.
-    const c = disjunctiveCtx(ctx);
-    const left = walk(a.left, b.left, c, sites);
-    const right = walk(a.right, b.right, c, sites);
-    return left && right;
-}
-
-function walkComparison(a: AstObject, b: AstObject, ctx: WalkCtx, sites: VaryingSite[]): boolean {
-    const op = typeof a.operator === 'string' ? a.operator : null;
-    const leftCol = ColumnName(a.left);
-    const rightCol = ColumnName(a.right);
-    let leftCtx = plainOperandCtx(ctx);
-    let rightCtx = plainOperandCtx(ctx);
-    // Attach the predicate column + operator to the *value* side only when exactly one side is a plain
-    // column_ref. Normalize the operator to the `column <op> value` reading: when the column is on the
-    // RIGHT (`value < column`), flip it so read-time injection emits `column > value` — an un-flipped
-    // operator here would invert the predicate and silently over/under-scope the materialized read.
-    if (leftCol && !rightCol) {
-        rightCtx = valueOperandCtx(ctx, leftCol, op); // column on left → operator as written
-    } else if (rightCol && !leftCol) {
-        leftCtx = valueOperandCtx(ctx, rightCol, op == null ? null : flipOperator(op));
-    }
-    const left = walk(a.left, b.left, leftCtx, sites);
-    const right = walk(a.right, b.right, rightCtx, sites);
-    return left && right;
-}
-
-/** Generic structural recursion over an object's keys (ignoring source-location noise). */
-function walkObjectKeys(a: AstObject, b: AstObject, childCtx: WalkCtx, sites: VaryingSite[]): boolean {
-    const keys = new Set<string>([...Object.keys(a), ...Object.keys(b)]);
-    keys.delete('loc');
-    let ok = true;
-    for (const k of keys) {
-        ok = walk(a[k], b[k], childCtx, sites) && ok;
-    }
-    return ok;
-}
-
-/** True for a single plain SELECT that can host a clean top-level WHERE (not a set-op / SELECT INTO). */
-function isSimpleSelect(node: AstNode): boolean {
-    if (NodeType(node) !== 'select' || !IsObject(node)) {
-        return false;
-    }
-    if (node.set_op != null || node._next != null) {
-        return false;
-    }
-    // node-sql-parser always emits `into: { position: null }` on a plain SELECT; only a real
-    // SELECT ... INTO sets `into.position`. Treat only the latter as disqualifying.
-    const into = node.into;
-    if (IsObject(into) && into.position != null) {
-        return false;
-    }
-    return true;
-}
-
-/** Diffs the two statement roots, applying top-WHERE context only to a simple SELECT's `where`. */
-function walkRoot(a: AstNode, b: AstNode, sites: VaryingSite[]): boolean {
-    if (NodeType(a) !== NodeType(b)) {
-        return false;
-    }
-    if (isSimpleSelect(a) && isSimpleSelect(b) && IsObject(a) && IsObject(b)) {
-        const keys = new Set<string>([...Object.keys(a), ...Object.keys(b)]);
-        keys.delete('loc');
-        let ok = true;
-        for (const k of keys) {
-            const ctx: WalkCtx =
-                k === 'where'
-                    ? { topWhere: true, conjClean: true, predColumn: null, predOperator: null }
-                    : plainSubtreeCtx();
-            ok = walk(a[k], b[k], ctx, sites) && ok;
-        }
-        return ok;
-    }
-    // Non-simple root (set-op, mutation, etc.) — no position can be a clean read-time filter.
-    return walk(a, b, plainSubtreeCtx(), sites);
+    return { Tokens: tokens, Tree: ReadConditionTree(tokens), Paths: top.Where.Condition.Identifiers() };
 }
 
 /**
- * Returns the sole statement of an AST, or null if it is not exactly one statement.
- * A multi-statement render (e.g. `SELECT …; SELECT …`) cannot be analyzed from one statement —
- * the parameter might act anywhere in the rest — so we refuse rather than inspect only the first.
+ * Keywords that can stand before a `(` without making it an argument list. A literal list after one of
+ * these is compared token by token (so `WHERE ('a') = Status` against `WHERE ('a', 'b') = Status` is a
+ * change of shape), never as one list whose length may vary.
  */
-function soleStatement(ast: AstNode): AstNode | null {
-    if (Array.isArray(ast)) {
-        return ast.length === 1 ? ast[0] : null;
+const NON_LIST_KEYWORDS = new Set<string>([
+    'SELECT', 'WHERE', 'AND', 'OR', 'NOT', 'ON', 'HAVING', 'QUALIFY', 'WHEN', 'THEN', 'ELSE', 'CASE', 'LIKE',
+    'BETWEEN', 'IS', 'AS', 'FROM', 'JOIN', 'BY', 'TOP', 'DISTINCT', 'ALL', 'ANY', 'SOME', 'EXISTS', 'UNION',
+    'EXCEPT', 'INTERSECT', 'RETURN',
+]);
+
+/**
+ * Where a list of literals starting at `open` closes, when it is a list whose length a varying value may
+ * change: the list of `IN (…)`, `VALUES (…)` or a function call's arguments. -1 otherwise.
+ */
+function literalListAt(tokens: readonly SqlToken[], open: number): number {
+    const before = tokens[open - 1];
+    const listOpener = before !== undefined
+        && (before.Kind === 'QuotedIdentifier' || (before.Kind === 'Word' && !NON_LIST_KEYWORDS.has(before.Text.toUpperCase())));
+    return listOpener ? LiteralListClose(tokens, open) : -1;
+}
+
+/** When the tokens at `i` are the literal bounds `a AND b` of a `BETWEEN`, the index after them; -1 otherwise. */
+function betweenBoundsAt(tokens: readonly SqlToken[], i: number): number {
+    const before = tokens[i - 1];
+    if (before === undefined || before.Kind !== 'Word' || before.Text.toUpperCase() !== 'BETWEEN') {
+        return -1;
     }
-    return ast;
+    const and = tokens[i + 1];
+    const bounded = LiteralCategoryOf(tokens[i]) !== null && and !== undefined && and.Kind === 'Word'
+        && and.Text.toUpperCase() === 'AND' && LiteralCategoryOf(tokens[i + 2]) !== null;
+    return bounded ? i + 3 : -1;
+}
+
+/** The end of a literal unit compared as a whole at `i` (a literal list, or BETWEEN bounds); -1 when none starts there. */
+function literalUnitEnd(tokens: readonly SqlToken[], i: number): number {
+    const listClose = literalListAt(tokens, i);
+    return listClose >= 0 ? listClose + 1 : betweenBoundsAt(tokens, i);
+}
+
+function tokenTexts(tokens: readonly SqlToken[], start: number, end: number): string {
+    return tokens.slice(start, end).map((t) => t.Text).join('\u0000');
+}
+
+/**
+ * Compares the tokens at `a[i]` and `b[j]`. A literal list (`IN (…)`, a call's arguments) and the literal
+ * bounds of a `BETWEEN` are each compared as one unit, so a list's length may vary; two literals of the
+ * same category may differ in value; anything else must be identical. Returns null on a difference of shape.
+ */
+function diffStep(a: readonly SqlToken[], i: number, b: readonly SqlToken[], j: number): DiffStep | null {
+    const unitA = literalUnitEnd(a, i);
+    const unitB = literalUnitEnd(b, j);
+    if (unitA >= 0 && unitB >= 0) {
+        const varies = tokenTexts(a, i, unitA) !== tokenTexts(b, j, unitB);
+        return { NextA: unitA, NextB: unitB, Varies: varies, Kind: 'list' };
+    }
+    const categoryA = LiteralCategoryOf(a[i]);
+    const categoryB = LiteralCategoryOf(b[j]);
+    if (categoryA !== null && categoryB !== null) {
+        // A literal whose category changes (string ↔ number) is a change of shape.
+        return categoryA === categoryB ? { NextA: i + 1, NextB: j + 1, Varies: a[i].Text !== b[j].Text, Kind: 'scalar' } : null;
+    }
+    const same = a[i].Kind === b[j].Kind && a[i].Text === b[j].Text;
+    return same ? { NextA: i + 1, NextB: j + 1, Varies: false, Kind: 'scalar' } : null;
+}
+
+/** Walks two variants' significant tokens in lockstep, collecting the literal positions whose value differs. */
+function diffTokens(a: readonly SqlToken[], b: readonly SqlToken[]): TokenDiff {
+    const sites: DiffSite[] = [];
+    let i = 0;
+    let j = 0;
+    while (i < a.length && j < b.length) {
+        const step = diffStep(a, i, b, j);
+        if (step === null) {
+            return { Equal: false, Sites: sites };
+        }
+        if (step.Varies) {
+            sites.push({ Index: i, Kind: step.Kind });
+        }
+        i = step.NextA;
+        j = step.NextB;
+    }
+    return { Equal: i === a.length && j === b.length, Sites: sites };
+}
+
+/** The leaf conjunct holding token `index`, or null when the index is not inside one. */
+function leafContaining(node: ConditionNode, index: number): ConditionLeaf | null {
+    if (node.Kind === 'Leaf') {
+        return node;
+    }
+    const child = node.Children.find((c) => index >= c.Start && index < c.End);
+    return child === undefined ? null : leafContaining(child, index);
+}
+
+/**
+ * Attributes a varying literal to its predicate. It is *clean* (read-time-filterable) only as the value
+ * side of a `column <op> literal` conjunct reached from the top-level WHERE through AND alone; anywhere
+ * else (projection, `OR`/`NOT`, subquery, function, `JOIN … ON`, HAVING) its column and operator are null.
+ */
+function siteAt(variant: ParsedVariant, site: DiffSite): VaryingSite {
+    const tainted: VaryingSite = { column: null, operator: null, kind: site.Kind };
+    const where = variant.Where;
+    if (where === null) {
+        return tainted;
+    }
+    const offset = variant.Tokens[site.Index].Span.Start;
+    const local = where.Tokens.findIndex((t) => t.Span.Start === offset);
+    const leaf = local < 0 ? null : leafContaining(where.Tree, local);
+    const predicate = leaf === null ? null : ReadComparison(where.Tokens, leaf.InnerStart, leaf.InnerEnd, where.Paths);
+    if (predicate === null || local < predicate.ValueStart || local >= predicate.ValueEnd) {
+        return tainted;
+    }
+    return { column: PathColumn(predicate.Column), operator: predicate.Operator, kind: predicate.ValueKind };
+}
+
+function parseVariant(sql: string, dialect: SQLParserDialect): SqlDocument {
+    return SqlDocument.Parse(sql, ToParserDialect(dialect));
 }
 
 /** Parses and diffs one pair of rendered variants. */
 function diffVariantPair(sqlA: string, sqlB: string, dialect: SQLParserDialect): PairDiff {
-    const ra = SQLParser.Astify(sqlA, dialect);
-    const rb = SQLParser.Astify(sqlB, dialect);
-    if (!ra.astParsed || !rb.astParsed || ra.ast == null || rb.ast == null) {
+    const docA = parseVariant(sqlA, dialect);
+    const docB = parseVariant(sqlB, dialect);
+    if (!docA.IsComplete || !docB.IsComplete) {
         return { structurallyEqual: false, varyingSites: [], hardRefuse: 'a rendered variant failed to parse — cannot verify; refusing under uncertainty' };
     }
-    const aStmt = soleStatement(ra.ast);
-    const bStmt = soleStatement(rb.ast);
-    if (aStmt == null || bStmt == null) {
+    // A multi-statement render (e.g. `SELECT …; SELECT …`) cannot be analyzed from one statement — the
+    // parameter might act anywhere in the rest — so refuse rather than inspect only the first.
+    if (docA.HasStackedStatements().Value || docB.HasStackedStatements().Value) {
         return { structurallyEqual: false, varyingSites: [], hardRefuse: 'a rendered variant is multi-statement — cannot verify a single row-filter; refusing under uncertainty' };
     }
-    const sites: VaryingSite[] = [];
-    const structurallyEqual = walkRoot(aStmt, bStmt, sites);
-    return { structurallyEqual, varyingSites: sites };
+    const variantA: ParsedVariant = { Tokens: docA.Tokens.Significant(), Where: cleanWhereOf(docA) };
+    const diff = diffTokens(variantA.Tokens, docB.Tokens.Significant());
+    return { structurallyEqual: diff.Equal, varyingSites: diff.Sites.map((s) => siteAt(variantA, s)) };
 }
 
 /**
@@ -414,7 +337,7 @@ export function VerifyParamRole(variants: string[], dialect: SQLParserDialect): 
 
     // Derive the single operator + kind for read-time reconstruction (Phase 2). All clean sites for one
     // parameter must agree — a single parameter can only occupy one predicate position, so >1 distinct
-    // operator/kind means our AST reading is ambiguous → refuse under uncertainty (§10) rather than guess.
+    // operator/kind means our reading is ambiguous → refuse under uncertainty (§10) rather than guess.
     const distinctOps = new Set(allSites.map((s) => s.operator).filter((o): o is string => o != null));
     const distinctKinds = new Set(allSites.map((s) => s.kind));
     if (distinctOps.size !== 1 || distinctKinds.size !== 1) {

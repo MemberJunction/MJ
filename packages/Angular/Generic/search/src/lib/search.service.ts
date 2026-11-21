@@ -142,8 +142,9 @@ export class SearchService {
      *
      * Consumers (typically the search composite component) should:
      *   - render skeleton rows immediately when the Observable is created
-     *   - on each 'provider' event: append the rows for that source
-     *   - on 'final': replace the partials with the canonical fused list
+     *   - on each 'provider' event: show progress — `ProviderName` and `ResultCount`. A 'provider'
+     *     event never carries rows: they arrive before the server's permission pass.
+     *   - on 'final': render the result list
      *   - on error: show the failure message + clear the skeleton
      *
      * Returns rxjs Observable rather than awaiting a Promise — callers
@@ -155,6 +156,8 @@ export class SearchService {
     public StreamSearch(request: SearchRequest): Observable<{
         Phase: string;
         ProviderName?: string;
+        /** Set on 'provider' events: how many hits that provider returned, capped at `MaxResults`. */
+        ResultCount?: number;
         Results?: SearchResultItem[];
         ElapsedMs?: number;
         ErrorMessage?: string;
@@ -175,6 +178,7 @@ export class SearchService {
         }).pipe(map((ev) => ({
             Phase: ev.Phase,
             ProviderName: ev.ProviderName,
+            ResultCount: ev.ResultCount,
             Results: ev.Results ? ev.Results.map(r => this.mapClientResultItem(r)) : undefined,
             ElapsedMs: ev.ElapsedMs,
             ErrorMessage: ev.ErrorMessage,

@@ -1,0 +1,106 @@
+<div class="office-connect-container">
+    <div class="office-connect-card">
+        @switch (Stage) {
+            @case ('waiting') {
+                <div class="office-connect-status">
+                    <mj-loading [text]="StatusMessage"></mj-loading>
+                    @if (CanSignIn) {
+                        <p class="office-connect-hint">Not signed in to MemberJunction in this window?</p>
+                        <div class="button-group">
+                            <button mjButton variant="secondary" (click)="OnSignIn()">
+                                <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                                Sign in
+                            </button>
+                        </div>
+                    }
+                </div>
+            }
+
+            @case ('sign-in') {
+                <div class="office-connect-status">
+                    <div class="icon-container brand-icon"><i class="fa-solid fa-table-cells"></i></div>
+                    <h2>Sign in to connect Excel</h2>
+                    <p>Sign in to MemberJunction with the account whose views and queries Excel should load.</p>
+                    <div class="button-group">
+                        <button mjButton variant="primary" (click)="OnSignIn()">
+                            <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                            Sign in
+                        </button>
+                    </div>
+                </div>
+            }
+
+            @case ('bad-request') {
+                <div class="office-connect-status">
+                    <div class="icon-container error-icon"><i class="fa-solid fa-circle-exclamation"></i></div>
+                    <h2>This link can't connect Excel</h2>
+                    <p>Open this page from the MemberJunction add-in in Excel by choosing <strong>Sign in</strong> there. You can close this window.</p>
+                </div>
+            }
+
+            @case ('not-enabled') {
+                <div class="office-connect-status">
+                    <div class="icon-container muted-icon"><i class="fa-solid fa-table-cells"></i></div>
+                    <h2>Excel isn't turned on</h2>
+                    <p>{{ ServerName || 'This MemberJunction server' }} doesn't have the Excel add-in turned on. Ask an administrator to turn it on, then sign in again from Excel. You can close this window.</p>
+                </div>
+            }
+
+            @case ('consent') {
+                <div class="office-connect-status">
+                    <div class="icon-container brand-icon"><i class="fa-solid fa-table-cells"></i></div>
+                    <h2>Connect Excel to {{ ServerName || 'MemberJunction' }}</h2>
+                    <div class="office-connect-user">
+                        <span class="office-connect-user-name">{{ UserName }}</span>
+                        @if (UserEmail && UserEmail !== UserName) {
+                            <span class="office-connect-user-email">{{ UserEmail }}</span>
+                        }
+                    </div>
+                    <ul class="office-connect-terms">
+                        <li>Excel can run the saved views and queries you can already open in MemberJunction, as you.</li>
+                        <li>It can only read data. It can't change or delete anything.</li>
+                        <li>The connection lasts {{ KeyLifetimeDays }} {{ KeyLifetimeDays === 1 ? 'day' : 'days' }}. You can disconnect it sooner on the API Keys page.</li>
+                    </ul>
+                    <div class="button-group">
+                        <button mjButton variant="primary" (click)="OnConnect()">
+                            <i class="fa-solid fa-link"></i>
+                            Connect Excel
+                        </button>
+                        <button mjButton variant="secondary" (click)="OnCancel()">Cancel</button>
+                    </div>
+                </div>
+            }
+
+            @case ('connecting') {
+                <div class="office-connect-status">
+                    <mj-loading [text]="StatusMessage"></mj-loading>
+                </div>
+            }
+
+            @case ('leaving') {
+                <div class="office-connect-status">
+                    <mj-loading [text]="StatusMessage"></mj-loading>
+                </div>
+            }
+
+            @case ('cancelled') {
+                <div class="office-connect-status">
+                    <div class="icon-container muted-icon"><i class="fa-solid fa-circle-xmark"></i></div>
+                    <h2>Excel wasn't connected</h2>
+                    <p>You can close this window.</p>
+                </div>
+            }
+
+            @case ('error') {
+                <div class="office-connect-status">
+                    <div class="icon-container error-icon"><i class="fa-solid fa-circle-exclamation"></i></div>
+                    <h2>Excel wasn't connected</h2>
+                    <p class="error-message">{{ ErrorMessage }}</p>
+                    <div class="button-group">
+                        <button mjButton variant="secondary" (click)="OnCancel()">Cancel</button>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+</div>

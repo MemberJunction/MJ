@@ -102,6 +102,11 @@ export class CloudflareDecision extends BaseSystemOneDecision {
         return { Authorization: `Bearer ${this._apiToken}`, 'Content-Type': 'application/json' };
     }
 
+    /** The whole key and the token alone, since the token is what an error body would echo. */
+    protected get SecretsToRedact(): string[] {
+        return [this.Credential.APIKey, this._apiToken];
+    }
+
     /** Workers AI's model selector is the `APIName`'s last segment: `clef` for `@cf/cloudflare/clef`. */
     protected GetWireModelName(model: string): string {
         const segments = model.split('/').filter(s => s.length > 0);

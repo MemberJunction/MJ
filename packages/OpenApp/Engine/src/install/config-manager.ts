@@ -9,13 +9,18 @@
  * manifest — so the client load mechanism lives in distributed npm packages (the CLI +
  * the generated manifest MJExplorer already imports) rather than a bespoke MJExplorer file.
  *
+ * Also manages the top-level `publicPages` array: one entry per page an app serves before
+ * sign-in. `mj codegen manifest --open-app-client-bootstrap` turns it into the host's page list.
+ *
  * Operates on the standard mj.config.cjs file using string-based manipulation
  * to preserve formatting and comments.
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { compileFunction } from 'node:vm';
+import { IsManifestPublicErrorPage } from '../manifest/manifest-schema.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
+import { PackageRunsOnTier } from '../manifest/package-platform.js';
 import { ResolveServerPackagePath } from './workspace-paths.js';
 
 /** Config file name. All MJ projects use mj.config.cjs. */
@@ -32,6 +37,32 @@ export interface DynamicPackageEntry {
     /** Open App name this package belongs to */
     AppName: string;
     /** Whether this package should be loaded */
+    Enabled: boolean;
+}
+
+/**
+ * A single entry in the top-level `publicPages` array.
+ */
+export interface PublicPageConfigEntry {
+    /** Open App name this page belongs to */
+    AppName: string;
+    /** URL slug; the page is served at `/p/<Slug>`. An error page has none. */
+    Slug?: string;
+    /** Set on an error page */
+    Role?: 'error';
+    /** Folder under `/p/` an error page covers; empty for all of `/p/` */
+    Scope?: string;
+    /** npm package that exports the page component */
+    PackageName: string;
+    /** Named export of the page component */
+    ExportName: string;
+    /** Page title, used in the page's HTML and link preview */
+    Title?: string;
+    /** Link preview text */
+    Description?: string;
+    /** Whether the page also answers the addresses under its slug */
+    SubPaths?: boolean;
+    /** Whether the host serves this page */
     Enabled: boolean;
 }
 
@@ -116,9 +147,68 @@ export function AddClientDynamicPackages(
 }
 
 /**
- * Removes all server and client dynamic package entries for an app from mj.config.cjs.
- * Entry removal is keyed by AppName and is array-agnostic — it sweeps both the
- * `server` and `client` arrays in one pass.
+ * Adds the app's public pages to the top-level `publicPages` array in mj.config.cjs.
+ *
+ * A page the app already has (same AppName and Slug) is updated in place to the manifest's
+ * package and export, and keeps its `Enabled` value. Fails, and writes nothing, when another
+ * app already owns one of the slugs.
+ *
+ * @param repoRoot - Absolute path to the monorepo root
+ * @param manifest - The app's validated manifest
+ * @returns Operation result
+ */
+export function AddPublicPages(
+    repoRoot: string,
+    manifest: MJAppManifest,
+    serverPackagePath?: string
+): ConfigOperationResult {
+    const pages = GetPublicPagesFromManifest(manifest);
+    if (pages.length === 0) {
+        return { Success: true };
+    }
+
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'update publicPages', (input) => {
+        const conflict = FindSlugConflict(input, manifest);
+        if (conflict) {
+            throw new Error(conflict);
+        }
+        let content = EnsurePublicPagesSection(input);
+        for (const page of pages) {
+            content = UpsertPublicPage(content, page);
+        }
+        return content;
+    });
+}
+
+/**
+ * Checks, without writing, that no other app in mj.config.cjs owns one of the manifest's
+ * public page slugs. Run before an install or upgrade changes anything.
+ *
+ * @param repoRoot - Absolute path to the monorepo root
+ * @param manifest - The app's validated manifest
+ * @returns Failure naming the slug and both apps, or success
+ */
+export function CheckPublicPageSlugConflicts(
+    repoRoot: string,
+    manifest: MJAppManifest,
+    serverPackagePath?: string
+): ConfigOperationResult {
+    if ((manifest.publicPages ?? []).length === 0) {
+        return { Success: true };
+    }
+    for (const configPath of resolveConfigPaths(repoRoot, serverPackagePath)) {
+        const conflict = FindSlugConflict(readFileSync(configPath, 'utf-8'), manifest);
+        if (conflict) {
+            return { Success: false, ErrorMessage: conflict };
+        }
+    }
+    return { Success: true };
+}
+
+/**
+ * Removes all server and client dynamic package entries and public pages for an app from
+ * mj.config.cjs. Entry removal is keyed by AppName and is array-agnostic — it sweeps the
+ * `server`, `client` and `publicPages` arrays in one pass.
  *
  * @param repoRoot - Absolute path to the monorepo root
  * @param appName - The app name to remove entries for
@@ -145,6 +235,7 @@ export function RemoveServerDynamicPackages(
  * Surviving entries are left byte-identical rather than removed and re-added, so a disabled app's
  * `Enabled: false` state is preserved. Server and client keep-sets are computed per array, so a
  * server-only package is not pruned from `server` just because it is absent from `client`.
+ * Public pages whose slug the manifest no longer declares are removed the same way.
  *
  * @param repoRoot - Absolute path to the monorepo root
  * @param manifest - The NEW (target) manifest the config should converge on
@@ -160,12 +251,12 @@ export function PruneDynamicPackagesNotInManifest(
         result = PruneEntriesForApp(result, manifest, 'client');
         result = NormalizeEmptyDynamicArray(result, 'server');
         result = NormalizeEmptyDynamicArray(result, 'client');
-        return result;
+        return PrunePublicPagesForApp(result, manifest);
     });
 }
 
 /**
- * Toggles the enabled state of all dynamic package entries for an app.
+ * Toggles the enabled state of all dynamic package entries and public pages for an app.
  *
  * @param repoRoot - Absolute path to the monorepo root
  * @param appName - The app name to toggle
@@ -225,7 +316,7 @@ function resolveConfigPaths(repoRoot: string, serverPackagePath?: string): strin
  * spread form HAS an object literal, so it is editable and inserting into it is correct.
  */
 function IsDelegatingConfig(content: string): boolean {
-    return /module\.exports\s*=\s*require\s*\(/.test(content);
+    return /module\.exports\s*=\s*require\s*\(/.test(BlankComments(content));
 }
 
 /**
@@ -269,7 +360,7 @@ function ApplyToConfigs(
                 delegated++;
                 continue;
             }
-            WriteConfigChecked(configPath, edit(content));
+            WriteConfigChecked(configPath, edit(content), content);
             updated++;
         }
         catch (error: unknown) {
@@ -305,7 +396,7 @@ function ApplyToConfigs(
  * it, so the `require(...)` / `process.env` references in a real config never run. It throws on
  * failure so the caller's existing try/catch surfaces it as `{ Success: false, ErrorMessage }`.
  */
-function WriteConfigChecked(configPath: string, content: string): void {
+function WriteConfigChecked(configPath: string, content: string, original: string): void {
     try {
         compileFunction(content);
     } catch (parseError: unknown) {
@@ -313,6 +404,15 @@ function WriteConfigChecked(configPath: string, content: string): void {
         throw new Error(
             `the edit would produce invalid JavaScript (${message}); the file was left unchanged. ` +
             `This is a bug in the Open App config editor — please report it with your mj.config.cjs shape.`,
+        );
+    }
+    // A sparse array (`['a', , 'b']`) parses, so the check above cannot see it, yet each hole is
+    // read as `undefined` — CodeGen received a null schema name this way (#4547). Compared with
+    // the original so a hole the host already had does not block every later install.
+    if (CountArrayHoles(content) > CountArrayHoles(original)) {
+        throw new Error(
+            'the edit would leave an empty slot in an array (e.g. `[\'a\', , \'b\']`), which reads as undefined; ' +
+            'the file was left unchanged. This is a bug in the Open App config editor — please report it with your mj.config.cjs shape.',
         );
     }
     writeFileSync(configPath, content, 'utf-8');
@@ -327,6 +427,9 @@ function GetServerPackagesFromManifest(manifest: MJAppManifest): DynamicPackageE
     const sharedPkgs = manifest.packages?.shared ?? [];
 
     for (const pkg of [...serverPkgs, ...sharedPkgs]) {
+        if (!PackageRunsOnTier(pkg, 'server')) {
+            continue;
+        }
         if (pkg.startupExport) {
             entries.push({
                 PackageName: pkg.name,
@@ -342,9 +445,14 @@ function GetServerPackagesFromManifest(manifest: MJAppManifest): DynamicPackageE
 
 /**
  * Extracts client package entries from a manifest's packages section.
- * Includes `client` and `shared` packages (shared packages run in both the server
- * and client bundles). Unlike server entries, every client/shared package is emitted
- * regardless of startupExport — client entries are side-effect imports.
+ *
+ * Includes `client` and `shared` packages, minus any whose platform excludes the browser — see
+ * {@link PackageRunsOnTier}. `shared` says which tiers a package is FOR, not that it can run on
+ * all of them: an actions package is shared source that reaches `@google-cloud/storage`, and
+ * namespace-importing it into the Angular bundle breaks the host's build (#4428).
+ *
+ * Unlike server entries, a qualifying package is emitted regardless of startupExport — client
+ * entries are side-effect imports and the client bootstrap never calls a startup function.
  */
 function GetClientPackagesFromManifest(manifest: MJAppManifest): DynamicPackageEntry[] {
     const entries: DynamicPackageEntry[] = [];
@@ -352,6 +460,9 @@ function GetClientPackagesFromManifest(manifest: MJAppManifest): DynamicPackageE
     const sharedPkgs = manifest.packages?.shared ?? [];
 
     for (const pkg of [...clientPkgs, ...sharedPkgs]) {
+        if (!PackageRunsOnTier(pkg, 'client')) {
+            continue;
+        }
         entries.push({
             PackageName: pkg.name,
             AppName: manifest.name,
@@ -371,7 +482,7 @@ function EnsureDynamicPackagesSection(content: string): string {
     // Match the actual `dynamicPackages:` key. A bare substring check (`includes`)
     // false-matches a comment or unrelated text mentioning the word, which would
     // skip section creation and silently drop the entry (B6).
-    if (/dynamicPackages\s*:/.test(content)) {
+    if (/dynamicPackages\s*:/.test(BlankComments(content))) {
         return content;
     }
 
@@ -389,7 +500,8 @@ function EnsureDynamicPackagesSection(content: string): string {
  * `server`, so the array must be injected before its first entry is added.
  */
 function EnsureDynamicArrayPresent(content: string, arrayName: 'server' | 'client'): string {
-    const dynMatch = content.match(/dynamicPackages\s*:\s*\{/);
+    const code = BlankComments(content);
+    const dynMatch = code.match(/dynamicPackages\s*:\s*\{/);
     if (!dynMatch || dynMatch.index === undefined) {
         throw new Error('dynamicPackages section not found in mj.config.cjs.');
     }
@@ -398,7 +510,7 @@ function EnsureDynamicArrayPresent(content: string, arrayName: 'server' | 'clien
     if (closeBracePos === -1) {
         throw new Error('Could not find the closing brace of the dynamicPackages section in mj.config.cjs.');
     }
-    const sectionBody = content.slice(openBracePos, closeBracePos);
+    const sectionBody = code.slice(openBracePos, closeBracePos);
     // Already present within THIS section — done.
     if (new RegExp(`${arrayName}\\s*:\\s*\\[`).test(sectionBody)) {
         return content;
@@ -419,12 +531,17 @@ function LocateDynamicArray(
     content: string,
     arrayName: 'server' | 'client'
 ): { OpenBracketPos: number; ClosePos: number } | null {
-    const dynMatch = content.match(/dynamicPackages\s*:\s*\{/);
+    const code = BlankComments(content);
+    const dynMatch = code.match(/dynamicPackages\s*:\s*\{/);
     if (!dynMatch || dynMatch.index === undefined) return null;
-    const afterDyn = content.slice(dynMatch.index);
-    const arrayRel = afterDyn.match(new RegExp(`${arrayName}:\\s*\\[`));
+    const sectionOpen = dynMatch.index + dynMatch[0].length - 1;
+    const sectionClose = FindMatchingBracket(content, sectionOpen);
+    if (sectionClose === -1) return null;
+    // Searched only inside the section, so an unrelated `server: [` after it is never edited.
+    const sectionBody = code.slice(sectionOpen, sectionClose);
+    const arrayRel = sectionBody.match(new RegExp(`${arrayName}:\\s*\\[`));
     if (!arrayRel || arrayRel.index === undefined) return null;
-    const openBracketPos = dynMatch.index + arrayRel.index + arrayRel[0].length - 1; // the '['
+    const openBracketPos = sectionOpen + arrayRel.index + arrayRel[0].length - 1; // the '['
     const closePos = FindMatchingBracket(content, openBracketPos);
     if (closePos === -1) return null;
     return { OpenBracketPos: openBracketPos, ClosePos: closePos };
@@ -445,7 +562,7 @@ function AddEntryToDynamicArray(content: string, entry: DynamicPackageEntry, arr
     // earlier satisfied the client check, so the client insert was skipped and the package never
     // reached dynamicPackages.client — its @RegisterClass components were then absent from the
     // bundle with no error raised anywhere.
-    const arrayBody = content.slice(location.OpenBracketPos, location.ClosePos);
+    const arrayBody = BlankComments(content).slice(location.OpenBracketPos, location.ClosePos);
     const existsPattern = new RegExp(
         `PackageName:\\s*['"]${EscapeRegex(entry.PackageName)}['"][^{}]*AppName:\\s*['"]${EscapeRegex(entry.AppName)}['"]`
     );
@@ -513,22 +630,18 @@ function PruneEntriesForApp(content: string, manifest: MJAppManifest, arrayName:
         : GetClientPackagesFromManifest(manifest);
     const keep = new Map(manifestEntries.map((e) => [e.PackageName, e.StartupExport]));
 
-    const body = content.slice(location.OpenBracketPos, location.ClosePos);
     // Same entry-block shape as RemoveEntriesForApp: [^{}] keeps the match inside a single entry
     // object rather than spanning from the enclosing dynamicPackages brace.
     const entryPattern = new RegExp(
         `\\s*\\{[^{}]*AppName:\\s*['"]${EscapeRegex(manifest.name)}['"][^{}]*\\},?`,
         'g'
     );
-    const prunedBody = body.replace(entryPattern, (block) => {
+    return ReplaceInRange(content, location.OpenBracketPos, location.ClosePos, entryPattern, (block) => {
         const packageMatch = block.match(/PackageName:\s*['"]([^'"]+)['"]/);
         if (!packageMatch) return block;
         if (!keep.has(packageMatch[1])) return '';
         return RetargetStartupExport(block, keep.get(packageMatch[1]));
     });
-    if (prunedBody === body) return content;
-
-    return content.slice(0, location.OpenBracketPos) + prunedBody + content.slice(location.ClosePos);
 }
 
 /**
@@ -540,13 +653,24 @@ function RemoveEntriesForApp(content: string, appName: string): string {
     // Match entry-level object blocks containing the appName.
     // Uses [^{}]* instead of [^}]* to prevent matching across nested object boundaries
     // (e.g., matching from the outer dynamicPackages { instead of just the entry {).
+    // Scoped to each dynamicPackages array, so a matching block elsewhere (or in a comment) stays.
     const pattern = new RegExp(
         `\\s*\\{[^{}]*AppName:\\s*['"]${EscapeRegex(appName)}['"][^{}]*\\},?`,
         'g'
     );
-    let result = content.replace(pattern, '');
+    let result = content;
+    for (const arrayName of ['server', 'client'] as const) {
+        const location = LocateDynamicArray(result, arrayName);
+        if (location) {
+            result = ReplaceInRange(result, location.OpenBracketPos, location.ClosePos, pattern, () => '');
+        }
+    }
     result = NormalizeEmptyDynamicArray(result, 'server');
     result = NormalizeEmptyDynamicArray(result, 'client');
+    const pages = LocatePublicPagesArray(result);
+    if (pages) {
+        result = CollapseEmptyPublicPagesArray(ReplaceInRange(result, pages.OpenBracketPos, pages.ClosePos, pattern, () => ''));
+    }
     return result;
 }
 
@@ -572,11 +696,203 @@ function NormalizeEmptyDynamicArray(content: string, arrayName: 'server' | 'clie
 function ToggleEntriesForApp(content: string, appName: string, enabled: boolean): string {
     // Find entries with the given appName and replace enabled value.
     // Uses [^{}]* to prevent matching across nested object boundaries.
+    // Scoped to each dynamicPackages array, so text outside them (or in a comment) is never touched.
     const pattern = new RegExp(
-        `(AppName:\\s*['"]${EscapeRegex(appName)}['"][^{}]*Enabled:\\s*)(?:true|false)`,
+        `AppName:\\s*['"]${EscapeRegex(appName)}['"][^{}]*Enabled:\\s*(?:true|false)`,
         'g'
     );
-    return content.replace(pattern, `$1${enabled}`);
+    let result = content;
+    for (const arrayName of ['server', 'client'] as const) {
+        const location = LocateDynamicArray(result, arrayName);
+        if (location) {
+            result = ReplaceInRange(result, location.OpenBracketPos, location.ClosePos, pattern,
+                (match) => match.replace(/(?:true|false)$/, () => String(enabled)));
+        }
+    }
+    const pages = LocatePublicPagesArray(result);
+    if (pages) {
+        result = ReplaceInRange(result, pages.OpenBracketPos, pages.ClosePos, pattern,
+            (match) => match.replace(/(?:true|false)$/, () => String(enabled)));
+    }
+    return result;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUBLIC PAGES
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Builds the `publicPages` entries for a manifest. */
+function GetPublicPagesFromManifest(manifest: MJAppManifest): PublicPageConfigEntry[] {
+    return (manifest.publicPages ?? []).map((page): PublicPageConfigEntry => {
+        const common = { AppName: manifest.name, PackageName: page.package, ExportName: page.export, Enabled: true };
+        if (IsManifestPublicErrorPage(page)) {
+            return { ...common, Role: 'error', Scope: page.scope };
+        }
+        return { ...common, Slug: page.slug, Title: page.title, Description: page.description, SubPaths: page.subPaths === true };
+    });
+}
+
+/**
+ * Quotes free text as a string literal for mj.config.cjs. Braces, quotes and slashes become
+ * escapes, so the entry-block patterns (`[^{}]*`, quoted values) and comment masking still work.
+ */
+function QuoteConfigText(value: string): string {
+    return JSON.stringify(value).replace(/[{}'/]/g, (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`);
+}
+
+/** Lines for the optional text keys of a page entry, each ending with a comma. */
+function OptionalPageTextLines(page: PublicPageConfigEntry): string {
+    return (['Title', 'Description'] as const)
+        .filter((key) => page[key] !== undefined)
+        .map((key) => `\n      ${key}: ${QuoteConfigText(page[key] ?? '')},`)
+        .join('');
+}
+
+/**
+ * Sets an optional text key in an entry block: replaces its value, adds it before `Enabled`,
+ * or removes the key when the value is undefined.
+ */
+function SetOptionalEntryText(block: string, key: 'Title' | 'Description', value: string | undefined): string {
+    const quoted = `(["'])(?:(?!\\1)[^\\\\]|\\\\.)*\\1`;
+    const existing = new RegExp(`\\n?[ \\t]*\\b${key}:\\s*${quoted},?`);
+    if (value === undefined) {
+        return block.replace(existing, '');
+    }
+    if (existing.test(block)) {
+        return block.replace(existing, (match) => match.replace(new RegExp(quoted), () => QuoteConfigText(value)));
+    }
+    return block.replace(/(\n[ \t]*)Enabled:/, (match, indent: string) => `${indent}${key}: ${QuoteConfigText(value)},${match}`);
+}
+
+/** Sets the `SubPaths: true` line of an entry block: adds it before `Enabled`, or removes it. */
+function SetSubPathsFlag(block: string, subPaths: boolean): string {
+    const existing = /\n?[ \t]*\bSubPaths:\s*(?:true|false),?/;
+    const without = block.replace(existing, '');
+    return subPaths ? without.replace(/(\n[ \t]*)Enabled:/, (match, indent: string) => `${indent}SubPaths: true,${match}`) : without;
+}
+
+/** True when an entry block is the config entry of `page`: the same error scope, or the same slug. */
+function IsEntryBlockOf(block: string, page: PublicPageConfigEntry): boolean {
+    const isErrorBlock = ReadEntryValue(block, 'Role') === 'error';
+    if (page.Role === 'error') {
+        return isErrorBlock && ReadEntryValue(block, 'Scope') === page.Scope;
+    }
+    return !isErrorBlock && ReadEntryValue(block, 'Slug') === page.Slug;
+}
+
+/** The identity lines of a new entry: role and scope for an error page, slug for a page. */
+function PageIdentityLines(page: PublicPageConfigEntry): string {
+    return page.Role === 'error'
+        ? `\n      Role: "error",\n      Scope: ${JSON.stringify(page.Scope ?? '')},`
+        : `\n      Slug: ${JSON.stringify(page.Slug ?? '')},`;
+}
+
+/** Locates the first `publicPages: [` array outside comments, or null when there is none. */
+function LocatePublicPagesArray(content: string): { OpenBracketPos: number; ClosePos: number } | null {
+    const match = BlankComments(content).match(/\bpublicPages\s*:\s*\[/);
+    if (!match || match.index === undefined) return null;
+    const openBracketPos = match.index + match[0].length - 1;
+    const closePos = FindMatchingBracket(content, openBracketPos);
+    return closePos === -1 ? null : { OpenBracketPos: openBracketPos, ClosePos: closePos };
+}
+
+/** Collapses a whitespace-only `publicPages` array to `[]`. */
+function CollapseEmptyPublicPagesArray(content: string): string {
+    const location = LocatePublicPagesArray(content);
+    if (!location || content.slice(location.OpenBracketPos + 1, location.ClosePos).trim() !== '') {
+        return content;
+    }
+    return content.slice(0, location.OpenBracketPos) + '[]' + content.slice(location.ClosePos + 1);
+}
+
+/** Adds an empty top-level `publicPages` array when the config has none. */
+function EnsurePublicPagesSection(content: string): string {
+    if (LocatePublicPagesArray(content)) {
+        return content;
+    }
+    return InsertBeforeModuleExportsClose(content, `\n  publicPages: [],\n`);
+}
+
+/** Reads the string value of `key` from one entry block, or undefined. */
+function ReadEntryValue(block: string, key: string): string | undefined {
+    return block.match(new RegExp(`\\b${key}:\\s*['"]([^'"]*)['"]`))?.[1];
+}
+
+/** Returns each `{ Slug, AppName }` pair in the `publicPages` array. */
+function ReadPublicPageOwners(content: string): { Slug: string; AppName: string }[] {
+    const location = LocatePublicPagesArray(content);
+    if (!location) return [];
+    const body = BlankComments(content).slice(location.OpenBracketPos, location.ClosePos);
+    const owners: { Slug: string; AppName: string }[] = [];
+    for (const block of body.match(/\{[^{}]*\}/g) ?? []) {
+        const slug = ReadEntryValue(block, 'Slug');
+        const appName = ReadEntryValue(block, 'AppName');
+        if (slug && appName) owners.push({ Slug: slug, AppName: appName });
+    }
+    return owners;
+}
+
+/** Returns an error message when another app owns one of the manifest's slugs, else undefined. */
+function FindSlugConflict(content: string, manifest: MJAppManifest): string | undefined {
+    const owners = ReadPublicPageOwners(content);
+    for (const page of manifest.publicPages ?? []) {
+        if (IsManifestPublicErrorPage(page)) continue;
+        const owner = owners.find((o) => o.Slug === page.slug && o.AppName !== manifest.name);
+        if (owner) {
+            return `Public page slug '${page.slug}' is already used by installed app '${owner.AppName}', so app '${manifest.name}' cannot use it. ` +
+                `Remove '${owner.AppName}' or change one of the slugs.`;
+        }
+    }
+    return undefined;
+}
+
+/** Sets a string-valued key in an entry block, keeping every other line. */
+function SetEntryValue(block: string, key: string, value: string): string {
+    const pattern = new RegExp(`\\b${key}:\\s*(['"])(?:[^'"\\\\]|\\\\.)*\\1`);
+    return block.replace(pattern, () => `${key}: ${JSON.stringify(value)}`);
+}
+
+/**
+ * Updates the app's existing entry for the page's slug to the page's package and export, or
+ * appends a new entry when the app has none for that slug.
+ */
+function UpsertPublicPage(content: string, page: PublicPageConfigEntry): string {
+    const location = LocatePublicPagesArray(content);
+    if (!location) {
+        throw new Error('publicPages array not found in mj.config.cjs when adding a page.');
+    }
+    let found = false;
+    const pattern = new RegExp(`\\{[^{}]*AppName:\\s*['"]${EscapeRegex(page.AppName)}['"][^{}]*\\}`, 'g');
+    const updated = ReplaceInRange(content, location.OpenBracketPos, location.ClosePos, pattern, (block) => {
+        if (!IsEntryBlockOf(block, page)) return block;
+        found = true;
+        const withCode = SetEntryValue(SetEntryValue(block, 'PackageName', page.PackageName), 'ExportName', page.ExportName);
+        if (page.Role === 'error') return withCode;
+        const withText = SetOptionalEntryText(SetOptionalEntryText(withCode, 'Title', page.Title), 'Description', page.Description);
+        return SetSubPathsFlag(withText, page.SubPaths === true);
+    });
+    if (found) {
+        return updated;
+    }
+
+    // JSON.stringify every value so a manifest value cannot break out of its string literal.
+    const entryStr = `\n    {\n      AppName: ${JSON.stringify(page.AppName)},${PageIdentityLines(page)}` +
+        `\n      PackageName: ${JSON.stringify(page.PackageName)},\n      ExportName: ${JSON.stringify(page.ExportName)},` +
+        `${OptionalPageTextLines(page)}${page.SubPaths ? '\n      SubPaths: true,' : ''}\n      Enabled: ${page.Enabled}\n    },`;
+    const before = EnsureTrailingComma(content.slice(0, location.ClosePos), location.OpenBracketPos).trimEnd();
+    return before + entryStr + '\n  ' + content.slice(location.ClosePos);
+}
+
+/** Removes the app's `publicPages` entries whose slug, or error scope, the manifest no longer declares. */
+function PrunePublicPagesForApp(content: string, manifest: MJAppManifest): string {
+    const location = LocatePublicPagesArray(content);
+    if (!location) return content;
+    const declared = GetPublicPagesFromManifest(manifest);
+    const pattern = new RegExp(`\\s*\\{[^{}]*AppName:\\s*['"]${EscapeRegex(manifest.name)}['"][^{}]*\\},?`, 'g');
+    const result = ReplaceInRange(content, location.OpenBracketPos, location.ClosePos, pattern, (block) => {
+        return declared.some((page) => IsEntryBlockOf(block, page)) ? block : '';
+    });
+    return CollapseEmptyPublicPagesArray(result);
 }
 
 /**
@@ -631,6 +947,106 @@ function FindMatchingBracket(content: string, openPos: number): number {
     }
 
     return depth === 0 ? pos - 1 : -1;
+}
+
+/** Placeholder written over comment (and, for {@link CountArrayHoles}, string) characters. */
+const MASK_CHAR = '#';
+
+/**
+ * Returns `content` with every comment character (and, when `maskStrings` is set, every character
+ * inside a string literal) replaced by {@link MASK_CHAR}; quotes and newlines are kept. The result
+ * has the same length and offsets as `content`. The placeholder is not whitespace, so a `\s*` in a
+ * search pattern never runs through a comment. Uses the same string/comment state machine as
+ * {@link FindMatchingBracket}.
+ */
+function MaskSource(content: string, maskStrings: boolean): string {
+    const out = content.split('');
+    const mask = (i: number): void => {
+        if (i < out.length && out[i] !== '\n' && out[i] !== '\r') out[i] = MASK_CHAR;
+    };
+    let pos = 0;
+    let inString: string | null = null;
+    let inLineComment = false;
+    let inBlockComment = false;
+
+    while (pos < content.length) {
+        const ch = content[pos];
+
+        if (inLineComment) {
+            if (ch === '\n') inLineComment = false;
+            else mask(pos);
+            pos++;
+            continue;
+        }
+        if (inBlockComment) {
+            if (ch === '*' && content[pos + 1] === '/') { mask(pos); mask(pos + 1); inBlockComment = false; pos += 2; continue; }
+            mask(pos);
+            pos++;
+            continue;
+        }
+        if (inString) {
+            if (ch === '\\') {
+                if (maskStrings) { mask(pos); mask(pos + 1); }
+                pos += 2;
+                continue;
+            }
+            if (ch === inString) inString = null;
+            else if (maskStrings) mask(pos);
+            pos++;
+            continue;
+        }
+
+        if (ch === '/' && content[pos + 1] === '/') { mask(pos); mask(pos + 1); inLineComment = true; pos += 2; continue; }
+        if (ch === '/' && content[pos + 1] === '*') { mask(pos); mask(pos + 1); inBlockComment = true; pos += 2; continue; }
+        if (ch === '"' || ch === "'" || ch === '`') inString = ch;
+        pos++;
+    }
+    return out.join('');
+}
+
+/**
+ * Returns the config with its comments blanked at the same offsets. Every key and section search
+ * in this module runs on this copy and edits the original at the offsets it finds, so text inside
+ * a comment — such as the example `module.exports = { ... }` in the stock MJAPI config header — is
+ * never taken for config (#3301).
+ */
+function BlankComments(content: string): string {
+    return MaskSource(content, false);
+}
+
+/**
+ * Counts array holes (`[ , x]`, `[a, , b]`) outside strings and comments. A hole parses as valid
+ * JavaScript and evaluates to `undefined`, so the parse check in {@link WriteConfigChecked} cannot
+ * see one (#4547).
+ */
+export function CountArrayHoles(content: string): number {
+    return MaskSource(content, true).match(/[[,]\s*,/g)?.length ?? 0;
+}
+
+/**
+ * Replaces each match of the global `pattern` inside `content[start, end)`. Matches are found on
+ * the comment-blanked copy; `replace` receives the original text at the match's offsets, and the
+ * result is spliced into the original. Keeps a removal or rewrite inside its target array/object
+ * and out of comments.
+ */
+function ReplaceInRange(
+    content: string,
+    start: number,
+    end: number,
+    pattern: RegExp,
+    replace: (original: string) => string
+): string {
+    const region = BlankComments(content).slice(start, end);
+    let result = '';
+    let last = 0;
+    for (const match of region.matchAll(pattern)) {
+        const matchStart = match.index ?? 0;
+        const matchEnd = matchStart + match[0].length;
+        result += content.slice(start + last, start + matchStart) + replace(content.slice(start + matchStart, start + matchEnd));
+        last = matchEnd;
+    }
+    if (last === 0 && result === '') return content;
+    return content.slice(0, start) + result + content.slice(start + last);
 }
 
 /**
@@ -705,10 +1121,13 @@ function EnsureTrailingComma(before: string, openBracePos: number): string {
  * file has trailing code — unlike `lastIndexOf('};')`, which lands in the wrong block (B4).
  */
 function InsertBeforeModuleExportsClose(content: string, section: string): string {
+    // Searched on the comment-blanked copy: the stock MJAPI header documents an example
+    // `module.exports = { ... }` inside a comment, which a plain first match lands in (#3301).
+    const code = BlankComments(content);
     // Try pattern 1: module.exports = { ... }
-    const inlineMatch = content.match(/module\.exports\s*=\s*\{/);
+    const inlineMatch = code.match(/module\.exports\s*=\s*\{/);
     if (inlineMatch && inlineMatch.index !== undefined) {
-        const bracePos = content.indexOf('{', inlineMatch.index);
+        const bracePos = code.indexOf('{', inlineMatch.index);
         const closePos = FindMatchingBracket(content, bracePos);
         if (closePos === -1) {
             throw new Error('Could not locate the closing brace of module.exports in mj.config.cjs.');
@@ -718,14 +1137,14 @@ function InsertBeforeModuleExportsClose(content: string, section: string): strin
     }
 
     // Try pattern 2: module.exports = someVar;
-    const varMatch = content.match(/module\.exports\s*=\s*([a-zA-Z_$][a-zA-Z0-9_$]*)\s*;/);
+    const varMatch = code.match(/module\.exports\s*=\s*([a-zA-Z_$][a-zA-Z0-9_$]*)\s*;/);
     if (varMatch && varMatch.index !== undefined) {
         const varName = varMatch[1];
         // Find the variable's object literal: const/let/var varName = { ... }
         const declPattern = new RegExp(`(?:const|let|var)\\s+${EscapeRegex(varName)}\\s*=\\s*\\{`);
-        const declMatch = content.match(declPattern);
+        const declMatch = code.match(declPattern);
         if (declMatch && declMatch.index !== undefined) {
-            const bracePos = content.indexOf('{', declMatch.index);
+            const bracePos = code.indexOf('{', declMatch.index);
             const closePos = FindMatchingBracket(content, bracePos);
             if (closePos === -1) {
                 throw new Error(`Could not locate the closing brace of '${varName}' object in mj.config.cjs.`);
@@ -770,18 +1189,19 @@ export function SetNewUserTemplate(
 /** Writes `newUserTemplate: { email, preset }` into the config's `userHandling`, creating what is missing. */
 function UpsertNewUserTemplate(content: string, email: string, preset: string): string {
     const literal = `{ email: ${JSON.stringify(email)}, preset: ${JSON.stringify(preset)} }`;
-    const existing = /newUserTemplate\s*:\s*\{/.exec(content);
+    const code = BlankComments(content);
+    const existing = /newUserTemplate\s*:\s*\{/.exec(code);
     if (existing) {
-        const open = content.indexOf('{', existing.index);
+        const open = code.indexOf('{', existing.index);
         const close = FindMatchingBracket(content, open);
         if (close === -1) {
             throw new Error('Could not locate the end of userHandling.newUserTemplate in mj.config.cjs.');
         }
         return content.slice(0, open) + literal + content.slice(close + 1);
     }
-    const handling = /userHandling\s*:\s*\{/.exec(content);
+    const handling = /userHandling\s*:\s*\{/.exec(code);
     if (handling) {
-        const open = content.indexOf('{', handling.index);
+        const open = code.indexOf('{', handling.index);
         return content.slice(0, open + 1) + `\n    newUserTemplate: ${literal},` + content.slice(open + 1);
     }
     return InsertBeforeModuleExportsClose(content, `\n  userHandling: {\n    newUserTemplate: ${literal},\n  },\n`);
@@ -843,7 +1263,9 @@ export function RemoveExcludeSchema(
  * If it doesn't exist, adds one inside the module.exports object.
  */
 function EnsureExcludeSchemasSection(content: string): string {
-    if (/excludeSchemas\s*:/.test(content)) {
+    // `excludeSchemas_append` (concatenated onto the defaults by the config merger) counts as the
+    // section too; missing it wrote a second `excludeSchemas: []` into the file (#3301).
+    if (/\bexcludeSchemas(?:_append)?\s*:/.test(BlankComments(content))) {
         return content;
     }
 
@@ -851,44 +1273,63 @@ function EnsureExcludeSchemasSection(content: string): string {
     return InsertBeforeModuleExportsClose(content, section);
 }
 
-/**
- * Adds a schema name to the first excludeSchemas array if not already present.
- */
-function AddSchemaToExcludeArray(content: string, schemaName: string): string {
-    // Check if the schema is already in the array (case-insensitive)
-    const alreadyExists = new RegExp(
-        `excludeSchemas\\s*:\\s*\\[[^\\]]*['"]${EscapeRegex(schemaName)}['"]`,
-        'i'
-    );
-    if (alreadyExists.test(content)) {
-        return content;
+/** An `excludeSchemas` or `excludeSchemas_append` array: its key and bracket offsets. */
+interface ExcludeArrayLocation {
+    Key: string;
+    OpenBracketPos: number;
+    ClosePos: number;
+}
+
+/** Finds every `excludeSchemas` / `excludeSchemas_append` array outside comments, in file order. */
+function LocateExcludeArrays(content: string): ExcludeArrayLocation[] {
+    const locations: ExcludeArrayLocation[] = [];
+    for (const match of BlankComments(content).matchAll(/\b(excludeSchemas(?:_append)?)\s*:\s*\[/g)) {
+        const openBracketPos = (match.index ?? 0) + match[0].length - 1;
+        const closePos = FindMatchingBracket(content, openBracketPos);
+        if (closePos !== -1) {
+            locations.push({ Key: match[1], OpenBracketPos: openBracketPos, ClosePos: closePos });
+        }
     }
-
-    // Find the first excludeSchemas array's closing bracket
-    const arrayMatch = content.match(/excludeSchemas\s*:\s*\[/);
-    if (!arrayMatch || arrayMatch.index === undefined) {
-        return content;
-    }
-
-    const openBracketPos = arrayMatch.index + arrayMatch[0].length - 1;
-    const closingBracket = FindMatchingBracket(content, openBracketPos);
-    if (closingBracket === -1) {
-        return content;
-    }
-
-    // Check if the array has existing entries to determine formatting.
-    // JSON.stringify: quoted + escaped literal, so the value can't break out of the string
-    // and inject code into the executed config (see AddEntryToDynamicArray).
-    const arrayContent = content.slice(openBracketPos + 1, closingBracket).trim();
-    const entry = arrayContent.length > 0
-        ? `, ${JSON.stringify(schemaName)}`
-        : JSON.stringify(schemaName);
-
-    return content.slice(0, closingBracket) + entry + content.slice(closingBracket);
+    return locations;
 }
 
 /**
- * Removes a schema name from all excludeSchemas arrays in the config.
+ * Adds a schema name to the host's exclusion array if no exclusion array already lists it.
+ * Writes to `excludeSchemas_append` when the host uses that key, otherwise to the first
+ * `excludeSchemas` array.
+ */
+function AddSchemaToExcludeArray(content: string, schemaName: string): string {
+    const arrays = LocateExcludeArrays(content);
+    const code = BlankComments(content);
+    // Already listed in any exclusion array (case-insensitive)? A commented-out entry does not count.
+    const listed = new RegExp(`['"]${EscapeRegex(schemaName)}['"]`, 'i');
+    if (arrays.some((a) => listed.test(code.slice(a.OpenBracketPos, a.ClosePos)))) {
+        return content;
+    }
+
+    const target = arrays.find((a) => a.Key === 'excludeSchemas_append') ?? arrays[0];
+    if (!target) {
+        return content;
+    }
+
+    // JSON.stringify: quoted + escaped literal, so the value can't break out of the string
+    // and inject code into the executed config (see AddEntryToDynamicArray).
+    const value = JSON.stringify(schemaName);
+    const lastIdx = LastSignificantCharIndex(content, target.ClosePos);
+    if (lastIdx <= target.OpenBracketPos) {
+        // Empty array.
+        return content.slice(0, target.ClosePos) + value + content.slice(target.ClosePos);
+    }
+    // Insert right after the last element. When it already carries a trailing comma, keep that
+    // style instead of adding a second comma, which would leave a hole (#4547).
+    const entry = content[lastIdx] === ',' ? ` ${value},` : `, ${value}`;
+    return content.slice(0, lastIdx + 1) + entry + content.slice(lastIdx + 1);
+}
+
+/**
+ * Removes a schema name from every `excludeSchemas` / `excludeSchemas_append` array in the config.
+ * Each removal is scoped to its array, so the same name elsewhere in the file (or in a comment)
+ * is left alone.
  */
 function RemoveSchemaFromExcludeArray(content: string, schemaName: string): string {
     // Remove the schema entry (with optional leading comma+space or trailing comma+space).
@@ -903,12 +1344,16 @@ function RemoveSchemaFromExcludeArray(content: string, schemaName: string): stri
         new RegExp(`['"]${EscapeRegex(schemaName)}['"]`, 'gi'),
     ];
 
-    for (const pattern of patterns) {
-        if (pattern.test(content)) {
-            return content.replace(pattern, '');
+    let result = content;
+    // Last array first, so an edit never shifts the offsets of an array still to be edited.
+    for (const location of LocateExcludeArrays(content).reverse()) {
+        const region = BlankComments(result).slice(location.OpenBracketPos + 1, location.ClosePos);
+        const pattern = patterns.find((p) => region.match(p) !== null);
+        if (pattern) {
+            result = ReplaceInRange(result, location.OpenBracketPos + 1, location.ClosePos, pattern, () => '');
         }
     }
-    return content;
+    return result;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -993,14 +1438,15 @@ function ResolveEntityPackageFromManifest(manifest: MJAppManifest): string | und
  */
 function EnsureEntityPackageNameSection(content: string): string {
     // Check if entityPackageName already exists as a Record (has opening brace)
-    const recordMatch = content.match(/entityPackageName\s*:\s*\{/);
+    const code = BlankComments(content);
+    const recordMatch = code.match(/entityPackageName\s*:\s*\{/);
     if (recordMatch) {
         return content; // Already a Record — nothing to do
     }
 
     // Check if entityPackageName exists as a string
-    const stringMatch = content.match(/entityPackageName\s*:\s*['"]([^'"]*)['"]\s*,?/);
-    if (stringMatch) {
+    const stringMatch = code.match(/entityPackageName\s*:\s*['"]([^'"]*)['"]\s*,?/);
+    if (stringMatch && stringMatch.index !== undefined) {
         const oldValue = stringMatch[1];
         // CodeGen's resolveEntityPackageName treats a STRING entityPackageName as "every
         // non-core schema resolves to <oldValue>", but a RECORD falls back to
@@ -1021,7 +1467,7 @@ function EnsureEntityPackageNameSection(content: string): string {
         }
         // Safe: a default string is equivalent to an empty Record (same resolution).
         const replacement = `entityPackageName: {\n  },`;
-        return content.replace(stringMatch[0], replacement);
+        return content.slice(0, stringMatch.index) + replacement + content.slice(stringMatch.index + stringMatch[0].length);
     }
 
     // entityPackageName doesn't exist at all — insert into the module.exports object literal
@@ -1039,12 +1485,13 @@ function AddEntityPackageEntry(content: string, schemaName: string, packageName:
     content = RemoveEntityPackageEntry(content, schemaName);
 
     // Find the entityPackageName Record opening brace
-    const recordMatch = content.match(/entityPackageName\s*:\s*\{/);
+    const code = BlankComments(content);
+    const recordMatch = code.match(/entityPackageName\s*:\s*\{/);
     if (!recordMatch || recordMatch.index === undefined) {
         throw new Error('entityPackageName record not found in mj.config.cjs when adding a schema mapping.');
     }
 
-    const bracePos = content.indexOf('{', recordMatch.index);
+    const bracePos = code.indexOf('{', recordMatch.index);
     // JSON.stringify both key and value — quoted + escaped, so neither can break out of its
     // string literal and inject code into the executed config (see AddEntryToDynamicArray).
     const entryStr = `\n    ${JSON.stringify(schemaName)}: ${JSON.stringify(packageName)},`;
@@ -1060,22 +1507,25 @@ function RemoveEntityPackageEntry(content: string, schemaName: string): string {
     // Anchor the removal to the entityPackageName record block ONLY. A global
     // replace would delete an identically-named key ANYWHERE else in the config
     // (e.g. a `'crm': 'CRM Agent'` entry under serverExtensions.SlashCommands) — B5.
-    const recordMatch = content.match(/entityPackageName\s*:\s*\{/);
+    const code = BlankComments(content);
+    const recordMatch = code.match(/entityPackageName\s*:\s*\{/);
     if (!recordMatch || recordMatch.index === undefined) {
         return content;
     }
-    const bracePos = content.indexOf('{', recordMatch.index);
+    const bracePos = code.indexOf('{', recordMatch.index);
     const closePos = FindMatchingBracket(content, bracePos);
     if (closePos === -1) {
         return content;
     }
-    // Accept both quote styles for key and value (B7).
+    // Accept a single-quoted, double-quoted or bare key, and either quote style for the value
+    // (B7). A bare key (`__mj_X: '...'`) needs no quotes in JS; missing it made every install
+    // add a second, quoted copy (#4548).
+    const name = EscapeRegex(schemaName);
     const pattern = new RegExp(
-        `\\s*['"]${EscapeRegex(schemaName)}['"]\\s*:\\s*['"][^'"]*['"]\\s*,?`,
+        `\\s*(?:(['"])${name}\\1|(?<![\\w$])${name}(?![\\w$]))\\s*:\\s*['"][^'"]*['"]\\s*,?`,
         'g'
     );
-    const inner = content.slice(bracePos + 1, closePos).replace(pattern, '');
-    return content.slice(0, bracePos + 1) + inner + content.slice(closePos);
+    return ReplaceInRange(content, bracePos + 1, closePos, pattern, () => '');
 }
 
 /**

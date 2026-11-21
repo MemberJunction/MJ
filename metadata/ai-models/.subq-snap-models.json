@@ -1,0 +1,95 @@
+[
+  {
+    "fields": {
+      "Name": "SubQ Snap",
+      "Description": "Subquadratic's multimodal decision model, built for fast, long-context decisions in enterprise agentic workflows. Announced on October 12, 2026, it is in public preview as subq-snap-preview; Subquadratic will change that ID at general availability, so update the Inference Provider row's APIName then. Its only host is the SubQ Decisions API (POST https://api.subq.ai/v1/systemone), which takes the same System One request as Jev: Likelihood, Choice (2 to 255 options) and Score (2 to 10 levels) questions about one state, named with up to 100 characters, each answered with a probability for every option or level. It writes no text. Subquadratic's announcement gives up to 384K tokens of context; its API documentation gives no limit. The API also accepts up to 4 images with the state, which MJ does not send yet. It charges $0.05 per million input tokens; output is free. MJ has not measured it; Subquadratic's claims are its own. Its raw probabilities are not calibrated to MJ's data, so set thresholds on calibrated values.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Decision",
+      "PowerRank": 43,
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 0,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Decision": {
+          "MaxChoiceOptions": 255,
+          "MaxScoreLevels": 10
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Subquadratic",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "9498C287-9254-48FA-ACC5-81744ECC3FE1"
+          },
+          "sync": {
+            "lastModified": "2026-10-20T23:18:43.025Z",
+            "checksum": "4054d72a470bf9571fbb57c861c9138ca75826315ae335f3510624733bd9af18"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Subquadratic",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "SubQDecision",
+            "APIName": "subq-snap-preview",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "46040459-5256-41CC-BB3E-335486F64B6B"
+          },
+          "sync": {
+            "lastModified": "2026-10-20T23:18:43.036Z",
+            "checksum": "67a9dbc24999f7ef424457da65bf890e169b7e4fd20e341f560fc07a547b1493"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Subquadratic",
+            "StartedAt": "2026-10-12T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.05,
+            "OutputPricePerUnit": 0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "subq-snap-preview on Subquadratic's SubQ Decisions API (public preview), as listed on the Models page of SubQ's API documentation on October 12, 2026: $0.05 per million input tokens; output is free, and usage.output_tokens is always 0."
+          },
+          "primaryKey": {
+            "ID": "621C0BC6-6AF1-41D4-912E-772515E9ABE8"
+          },
+          "sync": {
+            "lastModified": "2026-10-20T23:18:43.048Z",
+            "checksum": "c9bf849188e86a7c1e0ce59d539019bbb21de885efb333a7bafaa214743f01b2"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "43DC53C5-FB18-41E3-84CE-DE904FBF6040"
+    },
+    "sync": {
+      "lastModified": "2026-10-20T23:18:43.009Z",
+      "checksum": "1b4509239f0a9108c327f0dbdfb85baa34bcf9e1d604ea324f1c19327b06e592"
+    }
+  }
+]

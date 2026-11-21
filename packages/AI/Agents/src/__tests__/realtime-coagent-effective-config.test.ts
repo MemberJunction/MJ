@@ -305,10 +305,14 @@ describe('C1 re-audit: realtime.session propagates through the effective-config 
     it('carries a validated session tuning block end-to-end (was always dropped before the fix)', () => {
         const effective = ResolveEffectiveRealtimeConfig(
             null,
-            layer({ realtime: { session: { effortLevel: 'high', parallelToolCalls: true, inputTranscriptionModel: 'whisper-1' } } }),
+            layer({
+                realtime: { session: { effortLevel: 'high', parallelToolCalls: true, inputTranscriptionModel: 'whisper-1', transcriptionLanguages: ['en-US', 7] } },
+            }),
             null
         );
-        expect(effective.realtime?.session).toEqual({ effortLevel: 'high', parallelToolCalls: true, inputTranscriptionModel: 'whisper-1' });
+        expect(effective.realtime?.session).toEqual({
+            effortLevel: 'high', parallelToolCalls: true, inputTranscriptionModel: 'whisper-1', transcriptionLanguages: ['en-US'],
+        });
         // And GetSessionTuningSettings now returns a real bag (was always null before the fix):
         expect(GetSessionTuningSettings(effective)).toMatchObject({ effortLevel: 'high', parallelToolCalls: true, inputTranscriptionModel: 'whisper-1' });
     });
@@ -334,5 +338,29 @@ describe('C1 re-audit: realtime.session propagates through the effective-config 
     it('a numeric effortLevel survives as a number through the resolver', () => {
         const effective = ResolveEffectiveRealtimeConfig(null, layer({ realtime: { session: { effortLevel: 85 } } }), null);
         expect(effective.realtime?.session?.effortLevel).toBe(85);
+    });
+});
+
+describe('turnDetection.Coverage survives the co-agent config cascade (#6182 item 4)', () => {
+    const withCoverage = (coverage: string): string =>
+        JSON.stringify({ realtime: { session: { turnDetection: { Coverage: coverage } } } });
+    // ResolveEffectiveRealtimeConfig(typeDefault, agent, overrides, target, app) — one case per layer.
+    const callers: Record<string, (json: string) => ReturnType<typeof ResolveEffectiveRealtimeConfig>> = {
+        agentType: (j) => ResolveEffectiveRealtimeConfig(j, null, null),
+        coAgent: (j) => ResolveEffectiveRealtimeConfig(null, j, null),
+        targetAgent: (j) => ResolveEffectiveRealtimeConfig(null, null, null, j),
+        application: (j) => ResolveEffectiveRealtimeConfig(null, null, null, null, j),
+        configOverridesJson: (j) => ResolveEffectiveRealtimeConfig(null, null, j),
+    };
+
+    it.each(Object.keys(callers))('Coverage set only in the %s layer survives', (layerName) => {
+        const effective = callers[layerName](withCoverage('audioActivityOnly'));
+        expect(effective.realtime?.session?.turnDetection?.Coverage).toBe('audioActivityOnly');
+    });
+
+    it('Application Coverage wins over the catalog Coverage', () => {
+        const effective = ResolveEffectiveRealtimeConfig(
+            withCoverage('audioActivityAndAllVideo'), null, null, null, withCoverage('audioActivityOnly'));
+        expect(effective.realtime?.session?.turnDetection?.Coverage).toBe('audioActivityOnly');
     });
 });

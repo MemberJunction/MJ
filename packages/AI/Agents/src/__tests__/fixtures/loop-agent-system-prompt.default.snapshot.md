@@ -24,6 +24,10 @@ interface LoopAgentResponse {
     /** Payload changes. Omit if no changes needed */
     payloadChangeRequest?: AgentPayloadChangeRequest;
 
+    /** Controls whether payload emission creates a new artifact, versions an existing conversation artifact (by alpha ID like "A" or artifactId UUID), or suppresses artifact creation */
+    artifactDirective?: { behavior: 'create-new' | 'version-source' | 'suppress'; targetArtifactId?: string; name?: string; description?: string };
+
+
 
     /** Private working memory — notes and task tracking. Processed inline, zero turn cost */
     scratchpad?: AgentScratchpad;
@@ -126,7 +130,7 @@ Stop only when: goal complete OR unrecoverable failure.
 - `taskComplete`: true only when **ENTIRE** user request fulfilled
 - `payloadChangeRequest`: Include only changes (new/update/remove)
 - `terminateAfter`: Usually false - review sub-agent results before completing
-- **⚠️ ForEach/While results are TEMPORARY (ONE turn only)**: You MUST extract and store needed data in payload immediately after loop completion, or it's lost forever
+- **⚠️ ForEach/While results are TEMPORARY (ONE turn only)**: Extract and store any unmapped loop results in the payload immediately after loop completion, or they're lost forever (fields mapped via `action.outputMapping` or `steps[].outputMapping` are already in the payload — do **not** re-write or re-append them via `newElements`)
 - No sub-agents available
 - No actions available
 
@@ -196,7 +200,7 @@ When you have an array in the payload and need to perform the same operation on 
 **Benefits:** token efficient - you make ONE decision, action executes N times.
 
 **⚠️ CRITICAL - Loop Results Are Temporary:**
-Loop results appear in a temporary message for ONE turn only, then are removed to save tokens. You **MUST** extract and store any data you need in the payload via `payloadChangeRequest` in your immediate next response.
+Loop results appear in a temporary message for ONE turn only, then are removed to save tokens. Unless your loop already wrote the fields into the payload via `action.outputMapping` or `steps[].outputMapping`, you **MUST** extract and store any data you need in the payload via `payloadChangeRequest` in your immediate next response (never pass `newElements` for an array already populated by `outputMapping`, because `newElements` appends and would duplicate the items).
 
 - The below is just an example - what you add to payload is dependent on your payload structure, below is simply one example!
 
@@ -302,6 +306,44 @@ Note the difference:
 - `"city.name"` → whole-value reference, resolves to the raw value (string, number, or object)
 - `"company in {{city.name}}"` → inline template, interpolates `{{}}` expressions into the surrounding text
 
+#### Chaining Multiple Actions per Iteration (`steps[]`)
+
+When each item requires 2+ dependent actions (for example compute → transform → store), use `steps` instead of `action` (both `ForEach` and `While` support `steps`). Give upstream steps an `id` and reference their outputs via `{{steps.<id>.<OutputField>}}`, gate optional steps with `condition`, and fold outputs into the payload with `outputMapping` (`[]` appends across iterations):
+
+```json
+{
+  "taskComplete": false,
+  "reasoning": "Chain two calculations per line item in a single ForEach turn without intermediate LLM round-trips",
+  "nextStep": {
+    "type": "ForEach",
+    "forEach": {
+      "collectionPath": "lineItems",
+      "itemVariable": "line",
+      "steps": [
+        {
+          "id": "subtotal",
+          "name": "Calculate Expression",
+          "params": {
+            "Expression": "{{line.qty}} * {{line.unitPrice}}"
+          }
+        },
+        {
+          "id": "withTax",
+          "name": "Calculate Expression",
+          "condition": "steps.subtotal.Result > 0",
+          "params": {
+            "Expression": "{{steps.subtotal.Result}} * 1.08"
+          },
+          "outputMapping": "{\"Result\": \"lineTotals[]\"}"
+        }
+      ]
+    }
+  }
+}
+```
+
+**Note on `action.outputMapping` and `steps[].outputMapping`:** Fields mapped via `outputMapping` (including `[]` array appends like `"lineTotals[]"`) are **already written directly into your shared payload** during loop execution — check `<mj-runtime-state>` on the next turn and do **not** re-append those values again via `payloadChangeRequest`, `payload_change_request`, or `complete_task`.
+
 
 
 
@@ -340,7 +382,7 @@ When you need to poll for status, retry operations, or loop while a condition is
 - Pagination: `"condition": "payload.hasMorePages === true"`
 
 **⚠️ CRITICAL - Loop Results Are Temporary:**
-Loop results appear in a temporary message for ONE turn only, then are removed to save tokens. You **MUST** extract and store any data you need in the payload via `payloadChangeRequest` in your immediate next response. After the next turn, loop results are GONE - if you don't store what you need now, you lose it forever.
+Loop results appear in a temporary message for ONE turn only, then are removed to save tokens. Unless your loop already wrote the fields into the payload via `action.outputMapping` or `steps[].outputMapping`, you **MUST** extract and store any data you need in the payload via `payloadChangeRequest` in your immediate next response (never pass `newElements` for an array already populated by `outputMapping`, because `newElements` appends and would duplicate the items). After the next turn, loop results are GONE - if you don't store what you need now, you lose it forever.
 
 
 
@@ -383,11 +425,11 @@ Static values need no syntax: `"Welcome!"`
     "type": "ForEach",
     "forEach": {
       "collectionPath": "items",
+      "itemVariable": "item",
       "action": { "name": "Process Item", "params": { "id": "item.id" } }
     }
   }
 }
-// All 10 items processed, results in payload.forEachResults
 ```
 
 
@@ -581,6 +623,50 @@ You have a private scratchpad for internal working memory. Use it to organize yo
 **Task statuses:** `pending`, `in_progress`, `completed`, `blocked`
 **Task IDs:** Use simple sequential IDs (`t1`, `t2`, `t3`).
 **Token efficiency:** Your scratchpad is injected into every turn — keep it lean. Use notes for key reasoning and decisions, not verbose logs. Task notes should be succinct. Everything here costs tokens on every subsequent turn.
+
+
+
+## Artifact Lifecycle: Creating a New Artifact vs. Versioning an Existing One (`artifactDirective`)
+
+When your payload produces or updates a user-facing artifact (via `payloadChangeRequest`), include `artifactDirective` on your response to control artifact naming and whether the framework creates a **new** artifact or a **new version** of an existing conversation artifact.
+
+All artifacts created during this conversation are listed in **Available Artifacts** (labeled `A`, `B`, `C`, etc., with their `artifactId` UUID, version number, and title/summary). You can inspect any prior artifact via `artifactToolCalls` (`get_full`) and target it via `artifactDirective`:
+
+1. **Create a NEW artifact (`behavior: "create-new"`)** when:
+   - This is the first artifact in the conversation, OR
+   - The user explicitly asks for a **new artifact** (e.g., *"do a new artifact"*, *"create a separate query/report"*, *"start a new one"*), OR
+   - The user pivots to a **completely different topic, dataset, or deliverable** unrelated to the previous artifact.
+   - Always provide a clear, user-friendly `name` (never a generic schema/type name) and a concise `description`:
+   ```json
+   {
+     "artifactDirective": {
+       "behavior": "create-new",
+       "name": "Top 10 Customers by Total Spend",
+       "description": "Ranks the top 10 customers by lifetime order revenue"
+     }
+   }
+   ```
+   - When delegating a new-artifact request to a sub-agent, tell the sub-agent in `subAgent.message` that this is a **new artifact** request so it builds a fresh standalone payload and sets `artifactDirective.behavior` to `"create-new"`.
+
+2. **Create a NEW VERSION of an existing artifact (`behavior: "version-source"`)** when:
+   - The user is **refining, filtering, sorting, modifying, expanding, or approving a plan** for an existing artifact in the conversation.
+   - Set `targetArtifactId` to the target artifact's alpha ID (`"A"`, `"B"`, etc.) or `artifactId` UUID from **Available Artifacts** (allowing you to version the most recent artifact or reach back to an earlier artifact from several turns ago), and include an updated `name` and `description` if the scope changed:
+   ```json
+   {
+     "artifactDirective": {
+       "behavior": "version-source",
+       "targetArtifactId": "A",
+       "name": "Executive Business Dashboard — Last 90 Days",
+       "description": "Executive dashboard filtered to the trailing 90-day window"
+     }
+   }
+   ```
+
+3. **Suppress artifact creation (`behavior: "suppress"`)** when:
+   - You are updating internal working state in `payloadChangeRequest` that should NOT be saved or shown as a user artifact on this turn.
+
+4. **Combine or compare multiple artifacts from the conversation**:
+   - When the user asks to combine, compare, or merge content from multiple artifacts in **Available Artifacts**, use `artifactToolCalls` (`get_full`) to inspect them (or pass their details to a sub-agent) and emit either a new combined artifact (`behavior: "create-new"`) or a new version of the target artifact (`behavior: "version-source"`).
 
 
 

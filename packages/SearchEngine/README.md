@@ -85,9 +85,37 @@ The provider is registered in `metadata/search-providers/.search-providers.json`
 1. **Reciprocal Rank Fusion (RRF)**:
    Results from `TagSearchProvider` participate in `SearchFusion.Fuse()`. When an item matches across both direct entity LIKE-search and tag-weighted retrieval, RRF boosts the record's final rank, and `SearchFusion.Deduplicate()` combines score breakdowns (`ScoreBreakdown.Tag` + `ScoreBreakdown.Entity`) and merges tags.
 2. **Security & Permission Push-Down**:
-   `SearchEngine` automatically validates entity read permissions and executes `verifyOwnershipAndRowFilters` on tag results via `RunView`, guaranteeing that users only see records they are permitted to view.
+   `SearchEngine` automatically validates entity read permissions and executes `verifyOwnershipAndRowFilters` on tag results via `RunView`, guaranteeing that users only see records they are permitted to view. For content items and chunks, the protected `VerifyOriginRecords` gate then follows the result to the record it was derived from (through `MJ: Entity Record Documents`) and keeps it only when that origin record is readable under the origin entity's own permissions and row filters. See [SEARCH_SCOPES_AND_RAG_GUIDE.md § 4](../../guides/SEARCH_SCOPES_AND_RAG_GUIDE.md#4-permission-push-down-section-36).
 3. **Automatic Record Name Enrichment**:
    `SearchEnricher.Enrich()` resolves canonical record names using `GetEntityRecordNames` for all tag results and attaches entity icons.
+
+---
+
+## 🎯 Re-ranking
+
+A scope opts into a re-ranker with `ScopeConfig.reRanker.driverClass`; a scope without one keeps the fused order. The shipped drivers are `CohereReRanker`, `VoyageReRanker`, `OpenAIReRanker`, `BGEReRanker` (local) and `DecisionReRanker`.
+
+**`DecisionReRanker`** scores each candidate with a typed decision: one Likelihood per candidate, asked as the searching user through the `Default Decision` prompt and its failover chain. A decision call bills input tokens only and needs no reranker key of its own. The scoring is `@memberjunction/ai-reranker`'s `DecisionReranker`, resolved through the ClassFactory, so it must be loaded (both server bootstraps load it).
+
+```json
+{
+  "reRanker": {
+    "driverClass": "DecisionReRanker",
+    "inputTopN": 50,
+    "outputTopN": 10,
+    "config": { "minRelevanceThreshold": 0.1 }
+  }
+}
+```
+
+| `config` key | Meaning | Default |
+|---|---|---|
+| `promptID` | The decision prompt to ask | `Default Decision` |
+| `timeoutMS` | Time budget for the rerank's decision calls, all together | 15 000 |
+| `maxDocumentsPerCall` | Candidates per call when no model declares `Decision.MaxQuestionsPerCall` | 20 |
+| `minRelevanceThreshold` | Drop results below it, unless none reaches it. The scores are uncalibrated, so start at 0.1 | none |
+
+Cost is reported to the scope's `RerankerBudgetCents` guard from the decision runs' recorded usage, or from the per-candidate estimate when no cost was recorded. A failed rerank falls back to the fused order, as for every driver.
 
 ---
 

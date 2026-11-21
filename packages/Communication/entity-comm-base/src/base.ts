@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, RunViewParams, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, IRunViewProvider, RunViewParams, UserInfo } from "@memberjunction/core";
 import { MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity } from "@memberjunction/core-entities";
 import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { Message, ProcessedMessage, CommunicationEngineBase } from '@memberjunction/communication-types';
@@ -17,10 +17,31 @@ export class EntityCommunicationParams {
     Message: Message
     PreviewOnly?: boolean = false
     IncludeProcessedMessages?: boolean = false
+    /**
+     * The user the communication runs as. Required on the server: every recipient and related-entity
+     * read runs as this user, so row-level security, entity permissions and field-level security all
+     * apply, and no field this user cannot read is merged into a message or returned. The server
+     * engine refuses a request without it. Clients leave it unset; the API sets it from the
+     * authenticated caller.
+     */
+    ContextUser?: UserInfo
+    /**
+     * The provider of the request the communication serves; every metadata lookup and read uses
+     * it. The API sets it from the request. An in-process caller that leaves it unset gets the
+     * process's default provider.
+     */
+    Provider?: IMetadataProvider & IRunViewProvider
 }
 export class EntityCommunicationResultItem {
     RecipientData: any
     Message: ProcessedMessage
+    /**
+     * True when nothing was sent (or previewed) for this recipient. {@link SkipReason} says why, without
+     * revealing any value the sender may not read; {@link Message} is unset.
+     */
+    Skipped?: boolean
+    /** Why this recipient was skipped, when {@link Skipped} is true. */
+    SkipReason?: string
 }
 export class EntityCommunicationResult {
     Success: boolean

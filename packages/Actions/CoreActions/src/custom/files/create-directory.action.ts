@@ -1,6 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
+import { StorageAccountAccess } from "@memberjunction/storage";
 import { BaseFileStorageAction } from "./base-file-storage.action";
 
 /**
@@ -22,6 +23,11 @@ import { BaseFileStorageAction } from "./base-file-storage.action";
  */
 @RegisterClass(BaseAction, "File Storage: Create Directory")
 export class CreateDirectoryAction extends BaseFileStorageAction {
+
+    /** {@inheritDoc BaseFileStorageAction.AccountAccess} — this action WRITES to the account. */
+    protected override get AccountAccess(): StorageAccountAccess {
+        return 'Write';
+    }
 
     /**
      * Create a directory

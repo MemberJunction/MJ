@@ -42,6 +42,9 @@
               </div>
               <div class="config-card-date">
                 <span class="config-status-mode"><i class="fa-solid fa-sliders"></i> {{ config.DefaultMode }}</span>
+                @if (config.StorageMode === 'Purge') {
+                  <span class="config-status-mode config-purge-tag"><i class="fa-solid fa-eraser"></i> Purge</span>
+                }
               </div>
             </div>
           }
@@ -109,28 +112,49 @@
                 <h3><i class="fa-solid fa-hard-drive"></i> Storage</h3>
                 <div class="detail-row">
                   <div class="detail-field">
-                    <label for="config-storage">Storage Account</label>
+                    <label for="config-storage-mode">Storage Mode</label>
                     <select
-                      id="config-storage"
-                      [(ngModel)]="SelectedConfig.StorageAccountID"
+                      id="config-storage-mode"
+                      [(ngModel)]="SelectedConfig.StorageMode"
                       (ngModelChange)="OnConfigFieldChanged()"
                       class="detail-input">
-                      <option value="">-- Select --</option>
-                      @for (account of StorageAccounts; track account.ID) {
-                        <option [value]="account.ID">{{ account.Name }}</option>
+                      @for (mode of StorageModes; track mode) {
+                        <option [value]="mode">{{ mode }}</option>
                       }
                     </select>
                   </div>
-                  <div class="detail-field">
-                    <label for="config-path">Root Path</label>
-                    <input
-                      id="config-path"
-                      type="text"
-                      [(ngModel)]="SelectedConfig.RootPath"
-                      (ngModelChange)="OnConfigFieldChanged()"
-                      class="detail-input" />
-                  </div>
                 </div>
+                @if (SelectedConfig.StorageMode === 'Purge') {
+                  <p class="detail-purge-note">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    Purge keeps no copy. Cleared data cannot be restored, and no storage account is used.
+                  </p>
+                } @else {
+                  <div class="detail-row">
+                    <div class="detail-field">
+                      <label for="config-storage">Storage Account</label>
+                      <select
+                        id="config-storage"
+                        [(ngModel)]="SelectedConfig.StorageAccountID"
+                        (ngModelChange)="OnConfigFieldChanged()"
+                        class="detail-input">
+                        <option value="">-- Select --</option>
+                        @for (account of StorageAccounts; track account.ID) {
+                          <option [value]="account.ID">{{ account.Name }}</option>
+                        }
+                      </select>
+                    </div>
+                    <div class="detail-field">
+                      <label for="config-path">Root Path</label>
+                      <input
+                        id="config-path"
+                        type="text"
+                        [(ngModel)]="SelectedConfig.RootPath"
+                        (ngModelChange)="OnConfigFieldChanged()"
+                        class="detail-input" />
+                    </div>
+                  </div>
+                }
               </div>
 
               <!-- Defaults section -->

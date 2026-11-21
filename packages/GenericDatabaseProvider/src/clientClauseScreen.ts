@@ -1,0 +1,1439 @@
+import { CurrentFieldSecurityGeneration, EntityPermissionType, IsPlatformSQL, IsPostRunViewProtectedEntity, type EntityInfo, type PlatformSQL, type UserInfo } from '@memberjunction/core';
+import {
+    FindForbiddenFunctionCalls,
+    IsKeyword,
+    LexSQL,
+    SignificantTokens,
+    SqlDocument,
+    SQLParser,
+    StrictFragmentValidator,
+    type SQLLexToken,
+    type StrictValidationResult,
+} from '@memberjunction/sql-parser';
+import { PostgreSQLDialect, SQLServerDialect, type ParserDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
+import { FindProjectionStars } from './fieldSecurity/projectionStars.js';
+
+/** A client-supplied SQL fragment: plain text, or a set of per-platform variants. */
+export type ClientClauseText = string | PlatformSQL | null | undefined;
+
+/** The SQL fragments a RunView request can carry from a client. */
+export interface ClientViewClauseSet {
+    ExtraFilter?: ClientClauseText;
+    OrderBy?: ClientClauseText;
+    OverrideExcludeFilter?: ClientClauseText;
+}
+
+/**
+ * The entity base views a client fragment may read. `Qualified` is keyed by `schema.view`, `Bare`
+ * by view name alone; a name that collides across entities (or across schemas for `Bare`) maps to `null`.
+ */
+export interface EntityBaseViewAllowList {
+    Qualified: Map<string, EntityInfo | null>;
+    Bare: Map<string, EntityInfo | null>;
+}
+
+/**
+ * A provider that screens client SQL clauses with {@link ClientClauseScreen} against its own
+ * entities and dialect. `GenericDatabaseProvider` is one; server code that hands client SQL text
+ * to RunView outside the API entry points asks its provider through this.
+ */
+export interface ClientClauseScreeningProvider {
+    ScreenClientClause(clause: string | null | undefined, label: string, contextUser?: UserInfo, entityInfo?: EntityInfo): void;
+}
+
+/** Options for {@link ClientClauseScreen.AssertClauseUsesEntityBaseViews}. */
+export interface ClientClauseScreenOptions {
+    /**
+     * Leaves text the parser cannot read to the caller instead of refusing it. For a clause the
+     * provider checks again per item (an aggregate expression), that per-item check refuses it.
+     */
+    LeaveUnparseableToProvider?: boolean;
+}
+
+/** True when `provider` can screen client SQL clauses. */
+export function IsClientClauseScreeningProvider(provider: object | null | undefined): provider is ClientClauseScreeningProvider {
+    return !!provider && 'ScreenClientClause' in provider && typeof provider.ScreenClientClause === 'function';
+}
+
+/** One FROM item a parsed statement reads: a table or view, or a table function. */
+export interface StatementRelation {
+    /**
+     * The schema of the table or function as written, without quotes; empty when unqualified. A
+     * three-part name keeps its database (`database.schema`), so it never matches a view in this
+     * database.
+     */
+    SchemaName: string;
+    /** The table or view name without quotes; empty when the item is not a table or view. */
+    TableName: string;
+    /** The table function's name; empty when the item is not a function call. */
+    FunctionName: string;
+    /**
+     * True when the item names a CTE that is in scope where it is read: an unqualified name that
+     * matches, by the dialect's identifier rules, a CTE declared by its own SELECT or an enclosing
+     * one. A schema, `dbo` included, always makes the item a real table or view.
+     */
+    IsCTEReference: boolean;
+}
+
+/** What {@link ClientClauseScreen.CollectStatementReads} found in a parse tree. */
+export interface StatementReads {
+    /** Every FROM item, repeats included. Derived tables and VALUES lists add none of their own. */
+    Relations: StatementRelation[];
+    /** The SELECT nodes in the tree, each counted once. */
+    SelectCount: number;
+}
+
+/** One variant of a clause, with the dialect it would run under. */
+interface ClauseVariant {
+    Text: string;
+    Dialect: SQLParserDialect;
+}
+
+/** Allow-lists already built, per entity array (see {@link ClientClauseScreen.BuildEntityBaseViewAllowList}). */
+const allowListCache = new WeakMap<readonly EntityInfo[], { Length: number; Generation: number; List: EntityBaseViewAllowList }>();
+
+/**
+ * SECURITY — screens for SQL text that a client (or a client-saved record) supplies to RunView.
+ *
+ * {@link ClientClauseScreen.AssertClauseUsesEntityBaseViews} is the full screen: one statement,
+ * parsed as a read-only fragment, that calls no function the dialect forbids in caller SQL and
+ * whose table references are only entity base views the acting user can read unscoped (no row
+ * filter and no denied fields). Base tables and system catalogs are refused. Apply it at every
+ * point where client text enters RunView: the GraphQL and REST entry points, ad-hoc list sources,
+ * and the clauses a saved view stores (at save and when the view runs).
+ *
+ * {@link ClientClauseScreen.AssertSingleStatementFragment} is the light check the provider runs on
+ * every RunView, server-internal ones included: no statement separator and no comment outside a
+ * literal or quoted identifier. It cannot refuse a legitimate fragment, so it is safe for callers
+ * whose filters the full screen would refuse (base tables, entities the acting user cannot read).
+ *
+ * Both use dialect-aware lexing, so a quote inside a bracket identifier (`[a']`) or a PostgreSQL
+ * `E'\''` string cannot hide a statement the way it hides one from the keyword denylist.
+ */
+export class ClientClauseScreen {
+    /**
+     * Built-in table functions that read only their arguments. A subquery may use one in its FROM
+     * when the name is unqualified; a subquery inside its arguments is screened like any other.
+     */
+    private static readonly ARGUMENT_ONLY_TABLE_FUNCTIONS = new Set<string>([
+        'string_split', 'openjson', 'generate_series', 'unnest', 'regexp_split_to_table', 'string_to_table',
+        'json_array_elements', 'json_array_elements_text', 'jsonb_array_elements', 'jsonb_array_elements_text',
+        'json_each', 'json_each_text', 'jsonb_each', 'jsonb_each_text',
+    ]);
+
+    /**
+     * The parser dialect for a provider: from its `PlatformKey` when it has one, otherwise from its
+     * class name. Defaults to SQL Server.
+     */
+    public static DialectFor(provider?: object | null): SQLParserDialect {
+        const platform = provider && 'PlatformKey' in provider && typeof provider.PlatformKey === 'string' ? provider.PlatformKey : undefined;
+        const name = platform ?? provider?.constructor?.name ?? '';
+        return /postgres/i.test(name) ? new PostgreSQLDialect() : new SQLServerDialect();
+    }
+
+    /**
+     * The full screen for one client clause fragment; throws when it refuses. The label `OrderBy`
+     * screens the text as an ORDER BY list; any other label screens it as a WHERE predicate. When
+     * `user` is given, every entity the fragment reads must be readable by that user, unscoped
+     * ({@link AssertUnscopedRead}). That includes the entity the clause filters: a subquery over
+     * its base view is outside the row filter RunView applies to the outer query.
+     *
+     * The reads come from a walk of the whole parse tree ({@link CollectStatementReads}), and the
+     * clause is refused when that walk does not account for every SELECT in the text
+     * ({@link AssertEverySelectAccountedFor}). Only the parse wrapper's own FROM item is skipped,
+     * and no CTE reference is exempt. A name reserved for the parser
+     * ({@link AssertNoIdentifierAliasNames}) and a call to a function the dialect forbids
+     * ({@link AssertNoForbiddenFunctionCalls}) are refused first.
+     *
+     * With `LeaveUnparseableToProvider`, text the parser cannot read returns without a refusal;
+     * the caller's own per-item check must refuse it instead.
+     */
+    public static AssertClauseUsesEntityBaseViews(
+        clause: string | null | undefined,
+        label: string,
+        entities: readonly EntityInfo[],
+        dialect: SQLParserDialect,
+        user?: UserInfo,
+        options?: ClientClauseScreenOptions,
+    ): void {
+        if (!clause?.trim()) return;
+        if (SQLParser.HasStackedStatements(clause, dialect)) {
+            throw new Error(`Invalid ${label}: multiple statements are not permitted in client-supplied filters`);
+        }
+
+        const fragment = ClientClauseScreen.toDialectQuoting(clause, dialect);
+        ClientClauseScreen.AssertNoIdentifierAliasNames(fragment, dialect, label);
+        ClientClauseScreen.AssertNoForbiddenFunctionCalls(fragment, dialect, label);
+        const result =
+            label === 'OrderBy'
+                ? StrictFragmentValidator.ValidateOrderBy(fragment, dialect, { CollectReads: true })
+                : StrictFragmentValidator.ValidateFilter(fragment, dialect, { CollectReads: true });
+        if (result.Refusal === 'Unparseable' && options?.LeaveUnparseableToProvider) return;
+        const reads = ClientClauseScreen.safeReadsOf(result, `Invalid ${label}: not a safe read-only filter fragment — refusing under uncertainty`, label);
+        ClientClauseScreen.AssertEverySelectAccountedFor(result.ParsedSQL, dialect, reads, label);
+        const allowed = ClientClauseScreen.BuildEntityBaseViewAllowList(entities);
+        for (const relation of reads.Relations) {
+            const entity = ClientClauseScreen.AssertRelationReadable(allowed, relation, label, user);
+            if (entity && user) ClientClauseScreen.AssertUnscopedRead(entity, user, label);
+        }
+    }
+
+    /**
+     * Screens a full client-supplied SQL statement (ad-hoc query path) so every table reference
+     * resolves to an entity BaseView that `user` can read unscoped (CanRead, no row-level filter,
+     * no denied fields), with in-scope CTE references permitted.
+     */
+    public static AssertFullStatementUsesReadableEntityViews(
+        sqlText: string,
+        entities: readonly EntityInfo[],
+        dialect: SQLParserDialect,
+        user: UserInfo | undefined,
+        label = 'SQL',
+    ): void {
+        if (!user) {
+            throw new Error(`Invalid ${label}: no acting user resolved for ad-hoc SQL — refusing`);
+        }
+        ClientClauseScreen.AssertNoIdentifierAliasNames(sqlText, dialect, label);
+        ClientClauseScreen.AssertNoForbiddenFunctionCalls(sqlText, dialect, label);
+        const reads = ClientClauseScreen.readOnlyStatementReads(sqlText, dialect, label);
+        ClientClauseScreen.AssertEverySelectAccountedFor(sqlText, dialect, reads, label);
+        const allowed = ClientClauseScreen.BuildEntityBaseViewAllowList(entities);
+        for (const relation of reads.Relations) {
+            if (relation.IsCTEReference) continue;
+            const entity = ClientClauseScreen.AssertRelationReadable(allowed, relation, label, user);
+            if (entity) ClientClauseScreen.AssertUnscopedRead(entity, user, label);
+        }
+    }
+
+    /**
+     * Applies {@link AssertClauseUsesEntityBaseViews} to every clause of a RunView request. A
+     * platform-specific clause has every variant screened, each under its own platform's dialect.
+     */
+    public static ScreenViewClauses(
+        clauses: ClientViewClauseSet,
+        entities: readonly EntityInfo[],
+        dialect: SQLParserDialect,
+        user?: UserInfo,
+    ): void {
+        const labelled: Array<[string, ClientClauseText]> = [
+            ['ExtraFilter', clauses.ExtraFilter],
+            ['OrderBy', clauses.OrderBy],
+            ['OverrideExcludeFilter', clauses.OverrideExcludeFilter],
+        ];
+        for (const [label, value] of labelled) {
+            for (const variant of ClientClauseScreen.clauseVariants(value, label, dialect)) {
+                ClientClauseScreen.AssertClauseUsesEntityBaseViews(variant.Text, label, entities, variant.Dialect, user);
+            }
+        }
+    }
+
+    /**
+     * Refuses a statement separator or a comment outside literals and quoted identifiers. A filter
+     * or sort fragment never needs either, so this cannot refuse a legitimate clause.
+     */
+    public static AssertSingleStatementFragment(clause: string | null | undefined, label: string, dialect: SQLParserDialect): void {
+        if (clause == null || clause === '') return;
+        if (typeof clause !== 'string') {
+            throw new Error(`Invalid ${label}: expected SQL text`);
+        }
+        const token = LexSQL(clause, dialect).find((t) => t.Kind === 'semicolon' || t.Kind === 'comment');
+        if (token) {
+            const found = token.Kind === 'semicolon' ? 'statement separators' : 'comments';
+            throw new Error(`Invalid ${label}: ${found} are not permitted in a filter or sort clause`);
+        }
+    }
+
+    /**
+     * Refuses an identifier, quoted or bare, in the form of a name the SQL parser gives a bracket
+     * identifier it renames ({@link SQLParser.IsIdentifierAliasName}), in any case. Those names are
+     * reserved for the parser, so client SQL may not use them.
+     */
+    public static AssertNoIdentifierAliasNames(sql: string, dialect: SQLParserDialect, label: string): void {
+        const token = LexSQL(sql, dialect).find(
+            (t) => (t.Kind === 'word' || t.Kind === 'identifier') && SQLParser.IsIdentifierAliasName(ClientClauseScreen.StripIdentifierQuotes(t.Text).trim()),
+        );
+        if (token) {
+            throw new Error(`Invalid ${label}: '${token.Text}' is a name reserved for the SQL parser — use another name`);
+        }
+    }
+
+    /**
+     * Refuses a call to a function the dialect forbids in caller-supplied SQL
+     * ({@link SQLParserDialect.CallerSQLForbiddenFunctions}). Such a function runs SQL given as a
+     * string, reads files or other databases, acts on the server, or pauses the query, so the
+     * table check cannot see what it reads.
+     */
+    public static AssertNoForbiddenFunctionCalls(sql: string, dialect: SQLParserDialect, label: string): void {
+        const forbidden = FindForbiddenFunctionCalls(sql, dialect);
+        if (forbidden.length > 0) {
+            throw new Error(
+                `Invalid ${label}: may not call ${forbidden.join(', ')} — such a function runs SQL given as a string, reads files or other databases, acts on the server, or pauses the query, so what it reads cannot be checked`,
+            );
+        }
+    }
+
+    /**
+     * True when a parsed AST contains a write or DDL node at any depth.
+     *
+     * @deprecated Use {@link StrictFragmentValidator.ValidateReadOnlyStatement} from
+     * `@memberjunction/sql-parser`, whose result reports `ContainsNestedWrite`.
+     */
+    public static AstContainsWriteNode(node: unknown): boolean {
+        return StrictFragmentValidator.ContainsWriteNode(node);
+    }
+
+    /** Removes the bracket, double-quote or backtick quoting around one identifier. */
+    public static StripIdentifierQuotes(name: string | null | undefined): string {
+        if (!name) return '';
+        return name.replace(/^\[|\]$/g, '').replace(/^"|"$/g, '').replace(/^`|`$/g, '');
+    }
+
+    /** True for a reference written with no schema. A schema, `dbo` included, is matched as written. */
+    public static IsUnqualifiedSchema(schema: string): boolean {
+        return !schema;
+    }
+
+    /**
+     * Builds the base-view allow-list for a set of entities, including both each entity's
+     * canonical `BaseView` and any registered, usable `AlternateBaseViews` (D13).
+     * Disabled alternate base views (`!abv.IsUsable`) are excluded. Canonical `BaseView`
+     * entries are registered first and never overwritten by alternate base views; cross-entity
+     * collisions on `(schema, viewName)` map to `null` (fail-closed). Memoized per entity array:
+     * reused while the array keeps its length and no `EntityInfo` has been built since (the
+     * field-security generation, which moves on every build, so a refreshed or replaced entity
+     * is noticed).
+     */
+    public static BuildEntityBaseViewAllowList(entities: readonly EntityInfo[]): EntityBaseViewAllowList {
+        const generation = CurrentFieldSecurityGeneration();
+        const memo = allowListCache.get(entities);
+        if (memo && memo.Length === entities.length && memo.Generation === generation) {
+            return memo.List;
+        }
+        const list = ClientClauseScreen.buildAllowList(entities);
+        allowListCache.set(entities, { Length: entities.length, Generation: generation, List: list });
+        return list;
+    }
+
+    /** The uncached build behind {@link BuildEntityBaseViewAllowList}. */
+    private static buildAllowList(entities: readonly EntityInfo[]): EntityBaseViewAllowList {
+        const qualified = new Map<string, EntityInfo | null>();
+        const bare = new Map<string, EntityInfo | null>();
+        const canonicalQualifiedKeys = new Set<string>();
+        for (const e of entities) {
+            const view = ClientClauseScreen.StripIdentifierQuotes(e.BaseView);
+            if (!view) continue;
+            const schema = ClientClauseScreen.StripIdentifierQuotes(e.SchemaName);
+            const bareKey = view.toLowerCase();
+            bare.set(bareKey, bare.has(bareKey) ? null : e);
+            if (schema) {
+                const qualKey = `${schema}.${view}`.toLowerCase();
+                canonicalQualifiedKeys.add(qualKey);
+                const existing = qualified.get(qualKey);
+                qualified.set(qualKey, existing === undefined || existing === e ? e : null);
+            }
+        }
+        for (const e of entities) {
+            for (const abv of e.AlternateBaseViews ?? []) {
+                if (!abv.IsUsable) continue;
+                const altView = ClientClauseScreen.StripIdentifierQuotes(abv.ViewName);
+                if (!altView) continue;
+                const altSchema = ClientClauseScreen.StripIdentifierQuotes(abv.EffectiveSchemaName || e.SchemaName);
+                const altBareKey = altView.toLowerCase();
+                const existingBare = bare.get(altBareKey);
+                bare.set(altBareKey, existingBare === undefined || existingBare === e ? e : null);
+                if (altSchema) {
+                    const qualKey = `${altSchema}.${altView}`.toLowerCase();
+                    if (canonicalQualifiedKeys.has(qualKey)) continue;
+                    const existingQual = qualified.get(qualKey);
+                    qualified.set(qualKey, existingQual === undefined || existingQual === e ? e : null);
+                }
+            }
+        }
+        return { Qualified: qualified, Bare: bare };
+    }
+
+    /**
+     * Resolves a table reference against the allow-list and returns its entity; throws when it is
+     * not an entity base view, or when `user` is given and lacks CanRead on that entity.
+     *
+     * A schema-qualified reference, `dbo` included, must match an entity in that exact schema. An
+     * unqualified one resolves only when the view name is unique across schemas, because the
+     * database's default-schema resolution, not this screen, would pick which view runs.
+     */
+    public static AssertTableRefReadable(
+        allowed: EntityBaseViewAllowList,
+        schema: string,
+        table: string,
+        label: string,
+        user?: UserInfo,
+    ): EntityInfo {
+        const unqualified = ClientClauseScreen.IsUnqualifiedSchema(schema);
+        const entity = unqualified
+            ? allowed.Bare.get(table.toLowerCase())
+            : allowed.Qualified.get(`${schema}.${table}`.toLowerCase());
+        const reference = `${schema ? schema + '.' : ''}${table}`;
+        if (entity === null) {
+            throw new Error(
+                unqualified
+                    ? `Invalid ${label}: '${table}' is a base view in more than one schema — qualify it with its schema`
+                    : `Invalid ${label}: '${reference}' is registered as a base view on more than one entity`,
+            );
+        }
+        if (!entity) {
+            throw new Error(`Invalid ${label}: subquery must use an entity base view, not '${reference}'`);
+        }
+        if (user && !entity.GetUserPermisions(user).CanRead) {
+            throw new Error(`Invalid ${label}: you do not have read permission on entity '${entity.Name}' referenced by '${reference}'`);
+        }
+        return entity;
+    }
+
+    /**
+     * Refuses an entity whose read `user` holds under a row filter (role row-level security or an
+     * API-key row filter) or with denied fields. SQL that reads the entity's base view directly, such
+     * as a subquery in a client clause or an ad-hoc query, applies neither; RunView on that entity
+     * does. For any other entity, a granted read covers every row and field of its base view.
+     */
+    public static AssertUnscopedRead(entity: EntityInfo, user: UserInfo, label: string): void {
+        if (IsPostRunViewProtectedEntity(entity.Name)) {
+            throw new Error(
+                `Invalid ${label}: entity '${entity.Name}' enforces row-level access via server RunView hooks — SQL that reads its base view directly cannot apply those hooks; read that entity with RunView`,
+            );
+        }
+        if (entity.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '').length > 0) {
+            throw new Error(
+                `Invalid ${label}: entity '${entity.Name}' is row-level-security filtered for you — SQL that reads its base view directly cannot apply that filter; read that entity with RunView`,
+            );
+        }
+        if (entity.GetDeniedReadFields(user).size > 0) {
+            throw new Error(
+                `Invalid ${label}: entity '${entity.Name}' has fields you are not permitted to read — SQL that reads its base view directly cannot project them away; read that entity with RunView`,
+            );
+        }
+    }
+
+    /**
+     * The full screen for a whole caller-written statement (ad-hoc SQL), run on the SQL as it will
+     * execute: one read statement, no write or DDL at any depth, no name reserved for the parser,
+     * every SELECT accounted for, and every FROM item that is not a CTE in scope an entity base view
+     * `user` can read unscoped ({@link AssertUnscopedRead}). Base tables, system catalogs and table
+     * functions are refused. Throws on the first refusal.
+     */
+    public static AssertStatementReadsUnscopedEntityViews(
+        sql: string,
+        entities: readonly EntityInfo[],
+        dialect: SQLParserDialect,
+        user: UserInfo,
+        label: string,
+    ): void {
+        ClientClauseScreen.AssertNoIdentifierAliasNames(sql, dialect, label);
+        const reads = ClientClauseScreen.readOnlyStatementReads(sql, dialect, label);
+        ClientClauseScreen.AssertEverySelectAccountedFor(sql, dialect, reads, label);
+        const allowed = ClientClauseScreen.BuildEntityBaseViewAllowList(entities);
+        for (const relation of reads.Relations) {
+            if (relation.IsCTEReference) continue;
+            const entity = ClientClauseScreen.AssertRelationReadable(allowed, relation, label, user);
+            if (entity) ClientClauseScreen.AssertUnscopedRead(entity, user, label);
+        }
+    }
+
+    /**
+     * Parses a read-only SQL statement and resolves every non-CTE FROM/JOIN relation to its
+     * corresponding {@link EntityInfo} (matching entity base views, usable alternate base views,
+     * or entity base tables). Throws if the statement is not a single read-only SELECT, if any
+     * subquery cannot be accounted for, or if any relation does not resolve unambiguously to an
+     * entity in `entities`.
+     */
+    public static ResolveStatementEntities(
+        sql: string,
+        entities: readonly EntityInfo[],
+        dialect: SQLParserDialect,
+        label = 'SQL',
+    ): EntityInfo[] {
+        ClientClauseScreen.AssertNoIdentifierAliasNames(sql, dialect, label);
+        ClientClauseScreen.AssertNoForbiddenFunctionCalls(sql, dialect, label);
+        const reads = ClientClauseScreen.readOnlyStatementReads(sql, dialect, label);
+        ClientClauseScreen.AssertEverySelectAccountedFor(sql, dialect, reads, label);
+        const viewAllowList = ClientClauseScreen.BuildEntityBaseViewAllowList(entities);
+        const tableAllowList = ClientClauseScreen.buildBaseTableAllowList(entities);
+        const resolved = new Map<string, EntityInfo>();
+        for (const relation of reads.Relations) {
+            if (relation.IsCTEReference) continue;
+            if (!relation.TableName) {
+                const fnName = relation.FunctionName;
+                if (fnName && !relation.SchemaName && ClientClauseScreen.ARGUMENT_ONLY_TABLE_FUNCTIONS.has(fnName.toLowerCase())) {
+                    continue;
+                }
+                const source = fnName ? `the table function '${[relation.SchemaName, fnName].filter(Boolean).join('.')}'` : 'a row source it cannot identify';
+                throw new Error(`Invalid ${label}: query may read only registered entities, not ${source}`);
+            }
+            const entity = ClientClauseScreen.resolveEntityRelation(viewAllowList, tableAllowList, relation.SchemaName, relation.TableName, label);
+            resolved.set(entity.ID || entity.Name, entity);
+        }
+        return Array.from(resolved.values());
+    }
+
+    /**
+     * Returns all bare/unquoted word and quoted-identifier tokens appearing in `sql` (quotes stripped),
+     * excluding string literals and comments. Used by agent data-policy guards to refuse ad-hoc SQL
+     * that references denied field names via column aliases or WHERE predicates.
+     */
+    public static ExtractStatementIdentifierTokens(sql: string, dialect: SQLParserDialect): string[] {
+        const tokens = LexSQL(sql, dialect);
+        const names = new Set<string>();
+        for (const token of tokens) {
+            if (token.Kind === 'word' || token.Kind === 'identifier') {
+                const stripped = ClientClauseScreen.StripIdentifierQuotes(token.Text).trim();
+                if (stripped.length > 0) {
+                    names.add(stripped);
+                }
+            }
+        }
+        return Array.from(names);
+    }
+
+    /**
+     * Refuses statement separators, comments, or unbalanced parentheses outside string literals
+     * and quoted identifiers. Prevents `(${agentFilter}) AND (${policy})` breakout payloads such
+     * as `1=1) OR (1=1` where parenthesis depth drops below zero mid-fragment.
+     */
+    public static AssertBalancedSingleFragment(
+        clause: string | null | undefined,
+        label: string,
+        dialect: SQLParserDialect,
+    ): void {
+        if (clause == null || clause === '') return;
+        ClientClauseScreen.AssertSingleStatementFragment(clause, label, dialect);
+        let depth = 0;
+        for (const token of LexSQL(clause, dialect)) {
+            if (token.Kind === 'open') {
+                depth++;
+            } else if (token.Kind === 'close') {
+                depth--;
+                if (depth < 0) {
+                    throw new Error(`Invalid ${label}: unbalanced closing parenthesis in SQL fragment`);
+                }
+            }
+        }
+        if (depth !== 0) {
+            throw new Error(`Invalid ${label}: unbalanced opening parenthesis in SQL fragment`);
+        }
+    }
+
+    /**
+     * Screens an agent-supplied `Filter` or `OrderBy` fragment (requiring balanced parentheses,
+     * a single read-only fragment, no forbidden functions, and only readable entity base views in
+     * any subqueries) and returns every subquery {@link EntityInfo} referenced so callers can
+     * additionally enforce agent-level entity policies on subquery targets.
+     */
+    public static ScreenAgentClause(
+        clause: string | null | undefined,
+        label: string,
+        entities: readonly EntityInfo[],
+        dialect: SQLParserDialect,
+        user?: UserInfo,
+    ): EntityInfo[] {
+        if (!clause?.trim()) return [];
+        ClientClauseScreen.AssertBalancedSingleFragment(clause, label, dialect);
+        if (SQLParser.HasStackedStatements(clause, dialect)) {
+            throw new Error(`Invalid ${label}: multiple statements are not permitted in filters or sort clauses`);
+        }
+        const fragment = ClientClauseScreen.toDialectQuoting(clause, dialect);
+        ClientClauseScreen.AssertNoIdentifierAliasNames(fragment, dialect, label);
+        ClientClauseScreen.AssertNoForbiddenFunctionCalls(fragment, dialect, label);
+        const result =
+            label === 'OrderBy'
+                ? StrictFragmentValidator.ValidateOrderBy(fragment, dialect, { CollectReads: true })
+                : StrictFragmentValidator.ValidateFilter(fragment, dialect, { CollectReads: true });
+        const reads = ClientClauseScreen.safeReadsOf(
+            result,
+            `Invalid ${label}: not a safe read-only ${label === 'OrderBy' ? 'sort' : 'filter'} fragment — refusing under uncertainty`,
+            label,
+        );
+        ClientClauseScreen.AssertEverySelectAccountedFor(result.ParsedSQL, dialect, reads, label);
+        if (reads.Relations.length === 0) {
+            return [];
+        }
+        const allowed = ClientClauseScreen.BuildEntityBaseViewAllowList(entities);
+        const referenced = new Map<string, EntityInfo>();
+        for (const relation of reads.Relations) {
+            const entity = ClientClauseScreen.AssertRelationReadable(allowed, relation, label, user);
+            if (entity) {
+                if (user) {
+                    ClientClauseScreen.AssertUnscopedRead(entity, user, label);
+                }
+                referenced.set(entity.ID || entity.Name, entity);
+            }
+        }
+        return Array.from(referenced.values());
+    }
+
+    private static readonly WHOLE_ROW_SERIALIZATION_FUNCTIONS = new Set<string>([
+        'to_json',
+        'to_jsonb',
+        'row_to_json',
+        'json_agg',
+        'jsonb_agg',
+        'record_to_json',
+        'checksum',
+        'binary_checksum',
+    ]);
+
+    /**
+     * Refuses SQL constructs that rename, serialize, or sort by columns without naming the underlying
+     * source column when field-level masking is active:
+     * 1. CTE explicit column-alias lists (`WITH c(a, b) AS (SELECT * FROM ...)` at any depth)
+     * 2. Derived-table column-alias lists (`FROM (SELECT * FROM ...) AS t(a, b)`)
+     * 3. Set operations (`UNION` / `INTERSECT` / `EXCEPT`) combined with wildcard (`*`) projections
+     * 4. Whole-row constructs (`FOR JSON`, `FOR XML`, `NATURAL JOIN`, `to_jsonb(e)` / `row_to_json(e)`,
+     *    bare whole-row relation references, non-projection `*` / `alias.*` wildcards inside subqueries
+     *    or expressions, and ordinal `ORDER BY` / `GROUP BY`).
+     */
+    public static AssertNoPositionalColumnRenames(
+        sql: string,
+        dialect: SQLParserDialect,
+        label = 'SQL',
+    ): void {
+        const tokens = SignificantTokens(LexSQL(sql, dialect));
+        if (tokens.length === 0) return;
+
+        const keywordAllowedBeforeOpenAfterClose = new Set([
+            'and', 'or', 'in', 'not', 'over', 'filter', 'within', 'values',
+            'where', 'on', 'having', 'when', 'then', 'else', 'between',
+            'union', 'intersect', 'except', 'select', 'from', 'join',
+        ]);
+
+        let depth = 0;
+        const depths: number[] = [];
+        for (const tok of tokens) {
+            if (tok.Kind === 'close') {
+                depth = Math.max(0, depth - 1);
+            }
+            depths.push(depth);
+            if (tok.Kind === 'open') {
+                depth++;
+            }
+        }
+
+        // 1. Check CTE header column lists at ANY nesting depth: `<cte_name> ( ... ) AS [ [NOT] MATERIALIZED ] (`
+        for (let i = 0; i < tokens.length; i++) {
+            if ((tokens[i].Kind === 'word' || tokens[i].Kind === 'identifier') && tokens[i + 1]?.Kind === 'open') {
+                const isCteHeaderKeyword =
+                    IsKeyword(tokens[i], 'AS') ||
+                    IsKeyword(tokens[i], 'WITH') ||
+                    IsKeyword(tokens[i], 'SELECT') ||
+                    IsKeyword(tokens[i], 'MATERIALIZED') ||
+                    IsKeyword(tokens[i], 'NOT');
+                if (!isCteHeaderKeyword) {
+                    const targetDepth = depths[i];
+                    let closeIdx = -1;
+                    for (let j = i + 2; j < tokens.length; j++) {
+                        if (tokens[j].Kind === 'close' && depths[j] === targetDepth) {
+                            closeIdx = j;
+                            break;
+                        }
+                    }
+                    if (closeIdx > i + 1 && closeIdx + 1 < tokens.length && IsKeyword(tokens[closeIdx + 1], 'AS')) {
+                        let afterAs = closeIdx + 2;
+                        if (afterAs < tokens.length && IsKeyword(tokens[afterAs], 'NOT')) {
+                            afterAs++;
+                        }
+                        if (afterAs < tokens.length && IsKeyword(tokens[afterAs], 'MATERIALIZED')) {
+                            afterAs++;
+                        }
+                        if (afterAs < tokens.length && tokens[afterAs].Kind === 'open') {
+                            throw new Error(
+                                `Invalid ${label}: CTE column-alias lists are not permitted when field-level masking is active`,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Check derived-table column lists, set operations + *, FOR JSON/XML, whole-row functions, and ordinal ORDER/GROUP BY
+        let hasSetOp = false;
+        let hasWildcardStar = false;
+        for (let i = 0; i < tokens.length; i++) {
+            const tok = tokens[i];
+            if (IsKeyword(tok, 'UNION') || IsKeyword(tok, 'INTERSECT') || IsKeyword(tok, 'EXCEPT')) {
+                hasSetOp = true;
+            }
+            if (IsKeyword(tok, 'FOR') && tokens[i + 1] && (IsKeyword(tokens[i + 1], 'JSON') || IsKeyword(tokens[i + 1], 'XML'))) {
+                throw new Error(
+                    `Invalid ${label}: FOR ${tokens[i + 1].Text.toUpperCase()} is not permitted when field-level masking is active`,
+                );
+            }
+            if (IsKeyword(tok, 'NATURAL') && tokens[i + 1] && IsKeyword(tokens[i + 1], 'JOIN')) {
+                throw new Error(
+                    `Invalid ${label}: NATURAL JOIN is not permitted when field-level masking is active`,
+                );
+            }
+            if ((tok.Kind === 'word' || tok.Kind === 'identifier') && tokens[i + 1]?.Kind === 'open') {
+                const fnLower = ClientClauseScreen.StripIdentifierQuotes(tok.Text).trim().toLowerCase();
+                if (ClientClauseScreen.WHOLE_ROW_SERIALIZATION_FUNCTIONS.has(fnLower)) {
+                    throw new Error(
+                        `Invalid ${label}: whole-row function ${tok.Text}() is not permitted when field-level masking is active`,
+                    );
+                }
+            }
+            if ((IsKeyword(tok, 'ORDER') || IsKeyword(tok, 'GROUP')) && tokens[i + 1] && IsKeyword(tokens[i + 1], 'BY')) {
+                const clauseDepth = depths[i];
+                let itemStart = true;
+                for (let j = i + 2; j < tokens.length; j++) {
+                    if (depths[j] < clauseDepth && tokens[j].Kind === 'close') {
+                        break;
+                    }
+                    if (depths[j] === clauseDepth) {
+                        if (
+                            IsKeyword(tokens[j], 'OFFSET') ||
+                            IsKeyword(tokens[j], 'FETCH') ||
+                            IsKeyword(tokens[j], 'LIMIT') ||
+                            IsKeyword(tokens[j], 'FOR') ||
+                            IsKeyword(tokens[j], 'HAVING') ||
+                            IsKeyword(tokens[j], 'ORDER') ||
+                            IsKeyword(tokens[j], 'UNION') ||
+                            IsKeyword(tokens[j], 'INTERSECT') ||
+                            IsKeyword(tokens[j], 'EXCEPT')
+                        ) {
+                            break;
+                        }
+                        if (itemStart) {
+                            const isSignedNum =
+                                tokens[j].Kind === 'operator' &&
+                                (tokens[j].Text === '+' || tokens[j].Text === '-') &&
+                                tokens[j + 1]?.Kind === 'number';
+                            if (tokens[j].Kind === 'number' || isSignedNum) {
+                                throw new Error(
+                                    `Invalid ${label}: ordinal ${tok.Text.toUpperCase()} BY is not permitted when field-level masking is active`,
+                                );
+                            }
+                        }
+                        itemStart = tokens[j].Kind === 'comma';
+                    } else {
+                        itemStart = false;
+                    }
+                }
+            }
+            if (tok.Text === '*' || (tok.Kind === 'operator' && tok.Text.includes('*'))) {
+                const prev = i > 0 ? tokens[i - 1] : undefined;
+                if (
+                    !prev ||
+                    prev.Kind === 'comma' ||
+                    prev.Kind === 'dot' ||
+                    IsKeyword(prev, 'SELECT') ||
+                    IsKeyword(prev, 'DISTINCT') ||
+                    IsKeyword(prev, 'ALL')
+                ) {
+                    hasWildcardStar = true;
+                }
+            }
+            if (tok.Kind === 'close') {
+                const next1 = tokens[i + 1];
+                const next2 = tokens[i + 2];
+                const next3 = tokens[i + 3];
+                if (
+                    next1 &&
+                    IsKeyword(next1, 'AS') &&
+                    next2 &&
+                    (next2.Kind === 'word' || next2.Kind === 'identifier') &&
+                    next3?.Kind === 'open'
+                ) {
+                    throw new Error(
+                        `Invalid ${label}: derived-table column-alias lists are not permitted when field-level masking is active`,
+                    );
+                }
+                if (
+                    next1 &&
+                    (next1.Kind === 'word' || next1.Kind === 'identifier') &&
+                    !keywordAllowedBeforeOpenAfterClose.has(
+                        ClientClauseScreen.StripIdentifierQuotes(next1.Text).trim().toLowerCase(),
+                    ) &&
+                    next2?.Kind === 'open'
+                ) {
+                    throw new Error(
+                        `Invalid ${label}: derived-table column-alias lists are not permitted when field-level masking is active`,
+                    );
+                }
+            }
+        }
+
+        // 3. Check set operations with wildcard projections
+        if (hasSetOp && hasWildcardStar) {
+            throw new Error(
+                `Invalid ${label}: set operations (UNION/INTERSECT/EXCEPT) with wildcard (*) projections are not permitted when field-level masking is active`,
+            );
+        }
+
+        // 4. Parse with SqlDocument and check CTEs() + WholeRowConstructs() + FindProjectionStars()
+        const parserDialect: ParserDialect =
+            'Key' in dialect && 'Lexical' in dialect && 'Grammar' in dialect
+                ? (dialect as ParserDialect)
+                : dialect.QuoteIdentifier('x').startsWith('[')
+                  ? new SQLServerDialect()
+                  : new PostgreSQLDialect();
+        const doc = SqlDocument.Parse(sql, parserDialect);
+        const ctes = doc.CTEs();
+        if (ctes.Complete && ctes.Value.some((c) => c.ColumnList !== null && c.ColumnList.length > 0)) {
+            throw new Error(
+                `Invalid ${label}: CTE column-alias lists are not permitted when field-level masking is active`,
+            );
+        }
+
+        const wholeRow = doc.WholeRowConstructs();
+        if (!wholeRow.Complete) {
+            throw new Error(
+                `Invalid ${label}: whole-row construct analysis could not complete safely when field-level masking is active`,
+            );
+        }
+        if (wholeRow.Value.length > 0) {
+            const projectionStars = FindProjectionStars(sql, parserDialect);
+            for (const construct of wholeRow.Value) {
+                switch (construct.Kind) {
+                    case 'ForDocument':
+                        throw new Error(
+                            `Invalid ${label}: ${construct.Detail} is not permitted when field-level masking is active`,
+                        );
+                    case 'RowFunction':
+                    case 'RowReference':
+                        throw new Error(
+                            `Invalid ${label}: whole-row construct (${construct.Detail}) is not permitted when field-level masking is active`,
+                        );
+                    case 'NaturalJoin':
+                        throw new Error(
+                            `Invalid ${label}: NATURAL JOIN is not permitted when field-level masking is active`,
+                        );
+                    case 'OrdinalOrderBy':
+                        throw new Error(
+                            `Invalid ${label}: ordinal ${construct.Detail} is not permitted when field-level masking is active`,
+                        );
+                    case 'Star':
+                    case 'QualifiedStar': {
+                        const starOffset = sql.lastIndexOf('*', construct.Span.End - 1);
+                        const isExistsSelectStar =
+                            construct.Kind === 'Star' &&
+                            /\bEXISTS\s*\(\s*SELECT\s*$/i.test(sql.slice(0, construct.Span.Start));
+                        if (!isExistsSelectStar && (starOffset < construct.Span.Start || !projectionStars.has(starOffset))) {
+                            throw new Error(
+                                `Invalid ${label}: non-projection wildcard (${construct.Detail}) is not permitted when field-level masking is active`,
+                            );
+                        }
+                        break;
+                    }
+                    default:
+                        break;
+                }
+            }
+        }
+    }
+
+    /**
+     * Refuses whole-row constructs (`FOR JSON`/`FOR XML`, `to_jsonb(e)` / `row_to_json(e)`,
+     * subquery `*`/`alias.*`, CTE/derived-table column lists) and ordinal `ORDER BY` inside a
+     * `Filter` or `OrderBy` fragment when the target entity or any subquery entity has denied fields.
+     */
+    public static AssertNoWholeRowOrOrdinalInClause(
+        clause: string | null | undefined,
+        label: string,
+        dialect: SQLParserDialect,
+    ): void {
+        if (!clause?.trim()) return;
+        const fragment = ClientClauseScreen.toDialectQuoting(clause, dialect);
+        const quotedSchema = dialect.QuoteIdentifier('__mj');
+        const quotedView = dialect.QuoteIdentifier('vw_clause_check');
+        const wrappedSql =
+            label === 'OrderBy'
+                ? `SELECT 1 FROM ${quotedSchema}.${quotedView} ORDER BY ${fragment}`
+                : `SELECT 1 FROM ${quotedSchema}.${quotedView} WHERE ${fragment}`;
+        ClientClauseScreen.AssertNoPositionalColumnRenames(wrappedSql, dialect, label);
+    }
+
+    /**
+     * Inspects a stored query's rendered SQL and returns any denied field identifiers that appear
+     * anywhere OTHER than a pure, unaliased top-level `SELECT` projection column (`Col`, `t.Col`,
+     * or `s.t.Col`). Pure unaliased top-level columns preserve their field name in the result set
+     * and are stripped by `AgentDataPolicyGuard.MaskRows`; aliases (`Salary AS Contact`),
+     * expressions/aggregates (`MAX(Salary)`), predicates (`WHERE Salary > ...`), and sorts
+     * (`ORDER BY Salary`) cannot be stripped safely by output column name and are therefore refused.
+     */
+    public static FindUnmaskableStoredQueryDeniedFields(
+        sql: string,
+        dialect: SQLParserDialect,
+        isFieldDenied: (identifier: string) => boolean,
+    ): string[] {
+        const tokens = SignificantTokens(LexSQL(sql, dialect));
+        if (tokens.length === 0) return [];
+
+        let depth = 0;
+        const depths: number[] = [];
+        for (const tok of tokens) {
+            if (tok.Kind === 'close') {
+                depth = Math.max(0, depth - 1);
+            }
+            depths.push(depth);
+            if (tok.Kind === 'open') {
+                depth++;
+            }
+        }
+
+        const topSelectIdx = tokens.findIndex((t, i) => depths[i] === 0 && IsKeyword(t, 'SELECT'));
+        if (topSelectIdx < 0) {
+            return ClientClauseScreen.ExtractStatementIdentifierTokens(sql, dialect).filter(isFieldDenied);
+        }
+
+        let projStart = topSelectIdx + 1;
+        if (
+            projStart < tokens.length &&
+            depths[projStart] === 0 &&
+            (IsKeyword(tokens[projStart], 'DISTINCT') || IsKeyword(tokens[projStart], 'ALL'))
+        ) {
+            projStart++;
+        }
+        if (projStart < tokens.length && depths[projStart] === 0 && IsKeyword(tokens[projStart], 'TOP')) {
+            projStart++;
+            if (projStart < tokens.length && tokens[projStart].Kind === 'open') {
+                projStart++;
+                while (projStart < tokens.length && !(tokens[projStart].Kind === 'close' && depths[projStart] === 0)) {
+                    projStart++;
+                }
+                if (projStart < tokens.length) projStart++;
+            } else if (projStart < tokens.length && tokens[projStart].Kind === 'number') {
+                projStart++;
+            }
+            if (projStart < tokens.length && depths[projStart] === 0 && IsKeyword(tokens[projStart], 'PERCENT')) {
+                projStart++;
+            }
+        }
+
+        let projEnd = tokens.length;
+        for (let i = projStart; i < tokens.length; i++) {
+            if (
+                depths[i] === 0 &&
+                (IsKeyword(tokens[i], 'FROM') ||
+                    IsKeyword(tokens[i], 'INTO') ||
+                    IsKeyword(tokens[i], 'WHERE') ||
+                    IsKeyword(tokens[i], 'GROUP') ||
+                    IsKeyword(tokens[i], 'HAVING') ||
+                    IsKeyword(tokens[i], 'ORDER') ||
+                    IsKeyword(tokens[i], 'UNION') ||
+                    IsKeyword(tokens[i], 'INTERSECT') ||
+                    IsKeyword(tokens[i], 'EXCEPT'))
+            ) {
+                projEnd = i;
+                break;
+            }
+        }
+
+        const unmaskable = new Set<string>();
+        const checkToken = (tok: SQLLexToken): void => {
+            if (tok.Kind === 'word' || tok.Kind === 'identifier') {
+                const name = ClientClauseScreen.StripIdentifierQuotes(tok.Text).trim();
+                if (name.length > 0 && isFieldDenied(name)) {
+                    unmaskable.add(name);
+                }
+            }
+        };
+
+        // Any denied field before projStart (e.g., inside WITH CTEs or TOP expression) is unmaskable
+        for (let i = 0; i < projStart; i++) {
+            checkToken(tokens[i]);
+        }
+
+        // Split top-level projection items by comma at depth 0
+        const items: SQLLexToken[][] = [];
+        let current: SQLLexToken[] = [];
+        for (let i = projStart; i < projEnd; i++) {
+            if (depths[i] === 0 && tokens[i].Kind === 'comma') {
+                items.push(current);
+                current = [];
+            } else {
+                current.push(tokens[i]);
+            }
+        }
+        if (current.length > 0) {
+            items.push(current);
+        }
+
+        const isPlainColumnIdent = (tok: SQLLexToken): boolean =>
+            (tok.Kind === 'word' || tok.Kind === 'identifier') &&
+            !IsKeyword(tok, 'AS') &&
+            !IsKeyword(tok, 'NULL') &&
+            !IsKeyword(tok, 'TRUE') &&
+            !IsKeyword(tok, 'FALSE') &&
+            !IsKeyword(tok, 'CASE') &&
+            !IsKeyword(tok, 'DISTINCT');
+
+        for (const item of items) {
+            const isPureUnaliasedColumn =
+                (item.length === 1 && isPlainColumnIdent(item[0])) ||
+                (item.length === 3 &&
+                    isPlainColumnIdent(item[0]) &&
+                    item[1].Kind === 'dot' &&
+                    isPlainColumnIdent(item[2])) ||
+                (item.length === 5 &&
+                    isPlainColumnIdent(item[0]) &&
+                    item[1].Kind === 'dot' &&
+                    isPlainColumnIdent(item[2]) &&
+                    item[3].Kind === 'dot' &&
+                    isPlainColumnIdent(item[4]));
+            if (!isPureUnaliasedColumn) {
+                for (const tok of item) {
+                    checkToken(tok);
+                }
+            }
+        }
+
+        // Any denied field at or after projEnd (FROM/JOIN/WHERE/GROUP/HAVING/ORDER/UNION) is unmaskable
+        // (skipping the immediate relation name right after FROM or JOIN so view names don't false-positive)
+        for (let i = projEnd; i < tokens.length; i++) {
+            if (IsKeyword(tokens[i], 'FROM') || IsKeyword(tokens[i], 'JOIN')) {
+                let relIdx = i + 1;
+                while (
+                    relIdx + 1 < tokens.length &&
+                    (tokens[relIdx].Kind === 'word' || tokens[relIdx].Kind === 'identifier') &&
+                    tokens[relIdx + 1].Kind === 'dot'
+                ) {
+                    relIdx += 2;
+                }
+                if (
+                    relIdx < tokens.length &&
+                    (tokens[relIdx].Kind === 'word' || tokens[relIdx].Kind === 'identifier')
+                ) {
+                    i = relIdx;
+                    continue;
+                }
+            }
+            checkToken(tokens[i]);
+        }
+
+        return Array.from(unmaskable);
+    }
+
+    /**
+     * Evaluates a simple SQL `WHERE` predicate against an in-memory record map for lightweight
+     * providers that do not expose a live SQL execution engine (e.g. unit-test metadata mocks).
+     * Fails closed (`false`) on any subquery, function call, or unrecognized SQL construct.
+     */
+    public static EvaluateSimpleSqlWherePredicate(
+        whereClause: string,
+        record: Record<string, unknown>,
+        dialect: SQLParserDialect,
+    ): boolean {
+        const trimmed = whereClause.trim();
+        if (trimmed.length === 0) return true;
+        try {
+            ClientClauseScreen.AssertBalancedSingleFragment(trimmed, 'PolicyWhereClause', dialect);
+        } catch {
+            return false;
+        }
+        const tokens = SignificantTokens(LexSQL(trimmed, dialect));
+        if (tokens.length === 0) return true;
+
+        const recordByLowerKey = new Map<string, unknown>();
+        for (const [k, v] of Object.entries(record)) {
+            recordByLowerKey.set(k.trim().toLowerCase(), v);
+        }
+
+        let pos = 0;
+        const peek = (): SQLLexToken | undefined => tokens[pos];
+        const consume = (): SQLLexToken | undefined => tokens[pos++];
+
+        const readLiteral = (): { ok: true; value: string | number | boolean | null } | { ok: false } => {
+            const tok = peek();
+            if (!tok) return { ok: false };
+            if (tok.Kind === 'string') {
+                consume();
+                const raw = tok.Text.replace(/^[NnEe]'/, "'");
+                if (raw.startsWith("'") && raw.endsWith("'")) {
+                    return { ok: true, value: raw.slice(1, -1).replace(/''/g, "'") };
+                }
+                return { ok: false };
+            }
+            if (tok.Kind === 'operator' && (tok.Text === '-' || tok.Text === '+')) {
+                const sign = tok.Text === '-' ? -1 : 1;
+                consume();
+                const numTok = peek();
+                if (!numTok || numTok.Kind !== 'number') return { ok: false };
+                consume();
+                const parsed = Number(numTok.Text);
+                return Number.isFinite(parsed) ? { ok: true, value: sign * parsed } : { ok: false };
+            }
+            if (tok.Kind === 'number') {
+                consume();
+                const parsed = Number(tok.Text);
+                return Number.isFinite(parsed) ? { ok: true, value: parsed } : { ok: false };
+            }
+            if (tok.Kind === 'word') {
+                if (IsKeyword(tok, 'NULL')) {
+                    consume();
+                    return { ok: true, value: null };
+                }
+                if (IsKeyword(tok, 'TRUE')) {
+                    consume();
+                    return { ok: true, value: true };
+                }
+                if (IsKeyword(tok, 'FALSE')) {
+                    consume();
+                    return { ok: true, value: false };
+                }
+            }
+            return { ok: false };
+        };
+
+        const compareValues = (
+            actual: unknown,
+            op: string,
+            expected: string | number | boolean | null,
+        ): boolean => {
+            if (actual === null || actual === undefined || expected === null) {
+                return false;
+            }
+            if (typeof expected === 'number' || typeof actual === 'number') {
+                const leftNum =
+                    typeof actual === 'boolean' ? (actual ? 1 : 0) : Number(actual);
+                const rightNum =
+                    typeof expected === 'boolean' ? (expected ? 1 : 0) : Number(expected);
+                if (!Number.isFinite(leftNum) || !Number.isFinite(rightNum)) return false;
+                switch (op) {
+                    case '=': return leftNum === rightNum;
+                    case '!=':
+                    case '<>': return leftNum !== rightNum;
+                    case '<': return leftNum < rightNum;
+                    case '<=': return leftNum <= rightNum;
+                    case '>': return leftNum > rightNum;
+                    case '>=': return leftNum >= rightNum;
+                    default: return false;
+                }
+            }
+            if (typeof expected === 'boolean' || typeof actual === 'boolean') {
+                const leftBool = typeof actual === 'boolean' ? actual : String(actual).toLowerCase() === 'true' || actual === '1';
+                const rightBool = typeof expected === 'boolean' ? expected : String(expected).toLowerCase() === 'true' || expected === '1';
+                if (op === '=') return leftBool === rightBool;
+                if (op === '!=' || op === '<>') return leftBool !== rightBool;
+                return false;
+            }
+            const leftStr = actual instanceof Date ? actual.toISOString() : String(actual);
+            const rightStr = String(expected);
+            const leftLower = leftStr.toLowerCase();
+            const rightLower = rightStr.toLowerCase();
+            switch (op) {
+                case '=': return leftLower === rightLower;
+                case '!=':
+                case '<>': return leftLower !== rightLower;
+                case '<': return leftLower < rightLower;
+                case '<=': return leftLower <= rightLower;
+                case '>': return leftLower > rightLower;
+                case '>=': return leftLower >= rightLower;
+                default: return false;
+            }
+        };
+
+        const parseOr = (): { ok: true; value: boolean } | { ok: false } => {
+            let left = parseAnd();
+            if (!left.ok) return left;
+            while (peek() && IsKeyword(peek()!, 'OR')) {
+                consume();
+                const right = parseAnd();
+                if (!right.ok) return right;
+                left = { ok: true, value: left.value || right.value };
+            }
+            return left;
+        };
+
+        const parseAnd = (): { ok: true; value: boolean } | { ok: false } => {
+            let left = parseNot();
+            if (!left.ok) return left;
+            while (peek() && IsKeyword(peek()!, 'AND')) {
+                consume();
+                const right = parseNot();
+                if (!right.ok) return right;
+                left = { ok: true, value: left.value && right.value };
+            }
+            return left;
+        };
+
+        const parseNot = (): { ok: true; value: boolean } | { ok: false } => {
+            if (peek() && IsKeyword(peek()!, 'NOT')) {
+                consume();
+                const inner = parseNot();
+                return inner.ok ? { ok: true, value: !inner.value } : inner;
+            }
+            return parsePrimary();
+        };
+
+        const parsePrimary = (): { ok: true; value: boolean } | { ok: false } => {
+            const first = peek();
+            if (!first) return { ok: false };
+            if (first.Kind === 'open') {
+                consume();
+                if (peek() && IsKeyword(peek()!, 'SELECT')) {
+                    return { ok: false };
+                }
+                const inner = parseOr();
+                if (!inner.ok) return inner;
+                if (peek()?.Kind !== 'close') return { ok: false };
+                consume();
+                return inner;
+            }
+
+            // Support literal 1=1 / 1=0 guards
+            if (first.Kind === 'number') {
+                const leftLit = readLiteral();
+                if (!leftLit.ok) return { ok: false };
+                const opTok = consume();
+                if (!opTok || opTok.Kind !== 'operator') return { ok: false };
+                const rightLit = readLiteral();
+                if (!rightLit.ok) return { ok: false };
+                return { ok: true, value: compareValues(leftLit.value, opTok.Text, rightLit.value) };
+            }
+
+            if (first.Kind !== 'word' && first.Kind !== 'identifier') {
+                return { ok: false };
+            }
+            let colTok = consume()!;
+            if (peek()?.Kind === 'dot') {
+                consume();
+                const nextIdent = consume();
+                if (!nextIdent || (nextIdent.Kind !== 'word' && nextIdent.Kind !== 'identifier')) {
+                    return { ok: false };
+                }
+                colTok = nextIdent;
+            }
+            // Reject function calls `fn(...)`
+            if (peek()?.Kind === 'open') {
+                return { ok: false };
+            }
+            const colName = ClientClauseScreen.StripIdentifierQuotes(colTok.Text).trim().toLowerCase();
+            const actualVal = recordByLowerKey.get(colName);
+
+            const next = peek();
+            if (!next) return { ok: false };
+
+            if (IsKeyword(next, 'IS')) {
+                consume();
+                let negated = false;
+                if (peek() && IsKeyword(peek()!, 'NOT')) {
+                    negated = true;
+                    consume();
+                }
+                if (!peek() || !IsKeyword(peek()!, 'NULL')) return { ok: false };
+                consume();
+                const isNull = actualVal === null || actualVal === undefined;
+                return { ok: true, value: negated ? !isNull : isNull };
+            }
+
+            let negatedOp = false;
+            if (IsKeyword(next, 'NOT')) {
+                negatedOp = true;
+                consume();
+            }
+
+            const afterNot = peek();
+            if (!afterNot) return { ok: false };
+
+            if (IsKeyword(afterNot, 'IN')) {
+                consume();
+                if (peek()?.Kind !== 'open') return { ok: false };
+                consume();
+                if (peek() && IsKeyword(peek()!, 'SELECT')) return { ok: false };
+                const items: Array<string | number | boolean | null> = [];
+                while (peek() && peek()!.Kind !== 'close') {
+                    const lit = readLiteral();
+                    if (!lit.ok) return { ok: false };
+                    items.push(lit.value);
+                    if (peek()?.Kind === 'comma') {
+                        consume();
+                    } else if (peek()?.Kind !== 'close') {
+                        return { ok: false };
+                    }
+                }
+                if (peek()?.Kind !== 'close') return { ok: false };
+                consume();
+                const matched = items.some((item) => compareValues(actualVal, '=', item));
+                return { ok: true, value: negatedOp ? !matched : matched };
+            }
+
+            if (IsKeyword(afterNot, 'LIKE')) {
+                consume();
+                const patLit = readLiteral();
+                if (!patLit.ok || typeof patLit.value !== 'string') return { ok: false };
+                if (actualVal === null || actualVal === undefined) return { ok: true, value: false };
+                const regexSrc =
+                    '^' +
+                    patLit.value
+                        .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+                        .replace(/%/g, '.*')
+                        .replace(/_/g, '.') +
+                    '$';
+                const matched = new RegExp(regexSrc, 'is').test(String(actualVal));
+                return { ok: true, value: negatedOp ? !matched : matched };
+            }
+
+            if (negatedOp) return { ok: false };
+
+            if (afterNot.Kind === 'operator') {
+                // Compound operators like `<>`, `!=`, `<=`, `>=` may lex as 1 or 2 operator tokens
+                let opText = consume()!.Text;
+                if (
+                    (opText === '<' && (peek()?.Text === '>' || peek()?.Text === '=')) ||
+                    (opText === '>' && peek()?.Text === '=') ||
+                    (opText === '!' && peek()?.Text === '=')
+                ) {
+                    opText += consume()!.Text;
+                }
+                if (!['=', '!=', '<>', '<', '<=', '>', '>='].includes(opText)) {
+                    return { ok: false };
+                }
+                const right = readLiteral();
+                if (!right.ok) return { ok: false };
+                return { ok: true, value: compareValues(actualVal, opText, right.value) };
+            }
+
+            return { ok: false };
+        };
+
+        const parsed = parseOr();
+        if (!parsed.ok || pos !== tokens.length) {
+            return false;
+        }
+        return parsed.value;
+    }
+
+    private static buildBaseTableAllowList(entities: readonly EntityInfo[]): EntityBaseViewAllowList {
+        const qualified = new Map<string, EntityInfo | null>();
+        const bare = new Map<string, EntityInfo | null>();
+        for (const e of entities) {
+            const table = ClientClauseScreen.StripIdentifierQuotes(e.BaseTable);
+            if (!table) continue;
+            const schema = ClientClauseScreen.StripIdentifierQuotes(e.SchemaName);
+            const bareKey = table.toLowerCase();
+            bare.set(bareKey, bare.has(bareKey) ? (bare.get(bareKey) === e ? e : null) : e);
+            if (schema) {
+                const qualKey = `${schema}.${table}`.toLowerCase();
+                const existing = qualified.get(qualKey);
+                qualified.set(qualKey, existing === undefined || existing === e ? e : null);
+            }
+        }
+        return { Qualified: qualified, Bare: bare };
+    }
+
+    private static resolveEntityRelation(
+        viewAllowList: EntityBaseViewAllowList,
+        tableAllowList: EntityBaseViewAllowList,
+        schema: string,
+        table: string,
+        label: string,
+    ): EntityInfo {
+        const unqualified = ClientClauseScreen.IsUnqualifiedSchema(schema);
+        const key = unqualified ? table.toLowerCase() : `${schema}.${table}`.toLowerCase();
+        const fromView = unqualified ? viewAllowList.Bare.get(key) : viewAllowList.Qualified.get(key);
+        const reference = `${schema ? schema + '.' : ''}${table}`;
+        if (fromView === null) {
+            throw new Error(`Invalid ${label}: '${reference}' matches multiple entities — qualify it unambiguously`);
+        }
+        if (fromView) {
+            return fromView;
+        }
+        const fromTable = unqualified ? tableAllowList.Bare.get(key) : tableAllowList.Qualified.get(key);
+        if (fromTable === null) {
+            throw new Error(`Invalid ${label}: '${reference}' matches multiple entity base tables — qualify it unambiguously`);
+        }
+        if (fromTable) {
+            return fromTable;
+        }
+        throw new Error(`Invalid ${label}: '${reference}' does not resolve to a registered MemberJunction entity`);
+    }
+
+    /**
+     * Every FROM item in a parsed statement, and the number of SELECT nodes, from a walk of the
+     * whole parse tree with CTE scope ({@link StatementRelation.IsCTEReference}); see
+     * {@link StrictFragmentValidator.CollectStatementReads} in `@memberjunction/sql-parser`. `skip`
+     * is a FROM item node of `parser`'s own tree to leave out.
+     */
+    public static CollectStatementReads(parser: SQLParser, skip?: object): StatementReads {
+        return StrictFragmentValidator.CollectStatementReads(parser, skip);
+    }
+
+    /**
+     * Refuses SQL whose SELECT keywords, outside literals, quoted identifiers and comments, differ
+     * in number from the SELECT nodes a walk of its parse tree found. A subquery the walk cannot
+     * see would otherwise go unchecked, so a mismatch fails closed.
+     */
+    public static AssertEverySelectAccountedFor(sql: string, dialect: SQLParserDialect, reads: StatementReads, label: string): void {
+        const keywords = SignificantTokens(LexSQL(sql, dialect)).filter((token) => IsKeyword(token, 'SELECT')).length;
+        if (keywords !== reads.SelectCount) {
+            throw new Error(`Invalid ${label}: could not account for every subquery in it — refusing under uncertainty`);
+        }
+    }
+
+    /**
+     * The entity one FROM item reads, or null for an unqualified built-in table function that
+     * reads only its arguments. Throws for any other function or row source, and when
+     * {@link AssertTableRefReadable} refuses a table name.
+     */
+    public static AssertRelationReadable(
+        allowed: EntityBaseViewAllowList,
+        relation: StatementRelation,
+        label: string,
+        user?: UserInfo,
+    ): EntityInfo | null {
+        if (relation.TableName) {
+            return ClientClauseScreen.AssertTableRefReadable(allowed, relation.SchemaName, relation.TableName, label, user);
+        }
+        const name = relation.FunctionName;
+        if (name && !relation.SchemaName && ClientClauseScreen.ARGUMENT_ONLY_TABLE_FUNCTIONS.has(name.toLowerCase())) {
+            return null;
+        }
+        const source = name ? `the table function '${[relation.SchemaName, name].filter(Boolean).join('.')}'` : 'a row source it cannot identify';
+        throw new Error(`Invalid ${label}: a subquery may read only entity base views, not ${source}`);
+    }
+
+    /**
+     * Parses a whole statement strictly and returns what it reads; throws unless it is one plain
+     * read-only SELECT with no write or DDL at any depth.
+     */
+    private static readOnlyStatementReads(sql: string, dialect: SQLParserDialect, label: string): StatementReads {
+        const result = StrictFragmentValidator.ValidateReadOnlyStatement(sql, dialect, { CollectReads: true });
+        return ClientClauseScreen.safeReadsOf(result, `Invalid ${label}: not a safe read-only statement — refusing under uncertainty`, label);
+    }
+
+    /**
+     * The reads of a strict parse; throws `unsafe` unless it parsed as one plain read-only SELECT,
+     * and the nested-write refusal when a write or DDL sits inside it.
+     */
+    private static safeReadsOf(result: StrictValidationResult, unsafe: string, label: string): StatementReads {
+        if (result.Refusal === 'NestedWrite') {
+            throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
+        }
+        if (!result.IsValid || !result.Reads) throw new Error(unsafe);
+        return result.Reads;
+    }
+
+    /** The text variants of one clause; a platform-specific clause yields each of its variants. */
+    private static clauseVariants(value: ClientClauseText, label: string, dialect: SQLParserDialect): ClauseVariant[] {
+        if (value == null) return [];
+        if (typeof value === 'string') return [{ Text: value, Dialect: dialect }];
+        if (!IsPlatformSQL(value) || typeof value.default !== 'string') {
+            throw new Error(`Invalid ${label}: expected SQL text`);
+        }
+        const variants: ClauseVariant[] = [{ Text: value.default, Dialect: dialect }];
+        for (const [variant, variantDialect] of [[value.sqlserver, new SQLServerDialect()], [value.postgresql, new PostgreSQLDialect()]] as const) {
+            if (variant == null) continue;
+            if (typeof variant !== 'string') throw new Error(`Invalid ${label}: expected SQL text`);
+            variants.push({ Text: variant, Dialect: variantDialect });
+        }
+        return variants;
+    }
+
+    /**
+     * The clause with T-SQL bracket identifiers in the dialect's own quoting, for a dialect that
+     * does not quote with brackets. The PostgreSQL provider accepts `[Name]` in a client clause and
+     * converts it the same way before running it (`PostgreSQLDataProvider.quoteIdentifiersInSQL`).
+     * Only a bracket around a plain name changes; any other bracket stays as written, and the
+     * grammar refuses it.
+     */
+    private static toDialectQuoting(clause: string, dialect: SQLParserDialect): string {
+        if (dialect.QuoteIdentifier('x').startsWith('[')) return clause;
+        return clause.replace(/\[(\w[\w\s]*)\]/g, (_bracketed: string, name: string) => dialect.QuoteIdentifier(name));
+    }
+}

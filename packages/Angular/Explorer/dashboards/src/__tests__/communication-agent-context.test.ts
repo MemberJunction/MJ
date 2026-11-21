@@ -265,6 +265,46 @@ describe('buildCommunicationAgentContext — providers surface', () => {
         expect(ctx['SelectedProviderId']).toBe('PROV-2');
         expect(ctx['SelectedProviderName']).toBe('Twilio');
     });
+
+    it('emits Calendar/FreeBusy capabilities, enterprise scope summaries, and agent utility mailboxes when supplied', () => {
+        const providers: CommunicationProvidersContext = {
+            Surface: 'providers',
+            ProviderCount: 2,
+            ActiveProviderCount: 2,
+            ProviderNames: ['Microsoft Graph', 'Gmail'],
+            CalendarCapableProviderNames: ['Microsoft Graph', 'Gmail'],
+            FreeBusyCapableProviderNames: ['Microsoft Graph', 'Gmail'],
+            EnterpriseScopeSummaries: [
+                'Microsoft Graph · SecurityGroupScoped · bluecypress.io, memberjunction.org',
+                'Gmail · UtilityMailboxesOnly · Any domain',
+            ],
+            AgentUtilityMailboxCount: 2,
+            AgentUtilityMailboxSummaries: [
+                'cos-amith@bluecypress.io · Chief of Staff · Dedicated: Amith Nagarajan',
+                'sage@bluecypress.io · Sage · Shared',
+            ],
+            SelectedItemId: null,
+            SelectedItemName: null,
+        };
+        const ctx = BuildCommunicationAgentContext({
+            ActiveTab: 'providers',
+            ActiveTabLabel: 'Providers',
+            VisitedTabs: ['providers'],
+            IsRefreshing: false,
+            Surface: providers,
+        });
+        expect(ctx['CalendarCapableProviders']).toEqual(['Microsoft Graph', 'Gmail']);
+        expect(ctx['FreeBusyCapableProviders']).toEqual(['Microsoft Graph', 'Gmail']);
+        expect(ctx['EnterpriseScopeSummaries']).toEqual([
+            'Microsoft Graph · SecurityGroupScoped · bluecypress.io, memberjunction.org',
+            'Gmail · UtilityMailboxesOnly · Any domain',
+        ]);
+        expect(ctx['AgentUtilityMailboxCount']).toBe(2);
+        expect(ctx['AgentUtilityMailboxes']).toEqual([
+            'cos-amith@bluecypress.io · Chief of Staff · Dedicated: Amith Nagarajan',
+            'sage@bluecypress.io · Sage · Shared',
+        ]);
+    });
 });
 
 describe('buildCommunicationAgentContext — templates surface', () => {

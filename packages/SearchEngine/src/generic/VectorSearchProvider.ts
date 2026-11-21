@@ -13,10 +13,11 @@ import { EntityInfo, LogError, LogStatus, Metadata, RunView, UserInfo, Composite
 import { MJVectorIndexEntity, MJVectorDatabaseEntity, MJContentSourceEntity, MJEntityDocumentEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { GetAIAPIKey } from '@memberjunction/ai';
-import { AIEmbeddingRunner } from '@memberjunction/ai-prompts';
+import { AIEmbeddingRunner, EmbeddingCarrierPrompts } from '@memberjunction/ai-prompts';
 import { VectorDBBase, BaseResponse, QueryByVectorValues } from '@memberjunction/ai-vectordb';
 import { MJGlobal, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
+import type { LaneKind } from './ScopeExplanation';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeExternalIndexConstraint } from './search.types';
 import { CheckScopeJsonFilter, ScopeFilterCheck } from './ScopeFilterGuard';
 
@@ -52,6 +53,9 @@ interface UnmergedFilters {
 export class VectorSearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'vector';
 
+    /** Reads the scope's `Vector` external-index rows (see `BaseSearchProvider.ConsumesLaneKinds`). */
+    public override readonly ConsumesLaneKinds: readonly LaneKind[] = ['ExternalIndex'];
+
     private available = false;
 
     /**
@@ -73,6 +77,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
                 EntityName: 'MJ: Vector Indexes',
                 Fields: ['ID'],
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple'
             }, contextUser);
             this.available = result.Success && result.Results.length > 0;
@@ -97,11 +102,6 @@ export class VectorSearchProvider extends BaseSearchProvider {
         scopeConstraints?: ScopeConstraints
     ): Promise<SearchResultItem[]> {
         try {
-            await AIEngine.Instance.Config(false, contextUser);
-
-            // Honor per-provider query transform
-            const effectiveQuery = scopeConstraints?.QueryTransforms?.[this.SourceType] ?? query;
-
             // Determine the scoped vector-index subset. When scopeConstraints.ExternalIndexes
             // is provided, filter to rows where IndexType='Vector' (3rd-party rows are for
             // other providers) and match the listed VectorIndexIDs. When absent, fall back
@@ -109,6 +109,15 @@ export class VectorSearchProvider extends BaseSearchProvider {
             const scopedVectorRows = scopeConstraints?.ExternalIndexes
                 ? scopeConstraints.ExternalIndexes.filter(r => r.IndexType === 'Vector' && r.VectorIndexID)
                 : undefined;
+            if (scopedVectorRows?.length === 0) {
+                // The scope names no vector index: nothing for this provider, and nothing to query.
+                return [];
+            }
+
+            await AIEngine.Instance.Config(false, contextUser);
+
+            // Honor per-provider query transform
+            const effectiveQuery = scopeConstraints?.QueryTransforms?.[this.SourceType] ?? query;
 
             const rv = new RunView();
             const indexResult = await rv.RunView<MJVectorIndexEntity>({
@@ -257,8 +266,10 @@ export class VectorSearchProvider extends BaseSearchProvider {
                 const embeddingRunner = new AIEmbeddingRunner();
                 const embedResult = await embeddingRunner.RunEmbedding({
                     Texts: [query],
+                    PromptName: EmbeddingCarrierPrompts.VectorSearch,
                     ModelID: model.ID,
                     Dimensions: dimensions,
+                    InputType: 'query',
                     ContextUser: contextUser,
                     Description: `Vector search query embedding for model ${model.Name}`,
                 });

@@ -128,13 +128,18 @@ When the Strategist returns results (in `payloadChangeRequest`), the **artifact 
 - SQL code (displayed in the payload's SQL tab)
 - Column lists or raw data
 
-**Always include a `responseForm` with next actions.** Offer ideas for enhancing or refining the query when relevant, and always offer to save:
+**Always include a `responseForm` with next actions** and preserve `artifactDirective` (with `name` matching the query `title`):
 
 ```json
 {
   "message": "Found 5 agents with runs in the last 30 days. The Query Builder agent dominates activity with 22 runs at 100% success rate, averaging 10.2 seconds per execution.",
   "payloadChangeRequest": {
     "replaceElements": { "...Strategist's DataArtifactSpec..." }
+  },
+  "artifactDirective": {
+    "behavior": "create-new",
+    "name": "AI Agent Performance Summary",
+    "description": "Agent run counts, success rates, and average execution times over the last 30 days"
   },
   "responseForm": {
     "questions": [
@@ -168,6 +173,8 @@ Pick 2-3 enhancement ideas most relevant to the specific query, plus always incl
 
 ### Step 4: Iterate
 - The user may want to add filters, change grouping, add columns, etc.
+- For refinements to an existing artifact, set `artifactDirective: { "behavior": "version-source", "targetArtifactId": "<alpha ID or artifactId>" }`
+- When the user asks for a brand-new artifact or topic, set `artifactDirective: { "behavior": "create-new", "name": "<title>" }`
 - For each change, delegate back to the Query Strategist, then present updated results
 - Keep the conversation going until the user is satisfied
 
@@ -181,6 +188,12 @@ When the user asks to save (e.g., "save this", "create the query", "that's good,
 After saving, the toolbar automatically switches to an **Open Query** button so the user can navigate to the saved query record.
 
 If the user wants to update an existing saved query, use the **Update Record** action with `EntityName: "MJ: Queries"` and the query's `ID`.
+
+### Collaborative Spreadsheets & Live Query Tables
+When the user asks to turn a query into a **live spreadsheet** (or build formulas, multi-tab workbooks, or Excel charts around live query data):
+- If the **Query Browser** `CreateLiveSheetFromQuery` / `AppendQueryToLiveSheet` client tool is available, call it for an approved stored query to create/populate the governed **Excel Spreadsheet** and obtain its `ArtifactID`, `SheetName`, `BoundingRange`, and `RowCount`.
+- Otherwise (or when enriching an existing spreadsheet), use **`Create Governed Artifact`** (`ArtifactType: "Excel Spreadsheet"`) and **`Mutate Governed Artifact`** with `Tool: "upsert_live_table"` (`sourceType: "SavedQuery"`). Because `upsert_live_table` materializes `headers`, `boundingRange`, and `rowCount` immediately on the server, you can add summary formulas (`write_cells`), additional tabs (`add_sheet`), or charts (`upsert_chart`) right away in the next step.
+- In a realtime voice session, open the resulting `ArtifactID` via the **`ArtifactWorkspace`** channel so the user watches the live updates in real time.
 
 ### Step 6: Data Artifact Format
 
@@ -279,7 +292,7 @@ You don't need to understand the composition syntax — the Strategist handles a
 ## Data Sources Available
 
 - **ALL_ENTITIES**: All entity names, descriptions, schemas, base tables, and base views
-- **ALL_QUERIES**: Existing queries with their names, descriptions, and statuses
+- **ALL_QUERIES**: Approved queries with their names, descriptions and categories (no SQL; Pending drafts are left out)
 - **QUERY_CATEGORIES**: Available categories for organizing queries
 
 ## Actions Available

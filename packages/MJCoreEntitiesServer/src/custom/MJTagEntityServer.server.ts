@@ -1,8 +1,8 @@
 import { BaseEntity, EntitySaveOptions, LogError, LogStatus, RunView, SimpleEmbeddingResult, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
-import { Float32VectorToBase64, RegisterClass } from '@memberjunction/global';
+import { Float32VectorToBase64, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJTagEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
 import { TagEngine } from '@memberjunction/tag-engine';
-import { EmbedTextLocalHelper } from './util';
+import { EmbedTextLocalHelper, IsLocalEmbeddingStaleHelper } from './util';
 
 /**
  * Server-side Tag entity that:
@@ -28,6 +28,38 @@ export class MJTagEntityServer extends MJTagEntity {
 
     protected override async EmbedTextLocal(textToEmbed: string): Promise<SimpleEmbeddingResult> {
         return EmbedTextLocalHelper(this, textToEmbed);
+    }
+
+    /**
+     * A stored vector from a model other than the one TagEngine's tag index uses is re-embedded on
+     * save. With no model resolved there, the default local model is the reference.
+     */
+    protected override async IsEmbeddingStale(embeddingModelID: string | null): Promise<boolean> {
+        const tagModelID = await this.tagEmbeddingModelID();
+        if (tagModelID) {
+            return !UUIDsEqual(embeddingModelID, tagModelID);
+        }
+        return IsLocalEmbeddingStaleHelper(this, embeddingModelID);
+    }
+
+    /** The model TagEngine embeds tags with, or null when it resolves none or there is no user. */
+    private async tagEmbeddingModelID(): Promise<string | null> {
+        const user = this.ContextCurrentUser;
+        return user ? TagEngine.Instance.ResolveTagEmbeddingModelID(user) : null;
+    }
+
+    /**
+     * Embeds the tag text with TagEngine's model (#4922), so the tag shares a vector space with the
+     * rest of the tag index; the local helper is used only when TagEngine resolves no model.
+     */
+    private async embedTagText(text: string): Promise<{ vector: number[]; modelID: string | null } | null> {
+        const user = this.ContextCurrentUser;
+        if (user && await this.tagEmbeddingModelID()) {
+            const embedded = await TagEngine.Instance.EmbedTagText(text, user);
+            return embedded ? { vector: embedded.Vector, modelID: embedded.ModelID } : null;
+        }
+        const local = await this.EmbedTextLocal(text);
+        return local?.vector ? { vector: local.vector, modelID: local.modelID ?? null } : null;
     }
 
     public override SupportsEmbedTextLocal(): boolean {
@@ -143,7 +175,9 @@ export class MJTagEntityServer extends MJTagEntity {
         const nameDirty = !this.IsSaved || (nameField?.Dirty ?? false);
         const descDirty = !this.IsSaved || (descField?.Dirty ?? false);
 
-        if (!nameDirty && !descDirty) return;
+        const textChanged = nameDirty || descDirty;
+        const stale = this.EmbeddingVector != null && await this.IsEmbeddingStale(this.EmbeddingModelID);
+        if (!textChanged && !stale) return;
 
         const trimmedName = this.Name?.trim();
         if (!trimmedName) {
@@ -157,18 +191,19 @@ export class MJTagEntityServer extends MJTagEntity {
         const text = description ? `${trimmedName}: ${description}` : trimmedName;
 
         try {
-            const result = await this.EmbedTextLocal(text);
+            const result = await this.embedTagText(text);
             if (result?.vector && result.vector.length > 0) {
                 this.EmbeddingVector = JSON.stringify(result.vector);
                 this.EmbeddingVectorBinary = Float32VectorToBase64(result.vector);
                 if (result.modelID) this.EmbeddingModelID = result.modelID;
-            } else {
-                this.EmbeddingVector = null;
-                this.EmbeddingVectorBinary = null;
-                this.EmbeddingModelID = null;
+                return;
             }
         } catch (error) {
             LogError(`[MJTagEntityServer] Embedding refresh failed for tag "${this.Name}": ${error instanceof Error ? error.message : String(error)}`);
+        }
+        // A vector computed from old text must go; one that is only from an older model still matches
+        // the text, so keep it until a re-embed succeeds.
+        if (textChanged) {
             this.EmbeddingVector = null;
             this.EmbeddingVectorBinary = null;
             this.EmbeddingModelID = null;

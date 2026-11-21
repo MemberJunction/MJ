@@ -3,7 +3,7 @@
  * @module @memberjunction/scheduling-engine
  */
 
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, IsValidUUID, UUIDsEqual } from '@memberjunction/global';
 import { BaseScheduledJob, ScheduledJobExecutionContext } from '../BaseScheduledJob';
 import { ValidationResult, UserInfo, Metadata, ValidationErrorInfo, ValidationErrorType, IMetadataProvider } from '@memberjunction/core';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
@@ -24,8 +24,14 @@ import {
  *   StartingPayload?: any,
  *   InitialMessage?: string,
  *   ConfigurationID?: string,
+ *   CompanyID?: string,
  *   OverrideModelID?: string
  * }
+ *
+ * All four optional ID fields (`ConfigurationID`, `CompanyID`, `ConversationID`,
+ * `OverrideModelID`) are validated as UUIDs by `ValidateConfiguration` and
+ * forwarded to `AgentRunner.RunAgent` (`configurationId`, `companyId`,
+ * `conversationId`, and `override: { modelId }`).
  *
  * Execution result details (stored in ScheduledJobRun.Details):
  * {
@@ -41,8 +47,11 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
         // Parse agent-specific configuration
         const config = this.parseConfiguration<AgentJobConfiguration>(context.Schedule);
 
+        // Resolve the schedule owner's UserInfo when OwnerUserID is specified
+        const executionUser = await this.resolveScheduleOwnerUser(context.Schedule, context.ContextUser);
+
         // Load the agent entity
-        const agent = await this.loadAgent(config.AgentID, context.ContextUser);
+        const agent = await this.loadAgent(config.AgentID, executionUser);
 
         // A workflow SUBMITS and detaches — it returns a handle as soon as its steps are scheduled,
         // not a result. A scheduled job that ran one would record success the moment the graph was
@@ -78,7 +87,11 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
             agent: agent,
             conversationMessages: conversationMessages,
             payload: config.StartingPayload,
-            contextUser: context.ContextUser,
+            contextUser: executionUser,
+            ...(config.ConfigurationID !== undefined ? { configurationId: config.ConfigurationID } : {}),
+            ...(config.CompanyID !== undefined ? { companyId: config.CompanyID } : {}),
+            ...(config.ConversationID !== undefined ? { conversationId: config.ConversationID } : {}),
+            ...(config.OverrideModelID !== undefined ? { override: { modelId: config.OverrideModelID } } : {}),
             // Heartbeat the lease on every agent step (prompt / action / sub-agent /
             // decision) so a healthy long-running agent keeps its concurrency slot
             // (GH #2749). Fire-and-forget is safe — context.heartbeat never throws
@@ -120,6 +133,24 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
                     config.AgentID,
                     ValidationErrorType.Failure
                 ));
+            }
+
+            // Validate optional UUID fields
+            const optionalUuidFields: Array<keyof Pick<
+                AgentJobConfiguration,
+                'ConfigurationID' | 'CompanyID' | 'ConversationID' | 'OverrideModelID'
+            >> = ['ConfigurationID', 'CompanyID', 'ConversationID', 'OverrideModelID'];
+
+            for (const field of optionalUuidFields) {
+                const value = config[field];
+                if (value !== undefined && (typeof value !== 'string' || !IsValidUUID(value))) {
+                    result.Errors.push(new ValidationErrorInfo(
+                        `Configuration.${field}`,
+                        `${field} must be a valid UUID when provided (received "${String(value)}")`,
+                        value,
+                        ValidationErrorType.Failure
+                    ));
+                }
             }
 
             // Validate StartingPayload is valid JSON if provided

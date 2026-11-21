@@ -517,3 +517,16 @@
     background: var(--mj-status-error-bg);
   }
 }
+
+.detail-purge-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  border: 1px solid var(--mj-status-warning-border);
+  border-radius: 6px;
+  background: var(--mj-status-warning-bg);
+  color: var(--mj-status-warning-text);
+}

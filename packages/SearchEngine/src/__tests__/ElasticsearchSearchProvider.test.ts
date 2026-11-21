@@ -107,6 +107,21 @@ describe('ElasticsearchSearchProvider', () => {
             expect(results[1].Score).toBeCloseTo(0.5);
         });
 
+        it('a scoped search with no Elasticsearch row queries nothing — never the default index', async () => {
+            const p = new ElasticsearchSearchProvider();
+            await p.Initialize(basicConfig(), fakeUser);
+            await p.CheckAvailability(fakeUser);
+
+            const none = await p.Search('plain query', 10, undefined, fakeUser, { ExternalIndexes: [] });
+            const otherType = await p.Search('plain query', 10, undefined, fakeUser, {
+                ExternalIndexes: [{ IndexType: 'OpenSearch', ExternalIndexName: 'os-docs' }],
+            });
+
+            expect(none).toEqual([]);
+            expect(otherType).toEqual([]);
+            expect(mockSearch).not.toHaveBeenCalled();
+        });
+
         it('uses scope external-indexes when present (overrides defaultIndex)', async () => {
             const p = new ElasticsearchSearchProvider();
             await p.Initialize(basicConfig(), fakeUser);

@@ -10,7 +10,9 @@ services:
       MSSQL_PID: "Developer"
       MSSQL_MEMORY_LIMIT_MB: "3072"
     ports:
-      - "1444:1433"
+      # Bind to loopback only — this is an SA-enabled dev SQL Server, not something
+      # to expose on every interface of the host machine.
+      - "127.0.0.1:1444:1433"
     volumes:
       - sql-claude-data:/var/opt/mssql
     deploy:
@@ -36,7 +38,8 @@ services:
       POSTGRES_DB: "${PG_DATABASE:-MJ_Workbench_PG}"
       POSTGRES_INITDB_ARGS: "--data-checksums"
     ports:
-      - "${PG_HOST_PORT:-5433}:5432"
+      # Loopback only — dev database, same reasoning as sql-claude above.
+      - "127.0.0.1:${PG_HOST_PORT:-5433}:5432"
     volumes:
       - postgres-claude-data:/var/lib/postgresql/data
       - ./pg-init:/docker-entrypoint-initdb.d
@@ -64,7 +67,8 @@ services:
     image: redis:7-alpine
     container_name: redis-claude
     ports:
-      - "${REDIS_HOST_PORT:-6380}:6379"
+      # Loopback only — unauthenticated dev Redis, same reasoning as sql-claude above.
+      - "127.0.0.1:${REDIS_HOST_PORT:-6380}:6379"
     volumes:
       - redis-claude-data:/data
     deploy:

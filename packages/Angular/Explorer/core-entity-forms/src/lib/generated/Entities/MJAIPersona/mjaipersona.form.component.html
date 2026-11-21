@@ -271,6 +271,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- AI Agent User Policies Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentUserPolicies"
+        SectionName="AI Agent User Policies"
+        Icon="fa fa-shield-alt"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentUserPolicies')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent User Policies','PreferredPersonaID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent User Policies','PreferredPersonaID')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentUserPolicies')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentUserPolicies', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

@@ -75,10 +75,10 @@ export async function StartTaskGraphDispatcher(
         { InstanceID: instanceID ?? defaultInstanceID() },
         // Without this the dispatcher had nowhere to deliver: a finished graph logged its outcome,
         // marked itself delivered, and said nothing to the conversation that asked for it.
-        new TaskGraphContinuationDeliverer(providerFactory, contextUser),
+        new TaskGraphContinuationDeliverer(providerFactory, contextUser, pubSub),
         // Live signal. Supplied only when a PubSub engine exists — in a worker or a test there is
         // nobody to publish to, and the dispatcher runs identically without one.
-        pubSub ? new TaskGraphFrameBroadcaster(pubSub) : undefined,
+        pubSub ? new TaskGraphFrameBroadcaster(pubSub, true) : undefined,
         // Action nodes — the third execution shape, beside agents and people. Durable After* entity
         // actions land as these.
         new TaskGraphActionRunner(),

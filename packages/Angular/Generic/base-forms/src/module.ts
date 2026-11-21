@@ -25,7 +25,7 @@ import { MJReactModule } from '@memberjunction/ng-react';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { MJSafeRichHtmlPipe, SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { MJEmptyStateComponent, MJAlertComponent, MJButtonDirective, MjIconPickerComponent } from '@memberjunction/ng-ui-components';
+import { MJEmptyStateComponent, MJAlertComponent, MJButtonDirective, MjIconPickerComponent, MJBottomSheetComponent, MJConfirmDialogComponent } from '@memberjunction/ng-ui-components';
 import { InteractiveFormComponent } from './lib/interactive-form/interactive-form.component';
 import { InteractiveFormPanelComponent } from './lib/interactive-form/interactive-form-panel.component';
 import { MjEntityFormHostComponent } from './lib/host/entity-form-host.component';
@@ -33,6 +33,15 @@ import { MjFormPlacementDialogComponent } from './lib/apply/form-placement-dialo
 import { MjFormPlacementPreviewComponent } from './lib/apply/form-placement-preview.component';
 import { PlacementPreviewPanelComponent } from './lib/panel-slot/placement-preview-panel.component';
 import { RecordCloneSlideInComponent } from '@memberjunction/ng-record-clone';
+import { MjRecordLinksComponent } from './lib/links/record-links.component';
+import { MjRecordLinksDrawerComponent } from './lib/links/record-links-drawer.component';
+import { MjRecordLinkDirective } from './lib/links/record-link.directive';
+import { MjRecordLinkComponent } from './lib/links/record-link.component';
+import { MjRecordPreviewPopoverComponent } from './lib/preview-popover/record-preview-popover.component';
+import { MjRecordCommentsComponent } from './lib/comments/record-comments.component';
+import { MjCommentCardDriverHostComponent } from './lib/comments/comment-card-driver-host.component';
+import { FieldSuggestionCardComponent } from './lib/comments/field-suggestion-card.component';
+import { MjFoldedSubtypeSectionComponent } from './lib/subtype-ui-driver/folded-subtype-section.component';
 
 /**
  * BaseFormsModule - Form components and base classes for rendering and editing MemberJunction entity records.
@@ -74,13 +83,23 @@ import { RecordCloneSlideInComponent } from '@memberjunction/ng-record-clone';
     MjEntityFormHostComponent,
     MjFormPlacementDialogComponent,
     MjFormPlacementPreviewComponent,
-    PlacementPreviewPanelComponent
+    PlacementPreviewPanelComponent,
+    MjRecordLinksComponent,
+    MjRecordLinksDrawerComponent,
+    MjRecordLinkDirective,
+    MjRecordLinkComponent,
+    MjRecordPreviewPopoverComponent,
+    MjRecordCommentsComponent,
+    MjCommentCardDriverHostComponent,
+    FieldSuggestionCardComponent,
+    MjFoldedSubtypeSectionComponent
   ],
   imports: [
     CommonModule,
     FormsModule,
     MJEmptyStateComponent,
     MJAlertComponent,
+    MJButtonDirective,
     RecordChangesModule,
     ListManagementModule,
     EntityViewerModule,
@@ -93,6 +112,8 @@ import { RecordCloneSlideInComponent } from '@memberjunction/ng-record-clone';
     SharedGenericModule,
     MJButtonDirective,
     MjIconPickerComponent,
+    MJBottomSheetComponent,
+    MJConfirmDialogComponent,
     RecordCloneSlideInComponent
   ],
   exports: [
@@ -115,7 +136,16 @@ import { RecordCloneSlideInComponent } from '@memberjunction/ng-record-clone';
     MjEntityFormHostComponent,
     MjFormPlacementDialogComponent,
     MjFormPlacementPreviewComponent,
-    PlacementPreviewPanelComponent
+    PlacementPreviewPanelComponent,
+    MjRecordLinksComponent,
+    MjRecordLinksDrawerComponent,
+    MjRecordLinkDirective,
+    MjRecordLinkComponent,
+    MjRecordPreviewPopoverComponent,
+    MjRecordCommentsComponent,
+    MjCommentCardDriverHostComponent,
+    FieldSuggestionCardComponent,
+    MjFoldedSubtypeSectionComponent
   ]
 })
 export class BaseFormsModule { }

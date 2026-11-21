@@ -3,6 +3,8 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
 import { PanelConfig } from '../models/dashboard-types';
+import { FillUrlPlaceholders, PartInputProblemMessage } from '../models/dashboard-properties';
+import { WebUrlPartInterface } from '../models/dashboard-part-interfaces';
 
 /**
  * Runtime renderer for WebURL dashboard parts.
@@ -32,7 +34,7 @@ import { PanelConfig } from '../models/dashboard-types';
               [Message]="ErrorMessage"
               Size="compact">
               @if (rawUrl) {
-                <a actions [href]="rawUrl" target="_blank" class="open-link">
+                <a actions [href]="rawUrl" target="_blank" rel="noopener noreferrer" class="open-link">
                   <i class="fa-solid fa-up-right-from-square"></i>
                   Open in new window
                 </a>
@@ -133,7 +135,7 @@ import { PanelConfig } from '../models/dashboard-types';
           @if (!IsLoading && !ErrorMessage && SafeUrl && showFallbackLink) {
             <div class="iframe-fallback">
               <span>If the content doesn't load:</span>
-              <a [href]="rawUrl" target="_blank">
+              <a [href]="rawUrl" target="_blank" rel="noopener noreferrer">
                 <i class="fa-solid fa-external-link-alt"></i>
                 Open in new window
               </a>
@@ -282,6 +284,8 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
     } // Hidden by default, shown if content might be blocked
 
     private sanitizer: DomSanitizer;
+    /** True while the part shows a problem with its mappings. */
+    private showingInputProblem = false;
     private loadCheckTimeout: ReturnType<typeof setTimeout> | null = null;
     private iframeLoaded: boolean = false;
 
@@ -297,9 +301,18 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
         }
     }
 
+    protected override cleanup(): void {
+        if (this.loadCheckTimeout) {
+            clearTimeout(this.loadCheckTimeout);
+            this.loadCheckTimeout = null;
+        }
+        super.cleanup();
+    }
+
     public async loadContent(): Promise<void> {
         const config = this.getConfig<PanelConfig>();
-        const url = config?.['url'] as string | undefined;
+        const url = this.fillPlaceholders(config?.['url'] as string | undefined);
+        if (url === null) return; // a mapping problem is shown
 
         // Clear any existing timeout
         if (this.loadCheckTimeout) {
@@ -310,11 +323,22 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
         // Reset state
         this.iframeLoaded = false;
         this.ShowFallbackLink = false;
+        this.ErrorMessage = null;
 
         if (!url) {
             this.SafeUrl = null;
             this.RawUrl = '';
             this.cdr.detectChanges();
+            return;
+        }
+
+        // SECURITY: only http(s) URLs may be embedded. bypassSecurityTrustResourceUrl disables
+        // Angular's sanitizer, so without this check a stored javascript: (or other scheme) URL
+        // in a shared dashboard panel would execute in every viewer's browser.
+        if (!this.isEmbeddableUrl(url)) {
+            this.SafeUrl = null;
+            this.RawUrl = '';
+            this.setError('Only http:// and https:// URLs can be embedded.');
             return;
         }
 
@@ -344,6 +368,39 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
 
         } catch (error) {
             this.setError(error instanceof Error ? error.message : 'Failed to load URL');
+        }
+    }
+
+    /**
+     * The URL with its `{Name}` placeholders filled, each value URL-encoded, from the part's input
+     * mappings. A part without mappings keeps its URL exactly as configured. Returns null, showing
+     * why, when a mapping is broken or a placeholder has no value.
+     */
+    private fillPlaceholders(url: string | undefined): string | undefined | null {
+        const resolution = this.UpdateInputs(WebUrlPartInterface(url).Inputs);
+        if (!resolution || !url) return url;
+        const problem = PartInputProblemMessage(resolution);
+        if (this.showingInputProblem && !problem) this.ErrorMessage = null; // the values arrived
+        this.showingInputProblem = problem !== null;
+        if (problem) {
+            this.SafeUrl = null;
+            this.RawUrl = '';
+            this.setError(problem);
+            return null;
+        }
+        return FillUrlPlaceholders(url, resolution.Values);
+    }
+
+    /**
+     * True when the URL parses and uses a scheme that is safe to hand to
+     * bypassSecurityTrustResourceUrl for iframe embedding (http/https only).
+     */
+    private isEmbeddableUrl(url: string): boolean {
+        try {
+            const parsed = new URL(url);
+            return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+        } catch {
+            return false;
         }
     }
 

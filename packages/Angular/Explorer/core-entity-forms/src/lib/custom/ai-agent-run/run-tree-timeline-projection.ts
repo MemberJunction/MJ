@@ -442,7 +442,9 @@ function toTimelineItem(
         parentId: parentID,
         // Everything is already loaded — the whole tree arrived in one query — so nothing here is
         // ever in the "expanded but still fetching" state the lazy loader had to represent.
-        isExpanded: true,
+        // Default to collapsed (`isExpanded: false`) so expanding a TaskGraph step shows only its
+        // immediate child tasks (1 level) and lets the user expand/collapse each task individually.
+        isExpanded: false,
         childrenLoaded: true,
         hasNoChildren: node.Children.length === 0,
         children: [],

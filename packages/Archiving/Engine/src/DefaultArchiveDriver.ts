@@ -1,5 +1,6 @@
-import { BaseEntity, CompositeKey, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityFieldInfo, EntityFieldTSType, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
+import type { FileStorageBase } from '@memberjunction/storage';
 import { BaseArchiveDriver } from './BaseArchiveDriver';
 import {
     ArchiveRecordContext,
@@ -7,24 +8,35 @@ import {
     RestoreRecordContext,
     RestoreRecordResult,
     ArchiveDocument,
+    ArchiveFieldConfiguration,
+    EligibilityFilterContext,
+    IsPurgeStorageMode,
 } from './types';
 
 /**
  * Default archive driver implementation. Archives configured field values to
  * external storage, applies the appropriate post-archive action based on mode
  * (StripFields, HardDelete, ArchiveOnly), and supports restoring the original
- * values from the stored archive document.
+ * values from the stored archive document. When StorageMode is 'Purge', it applies
+ * the mode without writing anything to storage.
  */
 @RegisterClass(BaseArchiveDriver, 'DefaultArchiveDriver')
 export class DefaultArchiveDriver extends BaseArchiveDriver {
+    public override get SupportsPurge(): boolean {
+        return true;
+    }
+
     /**
      * Determines whether the record should be archived by checking if at least
-     * one of the configured fields (or SkipIfAllNullFields) has a non-null value.
+     * one of the configured fields (or SkipIfAllNullFields) holds a value. A null field
+     * holds no value. In StripFields mode an empty string in a NOT NULL column holds no
+     * value either, because that is what StripFields writes to such a column; in the other
+     * modes it is a value like any other.
      * If no specific fields are configured but ArchiveFullRecord is true,
      * always archives — the intent is a full record snapshot, not field stripping.
      */
     public ShouldArchiveRecord(context: ArchiveRecordContext): boolean {
-        const fieldsToCheck = this.getFieldsToCheck(context);
+        const fieldsToCheck = this.getFieldsToCheck(context.FieldConfig);
 
         // If no specific fields are configured but ArchiveFullRecord is true,
         // always archive — the intent is a full record snapshot, not field stripping
@@ -32,23 +44,58 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
             return context.FieldConfig.ArchiveFullRecord === true;
         }
 
-        return fieldsToCheck.some(fieldName => {
-            const value = context.Record.Get(fieldName);
-            return value != null;
-        });
+        const stripFields = this.resolveMode(context.ConfigEntity, context.Config) === 'StripFields';
+        return fieldsToCheck.some(fieldName => this.fieldHoldsValue(context.Record, fieldName, stripFields));
     }
 
     /**
-     * Archives a single record:
+     * Returns the SQL form of {@link ShouldArchiveRecord}: an OR over the checked fields of
+     * `[field] IS NOT NULL` for nullable columns and, in StripFields mode, `[field] LIKE '_%'`
+     * for NOT NULL string columns. `LIKE '_%'` matches any non-empty string, whitespace
+     * included, on SQL Server and PostgreSQL alike (unlike `<> ''`, which SQL Server
+     * evaluates ignoring trailing spaces), and also works on text/ntext columns.
+     * Returns null when there are no checked fields, or when one cannot be tested: it is
+     * missing from the entity, its name contains a bracket, or it is a NOT NULL column that
+     * always holds a value under the mode (any NOT NULL column outside StripFields, or a
+     * NOT NULL non-string column), which makes the whole OR always true.
+     */
+    public override BuildEligibilityFilter(context: EligibilityFilterContext): string | null {
+        const fieldsToCheck = this.getFieldsToCheck(context.FieldConfig);
+        if (fieldsToCheck.length === 0) {
+            return null;
+        }
+        const stripFields = this.resolveMode(context.ConfigEntity, context.Config) === 'StripFields';
+        const conditions: string[] = [];
+        for (const fieldName of fieldsToCheck) {
+            const condition = this.holdsValueCondition(context.EntityInfo.FieldByName(fieldName), stripFields);
+            if (!condition) {
+                return null;
+            }
+            conditions.push(condition);
+        }
+        return conditions.join(' OR ');
+    }
+
+    /**
+     * Archives a single record.
+     *
+     * Store run (any StorageMode other than 'Purge'):
      * 1. Builds the archive document with field values
      * 2. Writes the document to external storage
      * 3. Applies the post-archive action based on mode:
      *    - StripFields: nullifies configured fields on the source record
-     *    - HardDelete: cascades to archive+delete dependent records, then deletes the source record
+     *    - HardDelete: writes one cascade batch file per dependent entity, deletes the
+     *      dependent records leaf-first, then deletes the source record
      *    - ArchiveOnly: no changes to the source record
+     *
+     * Purge run: writes no archive document and no cascade batch file; applies only
+     * StripFields or HardDelete to the source record (and its dependents for HardDelete).
      */
     public async ArchiveRecord(context: ArchiveRecordContext): Promise<ArchiveRecordResult> {
         try {
+            if (IsPurgeStorageMode(context.StorageMode)) {
+                return await this.purgeRecord(context);
+            }
             const versionStamp = new Date();
             const document = this.BuildArchiveDocument(context, versionStamp);
             const storagePath = this.BuildStoragePath(
@@ -83,6 +130,18 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
                 ErrorMessage: message,
             };
         }
+    }
+
+    /**
+     * Applies the post-archive action (StripFields or HardDelete) to the source record
+     * without writing an archive document to storage.
+     */
+    private async purgeRecord(context: ArchiveRecordContext): Promise<ArchiveRecordResult> {
+        const result = await this.applyPostArchiveAction(context);
+        if (!result.Success) {
+            return result;
+        }
+        return { Success: true, StoragePath: null, BytesArchived: 0 };
     }
 
     /**
@@ -122,18 +181,62 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
      * Determines which fields to check for the "should archive" decision.
      * Uses SkipIfAllNullFields if configured, otherwise all active field names.
      */
-    private getFieldsToCheck(context: ArchiveRecordContext): string[] {
-        if (context.FieldConfig.SkipIfAllNullFields && context.FieldConfig.SkipIfAllNullFields.length > 0) {
-            return context.FieldConfig.SkipIfAllNullFields;
+    private getFieldsToCheck(fieldConfig: ArchiveFieldConfiguration): string[] {
+        if (fieldConfig.SkipIfAllNullFields && fieldConfig.SkipIfAllNullFields.length > 0) {
+            return fieldConfig.SkipIfAllNullFields;
         }
-        return context.FieldConfig.Fields
+        return fieldConfig.Fields
             .filter(f => f.IsActive !== false)
             .map(f => f.FieldName);
+    }
+
+    /**
+     * True when the field holds a value: not null and, in StripFields mode, not the empty
+     * string that StripFields writes to a NOT NULL column.
+     */
+    private fieldHoldsValue(record: BaseEntity, fieldName: string, stripFields: boolean): boolean {
+        const value = record.Get(fieldName);
+        if (value == null) {
+            return false;
+        }
+        if (!stripFields || value !== '') {
+            return true;
+        }
+        const fieldInfo = record.EntityInfo.FieldByName(fieldName);
+        return !fieldInfo || fieldInfo.AllowsNull;
+    }
+
+    /**
+     * The SQL condition for "this field holds a value", or null when it cannot be written
+     * or is always true. Uses the metadata field name in square brackets, never the
+     * configured string.
+     */
+    private holdsValueCondition(fieldInfo: EntityFieldInfo | undefined, stripFields: boolean): string | null {
+        if (!fieldInfo || /[[\]]/.test(fieldInfo.Name)) {
+            return null;
+        }
+        if (fieldInfo.AllowsNull) {
+            return `[${fieldInfo.Name}] IS NOT NULL`;
+        }
+        if (stripFields && fieldInfo.TSType === EntityFieldTSType.String) {
+            return `[${fieldInfo.Name}] LIKE '_%'`;
+        }
+        return null;
     }
 
     // ========================================
     // Storage Write
     // ========================================
+
+    /**
+     * Returns the context's storage driver, or throws when the run has none.
+     */
+    private requireStorageDriver(context: ArchiveRecordContext): FileStorageBase {
+        if (!context.StorageDriver) {
+            throw new Error(`No storage driver is available for StorageMode '${context.StorageMode}'`);
+        }
+        return context.StorageDriver;
+    }
 
     /**
      * Serializes the archive document and writes it to storage.
@@ -146,7 +249,7 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
         const jsonContent = JSON.stringify(document, null, 2);
         const buffer = Buffer.from(jsonContent, 'utf8');
 
-        const success = await context.StorageDriver.PutObject(storagePath, buffer, 'application/json');
+        const success = await this.requireStorageDriver(context).PutObject(storagePath, buffer, 'application/json');
         if (!success) {
             return {
                 Success: false,
@@ -165,11 +268,12 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
     // ========================================
 
     /**
-     * Resolves the effective archive mode from the entity config or parent config.
+     * Resolves the effective archive mode: the entity configuration's Mode, else the
+     * configuration's DefaultMode, else StripFields.
      */
-    private resolveMode(context: ArchiveRecordContext): string {
-        return (context.ConfigEntity.Get('Mode') as string | null)
-            ?? (context.Config.Get('DefaultMode') as string)
+    private resolveMode(configEntity: BaseEntity, config: BaseEntity): string {
+        return (configEntity.Get('Mode') as string | null)
+            ?? (config.Get('DefaultMode') as string | null)
             ?? 'StripFields';
     }
 
@@ -179,7 +283,7 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
     private async applyPostArchiveAction(
         context: ArchiveRecordContext
     ): Promise<{ Success: boolean; StoragePath: string | null; BytesArchived: number; ErrorMessage?: string }> {
-        const mode = this.resolveMode(context);
+        const mode = this.resolveMode(context.ConfigEntity, context.Config);
 
         switch (mode) {
             case 'StripFields':
@@ -246,9 +350,10 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
     // ========================================
 
     /**
-     * Deletes the source record from the database after successful archival.
-     * Automatically cascades to dependent (child) records via FK relationships
-     * discovered from entity metadata, archiving each child to storage before deleting it.
+     * Deletes the source record from the database. First cascades to dependent (child)
+     * records via One To Many relationships discovered from entity metadata: on a Store run
+     * the children are written to storage in cascade batch files before they are deleted;
+     * on a Purge run they are deleted with no copy.
      */
     private async hardDeleteRecord(
         context: ArchiveRecordContext
@@ -272,9 +377,9 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
     }
 
     /**
-     * Collects all dependent records depth-first, writes one batch archive file
-     * per entity to storage, then deletes all records leaf-first. This batched
-     * approach dramatically reduces storage API calls compared to per-record writes.
+     * Collects all dependent records depth-first, then deletes them leaf-first. On a Store
+     * run it first writes one batch archive file per entity to storage (fewer storage calls
+     * than per-record writes); on a Purge run it writes no batch file.
      */
     private async archiveAndDeleteDependentRecords(
         context: ArchiveRecordContext
@@ -289,10 +394,12 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
 
         LogStatus(`HardDelete cascade: collected ${collectedRecords.length} dependent record(s) across ${new Set(collectedRecords.map(r => r.EntityInfo.Name)).size} entity type(s)`);
 
-        // 2. Batch-archive: group records by entity name and write one file per entity
-        const archiveResult = await this.batchArchiveDependents(collectedRecords, context);
-        if (!archiveResult.Success) {
-            return archiveResult;
+        // 2. Batch-archive (Store only): group records by entity name and write one file per entity
+        if (!IsPurgeStorageMode(context.StorageMode)) {
+            const archiveResult = await this.batchArchiveDependents(collectedRecords, context);
+            if (!archiveResult.Success) {
+                return archiveResult;
+            }
         }
 
         // 3. Delete all records (already in leaf-first order from depth-first collection)
@@ -402,7 +509,7 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
             const jsonContent = JSON.stringify(batchDocument, null, 2);
             const batchBuffer = Buffer.from(jsonContent, 'utf8');
 
-            const writeSuccess = await context.StorageDriver.PutObject(storagePath, batchBuffer, 'application/json');
+            const writeSuccess = await this.requireStorageDriver(context).PutObject(storagePath, batchBuffer, 'application/json');
             if (!writeSuccess) {
                 return {
                     Success: false,

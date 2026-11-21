@@ -197,12 +197,13 @@ describe('ProjectRunTreeToTimeline', () => {
         expect(items[0].subtitle).not.toContain('$');
     });
 
-    it('marks every projected row as already loaded', () => {
-        // The whole tree arrives in one query, so no row is ever "expanded but still fetching".
+    it('marks every projected row as already loaded but collapsed by default for 1-level expansion', () => {
+        // The whole tree arrives in one query, so no row is ever "expanded but still fetching",
+        // while `isExpanded` starts false so expanding a TaskGraph reveals only immediate child tasks.
         const items = ProjectRunTreeToTimeline(sampleTree());
 
         expect(items.every((i) => i.childrenLoaded)).toBe(true);
-        expect(items.every((i) => i.isExpanded)).toBe(true);
+        expect(items.every((i) => i.isExpanded === false)).toBe(true);
     });
 
     it('flags leaves as having no children', () => {

@@ -52,7 +52,8 @@ export class SettingsExplorerComponent extends BaseResourceComponent implements 
         super();
     }
 
-    public ngOnInit(): void {
+    public override ngOnInit(): void {
+        super.ngOnInit();
         const p = DevToolsPrefs.Get<{ scope?: SettingsScope; search?: string }>('settingsExplorer');
         if (p?.scope) this.Scope = p.scope;
         if (p?.search) this.SearchQuery = p.search;

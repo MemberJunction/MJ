@@ -290,7 +290,9 @@ interface RunObservation {
 
 /**
  * Runs `agent` through AgentRunner on the scripted replies, with one opening user message and a payload
- * whose `notes` the script shortens. `data` carries any per-run override and the host's agent list.
+ * whose `notes` the script shortens. `data` carries any per-run override and the host's agent list; the
+ * run trusts it (`TrustReservedRunData`), as it would from the trusted server code this harness stands in for,
+ * so a per-run `__agentTypePromptParams` override is read.
  */
 async function runScripted(ctx: IntegrationCheckContext, agent: MJAIAgentEntityExtended, data?: Record<string, unknown>): Promise<RunObservation> {
     const f = requireFixture();
@@ -301,6 +303,7 @@ async function runScripted(ctx: IntegrationCheckContext, agent: MJAIAgentEntityE
         conversationMessages: UserTurn('Work out 6*7 and then 6*8 for the order totals.'),
         payload: { notes: STARTING_NOTES },
         data: { ...(data ?? {}), ALL_AVAILABLE_AGENTS: hostAgents(f) },
+        TrustReservedRunData: true,
         apiKeys: SCRIPTED_API_KEYS,
     });
     return observeRun(ctx, agent, result, before);
@@ -518,7 +521,7 @@ export const AgentDecisionsSwitchChecks: NamedCheck[] = [
             AssertEqual(entry.default, false, 'decisionsEnabled schema default');
 
             const { Agents } = requireFixture();
-            for (const agent of [Agents.Default, Agents.SubFlags, Agents.MemoryManager]) {
+            for (const agent of [Agents.Default, Agents.SubFlags]) {
                 Assert(!('decisionsEnabled' in agentParams(agent)), `${agent.Name} must not set decisionsEnabled: its checks test the default`);
             }
             const subFlags = agentParams(Agents.SubFlags);
@@ -528,7 +531,9 @@ export const AgentDecisionsSwitchChecks: NamedCheck[] = [
             const explicitFields = subFlags.includeResponseTypeDefinition;
             Assert(isRecord(explicitFields) && explicitFields.decisions === true && explicitFields.finishIf === true,
                 `${Agents.SubFlags.Name}: includeResponseTypeDefinition must set decisions and finishIf to true explicitly`);
-            AssertEqual(agentParams(Agents.Enabled).decisionsEnabled, true, `${Agents.Enabled.Name}: decisionsEnabled`);
+            for (const agent of [Agents.Enabled, Agents.MemoryManager]) {
+                AssertEqual(agentParams(agent).decisionsEnabled, true, `${agent.Name}: decisionsEnabled`);
+            }
         },
     },
     {
@@ -603,19 +608,19 @@ export const AgentDecisionsSwitchChecks: NamedCheck[] = [
     },
     {
         Id: 'agent-decisions-switch.DS8',
-        Name: "DS8: the Memory Manager's note gate asks nothing with enableDecisionGate on and the switch off, and asks once with the switch on for the run",
+        Name: "DS8: the Memory Manager's note gate asks once with its shipped decisionsEnabled true, and asks nothing when the per-run override turns the switch off",
         Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
-            const off = await runMemoryGate(ctx, { enableDecisionGate: true });
+            const on = await runMemoryGate(ctx, { enableDecisionGate: true });
+            AssertEqual(on.GateFlag, true, 'DS8 on: the run kept the gate flag on');
+            AssertEqual(on.DecisionCalls, 1, 'DS8 on: decision calls');
+            AssertEqual(on.PromptRuns.length, 1, 'DS8 on: Default Decision prompt runs about the notes');
+            AssertEqual(on.PromptRuns[0].Success, true, 'DS8 on: the decision prompt run succeeded');
+
+            const off = await runMemoryGate(ctx, { enableDecisionGate: true, __agentTypePromptParams: { decisionsEnabled: false } });
             AssertEqual(off.GateFlag, true, 'DS8 off: the run turned the gate flag on');
             AssertEqual(off.DecisionCalls, 0, 'DS8 off: decision calls');
             AssertEqual(off.PromptRuns.length, 0, 'DS8 off: Default Decision prompt runs about the notes');
             AssertEqual(off.Kept.length, 1, 'DS8 off: the confidence filter keeps only the confident note');
-
-            const on = await runMemoryGate(ctx, { enableDecisionGate: true, __agentTypePromptParams: { decisionsEnabled: true } });
-            AssertEqual(on.GateFlag, true, 'DS8 on: the run turned the gate flag on');
-            AssertEqual(on.DecisionCalls, 1, 'DS8 on: decision calls');
-            AssertEqual(on.PromptRuns.length, 1, 'DS8 on: Default Decision prompt runs about the notes');
-            AssertEqual(on.PromptRuns[0].Success, true, 'DS8 on: the decision prompt run succeeded');
         },
     },
     {
@@ -634,6 +639,7 @@ export const AgentDecisionsSwitchChecks: NamedCheck[] = [
                 conversationMessages: UserTurn('Is the order ready to ship?'),
                 payload: { order: { number: 'IT-DS9', status: 'packed and labelled' } },
                 data: { __agentTypePromptParams: { decisionsEnabled: false } },
+                TrustReservedRunData: true, // the per-run override, as trusted server code sends it
                 agentTypeParams: flowParams,
                 apiKeys: SCRIPTED_API_KEYS,
             });

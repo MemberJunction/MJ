@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { BaseSpeechToText, TranscribeAudioWithSplitting } from '../generic/baseSpeechToText';
 import { AudioModel, AudioSplitter, SpeechResult, SpeechToTextParams, TranscriptionPiece } from '../generic/baseAudio';
 import { ModelUsage } from '../generic/baseModel';
+import { ErrorAnalyzer } from '../generic/errorAnalyzer';
 
 const MB = 1024 * 1024;
 
@@ -100,5 +101,44 @@ describe('TranscribeAudioWithSplitting', () => {
         await expect(
             TranscribeAudioWithSplitting(Buffer.alloc(200), 100, 90, splitterReturning([]), 'Test', async () => ({ text: '' }))
         ).rejects.toThrow('The configured AudioSplitter returned no pieces');
+    });
+});
+
+describe('TranscribeAudioWithSplitting cancellation', () => {
+    it('hands the token to each piece', async () => {
+        const controller = new AbortController();
+        const transcribeOne = vi.fn(async (): Promise<TranscriptionPiece> => ({ text: 'part' }));
+
+        await TranscribeAudioWithSplitting(Buffer.alloc(200), 100, 90, splitterReturning([Buffer.alloc(80), Buffer.alloc(80)]), 'Test', transcribeOne, controller.signal);
+
+        expect(transcribeOne).toHaveBeenCalledTimes(2);
+        expect(transcribeOne.mock.calls.every(call => call[1] === controller.signal)).toBe(true);
+    });
+
+    it('sends no further piece once the token aborts, failing with a cancellation', async () => {
+        const controller = new AbortController();
+        const transcribeOne = vi.fn(async (): Promise<TranscriptionPiece> => {
+            controller.abort();
+            return { text: 'first' };
+        });
+        const pieces = [Buffer.alloc(80), Buffer.alloc(80), Buffer.alloc(80)];
+
+        const failure = await TranscribeAudioWithSplitting(Buffer.alloc(300), 100, 90, splitterReturning(pieces), 'Test', transcribeOne, controller.signal)
+            .then(() => undefined, (err: Error) => err);
+
+        expect(transcribeOne).toHaveBeenCalledTimes(1);
+        expect(failure).toBeInstanceOf(Error);
+        expect(ErrorAnalyzer.AnalyzeError(failure)).toMatchObject({ errorType: 'Cancelled', canFailover: false });
+    });
+
+    it('sends nothing when the token has already aborted', async () => {
+        const controller = new AbortController();
+        controller.abort();
+        const transcribeOne = vi.fn(async (): Promise<TranscriptionPiece> => ({ text: 'never' }));
+
+        await expect(
+            TranscribeAudioWithSplitting(Buffer.alloc(10), 100, 90, null, 'Test', transcribeOne, controller.signal)
+        ).rejects.toThrow(/cancelled/);
+        expect(transcribeOne).not.toHaveBeenCalled();
     });
 });

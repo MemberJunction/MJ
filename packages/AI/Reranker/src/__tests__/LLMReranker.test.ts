@@ -445,6 +445,32 @@ describe('LLMReranker', () => {
             expect(callParams.parentPromptRunId).toBe('rerank-run-001');
         });
 
+        it("hands the caller's signal to the chat prompt as its cancellationToken", async () => {
+            const reranker = new LLMReranker('', '', 'prompt-123', mockUser);
+            const caller = new AbortController();
+            mockExecutePrompt.mockResolvedValueOnce(rankedChatResult());
+
+            await reranker.Rerank({ ...rerankParams(), CancellationToken: caller.signal });
+
+            const callParams: AIPromptParams = mockExecutePrompt.mock.calls[0][0];
+            expect(callParams.cancellationToken).toBe(caller.signal);
+        });
+
+        it('reports a chat run the caller cancelled as Cancelled, which is never failed over', async () => {
+            const reranker = new LLMReranker('', '', 'prompt-123', mockUser);
+            const caller = new AbortController();
+            mockExecutePrompt.mockImplementationOnce(async () => {
+                caller.abort('user stopped it');
+                return { success: false, errorMessage: 'Chat completion was cancelled' };
+            });
+
+            const response = await reranker.Rerank({ ...rerankParams(), CancellationToken: caller.signal });
+
+            expect(response.success).toBe(false);
+            expect(response.errorInfo?.errorType).toBe('Cancelled');
+            expect(response.errorInfo?.canFailover).toBe(false);
+        });
+
         it('leaves parentPromptRunId unset when it has no parent run', async () => {
             const reranker = new LLMReranker('', '', 'prompt-123', mockUser);
             mockExecutePrompt.mockResolvedValueOnce(rankedChatResult());

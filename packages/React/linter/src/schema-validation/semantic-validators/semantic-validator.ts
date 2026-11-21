@@ -79,6 +79,23 @@ export abstract class SemanticValidator {
   ): ConstraintViolation[];
 
   /**
+   * Whether this validator also runs when the parent does not pass the property at all.
+   *
+   * By default a constraint is checked only against a prop the element actually passes, because
+   * most constraints describe a value ("these are field names on the entity") and have nothing to
+   * say about a missing one. A validator whose rule is about absence — "this prop must be set",
+   * "this prop must be set when another one is" — overrides this to return `true`. It is then
+   * also called for a missing prop, with `context.PropertyPresent === false` and
+   * `context.propertyValue === undefined`, and must handle that case.
+   *
+   * It is still not called for a missing prop when the element spreads props
+   * (`<Grid {...props} />`), since the spread may supply it.
+   */
+  get EvaluatesAbsentProp(): boolean {
+    return false;
+  }
+
+  /**
    * Get the name of this validator
    *
    * Used for debugging and error messages.

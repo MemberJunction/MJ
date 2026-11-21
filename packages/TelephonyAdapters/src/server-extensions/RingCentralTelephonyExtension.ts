@@ -7,7 +7,6 @@ import { RegisterClass } from '@memberjunction/global';
 import { LogStatus } from '@memberjunction/core';
 import {
     BaseServerExtension,
-    ServerExtensionConfig,
     ServerExtensionPhase,
     ServerExtensionInitContext,
     ExtensionInitResult,
@@ -30,10 +29,8 @@ export class RingCentralTelephonyExtension extends BaseServerExtension {
     private config: RingCentralTelephonyConfig | null = null;
 
     public async Initialize(
-        contextOrApp: ServerExtensionInitContext,
-        _config?: ServerExtensionConfig
+        context: ServerExtensionInitContext
     ): Promise<ExtensionInitResult> {
-        const context = contextOrApp;
         const rawSettings = context.config.Settings as unknown as Partial<RingCentralTelephonyConfig>;
 
         if (!rawSettings?.sipUsername || !rawSettings?.sipPassword) {

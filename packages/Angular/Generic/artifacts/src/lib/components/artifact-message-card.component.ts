@@ -1,11 +1,16 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, Type, inject } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, Type, inject, ChangeDetectorRef } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import { Subject } from 'rxjs';
 import { ArtifactIconService } from '../services/artifact-icon.service';
 import { ArtifactPreviewResolverService } from '../services/artifact-preview-resolver.service';
 import { IArtifactPreviewComponent } from '../interfaces/artifact-viewer-plugin.interface';
+
+export type ArtifactPreviewInputs = {
+  artifactVersion?: MJArtifactVersionEntity;
+};
 
 /**
  * Artifact message card component - displays a simple info bar for artifacts in conversation messages.
@@ -41,25 +46,24 @@ import { IArtifactPreviewComponent } from '../interfaces/artifact-viewer-plugin.
                 {{ artifact.Type }}
               </span>
               <span class="artifact-version">v{{ currentVersion.VersionNumber || 1 }}</span>
-              <span class="open-icon"><i class="fa-solid fa-arrow-up-right-from-square"></i></span>
             </div>
           </div>
         } @else {
-          <div class="artifact-info-bar" (click)="openFullView()">
+          <div class="artifact-info-bar" (click)="openFullView()" [title]="displayDescription ? (displayName + ' — ' + displayDescription) : displayName">
             <div class="artifact-icon">
               <i class="fa-solid" [ngClass]="getArtifactIcon()"></i>
             </div>
             <div class="artifact-info">
               <span class="artifact-name">{{ displayName }}</span>
+              @if (displayDescription && displayDescription !== displayName) {
+                <span class="artifact-description">{{ displayDescription }}</span>
+              }
               <div class="artifact-meta">
                 <span class="artifact-type-badge" [style.background]="getTypeBadgeColor()">
                   {{ artifact.Type }}
                 </span>
                 <span class="artifact-version">v{{ currentVersion?.VersionNumber || 1 }}</span>
               </div>
-            </div>
-            <div class="open-icon">
-              <i class="fa-solid fa-arrow-up-right-from-square"></i>
             </div>
           </div>
         }
@@ -163,6 +167,15 @@ import { IArtifactPreviewComponent } from '../interfaces/artifact-viewer-plugin.
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+
+    .artifact-description {
+      font-size: 12px;
+      color: var(--mj-text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.35;
     }
 
     .artifact-meta {
@@ -275,7 +288,7 @@ export class ArtifactMessageCardComponent extends BaseAngularComponent implement
   }
   /** @deprecated Use {@link Artifact}. */
   get artifact(): MJArtifactEntity | undefined {
-    return this.Artifact;
+    return this.Artifact ?? this._artifact ?? undefined;
   } // Optional - if provided, skips loading
   @Input() artifactVersion?: MJArtifactVersionEntity; // Optional - if provided, skips loading
   @Output() ActionPerformed = new EventEmitter<{action: string; artifact: MJArtifactEntity; version?: MJArtifactVersionEntity}>();
@@ -329,19 +342,20 @@ export class ArtifactMessageCardComponent extends BaseAngularComponent implement
   }
 
   /** Inputs forwarded to the dynamically rendered preview component via *ngComponentOutlet. */
-  public PreviewInputs: Record<string, unknown> = {};
+  public PreviewInputs: ArtifactPreviewInputs = {};
 
   /** @deprecated Use {@link PreviewInputs}. */
-  public get previewInputs(): Record<string, unknown> {
+  public get previewInputs(): ArtifactPreviewInputs {
     return this.PreviewInputs;
   }
   /** @deprecated Use {@link PreviewInputs}. */
-  public set previewInputs(value: Record<string, unknown>) {
+  public set previewInputs(value: ArtifactPreviewInputs) {
     this.PreviewInputs = value;
   }
 
   private destroy$ = new Subject<void>();
   private readonly previewResolver = inject(ArtifactPreviewResolverService);
+  private readonly cdr = inject(ChangeDetectorRef);
 
   constructor(private artifactIconService: ArtifactIconService) {
   super();}
@@ -410,17 +424,37 @@ export class ArtifactMessageCardComponent extends BaseAngularComponent implement
       this.Loading = true;
       this.error = false;
 
-      // Load artifact directly
+      // Query MJ: Artifacts first (Library / Voice session artifacts), falling back to MJ: Conversation Artifacts.
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const result = await rv.RunView<MJArtifactEntity>({
-        EntityName: 'MJ: Conversation Artifacts',
-        ExtraFilter: `ID='${this.artifactId}'`,
+      const safeId = EscapeSQLString(this.artifactId);
+      const artifactResult = await rv.RunView<MJArtifactEntity>({
+        EntityName: 'MJ: Artifacts',
+        ExtraFilter: `ID='${safeId}'`,
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'entity_object'
       }, this.CurrentUser);
 
-      if (result.Success && result.Results && result.Results.length > 0) {
-        this._artifact = result.Results[0];
+      let loadedArtifact: MJArtifactEntity | null =
+        artifactResult.Success && artifactResult.Results && artifactResult.Results.length > 0
+          ? artifactResult.Results[0]
+          : null;
+
+      if (!loadedArtifact) {
+        const legacyResult = await rv.RunView<MJArtifactEntity>({
+          EntityName: 'MJ: Conversation Artifacts',
+          ExtraFilter: `ID='${safeId}'`,
+          MaxRows: 1,
+          SkipTotalRowCount: true,
+          ResultType: 'entity_object'
+        }, this.CurrentUser);
+        if (legacyResult.Success && legacyResult.Results && legacyResult.Results.length > 0) {
+          loadedArtifact = legacyResult.Results[0];
+        }
+      }
+
+      if (loadedArtifact) {
+        this._artifact = loadedArtifact;
         // Load version content
         await this.loadVersionContent();
       } else {
@@ -432,6 +466,7 @@ export class ArtifactMessageCardComponent extends BaseAngularComponent implement
       this.error = true;
     } finally {
       this.Loading = false;
+      this.cdr.markForCheck();
     }
   }
 
@@ -440,15 +475,17 @@ export class ArtifactMessageCardComponent extends BaseAngularComponent implement
 
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const safeArtifactId = EscapeSQLString(this._artifact.ID);
       const filter = this.VersionNumber
-        ? `ArtifactID='${this._artifact.ID}' AND VersionNumber=${this.VersionNumber}`
-        : `ArtifactID='${this._artifact.ID}'`;
+        ? `ArtifactID='${safeArtifactId}' AND VersionNumber=${this.VersionNumber}`
+        : `ArtifactID='${safeArtifactId}'`;
 
       const result = await rv.RunView<MJArtifactVersionEntity>({
         EntityName: 'MJ: Artifact Versions',
         ExtraFilter: filter,
         OrderBy: 'VersionNumber DESC',
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'entity_object'
       }, this.CurrentUser);
 
@@ -503,7 +540,10 @@ export class ArtifactMessageCardComponent extends BaseAngularComponent implement
    */
   public GetArtifactIcon(): string {
     if (!this._artifact) return 'fa-file';
-    return this.artifactIconService.getArtifactIcon(this._artifact);
+    if (typeof this.artifactIconService.GetArtifactIcon === 'function') {
+      return this.artifactIconService.GetArtifactIcon(this._artifact, undefined, this.ProviderToUse);
+    }
+    return this.artifactIconService.getArtifactIcon(this._artifact, undefined, this.ProviderToUse);
   }
 
   /** @deprecated Use {@link GetArtifactIcon}. */
@@ -516,9 +556,9 @@ export class ArtifactMessageCardComponent extends BaseAngularComponent implement
 
     const type = this._artifact.Type?.toLowerCase() || '';
 
-    if (type.includes('code')) return '#8B5CF6'; // Purple
-    if (type.includes('report')) return '#3B82F6'; // Blue
-    if (type.includes('dashboard')) return '#10B981'; // Green
+    if (type.includes('code') || type === 'json') return '#8B5CF6'; // Purple
+    if (type.includes('report') || type.includes('research')) return '#3B82F6'; // Blue
+    if (type.includes('dashboard') || type.includes('data')) return '#10B981'; // Green
     if (type.includes('document')) return '#F59E0B'; // Orange
 
     return '#6B7280'; // Gray

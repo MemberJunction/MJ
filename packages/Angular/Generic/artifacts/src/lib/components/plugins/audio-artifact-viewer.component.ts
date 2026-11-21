@@ -1,7 +1,7 @@
 import { ChangeDetectorRef, Component, inject, OnInit, Type } from '@angular/core';
 import { DataSnapshot } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
+import { BaseArtifactViewerPluginComponent, FILE_EXPORT_KEY, type ArtifactExportOption } from '../base-artifact-viewer.component';
 import { ArtifactFileService } from '../../services/artifact-file.service';
 import { IArtifactPreviewComponent } from '../../interfaces/artifact-viewer-plugin.interface';
 import { AudioArtifactPreviewComponent } from '../previews/audio-artifact-preview.component';
@@ -132,7 +132,7 @@ export class AudioArtifactViewerComponent extends BaseArtifactViewerPluginCompon
     async ngOnInit(): Promise<void> {
         try {
             if (this.artifactVersion?.ContentMode === 'File' && this.artifactVersion.ID) {
-                this.setAudioUrl(await this.fileService.getDownloadUrl(this.artifactVersion.ID));
+                this.setAudioUrl(await this.fileService.GetDownloadUrl(this.artifactVersion.ID, false, this.ProviderToUse));
             } else {
                 const content = this.artifactVersion?.Content;
                 if (content) {
@@ -167,6 +167,15 @@ export class AudioArtifactViewerComponent extends BaseArtifactViewerPluginCompon
     /** @deprecated Use {@link OnMediaEnded}. */
     public onMediaEnded(): void {
         return this.OnMediaEnded();
+    }
+
+    /** The original file, once it has loaded. */
+    public override GetExportOptions(): ArtifactExportOption[] {
+        return this.AudioUrl ? [this.FileExportOption('Audio file', 'fa-solid fa-file-audio', 'The original file')] : [];
+    }
+
+    public override async RunExport(key: string): Promise<void> {
+        return key === FILE_EXPORT_KEY ? this.triggerBrowserDownload(this.AudioUrl, this.OriginalFileName('audio')) : super.RunExport(key);
     }
 
     public override GetCurrentStateSnapshot(): DataSnapshot | null {

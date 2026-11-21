@@ -20,6 +20,16 @@ on:
     paths:
       - 'release-lines.json'
 
+# Cancel superseded runs for the same ref. Without this a second push to a PR leaves the
+# first run burning a runner for a commit nobody will merge; 108 such runner-minutes were
+# measured across this repo in a single 23-hour window (2026-10-27).
+# EXCEPTION: push (merge to next) gets a per-commit group and is NEVER cancelled.
+# `github.ref` is the same string for every merge, so a shared, cancellable group would let
+# a later merge kill an earlier one's run. Mirrors test.yml.
+concurrency:
+  group: release-lines-guard-${{ github.ref }}${{ github.event_name == 'push' && format('-{0}', github.sha) || '' }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
+
 permissions:
   contents: read
   pull-requests: read
@@ -30,12 +40,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
 
@@ -50,12 +60,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
 

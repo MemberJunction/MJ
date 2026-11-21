@@ -40,6 +40,14 @@ export {
     ServerExtensionInitContext,
     ExtensionInitResult,
     ExtensionHealthResult,
+    SERVER_EXTENSION_CORE_SERVICE_KEYS,
+    type ServerExtensionCreateMagicLinkParams,
+    type ServerExtensionCreateMagicLinkResult,
+    type ServerExtensionManageMagicLinkResult,
+    type ServerExtensionMagicLinkScopeEntry,
+    type ServerExtensionMagicLinkClaims,
+    type IServerExtensionMagicLinkService,
+    type IServerExtensionHostRuntimeService,
 } from './types.js';
 export {
     MJ_SERVER_EXTENSIONS_EXPORT,
@@ -55,8 +63,14 @@ export {
     PrepareServerExtensionConfigs, prepareServerExtensionConfigs,
     ServerExtensionRootsOverlap, serverExtensionRootsOverlap,
     ValidateServerExtensionRootPath, validateServerExtensionRootPath,
+    ComposeServerExtensionMountPath,
 } from './collect.js';
 export type { NormalizeServerExtensionOptions, PrepareServerExtensionOptions } from './collect.js';
+export {
+    GetCorsOwningServerExtensionRoots,
+    IsPathUnderServerExtensionRoot,
+    SkipForServerExtensionRoots,
+} from './corsOwnership.js';
 export {
     RegisterMediaUpgradeRoute,
     InstallMediaUpgradeDispatcher,

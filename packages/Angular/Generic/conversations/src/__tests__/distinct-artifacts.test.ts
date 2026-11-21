@@ -74,4 +74,30 @@ describe('selectDistinctLatestArtifacts', () => {
     expect(result).toHaveLength(1);
     expect(result[0].versionNumber).toBe(2);
   });
+
+  it('orders distinct artifacts chronologically by versionCreatedAt ascending so final deliverables appear last', () => {
+    const finalReport = {
+      artifactId: 'research-report-id',
+      versionNumber: 1,
+      versionCreatedAt: new Date('2026-10-19T18:35:00Z'),
+    };
+    const step1Query = {
+      artifactId: 'step-1-query-id',
+      versionNumber: 1,
+      versionCreatedAt: new Date('2026-10-19T18:30:00Z'),
+    };
+    const step2Query = {
+      artifactId: 'step-2-query-id',
+      versionNumber: 1,
+      versionCreatedAt: new Date('2026-10-19T18:31:30Z'),
+    };
+
+    // Even if the view returned the final report first, chronological sort puts it last
+    const result = SelectDistinctLatestArtifacts([finalReport, step2Query, step1Query]);
+    expect(result.map((r) => r.artifactId)).toEqual([
+      'step-1-query-id',
+      'step-2-query-id',
+      'research-report-id',
+    ]);
+  });
 });

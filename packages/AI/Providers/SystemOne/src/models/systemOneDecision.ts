@@ -1,12 +1,12 @@
 import {
     BaseDecision,
     BaseSystemOneDecision,
-    IsSystemOneWireObject,
     NonEmptyString,
+    ReadSystemOneErrorMessage,
     SystemOneConfigurationError,
     TrimTrailingSlashes,
 } from '@memberjunction/ai';
-import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
+import { RegisterClass } from '@memberjunction/global';
 
 /** The route every System One server answers on. */
 const SYSTEMONE_PATH = '/v1/systemone';
@@ -86,7 +86,7 @@ export class SystemOneDecision extends BaseSystemOneDecision {
      * string or a list of `{ msg }`; llama.cpp sends `error.message`. Otherwise the start of the body.
      */
     protected DescribeHTTPError(status: number, bodyText: string): string {
-        const message = serverMessage(SafeJSONParse<unknown>(bodyText));
+        const message = ReadSystemOneErrorMessage(bodyText);
         return message ? `${this.ServiceName} returned HTTP ${status}: ${message}` : super.DescribeHTTPError(status, bodyText);
     }
 
@@ -116,26 +116,4 @@ export function ToSystemOneURL(baseURL: string): string {
         return base;
     }
     return base.endsWith('/v1') ? `${base}/systemone` : `${base}${SYSTEMONE_PATH}`;
-}
-
-/** The error message a System One server put in its body, or an empty string. */
-function serverMessage(body: unknown): string {
-    if (!IsSystemOneWireObject(body)) {
-        return '';
-    }
-    const detail = body['detail'];
-    if (typeof detail === 'string') {
-        return detail.trim();
-    }
-    if (Array.isArray(detail)) {
-        return detail
-            .map(d => (IsSystemOneWireObject(d) && typeof d['msg'] === 'string' ? d['msg'].trim() : ''))
-            .filter(m => m.length > 0)
-            .join('; ');
-    }
-    const error = body['error'];
-    if (IsSystemOneWireObject(error) && typeof error['message'] === 'string') {
-        return error['message'].trim();
-    }
-    return typeof error === 'string' ? error.trim() : '';
 }

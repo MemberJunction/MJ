@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { readWorkflow, readJobNames, readJobNeeds, readJobSteps } from './lib/workflow.mjs';
+
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
 // Pins the SHAPE of the sharded Unit Tests workflow (introduced 2026-08-24, replacing one
 // ~55-minute job with build → N shards → gate).
@@ -12,7 +17,9 @@ import { readWorkflow, readJobNames, readJobNeeds, readJobSteps } from './lib/wo
 const WORKFLOW_TEXT = readWorkflow();
 
 /** The lanes whose outcome the gate must consume. */
-const LANES = ['guards', 'build', 'test', 'esm-guard'];
+// `changes` is a lane too: when it fails, build/test/esm-guard skip, and only its own result
+// keeps the gate from reading those skips as a pass.
+const LANES = ['changes', 'guards', 'build', 'test', 'esm-guard'];
 
 describe('test.yml — job graph', () => {
     const jobs = readJobNames();
@@ -57,6 +64,14 @@ describe('test.yml — job graph', () => {
         // every PR restores from, so cleanup must run on failure and cancellation too.
         const cleanupBlock = WORKFLOW_TEXT.split(/^ {2}cleanup:$/m)[1].split(/^ {2}[a-z-]+:$/m)[0];
         expect(cleanupBlock).toMatch(/if: always\(\)/);
+    });
+
+    it('the cleanup job runs whenever build ran, since build is what saves the run cache', () => {
+        // cleanup skips only when build was skipped (nothing was saved). If it stopped depending
+        // on build, `needs.build.result` would be empty and it would never run at all.
+        expect(readJobNeeds('cleanup')).toContain('build');
+        const cleanupBlock = WORKFLOW_TEXT.split(/^ {2}cleanup:$/m)[1].split(/^ {2}[a-z-]+:$/m)[0];
+        expect(cleanupBlock).toMatch(/if: always\(\) && needs\.build\.result != 'skipped'/);
     });
 });
 
@@ -200,16 +215,73 @@ describe('test.yml — generated host artifacts reach the shards', () => {
 });
 
 describe('test.yml — checkout cost', () => {
-    // The blobless partial clone took checkout from 3m33s to well under a minute, and every
-    // job pays it. A checkout that loses `filter: blob:none` silently re-adds minutes to every
-    // lane at once.
-    it('every checkout uses a blobless partial clone', () => {
-        const checkouts = WORKFLOW_TEXT.split(/uses: actions\/checkout@v4/).slice(1);
+    /** The `with:` block of each checkout step in a job. */
+    const checkoutsOf = (job) =>
+        WORKFLOW_TEXT.split(new RegExp(`^ {2}${job}:$`, 'm'))[1]
+            .split(/^ {2}[a-z-]+:$/m)[0]
+            .split(/uses: actions\/checkout@\S+/)
+            .slice(1)
+            .map((block) => block.split(/\n {6}- /)[0]);
+
+    // A full-history checkout downloads every version of every file unless it is blobless.
+    it('every full-history checkout uses a blobless partial clone', () => {
+        const checkouts = WORKFLOW_TEXT.split(/uses: actions\/checkout@\S+/).slice(1).map((block) => block.split(/\n {6}- /)[0]);
         expect(checkouts.length).toBeGreaterThanOrEqual(5);
-        for (const [i, block] of checkouts.entries()) {
-            const withBlock = block.split(/\n {6}- /)[0];
-            expect(withBlock, `checkout #${i + 1} must set filter: blob:none`).toMatch(/filter: blob:none/);
+        const fullHistory = checkouts.filter((c) => /fetch-depth: 0/.test(c));
+        expect(fullHistory.length).toBeGreaterThanOrEqual(4);
+        for (const [i, withBlock] of fullHistory.entries()) {
+            expect(withBlock, `full-history checkout #${i + 1} must set filter: blob:none`).toMatch(/filter: blob:none/);
         }
+    });
+
+    // A one-commit checkout needs every file of that commit. With a blobless filter the files
+    // arrive in a second, slower download during `git checkout`.
+    it('a one-commit checkout of the whole tree does not use a blobless filter', () => {
+        for (const job of ['test', 'coverage']) {
+            const checkouts = checkoutsOf(job);
+            expect(checkouts, `job "${job}"`).toHaveLength(1);
+            expect(checkouts[0], `job "${job}"`).not.toMatch(/fetch-depth: 0/);
+            expect(checkouts[0], `job "${job}"`).not.toMatch(/filter:/);
+        }
+    });
+
+    // These jobs read only files under .github/, so they do not download the rest of the tree.
+    it('the jobs that read only .github/ use a sparse checkout', () => {
+        for (const job of ['changes', 'unit-tests']) {
+            const checkouts = checkoutsOf(job);
+            expect(checkouts, `job "${job}"`).toHaveLength(1);
+            expect(checkouts[0], `job "${job}"`).toMatch(/sparse-checkout: \.github\n/);
+        }
+    });
+
+    // Rename detection reads file contents, which a sparse blobless clone must download.
+    it('the change detection diff does not detect renames', () => {
+        const filter = readJobSteps('changes').find((s) => s.name === 'Check changed paths');
+        expect(filter.body.join('\n')).toMatch(/git diff --name-only --no-renames /);
+    });
+});
+
+describe('pnpm store cache', () => {
+    const SETUP = readFileSync(join(REPO_ROOT, '.github/actions/mj-setup/action.yml'), 'utf8');
+
+    // setup-node saves its pnpm cache under a key that any job can write first. A job that
+    // does not install saved a near-empty store there, and every later job then got an exact
+    // hit and downloaded all packages again.
+    it('mj-setup does not use the setup-node pnpm cache', () => {
+        expect(SETUP).not.toMatch(/^\s*cache: '?pnpm'?\s*$/m);
+    });
+
+    it('mj-setup restores and saves the pnpm store under its own key', () => {
+        expect(SETUP).toMatch(/uses: actions\/cache\/restore@/);
+        expect(SETUP).toMatch(/uses: actions\/cache\/save@/);
+        expect(SETUP).toMatch(/key: pnpm-store-v1-/);
+    });
+
+    it('a job that resolves the lockfile without an install does not write a pnpm cache', () => {
+        const integration = readFileSync(join(REPO_ROOT, '.github/workflows/integration.yml'), 'utf8');
+        const preflight = integration.split(/^ {2}preflight:$/m)[1].split(/^ {2}[a-z-]+:$/m)[0];
+        expect(preflight).toMatch(/--lockfile-only/);
+        expect(preflight).not.toMatch(/cache: '?pnpm'?/);
     });
 });
 
@@ -230,10 +302,30 @@ describe('test.yml — backstop integrity', () => {
         const steps = readJobSteps('esm-guard');
         const guard = steps.find((s) => s.name === 'Native-ESM import guard');
         const body = guard.body.join('\n');
-        // Scoping is gated on BOTH being a PR and having a narrowed turbo filter; anything
-        // else falls through to the unscoped sweep.
-        expect(body).toMatch(/pull_request.*&&.*-n "\$TURBO_FILTER"/s);
+        // A pull_request scopes to its own diff; everything else — the push and nightly
+        // backstops — falls through to the unscoped sweep. That sweep is what covers the
+        // residue a scoped scan cannot see (a tsconfig or build-tool change that shifts emit
+        // repo-wide), so it is the part worth pinning.
+        //
+        // This asserts the BEHAVIOUR, not the exact boolean. It previously pinned
+        // `-n "$TURBO_FILTER"`, which made scoping conditional on the build job's filter: any
+        // PR touching a root path (package.json, turbo.json, a root tsconfig, or this workflow)
+        // swept all ~220 type:module packages at ~3s each for no coverage gain. Pinning the
+        // expression rather than the behaviour made removing that look like a regression.
+        expect(body).toMatch(/"pull_request"/);
+        expect(body).toMatch(/--changed-since "origin\/\$PR_BASE_REF"/);
         expect(body).toMatch(/node \.github\/scripts\/check-esm-imports\.mjs packages\s*$/m);
+    });
+
+    it('still sweeps everything when the guard script itself is what changed', () => {
+        const steps = readJobSteps('esm-guard');
+        const guard = steps.find((s) => s.name === 'Native-ESM import guard');
+        const body = guard.body.join('\n');
+        // The one change that most needs the real sweep rather than a narrowed subset — the
+        // same reasoning the `changes` job applies when it lists gate scripts in its paths
+        // filter. Without this, editing the guard would scope the guard to whatever unrelated
+        // packages the PR happened to touch, which on a script-only PR is nothing at all.
+        expect(body).toMatch(/grep -qx '\.github\/scripts\/check-esm-imports\.mjs'/);
     });
 
     it('still files and resolves the backstop alarm', () => {

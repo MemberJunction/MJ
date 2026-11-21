@@ -41,20 +41,20 @@ graph TD
     C --> C4[ConversationListComponent]
     C --> C5[ConversationChatAreaComponent]
 
-    D --> D1[CollectionTreeComponent]
-    D --> D2[CollectionViewComponent]
-    D --> D3[LibraryFullViewComponent]
-    D --> D4[ArtifactCreateModalComponent]
+    D --> D1[LibraryWorkspaceComponent — Hub / Navigator / Studio]
+    D --> D2[LibraryRemoteDrivePaneComponent — Stateless Cloud Drives]
+    D --> D3[CollectionTreeComponent & CollectionViewComponent]
+    D --> D4[LibraryCreateDialogComponent & LibraryCreationService]
 
     E --> E1[AgentProcessPanelComponent]
     E --> E2[ActiveAgentIndicatorComponent]
-    E --> E3[TasksFullViewComponent]
+    E --> E3[TasksFullViewComponent — Agent Activity]
     E --> E4[GlobalTasksPanelComponent]
 
     F --> F1[ShareModalComponent]
     F --> F2[MembersModalComponent]
     F --> F3[ExportModalComponent]
-    F --> F4[SearchPanelComponent]
+    F --> F4[WhiteboardArtifactViewerComponent — OLE Canvas]
 
     style A fill:#2d6a9f,stroke:#1a4971,color:#fff
     style B fill:#7c5295,stroke:#563a6b,color:#fff
@@ -120,6 +120,8 @@ Embedding products (white-labeled end-user apps, embedded widgets) can pare the 
 | `allowAttachments` | The file-attachment button |
 | `allowPlanMode` | The composer's Plan Mode toggle button |
 | `allowRealtime` | The composer's real-time voice (co-agent) launcher button |
+| `AllowForking` | Starting forks: Fork from here, and Edit or Regenerate as a fork. When `false`, Edit and Regenerate change the latest turn in place, as without the `Conversations: Fork` authorization. UI only; deny that authorization to a role to block forks on the server too |
+| `AllowStopRun` | Stopping and continuing agent runs: the composer's Stop and Stop all, the Stop pill on an in-progress reply, the Continue button on a stopped reply, and the "Continue, or tell {agent} what to do differently" placeholder. UI only: a run stopped from another client still shows as stopped, and the next message still continues it. The composer's status line ("Sage is working, 0:41") is not part of this cap; it shows for any reply in flight |
 | `showEmptyFill` | The message list's built-in "No messages yet" filler |
 | `showLoadingState` | The centered loading spinner (loading still short-circuits rendering, so hiding it does not flash the empty state) |
 | `showAgentPicker` | The agent picker |
@@ -143,6 +145,7 @@ Unlike the gates above, these change *how* the surface behaves and default to to
 | Input | Default | Effect when set |
 |---|---|---|
 | `readReplyFromTop` | `false` | A finished turn — the reader's message plus the reply — is scrolled to the top of the pane if it is taller than the pane, so the run ends at the start of the answer instead of its end. A turn that fits stays where it is; a reader who scrolled up during the run is never moved. (Independent of this switch, an in-place message update — progress, status, streamed text — only follows the tail for a reader who is already at the bottom.) |
+| `OpenLinksInNewTab` | `true` | Inline markdown links in messages (external and relative/same-origin URLs, whether bare `https://...` autolinks or `[text](url)` links) open in a new browser tab (`target="_blank"` with `rel="noopener noreferrer"`). In-page fragment links (`#heading`), `mailto:` / `tel:` / `sms:` links, and raw HTML links with an explicit `target` keep their behaviour. Set `false` to open links in the current tab. |
 
 
 ```html
@@ -306,22 +309,37 @@ The overlay is generic — it raises events for navigation and tool execution. T
 </mj-mention-editor>
 ```
 
-### Collections and Library
+### Collections, Unified Library Workspace & Stateless Connected Drives
+
+`<mj-library-workspace>` powers MemberJunction's top-level **`Library`** application (`LibraryResource`, pinned beside `Chat` in the global header bar) and the **`Library`** nav tab inside `Chat` (`ChatCollectionsResource`, with `MOVED_NAV_ITEMS` redirecting legacy `Chat -> Collections` links):
 
 ```html
-<!-- Collection tree for organizing artifacts -->
+<mj-library-workspace
+  [CurrentUser]="currentUser"
+  [InitialMode]="'hub'"
+  [ExternalRouteParams]="routeParams"
+  (StateChanged)="onLibraryStateChanged($event)"
+  (HostNavigationRequested)="onLibraryNavigate($event)">
+</mj-library-workspace>
+```
+
+- **3 Progressive Workspace Modes**:
+  1. **`hub`** *(default landing)*: *Create New* quick-launch cards (`Blank Document`, `Blank Spreadsheet`, `Blank Presentation`, `New Collection`, `Upload File` via `LibraryCreationService`), **Multi-Artifact Synthesis** (`Artifact.SynthesizeFromSources`), *Continue Working* recents, *Collections* overview cards, and *Connected Cloud Drives* tiles.
+  2. **`navigator`** *(Power Navigator)*: Split-pane hierarchy with nested `MJ: Collections` (supporting hierarchical `ParentID` ACL inheritance & `'Defer'`) + Connected Cloud Drives on the left, faceted `MJFilterPanelComponent` search & list/grid toggle in the center, and slide-over preview inspector on the right. User preferences (`Library.SurfaceMode`, `Library.ListStyle`, `Library.StarredArtifactIDs`) persist server-side via `UserInfoEngine.Instance`.
+  3. **`studio`** *(Full-Canvas Studio)*: Distraction-free collaborative editor hosting `<mj-artifact-viewer-panel>` with breadcrumb navigation, **Save to Collection**, **Export to Connected Drive** (`<mj-library-export-drive-dialog>`), **Linked Drive Push/Pull/ETag Sync** (`ConnectedDriveSyncRequested`), **Share** (`<mj-artifact-share-modal>` with internal ACL & Guest Share links), and **Compare Versions**.
+- **Stateless Connected Cloud Drives (`<mj-library-remote-drive-pane>`) — Zero `MJ: Files` Invariant**:
+  - Dynamically browses, searches (`GraphQLFileStorageClient.SearchFiles`), previews, uploads (`CreatePreAuthUploadUrl`), creates folders, moves, copies, renames, and deletes files across external `MJStorage` accounts (Google Drive, SharePoint/OneDrive, Dropbox, Box, S3, Azure Blob) **without creating `MJ: Files` database rows**.
+  - Supports one-click **Import to MJ Library** (converting remote `.md`, `.docx`, `.xlsx`, and `.csv` files into governed, versioned `MJ: Artifacts` records), **Export to Drive** (`.docx`/`.md`, `.xlsx`/`.csv`, `.pptx`), and bidirectional **Push/Pull ETag-checked Sync** for linked artifacts.
+
+```html
+<!-- Standalone collection tree or legacy library subviews -->
 <mj-collection-tree
   [projectId]="currentProjectId"
   (collectionSelected)="onCollectionSelected($event)">
 </mj-collection-tree>
-
-<!-- Full library view -->
-<mj-library-full-view
-  [projectId]="currentProjectId">
-</mj-library-full-view>
 ```
 
-### Project and Task Management
+### Project and Agent Activity Management
 
 ```html
 <!-- Project selector -->
@@ -330,7 +348,7 @@ The overlay is generic — it raises events for navigation and tool execution. T
   (projectChanged)="onProjectChanged($event)">
 </mj-project-selector>
 
-<!-- Tasks view -->
+<!-- Agent Activity view (scoped in Chat to conversation/agent-originated runs) -->
 <mj-tasks-full-view
   [projectId]="currentProjectId">
 </mj-tasks-full-view>
@@ -396,6 +414,12 @@ This package never navigates (no Router): developer links emit a `RealtimeNaviga
 </mj-export-modal>
 ```
 
+#### Conversation folders
+
+A folder (`MJ: Projects`) is Private (only its owner sees it, the default), Shared (with chosen users or roles, through `MJ: Resource Permissions`) or Public (`OwnerUserID` null, everyone in the environment). A conversation in a Shared or Public folder appears in the lists of the people the folder is shared with only when its owner turns on folder inheritance (off by default), at the folder's level (View for a Public folder). Each folder is shared on its own; a subfolder does not inherit its parent's grants. Only a conversation's owner can move it or change whether it inherits, and only a folder's owner can change its owner or parent; the server enforces both on save, except for the server itself and the system user (so system-user agent runs are exempt). The server also refuses moving a folder into itself or one of its subfolders.
+
+Folder sharing controls which conversations are listed, not who can read them. Core ships no UI-role row-level security on `MJ: Conversations` or `MJ: Conversation Details`, so a host that needs hard read isolation must add that RLS itself.
+
 ## Component Reference
 
 ### Messaging Components
@@ -427,8 +451,13 @@ This package never navigates (no Router): developer links emit a `RealtimeNaviga
 
 ### Collection and Library Components
 
-| Component | Selector | Description |
+| Component / Service | Selector | Description |
 |-----------|----------|-------------|
+| `LibraryWorkspaceComponent` | `mj-library-workspace` | Unified 3-mode Library workspace (`Hub`, `Power Navigator`, and `Full-Canvas Studio`) for Docs, Sheets, Slides, Collections, and Connected Cloud Drives |
+| `LibraryRemoteDrivePaneComponent` | `mj-library-remote-drive-pane` | Stateless live cloud drive browser, cross-drive search, upload, file ops, and governed import/export via `GraphQLFileStorageClient` (zero `MJ: Files` rows) |
+| `LibraryCreateDialogComponent` | `mj-library-create-dialog` | Modal launcher for creating blank Docs/Sheets/Slides, new Collections, or uploading files |
+| `LibraryExportDriveDialogComponent` | `mj-library-export-drive-dialog` | Modal picker for exporting MJ Docs, Sheets, and Slides directly to a Connected Cloud Drive folder |
+| `LibraryCreationService` | *(Injectable)* | Creates governed starter `Markdown Document`, `Excel Spreadsheet`, and `Presentation` artifacts and imports `.md`/`.docx`/`.xlsx`/`.csv` files |
 | `CollectionTreeComponent` | `mj-collection-tree` | Hierarchical collection browser |
 | `CollectionViewComponent` | `mj-collection-view` | Collection detail view |
 | `CollectionArtifactCardComponent` | `mj-collection-artifact-card` | Artifact card within collections |
@@ -437,13 +466,13 @@ This package never navigates (no Router): developer links emit a `RealtimeNaviga
 | `ArtifactCreateModalComponent` | `mj-artifact-create-modal` | Create new artifact |
 | `CollectionsFullViewComponent` | `mj-collections-full-view` | All collections browser |
 
-### Project and Task Components
+### Project and Agent Activity Components
 
 | Component | Selector | Description |
 |-----------|----------|-------------|
 | `ProjectSelectorComponent` | `mj-project-selector` | Project selection dropdown |
 | `ProjectFormModalComponent` | `mj-project-form-modal` | Create/edit project |
-| `TasksFullViewComponent` | `mj-tasks-full-view` | Full tasks management view (standalone) |
+| `TasksFullViewComponent` | `mj-tasks-full-view` | Agent Activity & multi-step workflow command center (standalone; scoped in `ChatTasksResource` to conversation/agent-originated tasks so human `bizapps-tasks` deliverables remain separate) |
 | `TasksDropdownComponent` | `mj-tasks-dropdown` | Task quick-access dropdown |
 | `TaskWidgetComponent` | `mj-task-widget` | Compact task widget |
 | `GlobalTasksPanelComponent` | `mj-global-tasks-panel` | Global tasks panel |
@@ -468,15 +497,18 @@ This package never navigates (no Router): developer links emit a `RealtimeNaviga
 | `RealtimeChannelStripComponent` | `mj-realtime-channel-strip` | Chip-per-channel strip |
 | `RealtimeComposerComponent` | `mj-realtime-composer` | The bottom dock: phone-call strip (levels 0–1: mute / captions / Details peek / End) ⇄ fused minis + typed composer (level 2+) |
 | `RealtimeSurfaceTabsComponent` | `mj-realtime-surface-tabs` | Tabbed surface panel: channel tabs first, glowing unfocused artifact tabs, Activity pinned last (backed by the framework-free, unit-tested `RealtimeSurfaceTabsModel`) |
-| `WhiteboardArtifactViewerComponent` | `mj-whiteboard-artifact-viewer` | Saved-board artifact viewer (registered as `WhiteboardArtifactViewerPlugin`); renders via `@memberjunction/ng-whiteboard`'s snapshot component |
+| `RealtimeArtifactWorkspaceSurfaceComponent` | `mj-realtime-artifact-workspace-surface` | Side-by-side multi-tab collaborative viewer/editor for Docs, Slides, Sheets, and Whiteboards powered by `ArtifactWorkspaceChannel` (`navigate_to_anchor`, `set_view_mode`, `EmitSelectionDelta`) |
+| `RealtimeInteractiveComponentSurfaceComponent` | `mj-realtime-interactive-component-surface` | Multi-tab live React/Angular `Component` host powered by `InteractiveComponentChannel` |
+| `WhiteboardArtifactViewerComponent` | `mj-whiteboard-artifact-viewer` | Saved-board & inline MS OLE artifact viewer (`WhiteboardArtifactViewerPlugin`, `SupportsInlineEdit = true`); renders `<mj-whiteboard-snapshot>` in read-only mode and interactive `<mj-realtime-whiteboard-host>` in inline edit mode |
 
-> The live whiteboard surface itself (`mj-realtime-whiteboard-host`, board, toolbar, zoom, "What the agent sees" popover) ships in [`@memberjunction/ng-whiteboard`](../whiteboard/README.md); the `RealtimeWhiteboardChannel` plugin here creates it dynamically in a channel tab.
+> The live whiteboard surface itself (`mj-realtime-whiteboard-host`, board, toolbar, zoom, "What the agent sees" popover) ships in [`@memberjunction/ng-whiteboard`](../whiteboard/README.md); the `RealtimeWhiteboardChannel` plugin here creates it dynamically in a channel tab. For full channel documentation, see [`src/lib/components/realtime/README.md`](./src/lib/components/realtime/README.md).
 
 ### Utility Components
 
 | Component | Selector | Description |
 |-----------|----------|-------------|
-| `ShareModalComponent` | `mj-share-modal` | Resource sharing modal |
+| `ShareModalComponent` | `mj-share-modal` | Generic conversation/collection sharing modal |
+| `ArtifactShareModalComponent` | `mj-artifact-share-modal` | Artifact ACL sharing modal + **Guest Share Link** creation/revocation (Magic Link `/guest/artifact`, `artifact:share` scope, Frozen-only invariant) |
 | `MembersModalComponent` | `mj-members-modal` | Members management |
 | `ExportModalComponent` | `mj-export-modal` | Data export modal |
 | `SearchPanelComponent` | `mj-search-panel` | Search across conversations |
@@ -529,6 +561,33 @@ never writes into the engine's detail cache.
 Paging is measured in **display items**, not database rows: a realtime session collapses many
 rows into one timeline card, and a session is never split across pages.
 
+### Post-Turn Artifact Panel Auto-Open, Refresh & Switch (`decidePostTurnArtifactPanelAction`)
+
+When an agent turn completes in `ConversationChatAreaComponent`, the component captures the pre-turn set of non-system output `ArtifactID`s (`captureVisibleArtifactIdBaseline`) before the server turn runs and evaluates `decidePostTurnArtifactPanelAction` once the newly created/versioned artifacts for that turn are loaded:
+
+- **Panel Closed + Brand-New Artifact (`action: 'open-new'`)**: Automatically opens the right-hand Artifact Panel when the completed turn created an `ArtifactID` that did not exist in the pre-turn baseline (preserving the intentional behavior that versioning an *already-existing* artifact while the user has closed the panel does not force it back open).
+- **Panel Open + Currently Viewed Artifact Versioned (`action: 'refresh-current'`)**: Increments `artifactViewerRefreshTrigger` and updates `activeVersionNumber` in place so the open viewer immediately reflects the new version (e.g., `v1` → `v2`).
+- **Panel Open + Different Artifact Created or Versioned (`action: 'switch-artifact'`)**: Automatically switches the open Artifact Panel to display the newly created or newly versioned artifact (`activeArtifactId`, `activeVersionNumber`).
+- **Reconnected In-Flight Runs**: When reconnecting to an already-running turn on conversation open (`reconnectToInFlightAgentRuns`), the pre-turn baseline excludes any output artifacts attached to the in-progress message itself so a newly produced artifact still auto-opens when the reconnected turn finishes.
+
+### First-Class Inline Workflow Execution Card & Durable Task-Graph Continuation
+
+When an agent (such as `Sage`) dispatches a multi-step durable task graph associated with a `ConversationDetail` message:
+
+- **Inline Workflow Execution Card (`.msg-workflow-card` in `MessageItemComponent`)**: Renders directly inside `.message-body` (without requiring the user to open the developer gear menu). Deduplicates parent workflow container tasks (`ParentID == null`) from ordered step tasks (`WorkflowSteps`), displays an active shimmer progress bar, completed step ratio (`X/Y steps`), live elapsed duration, per-step specialist agent badges (`@Query Builder`, `@Research Report Writer`), and a one-click slide-over step inspector drawer (`mj-task-detail-panel`).
+- **Real-Time Multi-Tab Broadcast & Continuation (`ConversationChatAreaComponent`)**: `TaskGraphFrameBroadcaster` and `TaskGraphContinuationDeliverer` publish task-node progress and completion frames over `PUSH_STATUS_UPDATES_TOPIC` (`sessionId: '*'`, filtered by `ownerUserId` in `PushStatusResolver`). When a durable workflow finishes with `continuation: 'reinvoke'`, the server creates a new visible AI `ConversationDetail` reply row, runs the synthesizing agent, persists both step-level and continuation artifacts (`ProcessAgentArtifacts`), and notifies `ConversationChatAreaComponent` (`NewMessageCreated: true`) so the active conversation reloads messages, refreshes task statuses, and auto-opens any newly produced artifact.
+
+### AI Agent Workflows & Tasks Command Center (`TasksFullViewComponent`)
+
+`TasksFullViewComponent` (`<mj-tasks-full-view>`) provides the **AI Agent Workflows & Tasks Command Center** for inspecting and navigating agent-invoked workflows and standalone tasks across conversations:
+
+- **5-Card KPI Metric Ribbon**: Interactive filter cards for **Active Now**, **Completed**, **Needs Attention** (Failed/Cancelled), **Total Workflows**, and **Avg Execution Time** (plus completed-step throughput).
+- **Unified Filter & Search Bar**: Instant full-text search across workflow names, descriptions, and conversation names, status pill filters (`All`, `Active`, `Completed`, `Failed`), a dynamic **Specialist Agent** dropdown filter, and a scope toggle (**All Tasks** vs. **My Tasks**).
+- **3 Synchronized View Modes**:
+  1. **Workflow Cards View**: Hierarchy-aware cards showing workflow status, parent conversation deep-link pill, horizontal **Agent Pipeline** chips (`Step 1 -> Step 2`), progress bar, and expandable step rows with step numbers, agent badges, durations, and output previews.
+  2. **Execution Timeline & DAG View**: Custom second/minute-resolution **Execution Waterfall** bar chart for multi-step workflows (rendered automatically whenever tasks span `< 2 days` where day-level Gantt bars would collapse), paired with the full `mj-gantt-task-viewer` for multi-day schedules.
+  3. **Slide-Over Workflow & Step Inspector Drawer**: Selecting any workflow or step opens a contextual right-hand inspector drawer with step-switcher tabs, clickable telemetry pills for the **AI Agent** (`MJ: AI Agents`) and **AI Agent Run** (`MJ: AI Agent Runs`), separated **Task Instructions (Input)** vs. **Agent Output / Deliverable** (parsed cleanly around the `--- Output ---` delimiter), and a primary **Jump to Chat** action.
+
 ### MJ Entity Integration
 
 All data operations use the MemberJunction entity system:
@@ -559,16 +618,18 @@ RxJS `BehaviorSubject` instances for all state, with derived observables using `
 | `@memberjunction/ng-whiteboard` | The generic collaborative whiteboard (consumed by the realtime Whiteboard channel + artifact viewer) |
 | `@memberjunction/ai-realtime-client` | Browser-side realtime drivers (OpenAI / Gemini / ElevenLabs / AssemblyAI) used by `RealtimeSessionService` |
 
-### Kendo UI Packages
+### UI Packages
 
-Uses `@progress/kendo-angular-dialog`, `@progress/kendo-angular-buttons`, `@progress/kendo-angular-inputs`, `@progress/kendo-angular-layout`, `@progress/kendo-angular-indicators`, `@progress/kendo-angular-dropdowns`, `@progress/kendo-angular-notification`, `@progress/kendo-angular-upload`, `@progress/kendo-angular-dateinputs`.
+Uses `@memberjunction/ng-ui-components` for dialogs, buttons, inputs, layout, indicators, dropdowns, notifications, upload and date inputs.
 
 ### Peer Dependencies
 
+- `@angular/animations` ^21.x
+- `@angular/cdk` ^21.x
 - `@angular/common` ^21.x
 - `@angular/core` ^21.x
 - `@angular/forms` ^21.x
-- `@angular/router` ^21.x
+- `@angular/platform-browser` ^21.x
 
 ## Build
 

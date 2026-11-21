@@ -57,6 +57,13 @@ export * from './lib/duplicate-entry-check/duplicate-entry-check';
 
 // Components
 export * from './lib/toolbar/form-toolbar.component';
+export * from './lib/toolbar/base-form-toolbar-action';
+export * from './lib/toolbar/actions/record-links-toolbar-action';
+export * from './lib/toolbar/actions/record-comments-toolbar-action';
+export * from './lib/comments/form-record-comments-coordinator.service';
+export * from './lib/comments/comment-card-driver-host.component';
+export * from './lib/comments/field-suggestion-card.component';
+export * from './lib/comments/record-comments.component';
 export * from './lib/field/form-field.component';
 export * from './lib/field/fk-search-utils';
 export * from './lib/field/fk-lookup-strategy';
@@ -70,6 +77,15 @@ export * from './lib/explorer-entity-data-grid.component';
 export * from './lib/isa-related-panel/isa-hierarchy-utils';
 export * from './lib/isa-related-panel/isa-related-card.component';
 export * from './lib/isa-related-panel/isa-related-panel.component';
+export * from './lib/subtype-ui-driver/entity-subtype-ui-driver';
+export * from './lib/subtype-ui-driver/folded-subtype-section.component';
+export * from './lib/links/record-links.component';
+export * from './lib/links/record-links-drawer.component';
+export * from './lib/links/record-link-utils';
+export * from './lib/links/record-link.directive';
+export * from './lib/links/record-link.component';
+export * from './lib/preview-popover/record-preview-popover.component';
+export * from './lib/preview-popover/record-preview-popover.service';
 
 // Dynamic slot-injection extension point for form panels.
 // See packages/Angular/Generic/base-forms/PANELS.md for the architecture +

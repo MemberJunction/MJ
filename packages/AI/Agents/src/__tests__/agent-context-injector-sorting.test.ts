@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { AgentContextInjector } from '../agent-context-injector';
-import type { MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJAIAgentNoteTypeEntity } from '@memberjunction/core-entities';
+import { describe, it, expect, vi } from 'vitest';
+import { AIEngine } from '@memberjunction/aiengine';
+import { AgentContextInjector, type GetExamplesParams } from '../agent-context-injector';
+import type { MJAIAgentExampleEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity } from '@memberjunction/core-entities';
 
 /**
  * Regression coverage for the agent-context date-sort crash.
@@ -200,5 +201,26 @@ describe('agent-context sorts tolerate partially-converted and unparseable dates
         ];
         injector.sortNotes(input, 'Recent', TIED_PRIORITY_NOTE_TYPES);
         expect(ids(input)).toEqual(['old', 'new']);
+    });
+
+    it('returns [] without calling sortExamples when queryExamplesWithScoping matches zero examples', async () => {
+        const examplesSpy = vi.spyOn(AIEngine.Instance, 'AgentExamples', 'get').mockReturnValue([
+            makeExample({ ID: 'other-agent', AgentID: 'different-agent' }),
+        ]);
+        const sortSpy = vi.spyOn(injector, 'sortExamples');
+        try {
+            const queryFn = (injector as unknown as { queryExamplesWithScoping(p: GetExamplesParams): Promise<MJAIAgentExampleEntity[]> });
+            const res = await queryFn.queryExamplesWithScoping({
+                agentId: 'agent-1',
+                currentInput: 'hello',
+                strategy: 'Semantic',
+                maxExamples: 5,
+            });
+            expect(res).toEqual([]);
+            expect(sortSpy).not.toHaveBeenCalled();
+        } finally {
+            sortSpy.mockRestore();
+            examplesSpy.mockRestore();
+        }
     });
 });

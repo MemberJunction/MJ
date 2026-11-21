@@ -156,8 +156,8 @@ describe('MediaControlsComponent (DOM)', () => {
   });
 
   describe('the agent-vision button', () => {
-    const LET = 'Let the agent see your camera and screen';
-    const STOP = 'Stop letting the agent see your camera and screen';
+    const LET = 'Let the agent, and any agent that joins later, see your camera and screen';
+    const STOP = 'Stop letting the agent, and any agent that joins later, see your camera and screen';
 
     it('is there only when the host shows it', () => {
       expect(button(render(), LET)).toBeNull();
@@ -197,11 +197,11 @@ describe('MediaControlsComponent (DOM)', () => {
 
     it('speaks of every agent in the room when there is more than one', () => {
       const f = render({ ShowLabels: true, ShowAgentVision: true, AgentCount: 2 });
-      expect(button(f, 'Let agents in this room see your camera and screen')).not.toBeNull();
+      expect(button(f, 'Let every agent in this room, including any that join later, see your camera and screen')).not.toBeNull();
       expect(queryAll(f, '.control__label').map((l) => l.textContent?.trim()).at(-1)).toBe('Let agents see me');
       f.componentRef.setInput('AgentVisionOn', true);
       f.detectChanges();
-      expect(button(f, 'Stop letting agents in this room see your camera and screen')).not.toBeNull();
+      expect(button(f, 'Stop letting every agent in this room, including any that join later, see your camera and screen')).not.toBeNull();
       expect(queryAll(f, '.control__label').map((l) => l.textContent?.trim()).at(-1)).toBe('Hide from agents');
       f.componentRef.setInput('AgentCount', 1);
       f.detectChanges();

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  ModelImportanceView,
   ParseMetrics,
   ParseFeatureImportance,
   PrimaryModelScore,
@@ -7,11 +8,12 @@ import {
   OverfitGap,
   HumanizeFeatureName,
   FormatMetricValue,
+  TrainScoreIsInnerCv,
   PS_FEATURE_DOMINANCE_THRESHOLD,
 } from '../lib/custom/MLModels/ml-model-view-models';
 
 describe('ml-model-view-models', () => {
-  describe('parseMetrics', () => {
+  describe('ParseMetrics', () => {
     it('returns empty record for null/undefined/invalid JSON', () => {
       expect(ParseMetrics(null)).toEqual({});
       expect(ParseMetrics(undefined)).toEqual({});
@@ -29,7 +31,7 @@ describe('ml-model-view-models', () => {
     });
   });
 
-  describe('parseFeatureImportance', () => {
+  describe('ParseFeatureImportance', () => {
     it('handles empty or invalid input', () => {
       expect(ParseFeatureImportance(null)).toEqual([]);
       expect(ParseFeatureImportance('invalid')).toEqual([]);
@@ -63,7 +65,7 @@ describe('ml-model-view-models', () => {
     });
   });
 
-  describe('primaryModelScore', () => {
+  describe('PrimaryModelScore', () => {
     it('prefers AUC then Accuracy then F1 for classification', () => {
       const model = {
         ProblemType: 'Classification',
@@ -91,7 +93,7 @@ describe('ml-model-view-models', () => {
     });
   });
 
-  describe('overfitGap', () => {
+  describe('OverfitGap', () => {
     it('returns positive gap for overfit train > holdout', () => {
       const model = {
         Metrics: JSON.stringify({ auc: 0.95 }),
@@ -106,14 +108,22 @@ describe('ml-model-view-models', () => {
     });
   });
 
-  describe('humanizeFeatureName', () => {
+  describe('HumanizeFeatureName', () => {
+    // Pins the published export's output as it is on next: an `Is` prefix is dropped and every word is title-cased.
     it('turns camelCase and snake_case into clean Title Case', () => {
       expect(HumanizeFeatureName('daysUntilExpiration')).toBe('Days Until Expiration');
       expect(HumanizeFeatureName('total_spend_amount')).toBe('Total Spend Amount');
     });
+
+    it('drops a leading Is before a capital and title-cases snake_case words', () => {
+      expect(HumanizeFeatureName('IsActive')).toBe('Active');
+      expect(HumanizeFeatureName('membership_type')).toBe('Membership Type');
+      expect(HumanizeFeatureName('IsAutoRenew=1')).toBe('Auto Renew=1');
+      expect(HumanizeFeatureName('')).toBe('');
+    });
   });
 
-  describe('metricsToDisplay', () => {
+  describe('MetricsToDisplay', () => {
     it('formats known metrics for tabular/card rendering', () => {
       const metrics = ParseMetrics(JSON.stringify({ auc: 0.885, precision: 0.76 }));
       const displays = MetricsToDisplay(metrics);
@@ -121,6 +131,45 @@ describe('ml-model-view-models', () => {
       const auc = displays.find((d) => d.key === 'AUC');
       expect(auc?.label).toBe('AUC (ROC)');
       expect(auc?.value).toBe('0.885');
+    });
+  });
+
+  describe('ModelImportanceView.DisplayedFeatureImportance', () => {
+    const raw = JSON.stringify({ AutoRenew: 1.13, IncomeK: 0.01, Noise1: 0.002 });
+    const lineage = (kind: string): string => JSON.stringify({ evaluation: { ImportanceKind: kind } });
+    it('shows coefficient importance for logistic regression', () => {
+      expect(ModelImportanceView.DisplayedFeatureImportance(lineage('coefficient'), raw).map((b) => b.name)).toEqual(['AutoRenew', 'IncomeK', 'Noise1']);
+    });
+    it('hides split / impurity importance', () => {
+      expect(ModelImportanceView.DisplayedFeatureImportance(lineage('split_or_impurity'), raw)).toEqual([]);
+      expect(ModelImportanceView.DisplayedFeatureImportance(null, raw)).toEqual([]);
+    });
+  });
+
+  describe('PrimaryModelScore over the stored proper scores', () => {
+    const score = (holdout: Record<string, number>, metrics: Record<string, number> = {}, ProblemType = 'classification') =>
+      PrimaryModelScore({ ProblemType, Metrics: JSON.stringify(metrics), HoldoutMetrics: JSON.stringify(holdout) });
+
+    it('shows the stored primary holdout score of a kept baseline under its own label, for every proper score', () => {
+      const cases: [string, string, string][] = [
+        ['log-loss', 'LogLoss', 'Log Loss'], ['brier', 'Brier', 'Brier Score'], ['multiclass-log-loss', 'MulticlassLogLoss', 'Multiclass Log Loss'],
+        ['rmse', 'RMSE', 'RMSE'], ['mae', 'MAE', 'MAE'], ['poisson-deviance', 'PoissonDeviance', 'Poisson Deviance'],
+        ['tweedie-deviance', 'TweedieDeviance', 'Tweedie Deviance'], ['mase', 'MASE', 'MASE'],
+      ];
+      for (const [stored, key, label] of cases) {
+        expect(score({ [stored]: 0.3674 })).toEqual({ key, label, value: 0.3674 });
+      }
+    });
+
+    it('prefers the holdout primary to the inner-CV mean of the same metric', () => {
+      expect(score({ mase: 0.82 }, { mase: 0.9 }, 'regression')).toEqual({ key: 'MASE', label: 'MASE', value: 0.82 });
+    });
+  });
+
+  describe('TrainScoreIsInnerCv', () => {
+    it('is true for a model trained under an Evaluation Protocol, false for an older in-sample model', () => {
+      expect(TrainScoreIsInnerCv(JSON.stringify({ evaluationProtocolId: 'EP-1' }))).toBe(true);
+      expect([TrainScoreIsInnerCv(JSON.stringify({ evaluation: {} })), TrainScoreIsInnerCv(null), TrainScoreIsInnerCv('not json')]).toEqual([false, false, false]);
     });
   });
 });

@@ -21,7 +21,7 @@ import { LocalCacheManager, InMemoryLocalStorageProvider, Metadata, SetProvider,
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { DiscoverMJConfig, LoadDynamicPackages } from '@memberjunction/dynamic-packages';
-import { UserCache } from '@memberjunction/generic-database-provider';
+import { UserCache, GetServerPrincipal } from '@memberjunction/generic-database-provider';
 import { InstrumentedLocalStorageProvider } from './instrumented-cache';
 import { LoadEnv, LoadDbConfig } from './config';
 import type { DbConfig } from './config';
@@ -84,7 +84,10 @@ export async function BootstrapIntegrationServer(opts: BootstrapServerOptions = 
 
     // FIRST-CALLER cache init — MUST precede any provider setup (load-bearing on both backends).
     const storage = new InstrumentedLocalStorageProvider(opts.SharedStorage ?? new InMemoryLocalStorageProvider());
-    await LocalCacheManager.Instance.Initialize(storage, { verboseLogging: opts.VerboseCacheLogging ?? false });
+    await LocalCacheManager.Instance.Initialize(storage, {
+        verboseLogging: opts.VerboseCacheLogging ?? false,
+        maxSizeBytes: 512 * 1024 * 1024
+    });
     SetActiveStorage(storage);
 
     const ctx = db.Platform === 'postgresql'
@@ -154,7 +157,7 @@ async function setupPostgreSQLProvider(
     await UserCache.Instance.Refresh(provider);
     // setupSQLServerClient runs the startup engines itself; the PostgreSQL provider does not, so
     // run them here as MJAPI does. Without this, engine-backed checks ran against unloaded engines.
-    const systemUser = UserCache.Instance.GetSystemUser() ?? UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
+    const systemUser = GetServerPrincipal() ?? undefined;
     await StartupManager.Instance.Startup(false, systemUser, provider as unknown as IMetadataProvider);
 
     const user = resolveContextUser(opts.ContextUserEmail);

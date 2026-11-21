@@ -100,6 +100,32 @@ describe('RealtimeAgentBannerComponent (DOM)', () => {
     expect(mins).toHaveLength(1);
   });
 
+  it('closes an open gear popover when the gear is taken away (#6120)', () => {
+    const f = render({ State: 'listening', ShowGear: true, ShowDensityPicker: true });
+    click(f, '.bar-actions .iconb');
+    f.detectChanges();
+    expect(query(f, '.gear-pop')).not.toBeNull();
+    f.componentRef.setInput('ShowGear', false);
+    f.detectChanges();
+    expect(query(f, '.gear-pop')).toBeNull();
+  });
+
+  it('offers the Developer links toggle in the gear by default', () => {
+    const f = render({ State: 'listening', ShowGear: true });
+    click(f, '.iconb[title="Interface density & developer links"]');
+    f.detectChanges();
+    expect(query(f, '.gp-link')).not.toBeNull();
+  });
+
+  it('omits the Developer links toggle and its divider when AllowDevLinks is false', () => {
+    const f = render({ State: 'listening', ShowGear: true, AllowDevLinks: false });
+    click(f, '.iconb[title="Interface density & developer links"]');
+    f.detectChanges();
+    expect(query(f, '.gear-pop')).not.toBeNull();
+    expect(query(f, '.gp-link')).toBeNull();
+    expect(query(f, '.gp-div')).toBeNull();
+  });
+
   it('renders the review presentation with the close-reason chip and exit actions', () => {
     const f = render({
       State: 'closed',
@@ -126,5 +152,11 @@ describe('RealtimeAgentBannerComponent (DOM)', () => {
     const f = render({ State: 'closed', ReviewMode: true, AgentName: 'Sage', ShowStartLive: false });
     expect(query(f, '.start-live-pill')).toBeNull();
     expect(query(f, '.bar-actions .iconb')).not.toBeNull();
+  });
+
+  it('hides the redundant state pill when HideState is true (while the center hero orb shows the state)', () => {
+    const f = render({ State: 'speaking', AgentName: 'Sage', HideState: true });
+    expect(query(f, '.banner__state')).toBeNull();
+    expect(query(f, '.banner__for')).toBeNull();
   });
 });

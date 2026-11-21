@@ -22,7 +22,14 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
   selector: 'mj-entity-link-pill',
   template: `
     @if (entityInfo && recordId) {
-      <span class="entity-link-pill" (click)="openRecord()" [title]="tooltipText">
+      <span class="entity-link-pill"
+            mjRecordLink
+            [EntityName]="entityName"
+            [RecordID]="recordId"
+            [DisplayName]="displayLabel"
+            [HandleClick]="false"
+            (click)="openRecord()"
+            [title]="tooltipText">
         <i class="entity-icon" [ngClass]="iconClass"></i>
         <span class="entity-label">{{ displayLabel }}</span>
         <i class="fas fa-external-link-alt pill-action"></i>

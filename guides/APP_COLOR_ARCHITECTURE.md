@@ -12,7 +12,7 @@ Per the Feb 3, 2025 UX design meeting, the team decided:
 - **All dashboard content uses the unified MJ token system** — same colors everywhere, regardless of which app you're in.
 - **No per-app content theming** — avoids the "rainbow effect" and keeps the product feeling unified.
 
-This guide serves as the team reference for the design token system. Kendo UI has been fully removed — all components now use `@memberjunction/ng-ui-components` with `--mj-*` semantic tokens.
+This guide serves as the team reference for the design token system. All components use `@memberjunction/ng-ui-components` with `--mj-*` semantic tokens.
 
 ---
 
@@ -335,7 +335,7 @@ The following files contain hardcoded hex colors that need migration. They are o
 
 ### Actions Dashboard (Already Migrated)
 
-The Actions dashboard components (`categories-list-view`, `code-management`, `security-permissions`) have been migrated to MJ semantic tokens. All Kendo theme variables (`--kendo-color-primary`, etc.) have been removed.
+The Actions dashboard components (`categories-list-view`, `code-management`, `security-permissions`) use MJ semantic tokens throughout.
 
 ---
 
@@ -381,14 +381,14 @@ This file already defines token-based styling for **60+ class name variants** ac
 | **Cards** | `.mj-card`, `.dashboard-card`, `.stat-card`, `.kpi-card`, `.metric-card`, `.action-card`, `.prompt-card`, `.agent-card`, `.model-card`, + 30 more | Background, border, shadow, padding, hover transitions |
 | **Card Sub-elements** | `.mj-card-header`, `.card-header`, `.mj-card-body`, `.card-body`, `.mj-card-footer`, `.card-footer` | Consistent padding, borders, typography |
 | **Stat Elements** | `.stat-icon`, `.stat-value`, `.stat-label`, `.stat-content` | Icon sizing, value typography, label muting |
-| **Buttons** | `.mj-btn`, `.mj-btn-primary`, `.mj-btn-secondary`, `.mj-btn-ghost`, `.mj-btn-danger`, `.mj-btn-sm` | All states (hover/active/focus/disabled) using tokens |
+| **Buttons** | `.action-btn`, `.control-btn` (+ `.primary`, `.danger`, `.small`) — legacy only. New buttons use the `mjButton` directive (`.mj-btn--*`), styled solely by `ui-components/button.scss` | All states (hover/active/focus/disabled) using tokens |
 | **Badges** | `.mj-badge`, `.status-badge`, `.mj-badge-success`, `.mj-badge-warning`, `.mj-badge-error`, `.mj-badge-info`, `.mj-badge-neutral` | Status-colored badges using token families |
 | **Inputs** | `.mj-input`, `.mj-search-input`, `.search-input`, `.filter-input` | Border, focus ring, placeholder styling |
 | **Panels** | `.mj-panel`, `.filter-panel`, `.detail-panel` | Surface background, header/body structure |
 | **Tables** | `.mj-table`, `.data-table`, `.entity-table` | Header/row styling, hover, borders |
 | **Headers** | `.dashboard-header`, `.mj-dashboard-header` | Layout with `.header-info` and `.header-controls` regions |
 | **Empty/Loading** | `.mj-empty-state`, `.empty-state`, `.mj-loading`, `.loading-state` | Centered content with muted styling |
-| **Overlays** | `.mj-loading-overlay`, `.loading-overlay`, `.mj-modal-overlay` | Semi-transparent overlay backgrounds |
+| **Overlays** | `.mj-loading-overlay`, `.loading-overlay`, `.modal-overlay`, `.detail-panel-overlay` | Semi-transparent overlay backgrounds |
 | **Utilities** | `.text-muted`, `.text-secondary`, `.text-primary`, `.text-link`, `.bg-surface`, `.border-default`, `.shadow-md` | Quick token-backed utility classes |
 
 **How to use:** Apply these class names to your component HTML. The shared patterns file is globally included, so no additional imports are needed. Components keep their semantic class names (like `.kpi-card` or `.action-card`) and get consistent token-based styling automatically.
@@ -418,11 +418,11 @@ This file maps legacy variable names to MJ tokens for backward compatibility:
 | `--border-radius` | `--mj-radius-lg` | Various |
 | `--transition-time` | `--mj-transition-base` | Various |
 
-The five Kendo-specific variables (`--kendo-color-primary`, etc.) have been removed along with `_kendo-theme-override.scss` as part of the Kendo removal in Phase 2.1.
+The vendor theme variables and their `_*-theme-override.scss` shim were removed in Phase 2.1.
 
 ### Migration Path
 
-All Kendo overrides have been removed. New components should use MJ semantic tokens directly. For example:
+All vendor theme overrides have been removed. New components should use MJ semantic tokens directly. For example:
 
 ```css
 /* BEFORE — legacy variable */
@@ -515,5 +515,5 @@ Before writing custom card/button/badge/panel CSS, check `_shared-patterns.scss`
 | `packages/Angular/Explorer/explorer-app/src/lib/styles/_tokens.scss` | All MJ design tokens (primitives + semantic, light + dark) |
 | `packages/Angular/Explorer/explorer-app/src/lib/styles/_shared-patterns.scss` | 60+ reusable token-based class patterns |
 | `packages/Angular/Explorer/explorer-app/src/lib/styles/_variables.scss` | Legacy variable bridge (deprecated) |
-| ~~`_kendo-theme-override.scss`~~ | **Deleted** — Kendo overrides removed in Phase 2.1 |
+| ~~`_kendo-theme-override.scss`~~ | **Deleted** — vendor theme overrides removed in Phase 2.1 |
 | `guides/THEMING.md` | Full theming system documentation |

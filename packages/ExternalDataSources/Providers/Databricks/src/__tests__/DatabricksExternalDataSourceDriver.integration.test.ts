@@ -64,7 +64,7 @@ if (RUN && sdkAvailable && !hasCreds) {
 class TestableDatabricksDriver extends DatabricksExternalDataSourceDriver {
   protected override async resolveCredential<TCred extends Record<string, string> = Record<string, string>>(): Promise<ResolvedCredential<TCred> | null> {
     const values = { token: CONN.token, clientId: CONN.clientId, clientSecret: CONN.clientSecret } as unknown as TCred;
-    return { credential: null, values, source: 'request', expiresAt: null };
+    return { credential: null, values, source: 'request', expiresAt: null, expirationStatus: 'valid' };
   }
   public async closeAll(ds: MJExternalDataSourceEntity): Promise<void> {
     await this.invalidateConnection(ds.ID);

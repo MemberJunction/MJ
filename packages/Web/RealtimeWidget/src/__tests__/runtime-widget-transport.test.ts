@@ -13,15 +13,25 @@ interface ViewCall {
 
 const hoisted = vi.hoisted(() => {
     const user = { ID: 'guest-user' };
+    const savedDetails: Array<{ ID: string; Role?: string; Message?: string }> = [];
     /** A new entity row: plain property assignment, Save succeeds, and the ID depends on the entity. */
-    const newRow = (entityName: string) => ({
-        ID: entityName === 'MJ: Conversations' ? 'conv-1' : 'detail-1',
-        LatestResult: null,
-        NewRecord: () => undefined,
-        Save: async () => true,
-    });
+    const newRow = (entityName: string) => {
+        const row: { ID: string; Role?: string; Message?: string; LatestResult: null; NewRecord: () => void; Save: () => Promise<boolean> } = {
+            ID: entityName === 'MJ: Conversations' ? 'conv-1' : 'detail-1',
+            LatestResult: null,
+            NewRecord: () => undefined,
+            Save: async () => {
+                if (entityName === 'MJ: Conversation Details') {
+                    savedDetails.push({ ID: row.ID, Role: row.Role, Message: row.Message });
+                }
+                return true;
+            },
+        };
+        return row;
+    };
     return {
         views: [] as ViewCall[],
+        savedDetails,
         replyRows: [] as Array<{ Message: string | null }>,
         user,
         provider: {
@@ -62,7 +72,6 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
     agentFailureMessage: (_result: unknown, fallback: string) => fallback,
 }));
 
-import { ConversationEngine } from '@memberjunction/core-entities';
 import { RuntimeWidgetTransport } from '../transport/runtime-widget-transport.js';
 import type { WidgetSession } from '../types.js';
 
@@ -87,6 +96,7 @@ async function startTransport(): Promise<RuntimeWidgetTransport> {
 describe('RuntimeWidgetTransport — latest agent reply', () => {
     beforeEach(() => {
         hoisted.views.length = 0;
+        hoisted.savedDetails.length = 0;
         hoisted.replyRows = [{ Message: 'Hello from the agent' }];
     });
 
@@ -94,12 +104,13 @@ describe('RuntimeWidgetTransport — latest agent reply', () => {
         vi.restoreAllMocks();
     });
 
-    it('reads the newest AI reply in Main', async () => {
+    it('saves only the visitor message from the browser and reads the newest AI reply in Main', async () => {
         const transport = await startTransport();
 
         const result = await transport.SendMessage('hi');
 
         expect(result).toEqual({ reply: 'Hello from the agent', success: true });
+        expect(hoisted.savedDetails).toEqual([{ ID: 'detail-1', Role: 'User', Message: 'hi' }]);
         expect(hoisted.views).toHaveLength(1);
         const view = hoisted.views[0];
         expect(view.EntityName).toBe('MJ: Conversation Details');

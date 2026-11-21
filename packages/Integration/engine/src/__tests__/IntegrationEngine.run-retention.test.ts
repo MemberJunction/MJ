@@ -1,11 +1,12 @@
 /**
  * Run-history retention must actually prune.
  *
- * The pruner reads the `keep` most-recent runs for a company integration, takes the oldest of
- * those as the cutoff, and deletes everything older — details before runs, because the details
+ * The pruner reads the `keep + 1` most-recent runs for a company integration, takes the `keep`-th
+ * as the cutoff, and deletes everything older — details before runs, because the details
  * carry the FK. Two things are easy to get wrong and neither fails loudly: deleting in the wrong
  * order (FK violation, or orphaned details where the FK is not enforced), and treating "exactly
- * `keep` runs exist" as a backlog and deleting the oldest run it was supposed to keep.
+ * `keep` runs exist" as a backlog and deleting the oldest run it was supposed to keep. It counts the
+ * rows it read, not TotalRowCount.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -89,7 +90,7 @@ describe('IntegrationEngine.pruneOldRunHistory', () => {
         process.env.MJ_INTEGRATION_MAX_RUNS_PER_CI = '100';
     });
 
-    it('reads exactly the retention count, newest first, to find the cutoff', async () => {
+    it('reads one more than the retention count, newest first, to find the cutoff', async () => {
         const { provider } = createProvider();
         mockRunViewFn.mockResolvedValue({
             Success: true,
@@ -100,7 +101,7 @@ describe('IntegrationEngine.pruneOldRunHistory', () => {
         await prune(engine, provider);
 
         const params = mockRunViewFn.mock.calls[0][0] as { MaxRows: number; OrderBy: string };
-        expect(params.MaxRows).toBe(100);
+        expect(params.MaxRows).toBe(101);
         expect(params.OrderBy).toBe('StartedAt DESC');
     });
 
@@ -108,7 +109,7 @@ describe('IntegrationEngine.pruneOldRunHistory', () => {
         const { provider, executed } = createProvider();
         mockRunViewFn.mockResolvedValue({
             Success: true,
-            Results: Array.from({ length: 100 }, () => ({ StartedAt: '2026-01-01T00:00:00.000Z' })),
+            Results: Array.from({ length: 101 }, () => ({ StartedAt: '2026-01-01T00:00:00.000Z' })),
             TotalRowCount: 137,          // 37 runs older than the cutoff
         });
 
@@ -125,6 +126,59 @@ describe('IntegrationEngine.pruneOldRunHistory', () => {
             Success: true,
             Results: Array.from({ length: 100 }, () => ({ StartedAt: '2026-01-01T00:00:00.000Z' })),
             TotalRowCount: 100,
+        });
+
+        await prune(engine, provider);
+
+        expect(executed).toHaveLength(0);
+    });
+
+    it('takes the cutoff from the oldest run it keeps, not the extra row', async () => {
+        process.env.MJ_INTEGRATION_MAX_RUNS_PER_CI = '2';
+        const { provider, executed } = createProvider();
+        mockRunViewFn.mockResolvedValue({
+            Success: true,
+            Results: [
+                { StartedAt: '2026-03-01T00:00:00.000Z' },
+                { StartedAt: '2026-02-01T00:00:00.000Z' },
+                { StartedAt: '2026-01-01T00:00:00.000Z' },
+            ],
+            TotalRowCount: 5,
+        });
+
+        await prune(engine, provider);
+
+        expect(executed).toHaveLength(2);
+        expect(executed[1]).toContain("'2026-02-01T00:00:00.000Z'");
+    });
+
+    it('prunes with a retention count of 1 even though that read returns no real total', async () => {
+        process.env.MJ_INTEGRATION_MAX_RUNS_PER_CI = '1';
+        const { provider, executed } = createProvider();
+        mockRunViewFn.mockResolvedValue({
+            Success: true,
+            Results: [
+                { StartedAt: '2026-02-01T00:00:00.000Z' },
+                { StartedAt: '2026-01-01T00:00:00.000Z' },
+            ],
+            TotalRowCount: 2,
+        });
+
+        await prune(engine, provider);
+
+        const params = mockRunViewFn.mock.calls[0][0] as { MaxRows: number };
+        expect(params.MaxRows).toBe(2);
+        expect(executed).toHaveLength(2);
+        expect(executed[1]).toContain("'2026-02-01T00:00:00.000Z'");
+    });
+
+    it('does nothing with a retention count of 1 and a single run', async () => {
+        process.env.MJ_INTEGRATION_MAX_RUNS_PER_CI = '1';
+        const { provider, executed } = createProvider();
+        mockRunViewFn.mockResolvedValue({
+            Success: true,
+            Results: [{ StartedAt: '2026-01-01T00:00:00.000Z' }],
+            TotalRowCount: 1,
         });
 
         await prune(engine, provider);

@@ -1,0 +1,44 @@
+<div class="vs-audio-options" data-testid="vs-audio-options">
+  <div class="vs-audio-options__row">
+    <label class="vs-audio-options__label" for="vs-audio-voiceover-switch">
+      Voiceover
+    </label>
+    <mj-switch
+      InputId="vs-audio-voiceover-switch"
+      AriaLabel="Voiceover"
+      data-testid="vs-audio-voiceover-switch"
+      [Disabled]="Disabled"
+      [ngModel]="NarrationEnabled"
+      (ngModelChange)="OnNarrationSwitchChange($event)"
+    ></mj-switch>
+  </div>
+
+  @if (NarrationEnabled) {
+    <div class="vs-audio-options__captions" data-testid="vs-audio-captions-group">
+      <span class="vs-audio-options__sublabel" id="vs-audio-captions-label">
+        Captions
+      </span>
+      <div
+        class="vs-audio-options__buttons"
+        role="group"
+        aria-labelledby="vs-audio-captions-label"
+      >
+        @for (option of CaptionOptions; track option.Mode) {
+          <button
+            type="button"
+            mjButton
+            Variant="outline"
+            Size="sm"
+            [Toggleable]="true"
+            [Selected]="CaptionsMode === option.Mode"
+            [disabled]="Disabled"
+            [attr.data-testid]="'vs-audio-caption-' + option.Mode.toLowerCase()"
+            (click)="SelectCaptionsMode(option.Mode)"
+          >
+            {{ option.Label }}
+          </button>
+        }
+      </div>
+    </div>
+  }
+</div>

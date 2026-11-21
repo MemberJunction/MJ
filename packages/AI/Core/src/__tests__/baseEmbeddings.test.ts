@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BaseEmbeddings, Embeddings } from '../generic/baseEmbeddings';
+import { BaseEmbeddings, EmbeddingDimensionsError, EmbeddingModelInfo, Embeddings } from '../generic/baseEmbeddings';
+import { ErrorAnalyzer } from '../generic/errorAnalyzer';
 import { EmbedTextParams, EmbedTextResult, EmbedTextsParams, EmbedTextsResult } from '../generic/embed.types';
 import { ModelUsage } from '../generic/baseModel';
+import { AIErrorInfo } from '../generic/errorTypes';
 
 // Concrete test implementation
 class TestEmbeddings extends BaseEmbeddings {
@@ -385,5 +387,262 @@ describe('BaseEmbeddings.EmbedTexts dispatch on SupportsBatchEmbeddings', () => 
         }
         const e = new CollapsingBatch('k');
         await expect(e.EmbedTexts({ texts: ['a', 'b', 'c'], model: 'm' })).rejects.toThrow(/1:1 match|misaligned/i);
+    });
+});
+
+/** A driver with a model table, exposing the shared `dimensions` rule. */
+class TableEmbeddings extends TestEmbeddings {
+    protected override get EmbeddingModels(): readonly EmbeddingModelInfo[] {
+        return [
+            { Model: 'fixed', Description: 'one width, rejects dimensions', OutputDimension: 1536, AcceptsDimensions: false },
+            { Model: 'ranged', Description: 'any width up to 3072', OutputDimension: 3072, AcceptsDimensions: true },
+            { Model: 'listed', Description: 'three widths', OutputDimension: 1024, AcceptsDimensions: true, SupportedDimensions: [256, 512, 1024] },
+        ];
+    }
+
+    public Dimensions(model: string, dimensions?: number): { dimensions?: number } {
+        return this.DimensionsParam(model, dimensions);
+    }
+}
+
+describe('BaseEmbeddings.DimensionsParam', () => {
+    const e = new TableEmbeddings('k');
+
+    it('sends nothing when no width is requested', () => {
+        expect(e.Dimensions('ranged')).toEqual({});
+        expect(e.Dimensions('fixed', 0)).toEqual({});
+    });
+
+    it('omits dimensions for a model that rejects it when the width is its own', () => {
+        expect(e.Dimensions('fixed', 1536)).toEqual({});
+    });
+
+    it('sends a width the model can produce', () => {
+        expect(e.Dimensions('ranged', 512)).toEqual({ dimensions: 512 });
+        expect(e.Dimensions('ranged', 3072)).toEqual({ dimensions: 3072 });
+        expect(e.Dimensions('listed', 256)).toEqual({ dimensions: 256 });
+    });
+
+    it('refuses a width the model cannot produce, with a non-retriable classification', () => {
+        expect(() => e.Dimensions('fixed', 512)).toThrow(EmbeddingDimensionsError);
+        expect(() => e.Dimensions('fixed', 512)).toThrow("Embedding model 'fixed' can't produce 512-dimension vectors; it supports only 1536.");
+        expect(() => e.Dimensions('ranged', 4096)).toThrow('it supports 1 to 3072');
+        expect(() => e.Dimensions('ranged', -1)).toThrow('it supports 1 to 3072');
+        expect(() => e.Dimensions('listed', 768)).toThrow('it supports 256, 512, 1024');
+    });
+
+    it('passes the width through for a model not in the table, and for a driver with no table', () => {
+        expect(e.Dimensions('unknown', 4096)).toEqual({ dimensions: 4096 });
+        expect(new (class extends TestEmbeddings {
+            public Dimensions(model: string, dimensions?: number): { dimensions?: number } { return this.DimensionsParam(model, dimensions); }
+        })('k').Dimensions('fixed', 512)).toEqual({ dimensions: 512 });
+    });
+
+    it('carries a classification ErrorAnalyzer keeps: no retry, no failover', () => {
+        let thrown: unknown;
+        try {
+            e.Dimensions('fixed', 512);
+        } catch (error) {
+            thrown = error;
+        }
+        expect(ErrorAnalyzer.AnalyzeError(thrown)).toMatchObject({ errorType: 'InvalidRequest', severity: 'Fatal', canFailover: false });
+    });
+});
+
+/**
+ * A refusal is a configuration error, so the per-text path must not treat it as a transient
+ * failure. Retrying it sleeps through the backoff to reach the same answer, and degrading it to an
+ * empty result is what the refusal exists to replace: the runner reads an empty result as
+ * "No vectors returned", classifies it Retriable and fails over to another vendor, which fails the
+ * same way. Both layers arrived with embedding cancellation; the refusal arrived with #5234.
+ */
+describe('BaseEmbeddings.EmbedTexts and a refused width on the per-text path', () => {
+    /** Per-text driver (no native batch) whose EmbedText refuses a width its model can't produce. */
+    class RefusingEmbeddings extends BaseEmbeddings {
+        public attempts = 0;
+        protected override get EmbeddingModels(): readonly EmbeddingModelInfo[] {
+            return [{ Model: 'fixed', Description: 'one width, rejects dimensions', OutputDimension: 1536, AcceptsDimensions: false }];
+        }
+        public async EmbedText(params: EmbedTextParams): Promise<EmbedTextResult> {
+            this.attempts++;
+            this.DimensionsParam(params.model ?? '', params.dimensions);
+            return { object: 'object', model: 'fixed', ModelUsage: new ModelUsage(1, 0), vector: [0.1] };
+        }
+        public async GetEmbeddingModels(): Promise<string[]> {
+            return ['fixed'];
+        }
+    }
+
+    it('throws the refusal instead of degrading to an empty result, and does not retry it', async () => {
+        const e = new RefusingEmbeddings('k');
+
+        await expect(e.EmbedTexts({ texts: ['a'], model: 'fixed', dimensions: 512 })).rejects.toThrow(EmbeddingDimensionsError);
+        expect(e.attempts).toBe(1); // one attempt; 3 would mean the refusal was retried through the backoff
+    });
+
+    it('still degrades an ordinary per-text failure, which retry and the error contract own', async () => {
+        class FailingEmbeddings extends RefusingEmbeddings {
+            public override async EmbedText(_params: EmbedTextParams): Promise<EmbedTextResult> {
+                this.attempts++;
+                throw new Error('503 upstream unavailable');
+            }
+            protected override get embedRetryBaseDelayMs(): number {
+                return 0; // no real sleeping in a unit test
+            }
+        }
+        const e = new FailingEmbeddings('k');
+
+        const r = await e.EmbedTexts({ texts: ['a'], model: 'fixed', dimensions: 1536 });
+        expect(r.vectors).toEqual([]);
+        expect(e.attempts).toBe(3); // the initial attempt plus maxEmbedTextsRetries
+    });
+});
+
+/** The classification a thrown cancellation error carries. */
+function errorTypeOf(error: Error & { errorInfo?: AIErrorInfo }): string | undefined {
+    return error.errorInfo?.errorType;
+}
+
+/** Captures the error an operation rejects with, failing the test if it resolves. */
+async function rejectionOf(operation: Promise<unknown>): Promise<Error & { errorInfo?: AIErrorInfo }> {
+    try {
+        await operation;
+    } catch (error) {
+        if (error instanceof Error) {
+            return error;
+        }
+        throw new Error(`rejected with a non-Error: ${String(error)}`);
+    }
+    throw new Error('expected the operation to reject');
+}
+
+// Per-text driver whose EmbedText can abort the caller's controller, or fail with a scripted error.
+class CancellableEmbeddings extends BaseEmbeddings {
+    public attempts = 0;
+    public seenSignals: Array<AbortSignal | undefined> = [];
+    public onAttempt: ((attempt: number) => void) | null = null;
+    public retryDelayMs = 0;
+
+    protected override get maxEmbedTextsConcurrency(): number {
+        return 1; // sequential, so "texts after the abort" is well defined
+    }
+    protected override get embedRetryBaseDelayMs(): number {
+        return this.retryDelayMs;
+    }
+    public async EmbedText(params: EmbedTextParams): Promise<EmbedTextResult> {
+        this.attempts++;
+        this.seenSignals.push(params.CancellationToken);
+        this.onAttempt?.(this.attempts);
+        return { object: 'object', model: 'm', ModelUsage: new ModelUsage(1, 0), vector: [params.text.length] };
+    }
+    public async GetEmbeddingModels(): Promise<string[]> {
+        return [];
+    }
+}
+
+describe('BaseEmbeddings.EmbedTexts cancellation', () => {
+    it('refuses a pre-aborted call before any text or batch is sent', async () => {
+        const perText = new CancellableEmbeddings('k');
+        const batch = new BatchEmbeddings('k');
+        const controller = new AbortController();
+        controller.abort('stop');
+
+        const perTextError = await rejectionOf(perText.EmbedTexts({ texts: ['a', 'b'], model: 'm', CancellationToken: controller.signal }));
+        const batchError = await rejectionOf(batch.EmbedTexts({ texts: ['a', 'b'], model: 'm', CancellationToken: controller.signal }));
+
+        expect(perText.attempts).toBe(0);
+        expect(batch.batchCalls).toBe(0);
+        expect(errorTypeOf(perTextError)).toBe('Cancelled');
+        expect(errorTypeOf(batchError)).toBe('Cancelled');
+    });
+
+    it('forwards the signal to each per-text EmbedText call', async () => {
+        const e = new CancellableEmbeddings('k');
+        const controller = new AbortController();
+        await e.EmbedTexts({ texts: ['a', 'b'], model: 'm', CancellationToken: controller.signal });
+        expect(e.seenSignals).toEqual([controller.signal, controller.signal]);
+    });
+
+    it('stops before the next text once aborted, and throws a cancellation instead of degrading to []', async () => {
+        const e = new CancellableEmbeddings('k');
+        const controller = new AbortController();
+        e.onAttempt = (n) => {
+            if (n === 2) {
+                controller.abort('user pressed stop');
+            }
+        };
+
+        const error = await rejectionOf(e.EmbedTexts({ texts: ['a', 'b', 'c', 'd'], model: 'm', CancellationToken: controller.signal }));
+
+        expect(e.attempts).toBe(2); // texts 3 and 4 never sent
+        expect(errorTypeOf(error)).toBe('Cancelled');
+        expect(error.message).toContain('user pressed stop');
+    });
+
+    it('never retries a text whose call was aborted', async () => {
+        const e = new CancellableEmbeddings('k');
+        const controller = new AbortController();
+        e.onAttempt = () => {
+            controller.abort('stop');
+            const abort = new Error('This operation was aborted');
+            abort.name = 'AbortError';
+            throw abort;
+        };
+
+        const error = await rejectionOf(e.EmbedTexts({ texts: ['a'], model: 'm', CancellationToken: controller.signal }));
+
+        expect(e.attempts).toBe(1); // no retry, despite the default retry budget of 2
+        expect(errorTypeOf(error)).toBe('Cancelled');
+    });
+
+    it('does not retry an abort error even without a token', async () => {
+        const e = new CancellableEmbeddings('k');
+        e.onAttempt = () => {
+            const abort = new Error('This operation was aborted');
+            abort.name = 'AbortError';
+            throw abort;
+        };
+
+        const error = await rejectionOf(e.EmbedTexts({ texts: ['a'], model: 'm' }));
+
+        expect(e.attempts).toBe(1);
+        expect(errorTypeOf(error)).toBe('Cancelled');
+    });
+
+    it('cuts the retry backoff short when the signal fires during the wait', async () => {
+        const e = new CancellableEmbeddings('k');
+        e.retryDelayMs = 60_000; // a backoff the test would never outlive
+        const controller = new AbortController();
+        e.onAttempt = () => {
+            throw new Error('503 Service Unavailable'); // transient: the base backs off before retrying
+        };
+        setTimeout(() => controller.abort('stop'), 20);
+
+        const started = Date.now();
+        const error = await rejectionOf(e.EmbedTexts({ texts: ['a'], model: 'm', CancellationToken: controller.signal }));
+
+        expect(Date.now() - started).toBeLessThan(5_000);
+        expect(e.attempts).toBe(1); // the retry never started
+        expect(errorTypeOf(error)).toBe('Cancelled');
+    });
+
+    it('reports an abort caused by a timeout as a retriable network error, not a cancellation', async () => {
+        const e = new CancellableEmbeddings('k');
+        const controller = new AbortController();
+        e.onAttempt = () => controller.abort(Object.assign(new Error('the model call was aborted (timeout)'), { IsTimeout: true }));
+
+        const error = await rejectionOf(e.EmbedTexts({ texts: ['a', 'b'], model: 'm', CancellationToken: controller.signal }));
+
+        expect(errorTypeOf(error)).toBe('NetworkError');
+        expect(error.errorInfo?.canFailover).toBe(true);
+    });
+
+    it('refuses a pre-aborted EmbedContent', async () => {
+        const e = new CancellableEmbeddings('k');
+        const controller = new AbortController();
+        controller.abort('stop');
+        const error = await rejectionOf(e.EmbedContent({ content: 'hello', model: 'm', CancellationToken: controller.signal }));
+        expect(e.attempts).toBe(0);
+        expect(errorTypeOf(error)).toBe('Cancelled');
     });
 });

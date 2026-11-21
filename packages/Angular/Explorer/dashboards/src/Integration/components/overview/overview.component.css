@@ -207,7 +207,7 @@
 }
 .refresh-btn:hover {
   background: var(--mj-status-info-bg);
-  border-color: var(--mj-color-info-200);
+  border-color: var(--mj-status-info-border);
 }
 
 .pipeline-grid {
@@ -448,7 +448,7 @@
 }
 .btn-sync:hover:not(:disabled) {
   background: var(--mj-status-info-bg);
-  border-color: var(--mj-color-info-200);
+  border-color: var(--mj-status-info-border);
 }
 .btn-sync:disabled {
   opacity: 0.4;

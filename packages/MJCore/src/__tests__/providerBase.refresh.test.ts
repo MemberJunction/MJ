@@ -193,5 +193,29 @@ describe('ProviderBase.Refresh - Baseline Behavior', () => {
             // ✅ FIXED: No more race conditions - metadata is always valid
             // DESIRED BEHAVIOR: All calls complete safely, metadata is consistent
         });
+
+        test('RefreshWithinTransaction does not deadlock when a pool-based _metadataReloadInFlight is stalled', async () => {
+            await provider.Config(testConfig);
+
+            // Simulate a background pool-based reload blocked in SQL Server waiting on the caller's transaction lock
+            let resolveStalledReload!: (val: boolean) => void;
+            const stalledPoolReload = new Promise<boolean>(resolve => {
+                resolveStalledReload = resolve;
+            });
+            const internals = provider as unknown as {
+                _metadataReloadInFlight: Promise<boolean> | null;
+                _metadataReloadQueued: boolean;
+                RefreshWithinTransaction(): Promise<boolean>;
+            };
+            internals._metadataReloadInFlight = stalledPoolReload;
+            internals._metadataReloadQueued = false;
+
+            // RefreshWithinTransaction sets _metadataReadsJoinTransaction = true and must NOT await the stalled pool reload
+            const txResult = await internals.RefreshWithinTransaction();
+            expect(txResult).toBe(true);
+            expect(internals._metadataReloadQueued).toBe(true);
+
+            resolveStalledReload(true);
+        });
     });
 });

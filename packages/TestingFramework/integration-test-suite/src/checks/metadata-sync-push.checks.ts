@@ -15,6 +15,12 @@
  *    provider, which is the push transaction under the shared default, so a failure has to take the
  *    derived rows with it. Before 6.1.0 it did; from 6.1.0 the graph's own connection committed them
  *    as it went, and they survived a failed push (the third symptom reported in #4545).
+ *  - MSP11-MSP12: a two-pass record — an earlier folder sets a field, a later folder sets it again.
+ *    With the later folder's `overrides` declaration, validation passes and push saves the later
+ *    value; without it, or with the folders in the wrong order, validation still reports it.
+ *
+ * Every push is bounded (`PUSH_TIMEOUT_MS`, MSP3 tighter): a hung push fails its own check, and
+ * the driver rolls back the transaction it left open so later bundles start at depth 0 (#5389).
  *
  * Every row the bundle writes is named with the `zzz-it94` prefix. Teardown deletes all of them
  * (Action Params before Actions, then vendors) and removes the scratch directories, even after a
@@ -28,7 +34,7 @@ import { BaseEngineRegistry, BaseEntity, Metadata, RunView } from '@memberjuncti
 import type { UserInfo } from '@memberjunction/core';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import type { MJActionEntity, MJActionParamEntity, MJAIVendorEntity } from '@memberjunction/core-entities';
-import { PushAbortedError, PushService, SyncEngine } from '@memberjunction/metadata-sync';
+import { PushAbortedError, PushService, SyncEngine, ValidationService } from '@memberjunction/metadata-sync';
 import type { PushCallbacks, PushOptions } from '@memberjunction/metadata-sync';
 import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
@@ -62,6 +68,8 @@ interface ScratchFolder {
     Files: Record<string, JsonValue>;
     /** Writes `push.isolatedTransactions` into this directory's own `.mj-sync.json`. */
     Isolated?: boolean;
+    /** Written as `overrides` in this directory's own `.mj-sync.json`. */
+    Overrides?: JsonValue;
 }
 
 /** Write one push tree: a root `.mj-sync.json`, then one entity folder per entry, in order. */
@@ -76,6 +84,9 @@ function writeTree(dir: string, folders: ScratchFolder[], autoCreate: boolean): 
         const entityConfig: Record<string, JsonValue> = { entity: folder.Entity, filePattern: '**/.*.json' };
         if (folder.Isolated) {
             entityConfig.push = { isolatedTransactions: true };
+        }
+        if (folder.Overrides !== undefined) {
+            entityConfig.overrides = folder.Overrides;
         }
         fs.writeFileSync(path.join(folderDir, '.mj-sync.json'), JSON.stringify(entityConfig, null, 2));
         for (const [file, data] of Object.entries(folder.Files)) {
@@ -117,6 +128,30 @@ interface PushRunOutcome {
     Warnings: string[];
 }
 
+/**
+ * Bound on one push (#5389). A one-record push takes seconds; the bound only has to fail a hung
+ * push well inside the run budget, so the driver can roll back the transaction it left open
+ * and the rest of the suite keeps running.
+ */
+const PUSH_TIMEOUT_MS = 120_000;
+
+async function withTimeout<T>(work: Promise<T>, ms: number, message: string): Promise<T> {
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), ms);
+    });
+    try {
+        return await Promise.race([work, timeout]);
+    } finally {
+        if (timer) clearTimeout(timer);
+    }
+}
+
+/** The timeout message for a push, naming the check (the scratch folder name, e.g. MSP1). */
+function pushTimeoutMessage(label: string): string {
+    return `${label}: the push did not finish within ${PUSH_TIMEOUT_MS / 1000}s (hung push)`;
+}
+
 async function runPush(user: UserInfo, dir: string, extra: Partial<PushOptions> = {}): Promise<PushRunOutcome> {
     const engine = new SyncEngine(user);
     await engine.initialize();
@@ -124,7 +159,7 @@ async function runPush(user: UserInfo, dir: string, extra: Partial<PushOptions> 
     const warnings: string[] = [];
     const callbacks: PushCallbacks = { onWarn: (m) => warnings.push(m) };
     try {
-        await service.push({ dir, ...extra }, callbacks);
+        await withTimeout(service.push({ dir, ...extra }, callbacks), PUSH_TIMEOUT_MS, pushTimeoutMessage(path.basename(dir).toUpperCase()));
         return { Warnings: warnings };
     } catch (error) {
         return { Error: error, Warnings: warnings };
@@ -155,7 +190,7 @@ function queryRecord(id: string, name: string, dialectID: string, marker: string
         fields: {
             Name: name,
             Description: marker,
-            SQL: "SELECT ID, Name FROM __mj.AIVendor WHERE Name = '{{ VendorName }}'",
+            SQL: "SELECT ID, Name FROM __mj.AIVendor WHERE Name = {{ VendorName | sqlString }}",
             Status: 'Approved',
             SQLDialectID: dialectID,
             AuditQueryRuns: false,
@@ -188,7 +223,7 @@ async function countRows(ctx: IntegrationCheckContext, entityName: string, filte
     const rv = RunView.FromMetadataProvider(ctx.Provider);
     const result = await rv.RunView({ EntityName: entityName, ExtraFilter: filter, ResultType: 'count_only', BypassCache: true }, ctx.User);
     Assert(result.Success, `counting ${entityName} failed: ${result.ErrorMessage}`);
-    return result.TotalRowCount;
+    return result.TotalRowCount ?? 0;
 }
 
 async function expectBaseVendorUnchanged(ctx: IntegrationCheckContext, f: PushFixture, label: string): Promise<void> {
@@ -366,17 +401,6 @@ async function checkMsp4NonAtomicReportsWhatStayedCommitted(ctx: IntegrationChec
     AssertEqual(await countRows(ctx, 'MJ: AI Vendors', `ID='${newVendorID}'`), 1, 'MSP4: the reported create really is committed');
 }
 
-async function withTimeout<T>(work: Promise<T>, ms: number, message: string): Promise<T> {
-    let timer: NodeJS.Timeout | undefined;
-    const timeout = new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error(message)), ms);
-    });
-    try {
-        return await Promise.race([work, timeout]);
-    } finally {
-        if (timer) clearTimeout(timer);
-    }
-}
 
 
 // ─── Entities that derive child rows inside their own Save() ────────────────
@@ -512,7 +536,7 @@ async function checkMsp9UncommittedAuthorizationIsVisibleToTheNextDirectory(ctx:
     await engine.initialize();
     const service = new PushService(engine, ctx.User);
     try {
-        await service.push({ dir }, {
+        await withTimeout(service.push({ dir }, {
             onProgress: (message: string) => {
                 if (!message.includes('b-vendors')) {
                     return;
@@ -520,7 +544,7 @@ async function checkMsp9UncommittedAuthorizationIsVisibleToTheNextDirectory(ctx:
                 const names = Metadata.Provider?.Authorizations?.map((auth) => auth.Name) ?? []; // global-provider-ok: the check reads the provider the push reloads
                 seenAtSecondFolder = names.includes(authName);
             },
-        });
+        }), PUSH_TIMEOUT_MS, pushTimeoutMessage('MSP9'));
     } catch (error) {
         pushError = error;
     } finally {
@@ -562,7 +586,7 @@ async function checkMsp10OneRecordPushOfARowLevelSecurityFilter(ctx: Integration
         await engine.initialize();
         const service = new PushService(engine, ctx.User);
         try {
-            await service.push({ dir: root });
+            await withTimeout(service.push({ dir: root }), PUSH_TIMEOUT_MS, pushTimeoutMessage('MSP10'));
         } catch (error) {
             pushError = error;
         }
@@ -578,6 +602,64 @@ async function checkMsp10OneRecordPushOfARowLevelSecurityFilter(ctx: Integration
         await deleteAll<BaseEntity>(ctx, entityName, `Name='${EscapeSQLString(name)}'`);
         fs.rmSync(root, { recursive: true, force: true });
     }
+}
+
+// ─── Two-pass records (`overrides`) ─────────────────────────────────────────
+
+/** `a-draft` creates a vendor with one Description; `b-final` sets another, as a second pass. */
+function twoPassTree(dir: string, vendorID: string, name: string, overrides: JsonValue | undefined, order: string[]): string {
+    const folders: ScratchFolder[] = [
+        { Name: 'a-draft', Entity: 'MJ: AI Vendors', Files: { '.vendor.json': vendorRecord(vendorID, { Name: name, Description: 'MSP draft' }) } },
+        {
+            Name: 'b-final',
+            Entity: 'MJ: AI Vendors',
+            Overrides: overrides,
+            Files: { '.vendor.json': vendorRecord(vendorID, { Name: name, Description: 'MSP final' }) },
+        },
+    ];
+    writeTree(dir, order.map((n) => folders.find((f) => f.Name === n) as ScratchFolder), true);
+    return dir;
+}
+
+/** Validates a push tree the way `mj sync push` does before it writes. */
+async function validateTree(dir: string): Promise<string[]> {
+    const result = await new ValidationService({ ValidateChildFoldersOnly: true }).ValidateDirectory(dir);
+    return result.errors.map((e) => e.message);
+}
+
+async function checkMsp11DeclaredOverridePushesTheLaterValue(ctx: IntegrationCheckContext): Promise<void> {
+    const f = requireFixture();
+    const vendorID = randomUUID().toUpperCase();
+    const name = `${PREFIX} MSP11 vendor ${Date.now()}`;
+    const dir = twoPassTree(path.join(f.Root, 'msp11'), vendorID, name, [{ folder: 'a-draft', fields: ['Description'] }], ['a-draft', 'b-final']);
+
+    const errors = await validateTree(dir);
+    AssertEqual(errors.join(' | '), '', 'MSP11: validation errors for a declared override');
+
+    const outcome = await runPush(ctx.User, dir);
+    Assert(outcome.Error === undefined, `MSP11: push failed: ${outcome.Error instanceof Error ? outcome.Error.message : String(outcome.Error)}`);
+    const vendor = await loadVendor(ctx, vendorID);
+    Assert(vendor !== undefined, 'MSP11: the vendor the first folder creates is not in the database');
+    AssertEqual(vendor?.Description ?? null, 'MSP final', 'MSP11: the later folder\'s value is the one saved');
+}
+
+async function checkMsp12UndeclaredOrMisorderedOverrideStillFails(ctx: IntegrationCheckContext): Promise<void> {
+    const f = requireFixture();
+    const vendorID = randomUUID().toUpperCase();
+    const name = `${PREFIX} MSP12 vendor`;
+
+    const undeclared = await validateTree(twoPassTree(path.join(f.Root, 'msp12-undeclared'), vendorID, name, undefined, ['a-draft', 'b-final']));
+    const conflicts = undeclared.filter((m) => m.startsWith('Conflicting values'));
+    AssertEqual(conflicts.length, 1, `MSP12: an undeclared second pass gives one conflict (errors: ${undeclared.join(' | ')})`);
+    Assert(conflicts[0].includes('field "Description"') && conflicts[0].includes('"overrides"'),
+        `MSP12: the conflict names the field and the overrides fix: ${conflicts[0]}`);
+
+    const misordered = await validateTree(
+        twoPassTree(path.join(f.Root, 'msp12-misordered'), vendorID, name, [{ folder: 'a-draft', fields: ['Description'] }], ['b-final', 'a-draft'])
+    );
+    Assert(misordered.includes('"overrides" names folder "a-draft", which push runs after "b-final". Put "a-draft" before "b-final" in directoryOrder'),
+        `MSP12: a declaration naming a later folder is reported (errors: ${misordered.join(' | ')})`);
+    AssertEqual(await countRows(ctx, 'MJ: AI Vendors', `ID='${vendorID}'`), 0, 'MSP12: validation writes nothing');
 }
 
 export const MetadataSyncPushChecks: NamedCheck[] = [
@@ -639,6 +721,18 @@ export const MetadataSyncPushChecks: NamedCheck[] = [
         Id: 'metadata-sync-push.MSP10',
         Name: 'MSP10: a one-record push of an MJ: Row Level Security Filters row succeeds',
         Fn: checkMsp10OneRecordPushOfARowLevelSecurityFilter,
+        RequiresMutation: true,
+    },
+    {
+        Id: 'metadata-sync-push.MSP11',
+        Name: 'MSP11: a later folder that declares it overrides a field validates clean, and push saves its value',
+        Fn: checkMsp11DeclaredOverridePushesTheLaterValue,
+        RequiresMutation: true,
+    },
+    {
+        Id: 'metadata-sync-push.MSP12',
+        Name: 'MSP12: the same second pass without the declaration, or declared against a later folder, fails validation',
+        Fn: checkMsp12UndeclaredOrMisorderedOverrideStillFails,
         RequiresMutation: true,
     },
 ];

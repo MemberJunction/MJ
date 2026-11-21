@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseCliHarnessAdapter, HarnessCliRawEvent } from './BaseCliHarnessAdapter.js';
 import { BaseHarnessAdapter } from './BaseHarnessAdapter.js';
@@ -168,7 +169,7 @@ export class PiAdapter extends BaseCliHarnessAdapter {
         // creates the session if missing, so the first turn establishes it and later turns attach
         // to it. No branch on first-vs-subsequent is needed, which removes a state bug by design.
         if (!this.sessionId) {
-            this.sessionId = `mj-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
+            this.sessionId = `mj-${randomUUID()}`;
         }
 
         const args = ['-p', '--mode', 'json', '--session-id', this.sessionId];

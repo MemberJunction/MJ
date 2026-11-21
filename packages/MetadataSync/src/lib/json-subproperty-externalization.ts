@@ -18,6 +18,8 @@
  * from that existing code.
  */
 
+import { HasNestedEnvReference, ParseEnvReference } from './env-reference';
+
 /** A sub-property externalization resolved against one field. */
 export interface SubPropertyExternalization {
     /** Property path within the field's JSON, e.g. `['ReplayScript']`. */
@@ -223,7 +225,8 @@ export async function ExternalizeSubProperties(
 
     for (const { path, pattern } of configs) {
         const leaf = GetAtPath(result, path);
-        if (leaf === undefined || leaf === null) {
+        // A leaf that is or holds an `@env:` reference stays inline, so no side file gets a resolved value.
+        if (leaf === undefined || leaf === null || ParseEnvReference(leaf) !== null || HasNestedEnvReference(leaf)) {
             continue;
         }
         const existingRef = existing ? GetAtPath(existing, path) : undefined;
