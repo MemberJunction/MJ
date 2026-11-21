@@ -26,6 +26,7 @@
  *
  * @module @memberjunction/ai-core-plus
  */
+import { CODE_FALLBACK_LIMITS, LimitsConfigResolver } from '@memberjunction/core';
 import type { AgentDecisionAnswerSummary, AgentDecisionQuestion } from '../agent-decisions';
 import type { ForEachOperation } from '../foreach-operation';
 import type { WhileOperation } from '../while-operation';
@@ -559,25 +560,28 @@ export type TaskGraphValidationResult = {
 /**
  * Maximum nodes in a graph a MODEL authored — a Loop agent's `nextStep.tasks`, or a `Workflow.Draft`.
  *
- * Matches `scratchpadMaxTasks` so an agent that can hold N items in its scratchpad cannot emit a graph
- * larger than it can reason about, and bounds what a runaway model can put on the dispatcher. It is a
- * limit on *model output*, not on workflows: a graph a person drew, or code built, is not subject to
- * it. Callers that validate model output pass it as {@link TaskGraphValidationOptions.MaxTasks}.
+ * Defaults to {@link CODE_FALLBACK_LIMITS.MaxTasksPerAgentGraph} (`10_000`) and resolves dynamically
+ * via {@link GetMaxTasksPerAgentGraph} through `LimitsConfigResolver.Instance`.
  */
-export const MAX_TASKS_PER_AGENT_GRAPH = 50;
+export const MAX_TASKS_PER_AGENT_GRAPH = CODE_FALLBACK_LIMITS.MaxTasksPerAgentGraph;
 
 /**
  * The ceiling for ANY submitted graph — a blast-radius bound, not a design limit.
  *
- * `TaskGraph.Submit` is a remote operation, so something has to stop one request from writing an
- * unbounded number of rows. It is set far above any real workflow (a software-factory epic is
- * hundreds of nodes). Work that genuinely fans out wider than this is one node repeated over a
- * collection, which is what `ForEach` and Record Processes are for.
- *
- * This used to be 50 for every producer, which capped drawn and code-built workflows at the size of
- * an LLM scratchpad. That limit now lives on {@link MAX_TASKS_PER_AGENT_GRAPH}, where it belongs.
+ * Defaults to {@link CODE_FALLBACK_LIMITS.MaxTasksPerGraph} (`100_000`) and resolves dynamically
+ * via {@link GetMaxTasksPerGraph} through `LimitsConfigResolver.Instance`.
  */
-export const MAX_TASKS_PER_GRAPH = 10_000;
+export const MAX_TASKS_PER_GRAPH = CODE_FALLBACK_LIMITS.MaxTasksPerGraph;
+
+/** Resolves the effective model-authored task graph ceiling from `LimitsConfigResolver.Instance`. */
+export function GetMaxTasksPerAgentGraph(): number {
+    return LimitsConfigResolver.Resolve().Limits.MaxTasksPerAgentGraph;
+}
+
+/** Resolves the effective global task graph blast-radius ceiling from `LimitsConfigResolver.Instance`. */
+export function GetMaxTasksPerGraph(): number {
+    return LimitsConfigResolver.Resolve().Limits.MaxTasksPerGraph;
+}
 
 /** Options for `ValidateTaskGraphSpec`. */
 export type TaskGraphValidationOptions = {

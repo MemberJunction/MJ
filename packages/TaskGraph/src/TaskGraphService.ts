@@ -16,7 +16,9 @@
  * @module @memberjunction/task-graph
  */
 import {
+    CODE_FALLBACK_LIMITS,
     IMetadataProvider,
+    LimitsConfigResolver,
     LogError,
     LogStatus,
     RunInEntityTransaction,
@@ -220,7 +222,12 @@ export type TaskGraphParentMetadata = {
  * the cap the dispatcher forces `continuation: 'message'`, which ends the chain without losing the
  * results.
  */
-export const MAX_REINVOKE_DEPTH = 5;
+export const MAX_REINVOKE_DEPTH = CODE_FALLBACK_LIMITS.ResourceGuards.MaxReinvokeDepth;
+
+/** Resolves the effective reinvoke depth cap from `LimitsConfigResolver.Instance`. */
+export function GetMaxReinvokeDepth(): number {
+    return LimitsConfigResolver.Resolve().Limits.ResourceGuards.MaxReinvokeDepth;
+}
 
 /** What a parent row means when it carries no metadata, or metadata we cannot read. */
 const DEFAULT_PARENT_METADATA: TaskGraphParentMetadata = {
@@ -905,7 +912,7 @@ export class TaskGraphService {
         //     HERE rather than at execution because refusing to write the graph is the only point at
         //     which nothing has happened yet.
         const depth = context.ReinvokeDepth ?? 0;
-        if (depth >= MAX_REINVOKE_DEPTH) {
+        if (depth >= GetMaxReinvokeDepth()) {
             const message =
                 `"${spec.workflowName}" was not started: it is ${depth} levels deep in a chain of ` +
                 `workflows starting workflows, which is the limit. A workflow that reaches this is ` +
@@ -1151,7 +1158,7 @@ export class TaskGraphService {
         depth: number,
         visited: Set<string>,
     ): Promise<string[]> {
-        if (depth >= MAX_REINVOKE_DEPTH) {
+        if (depth >= GetMaxReinvokeDepth()) {
             LogError(
                 `[TaskGraphService] Nested cancel stopped at depth ${depth}; a deeper sub-graph chain ` +
                 `than the reinvoke cap allows may still be running.`,

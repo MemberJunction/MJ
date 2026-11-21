@@ -20,7 +20,7 @@
  *
  * @module @memberjunction/task-graph
  */
-import { LogError, LogStatus } from '@memberjunction/core';
+import { CODE_FALLBACK_LIMITS, LimitsConfigResolver, LogError, LogStatus } from '@memberjunction/core';
 import {
     ResolveMappedInput,
     type ForEachOperation,
@@ -29,11 +29,11 @@ import {
 } from '@memberjunction/ai-core-plus';
 
 /** Default iteration ceiling for a ForEach whose author did not set one. */
-export const DEFAULT_FOREACH_MAX_ITERATIONS = 1000;
+export const DEFAULT_FOREACH_MAX_ITERATIONS = CODE_FALLBACK_LIMITS.ForEachMaxIterations;
 /** Default iteration ceiling for a While whose author did not set one. */
-export const DEFAULT_WHILE_MAX_ITERATIONS = 100;
+export const DEFAULT_WHILE_MAX_ITERATIONS = CODE_FALLBACK_LIMITS.WhileLoopMaxIterations;
 /** Default concurrency when a parallel loop does not specify one. */
-export const DEFAULT_LOOP_MAX_CONCURRENCY = 10;
+export const DEFAULT_LOOP_MAX_CONCURRENCY = CODE_FALLBACK_LIMITS.ResourceGuards.MaxLoopConcurrency;
 
 /** One iteration's outcome, in the shape both task runners already return. */
 export type LoopIterationOutcome = {
@@ -97,7 +97,8 @@ export async function RunForEachLoop(
         );
     }
 
-    const limit = iterationLimit(op.maxIterations, DEFAULT_FOREACH_MAX_ITERATIONS);
+    const resolvedLimits = LimitsConfigResolver.Resolve().Limits;
+    const limit = iterationLimit(op.maxIterations, resolvedLimits.ForEachMaxIterations);
     const items = collection.slice(0, limit);
     if (items.length < collection.length) {
         // Truncation is announced. A silent cap reads downstream as "the collection was that size".
@@ -116,7 +117,7 @@ export async function RunForEachLoop(
     }));
 
     return op.executionMode === 'parallel'
-        ? runParallel(plan, invokeBody, op.maxConcurrency ?? DEFAULT_LOOP_MAX_CONCURRENCY, op.continueOnError === true)
+        ? runParallel(plan, invokeBody, op.maxConcurrency ?? resolvedLimits.ResourceGuards.MaxLoopConcurrency, op.continueOnError === true)
         : runSequential(plan, invokeBody, op.continueOnError === true, op.delayBetweenIterationsMs ?? 0);
 }
 
@@ -136,7 +137,7 @@ export async function RunWhileLoop(
     evaluateCondition: (iteration: number) => { Success: boolean; Value?: unknown; ErrorMessage?: string },
     invokeBody: LoopBodyInvoker,
 ): Promise<LoopExecutionResult> {
-    const limit = iterationLimit(op.maxIterations, DEFAULT_WHILE_MAX_ITERATIONS);
+    const limit = iterationLimit(op.maxIterations, LimitsConfigResolver.Resolve().Limits.WhileLoopMaxIterations);
     const attemptVar = op.itemVariable || 'attempt';
     const results: unknown[] = [];
     let succeeded = 0;

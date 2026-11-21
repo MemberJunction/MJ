@@ -9,11 +9,13 @@
  *
  * Each test below names the specific wrong-but-plausible behaviour it rules out.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { LimitsConfigResolver } from '@memberjunction/core';
 import {
     RunForEachLoop,
     RunWhileLoop,
     DEFAULT_FOREACH_MAX_ITERATIONS,
+    DEFAULT_WHILE_MAX_ITERATIONS,
     type LoopBodyInvoker,
 } from '../TaskLoopExecutor';
 import type { ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
@@ -83,11 +85,23 @@ describe('RunForEachLoop', () => {
             .then(() => expect(seen).toHaveLength(0));
     });
 
-    it('applies a default ceiling when none is set', async () => {
-        const big = `static:${JSON.stringify(Array.from({ length: DEFAULT_FOREACH_MAX_ITERATIONS + 5 }, (_, i) => i))}`;
+    beforeEach(() => {
+        LimitsConfigResolver.Instance.ClearMjConfigLimits();
+    });
+
+    it('exposes 1,000,000 as the default ForEach and While loop ceilings from LimitsConfigResolver', () => {
+        expect(DEFAULT_FOREACH_MAX_ITERATIONS).toBe(1_000_000);
+        expect(DEFAULT_WHILE_MAX_ITERATIONS).toBe(1_000_000);
+        expect(LimitsConfigResolver.Resolve().Limits.ForEachMaxIterations).toBe(1_000_000);
+        expect(LimitsConfigResolver.Resolve().Limits.WhileLoopMaxIterations).toBe(1_000_000);
+    });
+
+    it('applies a default ceiling from LimitsConfigResolver when none is set on the operation', async () => {
+        LimitsConfigResolver.Instance.RegisterMjConfigLimits({ ForEachMaxIterations: 25 });
+        const big = `static:${JSON.stringify(Array.from({ length: 30 }, (_, i) => i))}`;
         const { seen, invoke } = recorder();
         await RunForEachLoop({ collectionPath: big }, {}, invoke);
-        expect(seen).toHaveLength(DEFAULT_FOREACH_MAX_ITERATIONS);
+        expect(seen).toHaveLength(25);
     });
 
     it('stops at the first failure by default', async () => {

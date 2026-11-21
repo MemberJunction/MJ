@@ -60,7 +60,7 @@ import {
     TASK_GRAPH_RUNTIME_SECURITY_OPERATION,
     type TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
-import { DatabaseProviderBase, IMetadataProvider, IRunQueryProvider, LogError, LogStatus, LogWarning, RunView, ServerOperationScopeManager, UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, IMetadataProvider, IRunQueryProvider, LimitsConfigResolver, LogError, LogStatus, LogWarning, RunView, ServerOperationScopeManager, UserInfo } from '@memberjunction/core';
 import { EscapeSQLString, GroupByUUID, IShutdownable, IndexByUUID, IsValidUUID, ShutdownRegistry, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity, MJAIAgentRequestEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 import type { MJActionExecutionLogEntity, MJRecordChangeEntity } from '@memberjunction/core-entities';
@@ -156,16 +156,6 @@ const TERMINAL_TASK_STATUSES: ReadonlySet<string> = new Set<string>(TERMINAL_PAR
  * it has shut down — settling graphs onto a connection somebody else now owns.
  */
 const STOP_DRAIN_TIMEOUT_MS = 30_000;
-
-/**
- * How many consecutive failing passes a graph gets before this instance stops re-queueing it.
- *
- * Not a giving-up threshold so much as a stop-shouting one: past this the graph has failed to settle
- * on every attempt for minutes, so something is wrong that another identical attempt will not fix,
- * and continuing costs a full graph load per poll forever. It is reported and left to the startup
- * sweep, which is the wider net.
- */
-const MAX_SETTLEMENT_RETRY_PASSES = 20;
 
 /**
  * How long this instance leaves a graph alone after processing it threw (S6) — an inactive submitter,
@@ -5980,11 +5970,12 @@ export class TaskGraphDispatcher implements IShutdownable {
      * costs a full graph load per poll forever. It is reported once and left to the startup sweep.
      */
     private keepRetryingSettlement(parentID: string): void {
+        const maxSettlementRetryPasses = LimitsConfigResolver.Resolve().Limits.ResourceGuards.MaxSettlementRetryPasses;
         const passes = (this.retryingSettlement.get(parentID) ?? 0) + 1;
-        if (passes > MAX_SETTLEMENT_RETRY_PASSES) {
+        if (passes > maxSettlementRetryPasses) {
             this.retryingSettlement.delete(parentID);
             LogError(
-                `[TaskGraphDispatcher] Graph ${parentID} has failed to settle on ${MAX_SETTLEMENT_RETRY_PASSES} ` +
+                `[TaskGraphDispatcher] Graph ${parentID} has failed to settle on ${maxSettlementRetryPasses} ` +
                 `consecutive passes; this instance will stop re-queueing it. Its submitting run may be ` +
                 `left Paused. A restart's startup sweep will try again.`,
             );

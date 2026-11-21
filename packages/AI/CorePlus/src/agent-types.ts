@@ -13,7 +13,7 @@
 import { MJAIAgentTypeEntity,  } from '@memberjunction/core-entities';
 import { ChatMessage, ChatReasoningBlock, ChatToolCall } from '@memberjunction/ai';
 import {  } from '@memberjunction/core-entities';
-import { UserInfo, IMetadataProvider, type MJLimitsOverride } from '@memberjunction/core';
+import { CODE_FALLBACK_LIMITS, LimitsConfigResolver, UserInfo, IMetadataProvider, type MJLimitsOverride } from '@memberjunction/core';
 import type { LimitsDiagnosticsSnapshot } from './limits-diagnostics';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AgentScratchpad } from './agent-scratchpad';
@@ -627,7 +627,12 @@ export interface AgentToolCallRequest {
  * Maximum number of agent-to-agent handoffs allowed within a single user turn.
  * Shared across `BaseAgent` handoff validation/execution and messaging adapters.
  */
-export const MAX_HANDOFF_HOPS = 3;
+export const MAX_HANDOFF_HOPS = CODE_FALLBACK_LIMITS.ResourceGuards.MaxHandoffHops;
+
+/** Resolves the effective handoff hop ceiling from `LimitsConfigResolver.Instance`. */
+export function GetMaxHandoffHops(): number {
+    return LimitsConfigResolver.Resolve().Limits.ResourceGuards.MaxHandoffHops;
+}
 
 /**
  * Request emitted by an agent to transfer the conversation turn to another agent (`step === 'Handoff'`).

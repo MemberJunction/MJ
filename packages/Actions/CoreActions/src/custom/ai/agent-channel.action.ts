@@ -1,7 +1,7 @@
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { EscapeSQLString, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
-import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LimitsConfigResolver, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     BUILT_IN_CONVERSATION_TYPE_IDS,
     CONVERSATION_TYPE_CODES,
@@ -295,8 +295,21 @@ export class OpenAgentChannelAction extends BaseAction {
                 };
             }
 
-            const maxTurns = readNumberParam(params, 'MaxConsecutiveAgentTurns', 10, 1, 50);
-            const maxHourlyWakes = readNumberParam(params, 'MaxHourlyWakes', 6, 1, 30);
+            const resolvedLimits = LimitsConfigResolver.Resolve().Limits;
+            const maxTurns = readNumberParam(
+                params,
+                'MaxConsecutiveAgentTurns',
+                resolvedLimits.AgentChannelConsecutiveTurns,
+                1,
+                Math.max(resolvedLimits.AgentChannelConsecutiveTurns, 10_000),
+            );
+            const maxHourlyWakes = readNumberParam(
+                params,
+                'MaxHourlyWakes',
+                resolvedLimits.AgentChannelWakesPerHour,
+                1,
+                Math.max(resolvedLimits.AgentChannelWakesPerHour, 10_000),
+            );
             const replyByRaw = readStringParam(params, 'ReplyByISO');
             const replyByDate = replyByRaw ? new Date(replyByRaw) : null;
             if (replyByDate && Number.isNaN(replyByDate.getTime())) {

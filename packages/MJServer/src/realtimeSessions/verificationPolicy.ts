@@ -268,7 +268,7 @@ function domainMatches(domain: string, entry: string): boolean {
 /** Outcome of {@link ParseEmailAddress}. */
 export type ParsedEmail = { Ok: true; Email: string; Domain: string } | { Ok: false };
 
-/** RFC-5321 maximum length of a forward-path. */
+// ProtocolLimit: RFC 5321 SMTP forward-path maximum email address length (254 characters)
 const MAX_EMAIL_LENGTH = 254;
 /** A pragmatic address check: one `@`, a dotted domain of safe labels, no whitespace/control/angle characters. */
 const EMAIL_PATTERN = /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]{1,64}@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/;
