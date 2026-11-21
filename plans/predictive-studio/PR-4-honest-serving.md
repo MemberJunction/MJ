@@ -13510,6 +13510,9 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   core-entity-forms 90/722 + `test:types` 0 · Engine 124/1876 · TruthSuite 27/189 · MJCoreEntities 96/1688 · SQLParser
   63/2175 (its five hash goldens regenerated for the renamed query's comment, red 5 first). Rulings D4-270…D4-272;
   OF4-57.
+- The merge commit had swept in the local deterministic run's writes to next's three tracked
+  `integration-test-suite/benchmark-logs/` files (`latest.json`, `latest.md`, `history.jsonl`); restored to next's content
+  (the pre-push allowlist check named them).
 
 ## 12. Refresh log (append-only)
 

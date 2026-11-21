@@ -1,100 +1,73 @@
 {
-  "Timestamp": "2026-11-21T03:48:21.314Z",
-  "Database": "MJ_PS_PR4_claude",
+  "Timestamp": "2026-11-13T14:41:52.692Z",
+  "Database": "MJ_Demo_20261106",
   "Primitives": {
-    "ClassFactoryAndObjectCacheMs": 5.97,
-    "EntityHydrateAndFlsMs": 34.95,
-    "LocalCacheWritesAndStatsMs": 1.8,
-    "TemplateRenderSimpleMs": 59,
-    "ActionSnapshotAndEngineLookupMs": 13.73,
-    "PayloadApplyAndDeepDiffMs": 9,
+    "ClassFactoryAndObjectCacheMs": 3.99,
+    "EntityHydrateAndFlsMs": 8.83,
+    "LocalCacheWritesAndStatsMs": 1,
+    "TemplateRenderSimpleMs": 35.02,
+    "ActionSnapshotAndEngineLookupMs": 4.68,
+    "PayloadApplyAndDeepDiffMs": 4.8,
     "DatestampsOnlyEntityCount": 25,
     "DatestampsOnlyEntitiesBySchema": {
       "__mj": 25
     },
-    "DatestampsOnly10SavesMs": 96.24,
-    "ApplyRowChanges50On5000RowsMs": 42.95,
-    "BaseEnginePKMap100DeltasMs": 0.59,
-    "BaseEngineLinearScan100DeltasMs": 20.79,
-    "BaseEnginePKMapSpeedupRatio": 35.2,
-    "GetEntityObjectDefault500Ms": 7.35,
-    "GetEntityObjectSkipNewRecord500Ms": 2.43,
-    "UserByEmail10kLookupsMs": 2.19,
-    "UserByEmailLinear10kLookupsMs": 102.15,
-    "UserByEmailSpeedupRatio": 46.6,
-    "NarrowSearchRunView10CallsMs": 62.01,
-    "WideSearchRunView10CallsMs": 119.78,
+    "DatestampsOnly10SavesMs": 37.52,
+    "ApplyRowChanges50On5000RowsMs": 28.57,
+    "BaseEnginePKMap100DeltasMs": 0.2,
+    "BaseEngineLinearScan100DeltasMs": 19.59,
+    "BaseEnginePKMapSpeedupRatio": 97.9,
+    "GetEntityObjectDefault500Ms": 4.14,
+    "GetEntityObjectSkipNewRecord500Ms": 1.33,
+    "UserByEmail10kLookupsMs": 1.18,
+    "UserByEmailLinear10kLookupsMs": 49.98,
+    "UserByEmailSpeedupRatio": 42.4,
+    "NarrowSearchRunView10CallsMs": 35.61,
+    "WideSearchRunView10CallsMs": 100.93,
     "NarrowSearchReturnedColumns": 2,
-    "WideSearchReturnedColumns": 41,
-    "CanCountFromBaseTableEntityCount": 486,
+    "WideSearchReturnedColumns": 37,
+    "CanCountFromBaseTableEntityCount": 707,
     "RecordChangesCountTargetsBaseTable": true,
     "RecordChangesCountSql": "SELECT COUNT(*) AS [TotalRowCount] FROM [__mj].[RecordChange] WHERE (Status = 'Complete')",
     "TwoTierL1ZeroCloneIdentity": true,
-    "TwoTierL1200Reads50DeltasMs": 5.11,
-    "FrozenRowWireSerialize5000x20Ms": 9.75,
-    "UncachedJsonStringify5000x20Ms": 35.27,
-    "FrozenRowWireSpeedupRatio": 3.62,
-    "RecordChangePayloadSkip500x32KBMs": 0.2,
-    "RecordChangePayloadFull500x32KBMs": 50.17,
-    "RecordChangePayloadSkipSpeedupRatio": 250.85,
-    "CanCountSubqueryFiltersPassed": 3,
-    "RecordChangesExistsCountTargetsBaseTable": true,
-    "RecordChangesExistsCountMs": 86.68,
-    "LazyEntityInfoConstructAllMs": 11.11,
-    "LazyEntityInfo5FieldsAccessMs": 0.02,
-    "MetadataStorageRoundTripMs": 1000.54,
-    "MetadataStorageStructuredCloneUsed": true,
-    "FrozenFullCoverageZeroCopy": true,
-    "FrozenSubsetWire5000x20Ms": 10.38,
-    "FrozenSubsetWireUncached5000x20Ms": 35.66,
-    "FrozenSubsetWireSpeedupRatio": 3.44,
-    "PgReadOnlyPoolMax": 50,
-    "PgAdhocPoolMax": 10,
-    "BgeMaxCandidatesCap": 100,
-    "UserByID10kLookupsMs": 4,
-    "SharedTabWsCount10Tabs": 1,
-    "SharedTabRunViewBackendCalls10Tabs": 1,
-    "SharedTabMetadataIdbReadsTab2To10": 0,
-    "SharedTabIdbDedupWritesSaved": 9,
-    "SharedTab10TabStressMs": 74.89,
-    "EdgeHintSanitizeDiscardedCount": 3,
-    "EdgeHintFastPathConfidence": 0.9089,
-    "OmnibarFloat32Index100QueriesMs": 50.55,
-    "OmnibarFloat32PerQueryMs": 0.5055
+    "TwoTierL1200Reads50DeltasMs": 2.08,
+    "FrozenRowWireSerialize5000x20Ms": 4.24,
+    "UncachedJsonStringify5000x20Ms": 18.29,
+    "FrozenRowWireSpeedupRatio": 4.31
   },
-  "PrimitivesTotalMs": 124.45,
+  "PrimitivesTotalMs": 58.32,
   "DeterministicAgentRuns": [
     {
       "Label": "PB7: Sage (4-turn deterministic)",
       "AgentName": "Sage",
       "Mode": "deterministic-testllm",
-      "RootRunId": "421DDAC6-6763-4F81-88E5-869FBDC4986F",
-      "WallTimeMs": 770.92,
-      "LlmPromptExecutionMs": 198,
-      "FrameworkOverheadMs": 572.92,
+      "RootRunId": "A9901670-0366-405B-8540-327F0548E3B2",
+      "WallTimeMs": 669.32,
+      "LlmPromptExecutionMs": 178,
+      "FrameworkOverheadMs": 491.32,
       "TotalRunsInTree": 1,
-      "TotalStepsInTree": 7,
-      "PromptSteps": 3,
-      "ActionSteps": 2,
+      "TotalStepsInTree": 8,
+      "PromptSteps": 4,
+      "ActionSteps": 3,
       "SubAgentSteps": 0,
       "PayloadAtStartBytes": 15675,
-      "PayloadAtEndBytes": 15674,
-      "InputDataBytes": 2466,
-      "OutputDataBytes": 2434,
-      "TotalStepStorageBytes": 36249,
-      "PayloadAtStartPointerSteps": 4,
-      "PayloadAtEndPointerSteps": 4,
-      "UnDeduplicatedPayloadBytesEstimate": 161649,
-      "StorageSavingsPercent": 77.6
+      "PayloadAtEndBytes": 31349,
+      "InputDataBytes": 3247,
+      "OutputDataBytes": 2600,
+      "TotalStepStorageBytes": 52871,
+      "PayloadAtStartPointerSteps": 6,
+      "PayloadAtEndPointerSteps": 5,
+      "UnDeduplicatedPayloadBytesEstimate": 225296,
+      "StorageSavingsPercent": 76.5
     },
     {
       "Label": "PB8: Query Builder + Query Strategist (deterministic)",
       "AgentName": "Query Builder",
       "Mode": "deterministic-testllm",
-      "RootRunId": "02D6FD9E-6740-48F3-81A1-1C00F1C88370",
-      "WallTimeMs": 421.24,
-      "LlmPromptExecutionMs": 172,
-      "FrameworkOverheadMs": 249.24,
+      "RootRunId": "0A4E1CA1-7155-4530-B7BD-EBDF95CF5F0C",
+      "WallTimeMs": 517.67,
+      "LlmPromptExecutionMs": 167,
+      "FrameworkOverheadMs": 350.67,
       "TotalRunsInTree": 2,
       "TotalStepsInTree": 10,
       "PromptSteps": 4,
@@ -102,22 +75,22 @@
       "SubAgentSteps": 1,
       "PayloadAtStartBytes": 32284,
       "PayloadAtEndBytes": 48443,
-      "InputDataBytes": 24258,
-      "OutputDataBytes": 21580,
-      "TotalStepStorageBytes": 126565,
+      "InputDataBytes": 24107,
+      "OutputDataBytes": 21429,
+      "TotalStepStorageBytes": 126263,
       "PayloadAtStartPointerSteps": 4,
       "PayloadAtEndPointerSteps": 3,
-      "UnDeduplicatedPayloadBytesEstimate": 239678,
-      "StorageSavingsPercent": 47.2
+      "UnDeduplicatedPayloadBytesEstimate": 239376,
+      "StorageSavingsPercent": 47.3
     },
     {
       "Label": "PB9: Research Agent + Report Writer (deterministic)",
       "AgentName": "Research Agent",
       "Mode": "deterministic-testllm",
-      "RootRunId": "085D0989-E0EC-4B8A-84C5-FBCA865B51AF",
-      "WallTimeMs": 237.44,
-      "LlmPromptExecutionMs": 132,
-      "FrameworkOverheadMs": 105.44,
+      "RootRunId": "D3100D93-31FF-4880-ADB6-3517763C337E",
+      "WallTimeMs": 226.48,
+      "LlmPromptExecutionMs": 124,
+      "FrameworkOverheadMs": 102.48,
       "TotalRunsInTree": 2,
       "TotalStepsInTree": 6,
       "PromptSteps": 3,
@@ -134,77 +107,7 @@
       "StorageSavingsPercent": 32.1
     }
   ],
-  "LiveAgentRuns": [
-    {
-      "Label": "PB10: Sage (live-model)",
-      "AgentName": "Sage",
-      "Mode": "live-model",
-      "RootRunId": "F87936CF-8CE1-4188-A91D-AE2E4A50B42C",
-      "WallTimeMs": 2490.14,
-      "LlmPromptExecutionMs": 2351,
-      "FrameworkOverheadMs": 139.14,
-      "TotalRunsInTree": 1,
-      "TotalStepsInTree": 3,
-      "PromptSteps": 1,
-      "ActionSteps": 0,
-      "SubAgentSteps": 0,
-      "PayloadAtStartBytes": 0,
-      "PayloadAtEndBytes": 0,
-      "InputDataBytes": 637,
-      "OutputDataBytes": 397,
-      "TotalStepStorageBytes": 1034,
-      "PayloadAtStartPointerSteps": 0,
-      "PayloadAtEndPointerSteps": 0,
-      "UnDeduplicatedPayloadBytesEstimate": 1034,
-      "StorageSavingsPercent": 0
-    },
-    {
-      "Label": "PB11: Query Builder (live-model)",
-      "AgentName": "Query Builder",
-      "Mode": "live-model",
-      "RootRunId": "46C17F43-11ED-4607-93CB-25AB9116F980",
-      "WallTimeMs": 52494.66,
-      "LlmPromptExecutionMs": 52239,
-      "FrameworkOverheadMs": 255.66,
-      "TotalRunsInTree": 2,
-      "TotalStepsInTree": 13,
-      "PromptSteps": 5,
-      "ActionSteps": 3,
-      "SubAgentSteps": 1,
-      "PayloadAtStartBytes": 4,
-      "PayloadAtEndBytes": 9602,
-      "InputDataBytes": 18000,
-      "OutputDataBytes": 25297,
-      "TotalStepStorageBytes": 52903,
-      "PayloadAtStartPointerSteps": 7,
-      "PayloadAtEndPointerSteps": 5,
-      "UnDeduplicatedPayloadBytesEstimate": 110491,
-      "StorageSavingsPercent": 52.1
-    },
-    {
-      "Label": "PB12: Research Agent (live-model)",
-      "AgentName": "Research Agent",
-      "Mode": "live-model",
-      "RootRunId": "14DF72CE-BFC0-497F-A9D2-0E285A2B9231",
-      "WallTimeMs": 2261.23,
-      "LlmPromptExecutionMs": 2208,
-      "FrameworkOverheadMs": 53.23,
-      "TotalRunsInTree": 1,
-      "TotalStepsInTree": 2,
-      "PromptSteps": 1,
-      "ActionSteps": 0,
-      "SubAgentSteps": 0,
-      "PayloadAtStartBytes": 0,
-      "PayloadAtEndBytes": 0,
-      "InputDataBytes": 370,
-      "OutputDataBytes": 148,
-      "TotalStepStorageBytes": 518,
-      "PayloadAtStartPointerSteps": 0,
-      "PayloadAtEndPointerSteps": 0,
-      "UnDeduplicatedPayloadBytesEstimate": 518,
-      "StorageSavingsPercent": 0
-    }
-  ],
+  "LiveAgentRuns": [],
   "BaselineComparisons": [
     {
       "Metric": "Aggregate Suite: Core/Cache/SQL Primitives (PB1–PB6, PB13, PB15–PB17)",
@@ -214,9 +117,9 @@
       "Wave3": "—",
       "PreWave4": 433.97,
       "Wave4Baseline": 165.43,
-      "Current": 345.72,
-      "DeltaVsBaselinePercent": 109,
-      "Status": "FAIL"
+      "Current": 169.05,
+      "DeltaVsBaselinePercent": 2.2,
+      "Status": "PASS"
     },
     {
       "Metric": "Aggregate Suite: Deterministic Agent Framework Overhead (PB7–PB9)",
@@ -226,8 +129,8 @@
       "Wave3": 727.45,
       "PreWave4": 691.47,
       "Wave4Baseline": 811.1,
-      "Current": 927.6,
-      "DeltaVsBaselinePercent": 14.4,
+      "Current": 944.47,
+      "DeltaVsBaselinePercent": 16.4,
       "Status": "PASS"
     },
     {
@@ -238,9 +141,9 @@
       "Wave3": 66.04,
       "PreWave4": 69.68,
       "Wave4Baseline": 57.32,
-      "Current": 124.45,
-      "DeltaVsBaselinePercent": 117.1,
-      "Status": "FAIL"
+      "Current": 58.32,
+      "DeltaVsBaselinePercent": 1.7,
+      "Status": "PASS"
     },
     {
       "Metric": "PB1 ClassFactory & ObjectCache (10k)",
@@ -250,8 +153,8 @@
       "Wave3": 3.01,
       "PreWave4": 2.38,
       "Wave4Baseline": 3.48,
-      "Current": 5.97,
-      "DeltaVsBaselinePercent": 71.6,
+      "Current": 3.99,
+      "DeltaVsBaselinePercent": 14.7,
       "Status": "PASS"
     },
     {
@@ -262,9 +165,9 @@
       "Wave3": 18.3,
       "PreWave4": 18.95,
       "Wave4Baseline": 8.7,
-      "Current": 34.95,
-      "DeltaVsBaselinePercent": 301.7,
-      "Status": "FAIL"
+      "Current": 8.83,
+      "DeltaVsBaselinePercent": 1.5,
+      "Status": "PASS"
     },
     {
       "Metric": "PB3 LocalCacheManager Writes & Stats",
@@ -274,8 +177,8 @@
       "Wave3": 0.72,
       "PreWave4": 0.74,
       "Wave4Baseline": 1.02,
-      "Current": 1.8,
-      "DeltaVsBaselinePercent": 76.5,
+      "Current": 1,
+      "DeltaVsBaselinePercent": -2,
       "Status": "PASS"
     },
     {
@@ -286,9 +189,9 @@
       "Wave3": 30.88,
       "PreWave4": 34.48,
       "Wave4Baseline": 35.05,
-      "Current": 59,
-      "DeltaVsBaselinePercent": 68.3,
-      "Status": "WARN"
+      "Current": 35.02,
+      "DeltaVsBaselinePercent": -0.1,
+      "Status": "PASS"
     },
     {
       "Metric": "PB5 Action Snapshot & AI Perms (500)",
@@ -298,9 +201,9 @@
       "Wave3": 8.7,
       "PreWave4": 7.77,
       "Wave4Baseline": 4.32,
-      "Current": 13.73,
-      "DeltaVsBaselinePercent": 217.8,
-      "Status": "WARN"
+      "Current": 4.68,
+      "DeltaVsBaselinePercent": 8.3,
+      "Status": "PASS"
     },
     {
       "Metric": "PB6 PayloadManager & DeepDiffer (50)",
@@ -310,8 +213,8 @@
       "Wave3": 4.43,
       "PreWave4": 5.36,
       "Wave4Baseline": 4.75,
-      "Current": 9,
-      "DeltaVsBaselinePercent": 89.5,
+      "Current": 4.8,
+      "DeltaVsBaselinePercent": 1.1,
       "Status": "PASS"
     },
     {
@@ -322,9 +225,9 @@
       "Wave3": "—",
       "PreWave4": 32.39,
       "Wave4Baseline": 35.94,
-      "Current": 96.24,
-      "DeltaVsBaselinePercent": 167.8,
-      "Status": "FAIL"
+      "Current": 37.52,
+      "DeltaVsBaselinePercent": 4.4,
+      "Status": "PASS"
     },
     {
       "Metric": "PB15 ApplyRowChanges CoW (50 on 5k rows)",
@@ -334,9 +237,9 @@
       "Wave3": "—",
       "PreWave4": 60.89,
       "Wave4Baseline": 28.32,
-      "Current": 42.95,
-      "DeltaVsBaselinePercent": 51.7,
-      "Status": "WARN"
+      "Current": 28.57,
+      "DeltaVsBaselinePercent": 0.9,
+      "Status": "PASS"
     },
     {
       "Metric": "PB15 BaseEngine PKMap 100 Row Deltas",
@@ -346,8 +249,8 @@
       "Wave3": "—",
       "PreWave4": 69.84,
       "Wave4Baseline": 0.19,
-      "Current": 0.59,
-      "DeltaVsBaselinePercent": 210.5,
+      "Current": 0.2,
+      "DeltaVsBaselinePercent": 5.3,
       "Status": "PASS"
     },
     {
@@ -358,8 +261,8 @@
       "Wave3": "—",
       "PreWave4": 2.85,
       "Wave4Baseline": 1.21,
-      "Current": 2.43,
-      "DeltaVsBaselinePercent": 100.8,
+      "Current": 1.33,
+      "DeltaVsBaselinePercent": 9.9,
       "Status": "PASS"
     },
     {
@@ -370,8 +273,8 @@
       "Wave3": "—",
       "PreWave4": 44.66,
       "Wave4Baseline": 1.13,
-      "Current": 2.19,
-      "DeltaVsBaselinePercent": 93.8,
+      "Current": 1.18,
+      "DeltaVsBaselinePercent": 4.4,
       "Status": "PASS"
     },
     {
@@ -382,9 +285,9 @@
       "Wave3": "—",
       "PreWave4": 105.1,
       "Wave4Baseline": 36.76,
-      "Current": 62.01,
-      "DeltaVsBaselinePercent": 68.7,
-      "Status": "WARN"
+      "Current": 35.61,
+      "DeltaVsBaselinePercent": -3.1,
+      "Status": "PASS"
     },
     {
       "Metric": "PB17 TwoTier L1 CoW (200 reads + 50 deltas)",
@@ -394,8 +297,8 @@
       "Wave3": "—",
       "PreWave4": 32.18,
       "Wave4Baseline": 1.59,
-      "Current": 5.11,
-      "DeltaVsBaselinePercent": 221.4,
+      "Current": 2.08,
+      "DeltaVsBaselinePercent": 30.8,
       "Status": "PASS"
     },
     {
@@ -406,9 +309,9 @@
       "Wave3": "—",
       "PreWave4": 15.86,
       "Wave4Baseline": 3.96,
-      "Current": 9.75,
-      "DeltaVsBaselinePercent": 146.2,
-      "Status": "WARN"
+      "Current": 4.24,
+      "DeltaVsBaselinePercent": 7.1,
+      "Status": "PASS"
     },
     {
       "Metric": "PB7 Sage 4-Turn Step Storage",
@@ -418,8 +321,8 @@
       "Wave3": 52699,
       "PreWave4": 84218,
       "Wave4Baseline": 52871,
-      "Current": 36249,
-      "DeltaVsBaselinePercent": -31.4,
+      "Current": 52871,
+      "DeltaVsBaselinePercent": 0,
       "Status": "PASS"
     },
     {
@@ -430,8 +333,8 @@
       "Wave3": 119588,
       "PreWave4": 126565,
       "Wave4Baseline": 126263,
-      "Current": 126565,
-      "DeltaVsBaselinePercent": 0.2,
+      "Current": 126263,
+      "DeltaVsBaselinePercent": 0,
       "Status": "PASS"
     },
     {
@@ -451,9 +354,9 @@
       "Unit": "x",
       "PreWave4": "2.62x",
       "Wave4Baseline": "1.00x",
-      "Current": "2.09x",
-      "DeltaVsBaselinePercent": 109,
-      "Status": "FAIL"
+      "Current": "1.02x",
+      "DeltaVsBaselinePercent": 2,
+      "Status": "PASS"
     },
     {
       "Metric": "Aggregate Agent Framework Slowness Factor (vs Baseline)",
@@ -462,8 +365,8 @@
       "Wave3": "0.90x",
       "PreWave4": "0.85x",
       "Wave4Baseline": "1.00x",
-      "Current": "1.14x",
-      "DeltaVsBaselinePercent": 14,
+      "Current": "1.16x",
+      "DeltaVsBaselinePercent": 16,
       "Status": "PASS"
     },
     {
@@ -489,7 +392,7 @@
       "Unit": "x",
       "PreWave4": "1.0",
       "Wave4Baseline": "104.1x",
-      "Current": "35.2x",
+      "Current": "97.9x",
       "DeltaVsBaselinePercent": null,
       "Status": "PASS"
     },
@@ -498,7 +401,7 @@
       "Unit": "x",
       "PreWave4": "1.0",
       "Wave4Baseline": "43.4x",
-      "Current": "46.6x",
+      "Current": "42.4x",
       "DeltaVsBaselinePercent": null,
       "Status": "PASS"
     },
@@ -507,7 +410,7 @@
       "Unit": "x",
       "PreWave4": "1.0",
       "Wave4Baseline": "4.9x",
-      "Current": "3.62x",
+      "Current": "4.31x",
       "DeltaVsBaselinePercent": null,
       "Status": "PASS"
     }
