@@ -141,8 +141,16 @@ export interface CommsWebhookHandlerOptions {
     PublishActivity?: (payload: CommsActivityWorkPayload) => Promise<void>;
     /** HMAC secret used to verify `/click/:token?u=...&sig=...` redirects. */
     HmacSecret?: string | (() => string | undefined);
-    /** Per-IP rate limit overrides for `/comms/*` routes. */
+    /** Per-IP rate limit overrides for `/comms/*` routes (fallback when route-specific limit is omitted). */
     RateLimit?: Partial<RouteRateLimitSettings>;
+    /** Per-IP rate limit overrides for `/comms/webhooks/*` routes. */
+    WebhookRateLimit?: Partial<RouteRateLimitSettings>;
+    /** Per-IP rate limit overrides for `/comms/open/*` and `/comms/click/*` tracking routes. */
+    TrackingRateLimit?: Partial<RouteRateLimitSettings>;
+    /** Per-IP rate limit overrides for `/comms/unsubscribe*`, `/preferences*`, `/confirm*`. */
+    UnsubscribeRateLimit?: Partial<RouteRateLimitSettings>;
+    /** Override for verifying whether a TrackingToken or UnsubscribeToken exists before enqueueing activity. */
+    VerifyToken?: (kind: 'tracking' | 'unsubscribe', token: string) => Promise<boolean>;
     /** Clock override (Unix seconds) for deterministic replay-window testing. */
     NowSeconds?: () => number;
     /** Override for loading preference center data by UnsubscribeToken. */
@@ -174,59 +182,75 @@ export function CreateCommsWebhookHandler(options: CommsWebhookHandlerOptions = 
     const resolveUnsubRedirect = options.ResolveUnsubscribeRedirect ?? defaultResolveUnsubscribeRedirect;
     const elementSrc = options.PreferenceElementSrc ?? process.env.MJ_COMMS_PREFERENCE_ELEMENT_SRC;
     const generateNonce = options.GenerateNonce ?? (() => crypto.randomBytes(16).toString('base64'));
+    const verifyToken = options.VerifyToken ?? (options.PublishActivity ? async () => true : defaultVerifyToken);
 
-    router.use(CreateRouteRateLimiter('comms', options.RateLimit));
+    const webhookLimiter = CreateRouteRateLimiter(
+        'commsWebhooks',
+        options.WebhookRateLimit ?? options.RateLimit,
+    );
+    const trackingLimiter = CreateRouteRateLimiter(
+        'commsTracking',
+        options.TrackingRateLimit ?? options.RateLimit,
+    );
+    const unsubscribeLimiter = CreateRouteRateLimiter(
+        'commsUnsubscribe',
+        options.UnsubscribeRateLimit ?? options.RateLimit,
+    );
 
     const rawBodyParser = BodyParser.raw({ type: '*/*', limit: '10mb' });
-    router.post('/webhooks/sendgrid/:credentialId', rawBodyParser, async (req, res) => {
+    router.post('/webhooks/sendgrid/:credentialId', webhookLimiter, rawBodyParser, async (req, res) => {
         await handleSendGridWebhook(req, res, resolveKey, publishActivity, nowSeconds);
     });
-    router.post('/webhooks/sendgrid', rawBodyParser, async (req, res) => {
+    router.post('/webhooks/sendgrid', webhookLimiter, rawBodyParser, async (req, res) => {
         await handleSendGridWebhook(req, res, resolveKey, publishActivity, nowSeconds);
     });
 
-    router.get('/unsubscribe', async (req, res) => {
+    router.get('/unsubscribe', unsubscribeLimiter, async (req, res) => {
         await handleUnsubscribeRedirect(req, res, resolveUnsubRedirect);
     });
-    router.get('/unsubscribe/:token', async (req, res) => {
+    router.get('/unsubscribe/:token', unsubscribeLimiter, async (req, res) => {
         await handleUnsubscribeRedirect(req, res, resolveUnsubRedirect);
     });
 
     router.post(
         '/unsubscribe',
+        unsubscribeLimiter,
         BodyParser.json({ limit: '64kb' }),
         BodyParser.urlencoded({ extended: false, limit: '64kb' }),
         async (req, res) => {
-            await handleUnsubscribe(req, res, publishActivity);
+            await handleUnsubscribe(req, res, publishActivity, verifyToken);
         },
     );
     router.post(
         '/unsubscribe/:token',
+        unsubscribeLimiter,
         BodyParser.json({ limit: '64kb' }),
         BodyParser.urlencoded({ extended: false, limit: '64kb' }),
         async (req, res) => {
-            await handleUnsubscribe(req, res, publishActivity);
+            await handleUnsubscribe(req, res, publishActivity, verifyToken);
         },
     );
 
-    router.get('/preferences/:token', async (req, res) => {
+    router.get('/preferences/:token', unsubscribeLimiter, async (req, res) => {
         await handleGetPreferences(req, res, resolvePrefData, generateNonce, elementSrc);
     });
 
     router.post(
         '/preferences/:token',
+        unsubscribeLimiter,
         BodyParser.json({ limit: '64kb' }),
         async (req, res) => {
             await handlePostPreferences(req, res, savePrefChoices);
         },
     );
 
-    router.get('/confirm/:token', (req, res) => {
+    router.get('/confirm/:token', unsubscribeLimiter, (req, res) => {
         handleGetConfirm(req, res, generateNonce);
     });
 
     router.post(
         '/confirm/:token',
+        unsubscribeLimiter,
         BodyParser.json({ limit: '16kb' }),
         BodyParser.urlencoded({ extended: false, limit: '16kb' }),
         async (req, res) => {
@@ -234,12 +258,12 @@ export function CreateCommsWebhookHandler(options: CommsWebhookHandlerOptions = 
         },
     );
 
-    router.get('/open/:token.gif', async (req, res) => {
-        await handleOpenPixel(req, res, publishActivity);
+    router.get('/open/:token.gif', trackingLimiter, async (req, res) => {
+        await handleOpenPixel(req, res, publishActivity, verifyToken);
     });
 
-    router.get('/click/:token', async (req, res) => {
-        await handleClickRedirect(req, res, publishActivity, getHmacSecret);
+    router.get('/click/:token', trackingLimiter, async (req, res) => {
+        await handleClickRedirect(req, res, publishActivity, getHmacSecret, verifyToken);
     });
 
     return router;
@@ -351,7 +375,9 @@ async function handleUnsubscribe(
     req: express.Request,
     res: express.Response,
     publishActivity: (payload: CommsActivityWorkPayload) => Promise<void>,
+    verifyToken: (kind: 'tracking' | 'unsubscribe', token: string) => Promise<boolean>,
 ): Promise<void> {
+    res.setHeader('Cache-Control', 'no-store');
     const token = extractUnsubscribeToken(req);
     if (!token || !UUID_V4_REGEX.test(token)) {
         res.status(400).json({ error: 'Invalid or missing UnsubscribeToken' });
@@ -359,6 +385,10 @@ async function handleUnsubscribe(
     }
 
     try {
+        if (!(await verifyToken('unsubscribe', token))) {
+            res.status(404).json({ error: 'Unknown unsubscribe token' });
+            return;
+        }
         await publishActivity({
             Source: 'unsubscribe',
             EventType: 'Unsubscribed',
@@ -378,20 +408,23 @@ async function handleOpenPixel(
     req: express.Request,
     res: express.Response,
     publishActivity: (payload: CommsActivityWorkPayload) => Promise<void>,
+    verifyToken: (kind: 'tracking' | 'unsubscribe', token: string) => Promise<boolean>,
 ): Promise<void> {
     const rawToken = req.params.token;
     const token = (Array.isArray(rawToken) ? rawToken[0] : rawToken)?.trim();
 
-    if (token) {
+    if (token && UUID_V4_REGEX.test(token)) {
         try {
-            await publishActivity({
-                Source: 'open-pixel',
-                EventType: 'Opened',
-                TrackingToken: token,
-                OccurredAt: new Date().toISOString(),
-                IPAddress: req.ip,
-                UserAgent: req.get('user-agent'),
-            });
+            if (await verifyToken('tracking', token)) {
+                await publishActivity({
+                    Source: 'open-pixel',
+                    EventType: 'Opened',
+                    TrackingToken: token,
+                    OccurredAt: new Date().toISOString(),
+                    IPAddress: req.ip,
+                    UserAgent: req.get('user-agent'),
+                });
+            }
         } catch (ex) {
             LogError(`[CommsWebhook] Failed to enqueue open event: ${ex instanceof Error ? ex.message : String(ex)}`);
         }
@@ -411,6 +444,7 @@ async function handleClickRedirect(
     res: express.Response,
     publishActivity: (payload: CommsActivityWorkPayload) => Promise<void>,
     getHmacSecret: () => string | undefined,
+    verifyToken: (kind: 'tracking' | 'unsubscribe', token: string) => Promise<boolean>,
 ): Promise<void> {
     const rawToken = req.params.token;
     const token = (Array.isArray(rawToken) ? rawToken[0] : rawToken)?.trim();
@@ -429,15 +463,17 @@ async function handleClickRedirect(
     }
 
     try {
-        await publishActivity({
-            Source: 'click-redirect',
-            EventType: 'Clicked',
-            TrackingToken: token,
-            TargetURL: targetUrl,
-            OccurredAt: new Date().toISOString(),
-            IPAddress: req.ip,
-            UserAgent: req.get('user-agent'),
-        });
+        if (UUID_V4_REGEX.test(token) && (await verifyToken('tracking', token))) {
+            await publishActivity({
+                Source: 'click-redirect',
+                EventType: 'Clicked',
+                TrackingToken: token,
+                TargetURL: targetUrl,
+                OccurredAt: new Date().toISOString(),
+                IPAddress: req.ip,
+                UserAgent: req.get('user-agent'),
+            });
+        }
     } catch (ex) {
         LogError(`[CommsWebhook] Failed to enqueue click event: ${ex instanceof Error ? ex.message : String(ex)}`);
     }
@@ -660,6 +696,7 @@ async function handleGetPreferences(
                 res.status(404).json({ error: 'Preference token not found' });
                 return;
             }
+            res.setHeader('Cache-Control', 'no-store');
             res.status(200).json(data);
         } catch (ex) {
             LogError(`[CommsWebhook] Failed to load preference center data: ${ex instanceof Error ? ex.message : String(ex)}`);
@@ -722,6 +759,7 @@ async function handlePostPreferences(
             res.status(404).json({ error: 'Preference token not found' });
             return;
         }
+        res.setHeader('Cache-Control', 'no-store');
         res.status(result.Success ? 200 : 400).json(result);
     } catch (ex) {
         LogError(`[CommsWebhook] Failed to save preference choices: ${ex instanceof Error ? ex.message : String(ex)}`);
@@ -761,6 +799,7 @@ async function handlePostConfirm(
     confirmOptIn: (input: ConfirmOptInInput) => Promise<ConfirmOptInResult>,
     generateNonce: () => string,
 ): Promise<void> {
+    res.setHeader('Cache-Control', 'no-store');
     const token = extractRouteToken(req);
     if (!token) {
         if (prefersJson(req)) {
@@ -883,10 +922,38 @@ function parseTemplateContext(raw: string | null | undefined): PreferenceCenterT
     if (!raw) return {};
     try {
         const parsed = JSON.parse(raw) as unknown;
-        return parsed && typeof parsed === 'object' ? (parsed as PreferenceCenterTemplateContext) : {};
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+        const src = parsed as Record<string, unknown>;
+        const safe: PreferenceCenterTemplateContext = {};
+        if (typeof src.BrandName === 'string') safe.BrandName = src.BrandName;
+        if (typeof src.CompanyName === 'string') safe.CompanyName = src.CompanyName;
+        if (typeof src.LogoURL === 'string') safe.LogoURL = src.LogoURL;
+        if (typeof src.PrimaryColor === 'string') safe.PrimaryColor = src.PrimaryColor;
+        if (typeof src.FooterText === 'string') safe.FooterText = src.FooterText;
+        if (typeof src.SupportEmail === 'string') safe.SupportEmail = src.SupportEmail;
+        if (typeof src.PrivacyPolicyURL === 'string') safe.PrivacyPolicyURL = src.PrivacyPolicyURL;
+        return safe;
     } catch {
         return {};
     }
+}
+
+async function defaultVerifyToken(kind: 'tracking' | 'unsubscribe', token: string): Promise<boolean> {
+    const systemUser = getSystemUser();
+    if (!systemUser) return false;
+    const field = kind === 'tracking' ? 'TrackingToken' : 'UnsubscribeToken';
+    const rv = RunView.FromMetadataProvider(getCommsProvider());
+    const res = await rv.RunView<{ ID: string }>(
+        {
+            EntityName: 'MJ: Communication Logs',
+            Fields: ['ID'],
+            ExtraFilter: `${field}='${EscapeSQLString(token)}'`,
+            MaxRows: 1,
+            ResultType: 'simple',
+        },
+        systemUser,
+    );
+    return res.Success && res.Results.length > 0;
 }
 
 async function defaultResolveUnsubscribeRedirect(token: string, provider?: IMetadataProvider): Promise<string | undefined> {

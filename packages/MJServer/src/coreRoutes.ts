@@ -63,7 +63,12 @@ export function MountPublicCoreRoutes(app: Application, publicUrl: string, log: 
     app.use(ApiRoute('/esignature'), cors<cors.CorsRequest>(), CreateSignatureWebhookHandler());
     log.LogIf('verbose', `[eSignature] Webhook route registered at ${ApiRoute('/esignature')}/webhook/:driverKey`);
 
-    app.use(ApiRoute('/comms'), cors<cors.CorsRequest>(), CreateCommsWebhookHandler());
+    app.use(ApiRoute('/comms'), cors<cors.CorsRequest>(), CreateCommsWebhookHandler({
+        WebhookRateLimit: configInfo.rateLimiting?.routes?.commsWebhooks,
+        TrackingRateLimit: configInfo.rateLimiting?.routes?.commsTracking,
+        UnsubscribeRateLimit: configInfo.rateLimiting?.routes?.commsUnsubscribe,
+        RateLimit: configInfo.rateLimiting?.routes?.comms,
+    }));
     log.LogIf('verbose', `[Comms] Public webhook/tracking/unsubscribe routes registered at ${ApiRoute('/comms')}`);
 
     // The `?token=` query param is the capability; an <audio>/<video> element can't send Authorization headers.

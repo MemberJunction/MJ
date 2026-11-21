@@ -176,13 +176,14 @@ describe('CommsWebhookHandler', () => {
 
     it('GET /open/:token.gif serves 43-byte GIF with no-store headers and publishes Opened event', async () => {
         expect(TRANSPARENT_GIF_1X1.length).toBe(43);
+        const validUuid = '22222222-3333-4444-8555-666666666666';
 
         await withServer(
             {
                 PublishActivity: async (p) => { published.push(p); },
             },
             async (baseUrl) => {
-                const res = await fetch(`${baseUrl}/open/tok-abc-123.gif`);
+                const res = await fetch(`${baseUrl}/open/${validUuid}.gif`);
                 expect(res.status).toBe(200);
                 expect(res.headers.get('content-type')).toBe('image/gif');
                 expect(res.headers.get('cache-control')).toBe('no-store, no-cache, must-revalidate');
@@ -192,7 +193,7 @@ describe('CommsWebhookHandler', () => {
                 expect(published[0]).toMatchObject({
                     Source: 'open-pixel',
                     EventType: 'Opened',
-                    TrackingToken: 'tok-abc-123',
+                    TrackingToken: validUuid,
                 });
             },
         );
@@ -200,7 +201,7 @@ describe('CommsWebhookHandler', () => {
 
     it('GET /click/:token verifies HMAC sig, rejects tampered u with 400, and redirects 302 when valid', async () => {
         const secret = 'test-hmac-secret-32-chars-minimum';
-        const token = 'track-tok-999';
+        const token = '33333333-4444-4555-8666-777777777777';
         const target = 'https://example.com/landing?a=1';
         const sig = SignClickTrackingUrl(secret, token, target);
 
@@ -295,6 +296,66 @@ describe('CommsWebhookHandler', () => {
                 expect((await fetch(`${baseUrl}/open/t1.gif`)).status).toBe(200);
                 expect((await fetch(`${baseUrl}/open/t2.gif`)).status).toBe(200);
                 expect((await fetch(`${baseUrl}/open/t3.gif`)).status).toBe(429);
+            },
+        );
+    });
+
+    it('skips publishing when VerifyToken returns false or token is not a UUIDv4', async () => {
+        const validUuid = '44444444-5555-4666-8777-888888888888';
+        const secret = 'verify-token-secret-32-characters!';
+        const sig = SignClickTrackingUrl(secret, validUuid, 'https://example.com');
+
+        await withServer(
+            {
+                HmacSecret: secret,
+                PublishActivity: async (p) => { published.push(p); },
+                VerifyToken: async () => false,
+            },
+            async (baseUrl) => {
+                const openRes = await fetch(`${baseUrl}/open/${validUuid}.gif`);
+                expect(openRes.status).toBe(200);
+
+                const clickRes = await fetch(
+                    `${baseUrl}/click/${validUuid}?u=${encodeURIComponent('https://example.com')}&sig=${sig}`,
+                    { redirect: 'manual' },
+                );
+                expect(clickRes.status).toBe(302);
+
+                const unsubRes = await fetch(`${baseUrl}/unsubscribe/${validUuid}`, { method: 'POST' });
+                expect(unsubRes.status).toBe(404);
+                expect(unsubRes.headers.get('cache-control')).toBe('no-store');
+
+                expect(published).toHaveLength(0);
+            },
+        );
+    });
+
+    it('sets Cache-Control: no-store on token-bearing JSON endpoints', async () => {
+        const validUuid = '55555555-6666-4777-8888-999999999999';
+        await withServer(
+            {
+                ResolvePreferenceCenterData: async () => ({
+                    Found: true,
+                    EndpointValue: 'user@example.com',
+                    Categories: [],
+                    Channels: [],
+                    Branding: { BrandName: 'Acme' },
+                }),
+                ConfirmDoubleOptIn: async () => ({ Found: true, Confirmed: true }),
+            },
+            async (baseUrl) => {
+                const prefRes = await fetch(`${baseUrl}/preferences/${validUuid}`, {
+                    headers: { Accept: 'application/json' },
+                });
+                expect(prefRes.status).toBe(200);
+                expect(prefRes.headers.get('cache-control')).toBe('no-store');
+
+                const confirmRes = await fetch(`${baseUrl}/confirm/${validUuid}`, {
+                    method: 'POST',
+                    headers: { Accept: 'application/json' },
+                });
+                expect(confirmRes.status).toBe(200);
+                expect(confirmRes.headers.get('cache-control')).toBe('no-store');
             },
         );
     });

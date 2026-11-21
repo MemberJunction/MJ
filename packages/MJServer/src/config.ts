@@ -507,6 +507,10 @@ const rateLimitSchema = z.object({
     oauthAuthenticated: routeRateLimitSchema('oauthAuthenticated'),
     mediaUpload: routeRateLimitSchema('mediaUpload'),
     mediaRead: routeRateLimitSchema('mediaRead'),
+    comms: routeRateLimitSchema('comms'),
+    commsWebhooks: routeRateLimitSchema('commsWebhooks'),
+    commsTracking: routeRateLimitSchema('commsTracking'),
+    commsUnsubscribe: routeRateLimitSchema('commsUnsubscribe'),
   }).default({}),
 });
 
