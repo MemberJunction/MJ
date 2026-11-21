@@ -2836,9 +2836,11 @@ export class BaseAgent {
         // abort condition — whether it came from the caller, the timeout, or
         // both.
         //
-        // Actions invoked from this agent carry their own AbortSignal on
-        // `RunActionParams.AbortSignal` (see ActionEngine.RunAction) and are
-        // unaffected by this wrapper — their timeout budget is independent.
+        // Actions invoked from this agent retain their own per-action timeout
+        // budget inside `ActionEngine.RunAction`, while `ExecuteSingleAction`
+        // forwards `params.cancellationToken` as `RunActionParams.AbortSignal`
+        // so cancelling or timing out the agent run immediately aborts
+        // in-flight actions.
         // =====================================================================================
         const configuredMaxTimeMs =
             params.agent?.MaxTimePerRun != null && params.agent.MaxTimePerRun > 0
@@ -14205,6 +14207,7 @@ The context is now within limits. Please retry your request with the recovered c
                         Filters: [],
                         SkipActionLog: false,
                         Context: this.stampActionContext(params),
+                        AbortSignal: params.cancellationToken,
                         ...this.runBoundDispatchParams(params, actionEntity, audience.Readers, contextUser),
                     }),
                 params.policyCeilingAgentIDs

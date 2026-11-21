@@ -357,6 +357,73 @@ describe('Chief of Staff Actions Suite', () => {
             expect((await result).Success).toBe(true);
             expect(stub.Timezone).toBe('America/Chicago');
         });
+
+        it('rejects self-attested ConfirmedByUser and unverified RhythmTemplateID in agent context, requiring an Approved ConfirmedApprovalRequestID', async () => {
+            const stub = routineStub();
+            getEntityObjectMock.mockResolvedValue(stub);
+
+            // Self-attested ConfirmedByUser=true is rejected when Context.AgentID is set
+            const selfAttestedParams: RunActionParams = {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('user-abc'),
+                Context: { AgentID: 'cos-agent-id' },
+                Filters: [],
+                Params: [
+                    { Name: 'ScheduleMode', Type: 'Input', Value: 'Recurring' },
+                    { Name: 'CronExpression', Type: 'Input', Value: '0 9 * * 1-5' },
+                    { Name: 'WakeReason', Type: 'Input', Value: 'Self-attested recurring' },
+                    { Name: 'ConfirmedByUser', Type: 'Input', Value: true },
+                ],
+            };
+            const selfAttestedRes = await invokeAction(new ScheduleNextAgentWakeAction(), selfAttestedParams);
+            expect(selfAttestedRes.Success).toBe(false);
+            expect(selfAttestedRes.ResultCode).toBe('APPROVAL_REQUIRED');
+
+            // Unverified RhythmTemplateID is rejected with VALIDATION_ERROR
+            const fakeTplParams: RunActionParams = {
+                ...selfAttestedParams,
+                Params: [
+                    { Name: 'ScheduleMode', Type: 'Input', Value: 'Recurring' },
+                    { Name: 'CronExpression', Type: 'Input', Value: '0 9 * * 1-5' },
+                    { Name: 'WakeReason', Type: 'Input', Value: 'Fake template' },
+                    { Name: 'RhythmTemplateID', Type: 'Input', Value: 'nonexistent-tpl' },
+                ],
+            };
+            const fakeTplRes = await invokeAction(new ScheduleNextAgentWakeAction(), fakeTplParams);
+            expect(fakeTplRes.Success).toBe(false);
+            expect(fakeTplRes.ResultCode).toBe('VALIDATION_ERROR');
+
+            // Server-verified Approved MJ: AI Agent Requests row succeeds in agent context
+            runViewMock.mockImplementation(async (rvParams?: { EntityName?: string }) => {
+                if (rvParams?.EntityName === 'MJ: AI Agent Requests') {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: 'req-ok-1',
+                                AgentID: 'cos-agent-id',
+                                RequestForUserID: 'user-abc',
+                                Status: 'Approved',
+                            },
+                        ],
+                    };
+                }
+                return { Success: true, Results: [] };
+            });
+
+            const approvedParams: RunActionParams = {
+                ...selfAttestedParams,
+                Params: [
+                    { Name: 'ScheduleMode', Type: 'Input', Value: 'Recurring' },
+                    { Name: 'CronExpression', Type: 'Input', Value: '0 9 * * 1-5' },
+                    { Name: 'WakeReason', Type: 'Input', Value: 'Approved recurring' },
+                    { Name: 'ConfirmedApprovalRequestID', Type: 'Input', Value: 'req-ok-1' },
+                ],
+            };
+            const approvedRes = await invokeAction(new ScheduleNextAgentWakeAction(), approvedParams);
+            expect(approvedRes.Success).toBe(true);
+            expect(stub.Save).toHaveBeenCalledTimes(1);
+        });
     });
 
     describe('ConfigureAgentUserPolicyAction', () => {
