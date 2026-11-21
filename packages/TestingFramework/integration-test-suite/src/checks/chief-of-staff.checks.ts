@@ -23,15 +23,18 @@ import type { DatabaseProviderBase, UserInfo } from '@memberjunction/core';
 import {
     MJAIAgentRequestEntity,
     MJAIAgentUserPolicyEntity,
+    MJAgentChannelEntity,
+    MJConversationDetailEntity,
     MJUserRoutineEntity,
+    MJUserRoutineEntity_IRoutineWakeConfiguration,
 } from '@memberjunction/core-entities';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionParam, ActionResult, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RunUserRoutineNowAction } from '@memberjunction/scheduling-engine';
 import { AIEngine } from '@memberjunction/aiengine';
-import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
+import { AgentUserPolicyEngine, TypedActionPolicyGuard } from '@memberjunction/ai-core-plus';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
     Assert,
     AssertEqual,
@@ -55,6 +58,8 @@ interface ChiefOfStaffFixture {
     PolicyCreatedByBundle: boolean;
     CreatedRoutineIds: string[];
     CreatedRequestIds: string[];
+    CreatedSuggestionIds: string[];
+    CreatedChannelIds: string[];
     CreatedLogIds: string[];
 }
 
@@ -314,7 +319,438 @@ export const ChiefOfStaffChecks: NamedCheck[] = [
             AssertEqual((await requestsWithSubjectTag(ctx.User)).length, before, 'no approval may be queued under DraftOnly');
         }
     },
+    // ── Extensible Skills Core Layer (COS9–COS14) ───────────────────────────────────────
+    {
+        Id: 'chief-of-staff.COS9',
+        Name: 'COS9: Chief of Staff uses AcceptsSkills=Limited, excludes Data Analysis & Queries, delegates to Query Builder, holds zero SQL/CRUD actions, and runs Context + Briefing cleanly',
+        Fn: async (ctx) => {
+            const cosAgent = AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, fx().AgentID));
+            Assert(!!cosAgent, 'Chief of Staff agent must exist in AIEngine');
+            AssertEqual(cosAgent!.AcceptsSkills, 'Limited', 'Chief of Staff must set AcceptsSkills = Limited so SQL skills cannot be silently auto-activated');
+
+            const autoSkills = AIEngine.Instance.GetAutoActivatableSkillsForAgent(cosAgent!, ctx.User);
+            const hasSqlSkill = autoSkills.some(
+                (s) => (s.Name ?? '').trim().toLowerCase() === 'data analysis & queries'
+            );
+            Assert(!hasSqlSkill, 'Data Analysis & Queries must NOT be auto-activatable by Chief of Staff');
+
+            const queryBuilder = AIEngine.Instance.Agents.find(
+                (a) => (a.Name ?? '').trim().toLowerCase() === 'query builder'
+            );
+            Assert(!!queryBuilder, 'Query Builder specialist agent must exist in AIEngine');
+            const hasQueryBuilderRel = AIEngine.Instance.AgentRelationships.some(
+                (r) =>
+                    UUIDsEqual(r.AgentID, fx().AgentID) &&
+                    UUIDsEqual(r.SubAgentID, queryBuilder!.ID) &&
+                    r.Status === 'Active'
+            );
+            Assert(hasQueryBuilderRel, 'Chief of Staff must have an Active MJ: AI Agent Relationships grant to Query Builder');
+
+            const banned = new Set([
+                'run ad-hoc query',
+                'create record',
+                'update record',
+                'delete record',
+                'get record',
+            ]);
+            const actionsById = IndexByUUID(ActionEngineServer.Instance.Actions, (a) => a.ID);
+            const agentActions = AIEngine.Instance.AgentActions.filter((aa) =>
+                UUIDsEqual(aa.AgentID, fx().AgentID) && aa.Status === 'Active'
+            );
+            const bannedFound = agentActions
+                .map((aa) => actionsById.Get(aa.ActionID)?.Name ?? '')
+                .filter((name) => banned.has(name.trim().toLowerCase()));
+            AssertEqual(bannedFound.length, 0, `Chief of Staff must not hold raw SQL or generic CRUD actions, found: ${bannedFound.join(', ')}`);
+
+            const ctxRes = await runAction(ctx, 'Get My Agent Context', ctx.User, [input('AgentName', CHIEF_OF_STAFF)]);
+            Assert(ctxRes.Success, `Get My Agent Context failed: ${ctxRes.Message}`);
+            const ctxData = JSON.parse(ctxRes.Message ?? '{}') as { Agent?: { Name?: string } };
+            AssertEqual(ctxData.Agent?.Name, CHIEF_OF_STAFF, 'Get My Agent Context must return Chief of Staff');
+
+            const briefRes = await runAction(ctx, 'Assemble My Briefing', ctx.User, [
+                input('AgentName', CHIEF_OF_STAFF),
+                input('HorizonDays', 7),
+            ]);
+            Assert(briefRes.Success, `Assemble My Briefing failed: ${briefRes.Message}`);
+            const briefData = JSON.parse(briefRes.Message ?? '{}') as { Core?: unknown; SkillBriefings?: unknown[] };
+            Assert(!!briefData.Core && Array.isArray(briefData.SkillBriefings), 'Assemble My Briefing must return Core + SkillBriefings');
+        }
+    },
+    {
+        Id: 'chief-of-staff.COS10',
+        Name: 'COS10: Offered Rhythms & Suggestions lifecycle (list, enable with confirmation, decline dedup, cancel)',
+        Fn: async (ctx) => {
+            const listRes = await runAction(ctx, 'List Available Rhythms', ctx.User, [input('AgentName', CHIEF_OF_STAFF)]);
+            Assert(listRes.Success, `List Available Rhythms failed: ${listRes.Message}`);
+            const listed = JSON.parse(listRes.Message ?? '{}') as { Rhythms?: Array<{ WorkstreamKey: string }> };
+            Assert(
+                Boolean(listed.Rhythms?.some((r) => r.WorkstreamKey === 'calendar-daily-review')),
+                'List Available Rhythms must include seeded calendar-daily-review template'
+            );
+
+            const enableRes = await runAction(ctx, 'Enable Agent Rhythm', ctx.User, [
+                input('AgentName', CHIEF_OF_STAFF),
+                input('WorkstreamKey', 'calendar-daily-review'),
+                input('Timezone', 'America/Chicago'),
+                input('ConfirmedByUser', true),
+            ]);
+            Assert(enableRes.Success, `Enable Agent Rhythm failed: ${enableRes.Message}`);
+            const enabled = JSON.parse(enableRes.Message ?? '{}') as { RoutineID?: string; Status?: string };
+            Assert(!!enabled.RoutineID, 'Enable Agent Rhythm must return RoutineID');
+            fx().CreatedRoutineIds.push(enabled.RoutineID!);
+            AssertEqual(enabled.Status, 'Active', 'Enabled rhythm routine must be Active');
+
+            const cancelRes = await runAction(ctx, 'Cancel Agent Wake', ctx.User, [
+                input('RoutineID', enabled.RoutineID!),
+                input('Reason', `COS10 cleanup ${TAG}`),
+            ]);
+            Assert(cancelRes.Success, `Cancel Agent Wake failed: ${cancelRes.Message}`);
+
+            const testKey = `it157-sug-${Date.now()}`;
+            const offerRes = await runAction(ctx, 'Manage Agent Suggestions', ctx.User, [
+                input('Operation', 'RecordOffer'),
+                input('Kind', 'Rhythm'),
+                input('TargetKey', testKey),
+                input('Summary', `Integration suggestion ${TAG}`),
+            ]);
+            Assert(offerRes.Success, `RecordOffer failed: ${offerRes.Message}`);
+            const offered = JSON.parse(offerRes.Message ?? '{}') as { SuggestionID?: string };
+            if (offered.SuggestionID) fx().CreatedSuggestionIds.push(offered.SuggestionID);
+
+            const declineRes = await runAction(ctx, 'Manage Agent Suggestions', ctx.User, [
+                input('Operation', 'Respond'),
+                input('TargetKey', testKey),
+                input('Status', 'Declined'),
+            ]);
+            Assert(declineRes.Success, `Respond Declined failed: ${declineRes.Message}`);
+
+            const reofferRes = await runAction(ctx, 'Manage Agent Suggestions', ctx.User, [
+                input('Operation', 'RecordOffer'),
+                input('Kind', 'Rhythm'),
+                input('TargetKey', testKey),
+                input('Summary', 'Should not re-offer'),
+            ]);
+            const reofferCode = reofferRes.Result?.ResultCode ?? reofferRes.ResultCode;
+            AssertEqual(reofferCode, 'ALREADY_DECLINED', `expected ALREADY_DECLINED, got ${reofferCode}`);
+        }
+    },
+    {
+        Id: 'chief-of-staff.COS11',
+        Name: 'COS11: Agent Channel open, loop-guard pause, and direct human intervention reset',
+        Fn: async (ctx) => {
+            const other = otherUser('COS11');
+            if (!other || !ownsPolicy('COS11')) return;
+
+            const pol = await loadPolicy(ctx);
+            pol.CoordinationMode = 'Autonomous';
+            pol.AllowInterAgentCoordination = true;
+            pol.Status = 'Active';
+            Assert(await pol.Save(), `updating policy to Autonomous failed: ${pol.LatestResult?.CompleteMessage}`);
+
+            const openRes = await runAction(ctx, 'Open Agent Channel', ctx.User, [
+                input('Topic', `COS11 Channel ${TAG}`),
+                input('TargetUserIDs', other.ID),
+                input('InitialMessage', 'Opening coordination check from IT157.'),
+                input('MaxConsecutiveAgentTurns', 1),
+            ]);
+            Assert(openRes.Success, `Open Agent Channel failed: ${openRes.Message}`);
+            const opened = JSON.parse(openRes.Message ?? '{}') as { ChannelID?: string };
+            Assert(!!opened.ChannelID, 'Open Agent Channel must return ChannelID');
+            const channelId = opened.ChannelID!;
+            fx().CreatedChannelIds.push(channelId);
+
+            // Simulate two agent turns hitting MaxConsecutiveAgentTurns = 1 → Paused For Human
+            const agentReplyRun = new RunActionParams();
+            agentReplyRun.Action = ActionEngineServer.Instance.Actions.find((a) => a.Name === 'Reply In Agent Channel')!;
+            agentReplyRun.ContextUser = ctx.User;
+            agentReplyRun.Context = { AgentID: fx().AgentID };
+            agentReplyRun.Filters = [];
+            agentReplyRun.Params = [
+                input('ChannelID', channelId),
+                input('Message', 'Agent turn 1'),
+            ];
+            const turn1 = await ActionEngineServer.Instance.RunAction(agentReplyRun);
+            Assert(turn1.Success, `Agent turn 1 failed: ${turn1.Message}`);
+
+            const agentReplyRun2 = new RunActionParams();
+            agentReplyRun2.Action = agentReplyRun.Action;
+            agentReplyRun2.ContextUser = ctx.User;
+            agentReplyRun2.Context = { AgentID: fx().AgentID };
+            agentReplyRun2.Filters = [];
+            agentReplyRun2.Params = [
+                input('ChannelID', channelId),
+                input('Message', 'Agent turn 2 triggers loop guard'),
+            ];
+            const turn2 = await ActionEngineServer.Instance.RunAction(agentReplyRun2);
+            const turn2Code = turn2.Result?.ResultCode ?? turn2.ResultCode;
+            AssertEqual(turn2Code, 'CHANNEL_PAUSED_LOOP_GUARD', `expected CHANNEL_PAUSED_LOOP_GUARD, got ${turn2Code}`);
+
+            // Direct human reply via ConversationDetail must reset ConsecutiveAgentTurns = 0 and re-open channel
+            const humanDetail = await prov(ctx).GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', ctx.User);
+            humanDetail.NewRecord();
+            humanDetail.ConversationID = channelId;
+            humanDetail.UserID = ctx.User.ID;
+            humanDetail.AgentID = null;
+            humanDetail.Role = 'User';
+            humanDetail.Message = 'Human stepping in to resume coordination.';
+            Assert(await humanDetail.Save(), `human ConversationDetail save failed: ${humanDetail.LatestResult?.CompleteMessage}`);
+
+            const reloaded = await prov(ctx).GetEntityObject<MJAgentChannelEntity>('MJ: Agent Channels', ctx.User);
+            Assert(await reloaded.Load(channelId), 'could not reload Agent Channel');
+            AssertEqual(reloaded.ChannelStatus, 'Open', 'Human reply must re-open Paused For Human channel');
+            AssertEqual(reloaded.ConsecutiveAgentTurns, 0, 'Human reply must reset ConsecutiveAgentTurns to 0');
+        }
+    },
+    {
+        Id: 'chief-of-staff.COS12',
+        Name: 'COS12: Schedule Next Agent Wake blocks autonomous creation of new Recurring routines even with self-attested ConfirmedByUser=true',
+        Fn: async (ctx) => {
+            const action = ActionEngineServer.Instance.Actions.find((a) => a.Name === 'Schedule Next Agent Wake');
+            Assert(!!action, 'need Schedule Next Agent Wake action');
+            const run = new RunActionParams();
+            run.Action = action!;
+            run.ContextUser = ctx.User;
+            run.Context = { AgentID: fx().AgentID };
+            run.Filters = [];
+            run.Params = [
+                input('AgentName', CHIEF_OF_STAFF),
+                input('ScheduleMode', 'Recurring'),
+                input('CronExpression', '0 9 * * 1-5'),
+                input('WorkstreamKey', `cos12-unconfirmed-${Date.now()}`),
+                input('WakeReason', 'Should require server-verified approval'),
+                input('ConfirmedByUser', true),
+            ];
+            const result = await ActionEngineServer.Instance.RunAction(run);
+            if (result.LogEntry?.ID) fx().CreatedLogIds.push(result.LogEntry.ID);
+            const code = result.Result?.ResultCode ?? result.ResultCode;
+            AssertEqual(code, 'APPROVAL_REQUIRED', `expected APPROVAL_REQUIRED, got ${code} (${result.Message})`);
+        }
+    },
+    {
+        Id: 'chief-of-staff.COS13',
+        Name: 'COS13: Two-user inter-agent request round-trip (User A CoS -> Send Inter-Agent Request -> User B CoS wake & reply -> User A wake)',
+        Fn: async (ctx) => {
+            const other = otherUser('COS13');
+            if (!other || !ownsPolicy('COS13')) return;
+
+            const polA = await loadPolicy(ctx);
+            polA.CoordinationMode = 'Autonomous';
+            polA.AllowInterAgentCoordination = true;
+            polA.Status = 'Active';
+            Assert(await polA.Save(), `updating User A policy to Autonomous failed: ${polA.LatestResult?.CompleteMessage}`);
+
+            // Ensure User B has an Active CoS policy allowing inter-agent coordination (cleaned up in finally)
+            const existingPolB = await new RunView().RunView<{ ID: string }>({
+                EntityName: 'MJ: AI Agent User Policies',
+                ExtraFilter: `AgentID='${EscapeSQLString(fx().AgentID)}' AND UserID='${EscapeSQLString(other.ID)}'`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+                BypassCache: true,
+            }, ctx.User);
+
+            let createdPolBId: string | null = null;
+            if (!(existingPolB.Success && existingPolB.Results.length > 0)) {
+                const polB = await prov(ctx).GetEntityObject<MJAIAgentUserPolicyEntity>('MJ: AI Agent User Policies', ctx.User);
+                polB.NewRecord();
+                polB.AgentID = fx().AgentID;
+                polB.UserID = other.ID;
+                polB.Status = 'Active';
+                polB.CoordinationMode = 'Autonomous';
+                polB.AllowInterAgentCoordination = true;
+                Assert(await polB.Save(), `creating temporary User B policy failed: ${polB.LatestResult?.CompleteMessage}`);
+                createdPolBId = polB.ID;
+            }
+
+            const workstreamKey = `cos13-roundtrip-${Date.now()}`;
+            try {
+                // Step 1: User A sends inter-agent coordination request to User B
+                const sendRes = await runAction(ctx, 'Send Inter-Agent Request', ctx.User, [
+                    input('TargetUserID', other.ID),
+                    input('Subject', `COS13 Sync ${SUBJECT_TAG}`),
+                    input('Message', 'Please confirm Q4 launch milestone status.'),
+                    input('WorkstreamKey', workstreamKey),
+                ]);
+                Assert(sendRes.Success, `Send Inter-Agent Request failed: ${sendRes.Message}`);
+
+                const agentRequestId = String(
+                    sendRes.Params?.find((p) => p.Name === 'AgentRequestID')?.Value ?? ''
+                );
+                const deliveryMode = String(
+                    sendRes.Params?.find((p) => p.Name === 'DeliveryMode')?.Value ?? ''
+                );
+                Assert(agentRequestId.length > 0, 'Send Inter-Agent Request must output AgentRequestID');
+                AssertEqual(deliveryMode, 'InterAgent', 'DeliveryMode must be InterAgent when target user has an active policy');
+                fx().CreatedRequestIds.push(agentRequestId);
+
+                // Step 2: Observe User B's incoming AgentWake routine scheduled asynchronously by MJAIAgentRequestEntityServer
+                const bobWake = await waitForWakeRoutine(other.ID, fx().AgentID, workstreamKey, ctx.User);
+                Assert(!!bobWake, `expected immediate AgentWake routine for User B on workstream "${workstreamKey}"`);
+                fx().CreatedRoutineIds.push(bobWake!.ID);
+                const bobResume = parseWakeResumeState(bobWake!);
+                AssertEqual(bobResume['triggerType'], 'InterAgentRequestReceived', 'User B wake triggerType must be InterAgentRequestReceived');
+                Assert(
+                    UUIDsEqual(String(bobResume['requestID'] ?? ''), agentRequestId),
+                    'User B wake resumeState.requestID must match the sent AgentRequestID'
+                );
+
+                // Step 3: User B's CoS resolves the request with a reply
+                const reqEntity = await prov(ctx).GetEntityObject<MJAIAgentRequestEntity>('MJ: AI Agent Requests', ctx.User);
+                Assert(await reqEntity.Load(agentRequestId), 'could not load inter-agent request for reply');
+                reqEntity.Status = 'Responded';
+                reqEntity.Response = 'Confirmed: Q4 launch milestone is green.';
+                reqEntity.RespondedAt = new Date();
+                Assert(await reqEntity.Save(), `saving inter-agent reply failed: ${reqEntity.LatestResult?.CompleteMessage}`);
+
+                // Step 4: Observe User A's resolution AgentWake routine carrying User B's reply
+                const aliceWake = await waitForWakeRoutine(ctx.User.ID, fx().AgentID, workstreamKey, ctx.User);
+                Assert(!!aliceWake, `expected resolution AgentWake routine for User A on workstream "${workstreamKey}"`);
+                fx().CreatedRoutineIds.push(aliceWake!.ID);
+                const aliceResume = parseWakeResumeState(aliceWake!);
+                AssertEqual(aliceResume['triggerType'], 'InterAgentRequestResolved', 'User A wake triggerType must be InterAgentRequestResolved');
+                AssertEqual(aliceResume['status'], 'Responded', 'User A wake status must reflect Responded');
+                Assert(
+                    String(aliceResume['response'] ?? '').includes('Q4 launch milestone is green'),
+                    'User A wake resumeState.response must carry User B reply'
+                );
+            } finally {
+                if (createdPolBId) {
+                    try {
+                        const e = await prov(ctx).GetEntityObject<BaseEntity>('MJ: AI Agent User Policies', ctx.User);
+                        if (await e.InnerLoad(CompositeKey.FromID(createdPolBId))) {
+                            await e.Delete();
+                        }
+                    } catch { /* best-effort cleanup */ }
+                    AgentUserPolicyEngine.Instance.ClearCache(fx().AgentID, other.ID);
+                }
+            }
+        }
+    },
+    {
+        Id: 'chief-of-staff.COS14',
+        Name: 'COS14: Sub-agent policy ceiling propagates Chief of Staff ReadOnly + EntityAccessRules to child Query Builder via policyCeilingAgentIDs',
+        Fn: async (ctx) => {
+            if (!ownsPolicy('COS14')) return;
+
+            const queryBuilder = AIEngine.Instance.Agents.find(
+                (a) => (a.Name ?? '').trim().toLowerCase() === 'query builder'
+            );
+            Assert(!!queryBuilder, 'Query Builder agent must exist for COS14 policy ceiling test');
+
+            const pol = await loadPolicy(ctx);
+            const priorDefaultMode = pol.DefaultDataAccessMode;
+            const priorRules = pol.EntityAccessRulesObject;
+
+            pol.Status = 'Active';
+            pol.DefaultDataAccessMode = 'ReadOnly';
+            pol.EntityAccessRulesObject = [
+                {
+                    entityPattern: 'MJ: User Routines',
+                    access: 'Deny',
+                },
+            ];
+            Assert(await pol.Save(), `saving narrowed COS14 parent policy failed: ${pol.LatestResult?.CompleteMessage}`);
+            await AgentUserPolicyEngine.Instance.GetPolicyForAgentAndUser(fx().AgentID, ctx.User.ID, ctx.User, true);
+
+            try {
+                await AgentUserPolicyEngine.Instance.RunWithExecutingAgentContext(
+                    queryBuilder!.ID,
+                    async () => {
+                        const chain = AgentUserPolicyEngine.Instance.GetEffectivePolicyAgentChain();
+                        Assert(
+                            chain.some((id) => UUIDsEqual(id, queryBuilder!.ID)) &&
+                                chain.some((id) => UUIDsEqual(id, fx().AgentID)),
+                            `Effective policy ceiling chain must include both Query Builder and parent Chief of Staff, got [${chain.join(', ')}]`
+                        );
+
+                        // 1. Parent DefaultDataAccessMode='ReadOnly' blocks child writes on MJ: Tasks
+                        const writeCheck = await TypedActionPolicyGuard.CheckEntityAccess({
+                            entityName: 'MJ: Tasks',
+                            operation: 'Create',
+                            contextUser: ctx.User,
+                            provider: ctx.Provider,
+                        });
+                        Assert(!writeCheck.Allowed, 'Child Query Builder Create must be blocked by parent Chief of Staff ReadOnly policy');
+                        AssertEqual(writeCheck.ResultCode, 'POLICY_DENIED', 'Expected POLICY_DENIED for child write under parent ReadOnly ceiling');
+
+                        // 2. Parent EntityAccessRules Deny on MJ: User Routines blocks child reads too
+                        const deniedEntityRead = await TypedActionPolicyGuard.CheckEntityAccess({
+                            entityName: 'MJ: User Routines',
+                            operation: 'Read',
+                            contextUser: ctx.User,
+                            provider: ctx.Provider,
+                        });
+                        Assert(!deniedEntityRead.Allowed, 'Child Query Builder Read on MJ: User Routines must be denied by parent EntityAccessRules');
+                        AssertEqual(deniedEntityRead.ResultCode, 'POLICY_DENIED', 'Expected POLICY_DENIED for denied entity under parent ceiling');
+
+                        // 3. Read on non-denied entity remains permitted under ReadOnly ceiling
+                        const allowedRead = await TypedActionPolicyGuard.CheckEntityAccess({
+                            entityName: 'MJ: Tasks',
+                            operation: 'Read',
+                            contextUser: ctx.User,
+                            provider: ctx.Provider,
+                        });
+                        Assert(allowedRead.Allowed, `Child Query Builder Read on MJ: Tasks should be allowed under ReadOnly ceiling (${allowedRead.Message ?? 'ok'})`);
+                    },
+                    [fx().AgentID]
+                );
+            } finally {
+                const restore = await loadPolicy(ctx);
+                restore.DefaultDataAccessMode = priorDefaultMode;
+                restore.EntityAccessRulesObject = priorRules;
+                await restore.Save();
+                await AgentUserPolicyEngine.Instance.GetPolicyForAgentAndUser(fx().AgentID, ctx.User.ID, ctx.User, true);
+            }
+        }
+    },
 ];
+
+async function waitForWakeRoutine(
+    userId: string,
+    agentId: string,
+    workstreamKey: string,
+    contextUser: UserInfo,
+    timeoutMs: number = 10_000
+): Promise<MJUserRoutineEntity | null> {
+    const deadline = Date.now() + timeoutMs;
+    const targetKey = workstreamKey.trim().toLowerCase();
+    while (Date.now() < deadline) {
+        const res = await new RunView().RunView<MJUserRoutineEntity>(
+            {
+                EntityName: 'MJ: User Routines',
+                ExtraFilter: `UserID='${EscapeSQLString(userId)}' AND TargetID='${EscapeSQLString(agentId)}' AND RoutineType='AgentWake'`,
+                OrderBy: '__mj_UpdatedAt DESC',
+                MaxRows: 25,
+                ResultType: 'entity_object',
+                BypassCache: true,
+            },
+            contextUser
+        );
+        if (res.Success && Array.isArray(res.Results)) {
+            const found = res.Results.find((r) => {
+                const cfg =
+                    r.WakeConfigurationObject ??
+                    (r.WakeConfiguration
+                        ? SafeJSONParse<MJUserRoutineEntity_IRoutineWakeConfiguration>(r.WakeConfiguration)
+                        : null);
+                return (cfg?.workstreamKey ?? '').trim().toLowerCase() === targetKey;
+            });
+            if (found) {
+                return found;
+            }
+        }
+        await settle(250);
+    }
+    return null;
+}
+
+function parseWakeResumeState(routine: MJUserRoutineEntity): Record<string, unknown> {
+    const cfg =
+        routine.WakeConfigurationObject ??
+        (routine.WakeConfiguration
+            ? SafeJSONParse<MJUserRoutineEntity_IRoutineWakeConfiguration>(routine.WakeConfiguration)
+            : null);
+    return (cfg?.resumeState ?? {}) as Record<string, unknown>;
+}
 
 async function makeOneShot(ctx: IntegrationCheckContext, name: string): Promise<MJUserRoutineEntity> {
     const r = await prov(ctx).GetEntityObject<MJUserRoutineEntity>('MJ: User Routines', ctx.User);
@@ -402,6 +838,8 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('chief-of-staff', {
             PolicyCreatedByBundle: createdByBundle,
             CreatedRoutineIds: [],
             CreatedRequestIds: [],
+            CreatedSuggestionIds: [],
+            CreatedChannelIds: [],
             CreatedLogIds: [],
         };
     },
@@ -418,6 +856,28 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('chief-of-staff', {
         };
 
         for (const id of f.CreatedRequestIds) await del('MJ: AI Agent Requests', id);
+        for (const id of f.CreatedSuggestionIds) await del('MJ: AI Agent Suggestions', id);
+        for (const channelId of f.CreatedChannelIds) {
+            try {
+                const details = await new RunView().RunView<{ ID: string }>({
+                    EntityName: 'MJ: Conversation Details',
+                    ExtraFilter: `ConversationID='${channelId}'`,
+                    Fields: ['ID'],
+                    ResultType: 'simple',
+                    BypassCache: true,
+                }, user);
+                for (const d of details.Results ?? []) await del('MJ: Conversation Details', d.ID);
+                const parts = await new RunView().RunView<{ ID: string }>({
+                    EntityName: 'MJ: Agent Channel Participants',
+                    ExtraFilter: `AgentChannelID='${channelId}'`,
+                    Fields: ['ID'],
+                    ResultType: 'simple',
+                    BypassCache: true,
+                }, user);
+                for (const p of parts.Results ?? []) await del('MJ: Agent Channel Participants', p.ID);
+                await del('MJ: Agent Channels', channelId);
+            } catch { /* best-effort cleanup */ }
+        }
         try {
             for (const r of await requestsWithSubjectTag(user)) await del('MJ: AI Agent Requests', r.ID);
         } catch { /* best-effort cleanup */ }

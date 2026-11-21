@@ -25,6 +25,7 @@ import type {
   MJAIAgentRelationshipEntityType,
   MJAIAgentRequestTypeEntityType,
   MJAIAgentRequestEntityType,
+  MJAIAgentRhythmTemplateEntityType,
   MJAIAgentRubricEntityType,
   MJAIAgentRunMediaEntityType,
   MJAIAgentRunStepEntityType,
@@ -38,6 +39,7 @@ import type {
   MJAIAgentSkillEntityType,
   MJAIAgentStepPathEntityType,
   MJAIAgentStepEntityType,
+  MJAIAgentSuggestionEntityType,
   MJAIAgentTypeEntityType,
   MJAIAgentUserPolicyEntityType,
   MJAIAgentEntityType,
@@ -97,6 +99,8 @@ import type {
   MJActionParamEntityType,
   MJActionResultCodeEntityType,
   MJActionEntityType,
+  MJAgentChannelParticipantEntityType,
+  MJAgentChannelEntityType,
   MJApplicationEntityEntityType,
   MJApplicationRoleEntityType,
   MJApplicationSettingEntityType,
@@ -6388,6 +6392,232 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
 
 /**
+ * MJ: AI Agent Rhythm Templates - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentRhythmTemplate
+ * * Base View: vwAIAgentRhythmTemplates
+ * * @description Catalog of recurring wake rhythm templates offered by core agents or installed Open App skills. Users opt in to materialize a template into an MJ: User Routines row.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Rhythm Templates')
+export class MJAIAgentRhythmTemplateEntity extends BaseEntity<MJAIAgentRhythmTemplateEntityType> {
+    /**
+    * Loads the MJ: AI Agent Rhythm Templates record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Rhythm Templates record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIAgentRhythmTemplateEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    * * Description: The always-on AI agent (for example Chief of Staff) to which this rhythm template applies.
+    */
+    get AgentID(): string {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: SkillID
+    * * Display Name: Skill ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)
+    * * Description: Optional AI Skill that contributes this rhythm template; NULL for core agent rhythms.
+    */
+    get SkillID(): string | null {
+        return this.Get('SkillID');
+    }
+    set SkillID(value: string | null) {
+        this.Set('SkillID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable title of the offered rhythm shown to the user during onboarding or capability reviews.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: WorkstreamKey
+    * * Display Name: Workstream Key
+    * * SQL Data Type: nvarchar(150)
+    * * Description: Stable programmatic workstream key (for example tasks-daily-triage, calendar-daily-review) used to upsert the user routine cleanly.
+    */
+    get WorkstreamKey(): string {
+        return this.Get('WorkstreamKey');
+    }
+    set WorkstreamKey(value: string) {
+        this.Set('WorkstreamKey', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Plain-language explanation of what this rhythm checks and delivers to the user.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DefaultCronExpression
+    * * Display Name: Default Cron Expression
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Default 5-field cron expression evaluated in the user's local timezone when enabled.
+    */
+    get DefaultCronExpression(): string {
+        return this.Get('DefaultCronExpression');
+    }
+    set DefaultCronExpression(value: string) {
+        this.Set('DefaultCronExpression', value);
+    }
+
+    /**
+    * * Field Name: DefaultWakeGate
+    * * Display Name: Default Wake Gate
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional default 3-Tier Wake Gate JSON (watchedEntities, skipIfUnchanged, tier1Expression, tier2Decision) copied onto the created AgentWake routine.
+    */
+    get DefaultWakeGate(): string | null {
+        return this.Get('DefaultWakeGate');
+    }
+    set DefaultWakeGate(value: string | null) {
+        this.Set('DefaultWakeGate', value);
+    }
+
+    /**
+    * * Field Name: WakeReason
+    * * Display Name: Wake Reason
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Concise wake reason stored on the created AgentWake routine and passed to the agent when the rhythm fires.
+    */
+    get WakeReason(): string {
+        return this.Get('WakeReason');
+    }
+    set WakeReason(value: string) {
+        this.Set('WakeReason', value);
+    }
+
+    /**
+    * * Field Name: OfferAt
+    * * Display Name: Offer At
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Onboarding
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Both
+    *   * Install
+    *   * Onboarding
+    * * Description: Lifecycle moment when this rhythm should be suggested to the user: Onboarding, Install, or Both.
+    */
+    get OfferAt(): 'Both' | 'Install' | 'Onboarding' {
+        return this.Get('OfferAt');
+    }
+    set OfferAt(value: 'Both' | 'Install' | 'Onboarding') {
+        this.Set('OfferAt', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    * * Description: Whether this rhythm template is currently Active or Inactive.
+    */
+    get Status(): 'Active' | 'Inactive' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: Skill
+    * * Display Name: Skill
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Skill(): string | null {
+        return this.Get('Skill');
+    }
+}
+
+
+/**
  * JSON shapes for the rubric columns that store structured bags.
  *
  * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
@@ -10665,6 +10895,20 @@ export class MJAIAgentSkillEntity extends BaseEntity<MJAIAgentSkillEntityType> {
     }
 
     /**
+    * * Field Name: AllowMetadataSyncUpdate
+    * * Display Name: Allow Metadata Sync Update
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1 (default), metadata sync and app upgrades may update this agent-skill grant. Set to 0 when an administrator locally overrides or disables an app-shipped skill grant.
+    */
+    get AllowMetadataSyncUpdate(): boolean {
+        return this.Get('AllowMetadataSyncUpdate');
+    }
+    set AllowMetadataSyncUpdate(value: boolean) {
+        this.Set('AllowMetadataSyncUpdate', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent Name
     * * SQL Data Type: nvarchar(255)
@@ -11330,6 +11574,210 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     */
     get Prompt(): string | null {
         return this.Get('Prompt');
+    }
+}
+
+
+/**
+ * MJ: AI Agent Suggestions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentSuggestion
+ * * Base View: vwAIAgentSuggestions
+ * * @description Log of proactive capability, skill, or rhythm suggestions offered by an agent to a specific user so declined suggestions are not repeated.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Suggestions')
+export class MJAIAgentSuggestionEntity extends BaseEntity<MJAIAgentSuggestionEntityType> {
+    /**
+    * Loads the MJ: AI Agent Suggestions record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Suggestions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIAgentSuggestionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    * * Description: The AI agent that made the suggestion.
+    */
+    get AgentID(): string {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The user to whom the suggestion was offered.
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: Kind
+    * * Display Name: Kind
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: Rhythm
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Behavior
+    *   * Integration
+    *   * Rhythm
+    *   * Skill
+    * * Description: Category of suggestion: Rhythm, Skill, Behavior, or Integration.
+    */
+    get Kind(): 'Behavior' | 'Integration' | 'Rhythm' | 'Skill' {
+        return this.Get('Kind');
+    }
+    set Kind(value: 'Behavior' | 'Integration' | 'Rhythm' | 'Skill') {
+        this.Set('Kind', value);
+    }
+
+    /**
+    * * Field Name: TargetKey
+    * * Display Name: Target Key
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Stable deduplication key (such as a rhythm WorkstreamKey or skill name) preventing repeated offers of the same declined suggestion.
+    */
+    get TargetKey(): string {
+        return this.Get('TargetKey');
+    }
+    set TargetKey(value: string) {
+        this.Set('TargetKey', value);
+    }
+
+    /**
+    * * Field Name: Summary
+    * * Display Name: Summary
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Concise description of the proposed capability or rhythm shown to the user.
+    */
+    get Summary(): string {
+        return this.Get('Summary');
+    }
+    set Summary(value: string) {
+        this.Set('Summary', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Offered
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Accepted
+    *   * Declined
+    *   * Expired
+    *   * Offered
+    * * Description: Outcome of the suggestion: Offered, Accepted, Declined, or Expired.
+    */
+    get Status(): 'Accepted' | 'Declined' | 'Expired' | 'Offered' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Accepted' | 'Declined' | 'Expired' | 'Offered') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: OfferedAt
+    * * Display Name: Offered At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    * * Description: UTC timestamp when the suggestion was first presented to the user.
+    */
+    get OfferedAt(): Date {
+        return this.Get('OfferedAt');
+    }
+    set OfferedAt(value: Date) {
+        this.Set('OfferedAt', value);
+    }
+
+    /**
+    * * Field Name: RespondedAt
+    * * Display Name: Responded At
+    * * SQL Data Type: datetimeoffset
+    * * Description: UTC timestamp when the user accepted, declined, or let the suggestion expire.
+    */
+    get RespondedAt(): Date | null {
+        return this.Get('RespondedAt');
+    }
+    set RespondedAt(value: Date | null) {
+        this.Set('RespondedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
     }
 }
 
@@ -26231,6 +26679,25 @@ export class MJAISkillActionEntity extends BaseEntity<MJAISkillActionEntityType>
     }
 
     /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Tool
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Both
+    *   * Briefing
+    *   * Tool
+    * * Description: Role this action plays within the skill: Tool (normal tool invoked by the model), Briefing (deterministic briefing contributor invoked by Assemble My Briefing), or Both.
+    */
+    get Role(): 'Both' | 'Briefing' | 'Tool' {
+        return this.Get('Role');
+    }
+    set Role(value: 'Both' | 'Briefing' | 'Tool') {
+        this.Set('Role', value);
+    }
+
+    /**
     * * Field Name: Skill
     * * Display Name: Skill
     * * SQL Data Type: nvarchar(255)
@@ -31963,6 +32430,764 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
     */
     get ParentIDChildCount(): number | null {
         return this.Get('ParentIDChildCount');
+    }
+}
+
+
+/**
+ * MJ: Agent Channel Participants - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AgentChannelParticipant
+ * * Base View: vwAgentChannelParticipants
+ * * @description Participants (each a User + their AI Agent pair) enrolled in an Agent Channel conversation.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Agent Channel Participants')
+export class MJAgentChannelParticipantEntity extends BaseEntity<MJAgentChannelParticipantEntityType> {
+    /**
+    * Loads the MJ: Agent Channel Participants record from the database
+    * @param ID: string - primary key value to load the MJ: Agent Channel Participants record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAgentChannelParticipantEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentChannelID
+    * * Display Name: Agent Channel ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Agent Channels (vwAgentChannels.ID)
+    * * Description: The Agent Channel (and Conversation ID) to which this participant belongs.
+    */
+    get AgentChannelID(): string {
+        return this.Get('AgentChannelID');
+    }
+    set AgentChannelID(value: string) {
+        this.Set('AgentChannelID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The human user represented by this participant entry.
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    * * Description: The AI agent acting on behalf of UserID in this channel.
+    */
+    get AgentID(): string {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Participant
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Initiator
+    *   * Participant
+    * * Description: Participant role in the channel: Initiator or Participant.
+    */
+    get Role(): 'Initiator' | 'Participant' {
+        return this.Get('Role');
+    }
+    set Role(value: 'Initiator' | 'Participant') {
+        this.Set('Role', value);
+    }
+
+    /**
+    * * Field Name: LastSeenDetailID
+    * * Display Name: Last Seen Detail ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversation Details (vwConversationDetails.ID)
+    * * Description: Optional ConversationDetail ID of the last message read by this participant.
+    */
+    get LastSeenDetailID(): string | null {
+        return this.Get('LastSeenDetailID');
+    }
+    set LastSeenDetailID(value: string | null) {
+        this.Set('LastSeenDetailID', value);
+    }
+
+    /**
+    * * Field Name: JoinedAt
+    * * Display Name: Joined At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    * * Description: UTC timestamp when this participant joined the channel.
+    */
+    get JoinedAt(): Date {
+        return this.Get('JoinedAt');
+    }
+    set JoinedAt(value: Date) {
+        this.Set('JoinedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: AgentChannel
+    * * Display Name: Agent Channel
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AgentChannel(): string | null {
+        return this.Get('AgentChannel');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: LastSeenDetail
+    * * Display Name: Last Seen Detail
+    * * SQL Data Type: nvarchar(100)
+    */
+    get LastSeenDetail(): string | null {
+        return this.Get('LastSeenDetail');
+    }
+}
+
+
+/**
+ * MJ: Agent Channels - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AgentChannel
+ * * Base View: vwAgentChannels
+ * * @description IS-A extension of MJ: Conversations for shared, observable agent-to-agent coordination channels, storing topic, lifecycle status, and loop-guard/rate-limit counters.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Agent Channels')
+export class MJAgentChannelEntity extends BaseEntity<MJAgentChannelEntityType> {
+    /**
+    * Loads the MJ: Agent Channels record from the database
+    * @param ID: string - primary key value to load the MJ: Agent Channels record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAgentChannelEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+    * * Description: Shared primary key referencing MJ: Conversations(ID) for this IS-A Agent Channel conversation.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Topic
+    * * Display Name: Topic
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Short executive topic describing what the participating agents are coordinating on.
+    */
+    get Topic(): string {
+        return this.Get('Topic');
+    }
+    set Topic(value: string) {
+        this.Set('Topic', value);
+    }
+
+    /**
+    * * Field Name: ChannelStatus
+    * * Display Name: Channel Status
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: Open
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Open
+    *   * Paused For Human
+    *   * Resolved
+    * * Description: Operational state of the channel: Open, Paused For Human (loop or wake limit reached), or Resolved.
+    */
+    get ChannelStatus(): 'Open' | 'Paused For Human' | 'Resolved' {
+        return this.Get('ChannelStatus');
+    }
+    set ChannelStatus(value: 'Open' | 'Paused For Human' | 'Resolved') {
+        this.Set('ChannelStatus', value);
+    }
+
+    /**
+    * * Field Name: ReplyBy
+    * * Display Name: Reply By
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional deadline by which participants should respond or resolve the coordination topic.
+    */
+    get ReplyBy(): Date | null {
+        return this.Get('ReplyBy');
+    }
+    set ReplyBy(value: Date | null) {
+        this.Set('ReplyBy', value);
+    }
+
+    /**
+    * * Field Name: ConsecutiveAgentTurns
+    * * Display Name: Consecutive Agent Turns
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of consecutive agent messages posted since the last human message; resets to 0 when any human posts.
+    */
+    get ConsecutiveAgentTurns(): number {
+        return this.Get('ConsecutiveAgentTurns');
+    }
+    set ConsecutiveAgentTurns(value: number) {
+        this.Set('ConsecutiveAgentTurns', value);
+    }
+
+    /**
+    * * Field Name: MaxConsecutiveAgentTurns
+    * * Display Name: Max Consecutive Agent Turns
+    * * SQL Data Type: int
+    * * Default Value: 10
+    * * Description: Maximum consecutive agent turns permitted without human intervention before the channel automatically pauses (default 10).
+    */
+    get MaxConsecutiveAgentTurns(): number {
+        return this.Get('MaxConsecutiveAgentTurns');
+    }
+    set MaxConsecutiveAgentTurns(value: number) {
+        this.Set('MaxConsecutiveAgentTurns', value);
+    }
+
+    /**
+    * * Field Name: LastHumanMessageAt
+    * * Display Name: Last Human Message At
+    * * SQL Data Type: datetimeoffset
+    * * Description: UTC timestamp of the most recent message posted directly by a human participant.
+    */
+    get LastHumanMessageAt(): Date | null {
+        return this.Get('LastHumanMessageAt');
+    }
+    set LastHumanMessageAt(value: Date | null) {
+        this.Set('LastHumanMessageAt', value);
+    }
+
+    /**
+    * * Field Name: HourlyWakeCount
+    * * Display Name: Hourly Wake Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Count of peer agent wakes dispatched for this channel within the current rolling 1-hour window.
+    */
+    get HourlyWakeCount(): number {
+        return this.Get('HourlyWakeCount');
+    }
+    set HourlyWakeCount(value: number) {
+        this.Set('HourlyWakeCount', value);
+    }
+
+    /**
+    * * Field Name: HourlyWakeWindowStart
+    * * Display Name: Hourly Wake Window Start
+    * * SQL Data Type: datetimeoffset
+    * * Description: UTC start timestamp of the current 1-hour wake rate-limit window.
+    */
+    get HourlyWakeWindowStart(): Date | null {
+        return this.Get('HourlyWakeWindowStart');
+    }
+    set HourlyWakeWindowStart(value: Date | null) {
+        this.Set('HourlyWakeWindowStart', value);
+    }
+
+    /**
+    * * Field Name: MaxHourlyWakes
+    * * Display Name: Max Hourly Wakes
+    * * SQL Data Type: int
+    * * Default Value: 6
+    * * Description: Maximum peer wakes allowed per hour for this channel before pausing for human review (default 6).
+    */
+    get MaxHourlyWakes(): number {
+        return this.Get('MaxHourlyWakes');
+    }
+    set MaxHourlyWakes(value: number) {
+        this.Set('MaxHourlyWakes', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: ExternalID
+    * * Display Name: External ID
+    * * SQL Data Type: nvarchar(500)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ExternalID(): string | null {
+        return this.Get('ExternalID');
+    }
+    set ExternalID(value: string | null) {
+        this.Set('ExternalID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get Name(): string | null {
+        return this.Get('Name');
+    }
+    set Name(value: string | null) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: IsArchived
+    * * Display Name: Is Archived
+    * * SQL Data Type: bit
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get IsArchived(): boolean {
+        return this.Get('IsArchived');
+    }
+    set IsArchived(value: boolean) {
+        this.Set('IsArchived', value);
+    }
+
+    /**
+    * * Field Name: LinkedEntityID
+    * * Display Name: Linked Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get LinkedEntityID(): string | null {
+        return this.Get('LinkedEntityID');
+    }
+    set LinkedEntityID(value: string | null) {
+        this.Set('LinkedEntityID', value);
+    }
+
+    /**
+    * * Field Name: LinkedRecordID
+    * * Display Name: Linked Record ID
+    * * SQL Data Type: nvarchar(500)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get LinkedRecordID(): string | null {
+        return this.Get('LinkedRecordID');
+    }
+    set LinkedRecordID(value: string | null) {
+        this.Set('LinkedRecordID', value);
+    }
+
+    /**
+    * * Field Name: DataContextID
+    * * Display Name: Data Context ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Data Contexts (vwDataContexts.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get DataContextID(): string | null {
+        return this.Get('DataContextID');
+    }
+    set DataContextID(value: string | null) {
+        this.Set('DataContextID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get Status(): string {
+        return this.Get('Status');
+    }
+    set Status(value: string) {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: EnvironmentID
+    * * Display Name: Environment ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get EnvironmentID(): string {
+        return this.Get('EnvironmentID');
+    }
+    set EnvironmentID(value: string) {
+        this.Set('EnvironmentID', value);
+    }
+
+    /**
+    * * Field Name: ProjectID
+    * * Display Name: Project ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ProjectID(): string | null {
+        return this.Get('ProjectID');
+    }
+    set ProjectID(value: string | null) {
+        this.Set('ProjectID', value);
+    }
+
+    /**
+    * * Field Name: IsPinned
+    * * Display Name: Is Pinned
+    * * SQL Data Type: bit
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get IsPinned(): boolean {
+        return this.Get('IsPinned');
+    }
+    set IsPinned(value: boolean) {
+        this.Set('IsPinned', value);
+    }
+
+    /**
+    * * Field Name: TestRunID
+    * * Display Name: Test Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get TestRunID(): string | null {
+        return this.Get('TestRunID');
+    }
+    set TestRunID(value: string | null) {
+        this.Set('TestRunID', value);
+    }
+
+    /**
+    * * Field Name: ApplicationScope
+    * * Display Name: Application Scope
+    * * SQL Data Type: nvarchar(20)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ApplicationScope(): string {
+        return this.Get('ApplicationScope');
+    }
+    set ApplicationScope(value: string) {
+        this.Set('ApplicationScope', value);
+    }
+
+    /**
+    * * Field Name: ApplicationID
+    * * Display Name: Application ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ApplicationID(): string | null {
+        return this.Get('ApplicationID');
+    }
+    set ApplicationID(value: string | null) {
+        this.Set('ApplicationID', value);
+    }
+
+    /**
+    * * Field Name: DefaultAgentID
+    * * Display Name: Default Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get DefaultAgentID(): string | null {
+        return this.Get('DefaultAgentID');
+    }
+    set DefaultAgentID(value: string | null) {
+        this.Set('DefaultAgentID', value);
+    }
+
+    /**
+    * * Field Name: AdditionalData
+    * * Display Name: Additional Data
+    * * SQL Data Type: nvarchar(MAX)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get AdditionalData(): string | null {
+        return this.Get('AdditionalData');
+    }
+    set AdditionalData(value: string | null) {
+        this.Set('AdditionalData', value);
+    }
+
+    /**
+    * * Field Name: RecordingFileID
+    * * Display Name: Recording File ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get RecordingFileID(): string | null {
+        return this.Get('RecordingFileID');
+    }
+    set RecordingFileID(value: string | null) {
+        this.Set('RecordingFileID', value);
+    }
+
+    /**
+    * * Field Name: EgressID
+    * * Display Name: Egress ID
+    * * SQL Data Type: nvarchar(255)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get EgressID(): string | null {
+        return this.Get('EgressID');
+    }
+    set EgressID(value: string | null) {
+        this.Set('EgressID', value);
+    }
+
+    /**
+    * * Field Name: VisitorKey
+    * * Display Name: Visitor Key
+    * * SQL Data Type: nvarchar(255)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get VisitorKey(): string | null {
+        return this.Get('VisitorKey');
+    }
+    set VisitorKey(value: string | null) {
+        this.Set('VisitorKey', value);
+    }
+
+    /**
+    * * Field Name: LastConversationID
+    * * Display Name: Last Conversation ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get LastConversationID(): string | null {
+        return this.Get('LastConversationID');
+    }
+    set LastConversationID(value: string | null) {
+        this.Set('LastConversationID', value);
+    }
+
+    /**
+    * * Field Name: AnchorType
+    * * Display Name: Anchor Type
+    * * SQL Data Type: nvarchar(30)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get AnchorType(): string | null {
+        return this.Get('AnchorType');
+    }
+    set AnchorType(value: string | null) {
+        this.Set('AnchorType', value);
+    }
+
+    /**
+    * * Field Name: AnchorKey
+    * * Display Name: Anchor Key
+    * * SQL Data Type: nvarchar(255)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get AnchorKey(): string | null {
+        return this.Get('AnchorKey');
+    }
+    set AnchorKey(value: string | null) {
+        this.Set('AnchorKey', value);
+    }
+
+    /**
+    * * Field Name: AnchorMetadata
+    * * Display Name: Anchor Metadata
+    * * SQL Data Type: nvarchar(MAX)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get AnchorMetadata(): string | null {
+        return this.Get('AnchorMetadata');
+    }
+    set AnchorMetadata(value: string | null) {
+        this.Set('AnchorMetadata', value);
+    }
+
+    /**
+    * * Field Name: IsResolved
+    * * Display Name: Is Resolved
+    * * SQL Data Type: bit
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get IsResolved(): boolean {
+        return this.Get('IsResolved');
+    }
+    set IsResolved(value: boolean) {
+        this.Set('IsResolved', value);
+    }
+
+    /**
+    * * Field Name: ResolvedByUserID
+    * * Display Name: Resolved By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ResolvedByUserID(): string | null {
+        return this.Get('ResolvedByUserID');
+    }
+    set ResolvedByUserID(value: string | null) {
+        this.Set('ResolvedByUserID', value);
+    }
+
+    /**
+    * * Field Name: ResolvedAt
+    * * Display Name: Resolved At
+    * * SQL Data Type: datetimeoffset
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get ResolvedAt(): Date | null {
+        return this.Get('ResolvedAt');
+    }
+    set ResolvedAt(value: Date | null) {
+        this.Set('ResolvedAt', value);
+    }
+
+    /**
+    * * Field Name: TypeID
+    * * Display Name: Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversation Types (vwConversationTypes.ID)
+    * * IS-A Source: Inherited from MJ: Conversations
+    */
+    get TypeID(): string {
+        return this.Get('TypeID');
+    }
+    set TypeID(value: string) {
+        this.Set('TypeID', value);
     }
 }
 
@@ -102029,6 +103254,19 @@ export class MJRowLevelSecurityFilterEntity extends BaseEntity<MJRowLevelSecurit
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: PlatformVariants
+    * * Display Name: Platform Variants
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON object mapping SQL field names (FilterText) to database-platform overrides (for example {"FilterText":{"postgresql":"..."}}) resolved by RowLevelSecurityFilterInfo.GetPlatformFilterText.
+    */
+    get PlatformVariants(): string | null {
+        return this.Get('PlatformVariants');
+    }
+    set PlatformVariants(value: string | null) {
+        this.Set('PlatformVariants', value);
     }
 }
 

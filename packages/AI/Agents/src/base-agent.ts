@@ -2836,9 +2836,11 @@ export class BaseAgent {
         // abort condition — whether it came from the caller, the timeout, or
         // both.
         //
-        // Actions invoked from this agent carry their own AbortSignal on
-        // `RunActionParams.AbortSignal` (see ActionEngine.RunAction) and are
-        // unaffected by this wrapper — their timeout budget is independent.
+        // Actions invoked from this agent retain their own per-action timeout
+        // budget inside `ActionEngine.RunAction`, while `ExecuteSingleAction`
+        // forwards `params.cancellationToken` as `RunActionParams.AbortSignal`
+        // so cancelling or timing out the agent run immediately aborts
+        // in-flight actions.
         // =====================================================================================
         const configuredMaxTimeMs =
             params.agent?.MaxTimePerRun != null && params.agent.MaxTimePerRun > 0
@@ -14205,8 +14207,10 @@ The context is now within limits. Please retry your request with the recovered c
                         Filters: [],
                         SkipActionLog: false,
                         Context: this.stampActionContext(params),
+                        AbortSignal: params.cancellationToken,
                         ...this.runBoundDispatchParams(params, actionEntity, audience.Readers, contextUser),
-                    })
+                    }),
+                params.policyCeilingAgentIDs
             );
             this.recordDispatchOutcome(params, action, actionEntity, result, normalizedParams, skipBreaker);
             return result;
@@ -14273,37 +14277,7 @@ The context is now within limits. Please retry your request with the recovered c
         if (!contextUser?.ID || !params?.agent?.ID) {
             return null;
         }
-        let policy = AgentUserPolicyEngine.Instance.GetCachedPolicy(
-            params.agent.ID,
-            contextUser.ID,
-            params.provider
-        );
-        if (!policy) {
-            const lookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
-                params.agent.ID,
-                contextUser.ID,
-                contextUser,
-                { provider: params.provider }
-            );
-            if (lookup.status === 'error') {
-                return {
-                    Success: false,
-                    ResultCode: POLICY_DENIED_RESULT_CODE,
-                    Message: `Action "${actionEntity.Name || action.name}" blocked (fail-closed): user policy lookup failed (${lookup.errorMessage}).`,
-                    Params: [],
-                    RunParams: {
-                        Action: actionEntity,
-                        Params: this.toActionParams({ Params: action.params ?? {}, Bound: [] }, actionEntity),
-                        ContextUser: contextUser,
-                        Filters: [],
-                    },
-                };
-            }
-            policy = lookup.policy;
-        }
-        if (!policy) {
-            return null;
-        }
+        const policyAgentIDs = this.collectPolicyAgentChain(params);
         const actionParamsRecord: Record<string, string | number | boolean | null | undefined> = {};
         if (action.params) {
             for (const [key, val] of Object.entries(action.params)) {
@@ -14314,25 +14288,73 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
         }
-        const evaluation = AgentUserPolicyEngine.Instance.EvaluateActionExecution({
-            actionName: actionEntity.Name || action.name,
-            params: actionParamsRecord,
-            contextUser,
-            policy,
-        });
-        if (evaluation.verdict === 'Allow') {
+
+        const verdictRank: Record<'Allow' | 'RequireApproval' | 'DeferUntilNextWindow' | 'Deny', number> = {
+            Allow: 0,
+            RequireApproval: 1,
+            DeferUntilNextWindow: 2,
+            Deny: 3,
+        };
+        let strictestVerdict: 'Allow' | 'RequireApproval' | 'DeferUntilNextWindow' | 'Deny' = 'Allow';
+        let strictestReason = '';
+
+        for (const agentId of policyAgentIDs) {
+            let policy = AgentUserPolicyEngine.Instance.GetCachedPolicy(
+                agentId,
+                contextUser.ID,
+                params.provider
+            );
+            if (!policy) {
+                const lookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
+                    agentId,
+                    contextUser.ID,
+                    contextUser,
+                    { provider: params.provider }
+                );
+                if (lookup.status === 'error') {
+                    return {
+                        Success: false,
+                        ResultCode: POLICY_DENIED_RESULT_CODE,
+                        Message: `Action "${actionEntity.Name || action.name}" blocked (fail-closed): user policy lookup failed (${lookup.errorMessage}).`,
+                        Params: [],
+                        RunParams: {
+                            Action: actionEntity,
+                            Params: this.toActionParams({ Params: action.params ?? {}, Bound: [] }, actionEntity),
+                            ContextUser: contextUser,
+                            Filters: [],
+                        },
+                    };
+                }
+                policy = lookup.policy;
+            }
+            if (!policy) {
+                continue;
+            }
+            const evaluation = AgentUserPolicyEngine.Instance.EvaluateActionExecution({
+                actionName: actionEntity.Name || action.name,
+                params: actionParamsRecord,
+                contextUser,
+                policy,
+            });
+            if (verdictRank[evaluation.verdict] > verdictRank[strictestVerdict]) {
+                strictestVerdict = evaluation.verdict;
+                strictestReason = evaluation.reason;
+            }
+        }
+
+        if (strictestVerdict === 'Allow') {
             return null;
         }
         const resultCode =
-            evaluation.verdict === 'Deny'
+            strictestVerdict === 'Deny'
                 ? POLICY_DENIED_RESULT_CODE
-                : evaluation.verdict === 'DeferUntilNextWindow'
+                : strictestVerdict === 'DeferUntilNextWindow'
                 ? POLICY_DEFERRED_RESULT_CODE
                 : POLICY_APPROVAL_REQUIRED_RESULT_CODE;
         return {
             Success: false,
             ResultCode: resultCode,
-            Message: evaluation.reason,
+            Message: strictestReason,
             Params: [],
             RunParams: {
                 Action: actionEntity,
@@ -14341,6 +14363,31 @@ The context is now within limits. Please retry your request with the recovered c
                 Filters: [],
             },
         };
+    }
+
+    /**
+     * Collects the deduplicated chain of agent IDs whose user policies govern this run:
+     * the executing agent plus any ancestor `policyCeilingAgentIDs` inherited from a parent run.
+     */
+    private collectPolicyAgentChain(params: ExecuteAgentParams): string[] {
+        const seen = new Set<string>();
+        const result: string[] = [];
+        const add = (id: string | null | undefined): void => {
+            const clean = id?.trim();
+            if (!clean) {
+                return;
+            }
+            const lower = clean.toLowerCase();
+            if (!seen.has(lower)) {
+                seen.add(lower);
+                result.push(clean);
+            }
+        };
+        add(params.agent?.ID);
+        for (const ceilingId of params.policyCeilingAgentIDs ?? []) {
+            add(ceilingId);
+        }
+        return result;
     }
 
     /**
@@ -14646,6 +14693,7 @@ The context is now within limits. Please retry your request with the recovered c
                 parentStepCounts: parentStepCountsToPass,
                 parentRun: this._agentRun,
                 parentActivatedSkillIDs: this.activeSkillIDsForRun(params), // the root's active skills reach the sub-agent's actions
+                policyCeilingAgentIDs: this.collectPolicyAgentChain(params), // parent agent's narrowed user policy binds sub-agent actions too
                 payload: verifiedResumeRunId ? undefined : payload, // on resume, ignore computed/mapped payload so autoPopulateLastRunPayload loads the child's prior FinalPayload
                 ...(verifiedResumeRunId ? { lastRunId: verifiedResumeRunId, autoPopulateLastRunPayload: true } : {}),
                 configurationId: resolvedConfig.configurationId, // resolved preset configuration ID or inherited parent configurationId

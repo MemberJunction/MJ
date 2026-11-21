@@ -15,7 +15,7 @@ import { MJApplicationEntityEntity, ResourceData, UserInfoEngine } from '@member
 import {
   CreateLiveSheetHelperForProvider,
   type LiveSheetToolResult,
-} from '../shared/live-sheet-client-tool.helper';
+} from '@memberjunction/ng-artifacts';
 import {
   RecordSelectedEvent,
   RecordOpenedEvent,

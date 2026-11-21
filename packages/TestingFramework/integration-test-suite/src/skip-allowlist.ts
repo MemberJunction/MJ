@@ -360,6 +360,11 @@ export const SKIP_ALLOWLIST: readonly AllowedSkip[] = [
         Reason: 'Creates and drops an Open App schema, so it needs a login that can (db_owner, or CREATE on the database on PostgreSQL). CI runs the tier as sa; a least-privilege local login skips it.'
     },
     {
+        CheckId: 'open-app-local-source.OLS11',
+        Gate: 'credentials',
+        Reason: 'Creates and drops an Open App schema, so it needs a login that can (db_owner, or CREATE on the database on PostgreSQL). CI runs the tier as sa; a least-privilege local login skips it.'
+    },
+    {
         CheckId: 'comms-v2-wire.CV2W2',
         Gate: 'credentials',
         Reason: 'Signing a SendGrid webhook needs a key pair: MJAPI started with COMMUNICATION_VENDOR_WEBHOOK_KEY__SENDGRID (public key) and the test process given MJ_IT_SENDGRID_WEBHOOK_PRIVATE_KEY (private key). The deterministic lane does not provision one yet; CV2W3 still proves a bad signature is refused.',

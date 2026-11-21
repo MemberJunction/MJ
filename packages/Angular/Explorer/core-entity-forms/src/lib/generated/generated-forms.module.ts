@@ -39,6 +39,7 @@ import { MJAIAgentPromptFormComponent } from "./Entities/MJAIAgentPrompt/mjaiage
 import { MJAIAgentRelationshipFormComponent } from "./Entities/MJAIAgentRelationship/mjaiagentrelationship.form.component";
 import { MJAIAgentRequestFormComponent } from "./Entities/MJAIAgentRequest/mjaiagentrequest.form.component";
 import { MJAIAgentRequestTypeFormComponent } from "./Entities/MJAIAgentRequestType/mjaiagentrequesttype.form.component";
+import { MJAIAgentRhythmTemplateFormComponent } from "./Entities/MJAIAgentRhythmTemplate/mjaiagentrhythmtemplate.form.component";
 import { MJAIAgentRubricFormComponent } from "./Entities/MJAIAgentRubric/mjaiagentrubric.form.component";
 import { MJAIAgentRunFormComponent } from "./Entities/MJAIAgentRun/mjaiagentrun.form.component";
 import { MJAIAgentRunMediaFormComponent } from "./Entities/MJAIAgentRunMedia/mjaiagentrunmedia.form.component";
@@ -52,6 +53,7 @@ import { MJAIAgentSessionRecordingShardFormComponent } from "./Entities/MJAIAgen
 import { MJAIAgentSkillFormComponent } from "./Entities/MJAIAgentSkill/mjaiagentskill.form.component";
 import { MJAIAgentStepFormComponent } from "./Entities/MJAIAgentStep/mjaiagentstep.form.component";
 import { MJAIAgentStepPathFormComponent } from "./Entities/MJAIAgentStepPath/mjaiagentsteppath.form.component";
+import { MJAIAgentSuggestionFormComponent } from "./Entities/MJAIAgentSuggestion/mjaiagentsuggestion.form.component";
 import { MJAIAgentTypeFormComponent } from "./Entities/MJAIAgentType/mjaiagenttype.form.component";
 import { MJAIAgentUserPolicyFormComponent } from "./Entities/MJAIAgentUserPolicy/mjaiagentuserpolicy.form.component";
 import { MJAIArchitectureFormComponent } from "./Entities/MJAIArchitecture/mjaiarchitecture.form.component";
@@ -110,6 +112,8 @@ import { MJActionFormComponent } from "./Entities/MJAction/mjaction.form.compone
 import { MJActionLibraryFormComponent } from "./Entities/MJActionLibrary/mjactionlibrary.form.component";
 import { MJActionParamFormComponent } from "./Entities/MJActionParam/mjactionparam.form.component";
 import { MJActionResultCodeFormComponent } from "./Entities/MJActionResultCode/mjactionresultcode.form.component";
+import { MJAgentChannelFormComponent } from "./Entities/MJAgentChannel/mjagentchannel.form.component";
+import { MJAgentChannelParticipantFormComponent } from "./Entities/MJAgentChannelParticipant/mjagentchannelparticipant.form.component";
 import { MJApplicationEntityFormComponent } from "./Entities/MJApplicationEntity/mjapplicationentity.form.component";
 import { MJApplicationFormComponent } from "./Entities/MJApplication/mjapplication.form.component";
 import { MJApplicationRoleFormComponent } from "./Entities/MJApplicationRole/mjapplicationrole.form.component";
@@ -496,6 +500,7 @@ import { JoinGridModule } from "@memberjunction/ng-join-grid"
 
 @NgModule({
 declarations: [
+    MJAIAgentRhythmTemplateFormComponent,
     MJAIAgentSessionFormComponent,
     MJAIConfigurationParamFormComponent,
     MJAIPromptModelFormComponent,
@@ -556,6 +561,7 @@ export class GeneratedForms_SubModule_1 { }
 @NgModule({
 declarations: [
     MJAIAgentNoteFormComponent,
+    MJAIAgentSuggestionFormComponent,
     MJAIAgentTypeFormComponent,
     MJAuditLogTypeFormComponent,
     MJComponentFormComponent,
@@ -1004,6 +1010,7 @@ export class GeneratedForms_SubModule_15 { }
 declarations: [
     MJAIAgentSearchScopeFormComponent,
     MJAIModelPersonaFormComponent,
+    MJAgentChannelParticipantFormComponent,
     MJArtifactUseFormComponent,
     MJCommunicationRunFormComponent,
     MJContentTypeFormComponent,
@@ -1368,6 +1375,7 @@ export class GeneratedForms_SubModule_26 { }
 declarations: [
     MJAIAgentRequestFormComponent,
     MJAIAgentRequestTypeFormComponent,
+    MJAgentChannelFormComponent,
     MJCompanyIntegrationObjectFormComponent,
     MJConversationWidgetInstanceFormComponent,
     MJDuplicateRunDetailMatchFormComponent,

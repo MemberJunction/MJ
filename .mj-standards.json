@@ -32,6 +32,21 @@
         "metadata"
       ]
     },
+    "agent-skill-governance": {
+      "Severity": "error",
+      "Roots": [
+        "metadata"
+      ],
+      "Options": {
+        "AllowedAllSkillsAgents": [
+          "Sage",
+          "Research Agent",
+          "Knowledge Agent",
+          "Codesmith Agent",
+          "Marketing Agent"
+        ]
+      }
+    },
     "migration-existence-guards": {
       "Severity": "error",
       "Roots": [
