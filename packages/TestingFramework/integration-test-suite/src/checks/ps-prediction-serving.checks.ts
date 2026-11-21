@@ -42,7 +42,8 @@ import {
     PredictionPanelQueries, resolveOutcomeConfig, type FeatureSchemaEntry, type PredictRequest, type PredictResponse, type ScoringResult,
 } from '@memberjunction/predictive-studio-core';
 import { Assert, AssertEqual, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration';
-import { BuildSystemKeyProvider, BuildUserKeyProviderWithRetry, DeleteMintedUserKeys, MintFullAccessUserKey, type MintedUserKeyIds } from './fls-client.checks';
+import { BuildSystemKeyProvider, BuildUserKeyProviderWithRetry, DeleteMintedUserKeys, type MintedUserKeyIds } from './fls-client.checks';
+import { PsServingKeys } from './ps-prediction-serving-keys';
 import { ScoringLineage, type LineageModelRow, type LineageRunRow, type LineageValueRow } from './ps-gates/ps-gate-scoring-lineage';
 import { WaitUntil } from './wait-until';
 
@@ -167,7 +168,7 @@ export class PsPredictionServing {
             const user = await PsPredictionServing.CreateWireRow<MJUserEntity>(wire, 'MJ: Users', (u) => { u.Name = `${tag} ${label}`; u.Email = email; u.Type = 'User'; u.IsActive = true; });
             userIds.push(user.ID);
             await PsPredictionServing.CreateWireRow<MJUserRoleEntity>(wire, 'MJ: User Roles', (ur) => { ur.UserID = user.ID; ur.RoleID = roleId; });
-            const raw = await MintFullAccessUserKey(ctx, keys, user.ID, `${tag} ${label}`, wire);
+            const raw = await PsServingKeys.MintFullAccessKeyThroughMJAPI(ctx, keys, user.ID, `${tag} ${label}`, wire);
             const provider = await BuildUserKeyProviderWithRetry(raw);
             await WaitUntil(async () => (await PsPredictionServing.canRead(provider)), `${label} identity reads MJ: Latest Feature Values through MJAPI`, { TimeoutMs: IDENTITY_PROPAGATION_MS });
             return { UserID: user.ID, Email: email, Provider: provider };

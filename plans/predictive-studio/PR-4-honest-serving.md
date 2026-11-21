@@ -331,6 +331,7 @@ packages/CodeGenLib/src/__tests__/fixtures/entity-delete-fk-policy.json
 packages/TestingFramework/integration-test-suite/src/checks/ps-gate-*.checks.ts
 packages/TestingFramework/integration-test-suite/src/checks/ps-gates/**
 packages/TestingFramework/integration-test-suite/src/checks/ps-prediction-serving.checks.ts
+packages/TestingFramework/integration-test-suite/src/checks/ps-prediction-serving-keys.ts
 # PR 2's checks and rig read binding.MLModelID, which M5 removes
 packages/TestingFramework/integration-test-suite/src/checks/predictive-studio.checks.ts
 packages/TestingFramework/integration-test-suite/rigs/ps-inproc-scheduled-scoring.ts
@@ -420,7 +421,7 @@ packages/TestingFramework/integration-test-suite/src/index.ts
 # Server entity subclasses, their tests and the export barrel
 packages/MJCoreEntitiesServer/src/index.ts
 packages/MJCoreEntitiesServer/src/custom/MJML*.server.ts
-packages/MJCoreEntitiesServer/src/__tests__/**
+packages/MJCoreEntitiesServer/src/__tests__/ml-*.test.ts
 # CodeGen-owned output
 packages/MJCoreEntities/src/generated/**
 packages/MJServer/src/generated/**
@@ -462,8 +463,6 @@ packages/TestingFramework/integration-test-suite/src/__tests__/predictive-shadow
 metadata-optional/integration-test/tests/integration/.IT166-predictive-shadow-drift.json
 # D4-176/D4-177: the record panel, the binding editor and the default view-authorization name exported (b41bdc773a, a76c70843d, 7d84ccb852)
 packages/Angular/Explorer/core-entity-forms/src/public-api.ts
-# D4-185: IT182 mints its identities through MJAPI with the FLS client's key helpers (734a6a77c3)
-packages/TestingFramework/integration-test-suite/src/checks/fls-client.checks.ts
 # D4-230: IT182's teardown by tag and the zero-schema-change measure, unit-tested (5104063f76, 1d9f1f1d99)
 packages/TestingFramework/integration-test-suite/src/__tests__/ps-prediction-serving.test.ts
 # D4-239: ServerBootstrapLite declares integration-engine, which next's Peer Sync class needs in the Lite manifest (e7e409f515)
@@ -10529,6 +10528,8 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   scope rules go over a system-key connection (`BuildSystemKeyProvider`), so MJAPI's own caches see them at once;
   minting that fails releases what it created. The fixture model (no Prediction Unit) scores on a clock reading its
   as-of date. Setup's other rows are removed by tag by the bundle's teardown whether or not Setup finished (D4-230).
+  **Amended by D4-277:** the key and its scope rule are minted by the PS-owned `PsServingKeys` (copied logic);
+  `fls-client.checks.ts` is `next`'s again.
 - **D4-186 · Z7 proves the writer's in-place replace; the unique index is proved by `scoring-service.adversarial`**
   (M5b.6 Step 3). The plan's "`UQ_FeatureValue_ModelRow` dropped → Z7 fails" reads "→
   `scoring-service.adversarial.db.test.ts › refuses a second Model row …` fails" (both measured).
@@ -10953,6 +10954,11 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   and opens the List: no private view, no action, so neither D4-184 fix is needed. Tests first: four DOM cases (the
   List, details and group; every record as the current user; a failed submit opens nothing; a refused detail submits
   nothing).
+- **D4-277 · The controller's rulings on the remaining non-PS paths** (R1). MJCoreEntitiesServer's twelve non-PS test
+  edits (the expected-console wiring) are reverted to `next` and `helpers/expected-console.ts` is deleted (the three PS
+  tests never used it; non-PS stderr noise is next's, accepted). `fls-client.checks.ts` is reverted to `next`; IT185
+  mints its keys through the PS-local `PsServingKeys.MintFullAccessKeyThroughMJAPI` (the same writes through the
+  system-key wire). Everything else on the remaining-paths list stays (owner-ruled or PS-owned).
 - **D4-276 · The honest-serving specs' helpers sit beside them** (D4-274's item 5). `EXPLORER_BASE_URL`, `RequiredEnv`,
   `SqlTextLiteral` and `RedeemSignInLink` move unchanged into `e2e/specs/ps-honest-serving.helpers.ts` (not a spec:
   `testMatch` is `**/*.spec.ts`), imported by the two honest-serving specs; the allowlist names it.
@@ -11362,7 +11368,7 @@ are monitored on real outcomes.
 - Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, PS_SEED_LIMIT, PS_SIGN_IN_URL, PS_STORAGE_PROVIDER, PW_BASE_URL, STORAGE_LOCAL_ROOT<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->29<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->29<!-- /gen:checks -->
-- Head: <!-- gen:head -->546672021d<!-- /gen:head -->
+- Head: <!-- gen:head -->9f604459cd<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,

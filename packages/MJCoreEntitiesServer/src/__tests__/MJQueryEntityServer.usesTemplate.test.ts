@@ -51,8 +51,7 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         public LatestResult = { CompleteMessage: '', Errors: [] as Error[] };
         public RegisterResultHistoryEntry = vi.fn();
         public get ProviderToUse() { return { Entities: [] }; }
-        // The post-save fingerprint reads the stored SQL and parameter rows; this query has none.
-        public get RunViewProviderToUse() { return { RunViews: async () => [{ Success: true, Results: [] }, { Success: true, Results: [] }] }; }
+        public get RunViewProviderToUse() { return {}; }
         public GetFieldByName(name: string): { Dirty: boolean } { return { Dirty: name === 'SQL' ? this.SQLDirty : true }; }
         public GetPlatformSQL(_platform: DatabasePlatform): string | null { return this.SQL; }
         public async Save(): Promise<boolean> {
@@ -86,9 +85,6 @@ vi.mock('../custom/approvalStamp', () => ({
 }));
 
 import { QueryEngine } from '@memberjunction/core-entities';
-import { ExpectedConsole } from './helpers/expected-console';
-
-ExpectedConsole.Install([/^\[MJQueryEntityServer\] Query "Templated Query": The extracted child rows could not be written: the query is not saved through a database provider$/]);
 import { MJQueryEntityServer } from '../custom/MJQueryEntityServer.server';
 import { RunExtractionPipeline } from '../custom/query-extraction/pipeline';
 
@@ -131,7 +127,6 @@ function pipelineCtx(sql: string): QuerySyncContext {
         queryName: 'Templated Query',
         sql,
         isSaved: true,
-        platform: 'sqlserver',
         contextUser: { ID: 'user-1' } as UserInfo,
         metadataProvider: { Entities: [] } as Pick<IMetadataProvider, 'Entities'> as IMetadataProvider,
         runViewProvider: {} as IRunViewProvider,
@@ -144,8 +139,6 @@ const IF_BLOCK_ONLY_SQL = "SELECT m.ID FROM ext.Members m WHERE 1 = 1 {% if true
 
 beforeEach(() => {
     writes.length = 0;
-    // The query engine is not loaded through a database here; saving reads its (stubbed) queries without loading it.
-    vi.spyOn(QueryEngine.Instance, 'Loaded', 'get').mockReturnValue(true);
 });
 
 afterEach(() => {
@@ -175,8 +168,8 @@ describe('MJQueryEntityServer Save — UsesTemplate after an extraction failure 
         const query = createQuery();
         query.SQL = MISSING_REF_SQL;
         query.UsesTemplate = true;
-        // IsSaved and SQLDirty are the stub base's plain fields (an already-saved row whose SQL did not change).
-        Object.assign(query, { IsSaved: true, SQLDirty: false });
+        query.IsSaved = true;
+        query.SQLDirty = false;
         query.ExtractionOverride = 'Force';
         expect(await query.Save()).toBe(true);
         expect(writes.at(-1)?.UsesTemplate).toBe(true);

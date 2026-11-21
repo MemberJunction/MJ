@@ -400,14 +400,10 @@ export type MintedUserKeyIds = Pick<FlsClientFixture, 'CreatedKeyIds' | 'Created
  * Mint a user API key over the wire and grant it `full_access` on '*' — scope enforcement
  * fails closed, so a key with no scope rules cannot even run a batched view. Records the key
  * (and its scope rule) for teardown; returns the raw key.
- *
- * @param wire a system-key connection to MJAPI ({@link BuildSystemKeyProvider}) for a server-transport bundle: the key
- *   and its rule are then written THROUGH MJAPI, so MJAPI's key-scope cache sees them at once instead of on its timed
- *   reload; omitted, they are written on `ctx.Provider` (a client-transport bundle already writes through MJAPI)
  */
-export async function MintFullAccessUserKey(ctx: IntegrationCheckContext, fx: MintedUserKeyIds, userId: string, label: string, wire?: IMetadataProvider): Promise<string> {
+export async function MintFullAccessUserKey(ctx: IntegrationCheckContext, fx: MintedUserKeyIds, userId: string, label: string): Promise<string> {
     const engine = GetAPIKeyEngine();
-    const created = await engine.CreateAPIKey({ UserId: userId, Label: label }, ctx.User, wire);
+    const created = await engine.CreateAPIKey({ UserId: userId, Label: label }, ctx.User);
     if (!created.Success || !created.RawKey || !created.APIKeyId) {
         throw new Error(`CreateAPIKey('${label}') failed: ${created.Error ?? 'no raw key returned'}`);
     }
@@ -417,9 +413,7 @@ export async function MintFullAccessUserKey(ctx: IntegrationCheckContext, fx: Mi
     if (!fullAccess) {
         throw new Error("the seeded 'full_access' API scope was not found — cannot authorize the minted key");
     }
-    const rule = wire
-        ? await wire.GetEntityObject<MJAPIKeyScopeEntity>('MJ: API Key Scopes', wire.CurrentUser)
-        : await ctx.Provider.GetEntityObject<MJAPIKeyScopeEntity>('MJ: API Key Scopes', ctx.User);
+    const rule = await ctx.Provider.GetEntityObject<MJAPIKeyScopeEntity>('MJ: API Key Scopes', ctx.User);
     rule.NewRecord();
     rule.APIKeyID = created.APIKeyId;
     rule.ScopeID = fullAccess.ID;
