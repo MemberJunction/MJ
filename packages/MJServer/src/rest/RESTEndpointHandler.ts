@@ -6,7 +6,7 @@ import {
 } from '@memberjunction/core';
 import { EntityCRUDHandler } from './EntityCRUDHandler.js';
 import { ViewOperationsHandler } from './ViewOperationsHandler.js';
-import { CheckAPIKeyScopeAndLog } from '../auth/APIKeyScopeAuth.js';
+import { AssertAPIKeyScopeForRequest } from '../auth/APIKeyRequestScope.js';
 
 /**
  * Configuration options for RESTEndpointHandler
@@ -249,8 +249,9 @@ export class RESTEndpointHandler {
      * `entity:create|update|delete` / `view:run` / `view:batch` on every CRUD and view resolver
      * (ResolverBase.CheckAPIKeyScopeAuthorization); without this, a narrowly-scoped key (e.g.
      * `agent:execute` only) would get full entity writes and RunView through `/api/v1/*`, silently
-     * voiding the scope tier on a whole transport. `CheckAPIKeyScopeAndLog` is a no-op for
-     * sessions not authenticated via API key, so JWT users are unaffected.
+     * voiding the scope tier on a whole transport. It runs the same `AssertAPIKeyScopeForRequest`
+     * the resolvers run, which does nothing for a session not authenticated via API key, so JWT
+     * users are unaffected.
      */
     private requireAPIKeyScope(
         scopePath: string,
@@ -265,17 +266,17 @@ export class RESTEndpointHandler {
                     res.status(401).json({ error: 'Authentication required' });
                     return;
                 }
-                await CheckAPIKeyScopeAndLog(
-                    req.userPayload?.apiKeyId,
+                await AssertAPIKeyScopeForRequest(
+                    req.userPayload?.apiKeyHash,
                     scopePath,
+                    resourceFrom ? resourceFrom(req) : '*',
                     user,
                     {
                         endpoint: req.originalUrl,
                         method: req.method,
                         ipAddress: req.ip,
                         userAgent: typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : undefined,
-                    },
-                    { resource: resourceFrom ? resourceFrom(req) : '*' }
+                    }
                 );
                 next();
             } catch (error) {

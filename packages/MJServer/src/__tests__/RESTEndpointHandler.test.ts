@@ -58,8 +58,8 @@ vi.mock('../rest/ViewOperationsHandler.js', () => ({
     },
 }));
 
-vi.mock('../auth/APIKeyScopeAuth.js', () => ({
-    CheckAPIKeyScopeAndLog: mockCheckScope,
+vi.mock('../auth/APIKeyRequestScope.js', () => ({
+    AssertAPIKeyScopeForRequest: mockCheckScope,
 }));
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
@@ -105,7 +105,7 @@ function makeHandler(options: RESTEndpointHandlerOptions = {}): HandlerInternals
  * Sends one request through the handler's real router, so a test sees the middleware chain a
  * route is registered with, and resolves once a response is written or the chain runs out.
  */
-function dispatch(method: string, url: string, apiKeyId?: string): Promise<{ status: number; body: unknown }> {
+function dispatch(method: string, url: string, apiKeyHash?: string): Promise<{ status: number; body: unknown }> {
     const router = new RESTEndpointHandler().GetRouter();
     return new Promise((resolve) => {
         let status = 200;
@@ -116,7 +116,7 @@ function dispatch(method: string, url: string, apiKeyId?: string): Promise<{ sta
         };
         const req = {
             method, url, originalUrl: `/api/v1${url}`, headers: { 'user-agent': 'vitest' }, ip: '127.0.0.1',
-            query: {}, body: {}, mjUser: MJ_USER, userPayload: { apiKeyId },
+            query: {}, body: {}, mjUser: MJ_USER, userPayload: { apiKeyHash },
         };
         router(req as unknown as express.Request, res as unknown as express.Response, () => resolve({ status: 404, body: undefined }));
     });
@@ -729,7 +729,7 @@ describe('RESTEndpointHandler user and metadata routes', () => {
 
 describe('RESTEndpointHandler API-key scopes', () => {
     beforeEach(() => {
-        mockCheckScope.mockResolvedValue({ Allowed: true, Checked: true });
+        mockCheckScope.mockResolvedValue(undefined);
         mockCrudCreate.mockResolvedValue({ success: true, entity: { ID: '1' } });
         mockCrudUpdate.mockResolvedValue({ success: true, entity: { ID: '1' } });
         mockCrudDelete.mockResolvedValue({ success: true });
@@ -746,22 +746,22 @@ describe('RESTEndpointHandler API-key scopes', () => {
         ['PUT', '/users/user-1/favorites/Users/1', 'entity:update', 'User Favorites'],
         ['DELETE', '/users/user-1/favorites/Users/1', 'entity:delete', 'User Favorites'],
     ])('%s %s requires %s on %s', async (method, url, scope, resource) => {
-        await dispatch(method, url, 'key-1');
+        await dispatch(method, url, 'hash-1');
 
         expect(mockCheckScope).toHaveBeenCalledTimes(1);
         expect(mockCheckScope).toHaveBeenCalledWith(
-            'key-1',
+            'hash-1',
             scope,
+            resource,
             MJ_USER,
-            { endpoint: `/api/v1${url}`, method, ipAddress: '127.0.0.1', userAgent: 'vitest' },
-            { resource }
+            { endpoint: `/api/v1${url}`, method, ipAddress: '127.0.0.1', userAgent: 'vitest' }
         );
     });
 
     it('answers 403 and never reaches the handler when the key lacks the scope', async () => {
         mockCheckScope.mockRejectedValue(new Error("API key lacks scope 'entity:create' for 'Users'"));
 
-        const response = await dispatch('POST', '/entities/Users', 'key-1');
+        const response = await dispatch('POST', '/entities/Users', 'hash-1');
 
         expect(response.status).toBe(403);
         expect(response.body).toEqual({ error: "API key lacks scope 'entity:create' for 'Users'" });
@@ -769,13 +769,13 @@ describe('RESTEndpointHandler API-key scopes', () => {
     });
 
     it('runs the handler when the scope check passes', async () => {
-        const response = await dispatch('POST', '/entities/Users', 'key-1');
+        const response = await dispatch('POST', '/entities/Users', 'hash-1');
 
         expect(response.status).toBe(201);
         expect(mockCrudCreate).toHaveBeenCalledTimes(1);
     });
 
-    it('passes an undefined key id for a JWT session, which the scope check treats as not applicable', async () => {
+    it('passes an undefined key hash for a JWT session, which the scope check treats as not applicable', async () => {
         await dispatch('DELETE', '/entities/Users/1');
 
         expect(mockCheckScope.mock.calls[0][0]).toBeUndefined();
