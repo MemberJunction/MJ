@@ -535,6 +535,25 @@ describe('ProviderBase — metadata change notices from other servers', () => {
         expect(p.Checks).toEqual([true]);
     });
 
+    it('uses PeerMetadataNoticeMustWait on the retry timer when MetadataMemberRefreshMustWait stays true', async () => {
+        class RetryPoolNoticeProvider extends NoticeTestProvider {
+            public WaitForPeerNotice = true;
+            protected override get MetadataMemberRefreshMustWait(): boolean { return true; }
+            protected override get PeerMetadataNoticeMustWait(): boolean { return this.WaitForPeerNotice; }
+        }
+        const p = new RetryPoolNoticeProvider();
+        p.HandlePeerMetadataNotice(notice({ Action: 'set' }));
+
+        // First timer fires while PeerMetadataNoticeMustWait is true -> schedules a retry window.
+        await vi.advanceTimersByTimeAsync(ProviderBase.MetadataDatasetRefreshDebounceMs);
+        expect(p.Checks).toHaveLength(0);
+
+        // PeerMetadataNoticeMustWait clears while MetadataMemberRefreshMustWait remains true -> retry runs the check.
+        p.WaitForPeerNotice = false;
+        await vi.advanceTimersByTimeAsync(ProviderBase.MetadataDatasetRefreshDebounceMs);
+        expect(p.Checks).toEqual([true]);
+    });
+
     it('still checks timestamps and adopts a peer snapshot when AllowRefreshCheck is true while AllowRefresh is false', async () => {
         class SuspendedSaveProvider extends MemberRefreshTestProvider {
             public TimestampReads = 0;
