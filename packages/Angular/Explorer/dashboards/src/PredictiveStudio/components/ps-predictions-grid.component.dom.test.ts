@@ -1,14 +1,18 @@
 import '@angular/compiler';
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import type { ComponentFixture } from '@angular/core/testing';
 import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
-import type { RunViewParams } from '@memberjunction/core';
-import type { MJMLModelEntity } from '@memberjunction/core-entities';
+import { RunView, type CompositeKey, type IMetadataProvider, type RunViewParams } from '@memberjunction/core';
+import type { ActionParam } from '@memberjunction/actions-base';
+import { MJMLModelScoringBindingEntity, MJUserViewEntity, type MJMLModelEntity, type MJMLOutputBindingEntity } from '@memberjunction/core-entities';
+import type { SemanticsCheckBinding } from '@memberjunction/predictive-studio-core';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { renderComponentFixture, query, queryAll, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
 import { PredictiveStudioEngine, type PSRunDetailRow } from '../engine/predictive-studio.engine';
 import { PSPredictionsGridComponent, type PredictionGridRowsLoadedEvent } from './ps-predictions-grid.component';
+import type { LatestPredictionRow } from '../latest-prediction-rows';
+import { TestEntityRows } from '../../__tests__/fixtures/test-entity-rows';
 
 try {
   getTestBed().initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
@@ -23,7 +27,10 @@ try {
  */
 
 /** The model fields the grid reads to resolve its problem type, outcome config and polarity. */
-type ModelRow = Pick<MJMLModelEntity, 'ID' | 'ProblemType' | 'TargetVariable' | 'Lineage'>;
+type ModelRow = Pick<MJMLModelEntity, 'ID' | 'ProblemType' | 'TargetVariable' | 'Lineage' | 'OutputSemantics'>;
+
+/** The `MJ: ML Output Bindings` fields the grid reads. */
+type BindingRow = Pick<MJMLOutputBindingEntity, 'ID' | 'ModelID' | 'Surface' | 'SortsBy' | 'DriverDirectionRelativeTo' | 'Label'>;
 
 const detail = (recordId: string, score: number): PSRunDetailRow => ({
   ID: `d-${recordId}`,
@@ -39,7 +46,7 @@ async function renderGrid(model: ModelRow, rows: PSRunDetailRow[], capped = fals
   const provider = createFakeProvider<ModelRow>({ runViewResults: (p: RunViewParams) => (p.EntityName === 'MJ: ML Models' ? [model] : []) });
   let loaded: PredictionGridRowsLoadedEvent[] = [];
   const fixture = renderComponentFixture(PSPredictionsGridComponent, {
-    inputs: { modelId: model.ID, RunId: 'run-1', Provider: provider },
+    inputs: { ModelId: model.ID, RunId: 'run-1', Provider: provider },
     providers: [{ provide: NavigationService, useValue: {} }],
     setup: (instance) => {
       loaded = capture(instance.RowsLoaded);
@@ -50,14 +57,66 @@ async function renderGrid(model: ModelRow, rows: PSRunDetailRow[], capped = fals
   return { fixture, loaded };
 }
 
+/** What {@link RenderGrid} renders: the model, its binding row's fields under test (none: the model has no row), the run's scores. */
+interface RenderGridOptions {
+  model: ModelRow;
+  binding?: Partial<SemanticsCheckBinding>;
+  scores?: number[];
+  /** When given, every read the grid makes is pushed here. */
+  reads?: RunViewParams[];
+}
+
+/** A stored binding row of `modelId`: a classification model's predictions-grid defaults, overridden by `fields`. */
+const bindingRow = (modelId: string, fields: Partial<SemanticsCheckBinding>): BindingRow => ({
+  ID: fields.BindingID || 'B-grid',
+  ModelID: modelId,
+  Surface: fields.Surface || 'predictions-grid',
+  SortsBy: fields.SortsBy || 'adverse-probability-desc',
+  DriverDirectionRelativeTo: fields.DriverDirectionRelativeTo || 'adverse-class',
+  Label: fields.Label || 'false risk',
+});
+
+/** The rows a read returns: the model by ID, the binding rows of the surface its filter names. */
+const servedRows = (p: RunViewParams, model: ModelRow, bindings: BindingRow[]): Array<ModelRow | BindingRow> => {
+  if (p.EntityName === 'MJ: ML Models') return [model];
+  if (p.EntityName === 'MJ: ML Output Bindings') return bindings.filter((b) => (typeof p.ExtraFilter === 'string' ? p.ExtraFilter : '').includes(`Surface='${b.Surface}'`));
+  return [];
+};
+
+/**
+ * Renders the grid into `host` over a provider serving the model and its binding row (one batched read), and a run of
+ * `scores`; resolves to the grid once it has loaded.
+ */
+async function RenderGrid(host: HTMLElement, options: RenderGridOptions): Promise<PSPredictionsGridComponent> {
+  const scores = options.scores || [0.9, 0.2, 0.6];
+  vi.spyOn(PredictiveStudioEngine.Instance, 'LoadRunDetails').mockResolvedValue({ Rows: scores.map((s, i) => detail(`r${i}`, s)), Capped: false });
+  const bindings = options.binding ? [bindingRow(options.model.ID, options.binding)] : [];
+  const provider = createFakeProvider<ModelRow | BindingRow>({ runViewResults: (p: RunViewParams) => {
+    options.reads?.push(p);
+    return servedRows(p, options.model, bindings);
+  } });
+  const fixture = renderComponentFixture(PSPredictionsGridComponent, {
+    inputs: { ModelId: options.model.ID, RunId: 'run-1', Provider: provider },
+    providers: [{ provide: NavigationService, useValue: {} }],
+  });
+  for (let i = 0; i < 5; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+  fixture.detectChanges();
+  host.appendChild(fixture.nativeElement);
+  return fixture.componentInstance;
+}
+
 /** The tier chip buttons' text, e.g. "High risk (2)". */
 const tierChips = (fixture: ComponentFixture<PSPredictionsGridComponent>): string[] =>
   queryAll(fixture, '.pg-tier-btn').map((b) => (b.textContent ?? '').replace(/\s+/g, ' ').trim());
 
+// The grid reads through the engine of its provider; a test spies the members of the one instance it gets.
+beforeEach(() => {
+  vi.spyOn(PredictiveStudioEngine, 'GetProviderInstance').mockReturnValue(PredictiveStudioEngine.Instance);
+});
 afterEach(() => vi.restoreAllMocks());
 
 describe('PSPredictionsGridComponent (DOM) — tiers', () => {
-  const renewal: ModelRow = { ID: 'm-renew', ProblemType: 'classification', TargetVariable: 'Renewed', Lineage: null };
+  const renewal: ModelRow = { ID: 'm-renew', ProblemType: 'classification', TargetVariable: 'Renewed', Lineage: null, OutputSemantics: null };
 
   it('a renewal model tiers by risk: a 0.95 score is low risk and High holds the riskiest rows', async () => {
     const { fixture } = await renderGrid(renewal, [detail('r-safe', 0.95), detail('r-lapse1', 0.1), detail('r-lapse2', 0.2), detail('r-mid', 0.5)]);
@@ -88,7 +147,7 @@ describe('PSPredictionsGridComponent (DOM) — tiers', () => {
   });
 
   it('a regression model tiers by its outcome bands on the raw value and hides the risk column', async () => {
-    const revenue: ModelRow = { ID: 'm-rev', ProblemType: 'regression', TargetVariable: 'Revenue', Lineage: null };
+    const revenue: ModelRow = { ID: 'm-rev', ProblemType: 'regression', TargetVariable: 'Revenue', Lineage: null, OutputSemantics: null };
     const { fixture } = await renderGrid(revenue, [detail('big', 3000), detail('mid', 1000), detail('small1', 100), detail('small2', 50)]);
     const grid = fixture.componentInstance;
     expect(grid.IsRenewalModel).toBe(false);
@@ -127,5 +186,329 @@ describe('PSPredictionsGridComponent (DOM) — tiers', () => {
     });
     expect(csv.split('\n')[0]).toContain('"Top Drivers (+ raises risk, − lowers risk)"');
     expect(csv.split('\n')[1]).toContain('−Auto Renew');
+  });
+});
+
+describe('PSPredictionsGridComponent (DOM) — from the predictions-grid binding row', () => {
+  /** A model named for renewal whose adverse class is `Renewed = false`: the score is P(not renewed), so it is not inverted. */
+  const renewalNamed: ModelRow = {
+    ID: 'm-renewal-named', ProblemType: 'classification', TargetVariable: 'Renewed', Lineage: null,
+    OutputSemantics: JSON.stringify({ task: { kind: 'binary', classOrder: ['true', 'false'], adverseIndex: 1 } }),
+  };
+  let fixture: HTMLElement;
+  beforeEach(() => {
+    fixture = document.createElement('div');
+    document.body.appendChild(fixture);
+  });
+  afterEach(() => fixture.remove());
+
+  it('the predictions grid reads its polarity from the binding row, not the model name', async () => {
+    const grid = await RenderGrid(fixture, { model: renewalNamed, binding: { Surface: 'predictions-grid', SortsBy: 'adverse-probability-desc' } });
+    expect(grid.IsRenewalModel).toBe(false);
+  });
+
+  it('labels the risk column with the binding row and orders the rows by adverse probability', async () => {
+    const grid = await RenderGrid(fixture, { model: renewalNamed, binding: { Surface: 'predictions-grid', SortsBy: 'adverse-probability-desc', Label: 'false risk' } });
+    expect(grid.ColumnDefs.find((c) => c.field === 'riskPct')?.headerName).toBe('false risk');
+    expect(grid.AllRows.map((r) => r.score)).toEqual([0.9, 0.6, 0.2]);
+  });
+
+  it('a model with no binding row keeps the outcome-config rule (a "Renewed" target inverts)', async () => {
+    const grid = await RenderGrid(fixture, { model: renewalNamed });
+    expect(grid.IsRenewalModel).toBe(true);
+    expect(grid.AllRows.map((r) => r.score)).toEqual([0.2, 0.6, 0.9]);
+  });
+
+  it('reads its own and the why-badge binding rows past the server cache', async () => {
+    const reads: RunViewParams[] = [];
+    await RenderGrid(fixture, { model: renewalNamed, binding: { Surface: 'predictions-grid' }, reads });
+    const bindingReads = reads.filter((p) => p.EntityName === 'MJ: ML Output Bindings');
+    expect(bindingReads.map((p) => [p.ExtraFilter, p.BypassCache])).toEqual([
+      [`ModelID='m-renewal-named' AND Surface='predictions-grid'`, true],
+      [`ModelID='m-renewal-named' AND Surface='why-badge'`, true],
+    ]);
+  });
+
+  it('unparseable semantics with a binding row: no polarity is guessed and the grid says why', async () => {
+    const broken: ModelRow = { ...renewalNamed, ID: 'm-broken', OutputSemantics: '{not json' };
+    const grid = await RenderGrid(fixture, { model: broken, binding: { Surface: 'predictions-grid' } });
+    expect(grid.IsRenewalModel).toBe(false);
+    expect(fixture.querySelector('[data-testid="ps-semantics-problem"]')?.textContent).toContain('OutputSemantics');
+  });
+});
+
+describe('PSPredictionsGridComponent (DOM) — the latest values of the model\'s scoring binding', () => {
+  /** A churn model (no inversion) of pipeline P1 whose class order is ['false', 'true']: the score is P(true). */
+  const churn: ModelRow & Pick<MJMLModelEntity, 'PipelineID'> = {
+    ID: 'm-churn', PipelineID: 'P1', ProblemType: 'classification', TargetVariable: 'Churned', Lineage: null,
+    OutputSemantics: JSON.stringify({ task: { kind: 'binary', classOrder: ['false', 'true'], adverseIndex: 1 } }),
+  };
+  /** The model pipeline's Active scoring binding. */
+  const scoringBinding = { ID: 'SB1', MLTrainingPipelineID: 'P1', FeatureName: 'Churn risk', TargetEntityID: 'E-MEMBERS', Status: 'Active' } as const;
+  /** The latest Champion Model value of `recordId`: adverse probability `score`, its probabilities in class order. */
+  const Latest = (recordId: string, score: number): LatestPredictionRow => ({
+    ID: `LV-${recordId}`, RecordID: recordId, ValueText: score >= 0.5 ? 'true' : 'false', ValueNumeric: score, Confidence: Math.max(score, 1 - score),
+    ValueJSON: JSON.stringify({ Probabilities: { false: 1 - score, true: score }, Drivers: [{ sourceColumn: 'DaysSinceLogin', contribution: 0.4, effect: 'raises-adverse' }] }),
+    EffectiveAsOf: new Date('2026-11-03T00:00:00Z'), ComputedAt: new Date('2026-11-03T01:00:00Z'),
+  });
+
+  /** The provider of the last {@link RenderLatest}. */
+  let RenderedProvider: IMetadataProvider | null = null;
+
+  async function RenderLatest(latest: LatestPredictionRow[], reads: RunViewParams[], failRead?: (p: RunViewParams) => boolean): Promise<PSPredictionsGridComponent> {
+    // the engine's cached binding, a typed entity row
+    vi.spyOn(PredictiveStudioEngine.Instance, 'ScoringBindingsForPipeline').mockReturnValue([await TestEntityRows.Of(MJMLModelScoringBindingEntity, 'MJ: ML Model Scoring Bindings', scoringBinding)]);
+    const runDetails = vi.spyOn(PredictiveStudioEngine.Instance, 'LoadRunDetails');
+    const provider = createFakeProvider<ModelRow | LatestPredictionRow>({ runViewResults: (p: RunViewParams) => {
+      reads.push(p);
+      if (p.EntityName === 'MJ: ML Models') return [churn];
+      if (p.EntityName === 'MJ: Latest Feature Values') return latest;
+      return [];
+    } });
+    if (failRead) {
+      // the provider's own RunView, typed through the RunView seam the grid reads with
+      const runViews = RunView.FromMetadataProvider(provider).ProviderToUse;
+      const served = runViews.RunView.bind(runViews);
+      Object.assign(provider, {
+        RunView: async (p: RunViewParams) => (failRead(p) ? { Success: false, ErrorMessage: 'probe failed', Results: [], RowCount: 0, TotalRowCount: 0 } : served(p)),
+      });
+    }
+    RenderedProvider = provider;
+    const fixture = renderComponentFixture(PSPredictionsGridComponent, {
+      inputs: { ModelId: churn.ID, Provider: provider },
+      providers: [{ provide: NavigationService, useValue: {} }],
+    });
+    for (let i = 0; i < 5; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+    fixture.detectChanges();
+    expect(runDetails).not.toHaveBeenCalled();
+    return fixture.componentInstance;
+  }
+
+  it('reads the scoring binding and the latest values through the engine of the grid\'s own provider', async () => {
+    const reads: RunViewParams[] = [];
+    const scoped = vi.spyOn(PredictiveStudioEngine, 'GetProviderInstance').mockReturnValue(PredictiveStudioEngine.Instance);
+    await RenderLatest([Latest('r1', 0.9)], reads);
+    expect(scoped.mock.calls.length).toBeGreaterThan(0);
+    expect(scoped.mock.calls.every(([provider, engineClass]) => provider === RenderedProvider && engineClass === PredictiveStudioEngine)).toBe(true);
+  });
+
+  it('a failed probe past the row cap fails the load instead of reporting the rows complete', async () => {
+    const cap = Object.getOwnPropertyDescriptor(PredictiveStudioEngine, 'MaxRunDetailRows');
+    Object.defineProperty(PredictiveStudioEngine, 'MaxRunDetailRows', { value: 2, configurable: true, writable: true });
+    try {
+      const reads: RunViewParams[] = [];
+      const page = Array.from({ length: 1000 }, (_, i) => Latest(`r${i}`, 0.5));
+      const grid = await RenderLatest(page, reads, (p) => p.EntityName === 'MJ: Latest Feature Values' && p.MaxRows === 1);
+      expect(grid.LoadError).toContain('probe failed');
+    } finally {
+      if (cap) Object.defineProperty(PredictiveStudioEngine, 'MaxRunDetailRows', cap);
+    }
+  });
+
+  it('the predictions grid reads the binding feature from the latest-value entity', async () => {
+    const reads: RunViewParams[] = [];
+    const grid = await RenderLatest([Latest('r1', 0.9), Latest('r2', 0.2)], reads);
+    expect(reads.map((r) => r.EntityName)).toContain('MJ: Latest Feature Values');
+    expect(grid.AllRows.map((r) => r.score)).toEqual([0.9, 0.2]);
+  });
+
+  it('reads the binding\'s feature on its target entity, Model rows only, past the server cache', async () => {
+    const reads: RunViewParams[] = [];
+    await RenderLatest([Latest('r1', 0.9)], reads);
+    const latestRead = reads.find((r) => r.EntityName === 'MJ: Latest Feature Values');
+    expect([latestRead?.ExtraFilter, latestRead?.BypassCache]).toEqual(["EntityID='E-MEMBERS' AND FeatureName='Churn risk' AND Source='Model'", true]);
+  });
+
+  /** Two entities a pipeline's bindings can target. */
+  const entities = [TestEntityRows.Entity('Members', ['ID'], ['ID'], 'E-MEMBERS'), TestEntityRows.Entity('Others', ['ID'], ['ID'], 'E-OTHERS')];
+  type BindingFields = Pick<MJMLModelScoringBindingEntity, 'ID' | 'MLTrainingPipelineID' | 'FeatureName' | 'TargetEntityID' | 'Status'>;
+  const zeta: BindingFields = { ID: 'SB-Z', MLTrainingPipelineID: 'P1', FeatureName: 'Zeta risk', TargetEntityID: 'E-OTHERS', Status: 'Active' };
+  const alpha: BindingFields = { ID: 'SB-A', MLTrainingPipelineID: 'P1', FeatureName: 'Alpha risk', TargetEntityID: 'E-MEMBERS', Status: 'Active' };
+
+  /** Renders the churn model's grid over `bindings` (in that cache order), opened for `entityName`; returns the grid and its reads. */
+  async function RenderBindings(bindings: BindingFields[], entityName: string | null): Promise<{ grid: PSPredictionsGridComponent; reads: RunViewParams[] }> {
+    // the engine's cached bindings, typed entity rows
+    vi.spyOn(PredictiveStudioEngine.Instance, 'ScoringBindingsForPipeline').mockReturnValue(await TestEntityRows.Many(MJMLModelScoringBindingEntity, 'MJ: ML Model Scoring Bindings', bindings));
+    vi.spyOn(PredictiveStudioEngine.Instance, 'LoadRunDetails').mockResolvedValue({ Rows: [], Capped: false });
+    const reads: RunViewParams[] = [];
+    const provider = createFakeProvider<ModelRow | LatestPredictionRow>({
+      runViewResults: (p: RunViewParams) => {
+        reads.push(p);
+        if (p.EntityName === 'MJ: ML Models') return [churn];
+        if (p.EntityName === 'MJ: Latest Feature Values') return [Latest('r1', 0.9)];
+        return [];
+      },
+      entities,
+      entityByName: (name: string) => entities.find((e) => e.Name === name),
+    });
+    const fixture = renderComponentFixture(PSPredictionsGridComponent, {
+      inputs: { ModelId: churn.ID, Provider: provider, EntityName: entityName },
+      providers: [{ provide: NavigationService, useValue: {} }],
+    });
+    for (let i = 0; i < 5; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+    fixture.detectChanges();
+    return { grid: fixture.componentInstance, reads };
+  }
+
+  const latestFilter = (reads: RunViewParams[]): string | undefined => {
+    const filter = reads.find((r) => r.EntityName === 'MJ: Latest Feature Values')?.ExtraFilter;
+    return typeof filter === 'string' ? filter : undefined;
+  };
+
+  it('with no entity named, shows the first Active binding by feature name whatever the cache order, on that binding\'s entity', async () => {
+    const { grid, reads } = await RenderBindings([zeta, alpha], null);
+    expect(latestFilter(reads)).toBe("EntityID='E-MEMBERS' AND FeatureName='Alpha risk' AND Source='Model'");
+    expect(grid.ResolvedEntityName).toBe('Members');
+  });
+
+  it('opened for an entity, shows the Active binding on that entity', async () => {
+    const { grid, reads } = await RenderBindings([alpha, zeta], 'Others');
+    expect(latestFilter(reads)).toBe("EntityID='E-OTHERS' AND FeatureName='Zeta risk' AND Source='Model'");
+    expect(grid.ResolvedEntityName).toBe('Others');
+  });
+
+  it('opened for an entity no Active binding targets, reads the latest run instead of another entity\'s binding', async () => {
+    const { reads } = await RenderBindings([zeta], 'Members');
+    expect(latestFilter(reads)).toBeUndefined();
+  });
+
+  it('takes the drivers and the scored date from the stored value', async () => {
+    const grid = await RenderLatest([Latest('r1', 0.9)], []);
+    expect(grid.AllRows[0].drivers.map((d) => [d.Label, d.Up])).toEqual([['Days Since Login', true]]);
+    expect(grid.AllRows[0].scoredAtDate?.toISOString()).toBe('2026-11-03T00:00:00.000Z');
+  });
+});
+
+describe('PSPredictionsGridComponent (DOM) — the selection becomes a List through "Materialize List From View"', () => {
+  const model: ModelRow & Pick<MJMLModelEntity, 'PipelineID'> = { ID: 'm-churn', PipelineID: 'P1', ProblemType: 'classification', TargetVariable: 'Churned', Lineage: null, OutputSemantics: null };
+  const members = TestEntityRows.Entity('Members', ['ID'], ['ID'], 'E-MEMBERS');
+
+  /**
+   * A User View double: the generated entity over an in-memory `EntityInfo` holding the fields the grid writes, with
+   * the save it calls and the delete its failure path calls replaced (no provider is reached).
+   */
+  class ViewDouble extends MJUserViewEntity {
+    public Deletes = 0;
+    private saved = false;
+    constructor(private readonly saves = true, private readonly deletes = true) {
+      super(TestEntityRows.Entity('MJ: User Views', ['ID', 'Name', 'EntityID', 'UserID', 'WhereClause', 'FilterState', 'CustomWhereClause', 'IsShared']));
+      this.CustomWhereClause = false;
+      this.IsShared = true;
+    }
+    public override get IsSaved(): boolean { return this.saved; }
+    public override NewRecord(): boolean { return true; }
+    public override async Save(): Promise<boolean> {
+      if (!this.saves) return false;
+      this.ID = 'VIEW-1';
+      this.saved = true;
+      return true;
+    }
+    public override async Delete(): Promise<boolean> {
+      this.Deletes++;
+      if (!this.deletes) throw new Error('delete refused');
+      this.saved = false;
+      return true;
+    }
+  }
+
+  /** What the action double returns: a created list, a refusal, or success without a list ID. */
+  type ActionOutcome = { Success: boolean; Message: string; Params: ActionParam[] };
+  const created: ActionOutcome = { Success: true, Message: 'ok', Params: [{ Name: 'CreatedListID', Value: 'LIST-1', Type: 'Output' }] };
+
+  /** Renders the grid over three run rows, picks the high tier and clicks "Save as list"; resolves once the save settles. */
+  async function SaveHighTier(view: ViewDouble, outcome: ActionOutcome, runs: Array<{ ActionID: string; Params: ActionParam[] }> = [], opened: string[] = []): Promise<PSPredictionsGridComponent> {
+    vi.spyOn(PredictiveStudioEngine.Instance, 'LoadRunDetails').mockResolvedValue({ Rows: [detail('r1', 0.9), detail('r2', 0.8), detail('r3', 0.1)], Capped: false });
+    vi.spyOn(PSPredictionsGridComponent.prototype, 'ResolveMaterializeActionID').mockResolvedValue('ACT-MATERIALIZE');
+    vi.spyOn(PSPredictionsGridComponent.prototype, 'RunListAction').mockImplementation(async (actionId: string, params: ActionParam[]) => {
+      runs.push({ ActionID: actionId, Params: params });
+      return outcome;
+    });
+    const fake = createFakeProvider<ModelRow | { ID: string }>({
+      runViewResults: (p: RunViewParams) => (p.EntityName === 'MJ: ML Models' ? [model] : []),
+      entityByName: (name: string) => (name === 'Members' ? members : undefined),
+    });
+    // the grid creates its User View through the provider: a typed mock of GetEntityObject resolving to the view
+    const provider = Object.assign(fake, { GetEntityObject: vi.fn<IMetadataProvider['GetEntityObject']>().mockResolvedValue(view) });
+    const fixture = renderComponentFixture(PSPredictionsGridComponent, {
+      inputs: { ModelId: model.ID, RunId: 'run-1', EntityName: 'Members', Provider: provider },
+      providers: [{ provide: NavigationService, useValue: { OpenEntityRecord: (entity: string, key: CompositeKey) => { opened.push(`${entity}:${key.ToURLSegment()}`); return 'tab'; } } }],
+    });
+    for (let i = 0; i < 5; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+    fixture.detectChanges();
+    fixture.componentInstance.SetTier('high');
+    fixture.detectChanges();
+    (query(fixture, '[data-testid="ps-predictions-save-list"]') as HTMLButtonElement).click();
+    for (let i = 0; i < 5; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+    return fixture.componentInstance;
+  }
+
+  it('saves the filtered rows as a User View of the target entity and runs the action with its ID', async () => {
+    const view = new ViewDouble();
+    const opened: string[] = [];
+    const runs: Array<{ ActionID: string; Params: ActionParam[] }> = [];
+    await SaveHighTier(view, created, runs, opened);
+    // not a custom clause: MJ refuses CustomWhereClause from a non-Owner user; a plain view keeps a WhereClause set before its first save
+    expect([view.EntityID, view.UserID, view.WhereClause, view.CustomWhereClause, view.IsShared]).toEqual(['E-MEMBERS', 'test-user-id', "ID IN ('r1','r2')", false, false]);
+    // every value is a string: the GraphQL action input types Value as String, so a boolean is refused on the wire
+    expect(runs.map((r) => [r.ActionID, r.Params.map((p) => [p.Name, p.Value])])).toEqual([
+      ['ACT-MATERIALIZE', [['ViewID', 'VIEW-1'], ['ListName', view.Name], ['RememberLineage', 'true']]],
+    ]);
+    expect(opened).toEqual(['MJ: Lists:ID|LIST-1']);
+    expect(view.Deletes).toBe(0);
+  });
+
+  it('stores the selection as the view\'s FilterState too, so a later recompile of the saved view keeps the same records', async () => {
+    const view = new ViewDouble();
+    await SaveHighTier(view, created);
+    expect(JSON.parse(view.FilterState || 'null')).toEqual({ logic: 'or', filters: [{ field: 'ID', operator: 'in', value: ['r1', 'r2'] }] });
+  });
+
+  it.each([
+    ['the action is refused', { Success: false, Message: 'refused', Params: [] }, 'refused'],
+    ['the action creates no list', { Success: true, Message: '', Params: [] }, 'the action created no list'],
+  ])('deletes the private User View it created when %s', async (_case: string, outcome: ActionOutcome, reason: string) => {
+    const view = new ViewDouble();
+    const grid = await SaveHighTier(view, outcome);
+    expect([view.Deletes, view.IsSaved]).toEqual([1, false]);
+    expect(grid.ListMessage).toBe(`Could not save the list: ${reason}`);
+  });
+
+  it('keeps the action\'s failure as the message when the cleanup delete fails too', async () => {
+    const view = new ViewDouble(true, false);
+    const grid = await SaveHighTier(view, { Success: false, Message: 'refused', Params: [] });
+    expect(view.Deletes).toBe(1);
+    expect(grid.ListMessage).toBe('Could not save the list: refused');
+  });
+
+  it('deletes nothing when the view itself was not saved', async () => {
+    const view = new ViewDouble(false);
+    const grid = await SaveHighTier(view, created);
+    expect(view.Deletes).toBe(0);
+    expect(grid.ListMessage).toContain('the selection\'s view was not saved');
+  });
+});
+
+describe('PSPredictionsGridComponent.ActionIDByName', () => {
+  it('finds the action by its trimmed, case-insensitive name, or null', () => {
+    const actions = [{ ID: 'A1', Name: 'Run Report' }, { ID: 'A2', Name: ' materialize list from view ' }];
+    expect(PSPredictionsGridComponent.ActionIDByName(actions, 'Materialize List From View')).toBe('A2');
+    expect(PSPredictionsGridComponent.ActionIDByName(actions, 'Missing')).toBeNull();
+  });
+});
+
+describe('PSPredictionsGridComponent.SelectionFilterState', () => {
+  const single = TestEntityRows.Entity('Single', ['ID']);
+
+  it('puts at most 500 IDs in one `in` rule (the filter compiler\'s limit) and ORs the chunks', () => {
+    const ids = Array.from({ length: 1201 }, (_v, i) => `id-${i}`);
+    const state = PSPredictionsGridComponent.SelectionFilterState(single, ids);
+    expect(state.logic).toBe('or');
+    expect(state.filters.map((f) => ('value' in f && Array.isArray(f.value) ? f.value.length : -1))).toEqual([500, 500, 201]);
+  });
+
+  it('expands a composite key to an AND of `eq` rules per record', () => {
+    const composite = TestEntityRows.Entity('Composite', ['A', 'B'], ['A', 'B']);
+    const state = PSPredictionsGridComponent.SelectionFilterState(composite, ['A|1||B|x']);
+    expect(state).toEqual({ logic: 'or', filters: [{ logic: 'and', filters: [{ field: 'A', operator: 'eq', value: '1' }, { field: 'B', operator: 'eq', value: 'x' }] }] });
   });
 });

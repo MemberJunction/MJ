@@ -12,6 +12,8 @@
 
 import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 
+import { PredictiveStudioEvidenceGuard, PredictiveStudioStatusGuard } from './registry';
+
 // The self-managing Python-sidecar client `MLSidecar` lives in its own package,
 // `@memberjunction/predictive-studio-sidecar` — import it directly from there.
 // It is intentionally NOT re-exported here (CLAUDE.md rule 5: no cross-package re-exports).
@@ -43,10 +45,25 @@ export * from './feature-pipelines';
 // Training orchestration — TrainingEngine + its injected seams (§3/§4.3/§4.4/§8.2/§11).
 export * from './training';
 
-// Scoring — MLModelInferenceProcessor (Record Set Processing work type) + write-back (§10).
+// Model registry — RegistryContext (the request's user and the provider every registry, gate and scoring call runs on)
+// and ArtifactRegistry (write-once artifact storage, and a verified ArtifactLoad on every load).
+export * from './registry';
+
+// Governance — StoredEvidenceBuilder (a model's evidence from stored rows), SignOffService (a person's recorded sign-off,
+// evidence-hashed) and StoredSignOffLookup (the gate's read of the request's approving sign-off).
+export * from './governance';
+
+// The registry's PreSave guards, registered once per process by every process that loads the Engine (MJAPI among
+// them): the status guard (only the lifecycle gate changes MJ: ML Models.Status, re-derived on every publish) and the
+// evidence guard (stored evidence is write-once). Both are idempotent, across copies of this module too.
+PredictiveStudioStatusGuard.Register();
+PredictiveStudioEvidenceGuard.Register();
+
+// Scoring — MLModelInferenceProcessor (Record Set Processing work type) + write-back (§10), and the daily prediction
+// retention job's driver (PredictiveStudioPredictionRetentionJobDriver, registered with BaseScheduledJob on load).
 export * from './scoring';
 
-// Scheduling — createScheduledModelScoring: bind a trained model to write its
+// Scheduling — CreateScheduledModelScoring: bind a trained model to write its
 // prediction into a target entity column on a recurring schedule, by assembling a
 // single scheduled MJ: Record Processes row (the north-star enabler, PS2-6).
 export * from './scheduling';
@@ -68,10 +85,10 @@ export * from './migration';
 // delegation path), invocable by stable key from client or server (§12).
 export * from './operations';
 
-// Maintenance — MaintenanceEngine (staleness detection / scheduled re-scoring /
-// retraining triggers + challenger-vs-incumbent promotion recommendation), the
-// RetrainingPolicy model, its DI seams, and the default honest drift detector (§12 / SP10).
-export * from './maintenance';
+// Monitoring — PredictiveStudioModelMonitoringJobDriver (the one monitoring job per Published model: outcome join,
+// period scores with intervals, drift by procedure M, retrain triggers, challenger, rollback, mirror divergence,
+// parity) and its steps and production seams. Importing the module registers the driver with the class factory.
+export * from './monitoring';
 
 // Agent builder — the Predictive Studio Agent's DETERMINISTIC builder: the pure
 // ModelingPlanSpec→pipeline-config mapper + PredictiveStudioPipelineBuilder (create

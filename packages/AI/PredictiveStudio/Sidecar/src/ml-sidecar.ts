@@ -4,8 +4,13 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  MonitoringResultSchemas,
   TrainerContract,
   type JsonValue,
+  type MonitorCalibrateRequest,
+  type MonitorCalibrateResponse,
+  type MonitorDriftRequest,
+  type MonitorDriftResponse,
   type PredictRequest,
   type PredictResponse,
   type TrainerRequest,
@@ -43,6 +48,11 @@ export interface MLSidecarOptions {
    * (`…/Sidecar/.venv/bin/python`) when present, otherwise `python3`.
    */
   pythonPath?: string;
+  /**
+   * Port the managed service listens on (default `0`: the OS assigns an ephemeral port). A fixed port lets a restarted
+   * sidecar answer on the URL its remote clients already hold. Ignored in remote mode.
+   */
+  port?: number;
   /** Startup timeout in ms (default: 30000). */
   startupTimeoutMs?: number;
   /** Per-request timeout in ms (default: 300000 — training can be slow). */
@@ -80,6 +90,18 @@ export class TrainerResultMalformedError extends Error {
   constructor(problems: readonly string[]) {
     super(`The sidecar's /trainer answer is not a TrainerResult: ${problems.join('; ')}`);
     this.name = 'TrainerResultMalformedError';
+    this.Problems = problems;
+  }
+}
+
+/** The sidecar's `/monitor/drift` answered 2xx with a body that is not a {@link MonitorDriftResponse}. */
+export class MonitorDriftResponseMalformedError extends Error {
+  /** One problem per mismatch with the contract (`<path>: <message>`). */
+  public readonly Problems: readonly string[];
+
+  constructor(problems: readonly string[]) {
+    super(`The sidecar's /monitor/drift answer is not a MonitorDriftResponse: ${problems.join('; ')}`);
+    this.name = 'MonitorDriftResponseMalformedError';
     this.Problems = problems;
   }
 }
@@ -128,7 +150,7 @@ const DEFAULT_SERVER_PATH = resolveServerPath();
  * Two topologies, chosen automatically:
  *
  * - **Managed mode (default):** {@link Start} spawns the bundled FastAPI service
- *   (`src/python/server.py`) on 127.0.0.1 with an ephemeral port, reads
+ *   (`src/python/server.py`) on 127.0.0.1 with an ephemeral port (or the `port` option), reads
  *   `PREDICTIVE_STUDIO_SIDECAR_PORT=<n>` from its stdout, polls `/health` until
  *   ready, and registers SIGINT/SIGTERM/exit cleanup. On macOS it injects
  *   `DYLD_LIBRARY_PATH=/opt/homebrew/opt/libomp/lib` so xgboost/lightgbm load.
@@ -174,6 +196,8 @@ export class MLSidecar {
   private readonly serverPath: string;
   private readonly startupTimeoutMs: number;
   private readonly requestTimeoutMs: number;
+  /** The port passed to the managed service (`0`: ephemeral). */
+  private readonly requestedPort: number;
   private stopping = false;
   private cleanupRegistered = false;
   /**
@@ -194,6 +218,19 @@ export class MLSidecar {
     this.serverPath = DEFAULT_SERVER_PATH;
     this.startupTimeoutMs = options?.startupTimeoutMs ?? MLSidecar.DefaultStartupTimeoutMs;
     this.requestTimeoutMs = options?.requestTimeoutMs ?? MLSidecar.DefaultRequestTimeoutMs;
+    this.requestedPort = MLSidecar.ValidatePort(options?.port || 0);
+  }
+
+  /**
+   * A port the managed service can be asked to listen on: an integer from 0 (ephemeral) to 65535.
+   *
+   * @throws Error naming the value when it is not such an integer
+   */
+  public static ValidatePort(port: number): number {
+    if (!Number.isInteger(port) || port < 0 || port > 65535) {
+      throw new Error(`MLSidecar: port ${port} is not an integer from 0 (ephemeral) to 65535`);
+    }
+    return port;
   }
 
   /** Whether this client is in remote (connect-only) mode. */
@@ -241,7 +278,7 @@ export class MLSidecar {
 
   private async spawnManaged(): Promise<void> {
     await new Promise<void>((resolve, reject) => {
-      const proc = spawn(this.pythonPath, [this.serverPath, '0'], {
+      const proc = spawn(this.pythonPath, [this.serverPath, String(this.requestedPort)], {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: this.buildSpawnEnv(),
       });
@@ -375,6 +412,34 @@ export class MLSidecar {
   async Predict(req: PredictRequest, signal?: AbortSignal): Promise<PredictResponse> {
     this.assertRunning();
     return this.httpPost<PredictRequest, PredictResponse>('/predict', req, undefined, signal);
+  }
+
+  /**
+   * Run one look of monitor procedure M by POSTing a {@link MonitorDriftRequest} to `/monitor/drift`: each input's z
+   * against its training window, its empirical p against seeded no-drift replays at the look, and Benjamini–Hochberg
+   * across the look's inputs at q(L) (D4-11: the sidecar computes every statistic). The answer is checked against the
+   * contract before it is returned (the monitoring job stores it verbatim), never cast.
+   * @throws {SidecarError} when the sidecar refuses the request (422: outside the contract) or fails (5xx)
+   * @throws {MonitorDriftResponseMalformedError} when a 2xx answer is not a {@link MonitorDriftResponse}
+   */
+  async MonitorDrift(req: MonitorDriftRequest, signal?: AbortSignal): Promise<MonitorDriftResponse> {
+    this.assertRunning();
+    const answer = await this.httpPost<MonitorDriftRequest, JsonValue>('/monitor/drift', req, undefined, signal);
+    const parsed = MonitoringResultSchemas.ParseMonitorDriftResponse(answer);
+    if (parsed.Ok === false) throw new MonitorDriftResponseMalformedError(parsed.Errors);
+    return parsed.Value;
+  }
+
+  /**
+   * Find q(L) for a monitoring design by POSTing a {@link MonitorCalibrateRequest} to `/monitor/calibrate`: the
+   * largest level whose any-alarm rate over L looks on seeded no-drift replays is at most the target, by bisection.
+   * Operator API (D4-11): no job calls it; it is how an operator derives q(L) for a look design other than the shipped
+   * 12-look (`MonitoringJobSpecs.DEFAULT_DRIFT_Q`) and 3-look ones, and the sidecar's calibration tests pin those two.
+   * @throws {SidecarError} when the sidecar refuses the request (422: outside the contract) or fails (5xx)
+   */
+  async MonitorCalibrate(req: MonitorCalibrateRequest): Promise<MonitorCalibrateResponse> {
+    this.assertRunning();
+    return this.httpPost<MonitorCalibrateRequest, MonitorCalibrateResponse>('/monitor/calibrate', req);
   }
 
   /**

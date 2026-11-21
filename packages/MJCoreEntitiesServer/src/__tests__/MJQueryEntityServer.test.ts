@@ -48,6 +48,9 @@ import type {
     PassthroughParamContext,
     ResolvedCompositionReference,
 } from '../custom/query-extraction/types';
+import { ExpectedConsole } from './helpers/expected-console';
+
+ExpectedConsole.Install([/^Warning \(MJQ_COMPOSITION_PARTIAL_PATH\): the composition reference \"Demos\/Active Users\" names the query at \"MJ\/Demos\/Active Users\" by part of its category path/]);
 
 const tsqlDialect = new SQLServerDialect();
 const extractSelectColumns = (sql: string, dialect = tsqlDialect) => SQLParser.ExtractSelectColumns(sql, dialect);

@@ -36,8 +36,8 @@
     "@memberjunction/predictive-studio-core": "6.3.0-edge.1"
   },
   "devDependencies": {
-    "typescript": "^5.9.3",
     "tsc-alias": "^1.8.10",
+    "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   }
 }

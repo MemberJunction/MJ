@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "D1c -> S8.1",
+    "Description": "Gate G6.1 (owner PR 4, phase 6, dataset D1c, criterion S8.1): every D1c prediction whose label window closed has a joined outcome row, 100%. A model trained on periods 0-2 is published, bound and scored as of each of periods 3-5; PredictiveStudio.RunModelMonitoring runs each period and the MJ: ML Monitoring Results row counts the closed-window predictions (scored less training rows) and the joined ones.",
+    "Status": "Active",
+    "Tags": "[\"gate\", \"G6.1\", \"owner:PR4\", \"phase:6\", \"dataset:D1c\", \"criterion:S8.1\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 3600000,
+    "ExpectedOutcomes": {
+      "summary": "Every closed-window prediction has a joined outcome (joined equals closedWindowPredictions)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-d1c-s8-1"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "74CD0BC2-C795-41E6-B425-1E48543D2998"
+  }
+}

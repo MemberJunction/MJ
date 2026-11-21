@@ -33,6 +33,12 @@ import {
  */
 @RegisterClass(BaseAction, 'Materialize List From View')
 export class MaterializeListFromViewAction extends BaseAction {
+  /**
+   * The action authorizes its caller itself: `ListOperations` resolves the view and creates the list and its details
+   * as `params.ContextUser`, so the caller's own view, entity and List permissions decide what it may do.
+   */
+  public static readonly AuthorizesCaller: boolean = true;
+
   protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
     const viewId = GetStringParam(params, 'ViewID');
     const listName = GetStringParam(params, 'ListName');

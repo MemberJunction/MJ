@@ -12,6 +12,8 @@ import {
 } from '@memberjunction/core-entities';
 import { Metadata, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
+import { ExpectedConsole } from './helpers/expected-console';
+
 
 class MockDriver extends BaseIdentityClaimDriver {
     public onCreateCalled = false;
@@ -183,6 +185,9 @@ describe('IdentityClaimEngineServer', () => {
 
         vi.spyOn(IdentityClaimEngine.Instance, 'GetDriverInstance').mockReturnValue(mockDriver);
     });
+
+    // After the suite's own beforeEach, which restores every mock (and so would drop an earlier console capture).
+    ExpectedConsole.Install([/^\[IdentityClaimEngineServer\] driver\.OnClaim threw exception for claim claim-err-1: Transient downstream payment API timeout$/, /^\[IdentityClaimEngineServer\] RevokeClaim failed to save claim claim-123: unknown error$/]);
 
     it('should normalize email addresses properly', () => {
         const engine = IdentityClaimEngineServer.Instance;

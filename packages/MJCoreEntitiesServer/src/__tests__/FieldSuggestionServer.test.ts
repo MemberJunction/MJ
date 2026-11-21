@@ -28,6 +28,8 @@ import {
     MJCommentEntityServer,
     MJFieldSuggestionEntityServer,
 } from '../index';
+import { ExpectedConsole } from './helpers/expected-console';
+
 
 const TARGET_ENTITY_ID = '10000000-0000-4000-8000-000000000001';
 const TARGET_RECORD_ID = '20000000-0000-4000-8000-000000000002';
@@ -131,6 +133,9 @@ describe('FieldSuggestionCommentDriver, Server Subclasses & Security Hooks', () 
     beforeEach(() => {
         vi.restoreAllMocks();
     });
+
+    // After the suite's own beforeEach, which restores every mock (and so would drop an earlier console capture).
+    ExpectedConsole.Install([/^MJCommentEntityServer: malformed AllowedAnchorTypes JSON on CommentType 'Broken Type': /]);
 
     describe('FieldSuggestionCommentDriver.Validate', () => {
         it('rejects non-Field AnchorType, missing AnchorKey, non-opted-in entity, unknown field, and out-of-range Confidence', () => {

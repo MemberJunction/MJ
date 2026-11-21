@@ -8,6 +8,13 @@
  * evaluated by MJ's own `EvaluateAuthorizationChecks`.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+// Neutralize class-factory registration, as the package's other entity tests do: the server class registers over the
+// generated one, and the factory's duplicate-key warning is not what these tests check.
+vi.mock('@memberjunction/global', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/global')>();
+    return { ...actual, RegisterClass: () => (target: object) => target };
+});
 import {
     AuthorizationInfo,
     AuthorizationRoleInfo,

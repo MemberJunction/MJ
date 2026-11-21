@@ -1,6 +1,5 @@
-import { EntityFieldTSType, RunView, type EntityInfo, type UserInfo } from '@memberjunction/core';
+import { EntityFieldTSType, RunView, type EntityInfo, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
-import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MetadataEntityFactory, PipelineMigration } from '@memberjunction/predictive-studio';
 import {
   DOMINANCE_THRESHOLD_DEFAULT,
@@ -22,8 +21,8 @@ export interface AlgorithmRow {
 
 /** The harness's pipeline members. */
 export class HarnessPipelines {
-  /** Load all `MJ: ML Algorithms` rows from the provider. */
-  public static async LoadAlgorithms(provider: GraphQLDataProvider, user: UserInfo): Promise<AlgorithmRow[]> {
+  /** Load all `MJ: ML Algorithms` rows from the provider (MJAPI's client provider, or an in-process server provider). */
+  public static async LoadAlgorithms(provider: IMetadataProvider, user: UserInfo): Promise<AlgorithmRow[]> {
     const res = await RunView.FromMetadataProvider(provider).RunView<AlgorithmRow>(
       { EntityName: 'MJ: ML Algorithms', Fields: ['ID', 'Name', 'DriverClass'], ResultType: 'simple' },
       user,
@@ -58,7 +57,7 @@ export class HarnessPipelines {
    * that it is refused (`UNIT_REQUIRED`).
    */
   public static async CreatePipeline(
-    provider: GraphQLDataProvider,
+    provider: IMetadataProvider,
     user: UserInfo,
     algos: readonly AlgorithmRow[],
     spec: PipelineSpec,
@@ -93,7 +92,7 @@ export class HarnessPipelines {
   }
 
   /** Binds version 1 of the pipeline's unit and protocol through the pipeline migration; throws unless it migrated. */
-  private static async migrate(provider: GraphQLDataProvider, user: UserInfo, p: MJMLTrainingPipelineEntity): Promise<void> {
+  private static async migrate(provider: IMetadataProvider, user: UserInfo, p: MJMLTrainingPipelineEntity): Promise<void> {
     const deps = { Provider: provider, User: user, EntityFactory: new MetadataEntityFactory(provider), Today: UtcDay.UtcDayIso(new Date()) };
     const row = await PipelineMigration.EnsurePipelineUnitAndProtocol(p, deps, false);
     if (row.Action === 'held' && row.Reason === TIME_INDEX_HOLD_REASON) return;

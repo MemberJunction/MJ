@@ -45,7 +45,8 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         public LatestResult = { CompleteMessage: '', Errors: [] as Error[] };
         public RegisterResultHistoryEntry = vi.fn();
         public get ProviderToUse() { return { Entities: [] }; }
-        public get RunViewProviderToUse() { return {}; }
+        // The post-save fingerprint reads the stored SQL and parameter rows; this query has none.
+        public get RunViewProviderToUse() { return { RunViews: async () => [{ Success: true, Results: [] }, { Success: true, Results: [] }] }; }
         public GetFieldByName(): { Dirty: boolean } { return { Dirty: true }; }
         public GetPlatformSQL(_platform: DatabasePlatform): string | null { return this.SQL; }
         public async Save(): Promise<boolean> {
@@ -79,6 +80,10 @@ vi.mock('../custom/approvalStamp', () => ({
 }));
 
 import { MJQueryEntityServer } from '../custom/MJQueryEntityServer.server';
+import { QueryEngine } from '@memberjunction/core-entities';
+import { ExpectedConsole } from './helpers/expected-console';
+
+ExpectedConsole.Install([/^\[MJQueryEntityServer\] Query "Account Balances": The extracted child rows could not be written: the query is not saved through a database provider$/]);
 
 /** The generated base's constructor takes an EntityInfo; the stub takes none, so construct without arguments. */
 function createQuery(sql: string): MJQueryEntityServer {
@@ -88,6 +93,8 @@ function createQuery(sql: string): MJQueryEntityServer {
 }
 
 beforeEach(() => {
+    // The query engine is not loaded through a database here; saving reads its (stubbed) queries without loading it.
+    vi.spyOn(QueryEngine.Instance, 'Loaded', 'get').mockReturnValue(true);
     writes.length = 0;
 });
 

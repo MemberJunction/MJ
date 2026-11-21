@@ -120,6 +120,9 @@ import { MJQueryEntityServer } from '../custom/MJQueryEntityServer.server';
 import { MJQuerySQLEntityServer } from '../custom/MJQuerySQLEntityServer.server';
 import { RunDescriptionPass } from '../custom/query-extraction/descriptionPass';
 import { IsLocalEmbeddingStaleHelper } from '../custom/util';
+import { ExpectedConsole } from './helpers/expected-console';
+
+ExpectedConsole.Install([/^Failed to save query:/, /^\[MJQueryEntityServer\] Query \"Q\": The extracted child rows could not be written: insert refused$/, /^\[MJQuerySQLEntityServer\] Triggering re-extraction on \"Q\" — dialect variant saved for sqlserver$/]);
 
 /** A SQL Server database provider stub: a real `DatabaseProviderBase` prototype, so the entity treats it as one. */
 function sqlServerProvider(): DatabaseProviderBase {

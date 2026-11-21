@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "R1 -> S7.6",
+    "Description": "Gate G6.12 (owner PR 4, phase 6, dataset R1, criterion S7.6): parity on scored R1 rows raises 1 alert with one planted 1e-6 skew and 0 without (tolerance 1e-9, re-sampled once).",
+    "Status": "Active",
+    "Tags": "[\"gate\", \"G6.12\", \"owner:PR4\", \"phase:6\", \"dataset:R1\", \"criterion:S7.6\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 3600000,
+    "ExpectedOutcomes": {
+      "summary": "0 alerts on the clean period, 1 after the planted skew."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-r1-s7-6"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "CC31D7F3-B87C-46D5-A65F-475F25DDF9E6"
+  }
+}

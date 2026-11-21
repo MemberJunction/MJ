@@ -1788,6 +1788,17 @@
           "primaryKey": {
             "ID": "5941BA01-ECFA-40CF-8B53-4D817EBAC6C2"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT185 - PS Prediction Serving — Zero Schema Change",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "AB9A7DFE-F06B-4759-81F9-5E56175234E6"
+          }
         }
       ]
     },

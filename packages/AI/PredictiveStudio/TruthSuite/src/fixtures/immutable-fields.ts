@@ -29,6 +29,12 @@ export const TRUTH_IMMUTABLE_FIELDS: readonly ImmutableFieldDeclaration[] = [
   { BaseTable: 'Scn_R3', Fields: ['EntityKey', 'T', 'PastEventsZ', 'Member', 'DistanceZ', 'Target', 'TruthScore'] },
   { BaseTable: 'Scn_C2', Fields: ['EntityKey', 'T', 'ClaimAmountZ', 'PriorClaims', 'NewPolicy', 'ReportDelayZ', 'NoiseZ', 'Target', 'TruthScore'] },
   { BaseTable: 'Scn_T2p', Fields: ['EntityKey', 'T', 'UsageZ', 'Discount', 'Target', 'TruthScore'] },
+  { BaseTable: 'Scn_R1', Fields: ['EntityKey', 'T', 'DistanceZ', 'ItemsZ', 'TrafficZ', 'Target', 'TruthScore'] },
+  // The monitoring gates' scenarios (M6.6/M6.7): trained and monitored as of each row's T.
+  { BaseTable: 'Scn_D1c', Fields: ['EntityKey', 'T', 'EngagementZ', 'TenureZ', 'AutoRenew', 'Target', 'TruthScore'] },
+  { BaseTable: 'Scn_D1r', Fields: ['EntityKey', 'T', 'EngagementZ', 'TenureZ', 'AutoRenew', 'Target', 'TruthScore'] },
+  { BaseTable: 'Scn_D2', Fields: ['EntityKey', 'T', 'EngagementZ', 'TenureZ', 'AutoRenew', 'Target', 'TruthScore'] },
+  { BaseTable: 'Scn_T4', Fields: ['EntityKey', 'T', 'LagTarget', 'Target', 'TruthScore'] },
 ];
 
 /** The dataset prefixes a test-schema table name can carry. */

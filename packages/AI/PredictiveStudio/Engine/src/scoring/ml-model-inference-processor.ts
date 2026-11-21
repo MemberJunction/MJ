@@ -14,7 +14,9 @@
  *    `FeatureSchema`, `ProblemType`) + its pipeline assembly config are loaded
  *    **once per processor run** and reused across every record (the Python
  *    sidecar also warm-caches by model id — §3.1). The serialized artifact is
- *    fetched once via the injected {@link IArtifactLoader}.
+ *    fetched once through the artifact registry (`ArtifactRegistry.Load` over the
+ *    injected {@link IArtifactLoader}), which verifies it against the model's
+ *    registered SHA-256; a load that is not verified refuses the run.
  * 2. **Assemble features** via the SAME {@link FeatureAssemblyExecutor} as
  *    training, in the **on-demand / transform-only** context, using the model's
  *    FROZEN `FeatureSchema` + `FittedPreprocessing` (never re-fit — the anti-skew
@@ -26,13 +28,17 @@
  *    levels training stored in the model Lineage.
  * 3. **Call the sidecar `/predict`** with the artifact + frozen preprocessing +
  *    feature schema + the assembled row(s) → predictions (score + class).
- * 4. **Produce the per-record `RecordResult`** carrying the prediction.
- *    **Ephemeral by default**; when the Record Process has an `OutputMapping`,
- *    `RecordProcessExecutor` wraps this processor in the shared `WriteBackProcessor`
- *    (exactly as it does for the Action/Agent/Infer siblings) so the score lands
- *    as a sortable/filterable column or child record. The write-back is NOT done
- *    here — keeping it in the wrapper is how all work types share one declarative
- *    write-back.
+ * 4. **Produce the per-record `RecordResult`** carrying the prediction. A Record
+ *    Process no scoring binding names writes Process Run Details only; its
+ *    `OutputMapping` is ignored ({@link MLModelInferenceProcessor.PrepareOutputMapping}).
+ *
+ * ## A Record Process a scoring binding names (§5.8.3, D4-53)
+ * Preflight admits the binding through `ScoringService.Admit` (the binding's refusals, its pipeline's Published model,
+ * checks 1–3); a refusal writes a refused `MJ: ML Scoring Runs` row and refuses the run with
+ * {@link ScoringRefusedError}. Each batch is then one `ScoringService.Score` call over the batch's records, so one
+ * scoring run row per batch, `Source = 'Model'` Feature Values and the binding's column copy (no `OutputMapping`
+ * write-back). The processor declares {@link MLModelInferenceProcessor.FailRunOnRecordError}: a failed or refused
+ * batch fails the Process Run, and the batches after it are not scored.
  *
  * ## Registration (work-type key)
  * Registered on the MJGlobal ClassFactory via
@@ -75,6 +81,7 @@ import {
   type PredictionUnitSpec,
   type AssemblyRefusal,
   type UncoveredRowsCount,
+  type ArtifactLoad,
   LABEL_COLUMN,
   PredictionUnit,
 } from '@memberjunction/predictive-studio-core';
@@ -93,17 +100,28 @@ import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
 import { TrainingEngine } from '../training/training-engine';
 import { TrainingRefusedError } from '../training/training-refusal';
 import { UnitModelLineageParser } from '../training/unit-model-lineage';
+import { ArtifactRegistry } from '../registry/artifact-registry';
 import { RunViewPipelineUnitLookup, RunViewTrainingRowsLookup } from './seams';
 import {
+  ArtifactUnavailableError,
   ModelHasTrainedArtifact,
   ModelNeedsTrainingMessage,
-  ModelArtifactMissingMessage,
   ModelNeedsTrainingError,
   ModelNotScorableError,
   ModelNotServableError,
   ModelReadiness,
 } from './model-readiness';
-import type { MJRecordProcessEntity_IRecordProcessChallengerConfig } from '@memberjunction/core-entities';
+import type { MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
+import { EscapeSQLString as escapeSQL } from '@memberjunction/global';
+import type { ScoredRow, ScoringResult } from '@memberjunction/predictive-studio-core';
+import { CompositeKey, DatabaseProviderBase, type IMetadataProvider } from '@memberjunction/core';
+import { StoredRowReads } from '../registry/stored-row-reads';
+import { ScoringChecks } from './scoring-checks';
+import { ModelValueRows } from './model-value-rows';
+import type { ScoringContext } from './scoring-context';
+import { ScoringRefusedError } from './scoring-refused-error';
+import { InferenceScoringRuntime, MemoizedScoringRuntime, type ScoringServiceSeams } from './scoring-seams';
+import { ScoringService } from './scoring-service';
 import type {
   IModelAutoTrainer,
   MLAutoTrainConfig,
@@ -112,10 +130,16 @@ import type {
   LoadedModel,
   LoadedUnitModel,
 } from './types';
-import { SHADOW_NOT_DISPATCHED, type ShadowDispatchResult, type ShadowScoringCoordinator } from './shadow-scoring';
 
 /** The read seams a unit model's scoring assembly uses: the run's metadata and counting data access. */
 export interface ScoringSeams { readonly Metadata: IAssemblyMetadata; readonly DataAccess: ICountingDataAccess }
+
+/**
+ * How many batches of a Record Process a scoring binding names are scored at once (Record Set Processing's
+ * `MaxConcurrentBatches`). Each batch is its own `ScoringService.Score` call: its own transaction and its own
+ * `MJ: ML Scoring Runs` row (D4-53); the batches are disjoint record sets.
+ */
+export const BOUND_SCORING_BATCH_CONCURRENCY = 4;
 
 /** Stable work-type keys this processor is registered under on the ClassFactory. */
 export const ML_INFERENCE_WORK_TYPE = 'ML Model';
@@ -127,9 +151,8 @@ export const ML_INFERENCE_WORK_TYPE_ALIAS = 'MLModelInference';
  * for a warm, lazily-loaded model cache (artifact + frozen contract) shared
  * across a batch. Construct one per Record Process run.
  *
- * Note on drift population: An ML Record Process with no challenger configured
- * does not run shadow sampling, so no Feature Values are recorded and the
- * scheduled drift sweep reports InsufficientData for it (S5).
+ * A process no scoring binding names writes Process Run Details only (no Feature Value, champion or challenger); a
+ * bound process scores through `ScoringService`, whose live mirror writes the challenger's rows (D-069, §5.8.3).
  */
 @RegisterClass(MLModelInferenceProcessor, ML_INFERENCE_WORK_TYPE)
 export class MLModelInferenceProcessor implements IRecordProcessor {
@@ -142,8 +165,17 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
   private readonly datedSources?: DatedSourceSpec[];
   private readonly assembler: FeatureAssemblyExecutor;
   private readonly recordProcessId?: string;
-  private readonly challengerConfig?: MJRecordProcessEntity_IRecordProcessChallengerConfig;
-  private readonly shadowCoordinator?: ShadowScoringCoordinator;
+  private readonly serviceSeams?: Partial<ScoringServiceSeams>;
+  /** The scoring binding that names this run's Record Process (read by Preflight); null for an unbound process. */
+  private binding: MJMLModelScoringBindingEntity | null = null;
+  /** The run date of a bound run: every batch scores as of the same day. */
+  private boundRunDate: Date | null = null;
+  /** The scoring run of the batch a bound run stopped at; the batches after it are not scored. */
+  private stoppedAtRunId: string | null = null;
+  /** The run's provider makes an independent instance per batch (read by Preflight); otherwise batches run one at a time. */
+  private independentBatches = false;
+  /** The bound run's model runtime: each model is prepared once per run, not once per batch. */
+  private boundRuntime: MemoizedScoringRuntime | null = null;
 
   /** Warm model cache — loaded once on first record, reused across the batch. */
   private loadedModel: LoadedModel | null = null;
@@ -175,16 +207,31 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     this.autoTrain = options.autoTrain;
     this.autoTrainer = options.autoTrainer;
     this.recordProcessId = options.recordProcessId;
-    if (options.challengerConfig && options.challengerConfig.WorkType !== 'ML Model') {
-      LogError(
-        `MLModelInferenceProcessor: skipping ChallengerConfigurationObject with mismatched WorkType '${String(options.challengerConfig.WorkType)}' (expected 'ML Model').`,
-      );
-      this.challengerConfig = undefined;
-    } else {
-      this.challengerConfig = options.challengerConfig;
-    }
-    this.shadowCoordinator = options.shadowCoordinator;
+    this.serviceSeams = options.scoringSeams;
     this.assembler = assembler ?? new FeatureAssemblyExecutor();
+  }
+
+  /** A run of a Record Process a scoring binding names fails when any record fails (D4-09: a failed batch stops the run). */
+  public get FailRunOnRecordError(): boolean {
+    return this.binding !== null;
+  }
+
+  /**
+   * A bound run on a provider that makes independent instances scores {@link BOUND_SCORING_BATCH_CONCURRENCY} batches
+   * at once; any other run one at a time, so concurrent transactions never share one provider instance. After a
+   * batch that does not complete, no later batch is scored: the batches already in flight finish (each in its own
+   * transaction, keeping its rows), every later batch's records fail naming the stopping run, and the run ends Failed.
+   */
+  public get MaxConcurrentBatches(): number {
+    return this.binding !== null && this.independentBatches ? BOUND_SCORING_BATCH_CONCURRENCY : 1;
+  }
+
+  /**
+   * A scoring Record Process writes no `OutputMapping`: a bound process's column is the binding's column copy, an
+   * unbound one writes Process Run Details only. The empty mapping keeps the substrate from wrapping a write-back.
+   */
+  public PrepareOutputMapping(): { OutputMapping: Record<string, unknown>; HasUnmappedWrites: boolean } {
+    return { OutputMapping: {}, HasUnmappedWrites: false };
   }
 
   /**
@@ -207,34 +254,92 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
    *
    * A dry run (`context.DryRun`) never auto-trains: training creates and publishes a model, repoints the
    * Record Process and archives the old model, none of which a compute-only run may do. It reports the
-   * {@link ModelNeedsTrainingError} instead.
+   * {@link ModelNeedsTrainingError} or {@link ArtifactUnavailableError} instead.
    *
    * @param context the run-level execution context (user + provider)
-   * @throws when the model is missing, has no trained artifact, or its artifact can't be loaded
+   * @throws ModelNeedsTrainingError when no model is configured, the model is not found, or it was never trained
+   * @throws ArtifactUnavailableError when the model's artifact load is not verified (missing, hash mismatch, unverified)
    */
   public async Preflight(context: RecordProcessorContext): Promise<void> {
+    this.binding = await this.readBinding(context);
+    this.independentBatches = MLModelInferenceProcessor.MakesIndependentInstances(context.Provider);
+    if (this.binding !== null) return this.admitBinding(this.binding, context);
     const model = await this.loadForPreflight(context);
     this.assertScopeEntity(model, context);
   }
 
-  /** Warm-load the model, training it first when it needs training and the run opted into auto-train. */
+  /** The scoring binding that names the run's Record Process, or null (none is Active or Withdrawn for it). */
+  private async readBinding(context: RecordProcessorContext): Promise<MJMLModelScoringBindingEntity | null> {
+    const recordProcessId = context.RecordProcessID || this.recordProcessId;
+    if (!recordProcessId) return null;
+    const read = await StoredRowReads.Run<MJMLModelScoringBindingEntity>({
+      EntityName: 'MJ: ML Model Scoring Bindings', ExtraFilter: `RecordProcessID='${escapeSQL(recordProcessId)}'`, OrderBy: 'Status ASC', ResultType: 'entity_object', MaxRows: 1,
+    }, { ContextUser: context.ContextUser, Provider: context.Provider });
+    if (!read.Success) throw new Error(`MLModelInferenceProcessor: reading the scoring binding of Record Process '${recordProcessId}' failed: ${read.ErrorMessage}`);
+    return read.Results[0] || null;
+  }
+
+  /**
+   * A bound run's Preflight: an opted-in auto-train first serves the pipeline's model (it may train and publish one),
+   * then `ScoringService.Admit` runs the binding's refusals and checks 1–3; a refusal writes its refused run row and
+   * refuses the run.
+   */
+  private async admitBinding(binding: MJMLModelScoringBindingEntity, context: RecordProcessorContext): Promise<void> {
+    if (this.autoTrain && this.autoTrainer && !context.DryRun) await this.loadForPreflight(context);
+    const scope = { kind: 'record-ids' as const, entity: binding.TargetEntity || '', ids: [] };
+    const refused = await new ScoringService(this.scoringContext(context, 1)).Admit(binding, scope, this.runDate(), context.DryRun === true);
+    if (refused !== null && refused.Status !== 'completed') throw new ScoringRefusedError(refused);
+  }
+
+  /** The scoring context of a bound batch: the run's user, provider and Process Run, `batchSize` records per batch. */
+  private scoringContext(context: RecordProcessorContext, batchSize: number): ScoringContext {
+    return {
+      ContextUser: context.ContextUser, Provider: context.Provider, Path: 'record-process', OverwriteHumanValues: context.OverwriteHumanValues === true,
+      ProcessRunID: context.ProcessRunID || null, ScheduledJobRunID: null, Seams: { ...this.serviceSeams, Runtime: this.runtimeForRun(), BatchSize: Math.max(1, batchSize) },
+    };
+  }
+
+  /** The bound run's memoized runtime over the given seam's runtime, else the production one over this run's deps. */
+  private runtimeForRun(): MemoizedScoringRuntime {
+    if (this.boundRuntime === null) this.boundRuntime = new MemoizedScoringRuntime(this.serviceSeams?.Runtime || new InferenceScoringRuntime(this.deps));
+    return this.boundRuntime;
+  }
+
+  /** The bound run's date: read once from the service's clock (the seams' or the system's). */
+  private runDate(): Date {
+    if (this.boundRunDate === null) this.boundRunDate = this.serviceSeams?.Clock ? this.serviceSeams.Clock.Now() : new Date();
+    return this.boundRunDate;
+  }
+
+  /**
+   * Warm-load the model, training it first when the run opted into auto-train and the model needs training
+   * ({@link MLModelInferenceProcessor.IsAutoTrainable}): it was never trained ({@link ModelNeedsTrainingError}), its
+   * artifact is lost (`artifact-missing`), or it is not Published (`model-not-published`: a status that may not score,
+   * {@link ModelNotScorableError}). A changed or unregistered artifact (`artifact-hash-mismatch`, `artifact-unverified`)
+   * is refused, never retrained over. Auto-train serves the pipeline's Published model, resumes a withheld publish, or
+   * trains and publishes; its run is attributed to this Process Run.
+   */
   private async loadForPreflight(context: RecordProcessorContext): Promise<LoadedModel> {
     try {
       return await this.ensureModel(context);
     } catch (err) {
       // Clear the memoized failure so a retry (or the auto-train below) re-attempts the load.
       this.resetModelCache();
-      if (!(err instanceof ModelNeedsTrainingError) || context.DryRun || !this.autoTrain || !this.autoTrainer) {
+      if (!(err instanceof Error) || !MLModelInferenceProcessor.IsAutoTrainable(err) || context.DryRun || !this.autoTrain || !this.autoTrainer) {
         throw err;
       }
     }
-    // Opt-in train-if-untrained: train the declared pipeline, publish, repoint, then score with it.
+    // Opt-in train-if-untrained: serve the pipeline's Published model (reused, resumed, or trained and published),
+    // repoint, then score with it.
     this.modelId = await this.autoTrainer.EnsureTrainedModel(
       {
         pipelineId: this.autoTrain.pipelineId,
         currentModelId: this.modelId || null,
-        recordProcessId: context.RecordProcessID ?? this.recordProcessId ?? null,
+        recordProcessId: context.RecordProcessID || this.recordProcessId || null,
         binding: this.autoTrain.binding,
+        processRunId: context.ProcessRunID,
+        retryAfterHours: this.autoTrain.retryAfterHours,
+        notifyOnWithheld: this.autoTrain.notifyOnWithheld,
       },
       context.ContextUser,
       context.Provider,
@@ -245,6 +350,16 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       this.resetModelCache();
       throw err;
     }
+  }
+
+  /**
+   * Whether a Preflight load failure is one auto-train answers: the model needs training, its artifact is missing, or
+   * its status is not Published (`model-not-published`). Pure.
+   */
+  public static IsAutoTrainable(err: Error): boolean {
+    return err instanceof ModelNeedsTrainingError
+      || err instanceof ModelNotScorableError
+      || (err instanceof ArtifactUnavailableError && err.Refusal.kind === 'artifact-missing');
   }
 
   /**
@@ -277,7 +392,6 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
    */
   public async ProcessRecord(record: RecordRef, context: RecordProcessorContext): Promise<RecordResult> {
     try {
-      const startedAt = Date.now();
       const model = await this.ensureModel(context);
       const row = this.recordToPlain(record);
       const assembly = await this.assembleFeatures(model, [row], context);
@@ -287,11 +401,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       if (!prediction) {
         return { Status: 'Failed', ErrorMessage: 'Sidecar returned no prediction for the record' };
       }
-      const championLatencyMs = Date.now() - startedAt;
-      const payload = this.toPayload(model, prediction, record.RecordID);
-      // The champion audit row is written before the record reports done; the challenger runs on.
-      await this.dispatchShadowIfConfigured(record, model, featureRows[0] ?? {}, prediction, championLatencyMs, context).ChampionAudit;
-      return { Status: 'Succeeded', ResultPayload: payload };
+      return { Status: 'Succeeded', ResultPayload: this.toPayload(model, prediction, record.RecordID) };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       LogError(`MLModelInferenceProcessor: scoring failed for record '${record.RecordID}': ${message}`);
@@ -303,7 +413,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
    * Batch-score many records in one sidecar round-trip. The warm model is loaded
    * once; features for all rows are assembled together (transform-only), then a
    * single `/predict` carries every row. Returns one {@link RecordResult} per
-   * input record, positionally aligned. Useful for bulk / materialization paths;
+   * input record, positionally aligned. Useful for bulk scoring paths;
    * the per-record `WriteBackProcessor` wrapper still owns write-back when the
    * engine drives records individually.
    *
@@ -314,37 +424,20 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     if (records.length === 0) {
       return [];
     }
+    if (this.binding !== null) return this.scoreBoundBatch(this.binding, records, context);
     try {
-      const startedAt = Date.now();
       const model = await this.ensureModel(context);
       const rows = records.map((r) => this.recordToPlain(r));
       const assembly = await this.assembleFeatures(model, rows, context);
       const featureRows = MLModelInferenceProcessor.MatrixToFeatureRows(assembly.matrix, model.featureSchema);
       const response = await this.callSidecar(model, featureRows);
-      // Amortize batch wall-clock latency across the batch size so per-record champion latency
-      // is comparable to single-record challenger latency for P95 latency-ratio drift checks.
-      const perRecordLatencyMs = (Date.now() - startedAt) / Math.max(1, records.length);
-      const dispatches: ShadowDispatchResult[] = [];
       const results = records.map((rec, i) => {
         const prediction = response.predictions[i];
         if (!prediction) {
           return { Status: 'Failed' as const, ErrorMessage: 'Sidecar returned no prediction for the record' };
         }
-        dispatches.push(
-          this.dispatchShadowIfConfigured(rec, model, featureRows[i] ?? {}, prediction, perRecordLatencyMs, context),
-        );
         return { Status: 'Succeeded' as const, ResultPayload: this.toPayload(model, prediction, rec.RecordID) };
       });
-      // The batch's champion audit rows are written before it reports done (at most one per record, so bounded
-      // by the batch); the challengers run on and are never awaited here.
-      await Promise.all(dispatches.map((d) => d.ChampionAudit));
-      // Counted from this batch's own dispatches: the coordinator's DroppedCount is shared by every run.
-      const dropped = dispatches.filter((d) => d.Dropped).length;
-      if (dropped > 0) {
-        LogError(
-          `MLModelInferenceProcessor: Record Process '${context.RecordProcessID ?? this.recordProcessId ?? ''}' run '${context.ProcessRunID ?? ''}': ${dropped} shadow challenger task(s) dropped in this batch (in-flight cap reached)`,
-        );
-      }
       return results;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -354,60 +447,70 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
   }
 
   /**
-   * Mirrors a sampled record to the challenger. Returns what was dispatched: the record's champion audit write
-   * (never rejects) for the caller to await, and whether the challenger was dropped. Nothing dispatched settles at once.
+   * One batch of a bound run: one `ScoringService.Score` over the batch's records (one scoring run row). A batch after
+   * one that did not complete is not scored.
    */
-  private dispatchShadowIfConfigured(
-    record: RecordRef,
-    model: LoadedModel,
-    featureRow: Readonly<Record<string, string | number | boolean | null>>,
-    prediction: Prediction,
-    championLatencyMs: number,
-    context: RecordProcessorContext,
-  ): ShadowDispatchResult {
-    if (
-      !this.shadowCoordinator ||
-      !this.challengerConfig ||
-      this.challengerConfig.WorkType !== 'ML Model' ||
-      context.DryRun
-    ) {
-      return SHADOW_NOT_DISPATCHED;
+  private async scoreBoundBatch(binding: MJMLModelScoringBindingEntity, records: RecordRef[], context: RecordProcessorContext): Promise<RecordResult[]> {
+    if (this.stoppedAtRunId !== null) {
+      const message = `Not scored: the run stopped at an earlier batch (scoring run ${this.stoppedAtRunId}).`;
+      return records.map(() => ({ Status: 'Failed' as const, ErrorMessage: message, ResultPayload: { scoringRunId: this.stoppedAtRunId } }));
     }
+    const entity = context.Provider.EntityByName(binding.TargetEntity || '');
+    if (!entity) throw new Error(`MLModelInferenceProcessor: binding '${binding.ID}' targets entity '${binding.TargetEntity}', which is not in the metadata`);
+    const ids = records.map((r) => String(CompositeKey.FromURLSegment(entity, r.RecordID).KeyValuePairs[0]?.Value || r.RecordID));
+    const batch = await MLModelInferenceProcessor.BatchProvider(context.Provider);
+    let result: ScoringResult;
+    let service: ScoringService;
     try {
-      // Sample BEFORE cloning the feature row or constructing the envelope (D3).
-      if (!this.shadowCoordinator.ShouldSample(this.challengerConfig)) {
-        return SHADOW_NOT_DISPATCHED;
-      }
-      const championConfidence =
-        model.problemType === 'classification' && Number.isFinite(prediction.score)
-          ? Math.max(prediction.score, 1 - prediction.score)
-          : undefined;
-      return this.shadowCoordinator.DispatchShadowScore(
-        {
-          RecordProcessID: context.RecordProcessID ?? this.recordProcessId,
-          ProcessRunID: context.ProcessRunID ?? null,
-          EntityID: record.EntityID || context.EntityID,
-          EntityName: model.targetEntityName,
-          RecordID: record.RecordID,
-          FeatureName: model.targetVariable || 'Prediction',
-          ChampionModelID: model.modelId,
-          ChallengerConfig: this.challengerConfig,
-          FrozenFeatures: Object.freeze({ ...featureRow }),
-          ChampionScore: prediction.score,
-          ChampionLabel: prediction.class != null ? String(prediction.class) : undefined,
-          ChampionConfidence: championConfidence,
-          ChampionLatencyMs: championLatencyMs,
-          DispatchedAt: new Date().toISOString(),
-        },
-        context.ContextUser,
-        context.Provider,
-        { AlreadySampled: true },
-      );
-    } catch (shadowErr: unknown) {
-      const msg = shadowErr instanceof Error ? shadowErr.message : String(shadowErr);
-      LogError(`MLModelInferenceProcessor: non-fatal shadow dispatch failure for '${record.RecordID}': ${msg}`);
-      return SHADOW_NOT_DISPATCHED;
+      service = new ScoringService(this.scoringContext({ ...context, Provider: batch.Provider }, records.length));
+      result = await service.Score(binding, { kind: 'record-ids', entity: entity.Name, ids }, this.runDate(), context.DryRun === true);
+    } finally {
+      if (batch.Independent !== null) await batch.Independent.ReleaseIndependentInstance();
     }
+    if (result.Status !== 'completed' && this.stoppedAtRunId === null) this.stoppedAtRunId = result.ScoringRunID;
+    return MLModelInferenceProcessor.BoundResults(ids, result, service.ScoredRows());
+  }
+
+  /**
+   * The provider one bound batch runs on: an independent instance of a database provider (its own transaction stack,
+   * the shared pool and metadata; `Independent`, released after the batch), so batches scored at once never share a
+   * transaction; a provider that cannot make one is used as given (`Independent` null).
+   */
+  public static async BatchProvider(provider: IMetadataProvider): Promise<{ readonly Provider: IMetadataProvider; readonly Independent: DatabaseProviderBase | null }> {
+    if (!(provider instanceof DatabaseProviderBase) || !MLModelInferenceProcessor.MakesIndependentInstances(provider)) {
+      return { Provider: provider, Independent: null };
+    }
+    const independent = await provider.CreateIndependentInstance();
+    return { Provider: independent, Independent: independent };
+  }
+
+  /** Whether `provider` makes independent instances (a database provider that implements `CreateIndependentInstance`). Pure. */
+  public static MakesIndependentInstances(provider: IMetadataProvider): boolean {
+    return provider instanceof DatabaseProviderBase && provider.CreateIndependentInstance !== DatabaseProviderBase.prototype.CreateIndependentInstance;
+  }
+
+  /**
+   * The record results of a bound batch, aligned with `ids`: a completed run's records succeed with their scores; a
+   * failed or refused run fails every record with the run in plain words (a failing record with its own error), the
+   * structured result on the payload. Pure.
+   */
+  public static BoundResults(ids: readonly string[], result: ScoringResult, rows: readonly ScoredRow[]): RecordResult[] {
+    if (result.Status === 'completed') {
+      const byId = new Map(rows.map((r) => [r.recordId.toLowerCase(), r]));
+      return ids.map((id) => {
+        const row = byId.get(id.toLowerCase());
+        return row ? { Status: 'Succeeded' as const, ResultPayload: MLModelInferenceProcessor.boundPayload(row) } : { Status: 'Failed' as const, ErrorMessage: `Scoring run ${result.ScoringRunID} returned no score for the record` };
+      });
+    }
+    const message = ScoringRefusedError.Describe(result);
+    const own = new Map(result.Status === 'failed' ? result.FirstErrors.map((e) => [e.recordId.toLowerCase(), e.message]) : []);
+    const payload = result.Status === 'failed' ? { scoringRunId: result.ScoringRunID, status: result.Status } : { scoringRunId: result.ScoringRunID, status: result.Status, refusal: result.Reason };
+    return ids.map((id) => ({ Status: 'Failed' as const, ErrorMessage: own.get(id.toLowerCase()) || message, ResultPayload: payload }));
+  }
+
+  /** A bound record's payload: its scoring run, model and score. */
+  private static boundPayload(row: ScoredRow): MLBoundRecordPayload {
+    return { scoringRunId: row.scoringRunId, modelId: row.modelId, modelVersion: row.modelVersion, inTraining: row.inTraining, scoredAt: new Date().toISOString(), ...ModelValueRows.Score(row) };
   }
 
   // region: warm model load -----------------------------------------------------
@@ -428,7 +531,11 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     return this.loadedModel;
   }
 
-  /** Resolve the `MJ: ML Models` row + its frozen contract + the artifact bytes. */
+  /**
+   * Resolve the `MJ: ML Models` row + its frozen contract + the artifact bytes, loaded through the artifact registry.
+   * Only a `verified` load scores; any other load is recorded on the model row and refused with
+   * {@link ArtifactUnavailableError} before any record is read.
+   */
   private async loadModel(context: RecordProcessorContext): Promise<LoadedModel> {
     if (!this.modelId) {
       throw new ModelNeedsTrainingError('MLModelInferenceProcessor: no ML Model is configured yet — the model needs training.');
@@ -438,11 +545,12 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ML Model '${this.modelId}' not found`);
     }
     const artifactFileId = this.assertStatusCanScore(model);
-    const bytes = await this.deps.artifactLoader.load(artifactFileId, context.ContextUser, context.Provider);
-    if (!bytes) {
-      throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ${ModelArtifactMissingMessage(this.modelId, artifactFileId)}`);
+    const load = await ArtifactRegistry.ForContext(context, this.deps.artifactLoader).Load(model, context);
+    if (load.Status !== 'verified') {
+      await ArtifactRegistry.RecordArtifactStatus(model, load, 'MLModelInferenceProcessor');
+      throw ArtifactUnavailableError.For(load, 'MLModelInferenceProcessor', model.ID, artifactFileId);
     }
-    return this.buildLoadedModel(model, bytes, context);
+    return this.buildLoadedModel(model, load.Bytes, context);
   }
 
   /**
@@ -454,28 +562,58 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
    */
   private assertStatusCanScore(model: MJMLModelEntity): string {
     const status: MJMLModelEntity['Status'] = model.Status;
-    switch (status) {
-      case 'Draft':
-        this.requireArtifactFileId(model);
-        throw new ModelNotScorableError(this.modelId, status);
-      case 'Validated':
-      case 'Published': {
-        const fileId = this.requireArtifactFileId(model);
-        if (!ModelReadiness.IsServedByPredict(model)) throw new ModelNotServableError(this.modelId);
-        return fileId;
-      }
-      default:
-        throw new ModelNotScorableError(this.modelId, status);
+    if (status === 'Draft') {
+      this.requireArtifactFileId(model);
+      throw new ModelNotScorableError(this.modelId, status);
     }
+    // Check 1 of C6: only a Published model scores for a caller no binding's challenger names (G0.7).
+    if (ScoringChecks.StatusAndFlags(model, 'published', null) !== null) throw new ModelNotScorableError(this.modelId, status);
+    const fileId = this.requireArtifactFileId(model);
+    if (!ModelReadiness.IsServedByPredict(model)) throw new ModelNotServableError(this.modelId);
+    return fileId;
   }
 
-  /** The model's trained artifact file; throws "needs training" when it has none. */
+  /** The model's trained artifact file; throws "needs training" when the row was never trained (it has none). */
   private requireArtifactFileId(model: MJMLModelEntity): string {
     const fileId = model.ArtifactFileID;
     if (!ModelHasTrainedArtifact(model) || fileId === null || fileId === '') {
       throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ${ModelNeedsTrainingMessage(this.modelId)}`);
     }
     return fileId;
+  }
+
+  /**
+   * Warm-loads a model the caller has already checked and whose artifact it has already verified: builds the frozen
+   * inference contract from the row and the verified bytes and keeps it as this run's model, so the assembly methods
+   * ({@link AssembleForScoring}, {@link AssembleTransformOnly}) read neither the row nor the artifact again. The scoring
+   * service calls it after its own status and artifact checks (which admit a model kept serving while Unevaluated).
+   *
+   * @param model the model row the caller checked; must be the model this processor was constructed for
+   * @param bytes the artifact bytes the caller verified against the model's registered SHA-256
+   * @param context the run's user and provider
+   * @throws Error when `model` is not this processor's model
+   */
+  public async PrimeVerifiedModel(model: MJMLModelEntity, bytes: Uint8Array, context: RecordProcessorContext): Promise<LoadedModel> {
+    if (!UUIDsEqual(model.ID, this.modelId)) throw new Error(`MLModelInferenceProcessor: model '${model.ID}' is not this processor's model '${this.modelId}'`);
+    this.resetModelCache();
+    this.loadPromise = this.buildLoadedModel(model, bytes, context);
+    this.loadedModel = await this.loadPromise;
+    return this.loadedModel;
+  }
+
+  /**
+   * The transform-only (`'on-demand'`) assembly of a model trained without a Prediction Unit, over the model's frozen
+   * source bindings and feature steps: the route {@link ProcessBatch} takes for such a model. It reads no date (it
+   * assembles as of the lineage's `AsOfStrategy`), so it serves only the run date.
+   *
+   * @param rows the rows to score; each carries the target entity's primary key
+   * @param context the run's user and provider
+   * @throws Error when the model was trained on a Prediction Unit (assemble it with {@link AssembleForScoring})
+   */
+  public async AssembleTransformOnly(rows: SourceRow[], context: RecordProcessorContext): Promise<FeatureAssemblyResult> {
+    const model = await this.ensureModel(context);
+    if (model.unit !== null) throw new Error(`MLModelInferenceProcessor: model '${model.modelId}' was trained on a Prediction Unit; assemble it as of a date`);
+    return this.assembleFeatures(model, rows, context);
   }
 
   /** Assemble the frozen inference contract from a loaded model row + artifact bytes. */
@@ -561,7 +699,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       const res = await rv.RunView<PipelineViewRow>(
         {
           EntityName: 'MJ: ML Training Pipelines',
-          ExtraFilter: `ID='${pipelineId}'`,
+          ExtraFilter: `ID='${escapeSQL(pipelineId)}'`, // pk-filter-ok: MJ: ML Training Pipelines is an MJ core entity keyed by ID
           ResultType: 'simple',
           MaxRows: 1,
           SkipTotalRowCount: true,
@@ -576,8 +714,10 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
           (row.TargetEntityID ? context.Provider.EntityByID(row.TargetEntityID)?.Name : undefined) ||
           existing.targetEntityName;
 
+        // A Lineage's entity is kept only when the provider still knows it (an entity renamed since training is not).
+        const lineageEntity = existing.targetEntityName && context.Provider.EntityByName(existing.targetEntityName) ? existing.targetEntityName : '';
         return {
-          targetEntityName: existing.targetEntityName || targetEntity,
+          targetEntityName: lineageEntity || targetEntity,
           sourceBindings: existing.sourceBindings.length > 0 ? existing.sourceBindings : parseJson<SourceBinding[]>(row.SourceBindings, []),
           featureSteps: existing.featureSteps.Steps.length > 0 ? existing.featureSteps : (isFeatureStepGraph(rawSteps) ? rawSteps : { Steps: [] }),
           asOf: existing.asOf.Mode !== 'none' ? existing.asOf : parseJson<AsOfStrategy>(row.AsOfStrategy, { Mode: 'none' }),
@@ -601,8 +741,10 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     const lineage = parseJson<Record<string, unknown>>(model.Lineage, {});
     const outcomeConfig = resolveOutcomeConfig(model);
     return {
-      // The target entity the model scores is the training-unit entity from lineage.
-      targetEntityName: typeof lineage.targetEntityName === 'string' ? lineage.targetEntityName : (model.Pipeline ?? ''),
+      // The target entity the model scores is the training-unit entity from lineage. A Lineage without one (every model
+      // the pre-change trainer wrote) leaves it empty so the pipeline row's TargetEntity is read: `model.Pipeline` is the
+      // pipeline's name, never an entity (D4-61).
+      targetEntityName: typeof lineage.targetEntityName === 'string' ? lineage.targetEntityName.trim() : '',
       sourceBindings: Array.isArray(lineage.sourceBindings) ? (lineage.sourceBindings as SourceBinding[]) : [],
       featureSteps: isFeatureStepGraph(lineage.featureSteps) ? lineage.featureSteps : { Steps: [] },
       asOf: isAsOfStrategy(lineage.asOfStrategy) ? lineage.asOfStrategy : { Mode: 'none' },
@@ -916,6 +1058,26 @@ export interface MLInferenceResultPayload {
   scoreLabel?: string;
   /** Display label for the status column (e.g. "Renewal Status", "Risk Level"). */
   statusLabel?: string;
+}
+
+/** The payload of a record a bound Record Process scored: its scoring run and its score (the Feature Value holds the rest). */
+export interface MLBoundRecordPayload {
+  /** The `MJ: ML Scoring Runs` row of the record's batch. */
+  scoringRunId: string;
+  /** The model that scored. */
+  modelId: string;
+  /** The model's version. */
+  modelVersion: number;
+  /** A binary model's probability of class 1, a multiclass model's of its predicted class, or a regression's value. */
+  score: number;
+  /** The predicted class (classification only). */
+  class?: string;
+  /** The adverse-class probability (classification only). */
+  adverseProbability?: number;
+  /** The record was in the model's training snapshot. */
+  inTraining: boolean;  // case-violation-ok-legacy-back-compat: matches the MLInferenceResultPayload member casing
+  /** When the payload was built (ISO-8601 UTC). */
+  scoredAt: string;
 }
 
 /** Internal — the assembly config resolved off a model for scoring. */

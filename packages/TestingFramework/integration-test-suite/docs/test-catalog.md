@@ -251,7 +251,7 @@ The untested majority (~30 of ~40 server subclasses). Mostly DET (pure validator
 | ID | Check | Tier | Pri | Anchor |
 |---|---|---|---|---|
 | RT1 | Realtime Loopback session-bridge persistence + janitor: idle-reap routes through stop, finalizer fires, live session NOT reaped (injected clock) | MUT | P3 | ai-bridge-engine.ts:86-110 |
-| PS6 | Leakage guard blocks promotion: dominance-flagged model refused without sign-off, saves only Status | MUT | P1 | promote-model.gate.ts:4-55 |
+| PS6 | Lifecycle gate withholds a leakage-flagged publish: the training run's stored leakage flag refuses `unacknowledged-leakage-flags` until an approving sign-off record names every flag; the model's Status is unchanged | MUT | P1 | lifecycle-gate.ts:184-195 |
 | PS7 | Experiment orchestrator wave loop persistence (injected trainer): waves/iterations/leaderboard/prune/budget-gate | MUT | P2 | experiment-orchestrator.ts:19 |
 | PS8 | FeatureAssembly fit-once/as-of: recipe emitted, never fit in TS; label-derived cols denied; vision-on-own-image allowed | MUT | P2 | feature-assembly-executor.ts:14 |
 | PS9 | MLModelInferenceProcessor scoring via InMemoryArtifactLoader (no sidecar) | MUT | P2 | ml-model-inference-processor |

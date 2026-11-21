@@ -224,7 +224,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (504 classes)
+// @memberjunction/core-entities (509 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -557,8 +557,12 @@ import {
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
+    MJMLModelPublishRecordEntity,
     MJMLModelScoringBindingEntity,
+    MJMLMonitoringResultEntity,
+    MJMLOutputBindingEntity,
     MJMLPredictionUnitEntity,
+    MJMLScoringRunEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
     MJMLTrainingSnapshotEntity,
@@ -723,6 +727,7 @@ import {
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    MJvwLatestFeatureValuesEntity,
     ParentArtifactPermissionDelegate,
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
@@ -1167,28 +1172,6 @@ import {
     RecordProcessRunNowServerOperation,
 } from '@memberjunction/record-set-processor';
 
-// @memberjunction/predictive-studio (18 classes)
-import {
-    EvaluateFeatureAndPredictionDriftAction,
-    MLModelInferenceProcessor,
-    MLModelScoreEnricher,
-    PredictiveStudioControlExperimentSessionServerOperation,
-    PredictiveStudioCreateScoringProcessServerOperation,
-    PredictiveStudioMigratePipelinesAction,
-    PredictiveStudioModelDevAgent,
-    PredictiveStudioPipelineBuilderAgent,
-    PredictiveStudioPromoteModelAction,
-    PredictiveStudioPromoteModelServerOperation,
-    PredictiveStudioRunExperimentAction,
-    PredictiveStudioRunFeaturePipelineServerOperation,
-    PredictiveStudioScheduleModelScoringAction,
-    PredictiveStudioScoreRecordSetAction,
-    PredictiveStudioScoreRecordSetServerOperation,
-    PredictiveStudioStartExperimentSessionServerOperation,
-    PredictiveStudioTrainModelAction,
-    PredictiveStudioTrainModelServerOperation,
-} from '@memberjunction/predictive-studio';
-
 // @memberjunction/task-graph (17 classes)
 import {
     DurableTaskGraphSubmitter,
@@ -1225,7 +1208,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (92 classes)
+// @memberjunction/core-entities-server (95 classes)
 import {
     AgentChannelConversationDriver,
     FieldSuggestionCommentDriver,
@@ -1284,6 +1267,9 @@ import {
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLEvaluationProtocolEntityServer,
+    MJMLModelPublishRecordEntityServer,
+    MJMLModelScoringBindingEntityServer,
+    MJMLOutputBindingEntityServer,
     MJMLPredictionUnitEntityServer,
     MJMLTrainingPipelineEntityServer,
     MJMLTrainingSnapshotEntityServer,
@@ -1530,6 +1516,35 @@ import {
     WriteEntityFieldsAction,
     XMLParserAction,
 } from '@memberjunction/core-actions';
+
+// @memberjunction/predictive-studio (25 classes)
+import {
+    MLModelInferenceProcessor,
+    MLModelScoreEnricher,
+    PredictiveStudioControlExperimentSessionServerOperation,
+    PredictiveStudioCreateScoringProcessServerOperation,
+    PredictiveStudioGetModelEvidenceServerOperation,
+    PredictiveStudioMigratePipelinesAction,
+    PredictiveStudioMigratePreGateModelsServerOperation,
+    PredictiveStudioModelDevAgent,
+    PredictiveStudioModelMonitoringJobDriver,
+    PredictiveStudioPipelineBuilderAgent,
+    PredictiveStudioPredictionRetentionJobDriver,
+    PredictiveStudioPromoteModelAction,
+    PredictiveStudioPromoteModelServerOperation,
+    PredictiveStudioRegistryCheckJobDriver,
+    PredictiveStudioRunExperimentAction,
+    PredictiveStudioRunFeaturePipelineServerOperation,
+    PredictiveStudioRunModelMonitoringServerOperation,
+    PredictiveStudioScheduleModelScoringAction,
+    PredictiveStudioScoreRecordSetAction,
+    PredictiveStudioScoreRecordSetServerOperation,
+    PredictiveStudioSignOffModelServerOperation,
+    PredictiveStudioStartExperimentSessionServerOperation,
+    PredictiveStudioTrainModelAction,
+    PredictiveStudioTrainModelServerOperation,
+    PredictiveStudioWithdrawScoringBindingServerOperation,
+} from '@memberjunction/predictive-studio';
 
 // @memberjunction/scheduling-actions (6 classes)
 import {
@@ -2004,14 +2019,18 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
+    MJMLModelPublishRecordEntity,
     MJMLModelScoringBindingEntity,
-    MJMLPredictionUnitEntity,
-    MJMLTrainingPipelineEntity,
-    MJMLTrainingRunEntity,
+    MJMLMonitoringResultEntity,
+    MJMLOutputBindingEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJMLPredictionUnitEntity,
+    MJMLScoringRunEntity,
+    MJMLTrainingPipelineEntity,
+    MJMLTrainingRunEntity,
     MJMLTrainingSnapshotEntity,
     MJMagicLinkInviteAllowedDomainEntity,
     MJMagicLinkInviteAllowedPathEntity,
@@ -2174,6 +2193,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    MJvwLatestFeatureValuesEntity,
     ParentArtifactPermissionDelegate,
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
@@ -2207,15 +2227,15 @@ const CLASS_REGISTRATIONS_2: any[] = [
     EntityActionInvocationSingleRecord,
     EntityActionInvocationValidate,
     ApolloCreateListAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     ApolloEnrichmentAccountsAction,
     ApolloEnrichmentContactsAction,
     ApolloGetListAccountsAction,
     ApolloGetListContactsAction,
     ApolloGetListsAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     ApolloMoveListAccountsAction,
     ApolloMoveListContactsAction,
     ApolloSearchPeopleAction,
@@ -2411,15 +2431,15 @@ const CLASS_REGISTRATIONS_3: any[] = [
     DecisionReRanker,
     ElasticsearchSearchProvider,
     EntitySearchProvider,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     FullTextSearchProvider,
     GraphSearchProvider,
     NoopReRanker,
     OpenAIReRanker,
     OpenSearchSearchProvider,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     SearchScopePermissionResolver,
     StorageSearchProvider,
     TagSearchProvider,
@@ -2480,24 +2500,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     RecordProcessPauseRunServerOperation,
     RecordProcessResumeRunServerOperation,
     RecordProcessRunNowServerOperation,
-    EvaluateFeatureAndPredictionDriftAction,
-    MLModelInferenceProcessor,
-    MLModelScoreEnricher,
-    PredictiveStudioControlExperimentSessionServerOperation,
-    PredictiveStudioCreateScoringProcessServerOperation,
-    PredictiveStudioMigratePipelinesAction,
-    PredictiveStudioModelDevAgent,
-    PredictiveStudioPipelineBuilderAgent,
-    PredictiveStudioPromoteModelAction,
-    PredictiveStudioPromoteModelServerOperation,
-    PredictiveStudioRunExperimentAction,
-    PredictiveStudioRunFeaturePipelineServerOperation,
-    PredictiveStudioScheduleModelScoringAction,
-    PredictiveStudioScoreRecordSetAction,
-    PredictiveStudioScoreRecordSetServerOperation,
-    PredictiveStudioStartExperimentSessionServerOperation,
-    PredictiveStudioTrainModelAction,
-    PredictiveStudioTrainModelServerOperation,
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
     TaskGraphCompleteWaitingStepServerOperation,
@@ -2583,6 +2585,9 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLEvaluationProtocolEntityServer,
+    MJMLModelPublishRecordEntityServer,
+    MJMLModelScoringBindingEntityServer,
+    MJMLOutputBindingEntityServer,
     MJMLPredictionUnitEntityServer,
     MJMLTrainingPipelineEntityServer,
     MJMLTrainingSnapshotEntityServer,
@@ -2620,10 +2625,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     QueryRefreshExtractionServerOperation,
     APIRateLimiterAction,
     ActionSmithAgent,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     ActivateFormContributionVersionAction,
     ActivateInteractiveFormVersionAction,
     AddDocumentContentAction,
@@ -2634,6 +2635,10 @@ const CLASS_REGISTRATIONS_5: any[] = [
     AssignUserRolesAction,
     BraveSearchAction,
     BulkUpdateListItemStatusAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     BusinessDaysCalculatorAction,
     CSVParserAction,
     CalculateExpressionAction,
@@ -2824,14 +2829,39 @@ const CLASS_REGISTRATIONS_5: any[] = [
     VectorizeEntityAction,
     VerifyMyCommunicationCapabilitiesAction,
     VoidSignatureRequestAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_6: any[] = [
     WebPageContentAction,
     WebSearchAction,
     WriteEntityFieldsAction,
     XMLParserAction,
+    MLModelInferenceProcessor,
+    MLModelScoreEnricher,
+    PredictiveStudioControlExperimentSessionServerOperation,
+    PredictiveStudioCreateScoringProcessServerOperation,
+    PredictiveStudioGetModelEvidenceServerOperation,
+    PredictiveStudioMigratePipelinesAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_6: any[] = [
+    PredictiveStudioMigratePreGateModelsServerOperation,
+    PredictiveStudioModelDevAgent,
+    PredictiveStudioModelMonitoringJobDriver,
+    PredictiveStudioPipelineBuilderAgent,
+    PredictiveStudioPredictionRetentionJobDriver,
+    PredictiveStudioPromoteModelAction,
+    PredictiveStudioPromoteModelServerOperation,
+    PredictiveStudioRegistryCheckJobDriver,
+    PredictiveStudioRunExperimentAction,
+    PredictiveStudioRunFeaturePipelineServerOperation,
+    PredictiveStudioRunModelMonitoringServerOperation,
+    PredictiveStudioScheduleModelScoringAction,
+    PredictiveStudioScoreRecordSetAction,
+    PredictiveStudioScoreRecordSetServerOperation,
+    PredictiveStudioSignOffModelServerOperation,
+    PredictiveStudioStartExperimentSessionServerOperation,
+    PredictiveStudioTrainModelAction,
+    PredictiveStudioTrainModelServerOperation,
+    PredictiveStudioWithdrawScoringBindingServerOperation,
     CreateScheduledJobAction,
     DeleteScheduledJobAction,
     ExecuteScheduledJobNowAction,
@@ -2889,7 +2919,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1244;
+export const CLASS_REGISTRATIONS_COUNT = 1259;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -2967,11 +2997,11 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-agent-manager',
     '@memberjunction/ai-form-builder',
     '@memberjunction/record-set-processor',
-    '@memberjunction/predictive-studio',
     '@memberjunction/task-graph',
     '@memberjunction/scheduling-engine',
     '@memberjunction/core-entities-server',
     '@memberjunction/core-actions',
+    '@memberjunction/predictive-studio',
     '@memberjunction/scheduling-actions',
     '@memberjunction/testing-engine',
     '@memberjunction/feature-pipelines-engine',

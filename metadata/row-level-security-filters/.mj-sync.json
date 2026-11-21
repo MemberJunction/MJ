@@ -1,6 +1,7 @@
 {
   "entity": "MJ: Row Level Security Filters",
   "filePattern": "**/.*.json",
+  "defaults": {},
   "pull": {
     "createNewFileIfNotFound": true,
     "newFileName": ".agent-channel-rls-filters.json",
@@ -10,8 +11,11 @@
     "excludeFields": [],
     "mergeStrategy": "merge",
     "backupBeforeUpdate": false,
-    "filter": "Name LIKE 'UI: Agent Channel%' OR Name LIKE 'UI: Agent Suggestions%'",
+    "filter": "Name = 'Model Predictions View Gate' OR Name LIKE 'UI: Agent Channel%' OR Name LIKE 'UI: Agent Suggestions%'",
+    "externalizeFields": [],
     "ignoreNullFields": true,
-    "ignoreVirtualFields": true
+    "ignoreVirtualFields": true,
+    "lookupFields": {},
+    "relatedEntities": {}
   }
 }

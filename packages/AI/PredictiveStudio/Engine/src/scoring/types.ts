@@ -27,9 +27,10 @@
  * `AsOfFeatureAssembler` training used ({@link LoadedModel.unit}).
  */
 
+import type { ScoringServiceSeams } from './scoring-seams';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import type { UUIDSet } from '@memberjunction/global';
-import type { MJMLModelEntity, MJRecordProcessEntity_IRecordProcessChallengerConfig } from '@memberjunction/core-entities';
+import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import type {
   PredictRequest,
   PredictResponse,
@@ -50,7 +51,7 @@ import type { IRecordHistoryReader } from '../feature-assembly/as-of/record-hist
 import type { IPredictionUnitStore } from '../prediction-unit/unit-store';
 
 import type { DatedSourceSpec } from '../feature-assembly';
-import type { ShadowScoringCoordinator } from './shadow-scoring';
+import type { ScoringBindingMode } from './scoring-binding';
 
 /**
  * Read seam for loading the immutable `MJ: ML Models` row to score against.
@@ -69,10 +70,20 @@ export interface IMLModelLoader {
 }
 
 /**
+ * One read of a stored artifact's bytes: the bytes, or the file id whose `MJ: Files` row or stored object is gone. The
+ * read never verifies anything; the artifact registry (`ArtifactRegistry.Load`) turns it into a verified `ArtifactLoad`.
+ */
+export type ArtifactBytesRead =
+  | { readonly Kind: 'read'; readonly Bytes: Uint8Array }
+  | { readonly Kind: 'absent'; readonly FileID: string };
+
+/**
  * Read seam for fetching the serialized model artifact bytes by file id (the
  * read-side counterpart to the training `IArtifactStore.save`). Reads through the
  * storage provider the file's `MJ: Files` row names in production
- * (`StorageProviderArtifactLoader`); tests inject an in-memory map.
+ * (`StorageProviderArtifactLoader`); tests inject an in-memory map. Callers load through
+ * the artifact registry (`ArtifactRegistry.Load`), which verifies the bytes against the
+ * model's registered SHA-256.
  */
 export interface IArtifactLoader {
   /**
@@ -81,9 +92,9 @@ export interface IArtifactLoader {
    * @param fileId the `MLModel.ArtifactFileID` value
    * @param contextUser the acting user the file row is read as (required: a call site without one is a compile error)
    * @param provider the provider the file row is read through (required: no fallback to the global provider)
-   * @returns the artifact bytes, or `null` when not found
+   * @returns the bytes, or `absent` naming the file when its row or stored object is gone (never a quiet null)
    */
-  load(fileId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<Uint8Array | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  load(fileId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<ArtifactBytesRead>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -225,10 +236,8 @@ export interface MLModelInferenceProcessorOptions {
   autoTrainer?: IModelAutoTrainer;
   /** Optional RecordProcessID associated with this scoring processor instance. */
   recordProcessId?: string;
-  /** Optional WS-4.4 shadow challenger configuration (`ChallengerConfiguration`). */
-  challengerConfig?: MJRecordProcessEntity_IRecordProcessChallengerConfig;
-  /** Optional WS-4.4 shadow scoring coordinator. */
-  shadowCoordinator?: ShadowScoringCoordinator;
+  /** Replacements for the scoring service's production collaborators on a bound run (tests). */
+  scoringSeams?: Partial<ScoringServiceSeams>;
 }
 
 /**
@@ -245,17 +254,32 @@ export interface MLAutoTrainConfig {
   /** The `MJ: ML Training Pipelines` id to train when the configured model needs training. */
   pipelineId: string;
   /**
-   * Optional scoring binding to ensure for the trained model when the process has none
-   * yet (bindings that already point at this process are always repointed). Lets an
-   * app declare where scores land without shipping a binding row that would have to
-   * reference a model id that doesn't exist on a fresh install.
+   * Optional scoring binding of the pipeline to ensure on the process's entity: created when the pipeline does not bind
+   * `featureName` there yet, else updated. A binding names the pipeline, not a model, so an app declares its prediction
+   * feature without shipping a binding row that would reference a model id that does not exist on a fresh install.
    */
   binding?: {
-    /** The target-entity column the process writes the score to (shown by the prediction panel). */
+    /** The prediction's feature name on the process's entity. */
+    featureName: string;
+    /** The `MJ: Authorizations` id a user must hold to see the predictions; defaults to "View Model Predictions". */
+    viewAuthorizationId?: string;
+    /** Optional target-entity column the newest value is copied into (shown by the prediction panel). */
     targetColumn?: string;
+    /** The scored value the column receives (`$.AdverseProbability`, `$.Value`, …); required with `targetColumn`. */
+    targetColumnSource?: string;
     /** Binding mode; defaults to `Scheduled` when the process is scheduled, else `OnDemand`. */
-    mode?: 'OnDemand' | 'Scheduled';
+    mode?: ScoringBindingMode;
   };
+  /**
+   * Hours auto-train waits after a non-transient refusal of the pipeline's last attempt (a withheld publish, or a run
+   * stopped at Evaluate) before it trains the pipeline again (§5.7 R1). Default 24; 0 retrains on the next run.
+   */
+  retryAfterHours?: number;  // case-violation-ok-legacy-back-compat: a stored Record Process Configuration JSON key, cased like its siblings (pipelineId, binding)
+  /**
+   * Whether a withheld automatic publish (or a run stopped at Evaluate) sends the D4-18 notification (§5.7 R4 (d)).
+   * Default `true`; `false` suppresses only the withheld notices of this process, never the published ones.
+   */
+  notifyOnWithheld?: boolean;  // case-violation-ok-legacy-back-compat: a stored Record Process Configuration JSON key, cased like its siblings (pipelineId, binding)
 }
 
 /** Input to {@link IModelAutoTrainer.EnsureTrainedModel}. */
@@ -268,19 +292,27 @@ export interface AutoTrainRequest {
   recordProcessId: string | null;
   /** Optional binding to ensure (see {@link MLAutoTrainConfig.binding}). */
   binding?: MLAutoTrainConfig['binding'];
+  /** The `MJ: Process Runs` row of this run: the auto-train initiator's `processRunId` (its user is notified, D4-18). */
+  processRunId?: string;  // case-violation-ok-legacy-back-compat: cased like the request's existing members (pipelineId, recordProcessId)
+  /** See {@link MLAutoTrainConfig.retryAfterHours}. */
+  retryAfterHours?: MLAutoTrainConfig['retryAfterHours'];  // case-violation-ok-legacy-back-compat: cased like the request's existing members (pipelineId, recordProcessId)
+  /** See {@link MLAutoTrainConfig.notifyOnWithheld}. */
+  notifyOnWithheld?: MLAutoTrainConfig['notifyOnWithheld'];  // case-violation-ok-legacy-back-compat: cased like the request's existing members (pipelineId, recordProcessId)
 }
 
 /**
- * Seam that turns "this model needs training" into a published, scoreable model.
- * Production: `PipelineAutoTrainer` (train via the real `TrainingEngine`, publish via
- * the promotion gate, repoint the Record Process + bindings). Injected so the
- * processor stays free of training dependencies and is unit-testable.
+ * Seam that turns "this model needs training" into a scoreable model.
+ * Production: `PipelineAutoTrainer` (train via the real `TrainingEngine`, evaluate and publish through the automated
+ * publisher, repoint the Record Process + bindings). Injected so the processor stays free of training dependencies and
+ * is unit-testable.
  */
 export interface IModelAutoTrainer {
   /**
-   * Ensure a published, artifact-backed model exists for the pipeline and that the
-   * Record Process + its bindings point at it. Returns that model's id.
-   * @throws when training or publishing fails (e.g. leakage-flagged model needing sign-off)
+   * Ensure a Published, artifact-backed model exists for the pipeline (a reusable Published one, a resumed publish, or a
+   * newly trained one the lifecycle gate published) and that the Record Process + its bindings point at it. Returns that
+   * model's id.
+   * @throws when training fails, another training of the pipeline is in flight and no Published model exists, or the
+   *   publish is withheld and no Published model is left to score with (the message names the recorded refusal)
    */
   EnsureTrainedModel(request: AutoTrainRequest, contextUser: UserInfo, provider: IMetadataProvider): Promise<string>;
 }

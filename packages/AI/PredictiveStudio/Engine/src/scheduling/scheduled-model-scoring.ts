@@ -11,22 +11,23 @@
  * Everything underneath already exists; this helper just assembles a single
  * `MJ: Record Processes` row that the existing machinery picks up:
  *
- *   1. {@link createScheduledModelScoring} creates + saves a Record Process with
+ *   1. {@link CreateScheduledModelScoring} creates + saves a Record Process with
  *      `WorkType='ML Model'` (the runtime-registered scoring work type, PS2-1),
- *      a `Configuration` of `{ modelId, primaryKeyField }`, an `OutputMapping` of
- *      `{ fields: { <outputField>: '$.score' } }` (write the prediction into a
- *      column), and `ScheduleEnabled=true` + a cron expression for the cadence.
+ *      a `Configuration` of `{ modelId, primaryKeyField }` (no `OutputMapping`: the
+ *      binding's column copy writes the column), and `ScheduleEnabled=true` + a cron
+ *      expression for the cadence.
  *   2. Saving that row with `Status='Active'` + `ScheduleEnabled=true` + a
  *      `CronExpression` auto-creates an owned `MJ: Scheduled Jobs` row (via
  *      `MJRecordProcessEntityServer.Save → reconcileScheduledJob`).
  *   3. `SchedulingEngine` dispatches that job on its cron through
  *      `RecordProcessScheduledJobDriver → RecordProcessExecutor.RunByID(...)`,
- *      which resolves the scope, scores each row with the model, and writes the
- *      prediction back per the `OutputMapping`.
+ *      which resolves the scope and scores it through `ScoringService` per batch: the
+ *      binding's Feature Values, and its column copy when it names a column.
  *   4. AFTER the Record Process is saved, this helper also creates a
- *      `MJ: ML Model Scoring Bindings` row (`Mode='Scheduled'`) tying the model to
- *      that Record Process + target entity/column. The binding is the **lineage
- *      record** the new UX surfaces read — the model-prediction form panel and the
+ *      `MJ: ML Model Scoring Bindings` row (`Mode='Scheduled'`, in generic mode too)
+ *      naming the model's training pipeline, that Record Process, the target entity
+ *      and (in write-back mode) the column. The binding defines the prediction
+ *      feature the new UX surfaces read — the model-prediction form panel and the
  *      "Models in Production" dashboard both list operationalized models from these
  *      binding rows — so without it the scheduled scoring would run but be invisible.
  *
@@ -36,7 +37,7 @@
  * Process row, and records the binding for it.
  *
  * The shape + field-population primitives (scope model, value-kind → result-ref,
- * `Configuration` / `OutputMapping` serialization, scope application, validation,
+ * `Configuration` serialization, scope application, validation,
  * entity resolution, lineage-binding creation) are shared with the on-demand sibling
  * ({@link module:scoring/scoring-process}) in {@link module:scoring/scoring-process-shared};
  * this module composes them and owns only the schedule-specific bits (cadence → cron).
@@ -53,13 +54,12 @@ import {
   ML_MODEL_WORK_TYPE,
   ApplyScope,
   ModelConfiguration,
-  WriteBackOutputMapping,
   CreateScoringBinding,
   CountScopeSelectors,
   ResolveTargetEntityID,
   IsNonEmpty,
   type ScoringValueKind,
-  type ScoringScope,
+  type ScoringProcessScope,
 } from '../scoring/scoring-process-shared';
 
 // Re-export the shared value-kind under this module's long-standing name so existing
@@ -75,23 +75,24 @@ export type ScoringCadence = 'Monthly' | 'Weekly' | 'Daily' | { cron: string };
 /**
  * The scope of records each scheduled run scores. Exactly one selector must be
  * populated — the common case is a `filter`, but a saved `viewId`/`listId` and `all`
- * (the whole entity) are supported too. An alias of the shared {@link ScoringScope}
+ * (the whole entity) are supported too. An alias of the shared {@link ScoringProcessScope}
  * shape, kept under this module's long-standing name for backwards compatibility.
  */
-export type ScheduledScoringScope = ScoringScope;
+export type ScheduledScoringScope = ScoringProcessScope;
 
 /**
- * Inputs for {@link createScheduledModelScoring}. The required trio — `modelId`,
+ * Inputs for {@link CreateScheduledModelScoring}. The required trio — `modelId`,
  * `targetEntityName`, and exactly one `scope` selector — is the minimum to bind a
  * model to a recurring scoring run; everything else has a sensible default (monthly
  * cadence, `ID` primary key, numeric score, UTC, generated name).
  *
  * Two output modes, driven by whether `outputField` is supplied:
  * - **Write-back** (`outputField` present): each run writes the prediction into that
- *   target column AND a `MJ: ML Model Scoring Bindings` lineage row is created.
+ *   target column, and the binding names it.
  * - **Generic** (`outputField` omitted): each run records its predictions in the
- *   process run history (`MJ: Process Run Details`) only — no write-back column and
- *   no scoring binding.
+ *   process run history (`MJ: Process Run Details`); the binding names no column.
+ *
+ * Either way a `MJ: ML Model Scoring Bindings` row (`Mode='Scheduled'`) is created.
  */
 export interface ScheduleModelScoringOptions {
   /** The `MJ: ML Models` id to score with. */
@@ -101,8 +102,8 @@ export interface ScheduleModelScoringOptions {
   /**
    * Optional. The target-entity column to write the prediction into (e.g.
    * `'RenewalScore'`). **Omit for generic output** — each run's predictions are
-   * recorded in the process run history (`MJ: Process Run Details`) only; no
-   * write-back column and no scoring binding are created.
+   * recorded in the process run history (`MJ: Process Run Details`); no write-back
+   * column is set and the scoring binding names no column.
    */
   outputField?: string;
   /** The records each run scores. Populate EXACTLY ONE of: `filter`, `viewId`, `listId`, `all`. */
@@ -115,6 +116,10 @@ export interface ScheduleModelScoringOptions {
   valueKind?: ScoringValueKind;
   /** Optional Record Process name; a descriptive default is generated when omitted. */
   name?: string;
+  /** The prediction's feature name on the target entity; defaults to the model's pipeline name. */
+  featureName?: string;
+  /** Who may see the predictions; defaults to the seeded "View Model Predictions" authorization. */
+  viewAuthorizationId?: string;
   /** Timezone the cron is evaluated in (defaults to `'UTC'`). */
   timezone?: string;
   /** Server-side context user (required for data isolation + audit on the saved row). */
@@ -136,27 +141,20 @@ export const CADENCE_CRON: Readonly<Record<'Monthly' | 'Weekly' | 'Daily', strin
 };
 
 /** The helper name used to prefix this module's errors + binding-failure logs. */
-const HELPER_NAME = 'createScheduledModelScoring';
+const HELPER_NAME = 'CreateScheduledModelScoring';
 
 /**
- * The result of {@link createScheduledModelScoring}: the saved scheduled Record
- * Process AND — in write-back mode — its lineage binding. The Record Process is the
+ * The result of {@link CreateScheduledModelScoring}: the saved scheduled Record
+ * Process and its scoring binding. The Record Process is the
  * row that *does* the recurring scoring; the `MJ: ML Model Scoring Bindings` row
  * *records* it (the latter is what the model-prediction form panel and "Models in
  * Production" dashboard read).
- *
- * `binding` is `null` in **generic** mode (no `outputField`): there is no write-back
- * column to bind, so no lineage row is created — predictions live in the process run
- * history (`MJ: Process Run Details`) only.
  */
 export interface ScheduledModelScoringResult {
   /** The saved scheduled `MJ: Record Processes` entity (its owned scheduled job already reconciled). */
   recordProcess: MJRecordProcessEntity;
-  /**
-   * The saved `MJ: ML Model Scoring Bindings` lineage row (`Mode='Scheduled'`) in
-   * write-back mode, or `null` in generic mode (no `outputField`, no binding).
-   */
-  binding: MJMLModelScoringBindingEntity | null;
+  /** The saved `MJ: ML Model Scoring Bindings` row (`Mode='Scheduled'`); its `TargetColumn` is null in generic mode. */
+  binding: MJMLModelScoringBindingEntity;
 }
 
 /**
@@ -164,24 +162,23 @@ export interface ScheduledModelScoringResult {
  * `modelId` on a recurring cadence. Operates in one of two modes, driven by whether
  * `opts.outputField` is supplied:
  *
- * - **Write-back** (`outputField` present): each run writes the prediction into that
- *   target column (via the Record Process `OutputMapping`), AND this helper records a
- *   `MJ: ML Model Scoring Bindings` lineage row (`Mode='Scheduled'`) tying the model →
- *   Record Process → target entity/column so the operationalized model is discoverable
- *   by the UX surfaces that read those bindings. `result.binding` is the saved row.
- * - **Generic** (`outputField` omitted): no `OutputMapping` is set and no binding is
- *   created — each run's predictions are recorded in the process run history
- *   (`MJ: Process Run Details`) only. `result.binding` is `null`.
+ * - **Write-back** (`outputField` present): the binding names that target column, and
+ *   each run copies the newest score into it (the binding's column copy, `ScoringService`).
+ * - **Generic** (`outputField` omitted): the binding names no column; each run writes
+ *   the scores as the binding's Feature Values only.
+ *
+ * In both modes this helper records a `MJ: ML Model Scoring Bindings` row
+ * (`Mode='Scheduled'`) naming the model's training pipeline, the Record Process, the
+ * target entity and (in write-back mode) the column; `result.binding` is the saved row.
  *
  * In both modes, saving the Record Process auto-creates its owned `MJ: Scheduled Jobs`
  * row (so the run is live on the schedule immediately).
  *
  * @param opts the model + target + scope + cadence (see {@link ScheduleModelScoringOptions})
- * @returns the saved Record Process AND — in write-back mode — its scoring binding
- *   (`null` in generic mode); see {@link ScheduledModelScoringResult}
+ * @returns the saved Record Process and its scoring binding; see {@link ScheduledModelScoringResult}
  * @throws if a required input is missing, the scope is not exactly one selector, the
- *   target entity is unknown, the Record Process fails to save, or — in write-back mode,
- *   after the Record Process was saved — the binding fails to save (the message carries
+ *   target entity is unknown, the Record Process fails to save, or — after the Record
+ *   Process was saved — the binding fails to save (the message carries
  *   the cause). The binding save is intentionally fail-loud (not swallowed): a saved RP
  *   without a binding would run invisibly to the lineage UX, so we surface the inconsistency.
  */
@@ -205,27 +202,20 @@ export async function CreateScheduledModelScoring(
     );
   }
 
-  // Lineage binding only in write-back mode — generic output has no column to bind.
-  const binding = IsNonEmpty(opts.outputField)
-    ? await CreateScoringBinding(
-        opts.modelId,
-        opts.outputField,
-        rp.ID,
-        entityID,
-        'Scheduled',
-        provider,
-        opts.contextUser,
-        HELPER_NAME,
-      )
-    : null;
+  const binding = await CreateScoringBinding({
+    ModelID: opts.modelId,
+    RecordProcessID: rp.ID,
+    TargetEntityID: entityID,
+    TargetColumn: IsNonEmpty(opts.outputField) ? opts.outputField : null,
+    ValueKind: opts.valueKind,
+    FeatureName: opts.featureName,
+    ViewAuthorizationID: opts.viewAuthorizationId,
+    Mode: 'Scheduled',
+    Provider: provider,
+    ContextUser: opts.contextUser,
+    ContextLabel: HELPER_NAME,
+  });
   return { recordProcess: rp, binding };
-}
-
-/** @deprecated Use {@link CreateScheduledModelScoring}. */
-export async function createScheduledModelScoring(
-  opts: ScheduleModelScoringOptions,
-): Promise<ScheduledModelScoringResult> {
-  return CreateScheduledModelScoring(opts);
 }
 
 // ----- field population --------------------------------------------------------
@@ -236,9 +226,8 @@ export async function createScheduledModelScoring(
  * work-type, the scope, the model `Configuration`, the schedule (cron + timezone),
  * and enables on-demand runs too.
  *
- * The write-back `OutputMapping` is set ONLY in write-back mode (`opts.outputField`
- * present). In generic mode it is left unset, so each run records its predictions in
- * the process run history (`MJ: Process Run Details`) only — there is no target column.
+ * No `OutputMapping` is set in either mode: the binding names the column, and each run
+ * writes its scores as the binding's Feature Values and copies the newest into the column.
  */
 function applyRecordProcessFields(
   rp: MJRecordProcessEntity,
@@ -257,11 +246,8 @@ function applyRecordProcessFields(
   ApplyScope(rp, opts.scope);
 
   rp.Configuration = ModelConfiguration(opts.modelId, opts.primaryKeyField);
-  // Write-back mode only: map the prediction into the target column. Generic mode
-  // (no outputField) leaves OutputMapping unset — predictions land in run history only.
-  if (IsNonEmpty(opts.outputField)) {
-    rp.OutputMapping = WriteBackOutputMapping(opts.outputField, opts.valueKind);
-  }
+  // No OutputMapping in either mode: a write-back column is the binding's column copy (ScoringService), so the
+  // column is written once, by the binding, never also by a Record Process write-back.
 
   rp.ScheduleEnabled = true;
   rp.CronExpression = cron;
@@ -290,10 +276,6 @@ export function CadenceToCron(cadence: ScoringCadence | undefined): string {
   return CADENCE_CRON[cadence];
 }
 
-/** @deprecated Use {@link CadenceToCron}. */
-export function cadenceToCron(cadence: ScoringCadence | undefined): string {
-  return CadenceToCron(cadence);
-}
 
 /**
  * A descriptive default Record Process name. The base shape never implies a column —
@@ -315,7 +297,7 @@ function defaultName(opts: ScheduleModelScoringOptions, cron: string): string {
 /**
  * Validate the required inputs + exactly-one-scope rule, throwing a clear error on the
  * first problem. `outputField` is NOT required — omitting it selects generic output
- * (predictions recorded in run history only; see {@link createScheduledModelScoring}).
+ * (predictions recorded in run history only; see {@link CreateScheduledModelScoring}).
  */
 function validateOptions(opts: ScheduleModelScoringOptions): void {
   if (!IsNonEmpty(opts.modelId)) {
