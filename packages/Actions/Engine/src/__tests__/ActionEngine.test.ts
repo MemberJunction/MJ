@@ -225,9 +225,9 @@ vi.mock('@memberjunction/actions-base', async (importOriginal) => {
 // ============================================================================
 import { ACTION_PREVENTED_BY_FILTER_MESSAGE, ActionEngineServer, ENGINE_RESULT_CODES } from '../generic/ActionEngine';
 import { BaseAction } from '../generic/BaseAction';
-import { Metadata, LogError, LogErrorEx } from '@memberjunction/core';
+import { Metadata, LogError, LogErrorEx, type UserInfo } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
-import type { RunActionParams } from '@memberjunction/actions-base';
+import { ActionEngineBase, type RunActionParams } from '@memberjunction/actions-base';
 
 // ============================================================================
 // Create a concrete subclass of BaseAction for testing
@@ -1576,5 +1576,34 @@ describe('ActionEngineServer.RunRuntimeAction: the bridge context carries the ca
         expect(seen).toHaveLength(1);
         expect(seen[0].runScope).toBe(runScope);
         expect(seen[0].audience).toBe(audience);
+    });
+});
+
+describe('ActionEngineServer.Config system-user preservation', () => {
+    it('does not downgrade ContextUser to a restricted UI caller once ActionEngineBase resolved the system user', async () => {
+        const engine = ActionEngineServer.Instance;
+        const base = ActionEngineBase.Instance;
+        const systemUser = { ID: 'sys-0001', Name: 'System', Type: 'Owner' } as unknown as UserInfo;
+        const uiUser = { ID: 'ui-0002', Name: 'Sarah Connor', Type: 'User' } as unknown as UserInfo;
+        const origConfig = base.Config;
+        const origBaseUser = base.ContextUser;
+        const origEngineUser = engine.ContextUser;
+
+        try {
+            // Simulate BaseEngine.ResolveContextUser() locking base.ContextUser to the system user
+            // even when a subsequent Config(false, uiUser) arrives for a non-Owner UI caller.
+            (base as { ContextUser: UserInfo }).ContextUser = systemUser;
+            base.Config = vi.fn().mockResolvedValue(undefined);
+
+            await engine.Config(false, systemUser);
+            expect(engine.ContextUser).toBe(systemUser);
+
+            await engine.Config(false, uiUser);
+            expect(engine.ContextUser).toBe(systemUser);
+        } finally {
+            base.Config = origConfig;
+            (base as { ContextUser: UserInfo }).ContextUser = origBaseUser;
+            engine.ContextUser = origEngineUser;
+        }
     });
 });
