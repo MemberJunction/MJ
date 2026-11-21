@@ -11,7 +11,6 @@
 import cors from 'cors';
 import { default as BodyParser } from 'body-parser';
 import type { Application, Router } from 'express';
-import { LogError } from '@memberjunction/core';
 import { REALTIME_SDP_EXCHANGE_PATH } from '@memberjunction/ai';
 import type { ServerExtensionLoader } from '@memberjunction/server-extensions-core';
 import { configInfo } from './config.js';
@@ -183,21 +182,12 @@ function mountRealtimeVerify(app: Application, log: RouteLog): void {
     log.LogIf('verbose', `[RealtimeVerify] Public routes registered at ${ApiRoute(REALTIME_VERIFY_MOUNT_PATH)}/:token (GET) and ${ApiRoute(REALTIME_VERIFY_MOUNT_PATH)} (POST)`);
 }
 
-/**
- * `/health/extensions` — always mounted (pre-auth, for liveness probes). The unauthenticated body
- * carries only the aggregate boolean + count: the per-extension inventory (which integrations a
- * deployment runs, and their health detail) is reconnaissance material, so it stays in server logs
- * rather than in a pre-auth response.
- */
+/** `/health/extensions` — always mounted; an empty array when no extensions loaded. */
 export function MountExtensionHealthRoute(app: Application, loader: ServerExtensionLoader): void {
     app.get(ApiRoute('/health/extensions'), async (_req, res) => {
         const results = await loader.HealthCheckAll();
         const allHealthy = results.length === 0 || results.every((r) => r.Healthy);
-        if (!allHealthy) {
-            const unhealthy = results.filter((r) => !r.Healthy);
-            LogError(`[ExtensionHealth] ${unhealthy.length} of ${results.length} extensions unhealthy: ${unhealthy.map((r) => r.Name).join(', ')}`);
-        }
-        res.status(allHealthy ? 200 : 503).json({ healthy: allHealthy, count: results.length });
+        res.status(allHealthy ? 200 : 503).json({ extensions: results });
     });
 }
 

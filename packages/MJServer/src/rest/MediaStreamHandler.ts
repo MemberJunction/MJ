@@ -27,6 +27,7 @@ import { GetSystemUser } from '../auth/index.js';
 import { MediaAccessKeyManager } from './MediaAccessKeys.js';
 import { UploadTokenManager } from './UploadTokenManager.js';
 import { ParseRange, ParseRangeHeaderLoose } from './mediaRange.js';
+import { ContentDispositionFor } from './mediaContentDisposition.js';
 import { CreateRouteRateLimiter } from './routeRateLimit.js';
 import type { RouteRateLimitSettings } from '../routeRateLimitConfigUnits.js';
 
@@ -294,22 +295,6 @@ async function resolveFileBytesSource(fileId: string): Promise<FileBytesSource |
 }
 
 /**
- * Content types that are safe to render `inline` on this origin: media the browser can only
- * display, never execute. Everything else — text/html, image/svg+xml, XML, anything unknown —
- * is served as an `attachment` so an uploaded file with an attacker-declared active content
- * type can never run as a document on the API origin (stored XSS via /media URLs).
- * `X-Content-Type-Options: nosniff` does not help here, because the hazard is the DECLARED
- * type being active, not a sniffed one.
- */
-const INLINE_SAFE_CONTENT_TYPES = /^(image\/(?!svg)[-\w.+]+|video\/[-\w.+]+|audio\/[-\w.+]+|application\/pdf|text\/plain)(\s*;.*)?$/i;
-
-/** Builds the Content-Disposition header: `inline` only for passive, non-scriptable types. */
-function contentDispositionFor(contentType: string, fileName: string): string {
-  const kind = INLINE_SAFE_CONTENT_TYPES.test(contentType) ? 'inline' : 'attachment';
-  return `${kind}; filename="${encodeURIComponent(fileName)}"`;
-}
-
-/**
  * Streams the object honoring an HTTP `Range` request. Prefers true streaming
  * (`GetObjectStream`) for streaming-capable drivers; gracefully falls back to a
  * full buffered `GetObject` (slicing for Range) for drivers that don't.
@@ -337,7 +322,7 @@ async function serveViaStream(res: Response, source: FileBytesSource, rangeHeade
   const streamContentType = result.ContentType ?? source.contentType;
   res.setHeader('Accept-Ranges', 'bytes');
   res.setHeader('Content-Type', streamContentType);
-  res.setHeader('Content-Disposition', contentDispositionFor(streamContentType, source.fileName));
+  res.setHeader('Content-Disposition', ContentDispositionFor(streamContentType, source.fileName));
   res.setHeader('X-Content-Type-Options', 'nosniff');
   if (result.ContentLength != null) {
     res.setHeader('Content-Length', String(result.ContentLength));
@@ -371,7 +356,7 @@ async function serveViaBuffer(res: Response, source: FileBytesSource, rangeHeade
 
   res.setHeader('Accept-Ranges', 'bytes');
   res.setHeader('Content-Type', source.contentType);
-  res.setHeader('Content-Disposition', contentDispositionFor(source.contentType, source.fileName));
+  res.setHeader('Content-Disposition', ContentDispositionFor(source.contentType, source.fileName));
   res.setHeader('X-Content-Type-Options', 'nosniff');
 
   if (!rangeHeader) {

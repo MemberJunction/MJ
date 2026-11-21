@@ -74,8 +74,10 @@ export function CreateTenantMiddleware(config: MultiTenancyConfig): RequestHandl
         // hooks treat a user with no TenantContext as unscoped, so a client that simply
         // omits the header would see every tenant's rows. With multi-tenancy enabled and
         // header context configured, every non-admin request must name its tenant.
-        // Admin-role users are exempt because the hooks already bypass filtering for them.
-        if (isAdminUser(userPayload.userRecord as UserInfo, config.adminRoles)) {
+        // Admin-role users are exempt because the hooks already bypass filtering for them, and
+        // so is the system user: the system API key is the server-to-server credential (jobs,
+        // callbacks) and belongs to no tenant.
+        if (userPayload.isSystemUser || isAdminUser(userPayload.userRecord as UserInfo, config.adminRoles)) {
           next();
           return;
         }

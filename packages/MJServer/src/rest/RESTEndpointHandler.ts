@@ -167,7 +167,8 @@ export class RESTEndpointHandler {
         this.router.use('/users/:userId/favorites/:entityName', this.checkEntityAccess.bind(this));
 
         // Entity collection operations
-        this.router.get('/entities/:entityName', this.getEntityList.bind(this));
+        // Listing an entity is a RunView, so it takes the same scope as POST /views/:entityName
+        this.router.get('/entities/:entityName', this.requireAPIKeyScope('view:run', this.entityResource.bind(this)), this.getEntityList.bind(this));
         this.router.post('/entities/:entityName', this.requireAPIKeyScope('entity:create', this.entityResource.bind(this)), this.createEntity.bind(this));
 
         // Individual entity operations
@@ -255,7 +256,9 @@ export class RESTEndpointHandler {
         scopePath: string,
         resourceFrom?: (req: express.Request) => string
     ): express.RequestHandler {
-        return async (req, res, next) => {
+        // Parameters are typed as `express.Request` explicitly: contextual typing from
+        // `express.RequestHandler` gives the core Request, which lacks the `userPayload` augmentation.
+        return async (req: express.Request, res: express.Response, next: express.NextFunction): Promise<void> => {
             try {
                 const user = req['mjUser'] as UserInfo | undefined;
                 if (!user) {
