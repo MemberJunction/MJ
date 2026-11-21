@@ -452,6 +452,44 @@ describe('createViewUserSearchSQL — UserSearchParamFormatAPI still gets the fr
         expect(provider.buildSQL(e, "O'Leary")).toBe(`(([Phone]  = 'O''Leary'))`);
     });
 
+    // The denylist has no keyword to find in these: parentheses and comparison operators alone
+    // rewrite the predicate around an unquoted {0}.
+    for (const payload of ['2026 OR (1) < (2)', '(2026)', '2026 = 2026', '[Year]', '"Year"']) {
+        it(`refuses the structural characters in ${JSON.stringify(payload)} when the format splices the term unquoted`, () => {
+            expect(() => provider.buildSQL(customFormatEntity(), payload)).toThrow(/structural SQL characters/);
+        });
+    }
+
+    it('allows numbers, words and hyphens on an unquoted format', () => {
+        expect(provider.buildSQL(customFormatEntity(), '-2026.5')).toBe(`(([Year]  = -2026.5))`);
+    });
+
+    it('allows structural characters when every custom format quotes its slot', () => {
+        const e = makeEntity({ fields: [
+            makeField({ name: 'Phone', predicate: 'Exact', paramFormat: " = '{0}'" }),
+            makeField({ name: 'Code', predicate: 'Exact', paramFormat: " LIKE '+1' + REPLACE(N'{0}', ' ', '')" }),
+        ] });
+        expect(provider.buildSQL(e, '(555) 1212 <ext>')).toBe(
+            `(([Phone]  = '(555) 1212 <ext>') OR ([Code]  LIKE '+1' + REPLACE(N'(555) 1212 <ext>', ' ', '')))`,
+        );
+    });
+
+    it('refuses structural characters when one format quotes its slot and another does not', () => {
+        const e = makeEntity({ fields: [
+            makeField({ name: 'Phone', predicate: 'Exact', paramFormat: " = '{0}'" }),
+            makeField({ name: 'Year', type: 'int', predicate: 'Contains', paramFormat: ' = {0}' }),
+        ] });
+        expect(() => provider.buildSQL(e, '(2026)')).toThrow(/structural SQL characters/);
+    });
+
+    it('reads a quote inside a bracketed or double-quoted identifier as part of the name, not as a literal', () => {
+        // The apostrophe belongs to the identifier, so {0} is outside any string literal here.
+        for (const paramFormat of [" = [Owner's Year] + {0}", ` = "Owner's Year" + {0}`, " = 'x' + {0}"]) {
+            const e = makeEntity({ fields: [makeField({ name: 'Year', type: 'int', predicate: 'Contains', paramFormat })] });
+            expect(() => provider.buildSQL(e, '(2026)')).toThrow(/structural SQL characters/);
+        }
+    });
+
     it('does NOT screen entities without a custom format — that is the #4392 fix', () => {
         const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: 'Contains' })] });
         // "union"/"drop"/";" are ordinary words here; the term lands inside a literal.
