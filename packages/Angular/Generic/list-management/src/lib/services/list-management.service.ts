@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { MJListEntity, MJListDetailEntity, MJListCategoryEntity } from '@memberjunction/core-entities';
+import { MJListEntity, MJListCategoryEntity } from '@memberjunction/core-entities';
+import type { ApplyResult } from '@memberjunction/lists-base';
 import { MJLruCache } from '@memberjunction/global';
 import { BehaviorSubject, Observable } from 'rxjs';
 import {
@@ -9,6 +10,7 @@ import {
   RecordMembershipInfo,
   CreateListConfig
 } from '../models/list-management.models';
+import { CreateListsClient } from '../utils/list-member-changes';
 
 interface CacheEntry<T> {
   data: T;
@@ -335,98 +337,25 @@ export class ListManagementService {
   }
 
   /**
-   * Add records to one or more lists
+   * Adds records to one or more lists with one server call per list. Records a list already
+   * holds are skipped by the server and counted in `skipped`. `skipDuplicates` is kept for
+   * callers; the server never adds a record twice.
    */
   async AddRecordsToLists(
     listIds: string[],
     recordIds: string[],
     skipDuplicates: boolean = true
   ): Promise<BatchOperationResult> {
-    const result: BatchOperationResult = {
-      success: 0,
-      failed: 0,
-      skipped: 0,
-      errors: []
-    };
-
-    const md = this.Provider;
-
-    // Get existing membership to skip duplicates
-    let existingMembership = new Map<string, Set<string>>();
-    if (skipDuplicates) {
-      const rv = RunView.FromMetadataProvider(this.Provider);
-      const listIdFilter = listIds.map(id => `'${id}'`).join(',');
-      const recordIdFilter = recordIds.map(id => `'${id}'`).join(',');
-
-      const existing = await rv.RunView<{ ListID: string; RecordID: string }>({
-        EntityName: 'MJ: List Details',
-        ExtraFilter: `ListID IN (${listIdFilter}) AND RecordID IN (${recordIdFilter})`,
-        Fields: ['ListID', 'RecordID'],
-        ResultType: 'simple'
-      }, md.CurrentUser);
-
-      if (existing.Success && existing.Results) {
-        for (const detail of existing.Results) {
-          const recordSet = existingMembership.get(detail.ListID) || new Set();
-          recordSet.add(detail.RecordID);
-          existingMembership.set(detail.ListID, recordSet);
-        }
-      }
-    }
-
-    // Build list of records to add (excluding duplicates)
-    const recordsToAdd: Array<{listId: string, recordId: string}> = [];
+    const result = this.emptyBatchResult();
+    if (recordIds.length === 0) return result;
+    const client = CreateListsClient(this.Provider);
     for (const listId of listIds) {
-      const existingRecords = existingMembership.get(listId) || new Set();
-      for (const recordId of recordIds) {
-        if (skipDuplicates && existingRecords.has(recordId)) {
-          result.skipped++;
-        } else {
-          recordsToAdd.push({ listId, recordId });
-        }
-      }
+      const applied = await this.callListsClient(() => client.AddRecordsToList(listId, recordIds));
+      const added = applied.Counts?.Added ?? 0;
+      this.mergeApplyResult(result, applied, added, recordIds.length);
+      result.skipped += Math.max(0, recordIds.length - added - this.failedCount(applied, recordIds.length));
     }
-
-    if (recordsToAdd.length === 0) {
-      return result;
-    }
-
-    // Use transaction group for bulk insert
-    const tg = await md.CreateTransactionGroup();
-
-    for (const { listId, recordId } of recordsToAdd) {
-      try {
-        const listDetail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', md.CurrentUser);
-        listDetail.ListID = listId;
-        listDetail.RecordID = recordId;
-        listDetail.TransactionGroup = tg;
-        const saveResult = await listDetail.Save();
-        if (!saveResult) {
-          console.error(`[ListManagementService] Failed to queue record ${recordId} for list ${listId}:`, listDetail.LatestResult?.Message);
-          result.errors.push(`Failed to add record ${recordId} to list ${listId}: ${listDetail.LatestResult?.Message || 'Unknown error'}`);
-        }
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error(`[ListManagementService] Exception adding record:`, error);
-        result.errors.push(`Error adding record ${recordId} to list ${listId}: ${errorMessage}`);
-      }
-    }
-
-    // Submit the transaction
-    const success = await tg.Submit();
-
-    if (success) {
-      result.success = recordsToAdd.length - result.errors.length;
-      result.failed = result.errors.length;
-    } else {
-      result.failed = recordsToAdd.length;
-      result.success = 0;
-      result.errors.push('Transaction failed to submit');
-    }
-
-    // Invalidate membership cache
     this.membershipCache.Clear();
-
     return result;
   }
 
@@ -440,79 +369,21 @@ export class ListManagementService {
   }
 
   /**
-   * Remove records from one or more lists
+   * Removes records from one or more lists with one server call per list. `recordIds` are the
+   * members' `RecordID` values; records a list does not hold are ignored.
    */
   async RemoveRecordsFromLists(
     listIds: string[],
     recordIds: string[]
   ): Promise<BatchOperationResult> {
-    const result: BatchOperationResult = {
-      success: 0,
-      failed: 0,
-      skipped: 0,
-      errors: []
-    };
-
-    const md = this.Provider;
-    const rv = RunView.FromMetadataProvider(this.Provider);
-
-    // Find existing list details to delete
-    const listIdFilter = listIds.map(id => `'${id}'`).join(',');
-    const recordIdFilter = recordIds.map(id => `'${id}'`).join(',');
-
-    const existingResult = await rv.RunView<MJListDetailEntity>({
-      EntityName: 'MJ: List Details',
-      ExtraFilter: `ListID IN (${listIdFilter}) AND RecordID IN (${recordIdFilter})`,
-      ResultType: 'entity_object'
-    });
-
-    if (!existingResult.Success) {
-      result.errors.push('Failed to query existing list details');
-      return result;
+    const result = this.emptyBatchResult();
+    if (recordIds.length === 0) return result;
+    const client = CreateListsClient(this.Provider);
+    for (const listId of listIds) {
+      const applied = await this.callListsClient(() => client.RemoveRecordsFromList(listId, recordIds));
+      this.mergeApplyResult(result, applied, applied.Counts?.Removed ?? 0, recordIds.length);
     }
-
-    const toDelete = existingResult.Results || [];
-    if (toDelete.length === 0) {
-      return result;
-    }
-
-    // Queue all deletes in one TransactionGroup — a single round trip
-    // instead of one per removed membership row. Deliberately atomic (unlike
-    // the server-side bulk paths, which trade atomicity for per-record error
-    // isolation): if Submit() fails, the transaction rolled back and no rows
-    // were removed.
-    const tg = await md.CreateTransactionGroup();
-    let queued = 0;
-    for (const detail of toDelete) {
-      try {
-        detail.TransactionGroup = tg;
-        // With a TransactionGroup set, Delete() returns true once enqueued;
-        // false means a pre-enqueue failure (validation/permission) and the
-        // row never joined the transaction.
-        if (await detail.Delete()) {
-          queued++;
-        } else {
-          result.failed++;
-          result.errors.push(`Failed to queue removal of record ${detail.RecordID} from list ${detail.ListID}: ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-        }
-      } catch (error) {
-        result.failed++;
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        result.errors.push(`Error removing record: ${errorMessage}`);
-      }
-    }
-
-    const submitted = queued === 0 || await tg.Submit();
-    if (submitted) {
-      result.success = queued;
-    } else {
-      result.failed += queued;
-      result.errors.push('Transaction failed to submit');
-    }
-
-    // Invalidate caches
     this.membershipCache.Clear();
-
     return result;
   }
 
@@ -559,6 +430,36 @@ export class ListManagementService {
   /** @deprecated Use {@link CreateList}. */
   async createList(config: CreateListConfig): Promise<MJListEntity | null> {
     return this.CreateList(config);
+  }
+
+  private emptyBatchResult(): BatchOperationResult {
+    return { success: 0, failed: 0, skipped: 0, errors: [] };
+  }
+
+  /** Runs a client call and turns a thrown error into a failed result. */
+  private async callListsClient(call: () => Promise<ApplyResult>): Promise<ApplyResult> {
+    try {
+      return await call();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { Success: false, ResultCode: 'UNEXPECTED_ERROR', Message: message };
+    }
+  }
+
+  /** Records that failed; all of them when the server gave no counts. */
+  private failedCount(applied: ApplyResult, requested: number): number {
+    if (applied.Counts) return applied.Counts.Failed;
+    return applied.Success ? 0 : requested;
+  }
+
+  private mergeApplyResult(result: BatchOperationResult, applied: ApplyResult, succeeded: number, requested: number): void {
+    result.success += succeeded;
+    result.failed += this.failedCount(applied, requested);
+    if (applied.Errors?.length) {
+      result.errors.push(...applied.Errors);
+    } else if (!applied.Success) {
+      result.errors.push(applied.Message || 'The server could not change the list');
+    }
   }
 
   /**
