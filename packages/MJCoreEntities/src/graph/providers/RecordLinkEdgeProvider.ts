@@ -10,6 +10,7 @@ import {
     type GraphEdgeView,
     type GraphNodeRef,
     type GraphProviderContext,
+    GRAPH_DEFAULT_EDGE_TYPE,
 } from '../BaseGraphEdgeProvider';
 
 /**
@@ -158,7 +159,7 @@ export class RecordLinkEdgeProvider extends BaseGraphEdgeProvider<RecordLinkEdge
         const entitiesById = IndexByUUID(ctx.Provider.Entities);
 
         for (const row of runResult.Results) {
-            const edgeType = configuredEdgeType || row.LinkType?.trim() || 'Related To';
+            const edgeType = configuredEdgeType || row.LinkType?.trim() || GRAPH_DEFAULT_EDGE_TYPE;
             if (!MatchesEdgeTypeFilter(edgeType, request.EdgeTypes)) {
                 continue;
             }
