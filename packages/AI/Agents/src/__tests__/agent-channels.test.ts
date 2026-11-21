@@ -7,7 +7,11 @@ import {
 } from '@memberjunction/core-entities';
 import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { AgentWakeTriggerService } from '../AgentWakeTriggerService';
+import { GetGlobalObjectStore } from '@memberjunction/global';
+import {
+    AGENT_CHANNEL_HUMAN_POST_WAKE_HANDLER_KEY,
+    AgentWakeTriggerService,
+} from '../AgentWakeTriggerService';
 
 function makeUser(id: string, email: string, type: 'User' | 'Owner' = 'User'): UserInfo {
     return {
@@ -211,5 +215,51 @@ describe('AgentWakeTriggerService.TriggerWakeOnAgentChannelMessage', () => {
         expect(channel.ConsecutiveAgentTurns).toBe(0);
         expect(channel.LastHumanMessageAt).toEqual(now);
         expect(outcome.results[0].triggered).toBe(true);
+    });
+
+    it('registers the global human-post wake hook on GetGlobalObjectStore and wakes peer agents when invoked', async () => {
+        const now = new Date('2026-11-20T17:30:00Z');
+        const { routineStub, md } = buildChannelFixture({
+            ChannelStatus: 'Open',
+            ConsecutiveAgentTurns: 0,
+        });
+
+        AgentWakeTriggerService.Instance.RegisterAgentChannelHumanPostWakeHook();
+        const store = GetGlobalObjectStore();
+        const handler = store?.[AGENT_CHANNEL_HUMAN_POST_WAKE_HANDLER_KEY] as
+            | ((event: {
+                  provider: IMetadataProvider;
+                  channelID: string;
+                  conversationDetailID: string | null;
+                  senderUserID: string;
+                  messagePreview: string;
+                  contextUser: UserInfo;
+                  now: Date;
+                  reopenedFromPause: boolean;
+              }) => Promise<number>)
+            | undefined;
+
+        expect(typeof handler).toBe('function');
+        const wokenCount = await handler!({
+            provider: md,
+            channelID: 'chan-1',
+            conversationDetailID: 'detail-human-99',
+            senderUserID: alice.ID,
+            messagePreview: 'Direct UI reply from Alice',
+            contextUser: alice,
+            now,
+            reopenedFromPause: true,
+        });
+
+        expect(wokenCount).toBe(1);
+        expect(routineStub.Save).toHaveBeenCalledTimes(1);
+        expect(routineStub.UserID).toBe(bob.ID);
+        expect(routineStub.WakeConfigurationObject?.resumeState).toMatchObject({
+            triggerType: 'AgentChannelMessage',
+            channelID: 'chan-1',
+            conversationDetailID: 'detail-human-99',
+            senderUserID: alice.ID,
+            senderAgentID: null,
+        });
     });
 });

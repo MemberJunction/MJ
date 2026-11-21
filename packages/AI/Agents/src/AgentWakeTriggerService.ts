@@ -21,7 +21,7 @@
  */
 
 import { IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo, WellKnownUserSource } from '@memberjunction/core';
-import { BaseSingleton, EscapeSQLString, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, GetGlobalObjectStore, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
     MJAIAgentRequestEntity,
     MJAIAgentUserPolicyEntity,
@@ -215,13 +215,59 @@ interface ImmediateWakeRoutineParams {
     now: Date;
 }
 
+/**
+ * Well-known `GetGlobalObjectStore()` key shared with `@memberjunction/core-entities-server`
+ * (`AgentChannelConversationDriver`) so direct human replies in an `AGENT_CHANNEL` conversation
+ * immediately wake peer participant agents with zero circular package dependencies.
+ */
+export const AGENT_CHANNEL_HUMAN_POST_WAKE_HANDLER_KEY = '__MJ_AGENT_CHANNEL_HUMAN_POST_WAKE_HANDLER__';
+
+interface AgentChannelHumanPostWakeEventPayload {
+    provider: IMetadataProvider;
+    channelID: string;
+    conversationDetailID: string | null;
+    senderUserID: string;
+    messagePreview: string;
+    contextUser: UserInfo;
+    now: Date;
+    reopenedFromPause: boolean;
+}
+
 export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerService> {
     public constructor() {
         super();
+        this.RegisterAgentChannelHumanPostWakeHook();
     }
 
     public static get Instance(): AgentWakeTriggerService {
         return AgentWakeTriggerService.getInstance<AgentWakeTriggerService>();
+    }
+
+    /**
+     * Registers this service as the process-wide human-post wake handler on
+     * `GetGlobalObjectStore()` so `AgentChannelConversationDriver.HandleHumanMessagePosted`
+     * immediately wakes peer participant agents whenever a human posts in an `AGENT_CHANNEL`.
+     */
+    public RegisterAgentChannelHumanPostWakeHook(): void {
+        const store = GetGlobalObjectStore();
+        if (!store) {
+            return;
+        }
+        store[AGENT_CHANNEL_HUMAN_POST_WAKE_HANDLER_KEY] = async (
+            event: AgentChannelHumanPostWakeEventPayload
+        ): Promise<number> => {
+            const outcome = await AgentWakeTriggerService.Instance.TriggerWakeOnAgentChannelMessage({
+                channelID: event.channelID,
+                conversationDetailID: event.conversationDetailID,
+                senderUserID: event.senderUserID,
+                senderAgentID: null,
+                messagePreview: event.messagePreview,
+                contextUser: event.contextUser,
+                metadataProvider: event.provider,
+                now: event.now,
+            });
+            return outcome.results.filter((r) => r.triggered).length;
+        };
     }
 
     /**
@@ -632,11 +678,11 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             );
         }
         const policy: MJAIAgentUserPolicyEntity | null = policyLookup.policy;
-        if (policy && (policy.Status === 'Disabled' || policy.Status === 'Paused')) {
-            return this.notTriggered(
-                'POLICY_DENIED',
-                `Target user policy for agent "${resolvedAgent.Name ?? resolvedAgent.ID}" is ${policy.Status}; wake suppressed.`
-            );
+        if (!policy || policy.Status !== 'Active') {
+            const reason = !policy
+                ? `Target user "${targetUserID}" has no active policy for agent "${resolvedAgent.Name ?? resolvedAgent.ID}"; wake suppressed until the user onboards.`
+                : `Target user policy for agent "${resolvedAgent.Name ?? resolvedAgent.ID}" is ${policy.Status}; wake suppressed.`;
+            return this.notTriggered('POLICY_DENIED', reason);
         }
 
         const baseResumeState: AgentWakeResumeState = input.resumeState ?? {};
@@ -1159,7 +1205,13 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
     }
 
     private wakeEventKey(event: AgentWakeResumeState): string {
-        const id = event['requestID'] ?? event['messageID'] ?? event['eventID'] ?? event['recordID'] ?? '';
+        const id =
+            event['requestID'] ??
+            event['messageID'] ??
+            event['conversationDetailID'] ??
+            event['eventID'] ??
+            event['recordID'] ??
+            '';
         const qualifier = event['status'] ?? event['wakeReason'] ?? '';
         return `${String(event['triggerType'] ?? '')}:${String(id)}:${String(qualifier)}`.toLowerCase();
     }
@@ -1331,3 +1383,7 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
         };
     }
 }
+
+// Register the human-post Agent Channel wake hook on module import so any human post via
+// UI, GraphQL, or API triggers peer wakes even before `AgentWakeTriggerService.Instance` is touched.
+AgentWakeTriggerService.Instance.RegisterAgentChannelHumanPostWakeHook();

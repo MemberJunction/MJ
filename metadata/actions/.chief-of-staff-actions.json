@@ -294,7 +294,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Set to true when the user explicitly confirmed creating a new Recurring routine.",
+            "Description": "Deprecated self-attestation flag (ignored during agent execution — pass a server-verified ConfirmedApprovalRequestID instead).",
             "IsRequired": false,
             "DefaultValue": "false"
           },
@@ -302,8 +302,26 @@
             "ID": "55429DCD-B42A-4F89-A69F-0A39026FFF08"
           },
           "sync": {
-            "lastModified": "2026-11-20T22:01:25.995Z",
-            "checksum": "5179411b643a1857132dfa5fe5a551600e7262e451dc1457f6adf4c10c53c7f5"
+            "lastModified": "2026-11-21T15:59:12.618Z",
+            "checksum": "0161f282d1b0debd7ecb7a47e538dc94010a5dccfc0e8b631ec864ae34b5659c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConfirmedApprovalRequestID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of a server-verified Approved MJ: AI Agent Requests row owned by the calling user and matching the target agent. Required when an executing agent creates a brand-new Recurring routine.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "231B3DAD-673E-4629-8E2C-A42D0A0FFAE6"
+          },
+          "sync": {
+            "lastModified": "2026-11-21T15:59:12.680Z",
+            "checksum": "d7344ab99c6ae923498c319140542afa61d5e9ce12f6ffac2e8ccbfb2f3caef0"
           }
         },
         {

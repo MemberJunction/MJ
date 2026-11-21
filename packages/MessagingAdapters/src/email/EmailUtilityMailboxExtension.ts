@@ -1,15 +1,16 @@
 /**
  * @module @memberjunction/messaging-adapters
  * @description Email Utility Mailbox Server Extension — registers inbound email webhook
- * routes and optional poll fallback, delegating normalized messages to
- * {@link InboundUtilityMailboxIngestionService}.
+ * routes (`/inbound`, `/inbound/msgraph`, `/inbound/gmail`) and optional poll fallback,
+ * delegating normalized messages to {@link InboundUtilityMailboxIngestionService}.
  */
 
 import crypto from 'node:crypto';
 import express, { Application, Request, Response, Router } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { LogError, LogStatus } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import {
     BaseServerExtension,
     ExtensionHealthResult,
@@ -19,15 +20,20 @@ import {
 } from '@memberjunction/server-extensions-core';
 import { WebhookRateLimitSettings } from '../base/types.js';
 import {
+    InboundMailboxFetcher,
     InboundUtilityMailboxIngestionService,
     RawInboundMailboxMessage,
 } from './InboundUtilityMailboxIngestionService.js';
+import {
+    CommunicationProviderInboundMailboxFetcher,
+    ExtractBareEmailAddress,
+} from './CommunicationProviderInboundMailboxFetcher.js';
 
 /** Settings supported by {@link EmailUtilityMailboxExtension} in `mj.config.cjs`. */
 export interface EmailUtilityMailboxExtensionSettings {
     /**
-     * Shared webhook secret verified against `x-mj-webhook-secret` or `Authorization: Bearer <secret>`.
-     * Can also be supplied via `MJ_EMAIL_WEBHOOK_SECRET`.
+     * Shared webhook secret verified against `x-mj-webhook-secret`, `Authorization: Bearer <secret>`,
+     * or Microsoft Graph notification `clientState`. Can also be supplied via `MJ_EMAIL_WEBHOOK_SECRET`.
      */
     WebhookSecret?: string;
     /** Optional per-IP rate limit override for webhook endpoints. */
@@ -35,6 +41,32 @@ export interface EmailUtilityMailboxExtensionSettings {
     /** Optional poll fallback interval in milliseconds (0 disables timer polling; default 0). */
     PollIntervalMs?: number;
 }
+
+/** Normalized item parsed from a Microsoft Graph `value[]` change notification payload. */
+export interface MSGraphNormalizedNotificationItem {
+    subscriptionId?: string;
+    clientState?: string;
+    changeType?: string;
+    toAddress?: string;
+    messageID?: string;
+    embeddedMessage?: RawInboundMailboxMessage;
+}
+
+/** Result of normalizing a Microsoft Graph webhook request (either handshake or notification batch). */
+export type MSGraphWebhookNormalizeResult =
+    | { kind: 'handshake'; validationToken: string }
+    | { kind: 'notifications'; items: MSGraphNormalizedNotificationItem[] }
+    | { kind: 'invalid'; error: string };
+
+/** Result of normalizing a Gmail Cloud Pub/Sub push webhook payload. */
+export type GmailPubSubNormalizeResult =
+    | {
+          kind: 'notification';
+          emailAddress: string;
+          historyId: string;
+          embeddedMessage?: RawInboundMailboxMessage;
+      }
+    | { kind: 'invalid'; error: string };
 
 /** Default per-IP rate limit for inbound utility mailbox webhooks. */
 export const DEFAULT_EMAIL_WEBHOOK_RATE_LIMIT: Required<WebhookRateLimitSettings> = {
@@ -44,7 +76,7 @@ export const DEFAULT_EMAIL_WEBHOOK_RATE_LIMIT: Required<WebhookRateLimitSettings
 };
 
 /**
- * Constant-time comparison for shared webhook secrets supplied via HTTP headers.
+ * Constant-time comparison for shared webhook secrets supplied via HTTP headers or `clientState`.
  */
 export function VerifyEmailWebhookSecret(expectedSecret: string, suppliedSecret: string | undefined): boolean {
     if (!expectedSecret || !suppliedSecret) {
@@ -105,6 +137,214 @@ function parseInboundWebhookPayload(body: unknown): RawInboundMailboxMessage | n
         bodyPreview: readStringField(rec, 'bodyPreview'),
         receivedAtISO: readStringField(rec, 'receivedAtISO'),
         providerID: readStringField(rec, 'providerID'),
+    };
+}
+
+function extractMailboxFromGraphResource(resource: string | undefined): string | undefined {
+    if (!resource) {
+        return undefined;
+    }
+    // Matches `Users/cos@company.com/Messages/...` or `users('cos@company.com')/messages/...`
+    const parenMatch = resource.match(/users\(['"]([^'"]+)['"]\)/i);
+    if (parenMatch?.[1]) {
+        return decodeURIComponent(parenMatch[1]).trim();
+    }
+    const slashMatch = resource.match(/(?:^|\/)users\/([^/]+)/i);
+    if (slashMatch?.[1]) {
+        return decodeURIComponent(slashMatch[1]).trim();
+    }
+    return undefined;
+}
+
+function extractMessageIdFromGraphResource(resource: string | undefined): string | undefined {
+    if (!resource) {
+        return undefined;
+    }
+    const match = resource.match(/\/messages\/([^/?]+)/i);
+    return match?.[1] ? decodeURIComponent(match[1]).trim() : undefined;
+}
+
+function extractGraphEmbeddedMessage(
+    item: Record<string, unknown>,
+    fallbackToAddress: string | undefined,
+    fallbackMessageId: string | undefined
+): RawInboundMailboxMessage | undefined {
+    const candidate =
+        (typeof item['message'] === 'object' && item['message'] !== null
+            ? (item['message'] as Record<string, unknown>)
+            : null) ??
+        (typeof item['resourceData'] === 'object' && item['resourceData'] !== null
+            ? (item['resourceData'] as Record<string, unknown>)
+            : null);
+    if (!candidate) {
+        return undefined;
+    }
+
+    const directNormalized = parseInboundWebhookPayload(candidate);
+    if (directNormalized) {
+        return {
+            ...directNormalized,
+            messageID: directNormalized.messageID || fallbackMessageId || '',
+        };
+    }
+
+    // Graph rich notification format (`from.emailAddress.address`, `toRecipients[0].emailAddress.address`, `subject`)
+    const graphFromObj = candidate['from'] as { emailAddress?: { address?: unknown } } | undefined;
+    const rawFrom =
+        readStringField(candidate, 'fromAddress') ??
+        (typeof graphFromObj?.emailAddress?.address === 'string' ? graphFromObj.emailAddress.address : undefined);
+    const fromAddress = ExtractBareEmailAddress(rawFrom);
+    if (!fromAddress) {
+        return undefined;
+    }
+
+    const toRecipients = Array.isArray(candidate['toRecipients'])
+        ? (candidate['toRecipients'] as Array<{ emailAddress?: { address?: unknown } }>)
+        : [];
+    const firstGraphTo =
+        typeof toRecipients[0]?.emailAddress?.address === 'string'
+            ? toRecipients[0].emailAddress.address
+            : undefined;
+    const toAddress = ExtractBareEmailAddress(
+        readStringField(candidate, 'toAddress') ?? firstGraphTo ?? fallbackToAddress
+    );
+    if (!toAddress) {
+        return undefined;
+    }
+
+    return {
+        messageID: (readStringField(candidate, 'messageID') ?? readStringField(candidate, 'id') ?? fallbackMessageId ?? '').trim(),
+        toAddress,
+        fromAddress,
+        subject: readStringField(candidate, 'subject') ?? '',
+        bodyPreview: readStringField(candidate, 'bodyPreview'),
+        receivedAtISO:
+            readStringField(candidate, 'receivedAtISO') ?? readStringField(candidate, 'receivedDateTime'),
+        providerID: readStringField(candidate, 'providerID'),
+    };
+}
+
+/**
+ * Pure normalizer for Microsoft Graph change-notification webhooks:
+ * - Recognizes `?validationToken=<token>` subscription handshakes.
+ * - Parses `{ value: [...] }` change notification batches, extracting mailbox address, message ID,
+ *   `clientState`, and optional embedded rich notification message payloads.
+ */
+export function NormalizeMSGraphWebhookPayload(
+    body: unknown,
+    queryValidationToken?: string
+): MSGraphWebhookNormalizeResult {
+    if (queryValidationToken !== undefined && queryValidationToken.length > 0) {
+        return { kind: 'handshake', validationToken: queryValidationToken };
+    }
+    if (typeof body !== 'object' || body === null) {
+        return { kind: 'invalid', error: 'Microsoft Graph webhook payload must be a JSON object.' };
+    }
+    const rawValue = (body as Record<string, unknown>)['value'];
+    if (!Array.isArray(rawValue)) {
+        return { kind: 'invalid', error: 'Microsoft Graph webhook payload is missing value[] array.' };
+    }
+
+    const items: MSGraphNormalizedNotificationItem[] = [];
+    for (const rawItem of rawValue) {
+        if (typeof rawItem !== 'object' || rawItem === null) {
+            continue;
+        }
+        const item = rawItem as Record<string, unknown>;
+        const resource = readStringField(item, 'resource');
+        const resourceData =
+            typeof item['resourceData'] === 'object' && item['resourceData'] !== null
+                ? (item['resourceData'] as Record<string, unknown>)
+                : undefined;
+        const toAddress =
+            readStringField(item, 'toAddress')?.trim() ||
+            extractMailboxFromGraphResource(resource);
+        const messageID =
+            readStringField(resourceData ?? {}, 'id')?.trim() ||
+            extractMessageIdFromGraphResource(resource);
+        const embeddedMessage = extractGraphEmbeddedMessage(item, toAddress, messageID);
+
+        items.push({
+            subscriptionId: readStringField(item, 'subscriptionId'),
+            clientState: readStringField(item, 'clientState'),
+            changeType: readStringField(item, 'changeType'),
+            toAddress: toAddress ?? embeddedMessage?.toAddress,
+            messageID: messageID ?? embeddedMessage?.messageID,
+            ...(embeddedMessage ? { embeddedMessage } : {}),
+        });
+    }
+
+    return { kind: 'notifications', items };
+}
+
+/**
+ * Pure normalizer for Google Cloud Pub/Sub push webhooks triggered by Gmail `users.watch`:
+ * decodes base64 `message.data` JSON `{ emailAddress, historyId, ... }` and optionally extracts
+ * an embedded normalized message if supplied by a custom bridge/test harness.
+ */
+export function NormalizeGmailPubSubPayload(body: unknown): GmailPubSubNormalizeResult {
+    if (typeof body !== 'object' || body === null) {
+        return { kind: 'invalid', error: 'Gmail Pub/Sub payload must be a JSON object.' };
+    }
+    const messageEnvelope = (body as Record<string, unknown>)['message'];
+    if (typeof messageEnvelope !== 'object' || messageEnvelope === null) {
+        return { kind: 'invalid', error: 'Gmail Pub/Sub payload is missing message envelope.' };
+    }
+    const encodedData = readStringField(messageEnvelope as Record<string, unknown>, 'data');
+    if (!encodedData || encodedData.trim().length === 0) {
+        return { kind: 'invalid', error: 'Gmail Pub/Sub payload is missing base64 message.data.' };
+    }
+
+    let decodedJson: string;
+    try {
+        decodedJson = Buffer.from(encodedData.trim(), 'base64').toString('utf8');
+    } catch {
+        return { kind: 'invalid', error: 'Gmail Pub/Sub message.data is not valid base64.' };
+    }
+
+    const decoded = SafeJSONParse<Record<string, unknown>>(decodedJson);
+    if (!decoded || typeof decoded !== 'object') {
+        return { kind: 'invalid', error: 'Decoded Gmail Pub/Sub message.data is not valid JSON.' };
+    }
+
+    const emailAddress = ExtractBareEmailAddress(
+        readStringField(decoded, 'emailAddress') ?? readStringField(decoded, 'toAddress')
+    );
+    const rawHistory = decoded['historyId'];
+    const historyId =
+        typeof rawHistory === 'string' || typeof rawHistory === 'number' ? String(rawHistory).trim() : '';
+
+    if (!emailAddress) {
+        return { kind: 'invalid', error: 'Decoded Gmail Pub/Sub payload is missing emailAddress.' };
+    }
+    if (!historyId && !readStringField(decoded, 'fromAddress')) {
+        return { kind: 'invalid', error: 'Decoded Gmail Pub/Sub payload is missing historyId.' };
+    }
+
+    const fromAddress = ExtractBareEmailAddress(readStringField(decoded, 'fromAddress'));
+    const embeddedMessage: RawInboundMailboxMessage | undefined = fromAddress
+        ? {
+              messageID: (
+                  readStringField(decoded, 'messageID') ??
+                  readStringField(messageEnvelope as Record<string, unknown>, 'messageId') ??
+                  ''
+              ).trim(),
+              toAddress: emailAddress,
+              fromAddress,
+              subject: readStringField(decoded, 'subject') ?? '',
+              bodyPreview: readStringField(decoded, 'bodyPreview'),
+              receivedAtISO:
+                  readStringField(decoded, 'receivedAtISO') ??
+                  readStringField(messageEnvelope as Record<string, unknown>, 'publishTime'),
+              providerID: readStringField(decoded, 'providerID'),
+          }
+        : undefined;
+
+    return {
+        kind: 'notification',
+        emailAddress,
+        historyId,
+        ...(embeddedMessage ? { embeddedMessage } : {}),
     };
 }
 
@@ -179,6 +419,24 @@ export class EmailUtilityMailboxExtension extends BaseServerExtension {
                     await this.handleInboundRequest(req, res);
                 });
                 registeredRoutes.push(`POST ${config.RootPath}/inbound`);
+
+                router.post(
+                    '/inbound/msgraph',
+                    express.json({ limit: '512kb' }),
+                    async (req: Request, res: Response) => {
+                        await this.handleMSGraphInboundRequest(req, res);
+                    }
+                );
+                registeredRoutes.push(`POST ${config.RootPath}/inbound/msgraph`);
+
+                router.post(
+                    '/inbound/gmail',
+                    express.json({ limit: '512kb' }),
+                    async (req: Request, res: Response) => {
+                        await this.handleGmailInboundRequest(req, res);
+                    }
+                );
+                registeredRoutes.push(`POST ${config.RootPath}/inbound/gmail`);
             }
 
             router.get('/health', (_req: Request, res: Response) => {
@@ -186,6 +444,7 @@ export class EmailUtilityMailboxExtension extends BaseServerExtension {
                     status: 'ok',
                     webhookEnabled: this.webhookSecret.length > 0,
                     pollTimerActive: this.pollTimer !== null,
+                    fetcherRegistered: InboundUtilityMailboxIngestionService.Instance.HasRegisteredFetcher,
                 });
             });
             registeredRoutes.push(`GET ${config.RootPath}/health`);
@@ -193,6 +452,11 @@ export class EmailUtilityMailboxExtension extends BaseServerExtension {
             app.use(config.RootPath, router);
 
             if (pollIntervalMs > 0) {
+                if (!InboundUtilityMailboxIngestionService.Instance.HasRegisteredFetcher) {
+                    InboundUtilityMailboxIngestionService.Instance.RegisterFetcher(
+                        new CommunicationProviderInboundMailboxFetcher()
+                    );
+                }
                 const safeIntervalMs = Math.max(15_000, pollIntervalMs);
                 this.pollTimer = setInterval(() => {
                     void InboundUtilityMailboxIngestionService.Instance.PollActiveUtilityMailboxes().catch((err: unknown) => {
@@ -246,6 +510,13 @@ export class EmailUtilityMailboxExtension extends BaseServerExtension {
         };
     }
 
+    private getActiveOrDefaultFetcher(): InboundMailboxFetcher {
+        return (
+            InboundUtilityMailboxIngestionService.Instance.RegisteredFetcher ??
+            new CommunicationProviderInboundMailboxFetcher()
+        );
+    }
+
     private async handleInboundRequest(req: Request, res: Response): Promise<void> {
         const suppliedSecret = extractSuppliedWebhookSecret(req);
         if (!VerifyEmailWebhookSecret(this.webhookSecret, suppliedSecret)) {
@@ -269,6 +540,154 @@ export class EmailUtilityMailboxExtension extends BaseServerExtension {
             });
         } catch (error) {
             LogError('[EmailUtilityMailboxExtension] Failed handling inbound email webhook:', undefined, error);
+            if (!res.headersSent) {
+                res.status(500).json({ error: 'Internal Server Error' });
+            }
+        }
+    }
+
+    private async handleMSGraphInboundRequest(req: Request, res: Response): Promise<void> {
+        const rawValidationToken = req.query['validationToken'];
+        const validationToken = typeof rawValidationToken === 'string' ? rawValidationToken : undefined;
+        const normalized = NormalizeMSGraphWebhookPayload(req.body, validationToken);
+
+        if (normalized.kind === 'handshake') {
+            res.setHeader('X-Content-Type-Options', 'nosniff');
+            res.status(200).type('text/plain').send(normalized.validationToken);
+            return;
+        }
+
+        const headerSecret = extractSuppliedWebhookSecret(req);
+        const headerAuthorized = VerifyEmailWebhookSecret(this.webhookSecret, headerSecret);
+
+        if (normalized.kind === 'invalid') {
+            if (!headerAuthorized) {
+                res.status(401).json({ error: 'Unauthorized' });
+                return;
+            }
+            res.status(400).json({ error: normalized.error });
+            return;
+        }
+
+        const allClientStatesMatch =
+            normalized.items.length > 0 &&
+            normalized.items.every((item) => VerifyEmailWebhookSecret(this.webhookSecret, item.clientState));
+        if (!headerAuthorized && !allClientStatesMatch) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+
+        try {
+            const systemUser = UserCache.Instance.GetSystemUser();
+            const fetcher = this.getActiveOrDefaultFetcher();
+            let processed = 0;
+            let triggered = 0;
+            let duplicates = 0;
+
+            for (const item of normalized.items) {
+                const messagesToDispatch: RawInboundMailboxMessage[] = [];
+                if (item.embeddedMessage) {
+                    messagesToDispatch.push(item.embeddedMessage);
+                } else if (item.toAddress && systemUser) {
+                    if (item.messageID && typeof fetcher.FetchSingleMessage === 'function') {
+                        const fetched = await fetcher.FetchSingleMessage(
+                            item.toAddress,
+                            item.messageID,
+                            systemUser,
+                            'Microsoft Graph'
+                        );
+                        if (fetched) {
+                            messagesToDispatch.push(fetched);
+                        }
+                    } else if (typeof fetcher.FetchMessagesForMailbox === 'function') {
+                        const fetched = await fetcher.FetchMessagesForMailbox(
+                            item.toAddress,
+                            null,
+                            systemUser,
+                            'Microsoft Graph'
+                        );
+                        messagesToDispatch.push(...fetched);
+                    }
+                }
+
+                for (const msg of messagesToDispatch) {
+                    processed++;
+                    const dispatched = await InboundUtilityMailboxIngestionService.Instance.HandleWebhookMessage(msg);
+                    if (dispatched.duplicate) {
+                        duplicates++;
+                    } else if (dispatched.wakeResult?.triggered) {
+                        triggered++;
+                    }
+                }
+            }
+
+            res.status(202).json({
+                accepted: true,
+                notifications: normalized.items.length,
+                processed,
+                triggered,
+                duplicates,
+            });
+        } catch (error) {
+            LogError('[EmailUtilityMailboxExtension] Failed handling MS Graph inbound webhook:', undefined, error);
+            if (!res.headersSent) {
+                res.status(500).json({ error: 'Internal Server Error' });
+            }
+        }
+    }
+
+    private async handleGmailInboundRequest(req: Request, res: Response): Promise<void> {
+        const suppliedSecret = extractSuppliedWebhookSecret(req);
+        if (!VerifyEmailWebhookSecret(this.webhookSecret, suppliedSecret)) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+
+        const normalized = NormalizeGmailPubSubPayload(req.body);
+        if (normalized.kind === 'invalid') {
+            res.status(400).json({ error: normalized.error });
+            return;
+        }
+
+        try {
+            const messagesToDispatch: RawInboundMailboxMessage[] = [];
+            if (normalized.embeddedMessage) {
+                messagesToDispatch.push(normalized.embeddedMessage);
+            } else {
+                const systemUser = UserCache.Instance.GetSystemUser();
+                const fetcher = this.getActiveOrDefaultFetcher();
+                if (systemUser && typeof fetcher.FetchMessagesForMailbox === 'function') {
+                    const fetched = await fetcher.FetchMessagesForMailbox(
+                        normalized.emailAddress,
+                        null,
+                        systemUser,
+                        'Gmail'
+                    );
+                    messagesToDispatch.push(...fetched);
+                }
+            }
+
+            let triggered = 0;
+            let duplicates = 0;
+            for (const msg of messagesToDispatch) {
+                const dispatched = await InboundUtilityMailboxIngestionService.Instance.HandleWebhookMessage(msg);
+                if (dispatched.duplicate) {
+                    duplicates++;
+                } else if (dispatched.wakeResult?.triggered) {
+                    triggered++;
+                }
+            }
+
+            res.status(200).json({
+                accepted: true,
+                emailAddress: normalized.emailAddress,
+                historyId: normalized.historyId,
+                processed: messagesToDispatch.length,
+                triggered,
+                duplicates,
+            });
+        } catch (error) {
+            LogError('[EmailUtilityMailboxExtension] Failed handling Gmail Pub/Sub webhook:', undefined, error);
             if (!res.headersSent) {
                 res.status(500).json({ error: 'Internal Server Error' });
             }
