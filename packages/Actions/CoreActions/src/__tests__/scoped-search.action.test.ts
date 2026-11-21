@@ -106,6 +106,20 @@ vi.mock('@memberjunction/core', async (importOriginal) => ({
     UserInfo: class {},
 }));
 
+// Mock AIEngine cache (empty by default so existing tests continue to exercise the Metadata
+// fallback path; cache-hit tests populate these arrays explicitly).
+let cachedAgentsStub: Array<{ ID: string; Name: string; SearchScopeAccess: string }> = [];
+let cachedSkillsStub: Array<{ ID: string; Name: string; SearchScopeAccess: string }> = [];
+vi.mock('@memberjunction/aiengine', () => ({
+    AIEngine: {
+        Instance: {
+            Config: vi.fn(async () => {}),
+            get Agents() { return cachedAgentsStub; },
+            get Skills() { return cachedSkillsStub; },
+        }
+    }
+}));
+
 vi.mock('@memberjunction/actions', () => ({
     BaseAction: class {
         protected async InternalRunAction(_p: unknown): Promise<unknown> { return null; }
