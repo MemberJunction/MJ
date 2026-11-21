@@ -126,6 +126,21 @@ export class CSVExporter extends BaseExporter {
       return JSON.stringify(value);
     }
 
-    return String(value);
+    // Numbers/bigints are never formula vectors — a leading '-' here is a negative number.
+    if (typeof value === 'number' || typeof value === 'bigint') {
+      return String(value);
+    }
+
+    return this.neutralizeSpreadsheetFormula(String(value));
+  }
+
+  /**
+   * CSV/formula-injection defense (OWASP): a text cell beginning with `=`, `+`, `-`, `@`,
+   * tab or CR is executed as a formula when the export is opened in Excel/Sheets, so data
+   * authored by one user could run as a formula on another user's machine. Prefix such
+   * values with a single quote, which spreadsheets treat as a text marker.
+   */
+  private neutralizeSpreadsheetFormula(value: string): string {
+    return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
   }
 }
