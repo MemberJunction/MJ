@@ -810,8 +810,32 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
             expect(pending.map((p) => p['eventID'])).toEqual(['gh-evt-1', 'gh-evt-2']);
         });
 
-        it('suppresses workstream wake when target user policy is Paused or Disabled, and rejects unknown agent names', async () => {
+        it('suppresses workstream wake when target user has no active policy (un-onboarded), or policy is Paused/Disabled, and rejects unknown agent names', async () => {
             const { provider, savedRoutines } = createMockMetadataProvider();
+
+            // 0. Un-onboarded user (policy === null) must be suppressed cleanly with POLICY_DENIED
+            runViewMock
+                .mockResolvedValueOnce({
+                    Success: true,
+                    Results: [{ ID: FACTORY_AGENT_ID, Name: 'Software Factory' }],
+                })
+                .mockResolvedValueOnce({
+                    Success: true,
+                    Results: [],
+                });
+            const unOnboarded = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+                targetUserID: USER_ALICE_ID,
+                targetAgentID: FACTORY_AGENT_ID,
+                workstreamKey: 'task:task-unonboarded',
+                wakeReason: 'Assigned task for user with no policy row',
+                contextUser: aliceUser,
+                metadataProvider: provider,
+                now: FIXED_NOW,
+            });
+            expect(unOnboarded.triggered).toBe(false);
+            expect(unOnboarded.resultCode).toBe('POLICY_DENIED');
+            expect(unOnboarded.reason).toContain('no active policy');
+
             AgentUserPolicyEngine.Instance.SetCachedPolicy(
                 createPolicy({ AgentID: FACTORY_AGENT_ID, UserID: USER_ALICE_ID, Status: 'Paused' })
             );

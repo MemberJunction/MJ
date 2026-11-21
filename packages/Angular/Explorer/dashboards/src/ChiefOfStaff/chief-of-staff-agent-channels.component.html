@@ -46,6 +46,21 @@
             </div>
         }
 
+        @if (ChannelStatusMessage) {
+            <div class="cos-banner cos-banner--success" role="status">
+                <div class="cos-banner__content">
+                    <i class="fa-solid fa-circle-check"></i>
+                    <span>{{ ChannelStatusMessage }}</span>
+                </div>
+                <button mjButton
+                        variant="flat"
+                        size="sm"
+                        (click)="DismissChannelStatusMessage()">
+                    Dismiss
+                </button>
+            </div>
+        }
+
         @if (IsLoadingChannels && Channels.length === 0) {
             <mj-loading text="Loading Agent Channels..." size="medium"></mj-loading>
         } @else if (FilteredChannels.length === 0) {
