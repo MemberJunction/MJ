@@ -23,6 +23,8 @@ import type { DatabaseProviderBase, UserInfo } from '@memberjunction/core';
 import {
     MJAIAgentRequestEntity,
     MJAIAgentUserPolicyEntity,
+    MJAgentChannelEntity,
+    MJConversationDetailEntity,
     MJUserRoutineEntity,
 } from '@memberjunction/core-entities';
 import { ActionEngineServer } from '@memberjunction/actions';
@@ -31,7 +33,7 @@ import { RunUserRoutineNowAction } from '@memberjunction/scheduling-engine';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, UUIDsEqual } from '@memberjunction/global';
 import {
     Assert,
     AssertEqual,
@@ -55,6 +57,8 @@ interface ChiefOfStaffFixture {
     PolicyCreatedByBundle: boolean;
     CreatedRoutineIds: string[];
     CreatedRequestIds: string[];
+    CreatedSuggestionIds: string[];
+    CreatedChannelIds: string[];
     CreatedLogIds: string[];
 }
 
@@ -314,6 +318,190 @@ export const ChiefOfStaffChecks: NamedCheck[] = [
             AssertEqual((await requestsWithSubjectTag(ctx.User)).length, before, 'no approval may be queued under DraftOnly');
         }
     },
+    // ── Extensible Skills Core Layer (COS9–COS12) ───────────────────────────────────────
+    {
+        Id: 'chief-of-staff.COS9',
+        Name: 'COS9: Chief of Staff has zero raw SQL / generic CRUD actions and Get My Agent Context + Assemble My Briefing run cleanly',
+        Fn: async (ctx) => {
+            const banned = new Set([
+                'run ad-hoc query',
+                'create record',
+                'update record',
+                'delete record',
+                'get record',
+            ]);
+            const actionsById = IndexByUUID(ActionEngineServer.Instance.Actions, (a) => a.ID);
+            const agentActions = AIEngine.Instance.AgentActions.filter((aa) =>
+                UUIDsEqual(aa.AgentID, fx().AgentID) && aa.Status === 'Active'
+            );
+            const bannedFound = agentActions
+                .map((aa) => actionsById.Get(aa.ActionID)?.Name ?? '')
+                .filter((name) => banned.has(name.trim().toLowerCase()));
+            AssertEqual(bannedFound.length, 0, `Chief of Staff must not hold raw SQL or generic CRUD actions, found: ${bannedFound.join(', ')}`);
+
+            const ctxRes = await runAction(ctx, 'Get My Agent Context', ctx.User, [input('AgentName', CHIEF_OF_STAFF)]);
+            Assert(ctxRes.Success, `Get My Agent Context failed: ${ctxRes.Message}`);
+            const ctxData = JSON.parse(ctxRes.Message ?? '{}') as { Agent?: { Name?: string } };
+            AssertEqual(ctxData.Agent?.Name, CHIEF_OF_STAFF, 'Get My Agent Context must return Chief of Staff');
+
+            const briefRes = await runAction(ctx, 'Assemble My Briefing', ctx.User, [
+                input('AgentName', CHIEF_OF_STAFF),
+                input('HorizonDays', 7),
+            ]);
+            Assert(briefRes.Success, `Assemble My Briefing failed: ${briefRes.Message}`);
+            const briefData = JSON.parse(briefRes.Message ?? '{}') as { Core?: unknown; SkillBriefings?: unknown[] };
+            Assert(!!briefData.Core && Array.isArray(briefData.SkillBriefings), 'Assemble My Briefing must return Core + SkillBriefings');
+        }
+    },
+    {
+        Id: 'chief-of-staff.COS10',
+        Name: 'COS10: Offered Rhythms & Suggestions lifecycle (list, enable with confirmation, decline dedup, cancel)',
+        Fn: async (ctx) => {
+            const listRes = await runAction(ctx, 'List Available Rhythms', ctx.User, [input('AgentName', CHIEF_OF_STAFF)]);
+            Assert(listRes.Success, `List Available Rhythms failed: ${listRes.Message}`);
+            const listed = JSON.parse(listRes.Message ?? '{}') as { Rhythms?: Array<{ WorkstreamKey: string }> };
+            Assert(
+                Boolean(listed.Rhythms?.some((r) => r.WorkstreamKey === 'calendar-daily-review')),
+                'List Available Rhythms must include seeded calendar-daily-review template'
+            );
+
+            const enableRes = await runAction(ctx, 'Enable Agent Rhythm', ctx.User, [
+                input('AgentName', CHIEF_OF_STAFF),
+                input('WorkstreamKey', 'calendar-daily-review'),
+                input('Timezone', 'America/Chicago'),
+                input('ConfirmedByUser', true),
+            ]);
+            Assert(enableRes.Success, `Enable Agent Rhythm failed: ${enableRes.Message}`);
+            const enabled = JSON.parse(enableRes.Message ?? '{}') as { RoutineID?: string; Status?: string };
+            Assert(!!enabled.RoutineID, 'Enable Agent Rhythm must return RoutineID');
+            fx().CreatedRoutineIds.push(enabled.RoutineID!);
+            AssertEqual(enabled.Status, 'Active', 'Enabled rhythm routine must be Active');
+
+            const cancelRes = await runAction(ctx, 'Cancel Agent Wake', ctx.User, [
+                input('RoutineID', enabled.RoutineID!),
+                input('Reason', `COS10 cleanup ${TAG}`),
+            ]);
+            Assert(cancelRes.Success, `Cancel Agent Wake failed: ${cancelRes.Message}`);
+
+            const testKey = `it157-sug-${Date.now()}`;
+            const offerRes = await runAction(ctx, 'Manage Agent Suggestions', ctx.User, [
+                input('Operation', 'RecordOffer'),
+                input('Kind', 'Rhythm'),
+                input('TargetKey', testKey),
+                input('Summary', `Integration suggestion ${TAG}`),
+            ]);
+            Assert(offerRes.Success, `RecordOffer failed: ${offerRes.Message}`);
+            const offered = JSON.parse(offerRes.Message ?? '{}') as { SuggestionID?: string };
+            if (offered.SuggestionID) fx().CreatedSuggestionIds.push(offered.SuggestionID);
+
+            const declineRes = await runAction(ctx, 'Manage Agent Suggestions', ctx.User, [
+                input('Operation', 'Respond'),
+                input('TargetKey', testKey),
+                input('Status', 'Declined'),
+            ]);
+            Assert(declineRes.Success, `Respond Declined failed: ${declineRes.Message}`);
+
+            const reofferRes = await runAction(ctx, 'Manage Agent Suggestions', ctx.User, [
+                input('Operation', 'RecordOffer'),
+                input('Kind', 'Rhythm'),
+                input('TargetKey', testKey),
+                input('Summary', 'Should not re-offer'),
+            ]);
+            const reofferCode = reofferRes.Result?.ResultCode ?? reofferRes.ResultCode;
+            AssertEqual(reofferCode, 'ALREADY_DECLINED', `expected ALREADY_DECLINED, got ${reofferCode}`);
+        }
+    },
+    {
+        Id: 'chief-of-staff.COS11',
+        Name: 'COS11: Agent Channel open, loop-guard pause, and direct human intervention reset',
+        Fn: async (ctx) => {
+            const other = otherUser('COS11');
+            if (!other || !ownsPolicy('COS11')) return;
+
+            const pol = await loadPolicy(ctx);
+            pol.CoordinationMode = 'Autonomous';
+            pol.AllowInterAgentCoordination = true;
+            pol.Status = 'Active';
+            Assert(await pol.Save(), `updating policy to Autonomous failed: ${pol.LatestResult?.CompleteMessage}`);
+
+            const openRes = await runAction(ctx, 'Open Agent Channel', ctx.User, [
+                input('Topic', `COS11 Channel ${TAG}`),
+                input('TargetUserIDs', other.ID),
+                input('InitialMessage', 'Opening coordination check from IT157.'),
+                input('MaxConsecutiveAgentTurns', 1),
+            ]);
+            Assert(openRes.Success, `Open Agent Channel failed: ${openRes.Message}`);
+            const opened = JSON.parse(openRes.Message ?? '{}') as { ChannelID?: string };
+            Assert(!!opened.ChannelID, 'Open Agent Channel must return ChannelID');
+            const channelId = opened.ChannelID!;
+            fx().CreatedChannelIds.push(channelId);
+
+            // Simulate two agent turns hitting MaxConsecutiveAgentTurns = 1 → Paused For Human
+            const agentReplyRun = new RunActionParams();
+            agentReplyRun.Action = ActionEngineServer.Instance.Actions.find((a) => a.Name === 'Reply In Agent Channel')!;
+            agentReplyRun.ContextUser = ctx.User;
+            agentReplyRun.Context = { AgentID: fx().AgentID };
+            agentReplyRun.Filters = [];
+            agentReplyRun.Params = [
+                input('ChannelID', channelId),
+                input('Message', 'Agent turn 1'),
+            ];
+            const turn1 = await ActionEngineServer.Instance.RunAction(agentReplyRun);
+            Assert(turn1.Success, `Agent turn 1 failed: ${turn1.Message}`);
+
+            const agentReplyRun2 = new RunActionParams();
+            agentReplyRun2.Action = agentReplyRun.Action;
+            agentReplyRun2.ContextUser = ctx.User;
+            agentReplyRun2.Context = { AgentID: fx().AgentID };
+            agentReplyRun2.Filters = [];
+            agentReplyRun2.Params = [
+                input('ChannelID', channelId),
+                input('Message', 'Agent turn 2 triggers loop guard'),
+            ];
+            const turn2 = await ActionEngineServer.Instance.RunAction(agentReplyRun2);
+            const turn2Code = turn2.Result?.ResultCode ?? turn2.ResultCode;
+            AssertEqual(turn2Code, 'CHANNEL_PAUSED_LOOP_GUARD', `expected CHANNEL_PAUSED_LOOP_GUARD, got ${turn2Code}`);
+
+            // Direct human reply via ConversationDetail must reset ConsecutiveAgentTurns = 0 and re-open channel
+            const humanDetail = await prov(ctx).GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', ctx.User);
+            humanDetail.NewRecord();
+            humanDetail.ConversationID = channelId;
+            humanDetail.UserID = ctx.User.ID;
+            humanDetail.AgentID = null;
+            humanDetail.Role = 'User';
+            humanDetail.Message = 'Human stepping in to resume coordination.';
+            Assert(await humanDetail.Save(), `human ConversationDetail save failed: ${humanDetail.LatestResult?.CompleteMessage}`);
+
+            const reloaded = await prov(ctx).GetEntityObject<MJAgentChannelEntity>('MJ: Agent Channels', ctx.User);
+            Assert(await reloaded.Load(channelId), 'could not reload Agent Channel');
+            AssertEqual(reloaded.ChannelStatus, 'Open', 'Human reply must re-open Paused For Human channel');
+            AssertEqual(reloaded.ConsecutiveAgentTurns, 0, 'Human reply must reset ConsecutiveAgentTurns to 0');
+        }
+    },
+    {
+        Id: 'chief-of-staff.COS12',
+        Name: 'COS12: Schedule Next Agent Wake blocks autonomous creation of new Recurring routines without user confirmation',
+        Fn: async (ctx) => {
+            const action = ActionEngineServer.Instance.Actions.find((a) => a.Name === 'Schedule Next Agent Wake');
+            Assert(!!action, 'need Schedule Next Agent Wake action');
+            const run = new RunActionParams();
+            run.Action = action!;
+            run.ContextUser = ctx.User;
+            run.Context = { AgentID: fx().AgentID };
+            run.Filters = [];
+            run.Params = [
+                input('AgentName', CHIEF_OF_STAFF),
+                input('ScheduleMode', 'Recurring'),
+                input('CronExpression', '0 9 * * 1-5'),
+                input('WorkstreamKey', `cos12-unconfirmed-${Date.now()}`),
+                input('WakeReason', 'Should require confirmation'),
+            ];
+            const result = await ActionEngineServer.Instance.RunAction(run);
+            if (result.LogEntry?.ID) fx().CreatedLogIds.push(result.LogEntry.ID);
+            const code = result.Result?.ResultCode ?? result.ResultCode;
+            AssertEqual(code, 'APPROVAL_REQUIRED', `expected APPROVAL_REQUIRED, got ${code} (${result.Message})`);
+        }
+    },
 ];
 
 async function makeOneShot(ctx: IntegrationCheckContext, name: string): Promise<MJUserRoutineEntity> {
@@ -402,6 +590,8 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('chief-of-staff', {
             PolicyCreatedByBundle: createdByBundle,
             CreatedRoutineIds: [],
             CreatedRequestIds: [],
+            CreatedSuggestionIds: [],
+            CreatedChannelIds: [],
             CreatedLogIds: [],
         };
     },
@@ -418,6 +608,28 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('chief-of-staff', {
         };
 
         for (const id of f.CreatedRequestIds) await del('MJ: AI Agent Requests', id);
+        for (const id of f.CreatedSuggestionIds) await del('MJ: AI Agent Suggestions', id);
+        for (const channelId of f.CreatedChannelIds) {
+            try {
+                const details = await new RunView().RunView<{ ID: string }>({
+                    EntityName: 'MJ: Conversation Details',
+                    ExtraFilter: `ConversationID='${channelId}'`,
+                    Fields: ['ID'],
+                    ResultType: 'simple',
+                    BypassCache: true,
+                }, user);
+                for (const d of details.Results ?? []) await del('MJ: Conversation Details', d.ID);
+                const parts = await new RunView().RunView<{ ID: string }>({
+                    EntityName: 'MJ: Agent Channel Participants',
+                    ExtraFilter: `AgentChannelID='${channelId}'`,
+                    Fields: ['ID'],
+                    ResultType: 'simple',
+                    BypassCache: true,
+                }, user);
+                for (const p of parts.Results ?? []) await del('MJ: Agent Channel Participants', p.ID);
+                await del('MJ: Agent Channels', channelId);
+            } catch { /* best-effort cleanup */ }
+        }
         try {
             for (const r of await requestsWithSubjectTag(user)) await del('MJ: AI Agent Requests', r.ID);
         } catch { /* best-effort cleanup */ }

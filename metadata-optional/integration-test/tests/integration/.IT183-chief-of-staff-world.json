@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT183 - Chief of Staff World Seed",
+    "Description": "Idempotent persistent World Model seed for Chief of Staff core MJ layers: seeds Jordan Blake & Elena Rostova (non-Owner UI users with active Coordinator policies), two offered-rhythm User Routines, three AI Agent Suggestions (Offered/Accepted/Declined), two executive AI Agent Notes, and an observable multi-participant Agent Channel thread (COSW1-COSW3).",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "All COSW1-COSW3 checks pass and leave realistic, idempotent Chief of Staff world sample data persisted in the database without duplicating rows on repeated runs."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "chief-of-staff-world"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "E4D2A910-63F7-4B85-9C41-8A7B3E2D1F01"
+  }
+}

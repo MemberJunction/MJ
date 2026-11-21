@@ -276,15 +276,79 @@
                         </label>
 
                         <label class="cos-form-field cos-form-field--full">
-                            <span class="cos-form-field__label">Standing Executive Instructions Override</span>
+                            <span class="cos-form-field__label">
+                                Standing Executive Instructions Override
+                                <span class="cos-char-counter"
+                                      [class.cos-char-counter--warn]="DraftInstructionsSize.ExceedsThreshold">
+                                    ({{ DraftInstructionsSize.Length | number }} / {{ InstructionsWarningThreshold | number }} chars)
+                                </span>
+                            </span>
                             <textarea class="cos-textarea"
                                       rows="3"
                                       [value]="DraftPolicy.InstructionsOverride"
                                       placeholder="Optional standing instructions injected into every Chief of Staff run (e.g., preferred briefing style, VIP contacts, scheduling windows)..."
                                       (input)="OnInstructionsOverrideInput($event)"></textarea>
+                            @if (DraftInstructionsSize.ExceedsThreshold) {
+                                <div class="cos-inline-warning" role="status">
+                                    <i class="fa-solid fa-triangle-exclamation"></i>
+                                    <span>
+                                        Standing instructions exceed {{ InstructionsWarningThreshold | number }} characters ({{ DraftInstructionsSize.Length | number }} chars). Consider trimming or moving recurring workflows into offered rhythms or skills to keep prompt latency low.
+                                    </span>
+                                </div>
+                            }
                         </label>
                     </div>
                 </section>
+
+                @if (IsAdminUser) {
+                    <section class="cos-card">
+                        <div class="cos-card__header">
+                            <div>
+                                <h2 class="cos-card__title">
+                                    <i class="fa-solid fa-gauge-high"></i>
+                                    Instructions Override Size Monitor (Admin)
+                                </h2>
+                                <p class="cos-card__subtitle">
+                                    Flags user policies whose standing instructions exceed {{ InstructionsWarningThreshold | number }} characters for {{ SelectedAgentName }}.
+                                </p>
+                            </div>
+                            <mj-stat-badge
+                                [Count]="OversizedPolicyCount"
+                                [Total]="AdminPolicySizeRows.length"
+                                Label="over threshold"
+                                [Variant]="OversizedPolicyCount > 0 ? 'warning' : 'default'" />
+                        </div>
+
+                        @if (IsLoadingPolicySizeAudit) {
+                            <mj-loading text="Checking policy instruction sizes..." size="small"></mj-loading>
+                        } @else if (AdminPolicySizeRows.length === 0) {
+                            <p class="cos-empty-text">No user policies found for {{ SelectedAgentName }}.</p>
+                        } @else {
+                            <div class="cos-audit-list">
+                                @for (row of AdminPolicySizeRows; track row.PolicyID) {
+                                    <div class="cos-audit-row"
+                                         [class.cos-audit-row--warn]="row.ExceedsThreshold">
+                                        <div class="cos-audit-row__main">
+                                            <span class="cos-audit-row__user">{{ row.UserName }}</span>
+                                            <span class="cos-pill">{{ row.Status }}</span>
+                                        </div>
+                                        <div class="cos-audit-row__meta">
+                                            <span class="cos-audit-row__len">
+                                                {{ row.Length | number }} chars
+                                            </span>
+                                            @if (row.ExceedsThreshold) {
+                                                <span class="cos-pill cos-pill--warn">Over 4k limit</span>
+                                            }
+                                            <button mjButton variant="flat" size="sm" (click)="OpenAuditPolicyRecord(row.PolicyID)">
+                                                Open
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </section>
+                }
             </div>
         }
     </mj-page-body>
