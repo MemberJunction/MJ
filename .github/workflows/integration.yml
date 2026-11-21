@@ -1256,6 +1256,11 @@ jobs:
       - name: Boot two MJAPI processes on shared Redis
         env:
           MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
+          # The cross-server rig tests Redis cache invalidation and metadata notices, not scheduled
+          # jobs. On a fresh CI database, running background workers triggers Entity Vector Sync -
+          # Daily (RunImmediatelyIfNeverRun=1) on whichever replica claims the lock — 60-90s of
+          # local ONNX embedding and 1,656 concurrent Save() calls right through XS1-XS7 (see #6361).
+          MJ_SERVER_ROLE: api
         # Ready means the server loaded entity metadata: a start that loaded none fails, and
         # /healthcheck then answers 503 with the failed phase, which the wait script stops on.
         run: |
