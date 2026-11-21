@@ -8636,19 +8636,19 @@ design §4).
 
 **Milestone start (design §6.5; the same five steps at every milestone):**
 
-- [ ] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
+- [x] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
   `"$PLANS/tools/ps-env.sh" <command>` (D-074).
-- [ ] `git fetch origin next`; `git rev-parse --short origin/next` recorded in §11 (#6180 merged `fa33e94dbe`; the
+- [x] `git fetch origin next`; `git rev-parse --short origin/next` recorded in §11 (#6180 merged `fa33e94dbe`; the
   `pr6180` fetch and A-6180-STATE/A-6180-COLUMNS are retired, D4-79).
-- [ ] merge `origin/next`: when `git diff --name-only HEAD...origin/next -- migrations/` shows a newer migration, run
+- [x] merge `origin/next`: when `git diff --name-only HEAD...origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
   `git merge origin/next` and `"$PLANS/tools/ps-env.sh" pnpm mj migrate`.
-- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
+- [x] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
   `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" pnpm mj codegen` →
   `pnpm run build`, each exit code 0 (PR 3 D3-212); sync write-backs into `metadata/**/*.json` restored from the index
   (`git show :<path> > <path>`), never from `HEAD`.
-- [ ] `git diff --name-only HEAD...origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
+- [x] `git diff --name-only HEAD...origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
   bundle-count changes (conventions §3); when the merge brought a migration, the CodeGen tail is regenerated only from a
   clean bootstrap (`bootstrap-clean-db`) and the `__mj.ts` getters are diffed against the migration's views.
 
@@ -8683,17 +8683,17 @@ table ticked)
 regenerates the front matter (`minor`, the package list `MilestoneExit.ChangesetPackageNames` derives) and §10's
 `gen:migration`, `gen:env`, `gen:gates`, `gen:checks`, `gen:head`, and edits the open PR's body
 
-- [ ] Step 1: The failing check is Step 2's `grep` (`changeset-file` reads only the front matter — levels and the package
+- [x] Step 1: The failing check is Step 2's `grep` (`changeset-file` reads only the front matter — levels and the package
   list — so it cannot see a default body).
-- [ ] Step 2: `grep -c "Predictive Studio honest serving." .changeset/ps-honest-serving.md` → `1` (the tool's default body).
-- [ ] Step 3: Write the body; fill §10's mutation table (one row per `**Mutation check G…:**` of §4.1a, its flip and the
+- [x] Step 2: `grep -c "Predictive Studio honest serving." .changeset/ps-honest-serving.md` → `1` (the tool's default body).
+- [x] Step 3: Write the body; fill §10's mutation table (one row per `**Mutation check G…:**` of §4.1a, its flip and the
   test that went red) and the release note's alias list (`git log -p origin/next..HEAD -- packages | grep -c "^-.*@deprecated"`
   matches the list's length); run the `--edit-pr` command.
-- [ ] Step 4: `npm run check:changeset` → exit 0; Step 1's command → `ok  changeset-file`; §10's
+- [x] Step 4: `npm run check:changeset` → exit 0; Step 1's command → `ok  changeset-file`; §10's
   `gen:gates` value → `29` (the rows `git diff --diff-filter=A` adds: the 31 owned gates less `W2 -> C1.1` and
   `W3 -> C1.1`, which exist on `599c288dee` and are modified, not added) and the `gen:checks` value → `29` likewise (the
   two checks `ps-gate-w2-c1-1` and `ps-gate-w3-c1-1` exist), both written into §11.
-- [ ] Step 5: `gh pr view --json body --jq .body | grep -c "Mutation"` ≥ 1 and the five `gen:` values in the PR body
+- [x] Step 5: `gh pr view --json body --jq .body | grep -c "Mutation"` ≥ 1 and the five `gen:` values in the PR body
   equal §10's.
 
 #### Task M8.3: The one full end-to-end pass (D-076)
@@ -8704,22 +8704,22 @@ checkpoint, and the pass is run again from Step 1)
 **Interfaces:** the final head after Tasks M8.1 and M8.2; MJAPI :4041 and Explorer :4241; the sidecar; `sqlcmd` with the
 env loaded
 
-- [ ] Step 1: Rebuild and restart on the final head: `pnpm install` → `pnpm run build` → stop MJAPI and Explorer →
+- [x] Step 1: Rebuild and restart on the final head: `pnpm install` → `pnpm run build` → stop MJAPI and Explorer →
   `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/MJAPI && pnpm run start'` → `until curl -sf -o /dev/null --max-time 3 http://localhost:4041/healthcheck; do sleep 5; done; echo UP`
   → `UP`; Explorer on :4241 started the same way; `git rev-parse --short HEAD` recorded.
-- [ ] Step 2: The UI walk first: `npx playwright test --config e2e/playwright.config.ts e2e/specs/ps-honest-serving-record-panel.spec.ts e2e/specs/ps-honest-serving-publish-flow.spec.ts`
+- [x] Step 2: The UI walk first: `npx playwright test --config e2e/playwright.config.ts e2e/specs/ps-honest-serving-record-panel.spec.ts e2e/specs/ps-honest-serving-publish-flow.spec.ts`
   (env of Tasks M5b.9 and M7.6) → 7 passed, 0 failed; the screenshots and their database rows in §11.
-- [ ] Step 3: Every gate suite on the final head, each through `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "<suite>"`:
+- [x] Step 3: Every gate suite on the final head, each through `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "<suite>"`:
   `Predictive Studio Gates — Registry and Gate` → 9, `— Scoring` → 7, `— Monitoring` → 10, `— Monitoring (statistical)`
   → 3, `— Containment` → 12, each 0 failed (31 owned gates, G0.2 in the nightly lane's suite run here on the final head);
   the keep-list suites of §4.2 (PR 1's, PR 2's and PR 3's gates by name, including `Predictive Studio Gates — Pending`'s
   remaining member) → 0 failed; `Integration Tests — Deterministic` (D4-79's two forms) → 0 failed (IT185 a member).
-- [ ] Step 4: §7's unit tests (`cd <pkg> && pnpm test` for Core, Engine, Sidecar, TruthSuite, MJCore, dashboards,
+- [x] Step 4: §7's unit tests (`cd <pkg> && pnpm test` for Core, Engine, Sidecar, TruthSuite, MJCore, dashboards,
   core-entity-forms, FeaturePipelines, CodeGenLib, RecordSetProcessor/engine, MJCoreEntitiesServer,
   integration-test-suite; `pnpm run test:python` for the sidecar and the truth suite) → each `N passed / 0 failed / K
   skipped` written to §11; `npm run check:ui`, `npm run check:standards`, `npm run check:guards`,
   `npm run check:changeset` → exit 0.
-- [ ] Step 5: §7's database checks with `sqlcmd`, each output pasted into §11: no `Published` row with `Delivery IS NULL`;
+- [x] Step 5: §7's database checks with `sqlcmd`, each output pasted into §11: no `Published` row with `Delivery IS NULL`;
   0 pipelines with more than one `Published`; 0 `Published` without a complete `publish` record (G3.6); 0 training runs
   with two applied publishes (R1); `automated-gate`/`publish` and `refusal` rows present and every `sign-off` row's
   approver a `user`; scoring runs `refused`, `failed` and `completed` present and none `running` past the threshold; a
@@ -8737,21 +8737,21 @@ entry)
 with `next`; a CI unit-shard failure with exit 143 and "runner has received a shutdown signal" is re-run with
 `gh run rerun --failed`, never fixed by a push
 
-- [ ] Step 1: The failing check: `git fetch origin && git rev-list --count HEAD..origin/next` → a count above 0 when
+- [x] Step 1: The failing check: `git fetch origin && git rev-list --count HEAD..origin/next` → a count above 0 when
   `next` moved since Task M8.3 (then merge `next` through the milestone-start steps, retime if needed, and run Task
   M8.3 again).
-- [ ] Step 2: `gh pr view --json isDraft,mergeable,mergeStateStatus,statusCheckRollup` → `isDraft: true` before this task;
+- [x] Step 2: `gh pr view --json isDraft,mergeable,mergeStateStatus,statusCheckRollup` → `isDraft: true` before this task;
   every `statusCheckRollup` entry `SUCCESS` (a shutdown-signal shard re-run with `gh run rerun --failed`).
-- [ ] Step 3: Write §10's "Open deferrals" (D4-50, D4-69): OF4-5 a kept incumbent-heuristic rule (PR 3 Q3-5) is
+- [x] Step 3: Write §10's "Open deferrals" (D4-50, D4-69): OF4-5 a kept incumbent-heuristic rule (PR 3 Q3-5) is
   recorded per run and not delivered — expiry PR 6; OF4-3 the Record Process form's sections unchanged — out of scope
   (layering, D-062), no deferred work; no compatibility shim or deprecated alias is listed, because none is kept
   (D-042, D-053); run
   `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --edit-pr`.
-- [ ] Step 4: The merge-readiness check: Step 1's count → `0`; Step 2's rollup all `SUCCESS`, `mergeable: MERGEABLE`;
+- [x] Step 4: The merge-readiness check: Step 1's count → `0`; Step 2's rollup all `SUCCESS`, `mergeable: MERGEABLE`;
   `node $PLANS/tools/milestone-exit.mjs --mode pre-push --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"`
   → exit 0 (the repo guards included, M8 having its §11 entry); `gh pr view --json body --jq .body | grep -c "expiry"` →
   1 (OF4-5's; OF4-3 carries none, D4-50); then `gh pr ready` → the PR leaves draft.
-- [ ] Step 5: From here until merge the review-quiet rules hold; each later push is recorded in §11 with the review item it
+- [x] Step 5: From here until merge the review-quiet rules hold; each later push is recorded in §11 with the review item it
   resolves or the `next` merge it carries (a review round's entry `### <date> — <agent> — R<k>`, D-073).
 
 **Coverage table**
@@ -8799,7 +8799,7 @@ milestone; counts, cells and claims go to §11.
   → every case as its cell says; counts measured at M8.
 - [x] Step 3: The reviewer re-runs, on the final head, one mutation per milestone chosen by the reviewer from the earlier
   harnesses' lists (M1 … M7) → the case named for it fails each time; outputs in §11.
-- [ ] Step 4: A broken claim is fixed at the invariant in the milestone that owns it, Task M8.3 run again, and the harness
+- [x] Step 4: A broken claim is fixed at the invariant in the milestone that owns it, Task M8.3 run again, and the harness
   re-run → 0 broken.
 - [x] Step 5: Counts, cells, claims and each mutation's failing case written to §11.
 
@@ -8810,25 +8810,25 @@ merge-readiness check → `0` commits behind `next`, every check `SUCCESS`, four
 
 **Milestone exit, in order (design §6.5 and D-076: M8's exit is the one full end-to-end pass):**
 
-- [ ] servers rebuilt and restarted on the final head (Task M8.3 Step 1), the head's SHA in §11 (the exit tier once,
+- [x] servers rebuilt and restarted on the final head (Task M8.3 Step 1), the head's SHA in §11 (the exit tier once,
   D4-87, program D-084: an exit-pass fix round re-runs only the suites whose inputs it changed; §11 names what was re-run)
-- [ ] the UI walk first: both Playwright specs → 7 passed (Task M8.3 Step 2), the DOM and database rows in §11
-- [ ] every gate suite on the final head, the statistical suite included, and the keep-list and deterministic tier
+- [x] the UI walk first: both Playwright specs → 7 passed (Task M8.3 Step 2), the DOM and database rows in §11
+- [x] every gate suite on the final head, the statistical suite included, and the keep-list and deterministic tier
   (Task M8.3 Step 3), each count in §11
-- [ ] §7's unit tests and repo checks (Task M8.3 Step 4) and §7's database checks (Task M8.3 Step 5), each output in §11
-- [ ] Task M8.5's harness run by the reviewer (D-071), its counts, cells and claims in §11
-- [ ] self-audit of every added and changed line of the PR against `reference/coding-standards.md`, findings fixed (a fix
+- [x] §7's unit tests and repo checks (Task M8.3 Step 4) and §7's database checks (Task M8.3 Step 5), each output in §11
+- [x] Task M8.5's harness run by the reviewer (D-071), its counts, cells and claims in §11
+- [x] self-audit of every added and changed line of the PR against `reference/coding-standards.md`, findings fixed (a fix
   re-runs this list from the first item)
-- [ ] tasks ticked
-- [ ] §11 entry `### <date> — <agent> — M8` with the head SHA, every count, the open deferrals
-- [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
+- [x] tasks ticked
+- [x] §11 entry `### <date> — <agent> — M8` with the head SHA, every count, the open deferrals
+- [x] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
-- [ ] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M8` → exit 0 (its `changeset-file` and `handoff` checks treat M8 as the last milestone), summary in the commit body
-- [ ] one checkpoint commit, each path staged by name (the plan and `.changeset/ps-honest-serving.md` among them)
-- [ ] `git push` through the pre-push hook (D-072)
-- [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --edit-pr` → the open PR's body from §10 (the only file it changes is
+- [x] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M8` → exit 0 (its `changeset-file` and `handoff` checks treat M8 as the last milestone), summary in the commit body
+- [x] one checkpoint commit, each path staged by name (the plan and `.changeset/ps-honest-serving.md` among them)
+- [x] `git push` through the pre-push hook (D-072)
+- [x] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --edit-pr` → the open PR's body from §10 (the only file it changes is
   §10's `gen:head`, which rides in the next commit)
-- [ ] Task M8.4's merge-readiness check, then `gh pr ready`; the review-quiet rules from then on (D-077)
+- [x] Task M8.4's merge-readiness check, then `gh pr ready`; the review-quiet rules from then on (D-077)
 
 **Milestone exit (UI first where the milestone ships UI, D-076):** `pr-body.mjs` (no `--edit-pr`) → `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M8` → exit 0, summary in the commit body → one checkpoint commit (the plan and the changeset staged by name) → push (the pre-push hook runs `--mode pre-push`, D-072) → `pr-body.mjs --edit-pr`
 
@@ -10888,6 +10888,11 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   build, the unit tier of the packages the merge touched, IT185 and G5.6 (the two zero-schema-change checks that read the
   renamed fingerprint query), `Integration Tests — Deterministic` (next's new bundles are members) and G3.4 alone
   (D4-269) are re-run. The UI walks, the other gate suites and the harness are not: their inputs are unchanged.
+- **D4-273 · The last merge of next before `gh pr ready` re-runs only its own package** (M8.4, `68c3bb55f1`). Next's
+  four commits touch only `packages/Archiving/Engine` and add a changeset: no migration, no Predictive Studio file, no
+  check, bundle or metadata; so the merge is followed by that package's build and tests (4/115) and the pre-push
+  hook's full check, not by a DB rebuild or a suite re-run (D4-87/D-084). The checkpoint commit and its push precede
+  `gh pr ready`, so nothing is pushed after it except under the review-quiet rules (D-077).
 - **D4-263 · M8 lists two open deferrals, not four** (M8 final pass). Task M8.5's exit-test line "four deferrals
   listed with their expiries" predates D4-69, which removed OF4-1, OF4-2 and OF4-4 from D4-50's list; §10 lists OF4-5
   (expiry PR 6) and OF4-3 (out of scope, no deferred work), and Task M8.4 Step 4's `grep -c "expiry"` → 1 holds.
@@ -11335,7 +11340,7 @@ are monitored on real outcomes.
 - Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, PS_SEED_LIMIT, PS_SIGN_IN_URL, PS_STORAGE_PROVIDER, PW_BASE_URL, STORAGE_LOCAL_ROOT<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->29<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->29<!-- /gen:checks -->
-- Head: <!-- gen:head -->8ac973c228<!-- /gen:head -->
+- Head: <!-- gen:head -->c665be1214<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,
@@ -13513,6 +13518,64 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
 - The merge commit had swept in the local deterministic run's writes to next's three tracked
   `integration-test-suite/benchmark-logs/` files (`latest.json`, `latest.md`, `history.jsonl`); restored to next's content
   (the pre-push allowlist check named them).
+
+### 2026-11-21 — Claude (Opus 5.5) — M8
+
+- **Head:** `bb65b9ffc9` (code; this entry's commit adds the plan only). next merged twice: `0d1950895c` (`0e3d2b208f`,
+  retime → `V202611192101`) and `3c94a75e53` (`1b915d8be5`, retime → `V202611201631`, both DBs rebuilt, D4-271);
+  behind 0 at 00:32; next moved 4 commits (archiving engine only, no migration) → merged `68c3bb55f1` (`c665be1214`,
+  no conflicts; `Archiving/Engine` build 0, tests 4/115); no suite re-run (D4-273). Behind `origin/next` **0** after it.
+- **Task M8.2:** changeset body = the deploy-impact list; §10 final (32-row mutation table, the 217 removed
+  `@deprecated` members, changes outside Predictive Studio, open deferrals); `check:changeset` exit 0; `gen:gates` **29**,
+  `gen:checks` **29**; PR body edited by `pr-body.mjs --edit-pr` (`Mutation` 1, `expiry` 1, five `gen:` values = §10's).
+- **Task M8.3 Step 1:** both DBs rebuilt from clean twice (final: `196 applied`, tail = OF4-57's one statement of next's,
+  sync 0 errors, full CodeGen, provision 48, it-metadata `created 810`); identity identical (514 entities, 8029 fields);
+  root build 352/352 + 322/322; MJAPI :4041 healthcheck UP, sidecar :64203.
+- **Step 2 — UI walk** (first, exact paths, Explorer :4201 → MJAPI :4041): record panel **2 passed**, publish flow
+  **5 passed** (one run) — **7 passed, 0 failed**; the browser publish of `92346771-…` and the sign-off + publish of
+  `13FA336C-…` name `fv-walk-authorized@ps-walk.test`; automated-gate publish `700F2795-…` (agent initiator) and refusal
+  `71B73091-…`. Seeds cleaned up; census = baseline.
+- **Step 3 — gate suites on this code** (census EQUAL after each): Registry and Gate **9/9**; Scoring **7/7** (G5.6 ✓
+  again after the second merge); Monitoring **10/10** (G6.1 `12000 of 12000`, G6.2 `3 of 3`, G6.3 period 4, G6.4 `0 fires
+  … 12 of 12 insufficient-rows`, G6.5, G6.7 `0.60525 vs 0.4663`, G6.9/G6.10 replaced true, G6.11 replaced false, G6.12
+  `0/1`); Monitoring (statistical) **3/3** by member — G6.6 `19 of 400` (q 0.0095), G6.8 `400 of 400`, mean FDP 0.0076,
+  G3.4 **✓ `0 of 400 … Published (≤ 28); 400 of 400 with reason`** on its run alone (7340 s; D4-269: the chain's first
+  run ended on a client fetch after MJAPI's event loop was blocked 641 s / 436 s at host swap 19.8 of 21.5 GB — an
+  infrastructure failure, not an assertion); Containment **12/12** (G0.10 ✓). Keep-list: Prediction Units **12/12**;
+  Training **35/35** by member (G2.39 ✓ on `mj test run` after a 1200 s host-load timeout in the suite; alone 15/15 in
+  764 s); Training (statistical) **6/6** (after regenerating the n400 sets PR 4's generator change had re-hashed);
+  Pending G0.6 ✗ twice on its LLM judge (next's "raises/lowers risk" and "drivers" copy; D4-268, OF4-56; `Pending`, not
+  merge-blocking); Feature Pipelines 0/5 environment-blocked (D3-78, as since M1); IT166 ✓; IT185 ✓ (Z1–Z8).
+  `Integration Tests — Deterministic` (PR lane) on the final DB **132/162 passed, 29 skipped, skip gate PASSED**; ✗ PB7 +
+  PB18 only (OF4-36); the run before the second merge also had ABV3 (OF4-54).
+- **Step 4 — unit (0 failed each):** Core 45/593 · Engine 124/1876 + test-inclusive tsc 0 · TruthSuite 27/189 ·
+  FeaturePipelines 15/312 · RSP engine 10/182 · base 4/31 · MJCoreEntitiesServer 112/1621 · MJCoreEntities 96/1688 ·
+  core-entity-forms 90/722 + types 0 · dashboards 258/3158 + types 0 · integration-test-suite 78/1130 + rigs 0 ·
+  GraphQLDataProvider 55/780 · CoreActions 91/1224 · Sidecar 4/38 + pytest 535 · TruthSuite pytest 24 + mypy clean ·
+  MJCore 302/4382 · CodeGenLib 172/2610 (66 skipped) · SQLParser 63/2175 · React runtime 14/151. Repo gates:
+  check:ui, check:standards (0 errors), check:guards, check:changeset, check:codegen-tail, check:claude-md,
+  entityfield-sequence → exit 0.
+- **Step 5 — §7's database checks** (walk state + scoring proof): Published 5 all with `Delivery`, Unevaluated 3 without;
+  0 pipelines with two Published; 0 Published without a complete publish record; 0 runs with two applied publishes;
+  approver/kind `automated-gate|publish 1 · automated-gate|refusal 1 · user|publish 4 · user|refusal 2 · user|sign-off 1`,
+  0 sign-off rows not by a user; scoring runs `completed 1 · failed 1 · refused 1` (refused `leakage-unknown`, failed
+  `100 of 6673 records failed … sidecar did not become ready`), 0 running > 2 h; GraphQL `UpdateMJMLModel` Status →
+  `status-changed-outside-gate`; 0 Model rows missing lineage (6673 rows); 0 duplicate model-row keys; 0 bindings without
+  a view authorization; the unauthorized/authorized `RunView` pair is IT185's Z5/Z6 and the record-panel walk.
+- **Task M8.5 Step 4:** `serving-end-to-end` (MJAPI stopped) **5/5** (213.8 s; M5 × M6, M3 × M6, M5 × M5b, M5 × PR 1,
+  M1 × M5 × M6), stderr 0, census equal.
+- **Self-audit** of M8's own lines: 2 findings fixed (D4-265); M1–M7's lines were audited at their exits and in
+  `self-audit-M5b-M7.md`.
+- **CI on `bb65b9ffc9`:** 40 SUCCESS, 5 SKIPPED, 0 failed; `MERGEABLE`. Reds fixed on the way: CodeQL polynomial regex
+  (D4-264), the Loom-dependent unit test (D4-266); next's contract-test timeout (OF4-55) and PB18 timing (D4-267, re-run)
+  are next's.
+- **`milestone-exit --milestone M8`** (with commands) on `bb65b9ffc9` + this entry: `# checks 47 · failed 0`, EXIT=0.
+- **Merge-readiness (Task M8.4):** behind 0; rollup all SUCCESS (5 SKIPPED conditional jobs) on the pushed head;
+  `MERGEABLE`; `expiry` in the PR body 1; then `gh pr ready` and `pr-body.mjs --edit-pr` (its `gen:head` rides in the
+  next commit). From `gh pr ready` until merge the review-quiet rules hold (D-077): a later push resolves a named review
+  item or carries a merge of `next`, and is recorded here as `### <date> — <agent> — R<k>`.
+- **Open deferrals:** OF4-5 (a kept incumbent-heuristic rule is recorded and not delivered) — expiry PR 6; OF4-3 out of
+  scope, no deferred work. **Rulings:** D4-261…D4-273. **Flags:** OF4-55, OF4-56, OF4-57; OF4-34 resolved.
 
 ## 12. Refresh log (append-only)
 
