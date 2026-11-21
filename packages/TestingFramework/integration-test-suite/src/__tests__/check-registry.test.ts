@@ -211,7 +211,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['lists', ListsChecks, 3],
         ['list-refresh', ListRefreshChecks, 7], // LR1-LR7 source fingerprint, routine, approval (IT175)
         ['list-from-query', ListFromQueryChecks, 5], // LQ1-LQ5 conversation SQL saved Pending, list linked, refresh, edit stops it (IT179)
-        ['open-app-local-source', OpenAppLocalSourceChecks, 10], // OLS1-OLS10 install, upgrade and remove from a local folder (IT178)
+        ['open-app-local-source', OpenAppLocalSourceChecks, 11], // OLS1-OLS11 install, upgrade and remove from a local folder (IT178)
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 18],
         ['chief-of-staff', ChiefOfStaffChecks, 12], // COS1-COS12 ownership guards, run-now, policy cache, email approval-before-transport, extensible skills, rhythms, agent channels (IT157)
@@ -467,7 +467,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'native-tool-loop': 14,
         'native-tool-loop-live': 3,
         'nested-transactions': 11,
-        'open-app-local-source': 10,
+        'open-app-local-source': 11,
         'open-app-teardown': 2,
         'performance-benchmark': 23,
         'permission-engine': 15,
