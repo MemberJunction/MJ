@@ -17,7 +17,8 @@
 import crypto from 'node:crypto';
 import express from 'express';
 import BodyParser from 'body-parser';
-import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
+import { CommunicationEngineBase } from '@memberjunction/communication-types';
 import {
     ComputeTrackingSignature,
     VerifyTrackingSignature,
@@ -820,12 +821,17 @@ async function handlePostConfirm(
     }
 }
 
+function getCommsProvider(provider?: IMetadataProvider): IMetadataProvider {
+    return provider ?? CommunicationEngineBase.Instance.ProviderToUse;
+}
+
 async function loadLogAndSenderByToken(
     token: string,
     systemUser: UserInfo,
     provider?: IMetadataProvider,
 ): Promise<{ log: MJCommunicationLogEntity; sender: MJCommunicationSenderEntity | null } | null> {
-    const rv = new RunView();
+    const md = getCommsProvider(provider);
+    const rv = RunView.FromMetadataProvider(md);
     const logRes = await rv.RunView<MJCommunicationLogEntity>(
         {
             EntityName: 'MJ: Communication Logs',
@@ -841,7 +847,6 @@ async function loadLogAndSenderByToken(
     const log = logRes.Results[0];
     let sender: MJCommunicationSenderEntity | null = null;
     if (log.CommunicationSenderID) {
-        const md = provider ?? new Metadata();
         const s = await md.GetEntityObject<MJCommunicationSenderEntity>('MJ: Communication Senders', systemUser);
         if (await s.Load(log.CommunicationSenderID)) {
             sender = s;
@@ -853,9 +858,13 @@ async function loadLogAndSenderByToken(
 async function resolvePrincipalFromLog(
     log: MJCommunicationLogEntity,
     systemUser: UserInfo,
+    provider?: IMetadataProvider,
 ): Promise<{ EntityID: string; RecordID: string } | null> {
+    if (log.EntityID && log.RecordID) {
+        return { EntityID: log.EntityID, RecordID: log.RecordID };
+    }
     if (!log.CommunicationEndpointID) return null;
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(getCommsProvider(provider));
     const res = await rv.RunView<MJCommunicationEndpointPrincipalEntity>(
         {
             EntityName: 'MJ: Communication Endpoint Principals',
@@ -880,18 +889,19 @@ function parseTemplateContext(raw: string | null | undefined): PreferenceCenterT
     }
 }
 
-async function defaultResolveUnsubscribeRedirect(token: string): Promise<string | undefined> {
+async function defaultResolveUnsubscribeRedirect(token: string, provider?: IMetadataProvider): Promise<string | undefined> {
     const systemUser = getSystemUser();
     if (!systemUser) return undefined;
-    const found = await loadLogAndSenderByToken(token, systemUser);
+    const found = await loadLogAndSenderByToken(token, systemUser, provider);
     return found?.sender?.PreferenceCenterURL ?? undefined;
 }
 
-async function defaultResolvePreferenceCenterData(token: string): Promise<PreferenceCenterData | null> {
+async function defaultResolvePreferenceCenterData(token: string, provider?: IMetadataProvider): Promise<PreferenceCenterData | null> {
     const systemUser = getSystemUser();
     if (!systemUser) return null;
 
-    const found = await loadLogAndSenderByToken(token, systemUser);
+    const md = getCommsProvider(provider);
+    const found = await loadLogAndSenderByToken(token, systemUser, md);
     if (!found) return null;
 
     const { log, sender } = found;
@@ -899,7 +909,7 @@ async function defaultResolvePreferenceCenterData(token: string): Promise<Prefer
         ? `(CommunicationSenderID='${EscapeSQLString(sender.ID)}' OR CommunicationSenderID IS NULL)`
         : 'CommunicationSenderID IS NULL';
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(md);
     const prefRes = await rv.RunView<MJCommunicationPreferenceEntity>(
         {
             EntityName: 'MJ: Communication Preferences',
@@ -910,7 +920,7 @@ async function defaultResolvePreferenceCenterData(token: string): Promise<Prefer
         systemUser,
     );
     const prefs = prefRes.Success ? prefRes.Results : [];
-    const principal = await resolvePrincipalFromLog(log, systemUser);
+    const principal = await resolvePrincipalFromLog(log, systemUser, md);
 
     let principalPrefs: MJCommunicationPrincipalPreferenceEntity[] = [];
     if (principal) {
@@ -1013,7 +1023,8 @@ async function upsertPrincipalPreferenceAndAudit(
     systemUser: UserInfo,
     provider?: IMetadataProvider,
 ): Promise<void> {
-    const rv = new RunView();
+    const md = getCommsProvider(provider);
+    const rv = RunView.FromMetadataProvider(md);
     const senderClause = params.SenderID
         ? `CommunicationSenderID='${EscapeSQLString(params.SenderID)}'`
         : 'CommunicationSenderID IS NULL';
@@ -1027,7 +1038,6 @@ async function upsertPrincipalPreferenceAndAudit(
         systemUser,
     );
 
-    const md = provider ?? new Metadata();
     const existing = existingRes.Success && existingRes.Results.length > 0 ? existingRes.Results[0] : null;
     const prevValue = existing ? JSON.stringify({ State: existing.State }) : null;
     const pp = existing ?? (await md.GetEntityObject<MJCommunicationPrincipalPreferenceEntity>('MJ: Communication Principal Preferences', systemUser));
@@ -1071,22 +1081,22 @@ async function defaultSavePreferenceCenterChoices(
         return { Found: false, Success: false, UnsubscribedAll: false, Preferences: [] };
     }
 
-    const data = await defaultResolvePreferenceCenterData(input.Token);
+    const md = getCommsProvider(provider);
+    const data = await defaultResolvePreferenceCenterData(input.Token, md);
     if (!data) {
         return { Found: false, Success: false, UnsubscribedAll: false, Preferences: [] };
     }
 
-    const found = await loadLogAndSenderByToken(input.Token, systemUser, provider);
+    const found = await loadLogAndSenderByToken(input.Token, systemUser, md);
     if (!found) {
         return { Found: false, Success: false, UnsubscribedAll: false, Preferences: [] };
     }
 
-    const principal = await resolvePrincipalFromLog(found.log, systemUser);
+    const principal = await resolvePrincipalFromLog(found.log, systemUser, md);
     const senderId = found.sender?.ID ?? null;
     const visibleIds = new Set(data.Preferences.map((p) => p.ID.toLowerCase()));
 
     if (input.UnsubscribeAll) {
-        const md = provider ?? new Metadata();
         const supp = await md.GetEntityObject<MJCommunicationSuppressionEntity>('MJ: Communication Suppressions', systemUser);
         supp.CommunicationEndpointID = found.log.CommunicationEndpointID;
         supp.EntityID = principal?.EntityID ?? null;
@@ -1114,7 +1124,9 @@ async function defaultSavePreferenceCenterChoices(
         suppAudit.Source = 'Preference Center';
         suppAudit.IPAddress = input.IPAddress ?? null;
         suppAudit.UserAgent = input.UserAgent ?? null;
-        await suppAudit.Save();
+        if (!(await suppAudit.Save())) {
+            LogError(`[CommsWebhook] Failed to save unsubscribe-all audit log: ${suppAudit.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
 
         if (principal) {
             for (const pref of data.Preferences) {
@@ -1133,7 +1145,15 @@ async function defaultSavePreferenceCenterChoices(
                 );
             }
         }
-    } else if (principal && input.Preferences) {
+    } else if (!principal) {
+        return {
+            Found: true,
+            Success: false,
+            UnsubscribedAll: false,
+            Preferences: data.Preferences,
+            ErrorMessage: 'Preferences could not be saved because this address does not map to a unique recipient profile. Use Unsubscribe All to suppress this address.',
+        };
+    } else if (input.Preferences) {
         const currentByPrefId = new Map(
             data.Preferences.map((p) => [p.ID.toLowerCase(), p.State]),
         );
@@ -1175,7 +1195,8 @@ async function defaultConfirmDoubleOptIn(
         return { Found: false, Confirmed: false };
     }
 
-    const rv = new RunView();
+    const md = getCommsProvider(provider);
+    const rv = RunView.FromMetadataProvider(md);
     const res = await rv.RunView<MJCommunicationPrincipalPreferenceEntity>(
         {
             EntityName: 'MJ: Communication Principal Preferences',
@@ -1220,7 +1241,6 @@ async function defaultConfirmDoubleOptIn(
         };
     }
 
-    const md = provider ?? new Metadata();
     const audit = await md.GetEntityObject<MJCommunicationConsentAuditLogEntity>('MJ: Communication Consent Audit Logs', systemUser);
     audit.CommunicationPrincipalPreferenceID = pref.ID;
     audit.Action = 'Confirmed';

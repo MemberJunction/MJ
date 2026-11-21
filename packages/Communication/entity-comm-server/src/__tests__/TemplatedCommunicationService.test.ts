@@ -533,6 +533,7 @@ describe('EntityCommunicationsEngine — V1 Compatibility via V2 pipeline', () =
       },
       PreviewOnly: false,
       IncludeProcessedMessages: true,
+      UseV2: true,
       ContextUser: MOCK_USER,
     } as unknown as EntityCommunicationParams;
 
@@ -563,6 +564,7 @@ describe('EntityCommunicationsEngine — V1 Compatibility via V2 pipeline', () =
         ContextData: {},
       },
       PreviewOnly: false,
+      UseV2: true,
       ContextUser: MOCK_USER,
     } as unknown as EntityCommunicationParams;
 
@@ -593,6 +595,7 @@ describe('EntityCommunicationsEngine — V1 Compatibility via V2 pipeline', () =
       },
       PreviewOnly: true,
       IncludeProcessedMessages: true,
+      UseV2: true,
       ContextUser: MOCK_USER,
     } as unknown as EntityCommunicationParams;
 
@@ -600,6 +603,26 @@ describe('EntityCommunicationsEngine — V1 Compatibility via V2 pipeline', () =
     expect(result.Success).toBe(true);
     expect(result.Results).toHaveLength(1);
     expect(result.Results?.[0].Message.ProcessedBody).toContain('Hi {{ Recipient.FirstName }}');
+    expect(capturedSendCalls).toHaveLength(0);
+  });
+
+  it('keeps V1 RunEntityCommunication on the V1 path by default when UseV2 is not set', async () => {
+    const engine = new EntityCommunicationsEngine();
+    const v1Params = {
+      EntityID: 'ent-customers',
+      RunViewParams: { ViewID: 'view-1' },
+      ProviderName: 'SendGrid',
+      ProviderMessageTypeName: 'Email',
+      Message: {
+        Subject: 'Literal V1 Subject',
+        Body: 'Literal V1 Body',
+        ContextData: {},
+      },
+      PreviewOnly: false,
+      ContextUser: MOCK_USER,
+    } as unknown as EntityCommunicationParams;
+
+    await engine.RunEntityCommunication(v1Params);
     expect(capturedSendCalls).toHaveLength(0);
   });
 });

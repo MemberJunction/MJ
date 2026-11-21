@@ -36,6 +36,7 @@ import {
     type WorkOutcome,
 } from '@memberjunction/work-queue-core';
 import { BaseWorkHandler, WorkQueueEngine } from '@memberjunction/work-queue-engine';
+import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import {
     ResolveSendGridWebhookVerificationKey,
     type CommsActivityWorkPayload,
@@ -68,37 +69,34 @@ function toWorkJson(value: object): WorkJson {
 export function ConfigureCommsV2WorkQueue(
     baseTrackingUrl?: string,
     trackingHmacSecret?: string,
+    workQueueEnabled = true,
 ): void {
     const resolvedSecret =
         trackingHmacSecret ??
         process.env.MJ_COMMS_HMAC_SECRET;
 
+    const enqueueWork = workQueueEnabled
+        ? async (taskType: string, payload: object) => {
+            if (WorkQueueEngine.Instance.Topics.length === 0) {
+                await WorkQueueEngine.Instance.Config(false, CommunicationEngine.Instance.ContextUser);
+            }
+            const results = await WorkQueueEngine.Instance.Publish(taskType, [{ Payload: toWorkJson(payload) }]);
+            const rejected = results.find((r) => r.Status === 'Rejected');
+            if (rejected) {
+                throw new Error(`WorkQueue publish rejected for '${taskType}' (${rejected.Error?.Code ?? 'Unknown'}): ${rejected.Error?.Message ?? ''}`);
+            }
+        }
+        : undefined;
+
     CommunicationEngine.Instance.ConfigureV2Dispatch({
         BaseTrackingURL: baseTrackingUrl,
         TrackingHMACSecret: resolvedSecret,
-        EnqueueWork: async (taskType, payload) => {
-            if (WorkQueueEngine.Instance.Topics.length === 0) {
-                await WorkQueueEngine.Instance.Config(false, CommunicationEngine.Instance.ContextUser);
-            }
-            const results = await WorkQueueEngine.Instance.Publish(taskType, [{ Payload: toWorkJson(payload) }]);
-            const rejected = results.find((r) => r.Status === 'Rejected');
-            if (rejected) {
-                throw new Error(`WorkQueue publish rejected for '${taskType}' (${rejected.Error?.Code ?? 'Unknown'}): ${rejected.Error?.Message ?? ''}`);
-            }
-        },
+        EnqueueWork: enqueueWork,
     });
 
     TemplatedCommunicationService.Instance.Configure({
-        EnqueueWork: async (taskType, payload) => {
-            if (WorkQueueEngine.Instance.Topics.length === 0) {
-                await WorkQueueEngine.Instance.Config(false, CommunicationEngine.Instance.ContextUser);
-            }
-            const results = await WorkQueueEngine.Instance.Publish(taskType, [{ Payload: toWorkJson(payload) }]);
-            const rejected = results.find((r) => r.Status === 'Rejected');
-            if (rejected) {
-                throw new Error(`WorkQueue publish rejected for '${taskType}' (${rejected.Error?.Code ?? 'Unknown'}): ${rejected.Error?.Message ?? ''}`);
-            }
-        },
+        EnqueueWork: enqueueWork,
+        ResolveUser: (userID) => UserCache.Instance.UserByID(userID),
     });
 }
 

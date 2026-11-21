@@ -2032,7 +2032,7 @@ const setupComplete$ = new ReplaySubject(1);
   // ShutdownAll() drains it (up to 2 × shutdownDrainMs) before the HTTP server closes.
   // Not awaited: a slow engine load must not delay readiness, and a failure never stops the API.
   // Configure Comms V2 tracking URL, HMAC secret, and WorkQueue enqueue hook on all nodes (including API-only nodes)
-  ConfigureCommsV2WorkQueue(ApiRoute('/comms', { absolute: true }));
+  ConfigureCommsV2WorkQueue(ApiRoute('/comms', { absolute: true }), undefined, Boolean(configInfo.workQueue?.enabled));
 
   const workQueueProvider = Metadata.Provider; // global-provider-ok: server startup — the work-queue host runs on the server's own provider
   if (runBackgroundWorkers && configInfo.workQueue?.enabled && workQueueProvider instanceof DatabaseProviderBase) {

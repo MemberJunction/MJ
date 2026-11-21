@@ -36,6 +36,8 @@ export interface TemplatedCommunicationConfig {
   BatchSize?: number;
   /** Optional work-queue publisher for `comms.render` batches. */
   EnqueueWork?: (taskType: 'comms.render', payload: RenderBatchPayload) => Promise<void>;
+  /** Optional user resolver so async `comms.render` workers enforce the acting user's RLS/FLS. */
+  ResolveUser?: (userID: string) => UserInfo | undefined;
 }
 
 export interface RenderBatchRecipient {
@@ -62,6 +64,8 @@ export interface RenderBatchPayload {
   };
   AutoAppendComplianceFooter: boolean;
   Recipients: RenderBatchRecipient[];
+  /** Acting user ID so async `comms.render` workers enforce RLS/FLS when loading template data. */
+  ActingUserID?: string;
 }
 
 export interface RenderedRecipientPayload {
@@ -202,6 +206,7 @@ export class TemplatedCommunicationService
           Templates: params.Templates,
           AutoAppendComplianceFooter: autoAppendFooter,
           Recipients: batch,
+          ActingUserID: user?.ID,
         };
         await this.config.EnqueueWork('comms.render', batchPayload);
       }
@@ -331,14 +336,36 @@ export class TemplatedCommunicationService
       await CommunicationEngine.Instance.Config(false, user, provider);
     }
 
-    const resolvedTemplates = await this.resolveTemplates(payload.Templates, user, provider);
+    let renderUser = user;
+    if (payload.ActingUserID) {
+      if (contextUser && UUIDsEqual(contextUser.ID, payload.ActingUserID)) {
+        renderUser = contextUser;
+      } else {
+        const resolvedActingUser = this.config.ResolveUser?.(payload.ActingUserID);
+        if (!resolvedActingUser) {
+          return {
+            Success: false,
+            CommunicationRunID: payload.CommunicationRunID,
+            IsAsyncRun: false,
+            TotalCount: payload.Recipients.length,
+            QueuedCount: 0,
+            BlockedCount: 0,
+            DeferredCount: 0,
+            ErrorMessage: `Acting user '${payload.ActingUserID}' could not be resolved for async template rendering`,
+          };
+        }
+        renderUser = resolvedActingUser;
+      }
+    }
+
+    const resolvedTemplates = await this.resolveTemplates(payload.Templates, renderUser, provider);
     const rendered = await this.RenderBatchInline(
       payload.Recipients,
       resolvedTemplates,
       payload.Templates.SharedContextData,
       payload.EntityID,
       payload.AutoAppendComplianceFooter,
-      user,
+      renderUser,
       provider,
     );
 

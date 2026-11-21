@@ -66,6 +66,9 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
             const entityMessageType = this.ResolveEntityMessageType(params);
             const records = await this.RunRecipientView(entityInfo, params.RunViewParams, contextUser, provider);
 
+            const optInV2 =
+                params.UseV2 === true ||
+                params.Message.ContextData?.['UseV2'] === true;
             const usesV1OnlyFeatures = Boolean(
                 params.Message.From ||
                 (params.Message.CCRecipients && params.Message.CCRecipients.length > 0) ||
@@ -73,7 +76,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
                 (params.Message.Subject && (params.Message.BodyTemplate || params.Message.HTMLBodyTemplate) && !params.Message.SubjectTemplate),
             );
             const v2Engine = CommunicationEngine.Instance as Partial<CommunicationEngine>;
-            if (!usesV1OnlyFeatures && typeof v2Engine.EvaluateEligibility === 'function' && typeof v2Engine.Send === 'function') {
+            if (optInV2 && !usesV1OnlyFeatures && typeof v2Engine.EvaluateEligibility === 'function' && typeof v2Engine.Send === 'function') {
                 return await this.runEntityCommunicationV2(params, entityInfo, entityMessageType, records, contextUser, provider);
             }
 
