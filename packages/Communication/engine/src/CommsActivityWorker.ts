@@ -166,17 +166,12 @@ export class CommsActivityWorker {
       );
     }
 
-    const { scrubbedCount: scrubbedLogs, logIDs } = await this.scrubLogsForEndpoint(
+    const { scrubbedCount: scrubbedLogs } = await this.scrubLogsForEndpoint(
       endpoint.ID,
       contextUser,
     );
     const scrubbedActivities = await this.scrubActivitiesForEndpoint(
       endpoint.ID,
-      contextUser,
-    );
-    const scrubbedAuditLogs = await this.scrubAuditLogsForEndpoint(
-      endpoint.ID,
-      logIDs,
       contextUser,
     );
 
@@ -185,7 +180,8 @@ export class CommsActivityWorker {
       CommunicationEndpointID: endpoint.ID,
       ScrubbedLogs: scrubbedLogs,
       ScrubbedActivities: scrubbedActivities,
-      ScrubbedAuditLogs: scrubbedAuditLogs,
+      // CommunicationConsentAuditLog is append-only (AllowUpdateAPI=false, AllowDeleteAPI=false); never mutated on erasure.
+      ScrubbedAuditLogs: 0,
     };
   }
 
@@ -1207,58 +1203,6 @@ export class CommsActivityWorker {
         activity.UserAgent = null;
         activity.RawPayload = null;
         if (await activity.Save()) {
-          scrubbedCount++;
-        }
-      }
-    }
-    return scrubbedCount;
-  }
-
-  private async scrubAuditLogsForEndpoint(
-    endpointID: string,
-    logIDs: string[],
-    contextUser: UserInfo,
-  ): Promise<number> {
-    const rv = this.getRunView();
-    const suppRes = await rv.RunView<{ ID: string }>(
-      {
-        EntityName: 'MJ: Communication Suppressions',
-        Fields: ['ID'],
-        ExtraFilter: `CommunicationEndpointID='${EscapeSQLString(endpointID)}'`,
-        ResultType: 'simple',
-      },
-      contextUser,
-    );
-    const suppressionIDs =
-      suppRes.Success && suppRes.Results ? suppRes.Results.map((r) => r.ID) : [];
-
-    const clauses: string[] = [];
-    if (suppressionIDs.length > 0) {
-      const quoted = suppressionIDs.map((id) => `'${EscapeSQLString(id)}'`).join(',');
-      clauses.push(`CommunicationSuppressionID IN (${quoted})`);
-    }
-    if (logIDs.length > 0) {
-      const quoted = logIDs.map((id) => `'${EscapeSQLString(id)}'`).join(',');
-      clauses.push(`CommunicationLogID IN (${quoted})`);
-    }
-    if (clauses.length === 0) return 0;
-
-    const auditRes = await rv.RunView<MJCommunicationConsentAuditLogEntity>(
-      {
-        EntityName: 'MJ: Communication Consent Audit Logs',
-        ExtraFilter: clauses.join(' OR '),
-        ResultType: 'entity_object',
-      },
-      contextUser,
-    );
-    if (!auditRes.Success || !auditRes.Results) return 0;
-
-    let scrubbedCount = 0;
-    for (const audit of auditRes.Results) {
-      if (audit.IPAddress !== null || audit.UserAgent !== null) {
-        audit.IPAddress = null;
-        audit.UserAgent = null;
-        if (await audit.Save()) {
           scrubbedCount++;
         }
       }

@@ -729,7 +729,7 @@ describe('CommsActivityWorker', () => {
     expect(res.Found).toBe(true);
     expect(res.ScrubbedLogs).toBe(1);
     expect(res.ScrubbedActivities).toBe(1);
-    expect(res.ScrubbedAuditLogs).toBe(1);
+    expect(res.ScrubbedAuditLogs).toBe(0);
 
     expect(ep.Status).toBe('Erased');
     expect(ep.NormalizedValue).toBeNull();
@@ -738,7 +738,8 @@ describe('CommsActivityWorker', () => {
     expect(log.RecipientAddress).toBeNull();
     expect(activity.IPAddress).toBeNull();
     expect(activity.UserAgent).toBeNull();
-    expect(audit.IPAddress).toBeNull();
-    expect(audit.UserAgent).toBeNull();
+    // Append-only consent audit log is never mutated by erasure
+    expect(audit.IPAddress).toBe('203.0.113.42');
+    expect(audit.UserAgent).toBe('CustomUA/1.0');
   });
 });
