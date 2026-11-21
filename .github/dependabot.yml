@@ -9,12 +9,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    # Security advisories only — no routine version bumps.
-    open-pull-requests-limit: 10
-    allow:
-      - dependency-type: all
-    # Dependabot only opens PRs here for advisories when `versioning-strategy` + alerts are
-    # enabled org-side; the config's presence also activates grouped alert visibility.
+    # Security advisories only. A limit of 0 turns off routine version-update PRs for this
+    # ecosystem; security-update PRs are not counted against it and still open when Dependabot
+    # security updates are enabled for the repository.
+    open-pull-requests-limit: 0
     labels:
       - dependencies
   - package-ecosystem: github-actions
