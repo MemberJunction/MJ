@@ -98,6 +98,7 @@ export * from './checks/comms-v2-core.checks';
 export * from './checks/comms-v2-compliance.checks';
 export * from './checks/comms-v2-send.checks';
 export * from './checks/comms-v2-activity.checks';
+export * from './checks/comms-v2-wire.checks';
 export * from './checks/ai-cost.checks';
 export * from './checks/fp-gate-c2-1.checks';
 export * from './checks/fp-gate-c2-2.checks';

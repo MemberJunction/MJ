@@ -1,16 +1,27 @@
 /**
- * comms-v2-activity.checks.ts — the 'comms-v2-activity' bundle (CV2A1–CV2A3):
- * Exercises CommsActivityWorker against live SQL Server:
+ * comms-v2-activity.checks.ts — the 'comms-v2-activity' bundle (CV2A1–CV2A4):
+ * Exercises CommsActivityWorker against the live database:
  *   - CV2A1: Hard Bounce processing, deduplication, suppression & consent audit log
  *   - CV2A2: Soft Bounce threshold auto-suppression using SoftBounceThresholdPolicy
  *   - CV2A3: EraseEndpointPII GDPR erasure preserves compliance suppressions & audit logs
+ *   - CV2A4: a click whose HMAC signature verifies is correlated by TrackingToken and recorded
+ *
+ * TRANSPORT: server, in-process, on purpose. These checks pin the worker's own rules (dedup, the
+ * soft-bounce threshold, what erasure keeps), which need event shapes and repeat deliveries no
+ * public route can be made to produce on demand. The path a real event takes — public route →
+ * work queue → MJAPI's registered comms.activity handler → this worker — is covered over the wire
+ * by the 'comms-v2-wire' bundle (CV2W1 one-click unsubscribe, CV2W2/CV2W3 signed provider
+ * webhook). Nothing here publishes to the queue: a message published from this process would be
+ * consumed later by whichever host shares the database, after its fixture is gone.
+ *
+ * Test data is named per run and tagged safe to delete, and teardown never throws; see
+ * comms-v2-fixtures.ts, including the append-only audit rows teardown cannot remove.
  */
 import { randomUUID } from 'node:crypto';
 import { RunView } from '@memberjunction/core';
 import type {
   MJCommunicationActivityEntity,
   MJCommunicationBaseMessageTypeEntity,
-  MJCommunicationConsentAuditLogEntity,
   MJCommunicationEndpointEntity,
   MJCommunicationLogEntity,
   MJCommunicationProviderEntity,
@@ -18,8 +29,14 @@ import type {
   MJCommunicationSenderEntity,
   MJCommunicationSuppressionEntity,
 } from '@memberjunction/core-entities';
-import { CommsActivityWorker, CommunicationEngine, ComputeTrackingSignature, VerifyTrackingSignature } from '@memberjunction/communication-engine';
-import { WorkQueueEngine } from '@memberjunction/work-queue-engine';
+import {
+  CommsActivityWorker,
+  CommunicationEngine,
+  ComputeEndpointHash,
+  ComputeTrackingSignature,
+  VerifyTrackingSignature,
+} from '@memberjunction/communication-engine';
+import { EscapeSQLString } from '@memberjunction/global';
 import {
   Assert,
   AssertEqual,
@@ -27,8 +44,10 @@ import {
   IntegrationCheckRegistry,
   NamedCheck,
 } from '@memberjunction/testing-integration';
+import { COMMS_IT_TAG, CommsCleanup, CommsTestAddress, NewCommsRunTag } from './comms-v2-fixtures';
 
 interface ActivityFixture {
+  runTag: string;
   endpoint: MJCommunicationEndpointEntity;
   log: MJCommunicationLogEntity;
   sender: MJCommunicationSenderEntity;
@@ -37,9 +56,14 @@ interface ActivityFixture {
   address: string;
 }
 
+/** A provider event ID unique to the fixture's run; teardown finds the claimed-event rows by this prefix. */
+function eventId(fixture: ActivityFixture, label: string): string {
+  return `mj-it-${fixture.runTag}-${label}`;
+}
+
 async function createActivityFixture(
   ctx: IntegrationCheckContext,
-  address: string,
+  label: string,
 ): Promise<ActivityFixture> {
   await CommunicationEngine.Instance.Config(false, ctx.User);
   const rv = new RunView();
@@ -62,12 +86,14 @@ async function createActivityFixture(
   const provider = provRes.Results[0] as MJCommunicationProviderEntity;
   const pmt = pmtRes.Results[0] as MJCommunicationProviderMessageTypeEntity;
 
+  const runTag = NewCommsRunTag(label);
+  const address = CommsTestAddress(runTag);
   const endpoint = await ctx.Provider.GetEntityObject<MJCommunicationEndpointEntity>('MJ: Communication Endpoints', ctx.User);
   endpoint.BaseMessageTypeID = channel.ID;
-  endpoint.NormalizedValue = address.toLowerCase();
-  endpoint.ValueHash = randomUUID().replace(/-/g, '') + randomUUID().replace(/-/g, '');
+  endpoint.NormalizedValue = address;
+  endpoint.ValueHash = ComputeEndpointHash(address);
   endpoint.Status = 'Active';
-  Assert(await endpoint.Save(), `Failed creating fixture endpoint: ${endpoint.LatestResult?.Message}`);
+  Assert(await endpoint.Save(), `Failed creating fixture endpoint: ${endpoint.LatestResult?.CompleteMessage}`);
 
   const log = await ctx.Provider.GetEntityObject<MJCommunicationLogEntity>('MJ: Communication Logs', ctx.User);
   log.CommunicationProviderID = provider.ID;
@@ -77,47 +103,38 @@ async function createActivityFixture(
   log.MessageDate = new Date();
   log.CommunicationSenderID = sender.ID;
   log.CommunicationEndpointID = endpoint.ID;
-  log.RecipientAddress = address.toLowerCase();
-  Assert(await log.Save(), `Failed creating fixture log: ${log.LatestResult?.Message}`);
+  log.RecipientAddress = address;
+  log.CorrelationData = JSON.stringify({ IntegrationTest: COMMS_IT_TAG, Run: runTag });
+  if (!(await log.Save())) {
+    const message = log.LatestResult?.CompleteMessage;
+    const cleanup = new CommsCleanup('comms-v2-activity', ctx.User);
+    await cleanup.Delete(endpoint, `fixture endpoint ${endpoint.ID}`);
+    cleanup.Report();
+    Assert(false, `Failed creating fixture log: ${message}`);
+  }
 
   return {
+    runTag,
     endpoint,
     log,
     sender,
     providerId: provider.ID,
     channelId: channel.ID,
-    address: address.toLowerCase(),
+    address,
   };
 }
 
+/** Deletes what the worker wrote for the fixture, then the fixture, children first. Never throws. */
 async function cleanupActivityFixture(fixture: ActivityFixture, ctx: IntegrationCheckContext): Promise<void> {
-  const rv = new RunView();
-  const supps = await rv.RunView<MJCommunicationSuppressionEntity>(
-    { EntityName: 'MJ: Communication Suppressions', ExtraFilter: `CommunicationEndpointID='${fixture.endpoint.ID}'`, ResultType: 'entity_object' },
-    ctx.User,
+  const cleanup = new CommsCleanup('comms-v2-activity', ctx.User);
+  await cleanup.DeleteEndpointDependents([fixture.endpoint.ID], [fixture.log.ID]);
+  await cleanup.DeleteWhere(
+    'MJ: Communication Provider Events',
+    `ProviderEventID LIKE 'mj-it-${EscapeSQLString(fixture.runTag)}-%'`,
   );
-  if (supps.Success && supps.Results.length > 0) {
-    const suppIds = supps.Results.map((s) => `'${s.ID}'`).join(',');
-    const audits = await rv.RunView<MJCommunicationConsentAuditLogEntity>(
-      { EntityName: 'MJ: Communication Consent Audit Logs', ExtraFilter: `CommunicationSuppressionID IN (${suppIds})`, ResultType: 'entity_object' },
-      ctx.User,
-    );
-    if (audits.Success) {
-      for (const a of audits.Results) await a.Delete();
-    }
-    for (const s of supps.Results) await s.Delete();
-  }
-
-  const acts = await rv.RunView<MJCommunicationActivityEntity>(
-    { EntityName: 'MJ: Communication Activities', ExtraFilter: `CommunicationEndpointID='${fixture.endpoint.ID}'`, ResultType: 'entity_object' },
-    ctx.User,
-  );
-  if (acts.Success) {
-    for (const a of acts.Results) await a.Delete();
-  }
-
-  await fixture.log.Delete();
-  await fixture.endpoint.Delete();
+  await cleanup.Delete(fixture.log, `fixture log ${fixture.log.ID}`);
+  await cleanup.Delete(fixture.endpoint, `fixture endpoint ${fixture.endpoint.ID}`);
+  cleanup.Report();
 }
 
 export const CommsV2ActivityChecks: NamedCheck[] = [
@@ -125,9 +142,9 @@ export const CommsV2ActivityChecks: NamedCheck[] = [
     Id: 'comms-v2-activity.CV2A1',
     Name: 'CV2A1: CommsActivityWorker processes Hard Bounce, deduplicates, and creates Suppression + AuditLog',
     Fn: async (ctx: IntegrationCheckContext) => {
-      const fixture = await createActivityFixture(ctx, `cv2a1-${Date.now()}@integration.test`);
+      const fixture = await createActivityFixture(ctx, 'cv2a1');
       const worker = new CommsActivityWorker();
-      const evtId = `evt-cv2a1-${Date.now()}`;
+      const evtId = eventId(fixture, 'bounce');
 
       try {
         const res1 = await worker.ProcessActivityBatch(
@@ -182,12 +199,12 @@ export const CommsV2ActivityChecks: NamedCheck[] = [
     Id: 'comms-v2-activity.CV2A2',
     Name: 'CV2A2: Soft Bounce threshold policy auto-suppresses endpoint after 5 soft bounces',
     Fn: async (ctx: IntegrationCheckContext) => {
-      const fixture = await createActivityFixture(ctx, `cv2a2-${Date.now()}@integration.test`);
+      const fixture = await createActivityFixture(ctx, 'cv2a2');
       const worker = new CommsActivityWorker();
 
       try {
         const events = Array.from({ length: 5 }, (_, idx) => ({
-          ProviderEventID: `evt-cv2a2-${Date.now()}-${idx}`,
+          ProviderEventID: eventId(fixture, `soft-${idx}`),
           EventType: 'Soft Bounce' as const,
           OccurredAt: new Date(),
           CommunicationLogID: fixture.log.ID,
@@ -220,14 +237,14 @@ export const CommsV2ActivityChecks: NamedCheck[] = [
     Id: 'comms-v2-activity.CV2A3',
     Name: 'CV2A3: EraseEndpointPII scrubs endpoint/log PII while preserving suppression records',
     Fn: async (ctx: IntegrationCheckContext) => {
-      const fixture = await createActivityFixture(ctx, `cv2a3-${Date.now()}@integration.test`);
+      const fixture = await createActivityFixture(ctx, 'cv2a3');
       const worker = new CommsActivityWorker();
 
       try {
         await worker.ProcessActivityBatch(
           [
             {
-              ProviderEventID: `evt-cv2a3-${Date.now()}`,
+              ProviderEventID: eventId(fixture, 'unsub'),
               EventType: 'Unsubscribed',
               OccurredAt: new Date(),
               CommunicationLogID: fixture.log.ID,
@@ -266,35 +283,24 @@ export const CommsV2ActivityChecks: NamedCheck[] = [
   },
   {
     Id: 'comms-v2-activity.CV2A4',
-    Name: 'CV2A4: Click HMAC verification + WorkQueue comms.activity publish + CommsActivityWorker DB seam',
+    Name: 'CV2A4: a click with a verified HMAC signature is correlated by TrackingToken and recorded as an activity',
     Fn: async (ctx: IntegrationCheckContext) => {
-      const fixture = await createActivityFixture(ctx, `cv2a4-${Date.now()}@integration.test`);
-      const trackingToken = randomUUID();
-      const unsubscribeToken = randomUUID();
-      fixture.log.TrackingToken = trackingToken;
-      fixture.log.UnsubscribeToken = unsubscribeToken;
-      Assert(await fixture.log.Save(), 'Failed saving tracking/unsubscribe tokens on fixture log');
-
-      const hmacSecret = 'cv2a4-e2e-hmac-secret-32-chars-min';
-      const targetUrl = 'https://memberjunction.org/e2e?a=1&b=2';
-      const sig = ComputeTrackingSignature(trackingToken, targetUrl, hmacSecret);
-      Assert(VerifyTrackingSignature(trackingToken, targetUrl, sig, hmacSecret), 'Expected Compute/VerifyTrackingSignature parity');
-
-      await WorkQueueEngine.Instance.Config(false, ctx.User);
-      const publishResults = await WorkQueueEngine.Instance.Publish('comms.activity', [
-        {
-          Payload: {
-            Source: 'unsubscribe',
-            EventType: 'Unsubscribed',
-            UnsubscribeToken: unsubscribeToken,
-            OccurredAt: new Date().toISOString(),
-          },
-        },
-      ]);
-      Assert(publishResults.length === 1 && publishResults[0].Status === 'Accepted', 'Expected comms.activity publish to succeed');
-
-      const worker = new CommsActivityWorker();
+      const fixture = await createActivityFixture(ctx, 'cv2a4');
       try {
+        const trackingToken = randomUUID();
+        fixture.log.TrackingToken = trackingToken;
+        Assert(await fixture.log.Save(), `Failed saving tracking token on fixture log: ${fixture.log.LatestResult?.CompleteMessage}`);
+
+        const hmacSecret = `mj-it-${fixture.runTag}-hmac-secret-32-chars-min`;
+        const targetUrl = 'https://memberjunction.org/e2e?a=1&b=2';
+        const sig = ComputeTrackingSignature(trackingToken, targetUrl, hmacSecret);
+        Assert(VerifyTrackingSignature(trackingToken, targetUrl, sig, hmacSecret), 'Expected Compute/VerifyTrackingSignature parity');
+        Assert(
+          !VerifyTrackingSignature(trackingToken, `${targetUrl}&c=3`, sig, hmacSecret),
+          'A signature must not verify for a different target URL',
+        );
+
+        const worker = new CommsActivityWorker();
         const batchRes = await worker.ProcessActivityBatch(
           [
             {
@@ -306,30 +312,35 @@ export const CommsV2ActivityChecks: NamedCheck[] = [
               TargetURL: targetUrl,
               IsMachineEvent: false,
             },
-            {
-              CommunicationProviderID: fixture.providerId,
-              NormalizedAddress: fixture.address,
-              EventType: 'Unsubscribed',
-              OccurredAt: new Date(),
-              UnsubscribeToken: unsubscribeToken,
-              IsMachineEvent: false,
-            },
           ],
           ctx.User,
         );
-        AssertEqual(batchRes.ProcessedCount, 2, 'Expected both click and unsubscribe processed');
+        AssertEqual(batchRes.ProcessedCount, 1, 'Expected the click processed');
         AssertEqual(batchRes.ErrorCount, 0, 'Expected 0 processing errors');
 
         const rv = new RunView();
-        const supps = await rv.RunView<MJCommunicationSuppressionEntity>(
+        const acts = await rv.RunView<MJCommunicationActivityEntity>(
           {
-            EntityName: 'MJ: Communication Suppressions',
-            ExtraFilter: `CommunicationEndpointID='${fixture.endpoint.ID}' AND Reason='User Unsubscribe'`,
+            EntityName: 'MJ: Communication Activities',
+            ExtraFilter: `CommunicationLogID='${fixture.log.ID}' AND EventType='Clicked'`,
             ResultType: 'entity_object',
+            BypassCache: true,
           },
           ctx.User,
         );
-        Assert(supps.Success && supps.Results.length >= 1, 'Expected User Unsubscribe suppression persisted from seam');
+        Assert(acts.Success && acts.Results.length === 1, 'Expected one Clicked activity correlated to the log by TrackingToken');
+        AssertEqual(acts.Results[0].TargetURL, targetUrl, 'Expected the activity to record the clicked URL');
+
+        const supps = await rv.RunView<MJCommunicationSuppressionEntity>(
+          {
+            EntityName: 'MJ: Communication Suppressions',
+            ExtraFilter: `CommunicationEndpointID='${fixture.endpoint.ID}'`,
+            ResultType: 'entity_object',
+            BypassCache: true,
+          },
+          ctx.User,
+        );
+        Assert(supps.Success && supps.Results.length === 0, 'A click must not suppress the endpoint');
       } finally {
         await cleanupActivityFixture(fixture, ctx);
       }

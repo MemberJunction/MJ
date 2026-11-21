@@ -1,8 +1,19 @@
 /**
- * comms-v2-send.checks.ts — the 'comms-v2-send' bundle (CV2S1–CV2S3):
+ * comms-v2-send.checks.ts — the 'comms-v2-send' bundle (CV2S1–CV2S4):
  * Exercises V2SendService.Send() (DryRun, link rewriting, open pixel, List-Unsubscribe headers,
- * chunked WorkQueue dispatch) and TemplatedCommunicationService.RenderAndSend() end-to-end
- * against live SQL Server.
+ * chunked WorkQueue dispatch, a suppressed recipient) and
+ * TemplatedCommunicationService.RenderAndSend() end-to-end against the live database.
+ *
+ * TRANSPORT: server, in-process, on purpose. V2 Send has no wire of its own: no GraphQL mutation,
+ * REST route or remote operation takes a SendToPrincipalsParams. Its only route from a client is
+ * V1 RunEntityCommunicationByViewID with ContextData.UseV2, which carries no DryRun and cannot be
+ * handed a test provider, so it is driven over GraphQL only for a recipient the gate must block
+ * (comms-v2-wire.CV2W5). What needs a stand-in provider or an injected enqueue hook stays here:
+ * CV2S1–CV2S3 pass a provider that never contacts a service, and CV2S4 counts provider calls,
+ * which nothing outside the process can observe.
+ *
+ * Test data is named per run and tagged safe to delete, and teardown never throws; see
+ * comms-v2-fixtures.ts.
  */
 import { RunView } from '@memberjunction/core';
 import type {
@@ -10,11 +21,10 @@ import type {
   MJCommunicationEndpointEntity,
   MJCommunicationLogEntity,
   MJCommunicationProviderEntity,
-  MJCommunicationRunEntity,
   MJCommunicationSenderEntity,
+  MJCommunicationSuppressionEntity,
   MJTemplateContentEntity,
   MJTemplateEntityExtended,
-  MJTemplateParamEntity,
 } from '@memberjunction/core-entities';
 import {
   BaseCommunicationProvider,
@@ -36,6 +46,9 @@ import {
   IntegrationCheckRegistry,
   NamedCheck,
 } from '@memberjunction/testing-integration';
+import { COMMS_IT_TAG, CommsCleanup, CommsTestAddress, NewCommsRunTag, QuotedIdList } from './comms-v2-fixtures';
+
+const BUNDLE = 'comms-v2-send';
 
 class DryRunTestProvider extends BaseCommunicationProvider {
   public async SendSingleMessage(message: ProcessedMessage): Promise<MessageResult> {
@@ -52,6 +65,15 @@ class DryRunTestProvider extends BaseCommunicationProvider {
   }
   public async CreateDraft(): Promise<never> {
     throw new Error('Not implemented');
+  }
+}
+
+/** A provider that never contacts a service and counts how often it is asked to send. */
+class CountingTestProvider extends DryRunTestProvider {
+  public SendCalls = 0;
+  public override async SendSingleMessage(message: ProcessedMessage): Promise<MessageResult> {
+    this.SendCalls++;
+    return super.SendSingleMessage(message);
   }
 }
 
@@ -85,27 +107,26 @@ async function loadEmailContext(ctx: IntegrationCheckContext): Promise<{
   };
 }
 
-async function cleanupRunAndLogs(runId: string | undefined, ctx: IntegrationCheckContext): Promise<void> {
+/** Queues the deletion of a run and its logs (logs first). Never throws. */
+async function cleanupRunAndLogs(cleanup: CommsCleanup, runId: string | undefined): Promise<void> {
   if (!runId) return;
-  const rv = new RunView();
-  const logs = await rv.RunView<MJCommunicationLogEntity>(
-    { EntityName: 'MJ: Communication Logs', ExtraFilter: `CommunicationRunID='${runId}'`, ResultType: 'entity_object' },
-    ctx.User,
-  );
-  if (logs.Success) {
-    for (const log of logs.Results) {
-      await log.Delete();
-    }
-  }
-  const runs = await rv.RunView<MJCommunicationRunEntity>(
-    { EntityName: 'MJ: Communication Runs', ExtraFilter: `ID='${runId}'`, ResultType: 'entity_object' },
-    ctx.User,
-  );
-  if (runs.Success) {
-    for (const run of runs.Results) {
-      await run.Delete();
-    }
-  }
+  await cleanup.DeleteWhere('MJ: Communication Logs', `CommunicationRunID='${runId}'`);
+  await cleanup.DeleteWhere('MJ: Communication Runs', `ID='${runId}'`);
+}
+
+/** Deletes the endpoints Send resolved for the given addresses, with whatever hangs off them. Never throws. */
+async function cleanupEndpointsByAddress(cleanup: CommsCleanup, addresses: readonly string[]): Promise<void> {
+  const hashes = addresses.map((a) => ComputeEndpointHash(a.toLowerCase()));
+  await cleanup.Step('endpoints resolved by Send', async () => {
+    const res = await new RunView().RunView<{ ID: string }>(
+      { EntityName: 'MJ: Communication Endpoints', Fields: ['ID'], ExtraFilter: `ValueHash IN (${QuotedIdList(hashes)})`, ResultType: 'simple', BypassCache: true },
+      cleanup.User,
+    );
+    if (!res.Success || res.Results.length === 0) return;
+    const ids = res.Results.map((r) => r.ID);
+    await cleanup.DeleteEndpointDependents(ids);
+    await cleanup.DeleteWhere('MJ: Communication Endpoints', `ID IN (${QuotedIdList(ids)})`);
+  });
 }
 
 export const CommsV2SendChecks: NamedCheck[] = [
@@ -115,14 +136,15 @@ export const CommsV2SendChecks: NamedCheck[] = [
     Fn: async (ctx: IntegrationCheckContext) => {
       const { sender, channel, providerId } = await loadEmailContext(ctx);
       const sendService = new V2SendService();
-      const hmacSecret = 'mj-it-cv2s1-hmac-secret';
+      const runTag = NewCommsRunTag('cv2s1');
+      const hmacSecret = `mj-it-${runTag}-hmac-secret`;
       sendService.Configure({
         BaseTrackingURL: 'https://example.test/api',
         TrackingHMACSecret: hmacSecret,
       });
 
       const targetUrl = 'https://memberjunction.org/docs';
-      const address = `cv2s1-${Date.now()}@integration.test`;
+      const address = CommsTestAddress(runTag);
       const endpoint = await ctx.Provider.GetEntityObject<MJCommunicationEndpointEntity>(
         'MJ: Communication Endpoints',
         ctx.User,
@@ -149,7 +171,7 @@ export const CommsV2SendChecks: NamedCheck[] = [
               DryRun: true,
             },
             Payload: {
-              Subject: 'CV2S1 Integration Check',
+              Subject: `CV2S1 ${runTag} ${COMMS_IT_TAG}`,
               Body: 'Plain text body',
               HTMLBody: `<p>Hello <a href="${targetUrl}">Docs</a></p>`,
             },
@@ -197,8 +219,11 @@ export const CommsV2SendChecks: NamedCheck[] = [
         const sig = ComputeTrackingSignature(log.TrackingToken!, targetUrl, hmacSecret);
         Assert(VerifyTrackingSignature(log.TrackingToken!, targetUrl, sig, hmacSecret), 'HMAC signature verification failed');
       } finally {
-        await cleanupRunAndLogs(runId, ctx);
-        if (endpoint.IsSaved) await endpoint.Delete();
+        const cleanup = new CommsCleanup(BUNDLE, ctx.User);
+        await cleanupRunAndLogs(cleanup, runId);
+        await cleanup.DeleteEndpointDependents(endpoint.IsSaved ? [endpoint.ID] : []);
+        await cleanup.Delete(endpoint, 'CV2S1 fixture endpoint');
+        cleanup.Report();
       }
     },
   },
@@ -218,6 +243,8 @@ export const CommsV2SendChecks: NamedCheck[] = [
         },
       });
 
+      const runTag = NewCommsRunTag('cv2s2');
+      const addresses = [CommsTestAddress(runTag, 'a'), CommsTestAddress(runTag, 'b')];
       let runId: string | undefined;
       try {
         const result = await sendService.Send(
@@ -228,15 +255,15 @@ export const CommsV2SendChecks: NamedCheck[] = [
               ChannelID: channel.ID,
               DryRun: true,
             },
-            Payload: { Subject: 'CV2S2 Chunked', Body: 'Chunk test' },
+            Payload: { Subject: `CV2S2 ${runTag} ${COMMS_IT_TAG}`, Body: 'Chunk test' },
             Recipients: [
               {
                 Principal: { EntityID: userEntityId, RecordID: ctx.User.ID },
-                Endpoint: { Address: 'cv2s2-a@integration.test' },
+                Endpoint: { Address: addresses[0] },
               },
               {
                 Principal: { EntityID: userEntityId, RecordID: ctx.User.ID },
-                Endpoint: { Address: 'cv2s2-b@integration.test' },
+                Endpoint: { Address: addresses[1] },
               },
             ],
           },
@@ -251,7 +278,10 @@ export const CommsV2SendChecks: NamedCheck[] = [
         Assert(enqueued.length >= 2, `Expected >= 2 comms.dispatch chunks, got ${enqueued.length}`);
         AssertEqual(enqueued[0].taskType, 'comms.dispatch', 'Expected comms.dispatch task type');
       } finally {
-        await cleanupRunAndLogs(runId, ctx);
+        const cleanup = new CommsCleanup(BUNDLE, ctx.User);
+        await cleanupRunAndLogs(cleanup, runId);
+        await cleanupEndpointsByAddress(cleanup, addresses);
+        cleanup.Report();
       }
     },
   },
@@ -269,7 +299,10 @@ export const CommsV2SendChecks: NamedCheck[] = [
       const htmlTypeId = contentTypeRes.Results[0].ID;
 
       const template = await ctx.Provider.GetEntityObject<MJTemplateEntityExtended>('MJ: Templates', ctx.User);
-      template.Name = `CV2S3-Template-${Date.now()}`;
+      const runTag = NewCommsRunTag('cv2s3');
+      const address = CommsTestAddress(runTag);
+      template.Name = `CV2S3 ${runTag} ${COMMS_IT_TAG}`;
+      template.Description = `Comms V2 send fixture ${COMMS_IT_TAG}`;
       template.UserID = ctx.User.ID;
       template.IsActive = true;
 
@@ -301,7 +334,7 @@ export const CommsV2SendChecks: NamedCheck[] = [
             Recipients: [
               {
                 Principal: { EntityID: userEntityId, RecordID: ctx.User.ID },
-                Endpoint: { Address: 'cv2s3@integration.test' },
+                Endpoint: { Address: address },
               },
             ],
           },
@@ -312,18 +345,94 @@ export const CommsV2SendChecks: NamedCheck[] = [
         Assert(result.Success, 'Expected TemplatedCommunicationService.RenderAndSend to succeed');
         AssertEqual(result.TotalCount, 1, 'Expected TotalCount = 1');
       } finally {
-        await cleanupRunAndLogs(runId, ctx);
+        const cleanup = new CommsCleanup(BUNDLE, ctx.User);
+        await cleanupRunAndLogs(cleanup, runId);
+        await cleanupEndpointsByAddress(cleanup, [address]);
         if (template.IsSaved) {
-          const paramRes = await rv.RunView<MJTemplateParamEntity>(
-            { EntityName: 'MJ: Template Params', ExtraFilter: `TemplateID='${template.ID}'`, ResultType: 'entity_object' },
-            ctx.User,
-          );
-          if (paramRes.Success) {
-            for (const p of paramRes.Results) await p.Delete();
-          }
+          await cleanup.DeleteWhere('MJ: Template Params', `TemplateID='${template.ID}'`);
         }
-        if (content?.IsSaved) await content.Delete();
-        if (template.IsSaved) await template.Delete();
+        await cleanup.Delete(content, 'CV2S3 template content');
+        await cleanup.Delete(template, 'CV2S3 template');
+        cleanup.Report();
+      }
+    },
+  },
+  {
+    Id: 'comms-v2-send.CV2S4',
+    Name: 'CV2S4: V2SendService.Send blocks a recipient with an active suppression and never calls the provider',
+    // In-process by necessity: "the provider was not called" is only observable from inside the
+    // process that owns the provider. The same block is asserted over GraphQL by comms-v2-wire.CV2W5.
+    Fn: async (ctx: IntegrationCheckContext) => {
+      const { sender, channel, providerId } = await loadEmailContext(ctx);
+      const runTag = NewCommsRunTag('cv2s4');
+      const address = CommsTestAddress(runTag);
+      const provider = new CountingTestProvider();
+      const sendService = new V2SendService();
+
+      const endpoint = await ctx.Provider.GetEntityObject<MJCommunicationEndpointEntity>('MJ: Communication Endpoints', ctx.User);
+      endpoint.BaseMessageTypeID = channel.ID;
+      endpoint.NormalizedValue = address;
+      endpoint.ValueHash = ComputeEndpointHash(address);
+      endpoint.Status = 'Active';
+      const suppression = await ctx.Provider.GetEntityObject<MJCommunicationSuppressionEntity>('MJ: Communication Suppressions', ctx.User);
+      let runId: string | undefined;
+
+      try {
+        Assert(await endpoint.Save(), `Failed saving endpoint: ${endpoint.LatestResult?.CompleteMessage}`);
+        suppression.CommunicationEndpointID = endpoint.ID;
+        suppression.BaseMessageTypeID = channel.ID;
+        suppression.Reason = 'Hard Bounce';
+        suppression.Source = 'Admin';
+        suppression.Status = 'Active';
+        suppression.EffectiveAt = new Date(Date.now() - 60_000);
+        suppression.Notes = `${COMMS_IT_TAG} run ${runTag}`;
+        Assert(await suppression.Save(), `Failed saving suppression: ${suppression.LatestResult?.CompleteMessage}`);
+
+        const result = await sendService.Send(
+          {
+            Envelope: {
+              SenderID: sender.ID,
+              ProviderID: providerId,
+              MessageClass: 'Operational',
+              ChannelID: channel.ID,
+              DryRun: true,
+            },
+            Payload: { Subject: `CV2S4 ${runTag} ${COMMS_IT_TAG}`, Body: 'Suppressed recipient' },
+            Recipients: [{ Endpoint: { CommunicationEndpointID: endpoint.ID } }],
+          },
+          ctx.User,
+          () => provider,
+        );
+
+        runId = result.CommunicationRunID;
+        AssertEqual(result.TotalCount, 1, 'Expected TotalCount = 1');
+        AssertEqual(result.BlockedCount, 1, `Expected the recipient blocked: ${result.ErrorMessage ?? ''}`);
+        AssertEqual(result.QueuedCount, 0, 'Expected nothing queued for a blocked recipient');
+        const outcomes = result.Outcomes ?? [];
+        AssertEqual(outcomes.length, 1, 'Expected 1 recipient outcome');
+        AssertEqual(outcomes[0].Status, 'Blocked', 'Expected outcome Status = Blocked');
+        AssertEqual(outcomes[0].Reason, 'Hard Bounce', 'Expected the block reason to be the suppression reason');
+        Assert(outcomes[0].CommunicationLogID == null, 'A blocked recipient must not get a Communication Log');
+        AssertEqual(provider.SendCalls, 0, 'The provider must not be called for a blocked recipient');
+
+        const logs = await new RunView().RunView<{ ID: string }>(
+          {
+            EntityName: 'MJ: Communication Logs',
+            Fields: ['ID'],
+            ExtraFilter: `CommunicationEndpointID='${endpoint.ID}'`,
+            ResultType: 'simple',
+            BypassCache: true,
+          },
+          ctx.User,
+        );
+        Assert(logs.Success && logs.Results.length === 0, 'No Communication Log may exist for the blocked endpoint');
+      } finally {
+        const cleanup = new CommsCleanup(BUNDLE, ctx.User);
+        await cleanupRunAndLogs(cleanup, runId);
+        await cleanup.Delete(suppression, 'CV2S4 fixture suppression');
+        await cleanup.DeleteEndpointDependents(endpoint.IsSaved ? [endpoint.ID] : []);
+        await cleanup.Delete(endpoint, 'CV2S4 fixture endpoint');
+        cleanup.Report();
       }
     },
   },

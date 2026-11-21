@@ -1,13 +1,17 @@
 /**
  * comms-v2-core.checks.ts — the 'comms-v2-core' bundle (CV2C1–CV2C3):
  * Verifies the Communications V2 schema, starter metadata seeds, and
- * endpoint resolution/deduplication against live SQL Server.
+ * endpoint resolution/deduplication against the live database.
+ *
+ * TRANSPORT: server, in-process, on purpose. CV2C1 and CV2C2 read metadata and seed rows.
+ * CV2C3 calls V2SendService.ResolveEndpoints, which no GraphQL, REST or remote-operation surface
+ * exposes on its own; it runs inside a send, and the sends that have a wire are in comms-v2-wire.
+ *
+ * CV2C3's rows are named per run, and its teardown never throws; see comms-v2-fixtures.ts.
  */
 import { RunView } from '@memberjunction/core';
 import type {
   MJCommunicationBaseMessageTypeEntity,
-  MJCommunicationEndpointEntity,
-  MJCommunicationEndpointPrincipalEntity,
   MJEntityCommunicationFieldEntity,
   MJEntityCommunicationMessageTypeEntity,
 } from '@memberjunction/core-entities';
@@ -21,6 +25,7 @@ import {
   IntegrationCheckRegistry,
   NamedCheck,
 } from '@memberjunction/testing-integration';
+import { CommsCleanup, CommsTestAddress, NewCommsRunTag } from './comms-v2-fixtures';
 
 const V2_ENTITY_NAMES: readonly string[] = [
   'MJ: Jurisdictions',
@@ -101,7 +106,7 @@ export const CommsV2CoreChecks: NamedCheck[] = [
       Assert(channelRes.Success && channelRes.Results.length > 0, 'Email base message type not found');
       const channelID = channelRes.Results[0].ID;
 
-      const uniqueEmail = `mj-it-cv2c3-${Date.now()}@integration.test`;
+      const uniqueEmail = CommsTestAddress(NewCommsRunTag('cv2c3'));
       let createdEndpointId: string | null = null;
       let createdMsgType: MJEntityCommunicationMessageTypeEntity | null = null;
       let createdField: MJEntityCommunicationFieldEntity | null = null;
@@ -170,34 +175,18 @@ export const CommsV2CoreChecks: NamedCheck[] = [
           'Expected ResolveEndpoints to deduplicate case-varied address to same CommunicationEndpointID',
         );
       } finally {
+        const cleanup = new CommsCleanup('comms-v2-core', ctx.User);
         if (createdEndpointId) {
-          const linkRes = await rv.RunView<MJCommunicationEndpointPrincipalEntity>(
-            {
-              EntityName: 'MJ: Communication Endpoint Principals',
-              ExtraFilter: `CommunicationEndpointID='${createdEndpointId}'`,
-              ResultType: 'entity_object',
-            },
-            ctx.User,
-          );
-          if (linkRes.Success) {
-            for (const link of linkRes.Results) {
-              await link.Delete();
-            }
-          }
-          const epRes = await rv.RunView<MJCommunicationEndpointEntity>(
-            {
-              EntityName: 'MJ: Communication Endpoints',
-              ExtraFilter: `ID='${createdEndpointId}'`,
-              ResultType: 'entity_object',
-            },
-            ctx.User,
-          );
-          if (epRes.Success && epRes.Results.length > 0) {
-            await epRes.Results[0].Delete();
-          }
+          await cleanup.DeleteEndpointDependents([createdEndpointId]);
+          await cleanup.DeleteWhere('MJ: Communication Endpoints', `ID='${createdEndpointId}'`);
         }
-        if (createdField?.ID) await createdField.Delete();
-        if (createdMsgType?.ID) await createdMsgType.Delete();
+        await cleanup.Delete(createdField, 'CV2C3 temporary communication field');
+        await cleanup.Delete(createdMsgType, 'CV2C3 temporary message-type mapping');
+        if (createdMsgType) {
+          // The engine cached the temporary mapping; reload so later bundles in this process do not see it.
+          await cleanup.Step('reload CommunicationEngine', () => CommunicationEngine.Instance.Config(true, ctx.User));
+        }
+        cleanup.Report();
       }
     },
   },

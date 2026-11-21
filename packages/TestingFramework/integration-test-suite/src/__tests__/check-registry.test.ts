@@ -126,6 +126,7 @@ import { CommsV2CoreChecks } from '../checks/comms-v2-core.checks';
 import { CommsV2ComplianceChecks } from '../checks/comms-v2-compliance.checks';
 import { CommsV2SendChecks } from '../checks/comms-v2-send.checks';
 import { CommsV2ActivityChecks } from '../checks/comms-v2-activity.checks';
+import { CommsV2WireChecks } from '../checks/comms-v2-wire.checks';
 import { VideoStudioProductionChecks } from '../checks/video-studio-production.checks';
 import { VideoStudioLiveSmokeChecks } from '../checks/video-studio-live-smoke.checks';
 import { SemanticGraphChecks } from '../checks/semantic-graph.checks';
@@ -218,8 +219,9 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['open-app-local-source', OpenAppLocalSourceChecks, 10], // OLS1-OLS10 install, upgrade and remove from a local folder (IT178)
         ['comms-v2-core', CommsV2CoreChecks, 3], // CV2C1-CV2C3 Comms V2 schema, seeds, endpoint resolution (IT183)
         ['comms-v2-compliance', CommsV2ComplianceChecks, 4], // CV2G1-CV2G4 Comms V2 compliance gate & jurisdiction rollup (IT184)
-        ['comms-v2-send', CommsV2SendChecks, 3], // CV2S1-CV2S3 Comms V2 send pipeline, chunking, templated delivery (IT185)
-        ['comms-v2-activity', CommsV2ActivityChecks, 4], // CV2A1-CV2A4 Comms V2 activity worker, soft bounce policy, GDPR erasure, HTTP->worker seam (IT186)
+        ['comms-v2-send', CommsV2SendChecks, 4], // CV2S1-CV2S4 Comms V2 send pipeline, chunking, templated delivery, suppressed recipient never reaches the provider (IT185)
+        ['comms-v2-activity', CommsV2ActivityChecks, 4], // CV2A1-CV2A4 Comms V2 activity worker, soft bounce policy, GDPR erasure, verified click (IT186)
+        ['comms-v2-wire', CommsV2WireChecks, 5], // CV2W1-CV2W5 one-click unsubscribe POST, signed webhook POST, V1 RunEntityCommunication and V2 Send to a suppressed recipient, over HTTP and GraphQL (IT187)
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 18],
         ['chief-of-staff', ChiefOfStaffChecks, 8], // COS1-COS8 ownership guards, run-now, policy cache, email approval-before-transport (IT157)
@@ -423,7 +425,8 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'comms-v2-activity': 4,
         'comms-v2-compliance': 4,
         'comms-v2-core': 3,
-        'comms-v2-send': 3,
+        'comms-v2-send': 4,
+        'comms-v2-wire': 5,
         'concurrency-conflict-client': 5,
         'concurrent': 2,
         'content-pipeline': 21,
@@ -651,7 +654,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(252);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(257);
     });
 });
 

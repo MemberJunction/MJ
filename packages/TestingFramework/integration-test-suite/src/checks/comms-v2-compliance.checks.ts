@@ -2,6 +2,14 @@
  * comms-v2-compliance.checks.ts — the 'comms-v2-compliance' bundle (CV2G1–CV2G4):
  * Exercises ComplianceGate + JurisdictionResolver + CommunicationSenderPermission
  * against live database entities.
+ *
+ * TRANSPORT: server, in-process, on purpose. CV2G1, CV2G3 and CV2G4 evaluate the gate and the
+ * resolver over entity objects that are never saved, to pin single rules (an expired suppression,
+ * the jurisdiction rollup, Shadow mode) with inputs no request can dictate. The gate's verdict as
+ * a caller sees it is asserted over GraphQL by comms-v2-wire.CV2W5.
+ *
+ * Only CV2G2 writes rows. They are named per run, and its teardown never throws; see
+ * comms-v2-fixtures.ts.
  */
 import { randomUUID } from 'node:crypto';
 import { RunView } from '@memberjunction/core';
@@ -25,6 +33,7 @@ import {
   IntegrationCheckRegistry,
   NamedCheck,
 } from '@memberjunction/testing-integration';
+import { COMMS_IT_TAG, CommsCleanup, NewCommsRunTag } from './comms-v2-fixtures';
 
 export const CommsV2ComplianceChecks: NamedCheck[] = [
   {
@@ -105,15 +114,17 @@ export const CommsV2ComplianceChecks: NamedCheck[] = [
       Assert(senderTypeRes.Success && senderTypeRes.Results.length > 0, 'Sender type seed missing');
       const senderTypeId = senderTypeRes.Results[0].ID;
 
-      const tag = `CV2G2-${Date.now()}`;
+      const tag = `mj-it ${NewCommsRunTag('cv2g2')} safe-to-delete`;
       const parentSender = await ctx.Provider.GetEntityObject<MJCommunicationSenderEntity>('MJ: Communication Senders', ctx.User);
       parentSender.Name = `${tag}-Parent`;
+      parentSender.Description = COMMS_IT_TAG;
       parentSender.CommunicationSenderTypeID = senderTypeId;
       parentSender.EnforcementMode = 'Enforce';
       parentSender.Status = 'Active';
 
       const childSender = await ctx.Provider.GetEntityObject<MJCommunicationSenderEntity>('MJ: Communication Senders', ctx.User);
       childSender.Name = `${tag}-Child`;
+      childSender.Description = COMMS_IT_TAG;
       childSender.CommunicationSenderTypeID = senderTypeId;
       childSender.EnforcementMode = 'Enforce';
       childSender.Status = 'Active';
@@ -122,7 +133,7 @@ export const CommsV2ComplianceChecks: NamedCheck[] = [
       let childPerm: MJCommunicationSenderPermissionEntity | null = null;
 
       try {
-        Assert(await parentSender.Save(), `Failed saving parent sender: ${parentSender.LatestResult?.Message}`);
+        Assert(await parentSender.Save(), `Failed saving parent sender: ${parentSender.LatestResult?.CompleteMessage}`);
         childSender.ParentSenderID = parentSender.ID;
         Assert(await childSender.Save(), `Failed saving child sender: ${childSender.LatestResult?.Message}`);
 
@@ -157,10 +168,12 @@ export const CommsV2ComplianceChecks: NamedCheck[] = [
         Assert(await childPerm.Save(), `Failed saving child View permission: ${childPerm.LatestResult?.Message}`);
         AssertEqual(childPerm.PermissionLevel, 'View', 'Child View permission persisted');
       } finally {
-        if (childPerm?.IsSaved) await childPerm.Delete();
-        if (parentPerm?.IsSaved) await parentPerm.Delete();
-        if (childSender.IsSaved) await childSender.Delete();
-        if (parentSender.IsSaved) await parentSender.Delete();
+        const cleanup = new CommsCleanup('comms-v2-compliance', ctx.User);
+        await cleanup.Delete(childPerm, 'CV2G2 child permission');
+        await cleanup.Delete(parentPerm, 'CV2G2 parent permission');
+        await cleanup.Delete(childSender, 'CV2G2 child sender');
+        await cleanup.Delete(parentSender, 'CV2G2 parent sender');
+        cleanup.Report();
       }
     },
   },

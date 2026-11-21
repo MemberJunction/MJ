@@ -351,6 +351,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT187 - Comms V2 Public Routes and Sends over the Wire (client transport)",
+            "Sequence": 87,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E74B8956-FFF5-47FF-B7B2-60EC4CDF3BE7"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT22 - User Routines Dispatcher",
             "Sequence": 16,
             "Status": "Active"
