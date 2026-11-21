@@ -23,6 +23,8 @@ import {
     MJSQLDialectEntity,
     QueryDefinitionRows,
     QueryEngine,
+    QUERY_APPROVAL_REFUSAL,
+    UserCanApproveQueries,
 } from "@memberjunction/core-entities";
 import { EscapeSQLString, Float32VectorToBase64, RegisterClass, MJGlobal, UUIDMap, UUIDsEqual } from "@memberjunction/global";
 import { GenericDatabaseProvider, UserCache } from "@memberjunction/generic-database-provider";
@@ -57,6 +59,7 @@ import type {
     CompositionTargetRead,
 } from "./query-extraction";
 import { ApplyApprovalRulesAsync, ApprovalRefusalResult } from "./approvalStamp";
+import type { ApproverRule } from "./approvalStamp";
 
 /** The provider shape extraction reads and writes through. */
 type ExtractionProvider = IMetadataProvider & IRunViewProvider;
@@ -243,7 +246,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         let approving: boolean;
         try {
             // Approving is a server act; a ReplayOnly save writes nothing, so it has nothing to stamp.
-            approving = !options?.ReplayOnly && await ApplyApprovalRulesAsync(this, 'Status', this.Status);
+            approving = !options?.ReplayOnly && await ApplyApprovalRulesAsync(this, 'Status', this.Status, this.approverRule);
         } catch (e) {
             this.RegisterResultHistoryEntry(ApprovalRefusalResult(this, e));
             return false;
@@ -260,6 +263,17 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
             this.presetExtraction = null;
             this.refreshing = false;
         }
+    }
+
+    /**
+     * Who may approve a query: a holder of the `Queries: Approve` authorization (or an Owner). Anyone
+     * the role permissions let save a query can still save it as a draft.
+     */
+    private get approverRule(): ApproverRule {
+        return {
+            CanApprove: (user) => UserCanApproveQueries(user, this.extractionProvider),
+            Refusal: QUERY_APPROVAL_REFUSAL,
+        };
     }
 
     /** Whether this object saves through a network (client) provider rather than to a database. */

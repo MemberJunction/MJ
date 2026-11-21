@@ -5,7 +5,7 @@ import { GroupByUUID, IndexByUUID, RegisterClass , UUIDSet, UUIDsEqual } from '@
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { Metadata, CompositeKey, RunQuery, RunQueryResult } from '@memberjunction/core';
 import { TreeBranchConfig } from '@memberjunction/ng-trees';
-import { ResourceData, UserInfoEngine, MJQueryEntityExtended, MJQueryCategoryEntity, QueryEngine, ParseQuerySaveMessage } from '@memberjunction/core-entities';
+import { ResourceData, UserInfoEngine, MJQueryEntityExtended, MJQueryCategoryEntity, QueryEngine, ParseQuerySaveMessage, UserCanApproveQueries } from '@memberjunction/core-entities';
 import type { QueryDiagnosticLine } from '@memberjunction/core-entities';
 import {
     QueryEntityLinkClickEvent,
@@ -242,9 +242,24 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     /** Why the drawer's last save was refused, one finding per rule the SQL broke. */
     public DrawerSaveDiagnostics: QueryDiagnosticLine[] = [];
 
-    /** Ordered status options for the drawer dropdown — all valid Query statuses */
-    public readonly DrawerStatuses: Array<'Pending' | 'Approved' | 'Rejected' | 'Expired'> =
+    /** Every Query status, in the order the drawer dropdown lists them. */
+    private static readonly allDrawerStatuses: Array<MJQueryEntityExtended['Status']> =
         ['Pending', 'Approved', 'Rejected', 'Expired'];
+
+    /**
+     * The statuses the drawer dropdown offers. `Approved` is left out for a user who can't approve
+     * queries (the server would refuse the save), unless the query being edited is already Approved.
+     */
+    public get DrawerStatuses(): Array<MJQueryEntityExtended['Status']> {
+        const all = QueryBrowserResourceComponent.allDrawerStatuses;
+        if (this.CanApproveQueries || this.DrawerStatus === 'Approved') return all;
+        return all.filter(s => s !== 'Approved');
+    }
+
+    /** Whether the current user may approve queries (the `Queries: Approve` authorization). */
+    public get CanApproveQueries(): boolean {
+        return UserCanApproveQueries(this.metadata.CurrentUser, this.metadata);
+    }
 
     private initialDrawerSnapshot = '';
 

@@ -16,6 +16,8 @@ const { db, writes, saveOptions } = vi.hoisted(() => ({
         querySQLs: [] as Array<Record<string, unknown>>,
         queryParameters: [] as Array<Record<string, unknown>>,
         views: [] as RunViewParams[],
+        /** Whether the context user holds `Queries: Approve`. */
+        canApproveQueries: true,
     },
     writes: [] as Array<Record<string, unknown>>,
     saveOptions: [] as Array<EntitySaveOptions | undefined>,
@@ -121,6 +123,7 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
 
     return {
         ...actual,
+        UserCanApproveQueries: () => db.canApproveQueries,
         MJDashboardEntityExtended: StubDashboard,
         MJComponentEntityExtended: StubComponent,
         MJUserViewEntityExtended: StubUserView,
@@ -156,6 +159,7 @@ beforeEach(() => {
     db.querySQLs = [];
     db.queryParameters = [];
     db.views = [];
+    db.canApproveQueries = true;
     writes.length = 0;
     saveOptions.length = 0;
 });
@@ -286,5 +290,26 @@ describe('MJQueryEntityServer', () => {
             { ApprovedByUserID: 'original', ApprovedAt: null, ApprovedFingerprint: 'fp-d1', DefinitionFingerprint: await ComputeQueryFingerprintAsync(query, rows) },
         ]);
         expect(db.views.map(v => v.EntityName)).toEqual(['MJ: Queries', 'MJ: Query SQLs', 'MJ: Query Parameters']);
+    });
+
+    it('refuses an approving save, writing nothing, when the user does not hold Queries: Approve (#6746)', async () => {
+        db.stored = { Status: 'Pending', ...PENDING };
+        db.canApproveQueries = false;
+        const query = create(MJQueryEntityServer);
+        expect(await query.Save()).toBe(false);
+        expect(writes).toHaveLength(0);
+        expect(query.RegisterResultHistoryEntry).toHaveBeenCalledWith(expect.objectContaining({
+            Success: false,
+            Message: expect.stringContaining("needs the 'Queries: Approve' authorization"),
+        }));
+    });
+
+    it('still saves a draft for a user who does not hold Queries: Approve', async () => {
+        db.stored = { Status: 'Pending', ...PENDING };
+        db.canApproveQueries = false;
+        const query = create(MJQueryEntityServer);
+        query.Status = 'Pending';
+        expect(await query.Save()).toBe(true);
+        expect(writes[0]).toMatchObject({ ApprovedByUserID: null, ApprovedFingerprint: null });
     });
 });
