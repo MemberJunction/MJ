@@ -1,5 +1,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { AgGridAngular } from 'ag-grid-angular';
+import type { ColDef, GridOptions, RowClickedEvent } from 'ag-grid-community';
 import { RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
@@ -10,7 +12,9 @@ import type {
 } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
 import {
+  CommsGridTheme,
   ExecuteCommsRemoteOp,
+  OpenCommsEntityRecord,
   type CommsAdminLoadedMetadata,
   type CommsAdminMutationOpOutput,
   type CommsBlockEndpointOpOutput,
@@ -19,7 +23,7 @@ import {
 @Component({
   selector: 'mj-comms-endpoints-suppressions-tab',
   standalone: true,
-  imports: [FormsModule, MJButtonDirective],
+  imports: [FormsModule, MJButtonDirective, AgGridAngular],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./communications-admin.css'],
   template: `
@@ -55,33 +59,24 @@ import {
       <div class="comms-card">
         <div class="comms-card-header">
           <h3 class="comms-card-title">Endpoints ({{ Endpoints.length }})</h3>
+          @if (SelectedEndpoint) {
+            <div class="comms-actions-row">
+              <button mjButton variant="outline" size="sm" (click)="OpenEndpointForm(SelectedEndpoint)">
+                Open Form
+              </button>
+              <button mjButton variant="danger" size="sm" (click)="AddAdminBlock(SelectedEndpoint)">
+                Add Admin Block
+              </button>
+            </div>
+          }
         </div>
-        <table class="comms-table">
-          <thead>
-            <tr>
-              <th>Address</th>
-              <th>Status</th>
-              <th>Soft Bounce Count</th>
-              <th>Last Delivered</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (ep of Endpoints; track ep.ID) {
-              <tr>
-                <td>{{ ep.NormalizedValue || ep.ValueHash }}</td>
-                <td><span class="comms-pill">{{ ep.Status }}</span></td>
-                <td>{{ ep.SoftBounceCount }}</td>
-                <td>{{ ep.LastDeliveredAt ? ep.LastDeliveredAt.toISOString().slice(0, 10) : '—' }}</td>
-                <td>
-                  <button mjButton variant="danger" size="sm" (click)="AddAdminBlock(ep)">
-                    Add Admin Block
-                  </button>
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
+        <ag-grid-angular
+          [theme]="GridTheme"
+          [columnDefs]="EndpointCols"
+          [gridOptions]="GridOptions"
+          [rowData]="Endpoints"
+          (rowClicked)="OnEndpointRowClicked($event)"
+        />
       </div>
     }
 
@@ -89,43 +84,26 @@ import {
       <div class="comms-card">
         <div class="comms-card-header">
           <h3 class="comms-card-title">Suppressions ({{ Suppressions.length }})</h3>
+          @if (SelectedSuppression) {
+            <div class="comms-actions-row">
+              <button mjButton variant="outline" size="sm" (click)="OpenSuppressionForm(SelectedSuppression)">
+                Open Form
+              </button>
+              @if (SelectedSuppression.Status === 'Active') {
+                <button mjButton variant="danger" size="sm" (click)="RevokeSuppression(SelectedSuppression)">
+                  Revoke Suppression
+                </button>
+              }
+            </div>
+          }
         </div>
-        <table class="comms-table">
-          <thead>
-            <tr>
-              <th>Reason</th>
-              <th>Source</th>
-              <th>Status</th>
-              <th>Effective</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (s of Suppressions; track s.ID) {
-              <tr>
-                <td>{{ s.Reason }}</td>
-                <td>{{ s.Source }}</td>
-                <td>
-                  <span
-                    class="comms-pill"
-                    [class.comms-pill--blocked]="s.Status === 'Active'"
-                    [class.comms-pill--active]="s.Status === 'Revoked'"
-                  >
-                    {{ s.Status }}
-                  </span>
-                </td>
-                <td>{{ s.EffectiveAt.toISOString().slice(0, 10) }}</td>
-                <td>
-                  @if (s.Status === 'Active') {
-                    <button mjButton variant="outline" size="sm" (click)="RevokeSuppression(s)">
-                      Revoke
-                    </button>
-                  }
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
+        <ag-grid-angular
+          [theme]="GridTheme"
+          [columnDefs]="SuppressionCols"
+          [gridOptions]="GridOptions"
+          [rowData]="Suppressions"
+          (rowClicked)="OnSuppressionRowClicked($event)"
+        />
       </div>
     }
 
@@ -134,26 +112,12 @@ import {
         <div class="comms-card-header">
           <h3 class="comms-card-title">Consent Audit Log ({{ AuditLogs.length }})</h3>
         </div>
-        <table class="comms-table">
-          <thead>
-            <tr>
-              <th>Action</th>
-              <th>Source</th>
-              <th>Date</th>
-              <th>New Value</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (log of AuditLogs; track log.ID) {
-              <tr>
-                <td><span class="comms-pill">{{ log.Action }}</span></td>
-                <td>{{ log.Source }}</td>
-                <td>{{ log.__mj_CreatedAt.toISOString().slice(0, 19) }}</td>
-                <td><code>{{ log.NewValue }}</code></td>
-              </tr>
-            }
-          </tbody>
-        </table>
+        <ag-grid-angular
+          [theme]="GridTheme"
+          [columnDefs]="AuditCols"
+          [gridOptions]="GridOptions"
+          [rowData]="AuditLogs"
+        />
       </div>
     }
   `,
@@ -169,6 +133,51 @@ export class CommsEndpointsSuppressionsTabComponent extends BaseAngularComponent
   public Endpoints: MJCommunicationEndpointEntity[] = [];
   public Suppressions: MJCommunicationSuppressionEntity[] = [];
   public AuditLogs: MJCommunicationConsentAuditLogEntity[] = [];
+  public SelectedEndpoint: MJCommunicationEndpointEntity | null = null;
+  public SelectedSuppression: MJCommunicationSuppressionEntity | null = null;
+
+  public readonly GridTheme = CommsGridTheme();
+  public readonly GridOptions: GridOptions = {
+    domLayout: 'autoHeight',
+    suppressCellFocus: true,
+    rowSelection: { mode: 'singleRow' },
+  };
+  public readonly EndpointCols: ColDef[] = [
+    { field: 'NormalizedValue', headerName: 'Address', flex: 2, valueGetter: (p) => (p.data as MJCommunicationEndpointEntity | undefined)?.NormalizedValue || (p.data as MJCommunicationEndpointEntity | undefined)?.ValueHash || '' },
+    { field: 'Status', headerName: 'Status', flex: 1 },
+    { field: 'SoftBounceCount', headerName: 'Soft Bounces', flex: 1 },
+    { field: 'LastDeliveredAt', headerName: 'Last Delivered', flex: 1, valueFormatter: (p) => (p.value instanceof Date ? p.value.toISOString().slice(0, 10) : '—') },
+  ];
+  public readonly SuppressionCols: ColDef[] = [
+    { field: 'Reason', headerName: 'Reason', flex: 1 },
+    { field: 'Source', headerName: 'Source', flex: 1 },
+    { field: 'Status', headerName: 'Status', flex: 1 },
+    { field: 'EffectiveAt', headerName: 'Effective', flex: 1, valueFormatter: (p) => (p.value instanceof Date ? p.value.toISOString().slice(0, 10) : '—') },
+  ];
+  public readonly AuditCols: ColDef[] = [
+    { field: 'Action', headerName: 'Action', flex: 1 },
+    { field: 'Source', headerName: 'Source', flex: 1 },
+    { field: '__mj_CreatedAt', headerName: 'Date', flex: 1, valueFormatter: (p) => (p.value instanceof Date ? p.value.toISOString().slice(0, 19) : '—') },
+    { field: 'NewValue', headerName: 'New Value', flex: 2 },
+  ];
+
+  public OnEndpointRowClicked(event: RowClickedEvent): void {
+    this.SelectedEndpoint = (event.data as MJCommunicationEndpointEntity | undefined) ?? null;
+    this.cdr.markForCheck();
+  }
+
+  public OnSuppressionRowClicked(event: RowClickedEvent): void {
+    this.SelectedSuppression = (event.data as MJCommunicationSuppressionEntity | undefined) ?? null;
+    this.cdr.markForCheck();
+  }
+
+  public OpenEndpointForm(endpoint: MJCommunicationEndpointEntity): void {
+    OpenCommsEntityRecord('MJ: Communication Endpoints', endpoint.ID);
+  }
+
+  public OpenSuppressionForm(supp: MJCommunicationSuppressionEntity): void {
+    OpenCommsEntityRecord('MJ: Communication Suppressions', supp.ID);
+  }
 
   public async Search(): Promise<void> {
     const query = this.SearchAddress.trim().toLowerCase();

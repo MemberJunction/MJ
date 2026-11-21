@@ -1,4 +1,6 @@
-import type { IRemoteOperationProvider } from '@memberjunction/core';
+import { CompositeKey, type IRemoteOperationProvider } from '@memberjunction/core';
+import { SharedService } from '@memberjunction/ng-shared';
+import { themeQuartz } from 'ag-grid-community';
 import type {
   MJCommunicationBaseMessageTypeEntity,
   MJCommunicationComplianceRegimeEntity,
@@ -128,6 +130,20 @@ function isRemoteOperationProvider(provider: unknown): provider is IRemoteOperat
 /**
  * Dispatches a Communications Admin Remote Operation through `IRemoteOperationProvider.RouteOperation`.
  */
+export function CommsGridTheme() {
+  return themeQuartz.withParams({
+    fontFamily: 'inherit',
+    fontSize: 13,
+    headerFontSize: 12,
+    rowHeight: 40,
+    headerHeight: 38,
+  });
+}
+
+export function OpenCommsEntityRecord(entityName: string, id: string): void {
+  SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromID(id));
+}
+
 export async function ExecuteCommsRemoteOp<TInput, TOutput>(
   provider: unknown,
   operationKey: string,

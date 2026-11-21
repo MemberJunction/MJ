@@ -1,5 +1,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, Output, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { AgGridAngular } from 'ag-grid-angular';
+import type { ColDef, GridOptions } from 'ag-grid-community';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import type {
@@ -7,12 +9,12 @@ import type {
   MJCommunicationSenderPermissionEntity,
 } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
-import type { CommsAdminLoadedMetadata, SenderTreeNode } from './communications-admin.types';
+import { CommsGridTheme, OpenCommsEntityRecord, type CommsAdminLoadedMetadata, type SenderTreeNode } from './communications-admin.types';
 
 @Component({
   selector: 'mj-comms-senders-permissions-tab',
   standalone: true,
-  imports: [FormsModule, MJButtonDirective],
+  imports: [FormsModule, MJButtonDirective, AgGridAngular],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./communications-admin.css'],
   template: `
@@ -47,9 +49,14 @@ import type { CommsAdminLoadedMetadata, SenderTreeNode } from './communications-
               <h3 class="comms-card-title">{{ SelectedSender.Name }}</h3>
               <p class="comms-card-subtitle">Status: {{ SelectedSender.Status }}</p>
             </div>
-            <button mjButton variant="primary" size="sm" [disabled]="IsSaving" (click)="SaveSender()">
-              {{ IsSaving ? 'Saving…' : 'Save Sender' }}
-            </button>
+            <div class="comms-actions-row">
+              <button mjButton variant="outline" size="sm" (click)="OpenSenderForm(SelectedSender)">
+                Edit in Form
+              </button>
+              <button mjButton variant="primary" size="sm" [disabled]="IsSaving" (click)="SaveSender()">
+                {{ IsSaving ? 'Saving…' : 'Save Sender' }}
+              </button>
+            </div>
           </div>
 
           <div class="comms-field">
@@ -90,28 +97,16 @@ import type { CommsAdminLoadedMetadata, SenderTreeNode } from './communications-
             <p class="comms-card-subtitle">Grants scoped to {{ SelectedSender.Name }}.</p>
           </div>
         </div>
-        <table class="comms-table">
-          <thead>
-            <tr>
-              <th>Principal (Role / User)</th>
-              <th>Level</th>
-              <th>Applies To Children</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (perm of SelectedPermissions; track perm.ID) {
-              <tr>
-                <td>{{ perm.Role || perm.User || perm.RoleID || perm.UserID }}</td>
-                <td><span class="comms-pill">{{ perm.PermissionLevel }}</span></td>
-                <td>{{ perm.AppliesToChildSenders ? 'Yes' : 'No' }}</td>
-              </tr>
-            } @empty {
-              <tr>
-                <td colspan="3">No explicit permissions on this sender.</td>
-              </tr>
-            }
-          </tbody>
-        </table>
+        @if (SelectedPermissions.length > 0) {
+          <ag-grid-angular
+            [theme]="GridTheme"
+            [columnDefs]="PermissionCols"
+            [gridOptions]="GridOptions"
+            [rowData]="SelectedPermissions"
+          />
+        } @else {
+          <p class="comms-card-subtitle">No explicit permissions on this sender.</p>
+        }
       </div>
     }
   `,
@@ -119,6 +114,26 @@ import type { CommsAdminLoadedMetadata, SenderTreeNode } from './communications-
 export class CommsSendersPermissionsTabComponent extends BaseAngularComponent {
   private readonly cdr = inject(ChangeDetectorRef);
   private _metadata: CommsAdminLoadedMetadata | null = null;
+
+  public readonly GridTheme = CommsGridTheme();
+  public readonly GridOptions: GridOptions = { domLayout: 'autoHeight', suppressCellFocus: true };
+  public readonly PermissionCols: ColDef[] = [
+    {
+      field: 'Role',
+      headerName: 'Principal (Role / User)',
+      flex: 2,
+      valueGetter: (p) => {
+        const row = p.data as MJCommunicationSenderPermissionEntity | undefined;
+        return row?.Role || row?.User || row?.RoleID || row?.UserID || '';
+      },
+    },
+    { field: 'PermissionLevel', headerName: 'Level', flex: 1 },
+    { field: 'AppliesToChildSenders', headerName: 'Applies To Children', flex: 1, valueFormatter: (p) => (p.value ? 'Yes' : 'No') },
+  ];
+
+  public OpenSenderForm(sender: MJCommunicationSenderEntity): void {
+    OpenCommsEntityRecord('MJ: Communication Senders', sender.ID);
+  }
 
   public IsSelected(sender: MJCommunicationSenderEntity): boolean {
     return UUIDsEqual(this.SelectedSender?.ID, sender.ID);

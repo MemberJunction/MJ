@@ -4,7 +4,7 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ListManagementModule } from '@memberjunction/ng-list-management';
-import { MJButtonDirective, MJPageHeaderComponent, MJPageLayoutComponent, MJPageBodyComponent, MJPageSearchComponent, MJFilterChipComponent, MJFilterPopoverComponent, MJFilterPanelComponent, MJRefreshButtonComponent, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJPageHeaderComponent, MJPageLayoutComponent, MJPageBodyComponent, MJPageSearchComponent, MJFilterChipComponent, MJFilterPopoverComponent, MJFilterPanelComponent, MJRefreshButtonComponent, MJEmptyStateComponent, MJLeftNavComponent, MJLeftNavContentComponent } from '@memberjunction/ng-ui-components';
 import { SharedDashboardWidgetsModule } from './shared/shared-dashboard-widgets.module';
 
 // Communication Components
@@ -58,6 +58,8 @@ import { CommsSendingDomainsTabComponent } from './Communications/comms-sending-
     MJFilterPopoverComponent,
     MJFilterPanelComponent,
     MJRefreshButtonComponent,
+    MJLeftNavComponent,
+    MJLeftNavContentComponent,
     CommsGateSimulatorTabComponent,
     CommsSendersPermissionsTabComponent,
     CommsRegimesJurisdictionsTabComponent,

@@ -1,5 +1,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnInit, Output, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { AgGridAngular } from 'ag-grid-angular';
+import type { ColDef, GridOptions, RowClickedEvent } from 'ag-grid-community';
 import { RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
@@ -10,7 +12,9 @@ import type {
   MJCommunicationSendingDomainEntity,
 } from '@memberjunction/core-entities';
 import {
+  CommsGridTheme,
   ExecuteCommsRemoteOp,
+  OpenCommsEntityRecord,
   type CommsAdminLoadedMetadata,
   type CommsAdminMutationOpOutput,
   type CommsSendingDomainOpOutput,
@@ -19,7 +23,7 @@ import {
 @Component({
   selector: 'mj-comms-sending-domains-tab',
   standalone: true,
-  imports: [FormsModule, MJButtonDirective],
+  imports: [FormsModule, MJButtonDirective, AgGridAngular],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./communications-admin.css'],
   template: `
@@ -29,6 +33,40 @@ import {
           <h3 class="comms-card-title">Sending Domains & DNS</h3>
           <p class="comms-card-subtitle">Generate SPF/DKIM/DMARC records and verify domain authentication.</p>
         </div>
+        @if (SelectedDomain) {
+          <div class="comms-actions-row">
+            <button mjButton variant="outline" size="sm" (click)="OpenDomainForm(SelectedDomain)">
+              Edit in Form
+            </button>
+            <button
+              mjButton
+              variant="secondary"
+              size="sm"
+              [disabled]="IsBusy(SelectedDomain.ID)"
+              (click)="GenerateDnsRecords(SelectedDomain)"
+            >
+              Generate SPF/DKIM
+            </button>
+            <button
+              mjButton
+              variant="primary"
+              size="sm"
+              [disabled]="IsBusy(SelectedDomain.ID)"
+              (click)="VerifyDns(SelectedDomain)"
+            >
+              Verify DNS
+            </button>
+            <button
+              mjButton
+              variant="danger"
+              size="sm"
+              [disabled]="IsBusy(SelectedDomain.ID)"
+              (click)="DeleteDomain(SelectedDomain)"
+            >
+              Delete
+            </button>
+          </div>
+        }
       </div>
 
       <div class="comms-form-grid" style="margin-bottom: 16px;">
@@ -61,74 +99,13 @@ import {
         </div>
       </div>
 
-      <table class="comms-table">
-        <thead>
-          <tr>
-            <th>Domain</th>
-            <th>Provider</th>
-            <th>Status</th>
-            <th>Last Verified</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (dom of Metadata?.SendingDomains ?? []; track dom.ID) {
-            <tr>
-              <td>{{ dom.Domain }}</td>
-              <td>{{ dom.CommunicationProvider ?? '—' }}</td>
-              <td>
-                <span
-                  class="comms-pill"
-                  [class.comms-pill--verified]="dom.Status === 'Verified'"
-                  [class.comms-pill--pending]="dom.Status === 'Pending'"
-                  [class.comms-pill--failed]="dom.Status === 'Failed' || dom.Status === 'Revoked'"
-                >
-                  {{ dom.Status }}
-                </span>
-              </td>
-              <td>{{ dom.LastVerifiedAt ? dom.LastVerifiedAt.toISOString().slice(0, 10) : 'Never' }}</td>
-              <td>
-                <div class="comms-actions-row">
-                  <button mjButton variant="outline" size="sm" (click)="SelectDomain(dom)">
-                    Inspect DNS
-                  </button>
-                  <button
-                    mjButton
-                    variant="secondary"
-                    size="sm"
-                    [disabled]="IsBusy(dom.ID)"
-                    (click)="GenerateDnsRecords(dom)"
-                  >
-                    Generate SPF/DKIM
-                  </button>
-                  <button
-                    mjButton
-                    variant="primary"
-                    size="sm"
-                    [disabled]="IsBusy(dom.ID)"
-                    (click)="VerifyDns(dom)"
-                  >
-                    Verify DNS
-                  </button>
-                  <button
-                    mjButton
-                    variant="danger"
-                    size="sm"
-                    [disabled]="IsBusy(dom.ID)"
-                    (click)="DeleteDomain(dom)"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </td>
-            </tr>
-          } @empty {
-            <tr>
-              <td colspan="5">No sending domains configured.</td>
-            </tr>
-          }
-        </tbody>
-      </table>
+      <ag-grid-angular
+        [theme]="GridTheme"
+        [columnDefs]="DomainCols"
+        [gridOptions]="GridOptions"
+        [rowData]="Metadata?.SendingDomains ?? []"
+        (rowClicked)="OnDomainRowClicked($event)"
+      />
 
       @if (ErrorMessage) {
         <p class="comms-error-msg">{{ ErrorMessage }}</p>
@@ -143,45 +120,51 @@ import {
         <div class="comms-card-header">
           <h3 class="comms-card-title">DNS Records for {{ SelectedDomain.Domain }}</h3>
         </div>
-        <table class="comms-table">
-          <thead>
-            <tr>
-              <th>Purpose</th>
-              <th>Type</th>
-              <th>Host</th>
-              <th>Value</th>
-              <th>Validated</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (rec of SelectedRecords; track rec.Host + rec.Purpose) {
-              <tr>
-                <td>{{ rec.Purpose }}</td>
-                <td><code>{{ rec.Type }}</code></td>
-                <td><code>{{ rec.Host }}</code></td>
-                <td><code>{{ rec.Value }}</code></td>
-                <td>
-                  <span
-                    class="comms-pill"
-                    [class.comms-pill--verified]="rec.Validated"
-                    [class.comms-pill--pending]="!rec.Validated"
-                  >
-                    {{ rec.Validated ? 'Valid' : 'Pending' }}
-                  </span>
-                </td>
-              </tr>
-            } @empty {
-              <tr>
-                <td colspan="5">No DNS records generated yet. Click "Generate SPF/DKIM".</td>
-              </tr>
-            }
-          </tbody>
-        </table>
+        @if (SelectedRecords.length > 0) {
+          <ag-grid-angular
+            [theme]="GridTheme"
+            [columnDefs]="DnsRecordCols"
+            [gridOptions]="GridOptions"
+            [rowData]="SelectedRecords"
+          />
+        } @else {
+          <p class="comms-card-subtitle">No DNS records generated yet. Click "Generate SPF/DKIM".</p>
+        }
       </div>
     }
   `,
 })
 export class CommsSendingDomainsTabComponent extends BaseAngularComponent implements OnInit {
+  public readonly GridTheme = CommsGridTheme();
+  public readonly GridOptions: GridOptions = {
+    domLayout: 'autoHeight',
+    suppressCellFocus: true,
+    rowSelection: { mode: 'singleRow' },
+  };
+  public readonly DomainCols: ColDef[] = [
+    { field: 'Domain', headerName: 'Domain', flex: 2 },
+    { field: 'CommunicationProvider', headerName: 'Provider', flex: 1, valueFormatter: (p) => p.value || '—' },
+    { field: 'Status', headerName: 'Status', flex: 1 },
+    { field: 'LastVerifiedAt', headerName: 'Last Verified', flex: 1, valueFormatter: (p) => (p.value instanceof Date ? p.value.toISOString().slice(0, 10) : 'Never') },
+  ];
+  public readonly DnsRecordCols: ColDef<DomainDNSRecord>[] = [
+    { field: 'Purpose', headerName: 'Purpose', flex: 1 },
+    { field: 'Type', headerName: 'Type', flex: 1 },
+    { field: 'Host', headerName: 'Host', flex: 2 },
+    { field: 'Value', headerName: 'Value', flex: 3 },
+    { field: 'Validated', headerName: 'Validated', flex: 1, valueFormatter: (p) => (p.value ? 'Valid' : 'Pending') },
+  ];
+
+  public OnDomainRowClicked(event: RowClickedEvent): void {
+    const row = event.data as MJCommunicationSendingDomainEntity | undefined;
+    if (row) {
+      this.SelectDomain(row);
+    }
+  }
+
+  public OpenDomainForm(domain: MJCommunicationSendingDomainEntity): void {
+    OpenCommsEntityRecord('MJ: Communication Sending Domains', domain.ID);
+  }
   private readonly cdr = inject(ChangeDetectorRef);
 
   @Input() public Metadata: CommsAdminLoadedMetadata | null = null;

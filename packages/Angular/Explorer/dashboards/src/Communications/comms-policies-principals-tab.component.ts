@@ -1,5 +1,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, Output, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { AgGridAngular } from 'ag-grid-angular';
+import type { ColDef, GridOptions, RowClickedEvent } from 'ag-grid-community';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -8,7 +10,7 @@ import type {
   MJCommunicationSuppressionPolicyEntity,
   MJEntityCommunicationMessageTypeEntity,
 } from '@memberjunction/core-entities';
-import type { CommsAdminLoadedMetadata } from './communications-admin.types';
+import { CommsGridTheme, OpenCommsEntityRecord, type CommsAdminLoadedMetadata } from './communications-admin.types';
 
 export interface PrincipalSlotMappingForm {
   FullName: string;
@@ -21,7 +23,7 @@ export interface PrincipalSlotMappingForm {
 @Component({
   selector: 'mj-comms-policies-principals-tab',
   standalone: true,
-  imports: [FormsModule, MJButtonDirective],
+  imports: [FormsModule, MJButtonDirective, AgGridAngular],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./communications-admin.css'],
   template: `
@@ -31,42 +33,25 @@ export interface PrincipalSlotMappingForm {
           <h3 class="comms-card-title">Suppression Policies</h3>
           <p class="comms-card-subtitle">Automatic reputation protection (including SoftBounceThresholdPolicy).</p>
         </div>
+        @if (SelectedPolicy) {
+          <div class="comms-actions-row">
+            <button mjButton variant="outline" size="sm" (click)="OpenPolicyForm(SelectedPolicy)">
+              Edit in Form
+            </button>
+            <button mjButton variant="primary" size="sm" (click)="TogglePolicyStatus(SelectedPolicy)">
+              {{ SelectedPolicy.Status === 'Active' ? 'Disable' : 'Activate' }}
+            </button>
+          </div>
+        }
       </div>
 
-      <table class="comms-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Driver</th>
-            <th>Parameters</th>
-            <th>Status</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (policy of Metadata?.SuppressionPolicies ?? []; track policy.ID) {
-            <tr>
-              <td>{{ policy.Name }}</td>
-              <td><code>{{ policy.DriverClass }}</code></td>
-              <td><code>{{ policy.Parameters }}</code></td>
-              <td>
-                <span
-                  class="comms-pill"
-                  [class.comms-pill--active]="policy.Status === 'Active'"
-                  [class.comms-pill--disabled]="policy.Status !== 'Active'"
-                >
-                  {{ policy.Status }}
-                </span>
-              </td>
-              <td>
-                <button mjButton variant="outline" size="sm" (click)="TogglePolicyStatus(policy)">
-                  {{ policy.Status === 'Active' ? 'Disable' : 'Activate' }}
-                </button>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
+      <ag-grid-angular
+        [theme]="GridTheme"
+        [columnDefs]="PolicyCols"
+        [gridOptions]="GridOptions"
+        [rowData]="Metadata?.SuppressionPolicies ?? []"
+        (rowClicked)="OnPolicyRowClicked($event)"
+      />
     </div>
 
     <div class="comms-card">
@@ -75,40 +60,30 @@ export interface PrincipalSlotMappingForm {
           <h3 class="comms-card-title">Unregistered V1 Entity Message Types</h3>
           <p class="comms-card-subtitle">Register legacy EntityCommunicationMessageType rows as V2 Principals.</p>
         </div>
+        @if (SelectedV1Type) {
+          <button
+            mjButton
+            variant="primary"
+            size="sm"
+            [disabled]="IsBusy(SelectedV1Type.ID)"
+            (click)="RegisterAsPrincipal(SelectedV1Type)"
+          >
+            {{ IsBusy(SelectedV1Type.ID) ? 'Registering…' : 'Register as Principal' }}
+          </button>
+        }
       </div>
 
-      <table class="comms-table">
-        <thead>
-          <tr>
-            <th>Entity</th>
-            <th>Message Type</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (item of UnregisteredV1Types; track item.ID) {
-            <tr>
-              <td>{{ item.Entity }}</td>
-              <td>{{ item.BaseMessageType }}</td>
-              <td>
-                <button
-                  mjButton
-                  variant="primary"
-                  size="sm"
-                  [disabled]="IsBusy(item.ID)"
-                  (click)="RegisterAsPrincipal(item)"
-                >
-                  {{ IsBusy(item.ID) ? 'Registering…' : 'Register as Principal' }}
-                </button>
-              </td>
-            </tr>
-          } @empty {
-            <tr>
-              <td colspan="3">All V1 Entity Communication Message Types are registered as Principals.</td>
-            </tr>
-          }
-        </tbody>
-      </table>
+      @if (UnregisteredV1Types.length > 0) {
+        <ag-grid-angular
+          [theme]="GridTheme"
+          [columnDefs]="V1TypeCols"
+          [gridOptions]="GridOptions"
+          [rowData]="UnregisteredV1Types"
+          (rowClicked)="OnV1TypeRowClicked($event)"
+        />
+      } @else {
+        <p class="comms-card-subtitle">All V1 Entity Communication Message Types are registered as Principals.</p>
+      }
       @if (ErrorMessage) {
         <p class="comms-error-msg">{{ ErrorMessage }}</p>
       }
@@ -205,6 +180,40 @@ export interface PrincipalSlotMappingForm {
 export class CommsPoliciesPrincipalsTabComponent extends BaseAngularComponent {
   private readonly cdr = inject(ChangeDetectorRef);
   private _metadata: CommsAdminLoadedMetadata | null = null;
+
+  public SelectedPolicy: MJCommunicationSuppressionPolicyEntity | null = null;
+  public SelectedV1Type: MJEntityCommunicationMessageTypeEntity | null = null;
+
+  public readonly GridTheme = CommsGridTheme();
+  public readonly GridOptions: GridOptions = {
+    domLayout: 'autoHeight',
+    suppressCellFocus: true,
+    rowSelection: { mode: 'singleRow' },
+  };
+  public readonly PolicyCols: ColDef[] = [
+    { field: 'Name', headerName: 'Name', flex: 2 },
+    { field: 'DriverClass', headerName: 'Driver', flex: 2 },
+    { field: 'Parameters', headerName: 'Parameters', flex: 2 },
+    { field: 'Status', headerName: 'Status', flex: 1 },
+  ];
+  public readonly V1TypeCols: ColDef[] = [
+    { field: 'Entity', headerName: 'Entity', flex: 2 },
+    { field: 'BaseMessageType', headerName: 'Message Type', flex: 2 },
+  ];
+
+  public OnPolicyRowClicked(event: RowClickedEvent): void {
+    this.SelectedPolicy = (event.data as MJCommunicationSuppressionPolicyEntity | undefined) ?? null;
+    this.cdr.markForCheck();
+  }
+
+  public OnV1TypeRowClicked(event: RowClickedEvent): void {
+    this.SelectedV1Type = (event.data as MJEntityCommunicationMessageTypeEntity | undefined) ?? null;
+    this.cdr.markForCheck();
+  }
+
+  public OpenPolicyForm(policy: MJCommunicationSuppressionPolicyEntity): void {
+    OpenCommsEntityRecord('MJ: Communication Suppression Policies', policy.ID);
+  }
 
   @Input()
   public set Metadata(value: CommsAdminLoadedMetadata | null) {

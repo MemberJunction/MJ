@@ -8,6 +8,7 @@ import {
   inject,
 } from '@angular/core';
 import { BaseDashboard } from '@memberjunction/ng-shared';
+import type { MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-components';
 import { RegisterClass } from '@memberjunction/global';
 import { RunView, type IMetadataProvider } from '@memberjunction/core';
 import type {
@@ -56,64 +57,52 @@ import {
           <mj-refresh-button [Loading]="IsLoading" (Clicked)="LoadMetadata()" />
         </div>
       </mj-page-header>
-      <mj-page-body>
-        @if (LoadError) {
-          <div class="comms-admin-error" role="alert">{{ LoadError }}</div>
-        }
-        <div class="comms-admin-shell">
-          <nav class="comms-admin-rail" aria-label="Communications admin sections">
-            @for (tab of Tabs; track tab.Key) {
-              <button
-                type="button"
-                class="comms-admin-nav-btn"
-                [class.active]="ActiveTab === tab.Key"
-                (click)="SelectTab(tab.Key)"
-              >
-                <i [class]="tab.Icon"></i>
-                <span>{{ tab.Label }}</span>
-              </button>
-            }
-          </nav>
+      <mj-page-body [Flex]="true" [Padding]="false" Direction="row">
+        <mj-left-nav
+          MobileTitle="Communications Admin"
+          [Sections]="NavSections"
+          [ActiveId]="ActiveTab"
+          (ItemClicked)="OnNavItemClicked($event)"
+        ></mj-left-nav>
 
-          <section class="comms-admin-content">
-            @switch (ActiveTab) {
-              @case ('simulator') {
-                <mj-comms-gate-simulator-tab [Provider]="Provider" [Metadata]="LoadedMetadata" />
-              }
-              @case ('senders') {
-                <mj-comms-senders-permissions-tab
-                  [Provider]="Provider"
-                  [Metadata]="LoadedMetadata"
-                  (RefreshRequested)="LoadMetadata()"
-                />
-              }
-              @case ('regimes') {
-                <mj-comms-regimes-jurisdictions-tab
-                  [Provider]="Provider"
-                  [Metadata]="LoadedMetadata"
-                  (RefreshRequested)="LoadMetadata()"
-                />
-              }
-              @case ('endpoints') {
-                <mj-comms-endpoints-suppressions-tab [Provider]="Provider" [Metadata]="LoadedMetadata" />
-              }
-              @case ('policies') {
-                <mj-comms-policies-principals-tab
-                  [Provider]="Provider"
-                  [Metadata]="LoadedMetadata"
-                  (RefreshRequested)="LoadMetadata()"
-                />
-              }
-              @case ('domains') {
-                <mj-comms-sending-domains-tab
-                  [Provider]="Provider"
-                  [Metadata]="LoadedMetadata"
-                  (RefreshRequested)="LoadMetadata()"
-                />
-              }
+        <mj-left-nav-content [Loading]="IsLoading" [Error]="LoadError">
+          @switch (ActiveTab) {
+            @case ('simulator') {
+              <mj-comms-gate-simulator-tab [Provider]="Provider" [Metadata]="LoadedMetadata" />
             }
-          </section>
-        </div>
+            @case ('senders') {
+              <mj-comms-senders-permissions-tab
+                [Provider]="Provider"
+                [Metadata]="LoadedMetadata"
+                (RefreshRequested)="LoadMetadata()"
+              />
+            }
+            @case ('regimes') {
+              <mj-comms-regimes-jurisdictions-tab
+                [Provider]="Provider"
+                [Metadata]="LoadedMetadata"
+                (RefreshRequested)="LoadMetadata()"
+              />
+            }
+            @case ('endpoints') {
+              <mj-comms-endpoints-suppressions-tab [Provider]="Provider" [Metadata]="LoadedMetadata" />
+            }
+            @case ('policies') {
+              <mj-comms-policies-principals-tab
+                [Provider]="Provider"
+                [Metadata]="LoadedMetadata"
+                (RefreshRequested)="LoadMetadata()"
+              />
+            }
+            @case ('domains') {
+              <mj-comms-sending-domains-tab
+                [Provider]="Provider"
+                [Metadata]="LoadedMetadata"
+                (RefreshRequested)="LoadMetadata()"
+              />
+            }
+          }
+        </mj-left-nav-content>
       </mj-page-body>
     </mj-page-layout>
   `,
@@ -135,10 +124,23 @@ export class CommunicationsAdminDashboardComponent extends BaseDashboard impleme
   }
 
   public readonly Tabs = COMMS_ADMIN_TABS;
+  public readonly NavSections: MJLeftNavSection[] = [
+    {
+      items: COMMS_ADMIN_TABS.map((t) => ({
+        id: t.Key,
+        label: t.Label,
+        icon: t.Icon,
+      })),
+    },
+  ];
   public ActiveTab: CommsAdminTabId = 'simulator';
   public IsLoading = false;
   public LoadError = '';
   public LoadedMetadata: CommsAdminLoadedMetadata | null = null;
+
+  public OnNavItemClicked(item: MJLeftNavItem): void {
+    this.SelectTab(item.id as CommsAdminTabId);
+  }
 
   public async GetResourceDisplayName(_data: ResourceData): Promise<string> {
     return 'Communications Admin';
