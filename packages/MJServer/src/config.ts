@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { DEFAULT_WORK_QUEUE_CONFIG, WorkQueueSchema } from './services/workQueueConfig.js';
 import { cosmiconfigSync } from 'cosmiconfig';
-import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
+import { LimitsConfigResolver, LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 import { TelemetryEnabledDefault } from './telemetryConfigUnits.js';
 import { RealtimeEnabledDefault } from './realtimeConfigUnits.js';
@@ -1080,6 +1080,97 @@ const devAuthSchema = z.object({
   defaultEmail: z.string().optional(),
 }).passthrough();
 
+const limitsScopeBudgetSchema = z.object({
+  maxCostUsd: z.number().nonnegative().nullable().optional(),
+  MaxCostUsd: z.number().nonnegative().nullable().optional(),
+  maxWallClockMs: z.number().int().positive().nullable().optional(),
+  MaxWallClockMs: z.number().int().positive().nullable().optional(),
+}).passthrough();
+
+const limitsRunScopeBudgetSchema = limitsScopeBudgetSchema.extend({
+  maxTokens: z.number().int().positive().nullable().optional(),
+  MaxTokens: z.number().int().positive().nullable().optional(),
+}).passthrough();
+
+const limitsUserDailyScopeBudgetSchema = limitsScopeBudgetSchema.extend({
+  dayBoundaryTimezone: z.string().min(1).optional(),
+  DayBoundaryTimezone: z.string().min(1).optional(),
+}).passthrough();
+
+const limitsBudgetsSchema = z.object({
+  perRun: limitsRunScopeBudgetSchema.optional(),
+  PerRun: limitsRunScopeBudgetSchema.optional(),
+  perRoutine: limitsScopeBudgetSchema.optional(),
+  PerRoutine: limitsScopeBudgetSchema.optional(),
+  perUserPerDay: limitsUserDailyScopeBudgetSchema.optional(),
+  PerUserPerDay: limitsUserDailyScopeBudgetSchema.optional(),
+  countPausedTimeTowardsWallClock: z.boolean().optional(),
+  CountPausedTimeTowardsWallClock: z.boolean().optional(),
+  allowedInFlightOvershootUsd: z.number().nonnegative().optional(),
+  AllowedInFlightOvershootUsd: z.number().nonnegative().optional(),
+  allowedInFlightOvershootMs: z.number().nonnegative().optional(),
+  AllowedInFlightOvershootMs: z.number().nonnegative().optional(),
+}).passthrough();
+
+const limitsProgressDetectorSchema = z.object({
+  enabled: z.boolean().optional(),
+  Enabled: z.boolean().optional(),
+  windowSize: z.number().int().positive().optional(),
+  WindowSize: z.number().int().positive().optional(),
+  minIterationsBeforeCheck: z.number().int().positive().optional(),
+  MinIterationsBeforeCheck: z.number().int().positive().optional(),
+  duplicateStepRatioThreshold: z.number().min(0).max(1).optional(),
+  DuplicateStepRatioThreshold: z.number().min(0).max(1).optional(),
+  noPayloadDeltaWindowCount: z.number().int().positive().optional(),
+  NoPayloadDeltaWindowCount: z.number().int().positive().optional(),
+  repeatingErrorWindowCount: z.number().int().positive().optional(),
+  RepeatingErrorWindowCount: z.number().int().positive().optional(),
+  ambiguityLowScoreThreshold: z.number().min(0).max(1).optional(),
+  AmbiguityLowScoreThreshold: z.number().min(0).max(1).optional(),
+  ambiguityHighScoreThreshold: z.number().min(0).max(1).optional(),
+  AmbiguityHighScoreThreshold: z.number().min(0).max(1).optional(),
+  fastJudgeEnabled: z.boolean().optional(),
+  FastJudgeEnabled: z.boolean().optional(),
+  fastJudgeTimeoutMs: z.number().int().positive().optional(),
+  FastJudgeTimeoutMs: z.number().int().positive().optional(),
+  fastJudgeMinIntervalIterations: z.number().int().positive().optional(),
+  FastJudgeMinIntervalIterations: z.number().int().positive().optional(),
+  fastJudgeMaxInputChars: z.number().int().positive().optional(),
+  FastJudgeMaxInputChars: z.number().int().positive().optional(),
+  fastJudgeFailureFallback: z.enum(['ContinueWithWarning', 'PauseForHuman']).optional(),
+  FastJudgeFailureFallback: z.enum(['ContinueWithWarning', 'PauseForHuman']).optional(),
+}).passthrough();
+
+/**
+ * Optional `limits` block in `mj.config.cjs` providing Tier 2 (`MjConfig`) overrides for
+ * `LimitsConfigResolver` (`@memberjunction/core`). When omitted, `LimitsConfigResolver` falls
+ * back to `DEFAULT_MJ_LIMITS_CONFIG` (`CODE_FALLBACK_LIMITS`).
+ */
+export const LimitsConfigSchema = z.object({
+  agentChannelConsecutiveTurns: z.number().int().positive().optional(),
+  AgentChannelConsecutiveTurns: z.number().int().positive().optional(),
+  agentChannelWakesPerHour: z.number().int().positive().optional(),
+  AgentChannelWakesPerHour: z.number().int().positive().optional(),
+  agentAbsoluteIterations: z.number().int().positive().optional(),
+  AgentAbsoluteIterations: z.number().int().positive().optional(),
+  maxTasksPerAgentGraph: z.number().int().positive().optional(),
+  MaxTasksPerAgentGraph: z.number().int().positive().optional(),
+  whileLoopMaxIterations: z.number().int().positive().optional(),
+  WhileLoopMaxIterations: z.number().int().positive().optional(),
+  forEachMaxIterations: z.number().int().positive().optional(),
+  ForEachMaxIterations: z.number().int().positive().optional(),
+  maxTasksPerGraph: z.number().int().positive().optional(),
+  MaxTasksPerGraph: z.number().int().positive().optional(),
+  briefingContributorTimeoutMs: z.number().int().positive().optional(),
+  BriefingContributorTimeoutMs: z.number().int().positive().optional(),
+  briefingMaxContributorChars: z.number().int().positive().optional(),
+  BriefingMaxContributorChars: z.number().int().positive().optional(),
+  budgets: limitsBudgetsSchema.optional(),
+  Budgets: limitsBudgetsSchema.optional(),
+  progressDetector: limitsProgressDetectorSchema.optional(),
+  ProgressDetector: limitsProgressDetectorSchema.optional(),
+}).passthrough();
+
 const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
   magicLink: magicLinkSchema.optional().default({}),
@@ -1114,6 +1205,7 @@ const configInfoSchema = z.object({
   cors: corsSchema.optional().default({}),
   rateLimiting: rateLimitSchema.optional().default({}),
   startup: startupSchema.optional().default({}),
+  limits: LimitsConfigSchema.optional(),
 
   apiKey: z.string().optional(),
   baseUrl: z.string().default('http://localhost'),
@@ -1198,6 +1290,7 @@ export type FeedbackSettingsConfig = z.infer<typeof feedbackSettingsSchema>;
 export type CorsConfig = z.infer<typeof corsSchema>;
 export type RateLimitConfig = z.infer<typeof rateLimitSchema>;
 export type StartupConfig = z.infer<typeof startupSchema>;
+export type LimitsConfigInput = z.infer<typeof LimitsConfigSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 
 /**
@@ -1477,6 +1570,11 @@ export function LoadConfig() {
       '[SECURITY] Local dev auth (MJ_DEV_AUTH_ENABLED) is strictly forbidden when NODE_ENV=production. Refusing to start.'
     );
   }
+
+  // Register optional Tier 2 (`MjConfig`) execution limits with the process-wide resolver.
+  // When `limits` is omitted in mj.config.cjs, passing `null` clears any prior override so
+  // LimitsConfigResolver falls back to DEFAULT_MJ_LIMITS_CONFIG.
+  LimitsConfigResolver.Instance.RegisterMjConfigLimits(configParsing.data.limits ?? null);
 
   return configParsing.data;
 }

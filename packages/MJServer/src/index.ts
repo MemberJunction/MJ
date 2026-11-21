@@ -4,7 +4,7 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed } from '@memberjunction/core';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed, LimitsConfigResolver } from '@memberjunction/core';
 import { UserCache, resolveDbPlatformFromEnv, GenericDatabaseProvider, SummarizeSqlParameters } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, IndexByUUID, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
@@ -1049,6 +1049,9 @@ const setupComplete$ = new ReplaySubject(1);
   if (configInfo.queryDialects) {
     MJGlobal.Instance.GetGlobalObjectStore()['queryDialects'] = configInfo.queryDialects;
   }
+
+  // Register optional Tier 2 (`MjConfig`) execution limits with LimitsConfigResolver
+  LimitsConfigResolver.Instance.RegisterMjConfigLimits(configInfo.limits ?? null);
 
   // Initialize server telemetry based on config
   const tm = TelemetryManager.Instance;

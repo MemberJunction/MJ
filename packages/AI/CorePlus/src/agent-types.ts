@@ -13,7 +13,8 @@
 import { MJAIAgentTypeEntity,  } from '@memberjunction/core-entities';
 import { ChatMessage, ChatReasoningBlock, ChatToolCall } from '@memberjunction/ai';
 import {  } from '@memberjunction/core-entities';
-import { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { UserInfo, IMetadataProvider, type MJLimitsOverride } from '@memberjunction/core';
+import type { LimitsDiagnosticsSnapshot } from './limits-diagnostics';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AgentScratchpad } from './agent-scratchpad';
 import { AgentDecisionRequest, AgentDecisionResult, AgentFinishIf } from './agent-decisions';
@@ -1080,6 +1081,12 @@ export type ExecuteAgentResult<P = any> = {
      * Ensures `AgentRunner` and realtime delegation link these artifacts even when `payload` is empty.
      */
     touchedArtifacts?: GovernedRunArtifactSummary[];
+
+    /**
+     * Structured diagnostic snapshot of the resolved 5-tier limits and tier provenance
+     * active for this agent run.
+     */
+    limitsSnapshot?: LimitsDiagnosticsSnapshot;
 }
 
 /**
@@ -2360,6 +2367,11 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * ```
      */
     compactAfterRun?: boolean | AgentPostRunCompactionConfig;
+
+    /**
+     * Optional Tier 5 (`RunOverride`) limits override for this specific agent run.
+     */
+    limitsOverride?: MJLimitsOverride;
 
 }
 
