@@ -15,7 +15,7 @@ describe('MJListFormComponentExtended.RemoveSelectedItems', () => {
     it('removes the RecordIDs of the selected items in one server call, matching IDs in any case and skipping unloaded ones', async () => {
         const deleteSpy = vi.fn(async () => true);
         const item = (ID: string) => ({ detail: { ID, RecordID: `rec-${ID.toLowerCase()}`, Delete: deleteSpy } });
-        const executeGQL = vi.fn(async () => ({
+        const executeGQL = vi.fn(async (_query: string, _variables: unknown) => ({
             RemoveRecordsFromList: { Success: true, ResultCode: 'SUCCESS', Message: '', AddedCount: 0, RemovedCount: 2, FailedCount: 0 },
         }));
         const provider = Object.create(GraphQLDataProvider.prototype) as GraphQLDataProvider;

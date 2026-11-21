@@ -11,7 +11,7 @@ function applyResult(added: number) {
 }
 
 function makeForm(state: Record<string, unknown>) {
-    const executeGQL = vi.fn(async () => ({ AddRecordsToList: applyResult(2), AddViewResultsToList: applyResult(3) }));
+    const executeGQL = vi.fn(async (_query: string, _variables: unknown) => ({ AddRecordsToList: applyResult(2), AddViewResultsToList: applyResult(3) }));
     const getEntityObject = vi.fn(async () => ({ Save: async () => true }));
     const createTransactionGroup = vi.fn(async () => ({ Submit: async () => true }));
     const provider = Object.create(GraphQLDataProvider.prototype) as GraphQLDataProvider;
