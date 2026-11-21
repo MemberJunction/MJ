@@ -163,11 +163,25 @@ export function ComputeProtectedElementsHash(snapshot: ProtectedComplianceSnapsh
  * Orchestrates Communications V2 endpoint resolution, pre-flight compliance eligibility,
  * protected compliance injection, tracking instrumentation, and chunked/inline dispatch.
  */
+const CACHE_TTL_MS = 60_000;
+
 export class V2SendService {
   private config: V2DispatchConfig = {};
+  private senderCache = new Map<string, { value: MJCommunicationSenderEntity; expiresAt: number }>();
+  private senderAncestryCache = new Map<string, { value: MJCommunicationSenderEntity[]; expiresAt: number }>();
+  private senderTemplateCtxCache = new Map<string, { value: Record<string, unknown>; expiresAt: number }>();
+  private preferenceCache = new Map<string, { value: MJCommunicationPreferenceEntity; expiresAt: number }>();
 
   public Configure(config: V2DispatchConfig): void {
     this.config = { ...this.config, ...config };
+    this.ClearCache();
+  }
+
+  public ClearCache(): void {
+    this.senderCache.clear();
+    this.senderAncestryCache.clear();
+    this.senderTemplateCtxCache.clear();
+    this.preferenceCache.clear();
   }
 
   public async ResolveEndpoints(
@@ -228,6 +242,12 @@ export class V2SendService {
     const jurMap = await this.resolveAllJurisdictions(principalRefs, contextUser);
 
     const endpointIds = this.collectEndpointIds(resolvedMap, params.Recipients);
+    const adHocEndpointMap = await this.batchLoadAdHocEndpoints(params.Recipients, params.Envelope.ChannelID, contextUser);
+    for (const ep of adHocEndpointMap.values()) {
+      if (!endpointIds.includes(ep.ID)) {
+        endpointIds.push(ep.ID);
+      }
+    }
     const suppressions = await this.loadSuppressions(endpointIds, principalRefs, contextUser);
     const prefMap = preference
       ? await this.loadPrincipalPreferences(principalRefs, preference.ID, sender.ID, contextUser)
@@ -244,6 +264,7 @@ export class V2SendService {
         params.Envelope.ChannelID,
         resolvedMap,
         contextUser,
+        adHocEndpointMap,
       );
       if (!endpoint) {
         blocked.push({
@@ -259,7 +280,10 @@ export class V2SendService {
       const jur = key ? jurMap.get(key) : null;
       const pp = key ? prefMap.get(key) : undefined;
 
-      const endpointEntity = await this.loadEndpointEntity(endpoint.CommunicationEndpointID, contextUser);
+      const endpointEntity =
+        endpoint.EndpointEntity ??
+        adHocEndpointMap.get(endpoint.CommunicationEndpointID.toLowerCase()) ??
+        (await this.loadEndpointEntity(endpoint.CommunicationEndpointID, contextUser));
       if (!endpointEntity) {
         blocked.push({ Principal: rec.Principal, Endpoint: endpoint, Reason: 'EndpointNotFound' });
         continue;
@@ -487,6 +511,15 @@ export class V2SendService {
 
     const scheduledAt = params.Envelope.ScheduledAt;
     const scheduledInFuture = scheduledAt != null && scheduledAt.getTime() > Date.now();
+    const existingLogsByEndpoint = params.CommunicationRunID
+      ? await this.batchLoadRunLogs(run.ID, CommunicationEngineBase.Instance.ContextUser ?? contextUser)
+      : undefined;
+
+    const deferredSaves: Array<{
+      target: SendableRecipient;
+      deferUntil: Date | undefined;
+      deferredPayload: MessagePayload;
+    }> = [];
 
     for (let i = 0; i < eligibility.Sendable.length; i++) {
       const target = eligibility.Sendable[i];
@@ -516,24 +549,7 @@ export class V2SendService {
             ...(rawRecipient?.PayloadOverride?.Headers ?? {}),
           },
         };
-        const deferredLog = await this.claimOrCreateV2Log(
-          params,
-          sender,
-          providerEntity.ID,
-          pmt?.ID,
-          run.ID,
-          target,
-          'Pending',
-          contextUser,
-          deferredPayload,
-        );
-        outcomes.push({
-          Principal: target.Principal,
-          Endpoint: target.Endpoint,
-          CommunicationLogID: deferredLog.Log?.ID,
-          Status: 'Deferred',
-          DeferUntil: deferUntil,
-        });
+        deferredSaves.push({ target, deferUntil, deferredPayload });
         continue;
       }
 
@@ -548,11 +564,42 @@ export class V2SendService {
         provider,
         contextUser,
         senderCredentials,
+        existingLogsByEndpoint,
       );
       if (outcome.Status === 'Sent' || outcome.Status === 'Queued') {
         queuedCount++;
       }
       outcomes.push(outcome);
+    }
+
+    const LOG_BATCH_SIZE = 20;
+    for (let i = 0; i < deferredSaves.length; i += LOG_BATCH_SIZE) {
+      const batch = deferredSaves.slice(i, i + LOG_BATCH_SIZE);
+      const claims = await Promise.all(
+        batch.map((item) =>
+          this.claimOrCreateV2Log(
+            params,
+            sender,
+            providerEntity.ID,
+            pmt?.ID,
+            run.ID,
+            item.target,
+            'Pending',
+            contextUser,
+            item.deferredPayload,
+            existingLogsByEndpoint,
+          ),
+        ),
+      );
+      for (let j = 0; j < batch.length; j++) {
+        outcomes.push({
+          Principal: batch[j].target.Principal,
+          Endpoint: batch[j].target.Endpoint,
+          CommunicationLogID: claims[j].Log?.ID,
+          Status: 'Deferred',
+          DeferUntil: batch[j].deferUntil,
+        });
+      }
     }
 
     await CommunicationEngineBase.Instance.EndRun(run);
@@ -579,6 +626,7 @@ export class V2SendService {
     provider: BaseCommunicationProvider,
     contextUser: UserInfo,
     senderCredentials?: ProviderCredentialsBase,
+    existingLogsByEndpoint?: Map<string, MJCommunicationLogEntity>,
   ): Promise<SendV2RecipientOutcome> {
     const claim = await this.claimOrCreateV2Log(
       params,
@@ -589,6 +637,8 @@ export class V2SendService {
       target,
       'In-Progress',
       contextUser,
+      undefined,
+      existingLogsByEndpoint,
     );
     if (claim.AlreadySent) {
       return {
@@ -895,6 +945,12 @@ export class V2SendService {
     senderID: string | undefined,
     contextUser: UserInfo,
   ): Promise<MJCommunicationSenderEntity | undefined> {
+    const cacheKey = senderID ? senderID.toLowerCase() : '__default__';
+    const cached = this.senderCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value;
+    }
+
     const rv = this.getRunView();
     const filter = senderID
       ? `ID='${EscapeSQLString(senderID)}' AND Status='Active'`
@@ -907,13 +963,25 @@ export class V2SendService {
       },
       contextUser,
     );
-    return res.Success && res.Results.length > 0 ? res.Results[0] : undefined;
+    const found = res.Success && res.Results.length > 0 ? res.Results[0] : undefined;
+    if (found) {
+      const expiresAt = Date.now() + CACHE_TTL_MS;
+      this.senderCache.set(cacheKey, { value: found, expiresAt });
+      this.senderCache.set(found.ID.toLowerCase(), { value: found, expiresAt });
+    }
+    return found;
   }
 
   private async loadSenderAncestry(
     sender: MJCommunicationSenderEntity,
     contextUser: UserInfo,
   ): Promise<MJCommunicationSenderEntity[]> {
+    const cacheKey = sender.ID.toLowerCase();
+    const cached = this.senderAncestryCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value;
+    }
+
     const chain: MJCommunicationSenderEntity[] = [sender];
     const visited = new Set<string>([sender.ID.toLowerCase()]);
     let parentId = sender.ParentSenderID;
@@ -925,6 +993,7 @@ export class V2SendService {
       chain.push(parent);
       parentId = parent.ParentSenderID;
     }
+    this.senderAncestryCache.set(cacheKey, { value: chain, expiresAt: Date.now() + CACHE_TTL_MS });
     return chain;
   }
 
@@ -932,6 +1001,12 @@ export class V2SendService {
     chain: MJCommunicationSenderEntity[],
     contextUser: UserInfo,
   ): Promise<Record<string, unknown>> {
+    const cacheKey = chain[0].ID.toLowerCase();
+    const cached = this.senderTemplateCtxCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value;
+    }
+
     const merged: Record<string, unknown> = {};
     for (let i = chain.length - 1; i >= 0; i--) {
       const s = chain[i];
@@ -957,6 +1032,7 @@ export class V2SendService {
         Object.assign(merged, extra);
       }
     }
+    this.senderTemplateCtxCache.set(cacheKey, { value: merged, expiresAt: Date.now() + CACHE_TTL_MS });
     return merged;
   }
 
@@ -964,6 +1040,12 @@ export class V2SendService {
     preferenceID: string,
     contextUser: UserInfo,
   ): Promise<MJCommunicationPreferenceEntity> {
+    const cacheKey = preferenceID.toLowerCase();
+    const cached = this.preferenceCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value;
+    }
+
     const rv = this.getRunView();
     const res = await rv.RunView<MJCommunicationPreferenceEntity>(
       {
@@ -979,6 +1061,7 @@ export class V2SendService {
     if (res.Results.length === 0) {
       throw new Error(`Communication preference '${preferenceID}' was not found`);
     }
+    this.preferenceCache.set(cacheKey, { value: res.Results[0], expiresAt: Date.now() + CACHE_TTL_MS });
     return res.Results[0];
   }
 
@@ -1020,14 +1103,71 @@ export class V2SendService {
     return Array.from(ids);
   }
 
+  private async batchLoadAdHocEndpoints(
+    recipients: EvaluateEligibilityParams['Recipients'],
+    channelID: string,
+    contextUser: UserInfo,
+  ): Promise<Map<string, MJCommunicationEndpointEntity>> {
+    const out = new Map<string, MJCommunicationEndpointEntity>();
+    const ids = new Set<string>();
+    const hashes = new Set<string>();
+
+    for (const rec of recipients) {
+      if (rec.Endpoint?.CommunicationEndpointID) {
+        ids.add(rec.Endpoint.CommunicationEndpointID);
+      } else if (rec.Endpoint?.Address) {
+        const norm = NormalizeEndpointAddress(rec.Endpoint.Address);
+        if (norm) {
+          hashes.add(ComputeEndpointHash(norm.NormalizedValue));
+        }
+      }
+    }
+
+    if (ids.size === 0 && hashes.size === 0) {
+      return out;
+    }
+
+    const clauses: string[] = [];
+    if (ids.size > 0) {
+      const idList = Array.from(ids).map((id) => `'${EscapeSQLString(id)}'`).join(',');
+      clauses.push(`ID IN (${idList})`);
+    }
+    if (hashes.size > 0) {
+      const hashList = Array.from(hashes).map((h) => `'${EscapeSQLString(h)}'`).join(',');
+      clauses.push(`(BaseMessageTypeID='${EscapeSQLString(channelID)}' AND ValueHash IN (${hashList}))`);
+    }
+
+    const rv = this.getRunView();
+    const res = await rv.RunView<MJCommunicationEndpointEntity>(
+      {
+        EntityName: 'MJ: Communication Endpoints',
+        ExtraFilter: clauses.join(' OR '),
+        ResultType: 'entity_object',
+      },
+      contextUser,
+    );
+    if (res.Success) {
+      for (const ep of res.Results) {
+        out.set(ep.ID.toLowerCase(), ep);
+        if (ep.ValueHash) {
+          out.set(`hash:${ep.ValueHash}`, ep);
+        }
+      }
+    }
+    return out;
+  }
+
   private async pickEndpointForRecipient(
     rec: EvaluateEligibilityParams['Recipients'][number],
     channelID: string,
     resolvedMap: Map<string, ResolvedEndpoint[]>,
     contextUser: UserInfo,
+    adHocEndpointMap?: Map<string, MJCommunicationEndpointEntity>,
   ): Promise<ResolvedEndpoint | undefined> {
     if (rec.Endpoint?.CommunicationEndpointID) {
-      const entity = await this.loadEndpointEntity(rec.Endpoint.CommunicationEndpointID, contextUser);
+      const entity =
+        adHocEndpointMap?.get(rec.Endpoint.CommunicationEndpointID.toLowerCase()) ??
+        (await this.loadEndpointEntity(rec.Endpoint.CommunicationEndpointID, contextUser));
       if (!entity) return undefined;
       return {
         CommunicationEndpointID: entity.ID,
@@ -1036,6 +1176,7 @@ export class V2SendService {
         ValueHash: entity.ValueHash,
         RawValue: entity.NormalizedValue ?? '',
         Domain: entity.Domain ?? undefined,
+        EndpointEntity: entity,
       };
     }
 
@@ -1043,6 +1184,18 @@ export class V2SendService {
       const norm = NormalizeEndpointAddress(rec.Endpoint.Address);
       if (!norm) return undefined;
       const hash = ComputeEndpointHash(norm.NormalizedValue);
+      const cachedEp = adHocEndpointMap?.get(`hash:${hash}`);
+      if (cachedEp) {
+        return {
+          CommunicationEndpointID: cachedEp.ID,
+          ChannelID: cachedEp.BaseMessageTypeID,
+          NormalizedValue: norm.NormalizedValue,
+          ValueHash: hash,
+          RawValue: norm.RawValue,
+          Domain: norm.Domain,
+          EndpointEntity: cachedEp,
+        };
+      }
       const rv = this.getRunView();
       const res = await rv.RunView<MJCommunicationEndpointEntity>(
         {
@@ -1061,6 +1214,7 @@ export class V2SendService {
           ValueHash: hash,
           RawValue: norm.RawValue,
           Domain: norm.Domain,
+          EndpointEntity: ep,
         };
       }
     }
@@ -1228,6 +1382,31 @@ export class V2SendService {
     return res.Success && res.Results.length > 0;
   }
 
+  private async batchLoadRunLogs(
+    runID: string,
+    contextUser: UserInfo,
+  ): Promise<Map<string, MJCommunicationLogEntity> | undefined> {
+    const rv = this.getRunView();
+    const res = await rv.RunView<MJCommunicationLogEntity>(
+      {
+        EntityName: 'MJ: Communication Logs',
+        ExtraFilter: `CommunicationRunID='${EscapeSQLString(runID)}'`,
+        ResultType: 'entity_object',
+      },
+      contextUser,
+    );
+    if (!res.Success) {
+      return undefined;
+    }
+    const map = new Map<string, MJCommunicationLogEntity>();
+    for (const log of res.Results) {
+      if (log.CommunicationEndpointID) {
+        map.set(log.CommunicationEndpointID.toLowerCase(), log);
+      }
+    }
+    return map;
+  }
+
   private async claimOrCreateV2Log(
     params: SendToPrincipalsParams,
     sender: MJCommunicationSenderEntity,
@@ -1238,6 +1417,7 @@ export class V2SendService {
     initialStatus: 'In-Progress' | 'Pending',
     contextUser: UserInfo,
     deferredPayload?: MessagePayload,
+    existingLogsByEndpoint?: Map<string, MJCommunicationLogEntity>,
   ): Promise<{
     Log?: MJCommunicationLogEntity;
     AlreadySent?: boolean;
@@ -1299,12 +1479,18 @@ export class V2SendService {
     };
 
     if (params.CommunicationRunID) {
-      const lookup = await findExisting();
-      if (!lookup.Success) {
-        return { FailureReason: 'LogLookupFailed', FailureDetail: lookup.ErrorMessage };
+      const preloaded = existingLogsByEndpoint?.get(target.Endpoint.CommunicationEndpointID.toLowerCase());
+      if (preloaded) {
+        return handleExisting(preloaded);
       }
-      if (lookup.Log) {
-        return handleExisting(lookup.Log);
+      if (!existingLogsByEndpoint) {
+        const lookup = await findExisting();
+        if (!lookup.Success) {
+          return { FailureReason: 'LogLookupFailed', FailureDetail: lookup.ErrorMessage };
+        }
+        if (lookup.Log) {
+          return handleExisting(lookup.Log);
+        }
       }
     }
 

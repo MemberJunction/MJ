@@ -81,6 +81,8 @@ export interface ResolvedEndpoint {
   ValueHash: string;
   RawValue: string;
   Domain?: string;
+  /** Optional loaded entity returned by `ResolveEndpoints` to avoid redundant re-queries. */
+  EndpointEntity?: MJCommunicationEndpointEntity;
 }
 
 export interface PrincipalAttributes {

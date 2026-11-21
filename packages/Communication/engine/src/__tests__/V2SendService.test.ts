@@ -349,6 +349,7 @@ describe('V2SendService chunk fan-out', () => {
       'Pending',
       expect.anything(),
       expect.objectContaining({ Subject: 'Scheduled Hello', Body: 'Body text' }),
+      undefined,
     );
   });
 });

@@ -139,6 +139,7 @@ export class DefaultCommunicationPrincipal extends BaseCommunicationPrincipal {
             ValueHash: a.ValueHash,
             RawValue: a.RawValue,
             Domain: a.Domain,
+            EndpointEntity: ep,
           });
         }
       }
