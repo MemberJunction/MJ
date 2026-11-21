@@ -30,10 +30,10 @@
 ---
 
 ### Step 2: Provider Domain-Auth Contract (`base-types` & `sendgrid`)
-1. In [`BaseProvider.ts`](file:///Users/paulchristmann/Documents/src/bluecypress/mj/packages/Communication/base-types/src/BaseProvider.ts):
+1. In [`BaseProvider.ts`](../../packages/Communication/base-types/src/BaseProvider.ts):
    * Add `'CreateDomainAuthentication' | 'VerifyDomainAuthentication' | 'DeleteDomainAuthentication'` to `ProviderOperation`.
    * Define `DomainDNSRecord`, `CreateDomainAuthResult`, and `VerifyDomainAuthResult` types, with default "not supported" implementations on `BaseCommunicationProvider`.
-2. In [`SendGridProvider.ts`](file:///Users/paulchristmann/Documents/src/bluecypress/mj/packages/Communication/providers/sendgrid/src/SendGridProvider.ts):
+2. In [`SendGridProvider.ts`](../../packages/Communication/providers/sendgrid/src/SendGridProvider.ts):
    * `CreateDomainAuthentication(domain, credentials)`: Calls SendGrid `POST /v3/whitelabel/domains` and returns `ProviderDomainID` + generated SPF/DKIM CNAME/TXT records.
    * `VerifyDomainAuthentication(providerDomainId, domain, credentials)`: Calls SendGrid `POST /v3/whitelabel/domains/{id}/validate` + Node `dns.promises.resolveTxt('_dmarc.' + domain)` check, returning per-record `Validated` flags.
    * `DeleteDomainAuthentication(providerDomainId, credentials)`: Calls SendGrid `DELETE /v3/whitelabel/domains/{id}`.

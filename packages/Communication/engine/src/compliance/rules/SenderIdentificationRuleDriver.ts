@@ -6,8 +6,11 @@ import {
 } from '@memberjunction/communication-types';
 import { ReadBooleanParam } from './RuleParamUtils';
 
+/** Merged `SenderIdentification` requirement. */
 export interface SenderIdentificationMerged {
+  /** The sender must have a `PostalAddress`, and the message must contain it. */
   RequirePostalAddress: boolean;
+  /** The sender must have a `FromName` or `Name`. */
   RequireSenderName: boolean;
 }
 

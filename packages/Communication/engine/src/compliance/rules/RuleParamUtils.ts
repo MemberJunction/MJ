@@ -3,6 +3,7 @@
  * Supports both camelCase and PascalCase keys from JSON rule parameters.
  */
 
+/** Returns the value of the first of the given keys that is present and not null in `params`. */
 export function ReadParamValue<T>(
   params: Record<string, unknown>,
   ...keys: string[]
@@ -15,6 +16,7 @@ export function ReadParamValue<T>(
   return undefined;
 }
 
+/** Reads a boolean parameter, also accepting the strings `'true'` and `'false'`. */
 export function ReadBooleanParam(
   params: Record<string, unknown>,
   ...keys: string[]
@@ -31,6 +33,7 @@ export function ReadBooleanParam(
   return undefined;
 }
 
+/** Reads a finite number parameter, also accepting numeric strings. */
 export function ReadNumberParam(
   params: Record<string, unknown>,
   ...keys: string[]
@@ -48,6 +51,7 @@ export function ReadNumberParam(
   return undefined;
 }
 
+/** Reads a string parameter, trimmed. */
 export function ReadStringParam(
   params: Record<string, unknown>,
   ...keys: string[]

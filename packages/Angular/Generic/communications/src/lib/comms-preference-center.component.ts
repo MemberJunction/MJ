@@ -1,5 +1,6 @@
 import { ChangeDetectorRef, Component, Input, OnInit, inject } from '@angular/core';
 
+/** Sender branding returned with the preferences. */
 export interface PreferenceCenterTemplateContext {
   BrandName?: string;
   LogoURL?: string;
@@ -7,6 +8,7 @@ export interface PreferenceCenterTemplateContext {
   FooterText?: string;
 }
 
+/** One preference and the recipient's current state for it. */
 export interface PreferenceCenterItem {
   ID: string;
   Name: string;
@@ -16,6 +18,7 @@ export interface PreferenceCenterItem {
   State: 'Opted In' | 'Opted Out' | 'Pending';
 }
 
+/** Body of `GET <api-root>/preferences/:token` (JSON). */
 export interface PreferenceCenterResponse {
   Token: string;
   Sender: {
@@ -27,6 +30,11 @@ export interface PreferenceCenterResponse {
   CanUnsubscribeAll: boolean;
 }
 
+/**
+ * Public preference center. Loads a recipient's preferences with the unsubscribe token from their
+ * email and lets them opt in or out of each, or unsubscribe from everything. Uses only `fetch`; it
+ * needs no MemberJunction provider and no signed-in user.
+ */
 @Component({
   selector: 'mj-comms-preference-center',
   standalone: true,
@@ -96,6 +104,7 @@ export class CommsPreferenceCenterComponent implements OnInit {
     }
   }
 
+  /** Loads the preferences for the current token. */
   public async LoadPreferences(): Promise<void> {
     if (!this._token) {
       this.ErrorMessage = 'Invalid preference link.';
@@ -126,16 +135,25 @@ export class CommsPreferenceCenterComponent implements OnInit {
     }
   }
 
+  /**
+   * Flips one preference between `Opted In` and `Opted Out` locally. Nothing is saved until {@link
+   * SavePreferences}.
+   */
   public TogglePreference(pref: PreferenceCenterItem): void {
     pref.State = pref.State === 'Opted In' ? 'Opted Out' : 'Opted In';
     this.StatusMessage = '';
     this.cdr.markForCheck();
   }
 
+  /** Saves the current state of every preference. */
   public async SavePreferences(): Promise<void> {
     await this.submitChoices(false);
   }
 
+  /**
+   * Creates an unsubscribe-all suppression for the recipient with this sender and opts them out of
+   * every listed preference.
+   */
   public async UnsubscribeAll(): Promise<void> {
     await this.submitChoices(true);
   }

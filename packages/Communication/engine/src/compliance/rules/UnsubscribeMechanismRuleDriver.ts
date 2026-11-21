@@ -6,10 +6,14 @@ import {
 } from '@memberjunction/communication-types';
 import { ReadBooleanParam, ReadStringParam } from './RuleParamUtils';
 
+/** How strongly an unsubscribe mechanism is required. Only `'required'` creates an obligation. */
 export type UnsubscribeRequirementLevel = 'none' | 'optional' | 'required';
 
+/** Merged `UnsubscribeMechanism` requirement. */
 export interface UnsubscribeMechanismMerged {
+  /** Requirement level for the RFC 8058 one-click `List-Unsubscribe` headers. */
   OneClickHeader: UnsubscribeRequirementLevel;
+  /** Requirement level for an unsubscribe link in the body. */
   FooterLink: UnsubscribeRequirementLevel;
 }
 

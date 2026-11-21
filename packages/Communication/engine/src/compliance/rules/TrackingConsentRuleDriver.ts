@@ -6,10 +6,17 @@ import {
 } from '@memberjunction/communication-types';
 import { ReadBooleanParam, ReadStringParam } from './RuleParamUtils';
 
+/**
+ * Whether a tracking technique may be used: always (`'allowed'`), only for a recipient who is opted
+ * in to the envelope's preference (`'consent-required'`), or never (`'prohibited'`).
+ */
 export type TrackingPolicy = 'allowed' | 'consent-required' | 'prohibited';
 
+/** Merged `TrackingConsent` requirement. */
 export interface TrackingConsentMerged {
+  /** Policy for the open-tracking pixel. */
   OpenPixel: TrackingPolicy;
+  /** Policy for click-tracking link rewriting. */
   ClickTracking: TrackingPolicy;
 }
 

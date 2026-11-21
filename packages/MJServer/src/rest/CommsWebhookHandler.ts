@@ -48,6 +48,7 @@ import {
     RenderCommsPreferenceHostPage,
 } from './CommsPreferenceHostPage.js';
 
+/** Work-queue topic the public `/comms` routes publish activity onto. */
 export const COMMS_ACTIVITY_TOPIC = 'comms.activity';
 
 /** Standard 43-byte 1x1 transparent GIF89a pixel. */
@@ -58,22 +59,54 @@ export const TRANSPARENT_GIF_1X1 = Buffer.from(
 
 const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/**
+ * Payload of one `comms.activity` work item. A `sendgrid-webhook` item carries the raw webhook
+ * batch; the other sources carry one first-party event identified by token.
+ */
 export interface CommsActivityWorkPayload {
     [key: string]: string | number | boolean | null | Record<string, string> | undefined;
+    /** Which route produced the item. */
     Source: 'sendgrid-webhook' | 'unsubscribe' | 'open-pixel' | 'click-redirect';
+    /** ISO 8601 time the request was received. */
     OccurredAt: string;
+    /**
+     * `MJ: Credentials` ID from the webhook URL, used by the worker to load the verification key
+     * again.
+     */
     CredentialID?: string;
+    /**
+     * The webhook's JSON array as received, or one chunk of it when the batch was larger than the
+     * queue payload limit.
+     */
     RawBody?: string;
+    /**
+     * `true` for a chunk of a split batch. The signature covered the whole body and was verified
+     * before splitting, so the worker does not verify it again.
+     */
     SignatureVerifiedAtIngress?: boolean;
+    /**
+     * The webhook request's headers, including the signature and timestamp the worker re-verifies.
+     */
     Headers?: Record<string, string>;
+    /** The event for a first-party item. */
     EventType?: 'Opened' | 'Clicked' | 'Unsubscribed';
+    /** The log's `TrackingToken`, for opens and clicks. */
     TrackingToken?: string;
+    /** The log's `UnsubscribeToken`, for unsubscribes. */
     UnsubscribeToken?: string;
+    /** The link that was clicked. */
     TargetURL?: string;
+    /** Client IP address of the request. */
     IPAddress?: string;
+    /** Client user agent of the request. */
     UserAgent?: string;
 }
 
+/**
+ * Sender branding shown by the preference center. Read from the sender's `TemplateContext` JSON;
+ * only `BrandName`, `CompanyName`, `LogoURL`, `PrimaryColor`, `FooterText`, `SupportEmail` and
+ * `PrivacyPolicyURL` string values are passed through.
+ */
 export interface PreferenceCenterTemplateContext {
     BrandName?: string;
     LogoURL?: string;
@@ -82,6 +115,7 @@ export interface PreferenceCenterTemplateContext {
     [key: string]: unknown;
 }
 
+/** One preference as shown to a recipient, with the recipient's effective state. */
 export interface PreferenceCenterItem {
     ID: string;
     Name: string;
@@ -91,6 +125,7 @@ export interface PreferenceCenterItem {
     State: MJCommunicationPrincipalPreferenceEntity['State'];
 }
 
+/** Response body of `GET /comms/preferences/:token` when JSON is requested. */
 export interface PreferenceCenterData {
     Token: string;
     Sender: {
@@ -102,6 +137,7 @@ export interface PreferenceCenterData {
     CanUnsubscribeAll: boolean;
 }
 
+/** Input to saving a recipient's choices from the preference center. */
 export interface SavePreferenceChoicesInput {
     Token: string;
     UnsubscribeAll: boolean;
@@ -113,29 +149,45 @@ export interface SavePreferenceChoicesInput {
     UserAgent?: string;
 }
 
+/** Response body of `POST /comms/preferences/:token`. */
 export interface SavePreferenceChoicesResult {
+    /** Whether the token matched a log. */
     Found: boolean;
+    /** Whether the choices were saved. */
     Success: boolean;
+    /** Whether an unsubscribe-all suppression was created. */
     UnsubscribedAll: boolean;
+    /** The preferences with their state after the save. */
     Preferences: PreferenceCenterItem[];
+    /** Why the choices were not saved. */
     ErrorMessage?: string;
 }
 
+/** Input to confirming a double opt-in. */
 export interface ConfirmOptInInput {
     Token: string;
     IPAddress?: string;
     UserAgent?: string;
 }
 
+/** Result of `POST /comms/confirm/:token`. */
 export interface ConfirmOptInResult {
+    /** Whether the token matched a principal preference. */
     Found: boolean;
+    /** Whether the preference is now (or already was) `Opted In`. */
     Confirmed: boolean;
+    /** `true` when the preference was already `Opted In`. */
     AlreadyConfirmed?: boolean;
     State?: MJCommunicationPrincipalPreferenceEntity['State'];
     ConfirmedAt?: string;
     ErrorMessage?: string;
 }
 
+/**
+ * Options for {@link CreateCommsWebhookHandler}. Every data-access hook has a default that reads
+ * and writes through the server's own provider as the system user; the overrides exist for tests
+ * and for hosts with their own storage.
+ */
 export interface CommsWebhookHandlerOptions {
     /** Override for loading the SendGrid ECDSA verification public key for a credential ID. */
     ResolveWebhookKey?: (credentialId?: string) => Promise<string | undefined>;
@@ -581,6 +633,12 @@ function resolveSecretAccessor(hmacSecret?: string | (() => string | undefined))
     return () => process.env.MJ_COMMS_HMAC_SECRET;
 }
 
+/**
+ * Loads the SendGrid Event Webhook public key: from the named credential's `webhookVerificationKey`
+ * (or `verificationKey` / `publicKey`) value, or from `COMMUNICATION_VENDOR_WEBHOOK_KEY__SENDGRID`
+ * when no credential ID is given. Returns `undefined` when the credential is missing or is not a
+ * SendGrid credential.
+ */
 export async function ResolveSendGridWebhookVerificationKey(credentialId?: string): Promise<string | undefined> {
     return defaultResolveWebhookKey(credentialId);
 }

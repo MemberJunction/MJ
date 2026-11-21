@@ -1,9 +1,7 @@
 # MJ Comms V2 — Phase 1: Preferences, Senders & Compliance Data Model Plan
 
-**Status:** Revised per Architect & Design Review  
-**Migration:** [V202611171318__v6.2.x__Communications_V2_Schema.sql](file:///Users/paulchristmann/Documents/src/bluecypress/mj/migrations/v6/V202611171318__v6.2.x__Communications_V2_Schema.sql)  
-**Baseline:** [mj_comms_summary.txt](file:///Users/paulchristmann/Downloads/mj_comms_summary.txt)
-
+**Status:** Implemented. Where this plan and the code differ, the generated entities and [`guides/COMMUNICATIONS_V2_GUIDE.md`](../../guides/COMMUNICATIONS_V2_GUIDE.md) are authoritative.  
+**Migration:** [V202611201300__v6.3.x__Communications_V2_Schema.sql](../../migrations/v6/V202611201300__v6.3.x__Communications_V2_Schema.sql)  
 ---
 
 ## Phase 1–6 Implementation Sequence (At a Glance)
@@ -21,7 +19,7 @@
 
 ## 1. Summary of Model Updates & Refinements
 
-All schema updates are incorporated directly into `CREATE TABLE` / `ALTER TABLE CommunicationLog` in [V202611171318__v6.2.x__Communications_V2_Schema.sql](file:///Users/paulchristmann/Documents/src/bluecypress/mj/migrations/v6/V202611171318__v6.2.x__Communications_V2_Schema.sql):
+All schema updates are incorporated directly into `CREATE TABLE` / `ALTER TABLE CommunicationLog` in [V202611201300__v6.3.x__Communications_V2_Schema.sql](../../migrations/v6/V202611201300__v6.3.x__Communications_V2_Schema.sql):
 
 1. **`Pending` State + Single vs. Double Opt-In Tracking (`CommunicationPrincipalPreference`):**
    * `State` `CHECK` constraint: `('Pending', 'Opted In', 'Opted Out')`. `'Pending'` blocks `Marketing` and `Operational` sends only (allowing transactional confirmation emails).
@@ -45,12 +43,12 @@ All schema updates are incorporated directly into `CREATE TABLE` / `ALTER TABLE 
 
 ## 2. Concrete Examples: Creating & Interpreting Records
 
-### Example 1: AQHA (Single-Tenant US Association, International Members)
+### Example 1: Example Association (Single-Tenant US Association, International Members)
 
 #### A. Setup Records Created
-1. **`CommunicationPrincipal`:** `EntityID = Entity('AQHA: Members')`, `Configuration = '{"Slots":{"FullName":"DisplayName","Jurisdiction":"Addresses.JurisdictionCode","Timezone":"Timezone"}}'`, plus `EntityCommunicationField` pointing to `PrimaryEmail`.
-2. **`CommunicationSender`:** `AQHA` (`IsDefault = 1`, `FromEmail = 'news@aqha.org'`, `PostalAddress = '1600 Quarter Horse Dr, Amarillo, TX 79104'`, `JurisdictionID = Jurisdiction('US')`).
-3. **`CommunicationPreference`:** `Name = 'AQHA Member Newsletter'`, `CommunicationSenderID = AQHA`, `MessageClass = 'Marketing'`, `DefaultState = 'Opted In'`.
+1. **`CommunicationPrincipal`:** `EntityID = Entity('Association: Members')`, `Configuration = '{"Slots":{"FullName":"DisplayName","Jurisdiction":"Addresses.JurisdictionCode","Timezone":"Timezone"}}'`, plus `EntityCommunicationField` pointing to `PrimaryEmail`.
+2. **`CommunicationSender`:** `Example Association` (`IsDefault = 1`, `FromEmail = 'news@association.example'`, `PostalAddress = '100 Example Ave, Springfield, IL 62701'`, `JurisdictionID = Jurisdiction('US')`).
+3. **`CommunicationPreference`:** `Name = 'Member Newsletter'`, `CommunicationSenderID = Example Association`, `MessageClass = 'Marketing'`, `DefaultState = 'Opted In'`.
 4. **`Jurisdiction` & `CommunicationComplianceRegime`:**
    * `US` (contains `US-CA`, `US-TX`), `GB`, `AU`.
    * Active Regimes: `CAN-SPAM` (`AppliesBy = 'Sender'`, `Jurisdiction = US`, `ConsentModel = opt-out`), `UK GDPR` (`AppliesBy = 'Recipient or Sender'`, `Jurisdiction = GB`, `ConsentModel = opt-in`, `ConsentEvidence = required`), and optionally `AU Spam Act` (`AppliesBy = 'Recipient'`, `Jurisdiction = AU`, `ConsentModel = opt-in`).
@@ -73,7 +71,7 @@ Suppose **Molly (`GB`)** submits a newsletter signup form and must confirm via e
 
 1. **Step 1 — Form Submission:**
    * Create `CommunicationPrincipalPreference`:
-     `State = 'Pending'`, `OptInMethod = 'Double'`, `ConfirmedAt = NULL`, `ConsentSource = 'Signup Form'`, `ConsentAt = '2026-11-17T12:00:00Z'`, `ConsentText = 'Yes, send me the AQHA Newsletter'`, `IPAddress = '81.x.x.x'`.
+     `State = 'Pending'`, `OptInMethod = 'Double'`, `ConfirmedAt = NULL`, `ConsentSource = 'Signup Form'`, `ConsentAt = '2026-11-17T12:00:00Z'`, `ConsentText = 'Yes, send me the Member Newsletter'`, `IPAddress = '81.x.x.x'`.
    * Append `CommunicationConsentAuditLog`: `Action = 'Created'`, `NewValue = '{"State":"Pending","OptInMethod":"Double"}'`.
    * *Gate behavior:* Any `Marketing` send to Molly is **BLOCKED** (`PREFERENCE_PENDING`). Only the `Transactional` confirmation email is sent.
 2. **Step 2 — Confirmation Link Clicked:**
@@ -90,7 +88,7 @@ Suppose **Jane** clicks *"Unsubscribe from all"* in March, then explicitly signs
 
 1. **March (`Unsubscribe from all`):**
    * `CommunicationSuppression` row created:
-     `CommunicationEndpointID = <jane@ranch.com>`, `CommunicationSenderID = <AQHA>`, `CommunicationPreferenceID = NULL` (all preferences), `Reason = 'User Unsubscribe'`, `Source = 'One-Click Header'`, `Status = 'Active'`, `EffectiveAt = '2026-03-10T15:00:00Z'`.
+     `CommunicationEndpointID = <jane@example.com>`, `CommunicationSenderID = <Example Association>`, `CommunicationPreferenceID = NULL` (all preferences), `Reason = 'User Unsubscribe'`, `Source = 'One-Click Header'`, `Status = 'Active'`, `EffectiveAt = '2026-03-10T15:00:00Z'`.
 2. **June (`Weekly Newsletter` Signup Form):**
    * Global suppression row is **left untouched** (`Status = 'Active'`).
    * `CommunicationPrincipalPreference` row created for `Weekly Newsletter`:
@@ -102,10 +100,10 @@ Suppose **Jane** clicks *"Unsubscribe from all"* in March, then explicitly signs
 
 ---
 
-### Example 4: TRG Arts (Independent UK & US Theaters)
+### Example 4: Arts Organisation (Independent UK & US Theaters)
 
 #### A. Setup Records Created
-1. **`CommunicationSenderType`:** `Name = 'Theater'`, `EntityID = Entity('TRG: Theaters')`.
+1. **`CommunicationSenderType`:** `Name = 'Theater'`, `EntityID = Entity('Arts: Theaters')`.
 2. **`CommunicationSender` Rows:**
    * `London Theater`: `CommunicationSenderTypeID = 'Theater'`, `RecordID = 'T-LON'`, `JurisdictionID = Jurisdiction('GB')`, `FromEmail = 'boxoffice@londontheatre.co.uk'`, `PostalAddress = '... London, UK'`.
    * `NY Theater`: `CommunicationSenderTypeID = 'Theater'`, `RecordID = 'T-NYC'`, `JurisdictionID = Jurisdiction('US')`, `FromEmail = 'tickets@nytheater.org'`, `PostalAddress = '... New York, NY'`.

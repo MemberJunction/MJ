@@ -42,10 +42,14 @@ import {
     type CommsActivityWorkPayload,
 } from '../rest/CommsWebhookHandler.js';
 
+/** Handler key (and topic name) for chunked V2 sends. */
 export const COMMS_DISPATCH_HANDLER_KEY = 'comms.dispatch';
+/** Handler key (and topic name) for templated render batches. */
 export const COMMS_RENDER_HANDLER_KEY = 'comms.render';
+/** Handler key (and topic name) for delivery and engagement activity. */
 export const COMMS_ACTIVITY_HANDLER_KEY = 'comms.activity';
 
+/** Payload of one `comms.dispatch` work item: one chunk of a V2 send. */
 export interface CommsDispatchWorkPayload {
     CommunicationRunID?: string;
     Envelope: SendingEnvelope;
@@ -101,6 +105,10 @@ export function ConfigureCommsV2WorkQueue(
     });
 }
 
+/**
+ * Sends one `comms.dispatch` chunk through `CommunicationEngine.Send()`. A send that cannot start
+ * is retried; an item without an envelope or recipients is dead-lettered.
+ */
 @RegisterClass(BaseWorkHandler, COMMS_DISPATCH_HANDLER_KEY)
 export class CommsDispatchWorkHandler extends BaseWorkHandler<CommsDispatchWorkPayload & WorkJson> {
     public async Handle(
@@ -130,6 +138,10 @@ export class CommsDispatchWorkHandler extends BaseWorkHandler<CommsDispatchWorkP
     }
 }
 
+/**
+ * Renders and sends one `comms.render` batch through
+ * `TemplatedCommunicationService.HandleRenderBatch()`.
+ */
 @RegisterClass(BaseWorkHandler, COMMS_RENDER_HANDLER_KEY)
 export class CommsRenderWorkHandler extends BaseWorkHandler<RenderBatchPayload & WorkJson> {
     public async Handle(
@@ -148,6 +160,11 @@ export class CommsRenderWorkHandler extends BaseWorkHandler<RenderBatchPayload &
     }
 }
 
+/**
+ * Normalizes one `comms.activity` item into activity events and applies them with
+ * `CommsActivityWorker.ProcessActivityBatch()`. The item is retried when any event fails; events
+ * already applied are skipped on the retry when they carry a provider event ID.
+ */
 @RegisterClass(BaseWorkHandler, COMMS_ACTIVITY_HANDLER_KEY)
 export class CommsActivityWorkHandler extends BaseWorkHandler<CommsActivityWorkPayload & WorkJson> {
     public async Handle(

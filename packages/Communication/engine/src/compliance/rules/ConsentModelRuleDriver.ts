@@ -6,8 +6,14 @@ import {
 } from '@memberjunction/communication-types';
 import { ReadBooleanParam, ReadStringParam } from './RuleParamUtils';
 
+/** Merged `ConsentModel` requirement. */
 export interface ConsentModelMerged {
+  /** `'opt-in'` when any applicable regime requires prior consent, else `'opt-out'`. */
   Model: 'opt-in' | 'opt-out';
+  /**
+   * Whether an existing customer may be sent to without a recorded opt-in. `true` only when every
+   * opt-in regime allows it.
+   */
   SoftOptIn: boolean;
 }
 

@@ -406,9 +406,11 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
     }
 
     /**
-     * Routes V1 `RunEntityCommunication()` through V2 `EvaluateEligibility()` + `TemplatedCommunicationService`
-     * with V1 defaults (`IsDefault = 1` sender, `"General updates"` preference, `MessageClass = 'Marketing'`,
-     * and `AutoAppendComplianceFooter = true`), preserving V1's `EntityCommunicationResult` shape.
+     * Routes V1 `RunEntityCommunication()` through the V2 pipeline, preserving V1's
+     * `EntityCommunicationResult` shape. The envelope uses the default sender (`IsDefault = 1`),
+     * `MessageClass = 'Operational'`, no preference, and the provider named in the V1 params.
+     * Messages without templates go straight to `CommunicationEngine.Send()`; templated messages go
+     * through `TemplatedCommunicationService` with `AutoAppendComplianceFooter = true`.
      */
     private async runEntityCommunicationV2(
         params: EntityCommunicationParams,

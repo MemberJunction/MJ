@@ -26,7 +26,7 @@
 
 ### Step 2: Public Preference Center Angular Element (`packages/Angular/Generic/communications`)
 
-Following the [`bizapps-orders` checkout-element blueprint](file:///Users/paulchristmann/Documents/src/bluecypress/bizapps-orders/packages/Angular/scripts/checkout-element-entry.ts):
+Following the checkout-element blueprint used by the `bizapps-orders` Open App (`packages/Angular/scripts/checkout-element-entry.ts` in that repository):
 * **Standalone Angular Component (`<mj-comms-preference-center>`):**
   * Lives in `packages/Angular/Generic/communications` (no `MJExplorer` shell, no Auth0/MSAL providers, no Router imports).
   * Bootstrapped via `createApplication({ providers: [provideZoneChangeDetection(), { provide: CSP_NONCE, useFactory: readCspNonce }] })` + `createCustomElement()`, bundled with the Angular linker so **no `unsafe-eval` / JIT** is required.
@@ -40,7 +40,7 @@ Following the [`bizapps-orders` checkout-element blueprint](file:///Users/paulch
 
 ### Step 3: `MJServer` Public Host Page & Capability-Scoped REST API (`packages/MJServer`)
 
-Mounted in `MountPublicCoreRoutes()` ([`coreRoutes.ts`](file:///Users/paulchristmann/Documents/src/bluecypress/mj/packages/MJServer/src/coreRoutes.ts)), following [`checkout-host-page.ts`](file:///Users/paulchristmann/Documents/src/bluecypress/bizapps-orders/packages/Server/src/checkout-host-page.ts):
+Mounted in `MountPublicCoreRoutes()` ([`coreRoutes.ts`](../../packages/MJServer/src/coreRoutes.ts)), following `checkout-host-page.ts` in the `bizapps-orders` Open App:
 * **Security Headers:** Per-response `cspNonce`, `default-src 'none'`, `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`.
 * **`GET /api/comms/preferences/:token`:**
   * `Accept: text/html` $\rightarrow$ serves the CSP-nonce HTML shell hosting `<mj-comms-preference-center token="..." api-root="..." csp-nonce="...">` (with a minimal vanilla HTML confirm-button fallback if the element bundle is not configured, covering `W3-8`).

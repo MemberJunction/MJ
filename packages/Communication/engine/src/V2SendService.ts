@@ -48,31 +48,67 @@ import {
   PrincipalRecordKey,
 } from './DefaultCommunicationPrincipal';
 
+/**
+ * Settings for the V2 send pipeline, applied with
+ * `CommunicationEngine.Instance.ConfigureV2Dispatch()`. MJServer sets `BaseTrackingURL`,
+ * `TrackingHMACSecret` and `EnqueueWork` at startup.
+ */
 export interface V2DispatchConfig {
+  /** Recipients per `comms.dispatch` work item. Defaults to 50. */
   ChunkSize?: number;
+  /**
+   * A send with more recipients than this is handed to the work queue when `EnqueueWork` is set.
+   * Defaults to 100.
+   */
   AsyncThreshold?: number;
+  /**
+   * Public base URL of the `/comms` routes, used to build unsubscribe, open-pixel and
+   * click-tracking links. May or may not end in `/comms`. When unset, links are relative
+   * (`/comms/...`) and will not work in an email.
+   */
   BaseTrackingURL?: string;
+  /**
+   * Secret that signs click-tracking links. Falls back to the `MJ_COMMS_HMAC_SECRET` environment
+   * variable. When neither is set, links are not rewritten.
+   */
   TrackingHMACSecret?: string;
+  /** Enforcement mode for senders that have none of their own. Defaults to `'Enforce'`. */
   InstanceEnforcementMode?: EnforcementMode;
+  /** Publishes a work item. When unset, every send runs inline in the calling process. */
   EnqueueWork?: (
     taskType: 'comms.dispatch' | 'comms.send',
     payload: Record<string, unknown>,
   ) => Promise<void>;
 }
 
+/**
+ * The parts of a message that principal hooks must not change. Frozen before the hooks run and
+ * hashed before and after.
+ */
 export interface ProtectedComplianceSnapshot {
+  /** Sender address: the sender's `FromEmail`, else `FromPhone`. */
   From: string;
+  /** Recipient address (the endpoint's normalized value). */
   To: string;
+  /** `List-Unsubscribe` header value, when the one-click header is required. */
   ListUnsubscribe?: string;
+  /** `List-Unsubscribe-Post` header value, when the one-click header is required. */
   ListUnsubscribePost?: string;
+  /** HTML compliance footer, when a footer link or postal address is required. */
   FooterHTML?: string;
+  /** Plain-text compliance footer. */
   FooterText?: string;
+  /** `MJ: Communication Logs` ID of the message. */
   LogID: string;
 }
 
 const DEFAULT_CHUNK_SIZE = 50;
 const DEFAULT_ASYNC_THRESHOLD = 100;
 
+/**
+ * Returns the hex HMAC-SHA256 of `trackingToken + ':' + targetUrl`. This is the `sig` parameter of
+ * a click-tracking link.
+ */
 export function ComputeTrackingSignature(
   trackingToken: string,
   targetUrl: string,
@@ -83,6 +119,7 @@ export function ComputeTrackingSignature(
     .digest('hex');
 }
 
+/** Checks a click-tracking signature in constant time. */
 export function VerifyTrackingSignature(
   trackingToken: string,
   targetUrl: string,
@@ -109,6 +146,11 @@ function buildCommsRouteUrl(baseUrl: string, subpath: string): string {
     : `${cleanBase}/comms${subpath}`;
 }
 
+/**
+ * Rewrites every absolute `http(s)` link in `<a href>` tags to
+ * `<baseUrl>/comms/click/<trackingToken>?u=<target>&sig=<signature>`. Links listed in
+ * `excludedUrls` (the unsubscribe and preference-center links) are left as they are.
+ */
 export function RewriteLinksForTracking(
   html: string,
   trackingToken: string,
@@ -134,6 +176,10 @@ export function RewriteLinksForTracking(
   });
 }
 
+/**
+ * Adds the 1x1 open-tracking image (`<baseUrl>/comms/open/<trackingToken>.gif`) before `</body>`,
+ * or at the end when there is no body tag.
+ */
 export function InjectOpenPixel(
   html: string,
   trackingToken: string,
@@ -146,6 +192,10 @@ export function InjectOpenPixel(
   return `${html}${pixel}`;
 }
 
+/**
+ * Returns the SHA-256 hex digest of a snapshot's canonical JSON, used to detect a change to the
+ * protected elements.
+ */
 export function ComputeProtectedElementsHash(snapshot: ProtectedComplianceSnapshot): string {
   const canonical = JSON.stringify({
     From: snapshot.From,
@@ -159,12 +209,15 @@ export function ComputeProtectedElementsHash(snapshot: ProtectedComplianceSnapsh
   return createHash('sha256').update(canonical, 'utf8').digest('hex');
 }
 
-/**
- * Orchestrates Communications V2 endpoint resolution, pre-flight compliance eligibility,
- * protected compliance injection, tracking instrumentation, and chunked/inline dispatch.
- */
+/** How long senders, sender ancestry, sender template context and preferences are cached, in milliseconds. */
 const CACHE_TTL_MS = 60_000;
 
+/**
+ * The V2 send pipeline behind `CommunicationEngine.Send()`, `EvaluateEligibility()` and
+ * `ResolveEndpoints()`: resolves endpoints, runs the compliance gate, writes the log, adds the
+ * protected compliance elements and tracking, and dispatches inline or through the work queue. Use
+ * it through `CommunicationEngine.Instance`; the engine owns the configured instance.
+ */
 export class V2SendService {
   private config: V2DispatchConfig = {};
   private senderCache = new Map<string, { value: MJCommunicationSenderEntity; expiresAt: number }>();
@@ -172,11 +225,16 @@ export class V2SendService {
   private senderTemplateCtxCache = new Map<string, { value: Record<string, unknown>; expiresAt: number }>();
   private preferenceCache = new Map<string, { value: MJCommunicationPreferenceEntity; expiresAt: number }>();
 
+  /** Merges settings into the current configuration and clears the sender and preference caches. */
   public Configure(config: V2DispatchConfig): void {
     this.config = { ...this.config, ...config };
     this.ClearCache();
   }
 
+  /**
+   * Drops the 60-second caches of senders, sender ancestry, sender template context and
+   * preferences. Call it after changing those rows when the change must apply at once.
+   */
   public ClearCache(): void {
     this.senderCache.clear();
     this.senderAncestryCache.clear();
@@ -184,6 +242,10 @@ export class V2SendService {
     this.preferenceCache.clear();
   }
 
+  /**
+   * Resolves endpoints for principal records by calling each entity's principal driver. Returns a
+   * map keyed by `<EntityID lower-cased>:<RecordID>`.
+   */
   public async ResolveEndpoints(
     records: PrincipalRecordRef[],
     channelID: string,
@@ -212,6 +274,10 @@ export class V2SendService {
     return out;
   }
 
+  /**
+   * Runs the compliance gate for each recipient without sending or writing a log. Endpoint rows may
+   * be created as a side effect of endpoint resolution.
+   */
   public async EvaluateEligibility(
     params: EvaluateEligibilityParams,
     contextUser: UserInfo,
@@ -334,6 +400,13 @@ export class V2SendService {
     return { Sendable: sendable, Blocked: blocked };
   }
 
+  /**
+   * Sends to the recipients. Checks the sender, the caller's sender permission, the provider and
+   * (when the provider requires it) the verified sending domain; then either publishes
+   * `comms.dispatch` chunks or evaluates and dispatches inline.
+   *
+   * @param getProvider - Returns the provider instance for a provider name.
+   */
   public async Send(
     params: SendToPrincipalsParams,
     contextUser: UserInfo,

@@ -10,6 +10,10 @@ import type {
 } from '@memberjunction/core-entities';
 import type { MessageClass } from '@memberjunction/communication-types';
 
+/**
+ * The compliance metadata a {@link JurisdictionResolver} reads. `CommunicationEngineBase.Instance`
+ * satisfies it; tests can pass plain arrays.
+ */
 export interface ComplianceMetadataSource {
   Jurisdictions: MJJurisdictionEntity[];
   JurisdictionMembers: MJJurisdictionMemberEntity[];
@@ -19,14 +23,24 @@ export interface ComplianceMetadataSource {
   ComplianceRegimeJurisdictions: MJCommunicationComplianceRegimeJurisdictionEntity[];
 }
 
+/**
+ * The regimes that apply to one sender/recipient pair, with the expanded jurisdiction IDs that
+ * selected them.
+ */
 export interface ActiveRegimesResult {
+  /** Active regimes that apply. */
   Regimes: MJCommunicationComplianceRegimeEntity[];
+  /** IDs of the recipient's jurisdiction and every group that contains it. */
   ExpandedRecipientJurisdictions: string[];
+  /** IDs of the sender's jurisdiction and every group that contains it. */
   ExpandedSenderJurisdictions: string[];
 }
 
+/** All applicable rules of one rule type. */
 export interface GroupedComplianceRules {
+  /** The rule type, which names the driver class. */
   RuleType: MJCommunicationComplianceRuleTypeEntity;
+  /** The matching rules, one per regime that defines this rule type. */
   Rules: MJCommunicationComplianceRegimeRuleEntity[];
 }
 
@@ -144,6 +158,10 @@ export class JurisdictionResolver {
     return result;
   }
 
+  /**
+   * Resolves an `MJ: Jurisdictions` ID or `Code` (case-insensitive) to the ID of an active
+   * jurisdiction, or `null`.
+   */
   public ResolveJurisdictionID(idOrCode: string | null | undefined): string | null {
     if (!idOrCode || !idOrCode.trim()) return null;
     const trimmed = idOrCode.trim();
@@ -153,12 +171,17 @@ export class JurisdictionResolver {
     return byCode ? byCode.ID : null;
   }
 
+  /**
+   * Returns the jurisdiction's ID followed by the IDs of every group that contains it, directly or
+   * through other groups. Empty when the jurisdiction is unknown.
+   */
   public ExpandJurisdiction(idOrCode: string | null | undefined): string[] {
     const id = this.ResolveJurisdictionID(idOrCode);
     if (!id) return [];
     return this.expandedById.Get(id) ?? [id];
   }
 
+  /** Maps jurisdiction IDs to their codes, skipping unknown IDs. */
   public GetJurisdictionCodes(jurisdictionIds: string[]): string[] {
     const codes: string[] = [];
     for (const id of jurisdictionIds) {
@@ -170,6 +193,10 @@ export class JurisdictionResolver {
     return codes;
   }
 
+  /**
+   * Returns the IANA time zones of the most specific jurisdiction in the expansion that has a
+   * built-in mapping. Empty when none does.
+   */
   public GetJurisdictionTimezones(idOrCode: string | null | undefined): string[] {
     const expanded = this.ExpandJurisdiction(idOrCode);
     const seen = new Set<string>();
@@ -196,6 +223,11 @@ export class JurisdictionResolver {
     return zones;
   }
 
+  /**
+   * Selects the active regimes that apply. A regime applies when its `AppliesBy` side (recipient,
+   * sender, or either) has a jurisdiction attached to the regime, or when that side's jurisdiction
+   * is unknown and the regime has `AppliesWhenJurisdictionUnknown`.
+   */
   public CollectActiveRegimes(params: {
     RecipientJurisdiction?: string | null;
     SenderJurisdiction?: string | null;
@@ -238,6 +270,10 @@ export class JurisdictionResolver {
     };
   }
 
+  /**
+   * Returns the active rules of the given regimes that match the channel and message class (a rule
+   * with no channel or no class matches all), grouped by active rule type.
+   */
   public CollectRulesByType(
     regimes: MJCommunicationComplianceRegimeEntity[],
     channelID: string,

@@ -6,7 +6,9 @@ import {
 } from '@memberjunction/communication-types';
 import { ReadBooleanParam } from './RuleParamUtils';
 
+/** Merged `RequireDoubleOptIn` requirement. */
 export interface RequireDoubleOptInMerged {
+  /** Whether a confirmed (`Double`) opt-in is required. */
   Required: boolean;
 }
 

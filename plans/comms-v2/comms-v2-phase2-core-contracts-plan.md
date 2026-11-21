@@ -1,7 +1,7 @@
 # MJ Comms V2 — Phase 2: Core Deliverability Primitive & Compliance Gate
 
 **Phase:** 2 of 6 (`packages/Communication/base-types` & `@memberjunction/communication-engine`)  
-**Prerequisite:** **Phase 1** ([V202611171318__v6.2.x__Communications_V2_Schema.sql](file:///Users/paulchristmann/Documents/src/bluecypress/mj/migrations/v6/V202611171318__v6.2.x__Communications_V2_Schema.sql) + `mj codegen`)
+**Prerequisite:** **Phase 1** ([V202611201300__v6.3.x__Communications_V2_Schema.sql](../../migrations/v6/V202611201300__v6.3.x__Communications_V2_Schema.sql) + `mj codegen`)
 
 ---
 
@@ -11,7 +11,7 @@ Comms V2 explicitly separates **deliverability** from **template rendering**:
 
 1. **Deliverability Primitive ("Message-Based" — Implemented in Phase 2):**
    * `CommunicationEngine.EvaluateEligibility()`, `ResolveEndpoints()`, and `Send()` accept **pre-rendered** `Subject`, `PreviewText`, `Body`, and `HTMLBody` (shared or per-recipient `PayloadOverride`).
-   * Zero template rendering or entity-relation data fetching inside Phase 2—built as a standalone primitive for engines like Rasa or AI agents.
+   * Zero template rendering or entity-relation data fetching inside Phase 2—built as a standalone primitive for external engines or AI agents.
 2. **Template-Based Entry Point (Legacy V1 + Future Phase 5 Layer 2):**
    * **Existing V1 Callers:** `CommunicationEngine.SendMessages()` / `SendSingleMessage()` and `EntityCommunicationsEngine` remain intact for backward compatibility (defaulting to `IsDefault = 1` sender and `Operational` / `Transactional` class, while closing the direct-provider bypass).
    * **Future Phase 5 Wrapper (`ITemplatedCommunicationService.RenderAndSend`):** Documented in this phase as a separable Layer 2 wrapper that calls `EvaluateEligibility()` $\rightarrow$ WorkQueue/inline template rendering (`comms.render`) $\rightarrow$ `Send()`.
@@ -22,7 +22,7 @@ Comms V2 explicitly separates **deliverability** from **template rendering**:
 
 | Workstream | Exact Dependency / Seam | How Phase 2 Stays Isolated Now |
 | :--- | :--- | :--- |
-| **Phase 1 (Schema + CodeGen)** *(Hard Prereq)* | `V202611171318__v6.2.x__Communications_V2_Schema.sql` + `mj codegen` | Must run first so `@memberjunction/core-entities` exports strongly-typed entities and `CHECK`-derived unions. |
+| **Phase 1 (Schema + CodeGen)** *(Hard Prereq)* | `V202611201300__v6.3.x__Communications_V2_Schema.sql` + `mj codegen` | Must run first so `@memberjunction/core-entities` exports strongly-typed entities and `CHECK`-derived unions. |
 | **Phase 3 (Providers & Endpoints)** | `SendGridProvider` headers/`mj_log_id`, webhook & open-pixel routes | Phase 2 defines `MessageResult.ProviderMessageID`, `NormalizedActivityEvent`, and `BaseCommunicationProvider` guardrails; verified via `DryRun: true` and mock providers. |
 | **Phase 4 (Metadata Seed)** | Starter `Jurisdiction`s, `RuleType`s, `CAN-SPAM`/`GDPR`, `MJ: Users`, default `Company` sender | Phase 2 unit tests use in-memory metadata fixtures; engine degrades gracefully when regime tables are empty. |
 | **Phase 6 (WorkQueue Enhancements)** | `PublishRequest.ScheduledAt` (for `QuietHours` deferral / `SendAt`) + per-key rate limiting | Phase 2 publishes immediate `comms.dispatch` / `comms.send` jobs now and records `CommunicationLog.ScheduledAt` for Phase 6. |
@@ -33,7 +33,7 @@ Comms V2 explicitly separates **deliverability** from **template rendering**:
 
 ### Step 1: Contracts & Metadata Cache (`packages/Communication/base-types`)
 
-1. **V2 Dispatch & Telemetry Types** *(new `src/V2Types.ts`, exported from [`src/index.ts`](file:///Users/paulchristmann/Documents/src/bluecypress/mj/packages/Communication/base-types/src/index.ts))*:
+1. **V2 Dispatch & Telemetry Types** *(new `src/V2Types.ts`, exported from [`src/index.ts`](../../packages/Communication/base-types/src/index.ts))*:
    * `SendingEnvelope` (`SenderID?`, `PreferenceID?`, `MessageClass`, `ChannelID`, `ProviderID?`, `ScheduledAt?`, `TrackOpens?`, `DryRun?`, `CorrelationData?`).
    * `MessagePayload` (`Subject?`, `PreviewText?`, `Body?`, `HTMLBody?`, `Headers?`).
    * `PrincipalRecordRef`, `SendToPrincipalsParams`, `SendV2Result`, `ResolvedEndpoint`, `PrincipalAttributes` (`FullName`, `Timezone`, `PreferredLanguage`, `IsExistingCustomer?`).
@@ -44,10 +44,10 @@ Comms V2 explicitly separates **deliverability** from **template rendering**:
    * `BaseCommunicationPrincipal`: Default metadata-driven implementations + batch-shaped overrides (`ResolveEndpoints`, `ResolveJurisdiction`, `ResolveAttributes`, `PreProcess`, `PostProcess`, `OnActivity`).
    * `PrincipalMessageContext`: Read-only `Envelope`, `Principal`, `Endpoint`, `Payload` + controlled verbs (`AddContent`, `SetHeader` rejecting protected headers, `RequestMutation`).
    * `BaseCommunicationSender`, `BaseComplianceRule` (`MergeStrictest`, `Evaluate`), `BaseCommunicationSuppressionPolicy`.
-3. **Provider & Result Updates ([`src/BaseProvider.ts`](file:///Users/paulchristmann/Documents/src/bluecypress/mj/packages/Communication/base-types/src/BaseProvider.ts))**:
+3. **Provider & Result Updates ([`src/BaseProvider.ts`](../../packages/Communication/base-types/src/BaseProvider.ts))**:
    * Add `ProviderMessageID?: string` to `MessageResult`.
    * Close direct provider bypass (`W2-5`): `BaseCommunicationProvider.SendSingleMessage()` requires an engine-verified compliance token, or runs a **batch-friendly / cached** endpoint suppression check covering V1 `SendMessages()` and `Notifications`.
-4. **Metadata Cache ([`src/BaseEngine.ts`](file:///Users/paulchristmann/Documents/src/bluecypress/mj/packages/Communication/base-types/src/BaseEngine.ts)) (`W2-10`)**:
+4. **Metadata Cache ([`src/BaseEngine.ts`](../../packages/Communication/base-types/src/BaseEngine.ts)) (`W2-10`)**:
    * Cache small global tables (`CommunicationPrincipal`, `CommunicationSenderType`, `Jurisdiction`, `JurisdictionMember`, `CommunicationComplianceRegime`, `CommunicationComplianceRuleType`, `CommunicationComplianceRegimeRule`, `CommunicationComplianceRegimeJurisdiction`) in `Config()`.
    * Load `CommunicationSender` (with ancestors) and `CommunicationPreference` **on demand** with a bounded LRU/TTL cache for multi-tenant scale.
 5. **Polymorphic FK Metadata**:
@@ -107,7 +107,7 @@ Implement and `@RegisterClass(BaseComplianceRule, ...)` the 9 starter rule drive
 
 ### Step 5: Unit Test Suite (Vitest)
 
-* **Compliance Gate Matrix:** AQHA (`US-CA`, `US-TX`, `GB`, `AU`), TRG Arts (UK vs. US independent theaters), Option B recency override, Double Opt-In (`Pending` $\rightarrow$ `Opted In` confirmation allowed), `softOptIn`, unknown jurisdiction, and `QuietHours` multi-zone fallback.
+* **Compliance Gate Matrix:** single-tenant association (`US-CA`, `US-TX`, `GB`, `AU`), multi-sender arts organisation (UK vs. US independent theaters), Option B recency override, Double Opt-In (`Pending` $\rightarrow$ `Opted In` confirmation allowed), `softOptIn`, unknown jurisdiction, and `QuietHours` multi-zone fallback.
 * **Two-Stage Fan-Out & Write-Amplification Tests:** Chunking threshold (inline vs. `comms.dispatch`), set-based 24-hour guarded timestamp updates.
 * **Protected-Element & Body Compliance Tests:** `EvaluateEligibility` returning body obligations; `Send()` rejecting missing postal address or unsubscribe link; `PostProcess` running before protected injection + open-pixel HTML injection.
 * **Idempotency & V1 Bypass Tests:** `Status = 'Sending'` crash semantics (`Marketing` vs. `Transactional`) and `BaseCommunicationProvider` fallback blocking V1 suppressed sends.

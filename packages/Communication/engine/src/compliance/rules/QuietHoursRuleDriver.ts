@@ -6,16 +6,29 @@ import {
 } from '@memberjunction/communication-types';
 import { ReadNumberParam, ReadParamValue, ReadStringParam } from './RuleParamUtils';
 
+/**
+ * A daily window, in the recipient's local time, during which messages are held. `StartHour` is
+ * inclusive and `EndHour` exclusive (0-23); a window may wrap past midnight.
+ */
 export interface QuietHoursWindow {
   StartHour: number;
   EndHour: number;
 }
 
+/** Merged `QuietHours` requirement: the union of every applicable regime's windows. */
 export interface QuietHoursMerged {
   Windows: QuietHoursWindow[];
 }
 
+/**
+ * The rule context plus the time zones of the recipient's jurisdiction, which the gate adds for
+ * every rule driver.
+ */
 export interface QuietHoursEvalContext extends ComplianceEvalContext {
+  /**
+   * IANA time zones of the recipient's jurisdiction. A message is held when any of them is inside a
+   * window.
+   */
   JurisdictionTimezones?: string[];
 }
 

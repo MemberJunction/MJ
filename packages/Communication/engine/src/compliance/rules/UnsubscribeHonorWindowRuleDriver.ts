@@ -6,7 +6,15 @@ import {
 } from '@memberjunction/communication-types';
 import { ReadNumberParam } from './RuleParamUtils';
 
+/**
+ * Merged `UnsubscribeHonorWindow` requirement. Recorded in the audit snapshot only; MJ applies an
+ * unsubscribe as soon as its activity event is processed.
+ */
 export interface UnsubscribeHonorWindowMerged {
+  /**
+   * Shortest number of hours within which an unsubscribe must be honored; `null` when no regime
+   * sets one.
+   */
   MaxHours: number | null;
 }
 

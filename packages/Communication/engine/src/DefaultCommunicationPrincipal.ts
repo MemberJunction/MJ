@@ -33,14 +33,27 @@ interface NormalizedAddress {
   Domain?: string;
 }
 
+/**
+ * Returns the map key used for a principal record throughout the V2 pipeline: `<EntityID
+ * lower-cased>:<RecordID>`.
+ */
 export function PrincipalRecordKey(ref: Pick<PrincipalRecordRef, 'EntityID' | 'RecordID'>): string {
   return `${ref.EntityID.toLowerCase()}:${ref.RecordID}`;
 }
 
+/** Returns the SHA-256 hex digest of a normalized address: the `ValueHash` of an endpoint. */
 export function ComputeEndpointHash(normalizedValue: string): string {
   return createHash('sha256').update(normalizedValue, 'utf8').digest('hex');
 }
 
+/**
+ * Normalizes a raw address. A value containing `@` (or any value when `channelType` is `'email'`)
+ * is lower-cased as an email; anything else is reduced to its digits, keeping a leading `+`.
+ * Returns `null` for an empty value.
+ *
+ * @param raw - The address as entered.
+ * @param channelType - The base message type's `Type`, such as `Email` or `SMS`.
+ */
 export function NormalizeEndpointAddress(raw: string, channelType?: string): NormalizedAddress | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
@@ -85,6 +98,11 @@ export class DefaultCommunicationPrincipal extends BaseCommunicationPrincipal {
     this.runViewProvider = runViewProvider;
   }
 
+  /**
+   * Reads each record's address fields (from `RecordData`, else from the database), creates missing
+   * `MJ: Communication Endpoints` and `MJ: Communication Endpoint Principals` rows, and returns the
+   * endpoints in address-field priority order.
+   */
   public async ResolveEndpoints(
     records: PrincipalRecordRef[],
     channelID: string,
@@ -151,6 +169,10 @@ export class DefaultCommunicationPrincipal extends BaseCommunicationPrincipal {
     return result;
   }
 
+  /**
+   * Reads the jurisdiction from the field named by `Configuration.Slots.Jurisdiction` on the
+   * entity's principal row. Returns `null` for every record when no slot is configured.
+   */
   public async ResolveJurisdiction(
     records: PrincipalRecordRef[],
     contextUser: UserInfo,
@@ -177,6 +199,10 @@ export class DefaultCommunicationPrincipal extends BaseCommunicationPrincipal {
     return result;
   }
 
+  /**
+   * Reads `FullName`, `Timezone`, `PreferredLanguage` and `IsExistingCustomer` from the fields
+   * named in `Configuration.Slots`, defaulting each slot to a field of the same name.
+   */
   public async ResolveAttributes(
     records: PrincipalRecordRef[],
     contextUser: UserInfo,

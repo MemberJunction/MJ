@@ -24,7 +24,7 @@ Implements `ITemplatedCommunicationService.RenderAndSend(params: RenderAndSendPa
    * **Filters out `Blocked` recipients before any template-param `RunView`s or rendering run.**
    * Captures `SenderTemplateContext` (`Sender.*`), `PrincipalAttributes` (`Recipient.*`), and body-level `ComplianceObligations` (`RequireSenderPostalAddress`, `RequireFooterUnsubscribe`, `SenderPostalAddress`) per `SendableRecipient`.
 2. **Template Param Alignment & Context Assembly:**
-   * Reuses [`ValidateTemplateContextParamAlignment()`](file:///Users/paulchristmann/Documents/src/bluecypress/mj/packages/Communication/entity-comm-server/src/entity-communications.ts#L249) across `SubjectTemplateID`, `BodyTemplateID`, and `HTMLBodyTemplateID`.
+   * Reuses [`ValidateTemplateContextParamAlignment()`](../../packages/Communication/entity-comm-server/src/entity-communications.ts#L249) across `SubjectTemplateID`, `BodyTemplateID`, and `HTMLBodyTemplateID`.
    * Merges context per recipient:
      `{ ...Templates.SharedContextData, ...Recipient.ContextData, Sender: SenderTemplateContext, Recipient: PrincipalAttributes, Comms: { Obligations } }` + entity-relation data from `GetRelatedData()` (scoped strictly to `Sendable` PKs).
 3. **WorkQueue Rendering Pipeline (`comms.render` $\rightarrow$ `comms.send` — Standard Mechanism):**
@@ -36,11 +36,11 @@ Implements `ITemplatedCommunicationService.RenderAndSend(params: RenderAndSendPa
 
 ### Step 2: Migrating V1 Template Callers (`EntityCommunicationsEngine`, `SendMessages`, `MJServer`)
 
-1. **`EntityCommunicationsEngine.RunEntityCommunication()` ([`entity-communications.ts`](file:///Users/paulchristmann/Documents/src/bluecypress/mj/packages/Communication/entity-comm-server/src/entity-communications.ts#L21)):**
+1. **`EntityCommunicationsEngine.RunEntityCommunication()` ([`entity-communications.ts`](../../packages/Communication/entity-comm-server/src/entity-communications.ts#L21)):**
    * Maps `EntityCommunicationParams` $\rightarrow$ `RenderAndSendParams` (defaulting to `IsDefault = 1` sender and `Operational` class when not specified) and delegates to `TemplatedCommunicationService.RenderAndSend()`, preserving V1's `EntityCommunicationResult` return shape.
-2. **`EntityCommunicationsResolver` ([`EntityCommunicationsResolver.ts`](file:///Users/paulchristmann/Documents/src/bluecypress/mj/packages/MJServer/src/resolvers/EntityCommunicationsResolver.ts#L172)):**
+2. **`EntityCommunicationsResolver` ([`EntityCommunicationsResolver.ts`](../../packages/MJServer/src/resolvers/EntityCommunicationsResolver.ts#L172)):**
    * Keeps the existing GraphQL `RunEntityCommunicationByViewID` query working seamlessly via `EntityCommunicationsEngine` (and optionally exposes V2 sender/preference args).
-3. **`CommunicationEngine.SendMessages()` / `SendSingleMessage()` ([`Engine.ts`](file:///Users/paulchristmann/Documents/src/bluecypress/mj/packages/Communication/engine/src/Engine.ts#L101-L205)):**
+3. **`CommunicationEngine.SendMessages()` / `SendSingleMessage()` ([`Engine.ts`](../../packages/Communication/engine/src/Engine.ts#L101-L205)):**
    * Preserves synchronous V1 signatures for `SendSingleMessageAction` and `NotificationEngine` (`NotificationEngine` tagged `Transactional` for system alerts), routing through `EvaluateEligibility()` $\rightarrow$ `ProcessedMessageServer.Process()` $\rightarrow$ `Send()` inline.
 
 ---

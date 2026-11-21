@@ -121,6 +121,9 @@ MJServer uses a layered configuration system with the following priority (highes
 | `MJ_AGENT_RUN_WATCHDOG_SWEEP_INTERVAL_MS` | How often the agent-run watchdog sweeps for orphaned runs, once this process has run an agent (ms); `0` = startup sweep only | `300000` |
 | `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL` | `MJ: AI Models` name every process embeds locally with — see [Changing the local embedding model](#changing-the-local-embedding-model) | highest-PowerRank active local model |
 | `MJ_LOG_GRAPHQL_VARIABLES` | Enable redacted verbose echo of GraphQL variables to stdout — see [Debugging GraphQL requests](#debugging-graphql-requests) | `false` |
+| `MJ_COMMS_HMAC_SECRET` | Secret that signs and verifies Communications V2 click-tracking links. Long random value, identical on every instance. Unset: links are not rewritten and `/comms/click` rejects every request — see [Communications V2](#communications-v2) | (optional) |
+| `COMMUNICATION_VENDOR_WEBHOOK_KEY__SENDGRID` | SendGrid Event Webhook public verification key for `POST /comms/webhooks/sendgrid`. Unset: that route answers `401` | (optional) |
+| `MJ_COMMS_PREFERENCE_ELEMENT_SRC` | URL of the `<mj-comms-preference-center>` element bundle used by `GET /comms/preferences/:token` | bundle from `@memberjunction/ng-communications`, else the built-in page |
 
 ### Configuration File (`mj.config.cjs`)
 
@@ -729,6 +732,112 @@ Key endpoints:
 | `/api/v1/metadata/entities` | GET | List entity metadata |
 | `/api/v1/users/current` | GET | Get current user |
 
+## Communications V2
+
+MJServer hosts the server side of [Communications V2](../../guides/COMMUNICATIONS_V2_GUIDE.md): the public
+routes recipients and providers call, the work-queue handlers that send and that process delivery events, the
+startup wiring that connects the Communication engine to the work queue, and the admin operations.
+
+### Public `/comms` routes
+
+`MountPublicCoreRoutes()` (`src/coreRoutes.ts`) mounts the router from `CreateCommsWebhookHandler()` at
+`ApiRoute('/comms')`, ahead of the authentication middleware, so the routes sit under `MJAPI_BASE_PATH` like
+every other core route. `/comms` is a reserved root for server extensions. No route requires a signed-in user;
+each verifies its own capability.
+
+| Route | Capability | Behavior |
+|-------|------------|----------|
+| `POST /comms/webhooks/sendgrid[/:credentialId]` | SendGrid ECDSA signature over the raw body, 10-minute replay window | Publishes the batch to `comms.activity`; `202`, or `401` / `400` / `503` |
+| `GET /comms/open/:token.gif` | Tracking token of an existing log | Publishes `Opened`; always returns a 1x1 GIF |
+| `GET /comms/click/:token?u=&sig=` | HMAC-SHA256 of `token:u` under `MJ_COMMS_HMAC_SECRET` | Publishes `Clicked`; `302` to `u`, or `400` when the signature fails |
+| `POST /comms/unsubscribe[/:token]` | Unsubscribe token of an existing log | RFC 8058 one-click target; publishes `Unsubscribed` |
+| `GET /comms/unsubscribe[/:token]` | Unsubscribe token | `302` to the sender's `PreferenceCenterURL`, else to `/comms/preferences/:token` |
+| `GET /comms/preferences/:token` | Unsubscribe token | Preference center page; JSON when `Accept: application/json` |
+| `POST /comms/preferences/:token` | Unsubscribe token | Saves `{ Preferences: [{ PreferenceID, State }] }` or `{ UnsubscribeAll: true }` |
+| `GET` / `POST /comms/confirm/:token` | Confirmation token of a principal preference | `GET` renders a confirm button; `POST` confirms the double opt-in |
+| `GET /comms/preferences-element.js` | none | The preference center element bundle, or `404` |
+
+Tokens are UUID v4 values stored on `MJ: Communication Logs`. Requests whose token matches no log are rejected
+(unsubscribe) or ignored (open, click) before anything is queued. HTML pages are served with a per-response CSP
+nonce, `frame-ancestors 'none'`, `Referrer-Policy: no-referrer` and `Cache-Control: no-store`.
+
+The links placed in outgoing messages are built from `ApiRoute('/comms', { absolute: true })`, so
+`MJAPI_PUBLIC_URL` must be the address recipients can reach. See
+[`packages/MJAPI/CLAUDE.md`](../MJAPI/CLAUDE.md) for how the public URL and base path are set.
+
+A host that builds its own Express app can mount the router itself:
+
+```typescript
+import { ApiRoute, CreateCommsWebhookHandler } from '@memberjunction/server';
+
+app.use(ApiRoute('/comms'), CreateCommsWebhookHandler({
+    HmacSecret: () => process.env.MJ_COMMS_HMAC_SECRET,
+    PreferenceElementSrc: 'https://cdn.example.org/mj/preferences-element.js',
+}));
+```
+
+`CommsWebhookHandlerOptions` also lets a host replace how the webhook key is resolved, how activity is
+published, how tokens are verified and how preference data is loaded and saved; each has TSDoc.
+
+### Work-queue handlers
+
+`src/services/CommsWorkQueueHandlers.ts` registers three `BaseWorkHandler`s. Their topics and subscriptions
+are seeded from `metadata/work-queue-topics` and `metadata/work-queue-subscriptions`.
+
+| Handler key / topic | Class | Work |
+|---------------------|-------|------|
+| `comms.dispatch` | `CommsDispatchWorkHandler` | One chunk of a large `CommunicationEngine.Send()` |
+| `comms.render` | `CommsRenderWorkHandler` | One batch of a templated send (`TemplatedCommunicationService.HandleRenderBatch()`) |
+| `comms.activity` | `CommsActivityWorkHandler` | A provider webhook batch, or one open, click or unsubscribe; applied with `CommsActivityWorker.ProcessActivityBatch()` |
+
+A handler returns `Retry` when the send cannot start or any activity event fails, and `DeadLetter` for a
+payload missing its required fields. The seeded subscriptions allow 5 attempts with a 120-second lease.
+Activity processing is safe to retry for events that carry a provider event ID.
+
+Webhook batches larger than about 180 KB are split at ingress into several `comms.activity` items; the signature
+is verified on the whole body before splitting. Smaller batches are queued as received and their signature is
+verified again by the worker.
+
+At startup, on every instance, `ConfigureCommsV2WorkQueue()` points the Communication engine at the public
+`/comms` URL, hands it `MJ_COMMS_HMAC_SECRET`, gives it and `TemplatedCommunicationService` a publisher onto
+`WorkQueueEngine` when `workQueue.enabled` is true, and starts the scheduled sweep that sends deferred and
+scheduled messages. The handlers themselves run only where the work-queue host runs: instances whose server
+role is `all` or `worker` (see `MJ_SERVER_ROLE`).
+
+### Admin operations
+
+Six [Remote Operations](../../guides/REMOTE_OPERATIONS_GUIDE.md) in `src/operations/CommsAdminOperations.ts`
+back the Communications admin dashboard:
+
+| Operation key | Input | Output |
+|---------------|-------|--------|
+| `Communications.SimulateComplianceGate` | `CommsSimulateComplianceGateInput` | `CommsSimulateComplianceGateOutput` (`ResultJSON` is the full gate result) |
+| `Communications.CreateSendingDomain` | `CommsSendingDomainInput` | `CommsSendingDomainAuthOutput` (`DNSRecordsJSON`) |
+| `Communications.VerifySendingDomain` | `CommsSendingDomainInput` | `CommsSendingDomainAuthOutput` |
+| `Communications.DeleteSendingDomain` | `CommsSendingDomainInput` | `CommsAdminMutationOutput` |
+| `Communications.RevokeSuppression` | `CommsRevokeSuppressionInput` | `CommsAdminMutationOutput` (`WarningMessage` when the provider-side suppression could not be cleared) |
+| `Communications.BlockEndpoint` | `CommsBlockEndpointInput` | `CommsBlockEndpointOutput` |
+
+Every operation requires the caller to be an Owner or to hold the `Communications: Admin` authorization
+(seeded, granted to the `Developer` role). Anyone else receives `FORBIDDEN`.
+
+### Configuration
+
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `MJ_COMMS_HMAC_SECRET` (env) | none | Signs click-tracking links and verifies `/comms/click`. A secret: generate with `openssl rand -hex 32`, set the same value on every instance, never commit it. Unset, click tracking is off. Rotating it breaks the click links in mail already sent. |
+| `COMMUNICATION_VENDOR_WEBHOOK_KEY__SENDGRID` (env) | none | Public key that verifies SendGrid Event Webhook posts to `/comms/webhooks/sendgrid`. Unset, the route answers `401`. With `/comms/webhooks/sendgrid/:credentialId` the key comes from that `MJ: Credentials` row's `webhookVerificationKey` value instead. |
+| `MJ_COMMS_PREFERENCE_ELEMENT_SRC` (env) | none | URL of the preference center element bundle. Unset, MJServer serves the bundle from the installed `@memberjunction/ng-communications` at `/comms/preferences-element.js`, or the built-in page when the bundle is not built. |
+| `MJAPI_PUBLIC_URL`, `MJAPI_BASE_PATH` (env) | host and port | Base of every link in an outgoing message. |
+| `workQueue.enabled` (`mj.config.cjs`) | `true` | Enables the queue publisher and the handlers. When `false`, sends run inline regardless of size. |
+| `rateLimiting.routes.commsWebhooks` | `{ enabled: true, windowMs: 60000, maxRequests: 1200 }` | Per-IP limit on `POST /comms/webhooks/*` |
+| `rateLimiting.routes.commsTracking` | `{ enabled: true, windowMs: 60000, maxRequests: 1200 }` | Per-IP limit on `/comms/open/*` and `/comms/click/*` |
+| `rateLimiting.routes.commsUnsubscribe` | `{ enabled: true, windowMs: 60000, maxRequests: 300 }` | Per-IP limit on `/comms/unsubscribe*`, `/comms/preferences/*`, `/comms/confirm/*` |
+| `rateLimiting.routes.comms` | `{ enabled: true, windowMs: 60000, maxRequests: 600 }` | Fallback passed to the handler for the three groups above |
+
+The per-route limiters apply even when the global `rateLimiting.enabled` switch is off. A request over the
+limit receives `429`.
+
 ## SQL Logging
 
 The server includes a runtime SQL logging system for debugging and migration generation. Requires `Owner`-level user privileges.
@@ -949,6 +1058,7 @@ Each decision runs as the requesting user, through the `Default Decision` prompt
 |--------|-------------|
 | `serve(resolverPaths, app?, options?)` | Main server initialization function |
 | `createApp()` | Creates a new Express application instance |
+| `CreateCommsWebhookHandler(options?)` | Express router for the public Communications V2 `/comms` routes — see [Communications V2](#communications-v2) |
 
 #### Types
 

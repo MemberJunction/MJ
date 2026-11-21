@@ -31,8 +31,12 @@ import { BaseSingleton, EscapeSQLString, UUIDsEqual } from '@memberjunction/glob
 import { TemplateEngineServer } from '@memberjunction/templates';
 import type { RequestProvider } from './entity-communications';
 
+/**
+ * Settings for {@link TemplatedCommunicationService}, applied with `Configure()`. MJServer sets
+ * `EnqueueWork` and `ResolveUser` at startup.
+ */
 export interface TemplatedCommunicationConfig {
-  /** Number of sendable recipients per `comms.render` batch. Defaults to 500. */
+  /** Number of sendable recipients per `comms.render` batch. Defaults to 50. */
   BatchSize?: number;
   /** Optional work-queue publisher for `comms.render` batches. */
   EnqueueWork?: (taskType: 'comms.render', payload: RenderBatchPayload) => Promise<void>;
@@ -40,6 +44,10 @@ export interface TemplatedCommunicationConfig {
   ResolveUser?: (userID: string) => UserInfo | undefined;
 }
 
+/**
+ * A sendable recipient as carried in a `comms.render` work item: the gate's decision plus the
+ * caller's per-recipient data.
+ */
 export interface RenderBatchRecipient {
   Principal: PrincipalRecordRef;
   Endpoint: ResolvedEndpoint;
@@ -52,22 +60,30 @@ export interface RenderBatchRecipient {
   CorrelationData?: Record<string, unknown>;
 }
 
+/** Payload of one `comms.render` work item. */
 export interface RenderBatchPayload {
+  /** `MJ: Communication Runs` ID shared by every batch of the send. */
   CommunicationRunID: string;
+  /** The envelope of the send. */
   Envelope: SendingEnvelope;
+  /** `MJ: Entities` ID of the recipients' entity, for related-entity template parameters. */
   EntityID?: string;
+  /** Template IDs and shared template data, as given to `RenderAndSend()`. */
   Templates: {
     SubjectTemplateID?: string;
     BodyTemplateID?: string;
     HTMLBodyTemplateID?: string;
     SharedContextData?: Record<string, unknown>;
   };
+  /** Whether to append the compliance footer when the rendered body lacks it. */
   AutoAppendComplianceFooter: boolean;
+  /** The sendable recipients in this batch. */
   Recipients: RenderBatchRecipient[];
   /** Acting user ID so async `comms.render` workers enforce RLS/FLS when loading template data. */
   ActingUserID?: string;
 }
 
+/** The rendered content for one recipient. */
 export interface RenderedRecipientPayload {
   Recipient: RenderBatchRecipient;
   Subject?: string;
@@ -75,9 +91,13 @@ export interface RenderedRecipientPayload {
   HTMLBody?: string;
 }
 
+/** Result of {@link TemplatedCommunicationService.RenderAndPreview}. */
 export interface RenderPreviewResult {
+  /** Number of recipients passed in. */
   TotalCount: number;
+  /** Rendered content for each sendable recipient. */
   Rendered: RenderedRecipientPayload[];
+  /** Recipients the gate blocked. */
   Blocked: EvaluateEligibilityResult['Blocked'];
 }
 
@@ -116,14 +136,27 @@ export class TemplatedCommunicationService
     super();
   }
 
+  /** The process-wide instance. */
   public static get Instance(): TemplatedCommunicationService {
     return super.getInstance<TemplatedCommunicationService>();
   }
 
+  /** Merges settings into the current configuration. */
   public Configure(config: TemplatedCommunicationConfig): void {
     this.config = { ...this.config, ...config };
   }
 
+  /**
+   * Evaluates eligibility first, so nothing is rendered for a blocked recipient; then renders and
+   * sends. In `'Inline'` mode, or when no work-queue publisher is configured, rendering and sending
+   * happen in the calling process and per-recipient outcomes are returned. Otherwise the sendable
+   * recipients are published as `comms.render` batches and the result has `IsAsyncRun: true`.
+   *
+   * @param params - Envelope, recipients, templates and render options.
+   * @param contextUser - The acting user. Template data is loaded as this user, in async batches
+   *   too.
+   * @param provider - Metadata/RunView provider for the request, when not the default.
+   */
   public async RenderAndSend(
     params: RenderAndSendParams,
     contextUser?: UserInfo,

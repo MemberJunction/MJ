@@ -160,30 +160,45 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
    public get ProviderMessageTypes(): MJCommunicationProviderMessageTypeEntity[] {
       return this._providerMessageTypes;
    }
+   /**
+    * Cached `MJ: Communication Principals` rows: the entities registered as message recipients and
+    * their driver classes.
+    */
    public get Principals(): MJCommunicationPrincipalEntity[] {
       return this._principals;
    }
+   /** Cached `MJ: Communication Sender Types` rows. */
    public get SenderTypes(): MJCommunicationSenderTypeEntity[] {
       return this._senderTypes;
    }
+   /** Cached `MJ: Jurisdictions` rows. */
    public get Jurisdictions(): MJJurisdictionEntity[] {
       return this._jurisdictions;
    }
+   /** Cached `MJ: Jurisdiction Members` rows: which jurisdictions belong to which groups. */
    public get JurisdictionMembers(): MJJurisdictionMemberEntity[] {
       return this._jurisdictionMembers;
    }
+   /** Cached `MJ: Communication Compliance Regimes` rows, including disabled ones. */
    public get ComplianceRegimes(): MJCommunicationComplianceRegimeEntity[] {
       return this._complianceRegimes;
    }
+   /** Cached `MJ: Communication Compliance Rule Types` rows. */
    public get ComplianceRuleTypes(): MJCommunicationComplianceRuleTypeEntity[] {
       return this._complianceRuleTypes;
    }
+   /** Cached `MJ: Communication Compliance Regime Rules` rows. */
    public get ComplianceRegimeRules(): MJCommunicationComplianceRegimeRuleEntity[] {
       return this._complianceRegimeRules;
    }
+   /**
+    * Cached `MJ: Communication Compliance Regime Jurisdictions` rows: which jurisdictions each
+    * regime is attached to.
+    */
    public get ComplianceRegimeJurisdictions(): MJCommunicationComplianceRegimeJurisdictionEntity[] {
       return this._complianceRegimeJurisdictions;
    }
+   /** Cached `MJ: Communication Suppression Policies` rows. */
    public get SuppressionPolicies(): MJCommunicationSuppressionPolicyEntity[] {
       return this._suppressionPolicies;
    }

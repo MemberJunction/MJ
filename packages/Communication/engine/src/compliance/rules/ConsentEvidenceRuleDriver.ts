@@ -6,9 +6,16 @@ import {
 } from '@memberjunction/communication-types';
 import { ReadBooleanParam } from './RuleParamUtils';
 
+/**
+ * Merged `ConsentEvidence` requirement: which proof of consent must be on the principal preference
+ * row.
+ */
 export interface ConsentEvidenceMerged {
+  /** `ConsentSource` must be recorded. */
   RequireSource: boolean;
+  /** `ConsentAt` must be recorded. */
   RequireTimestamp: boolean;
+  /** `ConsentText` (the wording the recipient agreed to) must be recorded. */
   RequireConsentText: boolean;
 }
 

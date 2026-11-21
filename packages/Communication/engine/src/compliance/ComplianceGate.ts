@@ -14,11 +14,25 @@ import type { MJCommunicationSuppressionEntity } from '@memberjunction/core-enti
 import { JurisdictionResolver } from './JurisdictionResolver';
 import type { QuietHoursEvalContext } from './rules/QuietHoursRuleDriver';
 
+/**
+ * Per-recipient inputs to {@link ComplianceGate.Evaluate} that are not part of the rule context.
+ */
 export interface ComplianceGateEvalOptions {
+  /**
+   * Candidate suppressions. The gate keeps only those that are active, unexpired and match the
+   * recipient, sender chain, channel, preference and message class.
+   */
   Suppressions: MJCommunicationSuppressionEntity[];
+  /**
+   * The recipient's jurisdiction as an `MJ: Jurisdictions` ID or `Code`; `null` or omitted when
+   * unknown.
+   */
   RecipientJurisdiction?: string | null;
+  /** The sender's jurisdiction. Defaults to the sender's `JurisdictionID`. */
   SenderJurisdiction?: string | null;
+  /** Enforcement mode used when the sender has none. Defaults to `'Enforce'`. */
   InstanceEnforcementMode?: EnforcementMode;
+  /** Unsubscribe link to place in the returned obligations, when already known. */
   UnsubscribeURL?: string;
 }
 
@@ -67,6 +81,10 @@ export class ComplianceGate {
     this.resolver = resolver ?? new JurisdictionResolver();
   }
 
+  /**
+   * Evaluates one recipient. Synchronous and free of I/O: every row it needs is on `ctx`, in
+   * `options`, or in the engine's metadata cache.
+   */
   public Evaluate(
     ctx: ComplianceEvalContext,
     options: ComplianceGateEvalOptions,

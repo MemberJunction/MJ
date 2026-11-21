@@ -945,6 +945,10 @@ export class SendGridProvider extends BaseCommunicationProvider {
     }
 }
 
+/**
+ * The SendGrid suppression lists {@link SendGridProvider.RemoveSuppression} can clear.
+ * `'unsubscribes'` is the global unsubscribe list.
+ */
 export type SendGridSuppressionType = 'bounces' | 'blocks' | 'spam_reports' | 'invalid_emails' | 'unsubscribes';
 
 /**

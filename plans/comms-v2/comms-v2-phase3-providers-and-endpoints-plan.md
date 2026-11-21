@@ -20,14 +20,14 @@
 ## 2. Step-by-Step Implementation Plan
 
 ### Step 1: Extend Webhook Contract (`packages/Communication/base-types`)
-In [`src/BaseProvider.ts`](file:///Users/paulchristmann/Documents/src/bluecypress/mj/packages/Communication/base-types/src/BaseProvider.ts):
+In [`src/BaseProvider.ts`](../../packages/Communication/base-types/src/BaseProvider.ts):
 * Extend `NormalizedNotification.Kind` to `'message' | 'lifecycle' | 'activity'`.
 * Add `ActivityEvents?: NormalizedActivityEvent[]` to `NormalizedNotification`.
 
 ---
 
 ### Step 2: `SendGridProvider` Updates (`packages/Communication/providers/sendgrid`)
-In [`src/SendGridProvider.ts`](file:///Users/paulchristmann/Documents/src/bluecypress/mj/packages/Communication/providers/sendgrid/src/SendGridProvider.ts):
+In [`src/SendGridProvider.ts`](../../packages/Communication/providers/sendgrid/src/SendGridProvider.ts):
 1. **Outbound Payload:**
    * Pass `message.Headers` **verbatim** (do not auto-prefix `X-` onto `List-Unsubscribe` or `List-Unsubscribe-Post`).
    * Keep `trackingSettings.subscriptionTracking.enable = false` (MJ owns unsubscribes); disable SendGrid `openTracking` and `clickTracking` when MJ's first-party pixel / link tracking are active so opens and clicks are not double-counted or double-wrapped.
@@ -48,7 +48,7 @@ In [`src/SendGridProvider.ts`](file:///Users/paulchristmann/Documents/src/bluecy
 ---
 
 ### Step 3: `MJServer` Public Routes (`packages/MJServer`)
-Mounted in `MountPublicCoreRoutes()` ([`src/coreRoutes.ts`](file:///Users/paulchristmann/Documents/src/bluecypress/mj/packages/MJServer/src/coreRoutes.ts)) **ahead of JSON body-parser middleware** for raw-body signature verification:
+Mounted in `MountPublicCoreRoutes()` ([`src/coreRoutes.ts`](../../packages/MJServer/src/coreRoutes.ts)) **ahead of JSON body-parser middleware** for raw-body signature verification:
 1. **`POST /api/comms/webhooks/sendgrid/:credentialId`** (and default route without `:credentialId`):
    * Capture exact raw body bytes + headers into `WebhookNotificationInput`.
    * Load verification key from the specified `MJ: Credential` (`credentialId`), call `SendGridProvider.ParseNotification(input)`.
@@ -84,7 +84,7 @@ Mounted in `MountPublicCoreRoutes()` ([`src/coreRoutes.ts`](file:///Users/paulch
      * Appends `CommunicationConsentAuditLog` with clear `Source` (`One-Click Header (Mailbox Provider)` vs. `Provider Webhook` vs. `Preference Center`).
    * Invokes `BaseCommunicationSuppressionPolicy` and `BaseCommunicationPrincipal.OnActivity()`.
 3. **Optional MJ Activity Store Subscriber (Off by Default):**
-   * Separate WorkQueue subscriber that writes `CommunicationActivity` rows when enabled, leaving `comms.activity` clean for external analytics (Rasa/AIDP) by default.
+   * Separate WorkQueue subscriber that writes `CommunicationActivity` rows when enabled, leaving `comms.activity` clean for external analytics (third-party engagement tools) by default.
 
 ---
 

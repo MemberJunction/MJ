@@ -179,6 +179,165 @@ sequenceDiagram
 | `SendSingleMessage(provider, type, message, run?, preview?, credentials?)` | Send one message |
 | `SendMessages(provider, type, message, recipients, preview?, credentials?)` | Send to multiple recipients |
 | `CreateDraft(message, providerName, contextUser?, credentials?)` | Create a draft message |
+| `Send(params, contextUser?)` | V2: compliance-gated send to principals and endpoints |
+| `EvaluateEligibility(params, contextUser?)` | V2: run the compliance gate without sending |
+| `ResolveEndpoints(records, channelID, contextUser?)` | V2: resolve (and register) the endpoints of principal records |
+| `ConfigureV2Dispatch(config)` | V2: set chunking, tracking URL, HMAC secret, enforcement default and work-queue publisher |
+| `StartScheduledDeferralSweep(intervalMs?)` / `StopScheduledDeferralSweep()` | V2: periodically send due deferred and scheduled messages |
+| `ProcessDueScheduledLogs(contextUser?, batchSize?)` | V2: run one sweep pass |
+| `CheckV1ComplianceGate(channelID, address, messageClass?, contextUser?)` / `CheckV1ComplianceGateBatch(...)` | Endpoint-status and suppression check used by the V1 send path |
+
+## Communications V2
+
+V2 sends are addressed to principals (records) and endpoints (addresses) under a sender, a channel and a message
+class. Every recipient passes through a compliance gate before anything reaches the provider, and delivery
+events flow back into suppressions and consent. Read the
+[Communications V2 Guide](../../../guides/COMMUNICATIONS_V2_GUIDE.md) for the data flow, the entities, the
+deployment requirements and the extension points; this section is the package's API.
+
+### What this package adds
+
+| Export | Purpose |
+|--------|---------|
+| `CommunicationEngine.Send()`, `EvaluateEligibility()`, `ResolveEndpoints()` | The V2 entry points (table above) |
+| `V2SendService`, `V2DispatchConfig` | The pipeline behind those methods and its settings. Use it through the engine. |
+| `ComplianceGate`, `ComplianceGateEvalOptions` | The gate. Synchronous, no I/O; usable directly in tests and simulators. |
+| `JurisdictionResolver`, `ComplianceMetadataSource` | Jurisdiction expansion and regime/rule selection over the cached metadata |
+| `ConsentModelRuleDriver`, `RequireDoubleOptInRuleDriver`, `ConsentEvidenceRuleDriver`, `ConsentExpiryRuleDriver`, `UnsubscribeMechanismRuleDriver`, `UnsubscribeHonorWindowRuleDriver`, `SenderIdentificationRuleDriver`, `QuietHoursRuleDriver`, `TrackingConsentRuleDriver` | The nine built-in rule drivers |
+| `ReadParamValue`, `ReadBooleanParam`, `ReadNumberParam`, `ReadStringParam` | Helpers for reading rule parameters in camelCase or PascalCase |
+| `DefaultCommunicationPrincipal` | Metadata-driven principal driver, used for any entity without its own |
+| `PrincipalRecordKey`, `NormalizeEndpointAddress`, `ComputeEndpointHash` | Keys, address normalization and the endpoint hash |
+| `CommsActivityWorker` | Applies `NormalizedActivityEvent`s: endpoint health, suppressions, opt-outs, audit log, activity rows; `EraseEndpointPII()` |
+| `SoftBounceThresholdPolicy` | Built-in suppression policy |
+| `ComputeTrackingSignature`, `VerifyTrackingSignature`, `RewriteLinksForTracking`, `InjectOpenPixel`, `ComputeProtectedElementsHash` | Tracking and integrity helpers |
+
+### Sending
+
+```typescript
+import { CommunicationEngine } from '@memberjunction/communication-engine';
+
+await CommunicationEngine.Instance.Config(false, contextUser);
+
+const result = await CommunicationEngine.Instance.Send(
+    {
+        Envelope: {
+            ChannelID: emailChannelID,             // MJ: Communication Base Message Types ID
+            MessageClass: 'Marketing',
+            PreferenceID: newsletterPreferenceID,  // optional; enables the opt-in check
+            // SenderID omitted: the active sender with IsDefault = 1
+        },
+        Payload: { Subject: 'October newsletter', HTMLBody: '<p>Hello</p>', Body: 'Hello' },
+        Recipients: [{ Principal: { EntityID: contactsEntityID, RecordID: contactID } }],
+    },
+    contextUser,
+);
+
+if (!result.Success) {
+    throw new Error(result.ErrorMessage);          // the send could not start
+}
+for (const outcome of result.Outcomes ?? []) {
+    // Status: 'Sent' | 'Blocked' | 'Deferred' | 'Failed'
+    console.log(outcome.Status, outcome.Reason, outcome.Detail);
+}
+```
+
+`Send()` checks, in order: an active sender (the default one when `SenderID` is omitted), the caller's
+permission on it (`MJ: Communication Sender Permissions`; a sender chain with no rows is unrestricted), the
+provider, and a verified sending domain when the provider has `RequireVerifiedDomain`. Any of these failing
+returns `Success: false`. After that, blocked or failed recipients are reported per recipient and do not change
+`Success`.
+
+With more recipients than `AsyncThreshold` and a configured `EnqueueWork`, the send is published as
+`comms.dispatch` chunks and returns `IsAsyncRun: true` without `Outcomes`.
+
+### Checking eligibility
+
+```typescript
+const { Sendable, Blocked } = await CommunicationEngine.Instance.EvaluateEligibility(
+    { Envelope: envelope, Recipients: recipients },
+    contextUser,
+);
+for (const b of Blocked) console.log(b.Reason, b.Detail);
+for (const s of Sendable) console.log(s.Decision, s.DeferUntil, s.Obligations);
+```
+
+### Using the gate directly
+
+```typescript
+import { ComplianceGate, JurisdictionResolver } from '@memberjunction/communication-engine';
+
+const gate = new ComplianceGate(new JurisdictionResolver());   // reads CommunicationEngineBase.Instance
+const decision = gate.Evaluate(
+    {
+        Sender: sender,                     // MJCommunicationSenderEntity
+        SenderAncestors: [],
+        Endpoint: endpoint,                 // MJCommunicationEndpointEntity
+        MessageClass: 'Marketing',
+        ChannelID: emailChannelID,
+        Now: new Date(),
+    },
+    { Suppressions: suppressions, RecipientJurisdiction: 'DE' },
+);
+// decision.Decision: 'Allowed' | 'Blocked' | 'Deferred'
+```
+
+`JurisdictionResolver` takes an optional `ComplianceMetadataSource`, so tests can supply plain arrays instead of
+a configured engine.
+
+### Processing activity
+
+```typescript
+import { CommsActivityWorker } from '@memberjunction/communication-engine';
+
+const worker = new CommsActivityWorker();
+const batch = await worker.ProcessActivityBatch(events, contextUser);   // NormalizedActivityEvent[]
+// batch.ProcessedCount, batch.DuplicateCount, batch.ErrorCount
+
+const erased = await worker.EraseEndpointPII('person@example.org', emailChannelID, contextUser);
+```
+
+MJAPI calls `ProcessActivityBatch` from its `comms.activity` work-queue handler; call it yourself only when you
+ingest events another way.
+
+### Configuration
+
+```typescript
+CommunicationEngine.Instance.ConfigureV2Dispatch({
+    ChunkSize: 50,                     // recipients per comms.dispatch item
+    AsyncThreshold: 100,               // above this, publish to the work queue
+    BaseTrackingURL: 'https://api.example.org/comms',
+    TrackingHMACSecret: secret,
+    InstanceEnforcementMode: 'Enforce',
+    EnqueueWork: async (topic, payload) => { /* publish to your queue */ },
+});
+```
+
+| Setting | Default | Notes |
+|---------|---------|-------|
+| `ChunkSize` | 50 | |
+| `AsyncThreshold` | 100 | |
+| `BaseTrackingURL` | none | Base of unsubscribe, open and click links. MJAPI sets it to its public `/comms` URL. Unset, links are relative and do not work in mail. |
+| `TrackingHMACSecret` | `MJ_COMMS_HMAC_SECRET` | Signs click-tracking links. With neither set, links are not rewritten. |
+| `InstanceEnforcementMode` | `Enforce` | Used for senders with no `EnforcementMode`. |
+| `EnqueueWork` | none | Without it every send runs inline. MJAPI supplies a work-queue publisher. |
+
+Each call merges into the existing configuration and clears the 60-second caches of senders and preferences.
+
+| Environment variable | Required | Purpose |
+|----------------------|----------|---------|
+| `MJ_COMMS_HMAC_SECRET` | For click tracking | Fallback for `TrackingHMACSecret`. A secret: long, random, the same on every instance. Unset, click links are left as written. |
+
+MJAPI configures all of this at startup (`ConfigureCommsV2WorkQueue` in `@memberjunction/server`); a standalone
+host must call `ConfigureV2Dispatch()` and, if it wants deferred sends, `StartScheduledDeferralSweep()` itself.
+
+### V1 sends are gated too
+
+`SendSingleMessage()` now checks the To, CC and BCC addresses against endpoint status and active suppressions
+before calling the provider. The class comes from `message.ContextData.MessageClass` (`Transactional` when
+absent), so a V1 send is blocked by hard bounces, invalid addresses and erased endpoints, and additionally by
+complaints, unsubscribes, admin blocks and policy suppressions when the caller marks it `Operational` or
+`Marketing`. A blocked send returns `Success: false` and marks its log `Failed`. Addresses with no endpoint row
+are always allowed.
 
 ## Dependencies
 

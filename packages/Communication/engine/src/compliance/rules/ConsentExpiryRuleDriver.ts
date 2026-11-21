@@ -6,8 +6,11 @@ import {
 } from '@memberjunction/communication-types';
 import { ReadBooleanParam, ReadNumberParam } from './RuleParamUtils';
 
+/** Merged `ConsentExpiry` requirement. */
 export interface ConsentExpiryMerged {
+  /** Days after `ConsentAt` that consent stays valid; `null` for no limit. */
   MaxDays: number | null;
+  /** When `true`, `MaxDays` expires only implied consent, not an express opt-in. */
   ImpliedOnly: boolean;
 }
 

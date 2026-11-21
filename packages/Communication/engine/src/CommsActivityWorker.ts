@@ -39,21 +39,35 @@ const DEFAULT_SOFT_BOUNCE_EXPIRY_DAYS = 30;
 const MS_PER_DAY = 86_400_000;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Options for {@link CommsActivityWorker.ProcessActivityBatch}. */
 export interface ProcessActivityOptions {
+  /** Write an `MJ: Communication Activities` row per event. Defaults to `true`. */
   PersistActivity?: boolean;
 }
 
+/** Counts for one processed batch. */
 export interface ProcessActivityBatchResult {
+  /** Events applied. */
   ProcessedCount: number;
+  /**
+   * Events skipped because their `ProviderEventID` was already recorded or repeated in the batch.
+   */
   DuplicateCount: number;
+  /** Events that failed. Their deduplication claim is released so a retry can process them. */
   ErrorCount: number;
 }
 
+/** Result of {@link CommsActivityWorker.EraseEndpointPII}. */
 export interface EraseEndpointPIIResult {
+  /** Whether an endpoint matched. */
   Found: boolean;
+  /** The erased endpoint. */
   CommunicationEndpointID?: string;
+  /** Logs whose `RecipientAddress` was cleared. */
   ScrubbedLogs: number;
+  /** Activity rows whose `IPAddress`, `UserAgent` and `RawPayload` were cleared. */
   ScrubbedActivities: number;
+  /** Always 0: the consent audit log is append-only and is not changed by erasure. */
   ScrubbedAuditLogs: number;
 }
 
@@ -134,8 +148,12 @@ export class CommsActivityWorker {
 
   /**
    * GDPR erasure routine: marks the endpoint `Erased`, clears `NormalizedValue`
-   * while preserving `ValueHash` and all `CommunicationSuppression` rows, and scrubs
-   * `RecipientAddress`, `IPAddress`, and `UserAgent` on logs, activity, and audit rows.
+   * while preserving `ValueHash` and all `CommunicationSuppression` rows, clears
+   * `RecipientAddress` on the endpoint's logs, and clears `IPAddress`, `UserAgent` and
+   * `RawPayload` on its activity rows. Consent audit log rows are append-only and are not changed.
+   *
+   * @param endpointIdOrAddress - An `MJ: Communication Endpoints` ID, or a raw address.
+   * @param channelID - `MJ: Communication Base Message Types` ID, used when matching by address.
    */
   public async EraseEndpointPII(
     endpointIdOrAddress: string,
@@ -906,6 +924,14 @@ export class CommsActivityWorker {
     }
   }
 
+  /**
+   * Creates an active suppression and its consent audit entry. For use by suppression policy
+   * drivers.
+   *
+   * @param fields - The suppression's scope (endpoint and/or principal, sender, preference,
+   *   channel), reason, source and dates.
+   * @returns The saved suppression. Throws when the save fails.
+   */
   public async CreatePolicySuppression(
     fields: Parameters<CommsActivityWorker['createSuppression']>[0],
     contextUser: UserInfo,
