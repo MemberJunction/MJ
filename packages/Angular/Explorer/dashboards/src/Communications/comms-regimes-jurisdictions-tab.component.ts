@@ -109,14 +109,16 @@ export class CommsRegimesJurisdictionsTabComponent extends BaseAngularComponent 
     this.ErrorMessage = '';
     this.cdr.markForCheck();
 
+    const previousStatus = regime.Status;
     try {
-      regime.Status = regime.Status === 'Active' ? 'Disabled' : 'Active';
+      regime.Status = previousStatus === 'Active' ? 'Disabled' : 'Active';
       const ok = await regime.Save();
       if (!ok) {
         throw new Error(regime.LatestResult?.CompleteMessage || 'Failed to update regime.');
       }
       this.RefreshRequested.emit();
     } catch (err: unknown) {
+      regime.Status = previousStatus;
       this.ErrorMessage = err instanceof Error ? err.message : 'Failed to update regime.';
     } finally {
       this.BusyRegimeId = null;

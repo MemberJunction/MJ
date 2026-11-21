@@ -165,6 +165,10 @@ export class CommsSendersPermissionsTabComponent extends BaseAngularComponent {
     this.ErrorMessage = '';
     this.cdr.markForCheck();
 
+    const prevEnforcementMode = this.SelectedSender.EnforcementMode;
+    const prevPreferenceCenterUrl = this.SelectedSender.PreferenceCenterURL;
+    const prevTemplateContext = this.SelectedSender.TemplateContext;
+
     try {
       if (this.EditTemplateContext.trim()) {
         JSON.parse(this.EditTemplateContext);
@@ -181,6 +185,9 @@ export class CommsSendersPermissionsTabComponent extends BaseAngularComponent {
       this.StatusMessage = 'Sender updated.';
       this.RefreshRequested.emit();
     } catch (err: unknown) {
+      this.SelectedSender.EnforcementMode = prevEnforcementMode;
+      this.SelectedSender.PreferenceCenterURL = prevPreferenceCenterUrl;
+      this.SelectedSender.TemplateContext = prevTemplateContext;
       this.ErrorMessage = err instanceof Error ? err.message : 'Failed to save sender.';
     } finally {
       this.IsSaving = false;

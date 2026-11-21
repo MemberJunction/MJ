@@ -248,10 +248,11 @@ export class CommsEndpointsSuppressionsTabComponent extends BaseAngularComponent
       supp.Source = 'Admin';
       supp.Status = 'Active';
       supp.EffectiveAt = new Date();
-      if (await supp.Save()) {
-        await this.appendSuppressionAudit(supp, 'Created', null, { Reason: 'Admin Block', Status: 'Active' });
-        await this.Search();
+      if (!(await supp.Save())) {
+        throw new Error(supp.LatestResult?.CompleteMessage || 'Failed to add Admin Block.');
       }
+      await this.appendSuppressionAudit(supp, 'Created', null, { Reason: 'Admin Block', Status: 'Active' });
+      await this.Search();
     } catch (err: unknown) {
       this.ErrorMessage = err instanceof Error ? err.message : 'Failed to add Admin Block.';
       this.cdr.markForCheck();
@@ -286,13 +287,18 @@ export class CommsEndpointsSuppressionsTabComponent extends BaseAngularComponent
         return;
       }
 
-      const prev = { Status: supp.Status };
+      const prevStatus = supp.Status;
+      const prevRevokedAt = supp.RevokedAt;
+      const prev = { Status: prevStatus };
       supp.Status = 'Revoked';
       supp.RevokedAt = new Date();
-      if (await supp.Save()) {
-        await this.appendSuppressionAudit(supp, 'Revoked', prev, { Status: 'Revoked' });
-        await this.Search();
+      if (!(await supp.Save())) {
+        supp.Status = prevStatus;
+        supp.RevokedAt = prevRevokedAt;
+        throw new Error(supp.LatestResult?.CompleteMessage || 'Failed to revoke suppression.');
       }
+      await this.appendSuppressionAudit(supp, 'Revoked', prev, { Status: 'Revoked' });
+      await this.Search();
     } catch (err: unknown) {
       this.ErrorMessage = err instanceof Error ? err.message : 'Failed to revoke suppression.';
       this.cdr.markForCheck();

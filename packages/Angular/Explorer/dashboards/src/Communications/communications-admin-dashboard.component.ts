@@ -57,6 +57,9 @@ import {
         </div>
       </mj-page-header>
       <mj-page-body>
+        @if (LoadError) {
+          <div class="comms-admin-error" role="alert">{{ LoadError }}</div>
+        }
         <div class="comms-admin-shell">
           <nav class="comms-admin-rail" aria-label="Communications admin sections">
             @for (tab of Tabs; track tab.Key) {
@@ -134,6 +137,7 @@ export class CommunicationsAdminDashboardComponent extends BaseDashboard impleme
   public readonly Tabs = COMMS_ADMIN_TABS;
   public ActiveTab: CommsAdminTabId = 'simulator';
   public IsLoading = false;
+  public LoadError = '';
   public LoadedMetadata: CommsAdminLoadedMetadata | null = null;
 
   public async GetResourceDisplayName(_data: ResourceData): Promise<string> {
@@ -178,6 +182,7 @@ export class CommunicationsAdminDashboardComponent extends BaseDashboard impleme
 
   public async LoadMetadata(): Promise<void> {
     this.IsLoading = true;
+    this.LoadError = '';
     this.cdr.markForCheck();
 
     try {
@@ -199,6 +204,14 @@ export class CommunicationsAdminDashboardComponent extends BaseDashboard impleme
         { EntityName: 'MJ: Entity Communication Message Types', ResultType: 'entity_object' },
       ]);
 
+      const failed = results.filter((r) => !r.Success);
+      if (failed.length > 0) {
+        this.LoadError =
+          failed.map((r) => r.ErrorMessage).filter(Boolean).join('; ') ||
+          'Failed to load communications metadata.';
+        return;
+      }
+
       this.LoadedMetadata = {
         Senders: (results[0]?.Results ?? []) as MJCommunicationSenderEntity[],
         SenderPermissions: (results[1]?.Results ?? []) as MJCommunicationSenderPermissionEntity[],
@@ -216,6 +229,8 @@ export class CommunicationsAdminDashboardComponent extends BaseDashboard impleme
         EntityCommMessageTypes: (results[13]?.Results ?? []) as MJEntityCommunicationMessageTypeEntity[],
       };
       this.publishAgentContext();
+    } catch (err: unknown) {
+      this.LoadError = err instanceof Error ? err.message : 'Failed to load communications metadata.';
     } finally {
       this.IsLoading = false;
       this.cdr.markForCheck();
