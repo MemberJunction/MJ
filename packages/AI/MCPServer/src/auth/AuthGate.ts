@@ -31,7 +31,7 @@ interface ExtractedCredentials {
   /** Bearer token from Authorization header */
   bearerToken?: string;
   /** Source of API key if found */
-  apiKeySource?: 'x-api-key' | 'x-mj-api-key' | 'authorization' | 'query';
+  apiKeySource?: 'x-api-key' | 'x-mj-api-key' | 'authorization';
 }
 
 /**
@@ -60,7 +60,8 @@ export interface AuthGateConfig {
  * 1. x-api-key header
  * 2. x-mj-api-key header
  * 3. Authorization: Bearer header (could be API key or OAuth token)
- * 4. Query parameters (apiKey, api_key)
+ *
+ * Query parameters are deliberately not a source (see the note at the end of the function).
  *
  * @param request - The incoming HTTP request
  * @returns Extracted credentials

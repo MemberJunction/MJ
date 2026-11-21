@@ -139,8 +139,16 @@ export class CSVExporter extends BaseExporter {
    * tab or CR is executed as a formula when the export is opened in Excel/Sheets, so data
    * authored by one user could run as a formula on another user's machine. Prefix such
    * values with a single quote, which spreadsheets treat as a text marker.
+   *
+   * A signed number that arrives as text (PostgreSQL returns `numeric` columns as strings) is
+   * left alone: `-12.50` is a value, not a formula, and the quote would turn it into text.
    */
   private neutralizeSpreadsheetFormula(value: string): string {
-    return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+    if (!/^[=+\-@\t\r]/.test(value) || CSVExporter.SIGNED_NUMBER.test(value)) {
+      return value;
+    }
+    return `'${value}`;
   }
+
+  private static readonly SIGNED_NUMBER = /^[+-](\d+(\.\d*)?|\.\d+)(e[+-]?\d+)?$/i;
 }
