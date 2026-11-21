@@ -396,12 +396,27 @@ describe('JurisdictionResolver & ComplianceGate', () => {
     expect(mktRes.Decision).toBe('Blocked');
     expect(mktRes.Reason).toBe('DoubleOptInPending');
 
-    const txnRes = gate.Evaluate(
+    const txnMismatchRes = gate.Evaluate(
       {
         Sender: sender,
         SenderAncestors: [],
         Endpoint: endpoint,
         Preference: pref,
+        PrincipalPreference: pendingPref,
+        MessageClass: 'Transactional',
+        ChannelID: CHANNEL_EMAIL,
+        Now: new Date('2026-06-15T14:00:00Z'),
+      },
+      { Suppressions: [], RecipientJurisdiction: 'US-TX' },
+    );
+    expect(txnMismatchRes.Decision).toBe('Blocked');
+    expect(txnMismatchRes.Reason).toBe('MessageClassMismatch');
+
+    const txnRes = gate.Evaluate(
+      {
+        Sender: sender,
+        SenderAncestors: [],
+        Endpoint: endpoint,
         PrincipalPreference: pendingPref,
         MessageClass: 'Transactional',
         ChannelID: CHANNEL_EMAIL,
@@ -478,5 +493,86 @@ describe('JurisdictionResolver & ComplianceGate', () => {
     expect(res.AuditSnapshot.ApplicableRegimes).toContain('CAN-SPAM');
     expect(res.AuditSnapshot.ApplicableRegimes).toContain('CASL');
     expect(res.Decision).toBe('Blocked');
+  });
+
+  it('blocks Operational sends on global User Unsubscribe', () => {
+    const gate = new ComplianceGate(new JurisdictionResolver(buildSource()));
+    const globalUnsub = {
+      ID: 'sup-op-1',
+      CommunicationEndpointID: endpoint.ID,
+      CommunicationSenderID: null,
+      CommunicationPreferenceID: null,
+      BaseMessageTypeID: null,
+      Reason: 'User Unsubscribe',
+      Status: 'Active',
+      EffectiveAt: new Date('2026-01-01T00:00:00Z'),
+      ExpiresAt: null,
+    } as MJCommunicationSuppressionEntity;
+
+    const res = gate.Evaluate(
+      {
+        Sender: sender,
+        SenderAncestors: [],
+        Endpoint: endpoint,
+        MessageClass: 'Operational',
+        ChannelID: CHANNEL_EMAIL,
+        Now: new Date('2026-06-15T14:00:00Z'),
+      },
+      { Suppressions: [globalUnsub], RecipientJurisdiction: 'US-TX' },
+    );
+    expect(res.Decision).toBe('Blocked');
+    expect(res.Reason).toBe('User Unsubscribe');
+  });
+
+  it('fails closed when a rule driver cannot be instantiated or rule parameters are malformed JSON', () => {
+    const src = buildSource();
+    src.ComplianceRuleTypes.push({
+      ID: 'rt-missing',
+      Name: 'MissingDriverRule',
+      DriverClass: 'NonExistentRuleDriverClass_XYZ',
+      Status: 'Active',
+    } as never);
+    src.ComplianceRegimeRules.push({
+      ID: 'rule-missing',
+      CommunicationComplianceRegimeID: REG.CAN_SPAM,
+      CommunicationComplianceRuleTypeID: 'rt-missing',
+      MessageClass: 'Marketing',
+      BaseMessageTypeID: null,
+      Parameters: '{}',
+      Status: 'Active',
+    } as never);
+
+    const gateMissing = new ComplianceGate(new JurisdictionResolver(src));
+    const missingRes = gateMissing.Evaluate(
+      {
+        Sender: sender,
+        SenderAncestors: [],
+        Endpoint: endpoint,
+        MessageClass: 'Marketing',
+        ChannelID: CHANNEL_EMAIL,
+        Now: new Date('2026-06-15T14:00:00Z'),
+      },
+      { Suppressions: [], RecipientJurisdiction: 'US-TX' },
+    );
+    expect(missingRes.Decision).toBe('Blocked');
+    expect(missingRes.Reason).toBe('ComplianceRegime');
+
+    const badJsonSrc = buildSource();
+    const firstRule = badJsonSrc.ComplianceRegimeRules[0];
+    badJsonSrc.ComplianceRegimeRules[0] = { ...firstRule, Parameters: '{not-valid-json' } as never;
+    const gateBadJson = new ComplianceGate(new JurisdictionResolver(badJsonSrc));
+    const badJsonRes = gateBadJson.Evaluate(
+      {
+        Sender: sender,
+        SenderAncestors: [],
+        Endpoint: endpoint,
+        MessageClass: 'Marketing',
+        ChannelID: CHANNEL_EMAIL,
+        Now: new Date('2026-06-15T14:00:00Z'),
+      },
+      { Suppressions: [], RecipientJurisdiction: 'US-TX' },
+    );
+    expect(badJsonRes.Decision).toBe('Blocked');
+    expect(badJsonRes.Reason).toBe('ComplianceRegime');
   });
 });

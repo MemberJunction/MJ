@@ -127,6 +127,23 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
     }
 
     /**
+     * Batched V1 gate: checks endpoint status and active suppressions across all recipient addresses.
+     */
+    public async CheckV1ComplianceGateBatch(
+        channelID: string,
+        recipientAddresses: ReadonlyArray<string>,
+        messageClass: MessageClass = 'Transactional',
+        contextUser?: UserInfo,
+    ): Promise<{ Allowed: boolean; Reason?: string; Detail?: string }> {
+        return this._v2SendService.CheckV1ComplianceGateBatch(
+            channelID,
+            recipientAddresses,
+            messageClass,
+            contextUser ?? this.ContextUser,
+        );
+    }
+
+    /**
      * V2: Compliance-gated, endpoint-resolved send pipeline with link/open tracking and chunked fan-out.
      */
     public async Send(
@@ -308,20 +325,20 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
                             ...(message.CCRecipients ?? []),
                             ...(message.BCCRecipients ?? []),
                         ];
-                        for (const addr of recipientsToCheck) {
-                            const gateResult = await this.CheckV1ComplianceGate(
-                                channelID,
-                                addr,
-                                messageClass,
-                                effectiveUser,
-                            );
-                            if (!gateResult.Allowed) {
-                                const blockMsg = gateResult.Detail ?? gateResult.Reason ?? 'Blocked by compliance gate';
-                                log.Status = 'Failed';
-                                log.ErrorMessage = blockMsg;
-                                await log.Save();
-                                return { Success: false, Error: blockMsg, Message: processedMessage };
+                        const gateResult = await this.CheckV1ComplianceGateBatch(
+                            channelID,
+                            recipientsToCheck,
+                            messageClass,
+                            effectiveUser,
+                        );
+                        if (!gateResult.Allowed) {
+                            const blockMsg = gateResult.Detail ?? gateResult.Reason ?? 'Blocked by compliance gate';
+                            log.Status = 'Failed';
+                            log.ErrorMessage = blockMsg;
+                            if (!(await log.Save())) {
+                                LogError(`Failed to save blocked CommunicationLog ${log.ID}: ${log.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                             }
+                            return { Success: false, Error: blockMsg, Message: processedMessage };
                         }
                     }
 

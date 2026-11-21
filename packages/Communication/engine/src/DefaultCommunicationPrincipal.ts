@@ -351,12 +351,13 @@ export class DefaultCommunicationPrincipal extends BaseCommunicationPrincipal {
     }
 
     const md = this.provider ?? Metadata.Provider;
+    const writeUser = CommunicationEngineBase.Instance.ContextUser ?? contextUser;
     for (const addrs of extracted.values()) {
       for (const addr of addrs) {
         if (byHash.has(addr.ValueHash)) continue;
         const entity = await md.GetEntityObject<MJCommunicationEndpointEntity>(
           'MJ: Communication Endpoints',
-          contextUser,
+          writeUser,
         );
         entity.BaseMessageTypeID = channelID;
         entity.NormalizedValue = addr.NormalizedValue;
@@ -419,12 +420,14 @@ export class DefaultCommunicationPrincipal extends BaseCommunicationPrincipal {
         if (existing) {
           if (now.getTime() - existing.LastSeenAt.getTime() >= LAST_SEEN_REFRESH_INTERVAL_MS) {
             existing.LastSeenAt = now;
-            await existing.Save();
+            if (!(await existing.Save())) {
+              LogError(`DefaultCommunicationPrincipal: failed to update LastSeenAt on link ${existing.ID}: ${existing.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
           }
         } else {
           const link = await md.GetEntityObject<MJCommunicationEndpointPrincipalEntity>(
             'MJ: Communication Endpoint Principals',
-            contextUser,
+            CommunicationEngineBase.Instance.ContextUser ?? contextUser,
           );
           link.CommunicationEndpointID = ep.ID;
           link.EntityID = ref.EntityID;

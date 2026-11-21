@@ -46,6 +46,11 @@ const NON_TRANSACTIONAL_CLASSES: ReadonlySet<MessageClass> = new Set([
   'Operational',
   'Marketing',
 ]);
+const MESSAGE_CLASS_RANK: Record<MessageClass, number> = {
+  Transactional: 0,
+  Operational: 1,
+  Marketing: 2,
+};
 
 /**
  * 5-step compliance gate:
@@ -282,7 +287,7 @@ export class ComplianceGate {
         return NON_TRANSACTIONAL_CLASSES.has(messageClass);
       case 'User Unsubscribe':
       case 'Policy':
-        return s.CommunicationPreferenceID !== null || messageClass === 'Marketing';
+        return s.CommunicationPreferenceID !== null || NON_TRANSACTIONAL_CLASSES.has(messageClass);
       default:
         return false;
     }
@@ -323,9 +328,30 @@ export class ComplianceGate {
 
     for (const group of groupedRules) {
       const driver = this.instantiateRuleDriver(group.RuleType.DriverClass);
-      if (!driver) continue;
+      if (!driver) {
+        if (!blockedReason) {
+          blockedReason = `Compliance rule driver '${group.RuleType.DriverClass}' for '${group.RuleType.Name}' could not be loaded`;
+        }
+        continue;
+      }
 
-      const paramSets = group.Rules.map((r) => this.parseRuleParams(r.Parameters));
+      const paramSets: Record<string, unknown>[] = [];
+      let paramError: string | undefined;
+      for (const r of group.Rules) {
+        const parsed = this.parseRuleParams(r.Parameters);
+        if (parsed.Error) {
+          paramError = parsed.Error;
+          break;
+        }
+        paramSets.push(parsed.Params);
+      }
+      if (paramError) {
+        if (!blockedReason) {
+          blockedReason = `${paramError} in rule '${group.RuleType.Name}'`;
+        }
+        continue;
+      }
+
       const merged = driver.MergeStrictest(paramSets);
       mergedRules[group.RuleType.Name] = merged;
 
@@ -382,6 +408,16 @@ export class ComplianceGate {
       return {
         Reason: 'PreferenceDisabled',
         Detail: `Preference '${ctx.Preference.Name}' is disabled`,
+      };
+    }
+
+    if (
+      ctx.Preference.MessageClass &&
+      MESSAGE_CLASS_RANK[ctx.MessageClass] < MESSAGE_CLASS_RANK[ctx.Preference.MessageClass]
+    ) {
+      return {
+        Reason: 'MessageClassMismatch',
+        Detail: `Envelope MessageClass '${ctx.MessageClass}' is less strict than preference '${ctx.Preference.Name}' MessageClass '${ctx.Preference.MessageClass}'`,
       };
     }
 
@@ -501,15 +537,16 @@ export class ComplianceGate {
     return instance;
   }
 
-  private parseRuleParams(raw: string | null): Record<string, unknown> {
-    if (!raw || !raw.trim()) return {};
+  private parseRuleParams(raw: string | null): { Params: Record<string, unknown>; Error?: string } {
+    if (!raw || !raw.trim()) return { Params: {} };
     try {
       const parsed: unknown = JSON.parse(raw);
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-        ? (parsed as Record<string, unknown>)
-        : {};
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return { Params: parsed as Record<string, unknown> };
+      }
+      return { Params: {}, Error: 'Rule parameters must be a JSON object' };
     } catch {
-      return {};
+      return { Params: {}, Error: 'Malformed JSON in rule parameters' };
     }
   }
 }
