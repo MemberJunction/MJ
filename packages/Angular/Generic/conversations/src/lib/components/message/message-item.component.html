@@ -184,7 +184,7 @@
           </div>
         } @else {
           <div #messageTextEl class="message-text" [class.collapsed]="IsTextCollapsed">
-            <mj-markdown [data]="displayMessage" [enableCollapsibleHeadings]="true" [OpenLinksInNewTab]="OpenLinksInNewTab" (ImageClicked)="OnMarkdownImageClicked($event)"></mj-markdown>
+            <mj-markdown [data]="displayMessage" [IsStreaming]="IsStreaming || IsInProgressAIMessage" [enableCollapsibleHeadings]="!IsStreaming && !IsInProgressAIMessage" [OpenLinksInNewTab]="OpenLinksInNewTab" (ImageClicked)="OnMarkdownImageClicked($event)"></mj-markdown>
             @if (isMessageEdited) {
               <span class="edited-badge">(edited)</span>
             }

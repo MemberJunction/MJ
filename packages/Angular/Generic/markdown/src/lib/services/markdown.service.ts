@@ -185,6 +185,7 @@ const TEX_MACRO_DEFINITION = /\\(?:[gex]?def|let|futurelet|newcommand|renewcomma
   providedIn: 'root'
 })
 export class MarkdownService {
+  private static readonly MERMAID_SVG_CACHE_LIMIT = 64;
   private engine = new MarkdownEngine();
   private mermaidInitialized = false;
   private lastMermaidTheme: string | null = null;
@@ -193,6 +194,10 @@ export class MarkdownService {
   private mermaidEngine: Mermaid | null = null;
   /** In-flight load, so N diagrams in one document share ONE chunk fetch. */
   private mermaidLoad: Promise<Mermaid> | null = null;
+  /** Bounded LRU cache of DOMPurify-sanitized Mermaid SVGs keyed by `${effectiveTheme}\0${code.trim()}`. */
+  private mermaidSvgCache = new Map<string, { svg: string; idPrefix: string }>();
+  /** Monotonic counter so every rendered or reused Mermaid SVG gets a unique DOM ID prefix. */
+  private mermaidRenderSeq = 0;
   /** The KaTeX engine, once its lazy chunk has landed. Null until a formula is actually typeset. */
   private katexEngine: typeof katex | null = null;
   /** In-flight load, so N formulas in one document share ONE chunk fetch. */
@@ -427,6 +432,93 @@ export class MarkdownService {
     this.lastMermaidTheme = effectiveTheme;
   }
 
+  private mermaidCacheKey(effectiveTheme: string, code: string): string {
+    return `${effectiveTheme}\0${code.trim()}`;
+  }
+
+  private nextMermaidId(): string {
+    return `mermaid-${Date.now()}-${++this.mermaidRenderSeq}`;
+  }
+
+  private getCachedMermaidSvg(effectiveTheme: string, code: string): string | undefined {
+    const key = this.mermaidCacheKey(effectiveTheme, code);
+    const cached = this.mermaidSvgCache.get(key);
+    if (cached !== undefined) {
+      // Refresh LRU recency
+      this.mermaidSvgCache.delete(key);
+      this.mermaidSvgCache.set(key, cached);
+      // Rewrite the original render ID prefix so reusing a diagram in multiple places
+      // never introduces duplicate `<svg id="...">` or `url(#...)` marker IDs in the DOM.
+      const freshId = this.nextMermaidId();
+      return cached.svg.split(cached.idPrefix).join(freshId);
+    }
+    return undefined;
+  }
+
+  private setCachedMermaidSvg(effectiveTheme: string, code: string, idPrefix: string, sanitizedSvg: string): void {
+    const key = this.mermaidCacheKey(effectiveTheme, code);
+    if (this.mermaidSvgCache.has(key)) {
+      this.mermaidSvgCache.delete(key);
+    } else if (this.mermaidSvgCache.size >= MarkdownService.MERMAID_SVG_CACHE_LIMIT) {
+      const oldestKey = this.mermaidSvgCache.keys().next().value;
+      if (oldestKey !== undefined) {
+        this.mermaidSvgCache.delete(oldestKey);
+      }
+    }
+    this.mermaidSvgCache.set(key, { svg: sanitizedSvg, idPrefix });
+  }
+
+  private isStreamingMermaidBlock(block: Element): boolean {
+    return (
+      block.getAttribute('data-mermaid-streaming') === 'true' ||
+      block.parentElement?.getAttribute('data-mermaid-streaming') === 'true'
+    );
+  }
+
+  private replaceMermaidBlockWithSvg(block: Element, sanitizedSvg: string): void {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'mermaid-diagram';
+    wrapper.innerHTML = sanitizedSvg;
+
+    // Replace the pre element (parent of code) or the mermaid element itself
+    const elementToReplace = block.tagName === 'CODE' ? block.parentElement : block;
+    elementToReplace?.parentNode?.replaceChild(wrapper, elementToReplace);
+  }
+
+  /**
+   * Synchronously replaces any Mermaid code blocks whose sanitized SVG is already in the cache.
+   * Calling this immediately after DOM insertion eliminates the 1–3 frame raw-code flash and
+   * layout height jump when a streamed message re-renders or remounts on scroll.
+   *
+   * @param container The DOM element containing mermaid code blocks
+   * @returns true if at least one non-streaming, non-empty mermaid block still needs async rendering
+   */
+  public ApplyCachedMermaid(container: HTMLElement): boolean {
+    if (!this.currentConfig.enableMermaid) return false;
+
+    const mermaidBlocks = container.querySelectorAll('pre > code.language-mermaid, .mermaid');
+    if (mermaidBlocks.length === 0) return false;
+
+    const effectiveTheme = this.resolveEffectiveMermaidTheme();
+    let hasUncached = false;
+
+    for (let i = 0; i < mermaidBlocks.length; i++) {
+      const block = mermaidBlocks[i];
+      if (this.isStreamingMermaidBlock(block)) continue;
+      const code = block.textContent || '';
+      if (!code.trim()) continue;
+
+      const cached = this.getCachedMermaidSvg(effectiveTheme, code);
+      if (cached !== undefined) {
+        this.replaceMermaidBlockWithSvg(block, cached);
+      } else {
+        hasUncached = true;
+      }
+    }
+
+    return hasUncached;
+  }
+
   /**
    * Render Mermaid diagrams in a container element
    * Call this after the HTML has been inserted into the DOM
@@ -437,9 +529,31 @@ export class MarkdownService {
 
     // Find all mermaid code blocks BEFORE touching the engine — this is the branch the
     // deferral hangs off: no diagrams in this document means no chunk fetch at all.
-    const mermaidBlocks = container.querySelectorAll('pre > code.language-mermaid, .mermaid');
+    const rawBlocks = Array.from(container.querySelectorAll('pre > code.language-mermaid, .mermaid'));
+    const eligibleBlocks = rawBlocks.filter((block) => !this.isStreamingMermaidBlock(block));
 
-    if (mermaidBlocks.length === 0) return false;
+    if (eligibleBlocks.length === 0) return false;
+
+    const effectiveTheme = this.resolveEffectiveMermaidTheme();
+    const uncachedBlocks: Element[] = [];
+    let appliedAnyCached = false;
+
+    for (const block of eligibleBlocks) {
+      const code = block.textContent || '';
+      if (!code.trim()) continue;
+
+      const cached = this.getCachedMermaidSvg(effectiveTheme, code);
+      if (cached !== undefined) {
+        this.replaceMermaidBlockWithSvg(block, cached);
+        appliedAnyCached = true;
+      } else {
+        uncachedBlocks.push(block);
+      }
+    }
+
+    if (uncachedBlocks.length === 0) {
+      return appliedAnyCached;
+    }
 
     let mermaid: Mermaid;
     try {
@@ -449,24 +563,38 @@ export class MarkdownService {
       // every block we were going to render — an empty panel would look like the diagram
       // simply wasn't there.
       console.error('Failed to load the Mermaid diagram engine:', error);
-      this.markMermaidBlocksFailed(mermaidBlocks, 'Diagram engine failed to load');
-      return false;
+      this.markMermaidBlocksFailed(
+        uncachedBlocks.filter((block) => container.contains(block)),
+        'Diagram engine failed to load',
+      );
+      return appliedAnyCached;
     }
 
     this.initializeMermaid(mermaid);
 
-    for (let i = 0; i < mermaidBlocks.length; i++) {
-      const block = mermaidBlocks[i];
+    for (let i = 0; i < uncachedBlocks.length; i++) {
+      const block = uncachedBlocks[i];
+      if (!container.contains(block)) continue;
       const code = block.textContent || '';
 
       if (!code.trim()) continue;
 
+      // Re-check cache in case an identical earlier block in the same pass just populated it
+      const cached = this.getCachedMermaidSvg(effectiveTheme, code);
+      if (cached !== undefined) {
+        this.replaceMermaidBlockWithSvg(block, cached);
+        continue;
+      }
+
       try {
         // Create a unique ID for this diagram
-        const id = `mermaid-${Date.now()}-${i}`;
+        const id = this.nextMermaidId();
 
         // Render the diagram
         const { svg } = await mermaid.render(id, code);
+
+        // A newer render (e.g., next streamed chunk) may have replaced this node while rendering
+        if (!container.contains(block)) continue;
 
         // Sanitize rendered SVG with DOMPurify even under securityLevel: 'strict' (defense-in-depth)
         const purifierInstance = getPurifier();
@@ -478,18 +606,14 @@ export class MarkdownService {
           USE_PROFILES: { svg: true, svgFilters: true },
         });
 
-        // Replace the code block with the sanitized SVG
-        const wrapper = document.createElement('div');
-        wrapper.className = 'mermaid-diagram';
-        wrapper.innerHTML = sanitizedSvg;
-
-        // Replace the pre element (parent of code) or the mermaid element itself
-        const elementToReplace = block.tagName === 'CODE' ? block.parentElement : block;
-        elementToReplace?.parentNode?.replaceChild(wrapper, elementToReplace);
+        this.setCachedMermaidSvg(effectiveTheme, code, id, sanitizedSvg);
+        this.replaceMermaidBlockWithSvg(block, sanitizedSvg);
       } catch (error) {
         console.warn('Mermaid rendering failed:', error);
         // Show it failed on this block — the source stays visible underneath.
-        this.markMermaidBlocksFailed([block], 'Diagram rendering failed');
+        if (container.contains(block)) {
+          this.markMermaidBlocksFailed([block], 'Diagram rendering failed');
+        }
       }
     }
 
