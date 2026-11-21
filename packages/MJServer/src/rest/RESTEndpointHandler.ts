@@ -6,6 +6,7 @@ import {
 } from '@memberjunction/core';
 import { EntityCRUDHandler } from './EntityCRUDHandler.js';
 import { ViewOperationsHandler } from './ViewOperationsHandler.js';
+import { CheckAPIKeyScopeAndLog } from '../auth/APIKeyScopeAuth.js';
 
 /**
  * Configuration options for RESTEndpointHandler
@@ -167,12 +168,12 @@ export class RESTEndpointHandler {
 
         // Entity collection operations
         this.router.get('/entities/:entityName', this.getEntityList.bind(this));
-        this.router.post('/entities/:entityName', this.createEntity.bind(this));
+        this.router.post('/entities/:entityName', this.requireAPIKeyScope('entity:create', this.entityResource.bind(this)), this.createEntity.bind(this));
 
         // Individual entity operations
         this.router.get('/entities/:entityName/:id', this.getEntity.bind(this));
-        this.router.put('/entities/:entityName/:id', this.updateEntity.bind(this));
-        this.router.delete('/entities/:entityName/:id', this.deleteEntity.bind(this));
+        this.router.put('/entities/:entityName/:id', this.requireAPIKeyScope('entity:update', this.entityResource.bind(this)), this.updateEntity.bind(this));
+        this.router.delete('/entities/:entityName/:id', this.requireAPIKeyScope('entity:delete', this.entityResource.bind(this)), this.deleteEntity.bind(this));
         
         // Record changes and dependencies
         this.router.get('/entities/:entityName/:id/changes', this.getRecordChanges.bind(this));
@@ -180,8 +181,8 @@ export class RESTEndpointHandler {
         this.router.get('/entities/:entityName/:id/name', this.getEntityRecordName.bind(this));
 
         // View operations
-        this.router.post('/views/:entityName', this.runView.bind(this));
-        this.router.post('/views/batch', this.runViews.bind(this));
+        this.router.post('/views/:entityName', this.requireAPIKeyScope('view:run', this.entityResource.bind(this)), this.runView.bind(this));
+        this.router.post('/views/batch', this.requireAPIKeyScope('view:batch'), this.runViews.bind(this));
         this.router.get('/views/entity', this.getViewEntity.bind(this));
         
         // Metadata endpoints
@@ -194,8 +195,8 @@ export class RESTEndpointHandler {
         // User operations
         this.router.get('/users/current', this.getCurrentUser.bind(this));
         this.router.get('/users/:userId/favorites/:entityName/:id', this.getRecordFavoriteStatus.bind(this));
-        this.router.put('/users/:userId/favorites/:entityName/:id', this.setRecordFavoriteStatus.bind(this));
-        this.router.delete('/users/:userId/favorites/:entityName/:id', this.removeRecordFavoriteStatus.bind(this));
+        this.router.put('/users/:userId/favorites/:entityName/:id', this.requireAPIKeyScope('entity:update', () => 'User Favorites'), this.setRecordFavoriteStatus.bind(this));
+        this.router.delete('/users/:userId/favorites/:entityName/:id', this.requireAPIKeyScope('entity:delete', () => 'User Favorites'), this.removeRecordFavoriteStatus.bind(this));
         
         // Transaction operations
         this.router.post('/transactions', this.executeTransaction.bind(this));
@@ -240,6 +241,49 @@ export class RESTEndpointHandler {
             return;
         }
         next();
+    }
+
+    /**
+     * Route middleware enforcing the API-key SCOPE tier on this transport. GraphQL checks
+     * `entity:create|update|delete` / `view:run` / `view:batch` on every CRUD and view resolver
+     * (ResolverBase.CheckAPIKeyScopeAuthorization); without this, a narrowly-scoped key (e.g.
+     * `agent:execute` only) would get full entity writes and RunView through `/api/v1/*`, silently
+     * voiding the scope tier on a whole transport. `CheckAPIKeyScopeAndLog` is a no-op for
+     * sessions not authenticated via API key, so JWT users are unaffected.
+     */
+    private requireAPIKeyScope(
+        scopePath: string,
+        resourceFrom?: (req: express.Request) => string
+    ): express.RequestHandler {
+        return async (req, res, next) => {
+            try {
+                const user = req['mjUser'] as UserInfo | undefined;
+                if (!user) {
+                    res.status(401).json({ error: 'Authentication required' });
+                    return;
+                }
+                await CheckAPIKeyScopeAndLog(
+                    req.userPayload?.apiKeyId,
+                    scopePath,
+                    user,
+                    {
+                        endpoint: req.originalUrl,
+                        method: req.method,
+                        ipAddress: req.ip,
+                        userAgent: typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : undefined,
+                    },
+                    { resource: resourceFrom ? resourceFrom(req) : '*' }
+                );
+                next();
+            } catch (error) {
+                res.status(403).json({ error: error instanceof Error ? error.message : 'Forbidden' });
+            }
+        };
+    }
+
+    /** Resolves the `:entityName` route param for scope-check resource attribution. */
+    private entityResource(req: express.Request): string {
+        return this.getStringParam(req.params.entityName) || '*';
     }
 
     /**
