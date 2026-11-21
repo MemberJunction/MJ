@@ -17,7 +17,7 @@ import { UserInfo, type DatabaseProviderBase } from '@memberjunction/core';
 import { GetServerPrincipal } from '@memberjunction/generic-database-provider';
 import { initializeProvider, cleanupProvider } from '@memberjunction/metadata-sync';
 import type { GitHubClientOptions, GitHubTokenSource } from '@memberjunction/open-app-engine';
-import { GetValidatedConfig } from '../config.js';
+import { GetValidatedConfig, ResolvePostgresMigrationSecurity } from '../config.js';
 
 type ResolvedConfig = ReturnType<typeof GetValidatedConfig>;
 
@@ -137,6 +137,9 @@ export async function BuildOrchestratorContext(
   // `interactive` is the per-command opt-out (--non-interactive); isInteractiveRun() is the
   // global rule: a real terminal unless --no-interactive / CI says otherwise.
   const wantPrompts = interactive && IsInteractiveRun();
+  // PostgreSQL: the install's migration run and metadata refresh follow the shared PG_SSL_* and
+  // PG_AUTH_MODE settings, like `mj migrate`.
+  const pgSecurity = config.dbPlatform === 'postgresql' ? await ResolvePostgresMigrationSecurity(config) : undefined;
 
   return {
     ContextUser: contextUser,
@@ -146,10 +149,11 @@ export async function BuildOrchestratorContext(
       Port: config.dbPort,
       Database: config.dbDatabase,
       User: config.codeGenLogin,
-      Password: config.codeGenPassword,
+      Password: pgSecurity?.Password ?? config.codeGenPassword,
       Encrypt: config.dbEncrypt,
       TrustServerCertificate: config.dbTrustServerCertificate,
       RequestTimeout: config.dbRequestTimeout,
+      ...(pgSecurity?.SSL ? { SSL: pgSecurity.SSL } : {}),
     },
     GitHubOptions: BuildGitHubOptions(config),
     RepoRoot: process.cwd(),
@@ -221,6 +225,7 @@ interface OrchestratorContextShape {
     Encrypt?: boolean;
     TrustServerCertificate?: boolean;
     RequestTimeout?: number;
+    SSL?: Record<string, unknown>;
   };
   GitHubOptions: {
     Token?: string;

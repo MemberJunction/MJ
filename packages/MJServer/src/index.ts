@@ -40,7 +40,7 @@ import buildApolloServer from './apolloServer/index.js';
 import { configInfo, configFilePath, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions, userEmailMap } from './config.js';
 import { DescribeUserEmailMap } from './auth/loginEmailResolution.js';
 import { TranslateBracketsToPG } from './postgresqlCompat.js';
-import { BuildPostgreSQLConnectionConfig, DescribeReadOnlyLoginOverreach, PostgreSQLReadOnlyPool, ResolvePostgreSQLEndpoint, ResolvePostgreSQLReadOnlyCredentials, ToPGPoolConfig } from './postgresqlPoolSettings.js';
+import { BuildPostgreSQLConnectionConfig, DescribeReadOnlyLoginOverreach, PostgreSQLReadOnlyPool, ResolvePostgreSQLEndpoint, ResolvePostgreSQLReadOnlyCredentials, ToPGPoolConfig, WarnIfPostgreSQLConnectionBudgetExceeded, ResolvePostgreSQLReadOnlyEndpoints } from './postgresqlPoolSettings.js';
 import { default as jwt } from 'jsonwebtoken';
 import { contextFunction, CreateReadOnlyProvider, CreateUnifiedAuthMiddleware, getUserPayload } from './context.js';
 import { UserPayload } from './types.js';
@@ -625,13 +625,15 @@ const setupComplete$ = new ReplaySubject(1);
     startupLog.BeginPhase('Connecting to database');
     startupLog.LogIf('verbose', 'Database type: PostgreSQL');
     const pg = await import('pg');
-    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData, MJPostgresTypes } = await import('@memberjunction/postgresql-dataprovider');
+    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData, MJPostgresTypes, DescribePgSsl } = await import('@memberjunction/postgresql-dataprovider');
 
     const pgEndpoint = ResolvePostgreSQLEndpoint();
     const { Host: pgHost, Port: pgPort, User: pgUser, Database: pgDatabase } = pgEndpoint;
     // Every API pool carries the statement and idle-in-transaction timeouts from connection #1.
     const pgConnectionConfig = BuildPostgreSQLConnectionConfig(pgEndpoint, configInfo.databaseSettings, 'api');
-    const pgPool = new pg.default.Pool(ToPGPoolConfig(pgConnectionConfig));
+    // One API pool, shared by the provider and the MSSQL-compat wrapper below. It carries the
+    // provider's type parsers, since the provider runs its queries on it.
+    const pgPool = new pg.default.Pool({ ...ToPGPoolConfig(pgConnectionConfig), types: MJPostgresTypes });
     // An idle connection the server drops is emitted on the pool; without a listener Node exits.
     pgPool.on('error', (err) => console.error('[PostgreSQL pool] Idle connection error (connection evicted):', err.message));
 
@@ -639,7 +641,7 @@ const setupComplete$ = new ReplaySubject(1);
     const testClient = await pgPool.connect();
     await testClient.query('SELECT 1');
     testClient.release();
-    startupLog.LogIf('verbose', `PostgreSQL pool connected to ${pgHost}:${pgPort}/${pgDatabase}`);
+    startupLog.LogIf('verbose', `PostgreSQL pool connected to ${pgHost}:${pgPort}/${pgDatabase} (${DescribePgSsl(pgConnectionConfig.SSL)})`);
 
     // Two distinct read-only pools on the read-only login when configured:
     // 1. Application read-only pool ('read-only'): sized up to apiMax / connectionPool.readOnlyMax
@@ -648,10 +650,13 @@ const setupComplete$ = new ReplaySubject(1);
     //    for untrusted caller-supplied SQL (ExecuteAdhocQuery, TestQuerySQL, GetDataContextData).
     const pgReadOnlyCredentials = ResolvePostgreSQLReadOnlyCredentials(configInfo);
     if (pgReadOnlyCredentials) {
+      // Both pools use the read-only login; a configured read replica takes the ad-hoc pool (and,
+      // when asked, the application read-only pool).
+      const readOnlyEndpoints = ResolvePostgreSQLReadOnlyEndpoints({ ...pgEndpoint, ...pgReadOnlyCredentials }, configInfo.databaseSettings);
       // A pool a provider runs on must carry the provider's type parsers, so BIGINT and NUMERIC
       // come back as numbers here as they do on the provider's own pool.
       const readOnlyPgPool = new pg.default.Pool({
-        ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig({ ...pgEndpoint, ...pgReadOnlyCredentials }, configInfo.databaseSettings, 'read-only')),
+        ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig(readOnlyEndpoints.Application, configInfo.databaseSettings, 'read-only')),
         types: MJPostgresTypes,
       });
       readOnlyPgPool.on('error', (err) => console.error('[PostgreSQL read-only pool] Idle connection error (connection evicted):', err.message));
@@ -666,14 +671,18 @@ const setupComplete$ = new ReplaySubject(1);
       PostgreSQLReadOnlyPool.Instance.Pool = readOnlyPgPool;
 
       const adhocReadOnlyPgPool = new pg.default.Pool({
-        ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig({ ...pgEndpoint, ...pgReadOnlyCredentials }, configInfo.databaseSettings, 'adhoc-read-only')),
+        ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig(readOnlyEndpoints.Adhoc, configInfo.databaseSettings, 'adhoc-read-only')),
         types: MJPostgresTypes,
       });
       adhocReadOnlyPgPool.on('error', (err) => console.error('[PostgreSQL adhoc read-only pool] Idle connection error (connection evicted):', err.message));
       PostgreSQLReadOnlyPool.Instance.AdhocPool = adhocReadOnlyPgPool;
 
-      startupLog.LogIf('verbose', 'Read-only PostgreSQL pools (application & ad-hoc) have been initialized.');
+      startupLog.LogIf('verbose', `Read-only PostgreSQL pools initialized (application → ${readOnlyEndpoints.Application.Host}:${readOnlyEndpoints.Application.Port}, ad-hoc → ${readOnlyEndpoints.Adhoc.Host}:${readOnlyEndpoints.Adhoc.Port}).`);
     }
+    await WarnIfPostgreSQLConnectionBudgetExceeded(
+      pgPool, configInfo.databaseSettings, pgReadOnlyCredentials != null,
+      !!(process.env.CODEGEN_DB_USERNAME && process.env.CODEGEN_DB_PASSWORD), LogStatus,
+    );
 
     // Create a DataSourceInfo with a MSSQL-compatible wrapper around pg.Pool
     // This allows existing code (types, util, context) to work without changes
@@ -698,7 +707,10 @@ const setupComplete$ = new ReplaySubject(1);
     pgConfigData.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
     pgConfigData.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
     const provider = new PostgreSQLDataProvider();
-    await provider.Config(pgConfigData);
+    // Share the API pool rather than letting Config() open a second pool of the same size.
+    if (!(await provider.ConfigWithSharedPool(pgConfigData, pgPool))) {
+      throw new Error('PostgreSQL provider configuration failed; see the error logged above.');
+    }
     SetProvider(provider);
 
     // Warm the user cache — dialect-neutral, same call the SQL Server path makes
@@ -781,7 +793,7 @@ const setupComplete$ = new ReplaySubject(1);
           configInfo.databaseSettings,
           'codegen',
         );
-        const codegenPgPool = new pg.default.Pool(ToPGPoolConfig(codegenPgConnectionConfig));
+        const codegenPgPool = new pg.default.Pool({ ...ToPGPoolConfig(codegenPgConnectionConfig), types: MJPostgresTypes });
         codegenPgPool.on('error', (err) => console.error('[PostgreSQL CodeGen pool] Idle connection error (connection evicted):', err.message));
         const codegenTestClient = await codegenPgPool.connect();
         await codegenTestClient.query('SELECT 1');
@@ -803,7 +815,11 @@ const setupComplete$ = new ReplaySubject(1);
           false,
         );
         const codegenPgProvider = new PostgreSQLDataProvider();
-        await codegenPgProvider.Config(codegenPgConfigData); // separate pool (per-instance manager); does NOT touch the global API provider
+        // Shares codegenPgPool (the CodeGen connection below uses it too) rather than opening a second
+        // CodeGen-sized pool. Still separate from the global API provider's pool.
+        if (!(await codegenPgProvider.ConfigWithSharedPool(codegenPgConfigData, codegenPgPool))) {
+          throw new Error('PostgreSQL CodeGen provider configuration failed; see the error logged above.');
+        }
         RuntimeSchemaManager.Instance.SetDDLProvider(codegenPgProvider);
         startupLog.LogIf('verbose', 'RSU DDL provider initialized with CodeGen credentials (PostgreSQL).');
 

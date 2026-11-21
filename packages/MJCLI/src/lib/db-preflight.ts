@@ -62,6 +62,11 @@ function isUntrustedCertError(message: string): boolean {
 }
 
 /** True when the error indicates a credentials / login problem. */
+/** PostgreSQL refusing a plain-TCP connection because its pg_hba.conf allows only `hostssl`. */
+function isUnencryptedRejectedError(message: string): boolean {
+  return message.toLowerCase().includes('no encryption');
+}
+
 function isAuthError(message: string): boolean {
   const m = message.toLowerCase();
   return m.includes('login failed') || m.includes('password authentication failed');
@@ -77,6 +82,25 @@ function isUnreachableError(message: string): boolean {
 
 /** Turn a connection error message into a classified, actionable result. */
 function classifyFailure(message: string, config: DbConnectionConfig): DbPreflightResult {
+  if (isUntrustedCertError(message) && config.dbPlatform === 'postgresql') {
+    return {
+      Ok: false,
+      Reason: 'tls-untrusted-cert',
+      Message: message,
+      Suggestion:
+        'The PostgreSQL server presents a certificate that is not signed by a CA Node trusts. Point ' +
+        'PG_SSL_CA_FILE at the CA bundle that signed it (for RDS, Azure or HorizonDB, their published ' +
+        'root bundle). Only for a development server, PG_SSL_MODE=require skips the check.',
+    };
+  }
+  if (isUnencryptedRejectedError(message)) {
+    return {
+      Ok: false,
+      Reason: 'other',
+      Message: message,
+      Suggestion: 'The PostgreSQL server only accepts TLS connections. Set PG_SSL_MODE=verify-full (and PG_SSL_CA_FILE if its CA is not public).',
+    };
+  }
   if (isUntrustedCertError(message)) {
     // Only suggest trusting the cert when we aren't already trusting it — otherwise
     // the problem is a different cert issue and that advice would mislead.

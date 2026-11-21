@@ -13,9 +13,19 @@ export interface PGConnectionConfig {
     Database: string;
     /** Username */
     User: string;
-    /** Password */
+    /** Password. Ignored when {@link PasswordSource} is set. */
     Password: string;
-    /** SSL configuration */
+    /**
+     * Supplies the password for each new physical connection, for token-based logins (Microsoft
+     * Entra ID, AWS RDS IAM) whose tokens expire. node-postgres calls it every time the pool opens
+     * a connection, so a rotated token is picked up without restarting. See `BuildPgPasswordSource`.
+     */
+    PasswordSource?: () => Promise<string>;
+    /**
+     * TLS for the connection, as node-postgres takes it. Build it with `BuildPgSslConfig` so every
+     * client follows the same `PG_SSL_*` settings. When unset, TLS is on (without server
+     * verification rules beyond node's defaults) only when `NODE_ENV` is `production`.
+     */
     SSL?: boolean | pg.ConnectionConfig['ssl'];
     /** Maximum number of connections in the pool (default: 20) */
     MaxConnections?: number;
@@ -103,7 +113,7 @@ export class PGConnectionManager {
             port: config.Port ?? 5432,
             database: config.Database,
             user: config.User,
-            password: config.Password,
+            password: config.PasswordSource ?? config.Password,
             // SSL default: explicit config wins; otherwise ON in production so managed Postgres (e.g. AWS
             // Aurora with rds.force_ssl=1, the AWS default) is not rejected or silently downgraded to an
             // unencrypted channel. Dev/local stays OFF unless explicitly enabled. For Aurora, pass an SSL
