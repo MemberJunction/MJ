@@ -10883,6 +10883,29 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   `TRUTH_LOOM_DIR=/nonexistent-loom`). It becomes `make-scenario-series-lag.regeneration.test.ts`, beside
   `golden.regeneration.test.ts`, the lane whose config already assumes Loom (`vitest.regeneration.config.ts`): unit
   lane 27/189 without Loom, regeneration lane 1/1 with it.
+- **D4-267 · A PB18 timing failure in CI is re-run, not fixed by a push** (M8, CI run 44838557755 on `3715a814f9`).
+  `performance-benchmark.PB18` failed on two timing metrics (PB7–PB9 overhead 4383.74 against a 2368.67 baseline,
+  1.85x). PB18 is next's timing gate (OF4-36's family) and fails on next's own CI too (runs 44809644656 and
+  44795114681: the FrozenRow speedup ratio); the same agent code passed it on `a63fec9d2e` (run 44833693578), and the
+  only change since is a TruthSuite test rename. The failed job is re-run once (`gh run rerun --failed`); a second
+  failure would be root-caused on the runner's PB7 numbers.
+- **D4-268 · G0.6's LLM-judge failure on the grid's CSV header is recorded, not fixed in M8** (M8.3, keep-list run of
+  `Predictive Studio Gates — Pending`). G0.6 (`W1 -> S9.3`, PR 2's gate, `Status` `Pending`) failed: 1 of 55 chunks,
+  `ps-predictions-grid.component.ts`'s CSV header "Top Drivers (+ raises risk, − lowers risk)" judged causal. The string
+  is byte-identical on `origin/next` (PR 2's), the gate's own row records that the judge's verdict on this header varies
+  between runs (why it is `Pending` and cannot block a merge), and the same "raises/lowers risk" wording is PR 2/3's
+  driver vocabulary (Core `at-risk-rules`, the drivers' tooltips). A re-run measures the variance; the wording is OF4-56.
+- **D4-269 · G3.4's M8 failure is an infrastructure failure; it re-runs alone after the deterministic tier**
+  (controller, M8.3). In the chain's `Monitoring (statistical)` run G3.4 (`W2 -> S6.5 #2`) ended `GraphQL Error (Code:
+  unknown)`: a `TypeError` from undici in the client's `executeRunViewsSubset`, not an assertion. MJAPI logged `event
+  loop was blocked for 641024ms` and `436476ms` (heap ~1 GB, "no agent runs or scheduled jobs in flight") while the host
+  had `vm.swapusage used 19770 of 21504 MB` and 5.15 M pageouts (other projects' Node processes, a second MJAPI from
+  another checkout, the Docker VM; none of PR 4's worktrees running anything), so MJAPI's heap was paged out and one
+  RunViews outlasted undici's 300 s header timeout. G3.4 re-runs ALONE (`mj test run`), MJAPI freshly restarted and
+  nothing else of ours running, background limit ≥ 4 h, after the Training (statistical) re-run and `Integration Tests —
+  Deterministic`. A second failure of the same kind (an event-loop block, not an assertion) is recorded in §11 with
+  both runs and the host evidence as a known infrastructure limit (G3.4 passed on this branch's code paths at M5's exit
+  and at M5b's start) and M8.4 continues; an assertion failure is a finding and is root-caused.
 - **D-086 · Program process ruling (owner, 2026-11-16).** Fix rounds are capped at two per task, Minor/Nit findings are
   parked and fixed in one batch at the milestone exit self-audit (Important at once); no scoped re-review for nit-only
   rounds; reviewers verify by reading and targeted runs (the DB-lane case, the mutation, the runtime proof) and do not
@@ -10985,7 +11008,7 @@ All resolved; the defaults are implemented and the kickoff only confirms the fac
 The owner's ruling of 2026-11-10 (D4-69) removed OF4-1, OF4-2, OF4-4 and OF4-6: CI gains the sidecar pytest job at M1
 (Task M1.6), M5.4 drops `'Materialized'` from `ModeBadgeClass`, M4.3 deletes the grid's `@deprecated` aliases, and M3.4
 deletes `ProductionModelPromotionGate` and rewrites RD9 and the `ps-live-*` rigs, each with the test or rig it breaks
-updated as caller maintenance (§2.6). Fifty-one flags are listed (OF4-12…OF4-15 added at M3, OF4-17 at M4's start, OF4-16 and OF4-18…OF4-26 at M4, OF4-27…OF4-33 at M4b, OF4-34…OF4-36 at M5's start, OF4-37…OF4-41 at M5's exit, OF4-42…OF4-47 at the M5b/M6/M7 integration, OF4-48…OF4-52 at the M5b–M7 final verification, OF4-53…OF4-54 at the post-audit verification, OF4-55 at M8); OF4-30 is closed and OF4-48…OF4-51 and OF4-53 are resolved, so forty-five remain, each decided out of scope with its
+updated as caller maintenance (§2.6). Fifty-two flags are listed (OF4-12…OF4-15 added at M3, OF4-17 at M4's start, OF4-16 and OF4-18…OF4-26 at M4, OF4-27…OF4-33 at M4b, OF4-34…OF4-36 at M5's start, OF4-37…OF4-41 at M5's exit, OF4-42…OF4-47 at the M5b/M6/M7 integration, OF4-48…OF4-52 at the M5b–M7 final verification, OF4-53…OF4-54 at the post-audit verification, OF4-55…OF4-56 at M8); OF4-30 is closed and OF4-48…OF4-51 and OF4-53 are resolved, so forty-six remain, each decided out of scope with its
 default implemented:
 
 - **OF4-3 · `packages/Angular/Explorer/core-entity-forms/src/lib/custom/RecordProcesses/**` stays out of scope**
@@ -11231,6 +11254,10 @@ default implemented:
   slowest `V202611062330` 1.5 s; PR 4's migration 5 ms); the whole file 6.2 s locally at load 20. Green on next's CI at
   the same base. The test is next's file, outside the allowlist (D-062). **Default:** recorded; an `includes()` pre-filter
   before the regex would make it linear — for next's owners.
+- **OF4-56 · The driver vocabulary "raises risk / lowers risk" reads as causal to G0.6's judge** (M8.3, D4-268). The
+  grid's CSV header and the drivers' tooltips (PR 2/3's `AtRiskRules` wording) say a feature "raises" or "lowers" risk;
+  G0.6's criterion allows only "associated with" or "weighted by". **Default:** out of PR 4's scope (PR 2/3's copy,
+  D-062); the wording change ("associated with higher / lower risk") belongs with G0.6's activation.
 
 ## 10. PR description draft
 
