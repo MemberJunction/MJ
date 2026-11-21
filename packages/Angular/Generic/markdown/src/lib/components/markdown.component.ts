@@ -53,20 +53,20 @@ const RERENDER_INPUTS = new Set([
 ]);
 
 /**
- * Linear O(N) non-regex CommonMark fence scanner that reports whether `markdown`
- * ends inside an unclosed fenced `mermaid` code block (e.g. mid-stream before the
- * closing ```` ``` ```` or `~~~` arrives). Used to avoid rendering and error-flashing
- * half-streamed Mermaid diagrams on every streamed chunk.
+ * Linear O(N) non-regex CommonMark fence scanner. If `markdown` ends inside an unclosed
+ * fenced `mermaid` code block (exact `mermaid` info-string token matching marked's
+ * `code.language-mermaid` class), returns the body text inside that open fence; otherwise `null`.
  */
-export function HasUnclosedTrailingMermaidFence(markdown: string): boolean {
+export function GetUnclosedTrailingMermaidBody(markdown: string): string | null {
   if (!markdown || (!markdown.includes('`') && !markdown.includes('~'))) {
-    return false;
+    return null;
   }
 
   let inFence = false;
   let fenceChar = 0; // 96 ('`') or 126 ('~')
   let fenceLen = 0;
   let fenceLang = '';
+  let fenceBodyStart = -1;
 
   const len = markdown.length;
   let lineStart = 0;
@@ -104,7 +104,9 @@ export function HasUnclosedTrailingMermaidFence(markdown: string): boolean {
               while (langEnd < trimmedInfo.length && trimmedInfo.charCodeAt(langEnd) > 32) {
                 langEnd++;
               }
-              fenceLang = trimmedInfo.slice(0, langEnd).toLowerCase();
+              // Exact case to match marked's case-sensitive `code.language-mermaid` selector
+              fenceLang = trimmedInfo.slice(0, langEnd);
+              fenceBodyStart = nlIdx === -1 ? len : nlIdx + 1;
             }
           }
         }
@@ -126,6 +128,7 @@ export function HasUnclosedTrailingMermaidFence(markdown: string): boolean {
             fenceChar = 0;
             fenceLen = 0;
             fenceLang = '';
+            fenceBodyStart = -1;
           }
         }
       }
@@ -137,7 +140,17 @@ export function HasUnclosedTrailingMermaidFence(markdown: string): boolean {
     lineStart = nlIdx + 1;
   }
 
-  return inFence && fenceLang === 'mermaid';
+  return inFence && fenceLang === 'mermaid' ? markdown.slice(fenceBodyStart) : null;
+}
+
+/**
+ * Linear O(N) non-regex CommonMark fence scanner that reports whether `markdown`
+ * ends inside an unclosed fenced `mermaid` code block (e.g. mid-stream before the
+ * closing ```` ``` ```` or `~~~` arrives). Used to avoid rendering and error-flashing
+ * half-streamed Mermaid diagrams on every streamed chunk.
+ */
+export function HasUnclosedTrailingMermaidFence(markdown: string): boolean {
+  return GetUnclosedTrailingMermaidBody(markdown) !== null;
 }
 
 /**
@@ -656,28 +669,37 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   }
 
   /**
-   * Marks an unclosed trailing Mermaid fence as still streaming (so Mermaid does not render
-   * half-written syntax or flash error banners mid-stream) and synchronously swaps any already-cached
-   * completed Mermaid SVGs into the DOM before the browser paints.
+   * Marks an unclosed trailing Mermaid fence as still streaming when `IsStreaming` is `true`
+   * (so Mermaid does not render half-written syntax or flash error banners mid-stream) and
+   * synchronously swaps any already-cached completed Mermaid SVGs into the DOM before paint.
    */
-  private prepareMermaidBlocksForPaint(container: HTMLElement, markdown: string, isIncrementalFrame: boolean): void {
+  private prepareMermaidBlocksForPaint(container: HTMLElement, markdown: string): void {
     if (!this.EnableMermaid || !this.hasMermaid) {
       this.deferredStreamingMermaid = false;
       return;
     }
 
-    const shouldDeferTrailing =
-      (this.IsStreaming || isIncrementalFrame) && HasUnclosedTrailingMermaidFence(markdown);
-    this.deferredStreamingMermaid = shouldDeferTrailing;
+    // Opt-in via IsStreaming only so non-streaming hosts that append Data never leave a
+    // truncated/unclosed trailing Mermaid block permanently deferred.
+    const trailingBody = this.IsStreaming ? GetUnclosedTrailingMermaidBody(markdown) : null;
+    let deferredAny = false;
 
-    if (shouldDeferTrailing) {
+    if (trailingBody !== null) {
       const blocks = container.querySelectorAll('pre > code.language-mermaid');
       if (blocks.length > 0) {
         const lastBlock = blocks[blocks.length - 1];
-        lastBlock.setAttribute('data-mermaid-streaming', 'true');
-        lastBlock.parentElement?.setAttribute('data-mermaid-streaming', 'true');
+        // Verify the DOM block actually corresponds to the open trailing fence (not an earlier
+        // finished diagram when marked absorbed the trailing fence into an HTML block).
+        const normalizedBlock = (lastBlock.textContent ?? '').replace(/\r\n/g, '\n').trim();
+        const normalizedBody = trailingBody.replace(/\r\n/g, '\n').trim();
+        if (normalizedBlock === normalizedBody) {
+          lastBlock.setAttribute('data-mermaid-streaming', 'true');
+          lastBlock.parentElement?.setAttribute('data-mermaid-streaming', 'true');
+          deferredAny = true;
+        }
       }
     }
+    this.deferredStreamingMermaid = deferredAny;
 
     // Swap any already-rendered closed Mermaid blocks synchronously from the LRU cache so
     // full re-renders (e.g. stream completion enabling collapsible headings, or virtualized
@@ -936,7 +958,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
       this.RenderedContent = this.sanitizer.bypassSecurityTrustHtml(html);
     }
 
-    this.prepareMermaidBlocksForPaint(container, markdown, false);
+    this.prepareMermaidBlocksForPaint(container, markdown);
     this.lastRenderedMarkdown = markdown;
     this.cdr.markForCheck();
     Promise.resolve().then(() => this.postRenderProcessing(seq));
@@ -1041,7 +1063,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
 
     const fullHtml = this.committedPrefixHtml + tailHtml;
     this.updateContentFlags(fullHtml);
-    this.prepareMermaidBlocksForPaint(container, markdown, true);
+    this.prepareMermaidBlocksForPaint(container, markdown);
     this.RenderedContent = this.sanitizer.bypassSecurityTrustHtml(fullHtml);
     this.lastRenderedMarkdown = markdown;
 

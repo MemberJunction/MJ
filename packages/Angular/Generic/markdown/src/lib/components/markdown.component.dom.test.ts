@@ -789,17 +789,76 @@ describe('MarkdownComponent (DOM)', () => {
     it('HasUnclosedTrailingMermaidFence detects unclosed mermaid fences without false positives', () => {
       expect(HasUnclosedTrailingMermaidFence('')).toBe(false);
       expect(HasUnclosedTrailingMermaidFence('```mermaid\nflowchart TD\n  A-->B\n```')).toBe(false);
+      expect(HasUnclosedTrailingMermaidFence('```mermaid\r\nflowchart TD\r\n  A-->B\r\n```')).toBe(false);
+      expect(HasUnclosedTrailingMermaidFence('```mermaid\r\nflowchart TD\r\n  A-->B')).toBe(true);
       expect(HasUnclosedTrailingMermaidFence('```mermaid\nflowchart TD\n  A-->B')).toBe(true);
-      expect(HasUnclosedTrailingMermaidFence('```Mermaid\nflowchart TD\n  A -->')).toBe(true);
+      // Exact case matches marked's case-sensitive `code.language-mermaid` selector
+      expect(HasUnclosedTrailingMermaidFence('```Mermaid\nflowchart TD\n  A -->')).toBe(false);
       expect(HasUnclosedTrailingMermaidFence('~~~mermaid\nflowchart TD\n  A-->B')).toBe(true);
       expect(HasUnclosedTrailingMermaidFence('```ts\nconst x = 1;')).toBe(false);
       expect(HasUnclosedTrailingMermaidFence('    ```mermaid\nflowchart TD\nA-->B')).toBe(false);
+      // Closer must match opener character and length and have only trailing spaces/tabs
+      expect(HasUnclosedTrailingMermaidFence('````mermaid\nflowchart TD\nA-->B\n```')).toBe(true);
+      expect(HasUnclosedTrailingMermaidFence('```mermaid\nflowchart TD\nA-->B\n~~~')).toBe(true);
+      expect(HasUnclosedTrailingMermaidFence('```mermaid\nflowchart TD\nA-->B\n``` extra')).toBe(true);
+      expect(HasUnclosedTrailingMermaidFence('```mermaid\nflowchart TD\nA-->B\n```   \t')).toBe(false);
+      // Backtick in backtick-fence info string is inline code, not a fence opener
+      expect(HasUnclosedTrailingMermaidFence('```mermaid`foo\nflowchart TD\nA-->B')).toBe(false);
       expect(
         HasUnclosedTrailingMermaidFence('```mermaid\nflowchart TD\nA-->B\n```\n\n```mermaid\nflowchart LR\nC-->'),
       ).toBe(true);
       expect(
         HasUnclosedTrailingMermaidFence('````markdown\n```mermaid\nflowchart TD\nA-->B\n````'),
       ).toBe(false);
+    });
+
+    it('renders an appended unclosed trailing mermaid fence when IsStreaming is false (non-streaming hosts opt out)', async () => {
+      const f = render({ data: 'Intro paragraph.\n\nSecond paragraph.', IsStreaming: false });
+      const service = TestBed.inject(MarkdownService);
+      let renderCalls = 0;
+      const fakeMermaid: Partial<Mermaid> = {
+        initialize: vi.fn(),
+        render: async (id) => {
+          renderCalls++;
+          return { svg: `<svg id="${id}"><text>Rendered</text></svg>`, diagramType: 'flowchart' };
+        },
+      };
+      (service as unknown as { loadMermaid: () => Promise<Mermaid> }).loadMermaid = async () => fakeMermaid as Mermaid;
+
+      const c = container(f);
+      f.componentRef.setInput(
+        'data',
+        'Intro paragraph.\n\nSecond paragraph.\n\n```mermaid\nflowchart TD\n  A-->B',
+      );
+      f.detectChanges();
+
+      await vi.waitFor(() => expect(c.querySelector('.mermaid-diagram svg')).not.toBeNull());
+      expect(renderCalls).toBe(1);
+    });
+
+    it('does not hold back an earlier finished mermaid diagram when a trailing fence is absorbed into an HTML block or uses uppercase Mermaid', async () => {
+      const f = render({ data: '', IsStreaming: true, enableHtml: true });
+      const service = TestBed.inject(MarkdownService);
+      let renderCalls = 0;
+      const fakeMermaid: Partial<Mermaid> = {
+        initialize: vi.fn(),
+        render: async (id) => {
+          renderCalls++;
+          return { svg: `<svg id="${id}"><text>FirstChart</text></svg>`, diagramType: 'flowchart' };
+        },
+      };
+      (service as unknown as { loadMermaid: () => Promise<Mermaid> }).loadMermaid = async () => fakeMermaid as Mermaid;
+
+      const c = container(f);
+      // Closed first chart followed by an HTML block swallowing a trailing ```mermaid line
+      f.componentRef.setInput(
+        'data',
+        '```mermaid\nflowchart TD\n  A-->B\n```\n\n<div>\n```mermaid\nflowchart LR\n  C-->',
+      );
+      f.detectChanges();
+
+      await vi.waitFor(() => expect(c.querySelector('.mermaid-diagram svg')).not.toBeNull());
+      expect(renderCalls).toBe(1);
     });
 
     it('holds an unclosed streaming mermaid flowchart without flickering, renders once on close, and stays flicker-free across trailing stream chunks and stream-end re-render', async () => {

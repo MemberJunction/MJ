@@ -230,13 +230,16 @@ describe('MarkdownService (DOM)', () => {
       expect(renderedHtml).toContain('OK');
     });
 
-    it('caches sanitized Mermaid SVGs by theme + code and applies them synchronously via ApplyCachedMermaid', async () => {
+    it('caches sanitized Mermaid SVGs by theme + code, rewrites SVG IDs on reuse, and applies them synchronously via ApplyCachedMermaid', async () => {
       let renderCalls = 0;
       const fakeMermaid: Partial<Mermaid> = {
         initialize: vi.fn(),
-        render: async (_id, code) => {
+        render: async (id, code) => {
           renderCalls++;
-          return { svg: `<svg data-call="${renderCalls}"><text>${code.trim()}</text></svg>`, diagramType: 'flowchart' };
+          return {
+            svg: `<svg id="${id}" data-call="${renderCalls}"><style>#${id} { fill: red; }</style><text>${code.trim()}</text></svg>`,
+            diagramType: 'flowchart',
+          };
         },
       };
       stubLoader(async () => fakeMermaid as Mermaid);
@@ -244,13 +247,22 @@ describe('MarkdownService (DOM)', () => {
       const first = containerWith('<pre><code class="language-mermaid">flowchart TD\nA-->B</code></pre>');
       expect(await service.RenderMermaid(first)).toBe(true);
       expect(renderCalls).toBe(1);
-      expect(first.querySelector('.mermaid-diagram svg')?.getAttribute('data-call')).toBe('1');
+      const firstSvg = first.querySelector('.mermaid-diagram svg')!;
+      expect(firstSvg.getAttribute('data-call')).toBe('1');
+      const firstId = firstSvg.getAttribute('id');
+      expect(firstId).toBeTruthy();
 
-      // Second container with the exact same diagram swaps synchronously without invoking mermaid.render again
+      // Second container with the exact same diagram swaps synchronously with a FRESH unique SVG ID
       const second = containerWith('<pre><code class="language-mermaid">flowchart TD\nA-->B</code></pre>');
       const hasUncached = service.ApplyCachedMermaid(second);
       expect(hasUncached).toBe(false);
-      expect(second.querySelector('.mermaid-diagram svg')?.getAttribute('data-call')).toBe('1');
+      const secondSvg = second.querySelector('.mermaid-diagram svg')!;
+      expect(secondSvg.getAttribute('data-call')).toBe('1');
+      const secondId = secondSvg.getAttribute('id');
+      expect(secondId).toBeTruthy();
+      expect(secondId).not.toBe(firstId);
+      expect(second.innerHTML).toContain(`#${secondId}`);
+      expect(second.innerHTML).not.toContain(`#${firstId}`);
       expect(second.querySelector('pre')).toBeNull();
       expect(renderCalls).toBe(1);
 
@@ -261,6 +273,40 @@ describe('MarkdownService (DOM)', () => {
       expect(await service.RenderMermaid(darkContainer)).toBe(true);
       expect(renderCalls).toBe(2);
       expect(darkContainer.querySelector('.mermaid-diagram svg')?.getAttribute('data-call')).toBe('2');
+    });
+
+    it('evicts the least-recently-used Mermaid SVG cache entry past the 64-entry cap', async () => {
+      let renderCalls = 0;
+      const fakeMermaid: Partial<Mermaid> = {
+        initialize: vi.fn(),
+        render: async (id, code) => {
+          renderCalls++;
+          return { svg: `<svg id="${id}"><text>${code.trim()}</text></svg>`, diagramType: 'flowchart' };
+        },
+      };
+      stubLoader(async () => fakeMermaid as Mermaid);
+
+      // Fill cache with 64 distinct diagrams
+      for (let i = 0; i < 64; i++) {
+        const c = containerWith(`<pre><code class="language-mermaid">flowchart TD\nA-->N${i}</code></pre>`);
+        await service.RenderMermaid(c);
+      }
+      expect(renderCalls).toBe(64);
+
+      // Touch entry 0 so entry 1 becomes the LRU victim
+      const touch0 = containerWith('<pre><code class="language-mermaid">flowchart TD\nA-->N0</code></pre>');
+      expect(service.ApplyCachedMermaid(touch0)).toBe(false);
+
+      // Insert 65th diagram -> evicts entry 1, keeps entry 0
+      const c64 = containerWith('<pre><code class="language-mermaid">flowchart TD\nA-->N64</code></pre>');
+      await service.RenderMermaid(c64);
+      expect(renderCalls).toBe(65);
+
+      const check0 = containerWith('<pre><code class="language-mermaid">flowchart TD\nA-->N0</code></pre>');
+      expect(service.ApplyCachedMermaid(check0)).toBe(false);
+
+      const check1 = containerWith('<pre><code class="language-mermaid">flowchart TD\nA-->N1</code></pre>');
+      expect(service.ApplyCachedMermaid(check1)).toBe(true);
     });
 
     it('skips blocks marked data-mermaid-streaming="true" without loading mermaid or flashing errors', async () => {
@@ -279,7 +325,7 @@ describe('MarkdownService (DOM)', () => {
       expect(container.querySelector('.mermaid-error')).toBeNull();
     });
 
-    it('discards stale async mermaid results when the target block was replaced while rendering', async () => {
+    it('discards stale async mermaid results when the target block was moved out of container while rendering', async () => {
       let resolveRender!: (value: { svg: string; diagramType: string }) => void;
       const fakeMermaid: Partial<Mermaid> = {
         initialize: vi.fn(),
@@ -288,15 +334,23 @@ describe('MarkdownService (DOM)', () => {
       stubLoader(async () => fakeMermaid as Mermaid);
 
       const container = containerWith('<pre><code class="language-mermaid">flowchart TD\nA-->B</code></pre>');
+      const originalPre = container.querySelector('pre')!;
+      const detachedHost = document.createElement('div');
       const pending = service.RenderMermaid(container);
 
-      // Simulate a newer streamed chunk replacing the container DOM while mermaid.render() is in flight
+      // Move the original <pre> into a separate host (still has a parentNode so replaceChild would mutate
+      // detachedHost if the container.contains(block) guard were missing!)
       await Promise.resolve();
+      detachedHost.appendChild(originalPre);
       container.innerHTML = '<p>Updated chunk</p>';
+
       resolveRender({ svg: '<svg><text>Stale</text></svg>', diagramType: 'flowchart' });
       await pending;
 
       expect(container.innerHTML).toBe('<p>Updated chunk</p>');
+      // detachedHost must NOT have been mutated into a .mermaid-diagram AND cache must not be polluted
+      expect(detachedHost.querySelector('.mermaid-diagram')).toBeNull();
+      expect(detachedHost.querySelector('pre')).toBe(originalPre);
     });
   });
 

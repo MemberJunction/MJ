@@ -195,7 +195,9 @@ export class MarkdownService {
   /** In-flight load, so N diagrams in one document share ONE chunk fetch. */
   private mermaidLoad: Promise<Mermaid> | null = null;
   /** Bounded LRU cache of DOMPurify-sanitized Mermaid SVGs keyed by `${effectiveTheme}\0${code.trim()}`. */
-  private mermaidSvgCache = new Map<string, string>();
+  private mermaidSvgCache = new Map<string, { svg: string; idPrefix: string }>();
+  /** Monotonic counter so every rendered or reused Mermaid SVG gets a unique DOM ID prefix. */
+  private mermaidRenderSeq = 0;
   /** The KaTeX engine, once its lazy chunk has landed. Null until a formula is actually typeset. */
   private katexEngine: typeof katex | null = null;
   /** In-flight load, so N formulas in one document share ONE chunk fetch. */
@@ -434,6 +436,10 @@ export class MarkdownService {
     return `${effectiveTheme}\0${code.trim()}`;
   }
 
+  private nextMermaidId(): string {
+    return `mermaid-${Date.now()}-${++this.mermaidRenderSeq}`;
+  }
+
   private getCachedMermaidSvg(effectiveTheme: string, code: string): string | undefined {
     const key = this.mermaidCacheKey(effectiveTheme, code);
     const cached = this.mermaidSvgCache.get(key);
@@ -441,11 +447,15 @@ export class MarkdownService {
       // Refresh LRU recency
       this.mermaidSvgCache.delete(key);
       this.mermaidSvgCache.set(key, cached);
+      // Rewrite the original render ID prefix so reusing a diagram in multiple places
+      // never introduces duplicate `<svg id="...">` or `url(#...)` marker IDs in the DOM.
+      const freshId = this.nextMermaidId();
+      return cached.svg.split(cached.idPrefix).join(freshId);
     }
-    return cached;
+    return undefined;
   }
 
-  private setCachedMermaidSvg(effectiveTheme: string, code: string, sanitizedSvg: string): void {
+  private setCachedMermaidSvg(effectiveTheme: string, code: string, idPrefix: string, sanitizedSvg: string): void {
     const key = this.mermaidCacheKey(effectiveTheme, code);
     if (this.mermaidSvgCache.has(key)) {
       this.mermaidSvgCache.delete(key);
@@ -455,7 +465,7 @@ export class MarkdownService {
         this.mermaidSvgCache.delete(oldestKey);
       }
     }
-    this.mermaidSvgCache.set(key, sanitizedSvg);
+    this.mermaidSvgCache.set(key, { svg: sanitizedSvg, idPrefix });
   }
 
   private isStreamingMermaidBlock(block: Element): boolean {
@@ -578,7 +588,7 @@ export class MarkdownService {
 
       try {
         // Create a unique ID for this diagram
-        const id = `mermaid-${Date.now()}-${i}`;
+        const id = this.nextMermaidId();
 
         // Render the diagram
         const { svg } = await mermaid.render(id, code);
@@ -596,7 +606,7 @@ export class MarkdownService {
           USE_PROFILES: { svg: true, svgFilters: true },
         });
 
-        this.setCachedMermaidSvg(effectiveTheme, code, sanitizedSvg);
+        this.setCachedMermaidSvg(effectiveTheme, code, id, sanitizedSvg);
         this.replaceMermaidBlockWithSvg(block, sanitizedSvg);
       } catch (error) {
         console.warn('Mermaid rendering failed:', error);
