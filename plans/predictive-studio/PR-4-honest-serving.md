@@ -11316,7 +11316,12 @@ default implemented:
   client shard, CW7's REST get as the reader succeeds and the REST runView on the same key then answers 403 `API key
   not found`; CW8 reads the same refusal. Next's own push at 15:12 (run 44917940699), a dependabot PR and
   `claude/practical-faraday-1ni6e9` fail identically; next's 15:03 push passed. PR 4 changes neither the bundle nor
-  API keys. **Default:** recorded; next's, not PR 4's.
+  API keys. **Default:** recorded; next's, not PR 4's. **State after the merge of next `b219376ecf` (R1):** not fixed —
+  next's latest integration run (44917940699, on `b219376ecf`) is red the same way. Cause, read from the code: #6817
+  (`b219376ecf`) wraps REST `POST /views/:entityName` in `requireAPIKeyScope` (the REST get route CW7 calls first is
+  not wrapped, so it passes), and `decideAPIKeyScope` (`MJServer/src/auth/APIKeyScopeAuth.ts`) loads `MJ: API Keys` by ID
+  as the caller (`contextUser`); the FLS reader cannot read that entity, so the lookup returns no row → "API key not
+  found". A fix belongs to next (read the key as the system user); outside Predictive Studio, so not in PR 4 (D4-274).
 
 ## 10. PR description draft
 
@@ -13624,6 +13629,14 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   takes `CompositeKey | UserInfo` and records the user) → `test:types` 0, dashboards 258/3154. Integration
   (deterministic) red only on next's `fls-closeout-client` CW7/CW8 (`API key not found`), which fails the same way on
   next's own 15:12 push (run 44917940699) and two other PRs: next's, not PR 4's (OF4-58).
+- **Controller rulings (D4-277):** MJCoreEntitiesServer's twelve non-PS test edits → next's, `expected-console.ts`
+  deleted (113/1624, 0 failed); `fls-client.checks.ts` → next's, IT185 mints through the PS-local `PsServingKeys`
+  (integration-test-suite 77/1129 + rigs tsc 0). Commit `862d37a5f6`.
+- **Merge of next** `b219376ecf` (16 commits, no conflicts, no migration → no retime): merge `d6c75f7fd1`; `pnpm install` 0; root
+  build 352/352 + 322/322; unit (0 failed) MJCoreEntitiesServer 1624 · integration-test-suite 1129 · CoreActions 1256 ·
+  Actions Engine 281 · MJServer 3878 (66 skipped) · GenericDatabaseProvider 2216 (1 skipped) · MJExportEngine 155 ·
+  TaskGraph 594 · MCPServer 241. **IT185** on the claude DB (MJAPI :4041, sidecar :64203) **✓ Z1–Z8**, census equal.
+  OF4-58 not fixed by next yet; its cause recorded there (next's #6817).
 
 ## 12. Refresh log (append-only)
 
