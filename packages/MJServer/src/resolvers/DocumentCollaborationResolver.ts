@@ -54,6 +54,7 @@ import {
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AppContext } from '../types.js';
 import { WriteArtifactComplianceAudit } from '../operations/ArtifactComplianceAuditHelper.js';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 @ObjectType()
 export class CollaborationTicketResult {
@@ -191,6 +192,7 @@ export class DocumentCollaborationResolver extends ResolverBase {
         return (readWrite ?? anyProv ?? Metadata.Provider) as IMetadataProvider;
     }
 
+    @RefuseScopeLimitedPrincipals()
     @Mutation(() => CollaborationTicketResult)
     async MintArtifactCollaborationTicket(
         @Arg('artifactId') artifactId: string,
@@ -400,6 +402,7 @@ export class DocumentCollaborationResolver extends ResolverBase {
         }
     }
 
+    @RefuseScopeLimitedPrincipals()
     @Query(() => DocumentLiveBlockResultOutput)
     async ExecuteDocumentLiveBlock(
         @Arg('specJson') specJson: string,
@@ -461,6 +464,7 @@ export class DocumentCollaborationResolver extends ResolverBase {
         }
     }
 
+    @RefuseScopeLimitedPrincipals()
     @Mutation(() => FreezeDocumentBlockResultOutput)
     async FreezeDocumentLiveBlock(
         @Arg('specJson') specJson: string,
@@ -535,6 +539,7 @@ export class DocumentCollaborationResolver extends ResolverBase {
         }
     }
 
+    @RefuseScopeLimitedPrincipals()
     @Mutation(() => CommitArtifactInlineEditResultOutput)
     async CommitArtifactInlineEdit(
         @Arg('artifactId') artifactId: string,
@@ -579,6 +584,7 @@ export class DocumentCollaborationResolver extends ResolverBase {
         };
     }
 
+    @RefuseScopeLimitedPrincipals()
     @Mutation(() => CreateInlineDelegatedArtifactResultOutput)
     async CreateInlineDelegatedArtifact(
         @Arg('hostArtifactId') hostArtifactId: string,
@@ -747,6 +753,7 @@ export class DocumentCollaborationResolver extends ResolverBase {
      * - `agentMode === 'edit'` requires `artifact:edit` scope and `CanEdit === true` on `artifactId`.
      * - `agentMode === 'comment' | 'suggest'` requires `artifact:comment` scope and `CanRead === true` on `artifactId`.
      */
+    @RefuseScopeLimitedPrincipals()
     @Mutation(() => ExecuteAnchoredCommentAgentMentionPayload)
     public async ExecuteAnchoredCommentAgentMention(
         @Arg('artifactId', () => String) artifactId: string,
@@ -1570,6 +1577,7 @@ export class DocumentCollaborationResolver extends ResolverBase {
      * version marked with `MarkTrustedServerRestoreSave` and applying the restore state across active collaboration
      * rooms and peer replica nodes (`R9-2`).
      */
+    @RefuseScopeLimitedPrincipals()
     @Mutation(() => RestoreArtifactVersionResultOutput)
     public async RestoreArtifactVersion(
         @Arg('artifactId', () => String) artifactId: string,
