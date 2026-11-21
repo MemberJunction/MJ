@@ -4936,6 +4936,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     `tokens, such as an unbalanced quote or bracket.`,
                 );
             }
+            // The denylist alone cannot close the unquoted-format hole its own comment above
+            // describes: a term made of balanced parentheses and comparison operators carries no
+            // forbidden keyword yet still rewrites the predicate structure around `{0}`. When the
+            // term will be spliced unquoted, refuse the characters that give SQL its STRUCTURE —
+            // parens, quotes, comparison operators, brackets, semicolons. Ordinary search text
+            // (words, numbers, emails, hyphens) is unaffected, and entities without a
+            // UserSearchParamFormatAPI field never reach this check.
+            if (termIsSQL && /[()=<>;'"[\]`]/.test(safeUserSearchString)) {
+                throw new Error(
+                    `Invalid User Search string: this entity has a field using UserSearchParamFormatAPI, ` +
+                    `which splices the term directly into SQL unquoted, so structural SQL characters ` +
+                    `(parentheses, quotes, comparison operators, brackets, semicolons) are not allowed in the term.`,
+                );
+            }
             // The built-in predicates have no phrase syntax, so they search a quoted phrase without its
             // quotes (UnwrapPhraseQuotes). A custom format is SQL, screened above as typed, so it gets
             // the term as typed.

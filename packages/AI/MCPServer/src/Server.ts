@@ -20,7 +20,7 @@ import { UserCache } from "@memberjunction/generic-database-provider";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'crypto';
 import { Readable } from 'stream';
 import express, { Request, Response, NextFunction } from 'express';
 import sql from "mssql";
@@ -326,7 +326,16 @@ async function validateApiKey(
         const sharedApiKey = _config.apiKey;
         const configuredSystemApiKey = mcpSystemKey || sharedApiKey;
 
-        if (configuredSystemApiKey && apiKey === configuredSystemApiKey) {
+        // Constant-time comparison: this is the superadmin credential, and a byte-by-byte `===`
+        // leaks how much of a guess matched through response timing. Hashing both sides first
+        // also equalizes length, mirroring MJServer's system-key check in context.ts.
+        const systemKeyMatches =
+            !!configuredSystemApiKey &&
+            timingSafeEqual(
+                createHash('sha256').update(apiKey).digest(),
+                createHash('sha256').update(configuredSystemApiKey).digest()
+            );
+        if (systemKeyMatches) {
             return {
                 valid: true,
                 user: systemUser,

@@ -68,7 +68,19 @@ export class DataMapperAction extends BaseAction {
         super();
         // Initialize Nunjucks with custom filters
         this.nunjucksEnv = new nunjucks.Environment();
+        this.removeFunctionGlobals(this.nunjucksEnv);
         this.setupCustomFilters();
+    }
+
+    /**
+     * Removes nunjucks' built-in function globals (`range`, `cycler`, `joiner`, `lipsum`).
+     * They are callable objects whose properties are a path from template code to JavaScript
+     * internals, and data mapping has no use for any of them.
+     */
+    private removeFunctionGlobals(env: nunjucks.Environment): void {
+        for (const name of ['range', 'cycler', 'joiner', 'lipsum']) {
+            env.addGlobal(name, undefined);
+        }
     }
 
     /**
@@ -132,6 +144,7 @@ export class DataMapperAction extends BaseAction {
             if (strictVariables) {
                 // Create a new environment with strict settings
                 activeEnv = new nunjucks.Environment(undefined, { throwOnUndefined: true });
+                this.removeFunctionGlobals(activeEnv);
                 // Copy filters from the main environment
                 this.copyFiltersToEnvironment(activeEnv);
             }
@@ -254,13 +267,50 @@ export class DataMapperAction extends BaseAction {
     }
 
     /**
+     * SSTI defense: the mapping template is CALLER-supplied (including by AI agents via tool
+     * calls), and full Nunjucks is not a sandbox — template code that reaches a function
+     * constructor executes arbitrary JavaScript inside the server process. Data mapping needs
+     * only property paths, filters and basic control flow, so templates that try to reach
+     * JavaScript internals are refused outright:
+     * - `constructor` / `__proto__` / `prototype` are the escape hatches from any context object
+     *   (checked across the whole template so split-expression tricks cannot hide them)
+     * - computed, non-numeric bracket access (`x["..."]`) can smuggle those same names as
+     *   built strings (checked inside expressions; static text may still contain brackets)
+     * - include/import/extends pull in external templates this action never needs
+     */
+    private static readonly UNSAFE_EXPRESSION_PATTERNS: ReadonlyArray<{ pattern: RegExp; reason: string }> = [
+        { pattern: /\[(?!\s*\d+\s*\])/, reason: 'computed bracket member access (use dot paths or numeric indexes)' },
+        { pattern: /\{%-?\s*(include|import|extends|from)\b/i, reason: 'external template loading' }
+    ];
+
+    private assertTemplateSafe(template: string): void {
+        if (/\b(constructor|__proto__|prototype)\b/.test(template)) {
+            throw new Error('Mapping template rejected: access to JavaScript object internals (constructor/__proto__/prototype) is not allowed in Data Mapper templates');
+        }
+        const expressions = template.match(/\{\{[\s\S]*?\}\}|\{%[\s\S]*?%\}/g) ?? [];
+        for (const expr of expressions) {
+            for (const { pattern, reason } of DataMapperAction.UNSAFE_EXPRESSION_PATTERNS) {
+                if (pattern.test(expr)) {
+                    throw new Error(`Mapping template rejected: ${reason} is not allowed in Data Mapper templates`);
+                }
+            }
+        }
+    }
+
+    /** Single choke point for rendering caller-supplied template strings — validates first. */
+    private renderTemplate(env: nunjucks.Environment, template: string, data: unknown): string {
+        this.assertTemplateSafe(template);
+        return env.renderString(template, data);
+    }
+
+    /**
      * Transform a single data item using templates
      */
     private transformData(data: any, template: any, templateType: string, env: nunjucks.Environment = this.nunjucksEnv): any {
         try {
             if (templateType === 'string') {
                 // Render string template
-                return env.renderString(template.toString(), data);
+                return this.renderTemplate(env, template.toString(), data);
             } else if (templateType === 'object' && typeof template === 'object' && !Array.isArray(template)) {
                 // Transform object template
                 const result: any = {};
@@ -268,7 +318,7 @@ export class DataMapperAction extends BaseAction {
                 for (const [key, templateValue] of Object.entries(template)) {
                     if (typeof templateValue === 'string') {
                         // Render template string
-                        result[key] = env.renderString(templateValue, data);
+                        result[key] = this.renderTemplate(env, templateValue, data);
                         
                         // Try to parse as JSON if it looks like JSON
                         if (typeof result[key] === 'string' && 
@@ -293,7 +343,7 @@ export class DataMapperAction extends BaseAction {
                 // Transform array template
                 return template.map(item => {
                     if (typeof item === 'string') {
-                        return env.renderString(item, data);
+                        return this.renderTemplate(env, item, data);
                     } else if (typeof item === 'object') {
                         return this.transformData(data, item, 'object', env);
                     } else {
