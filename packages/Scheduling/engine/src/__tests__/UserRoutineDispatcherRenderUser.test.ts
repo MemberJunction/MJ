@@ -41,6 +41,6 @@ describe('UserRoutineDispatcherDriver: notification render user', () => {
         const output = await renderMessage(routine, run, routineUser);
 
         expect(output).toBe('rendered');
-        expect(render.mock.calls[0][5]).toEqual({ ContextUser: routineUser });
+        expect(render.mock.calls[0][5]).toEqual({ ContextUser: routineUser, autoescape: false });
     });
 });
