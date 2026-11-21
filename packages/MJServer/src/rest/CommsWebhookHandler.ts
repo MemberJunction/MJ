@@ -15,6 +15,8 @@
  */
 
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import express from 'express';
 import BodyParser from 'body-parser';
 import { IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
@@ -230,6 +232,17 @@ export function CreateCommsWebhookHandler(options: CommsWebhookHandlerOptions = 
             await handleUnsubscribe(req, res, publishActivity, verifyToken);
         },
     );
+
+    router.get('/preferences-element.js', (_req, res) => {
+        const bundlePath = resolvePreferenceElementBundlePath();
+        if (!bundlePath) {
+            res.status(404).type('text/plain').send('Preference center element bundle not built');
+            return;
+        }
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        res.type('application/javascript; charset=utf-8');
+        res.sendFile(bundlePath);
+    });
 
     router.get('/preferences/:token', unsubscribeLimiter, async (req, res) => {
         await handleGetPreferences(req, res, resolvePrefData, generateNonce, elementSrc);
@@ -708,12 +721,13 @@ async function handleGetPreferences(
     const nonce = generateNonce();
     setSecurityHeaders(res, nonce);
     const apiRoot = (req.baseUrl || '/comms').replace(/\/+$/, '');
+    const resolvedElementSrc = elementSrc ?? (resolvePreferenceElementBundlePath() ? `${apiRoot}/preferences-element.js` : undefined);
     res.status(200).send(
         RenderCommsPreferenceHostPage({
             Token: token,
             ApiRoot: apiRoot,
             CspNonce: nonce,
-            ElementSrc: elementSrc,
+            ElementSrc: resolvedElementSrc,
         }),
     );
 }
@@ -1327,4 +1341,19 @@ async function defaultConfirmDoubleOptIn(
         State: 'Opted In',
         ConfirmedAt: now.toISOString(),
     };
+}
+
+let cachedElementBundlePath: string | null | undefined;
+function resolvePreferenceElementBundlePath(): string | null {
+    if (cachedElementBundlePath !== undefined) {
+        return cachedElementBundlePath;
+    }
+    try {
+        const req = createRequire(import.meta.url);
+        const candidate = req.resolve('@memberjunction/ng-communications/dist/element/main.js');
+        cachedElementBundlePath = fs.existsSync(candidate) ? candidate : null;
+    } catch {
+        cachedElementBundlePath = null;
+    }
+    return cachedElementBundlePath;
 }

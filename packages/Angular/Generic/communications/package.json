@@ -10,7 +10,7 @@
   "scripts": {
     "test": "vitest run",
     "test:types": "tsc --noEmit -p tsconfig.spec.json",
-    "build": "ngc",
+    "build": "ngc && pnpm run build:element",
     "build:element": "node scripts/build-element.mjs",
     "test:watch": "vitest"
   },
@@ -20,7 +20,9 @@
   "devDependencies": {
     "@angular/compiler": "21.2.22",
     "@angular/compiler-cli": "21.2.22",
+    "@babel/core": "^7.29.0",
     "@memberjunction/ng-test-utils": "6.3.0-edge.1",
+    "esbuild": "0.28.1",
     "vitest": "^4.0.18",
     "zone.js": "~0.16.0"
   },
