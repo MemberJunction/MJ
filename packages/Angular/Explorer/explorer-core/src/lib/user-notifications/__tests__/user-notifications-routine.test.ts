@@ -195,6 +195,27 @@ describe('ClassifyNotificationMessage & StripNotificationMarkdown — routine & 
     expect(classified.Preview).toBe('Check Northwind today.');
   });
 
+  it('scales linearly O(n) on large pathological bracket and unclosed parenthesis inputs', () => {
+    const pathologicalCases = [
+      '['.repeat(20_000) + 'text',
+      '[a]('.repeat(10_000),
+      '[a]('.repeat(10_000) + ')',
+      '['.repeat(10_000) + '](' + '('.repeat(10_000),
+      '['.repeat(10_000) + 'a](' + '('.repeat(10_000),
+    ];
+
+    for (const input of pathologicalCases) {
+      const start = performance.now();
+      const classified = ClassifyNotificationMessage(input);
+      const stripped = StripNotificationMarkdown(input);
+      const elapsedMs = performance.now() - start;
+
+      expect(classified.Kind).toBe('text');
+      expect(stripped).toBe(input);
+      expect(elapsedMs).toBeLessThan(100);
+    }
+  });
+
   it('cleans entities and mention tokens in plain-text notifications (Kind === "text")', () => {
     const raw =
       'Routine &quot;Elena&#39;s Watch&quot; checked Northwind @{"_mode":"mention","type":"record","entityName":"Accounts","name":"Northwind","ID":"acc-1"} &amp; Contoso.';
@@ -202,9 +223,28 @@ describe('ClassifyNotificationMessage & StripNotificationMarkdown — routine & 
     const classified = ClassifyNotificationMessage(raw);
 
     expect(classified.Kind).toBe('text');
-    expect(classified.Body).toBe('');
+    expect(classified.Body).toBe('Routine "Elena\'s Watch" checked Northwind & Contoso.');
     expect(classified.Expandable).toBe(false);
     expect(classified.Preview).toBe('Routine "Elena\'s Watch" checked Northwind & Contoso.');
+  });
+
+  it('populates clean vm.Body for long (>240 chars) plain-text notifications when expanded', () => {
+    const suffix = 'A'.repeat(240);
+    const raw = `Elena&#39;s &quot;Northwind&quot; &amp; Co checked Northwind @{"_mode":"mention","type":"record","entityName":"Accounts","name":"Northwind","ID":"acc-1"} and Contoso @{"_mode":"mention","type":"user","id":"u-1","name":"Elena Vance"} — ${suffix}`;
+    const entity = createNotificationEntity('notif-long-text', 'Long Plain Notification', raw);
+    const component = createNotificationsComponent([entity]);
+
+    const vm = component.Groups[0].Items[0];
+
+    expect(vm.Kind).toBe('text');
+    expect(vm.Expandable).toBe(true);
+    expect(vm.Body.length).toBeGreaterThan(240);
+    expect(vm.Body).toContain('Elena\'s "Northwind" & Co checked Northwind and Contoso @Elena Vance');
+    expect(vm.Body).not.toContain('&#39;');
+    expect(vm.Body).not.toContain('&quot;');
+    expect(vm.Body).not.toContain('&amp;');
+    expect(vm.Body).not.toContain('@{"_mode"');
+    expect(vm.Body).not.toContain('Northwind Northwind');
   });
 
   it('truncates long Markdown previews cleanly at 240 characters with an ellipsis', () => {

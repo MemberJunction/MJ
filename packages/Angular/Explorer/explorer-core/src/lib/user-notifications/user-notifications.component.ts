@@ -41,7 +41,7 @@ interface MarkdownSegment {
 interface NotificationVM {
   N: MJUserNotificationEntity;
   Kind: MessageKind;
-  /** Rich body: extracted+stripped HTML fragment (html) or the raw message (markdown). Empty for plain text. */
+  /** Rich body: extracted+stripped HTML fragment (html), normalized markdown (markdown), or normalized plain text (text). */
   Body: string;
   /** Plain-text excerpt for the collapsed card. */
   Preview: string;
@@ -336,78 +336,85 @@ function unwrapInlineCode(segment: string): string {
   return inner;
 }
 
+function findLinkLabelEnd(text: string, openBracket: number, lineEnd: number): { start: number; closeBracket: number } {
+  let start = openBracket;
+  for (let k = openBracket + 1; k < lineEnd; k++) {
+    const ch = text[k];
+    if (ch === '[') {
+      // Outer '[' cannot form a single-bracket link label; jump directly to the inner '['.
+      start = k;
+    } else if (ch === ']') {
+      return { start, closeBracket: k };
+    }
+  }
+  return { start, closeBracket: -1 };
+}
+
+function findBalancedParenEnd(text: string, openParen: number, lineEnd: number): number {
+  let depth = 1;
+  for (let k = openParen + 1; k < lineEnd; k++) {
+    const ch = text[k];
+    if (ch === '(') {
+      depth++;
+    } else if (ch === ')') {
+      depth--;
+      if (depth === 0) {
+        return k;
+      }
+    }
+  }
+  return -1;
+}
+
 /**
- * Linear-time O(n) scanner/replacer for Markdown links `[label](url)` — avoids
- * polynomial regex backtracking on repeated `[` or `[](` sequences.
+ * Linear-time O(n) single-pass scanner/replacer for Markdown links `[label](url)` —
+ * caches `lineEnd` per line and advances a strictly monotonic cursor so pathological
+ * `[` or `[a](` sequences never rescan overlapping suffixes.
  */
 function processMarkdownLinks(text: string, mode: 'detect'): boolean;
 function processMarkdownLinks(text: string, mode: 'strip'): string;
 function processMarkdownLinks(text: string, mode: 'detect' | 'strip'): boolean | string {
   let out = '';
   let cursor = 0;
+  let lineEnd = -1;
   let i = 0;
   while (i < text.length) {
     if (text[i] !== '[') {
       i++;
       continue;
     }
-    const lineEnd = text.indexOf('\n', i + 1);
-    const searchLimit = lineEnd === -1 ? text.length : lineEnd;
-    let closeBracket = -1;
-    let nested = false;
-    for (let k = i + 1; k < searchLimit; k++) {
-      if (text[k] === '[') {
-        i = k;
-        nested = true;
-        break;
-      }
-      if (text[k] === ']') {
-        closeBracket = k;
-        break;
-      }
+    if (i > lineEnd) {
+      const nl = text.indexOf('\n', i + 1);
+      lineEnd = nl === -1 ? text.length : nl;
     }
-    if (nested) {
+    const { start, closeBracket } = findLinkLabelEnd(text, i, lineEnd);
+    if (closeBracket === -1) {
+      i = lineEnd;
       continue;
     }
-    if (closeBracket <= i + 1 || text[closeBracket + 1] !== '(') {
-      i = closeBracket !== -1 ? closeBracket + 1 : searchLimit;
+    if (closeBracket <= start + 1 || text[closeBracket + 1] !== '(') {
+      i = closeBracket + 1;
       continue;
     }
-    let closeParen = -1;
-    let parenDepth = 1;
-    for (let k = closeBracket + 2; k < searchLimit; k++) {
-      const ch = text[k];
-      if (ch === '(') {
-        parenDepth++;
-      } else if (ch === ')') {
-        parenDepth--;
-        if (parenDepth === 0) {
-          closeParen = k;
-          break;
-        }
-      }
-    }
+    const closeParen = findBalancedParenEnd(text, closeBracket + 1, lineEnd);
     if (closeParen === -1) {
-      const nextClose = text.indexOf(')', closeBracket + 2);
-      i = nextClose === -1 || nextClose >= searchLimit ? searchLimit : closeBracket + 2;
-      continue;
-    }
-    if (mode === 'detect' && closeParen === closeBracket + 2) {
-      i = closeParen + 1;
+      // No closing ')' before lineEnd; advance past the scanned suffix so it is never rescanned.
+      i = lineEnd;
       continue;
     }
     if (mode === 'detect') {
-      return true;
+      if (closeParen > closeBracket + 2) {
+        return true;
+      }
+      i = closeParen + 1;
+      continue;
     }
-    out += text.slice(cursor, i);
-    out += text.slice(i + 1, closeBracket);
+    out += text.slice(cursor, start);
+    out += text.slice(start + 1, closeBracket);
     cursor = closeParen + 1;
     i = cursor;
   }
-  if (mode === 'detect') {
-    return false;
-  }
-  return out + text.slice(cursor);
+  return mode === 'detect' ? false : out + text.slice(cursor);
 }
 
 function stripMarkdownSyntaxOutsideTokens(text: string): string {
@@ -498,7 +505,7 @@ export function ClassifyNotificationMessage(message: string): ClassifiedNotifica
   const cleanedText = collapseWhitespaceValue(cleanNonHtmlMessage(trimmed));
   return {
     Kind: 'text',
-    Body: '',
+    Body: cleanedText,
     Preview: cleanedText,
     Expandable: cleanedText.length > PREVIEW_MAX_CHARS,
   };

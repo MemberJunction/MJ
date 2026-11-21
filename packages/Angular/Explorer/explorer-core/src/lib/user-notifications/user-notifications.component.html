@@ -202,7 +202,7 @@
                         <mj-markdown class="card-rich-md" [data]="vm.Body" [enableMermaid]="false"></mj-markdown>
                       }
                       @default {
-                        <p class="card-message card-message-full">{{vm.N.Message}}</p>
+                        <p class="card-message card-message-full">{{vm.Body || vm.N.Message}}</p>
                       }
                     }
                   </div>
