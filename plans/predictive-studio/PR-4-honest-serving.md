@@ -3117,7 +3117,7 @@ A-6180-DELETE-PROC (§8.2) checks PR 4's body ⊇ `V202611101901`'s wherever a m
 **The run/model cycle (M2.3).** From M2 every trainer-path model names its run (`MLModel.TrainingRunID`) and its run
 names the model (`MLTrainingRun.ResultingModelID`). The procedure breaks the cycle on both sides before either
 `DELETE`: it nulls `MLTrainingRun.ResultingModelID` for the doomed models
-(`V202611192101__v6.3.x__PS_Honest_Serving_Schema.sql:664`) and `MLModel.TrainingRunID` for the doomed runs (`:742`),
+(`V202611201631__v6.3.x__PS_Honest_Serving_Schema.sql:664`) and `MLModel.TrainingRunID` for the doomed runs (`:742`),
 then deletes the runs (`:754`) and the models (`:755`). The TruthSuite `HarnessCleanup` mirrors that order through the
 entity layer (`harness/cleanup.ts:225`: clear and save each run's `ResultingModelID` that names a model being deleted,
 then delete the models, then the runs), pinned by its two cleanup-order tests.
@@ -10873,6 +10873,21 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   Sequence 49 of the deterministic suite (server block), its member row keeping its ID; the check's tags and comments
   and the schema-fingerprint query's description follow. §7, §10 and the task texts read IT185; D4-262 and the §11
   entries written before this merge keep IT183.
+- **D4-271 · The tail's guarded EntityUniqueKey inserts are removed; both databases rebuilt** (M8.4, the merge of
+  next `3c94a75e53`). Next's `V202611201630` inserts, unguarded, the `EntityUniqueKey` rows of PR 3's three constraints
+  (and OF4-34's): applied out of order on the dev databases (where PR 4's migration had already run) it failed at batch
+  85 on `UQ_EntityUniqueKey_EntityID_Name` (`UQ_MLTrainingSnapshot_ContentHash`). On a fresh install next's runs first
+  and PR 4's guards would skip, but the rows are next's now, so D4-72's three guarded inserts and their HAND EDIT
+  comments are removed (D4-72's own exit: "when next fixes it … their guards go with them"), the unique-key header
+  reads "10 added", and both databases are rebuilt from clean (the migration's checksum changed; the brief's rule for a
+  migration that touches objects we test). OF4-34 is resolved by the same migration.
+- **D4-272 · After the second merge of next, the pass re-runs only what the merge changed** (M8.4, D4-87/D-084). Next's
+  `3c94a75e53` changed no Predictive Studio code; PR 4's own changes since the M8.3 runs are the IT185 rename, the
+  migration's three removed (redundant) unique-key inserts and the retime. Both databases are rebuilt from clean with
+  next's migration first; identity is proven (514 entities, 8029 fields, `(Entity, Field, Sequence)` identical); the root
+  build, the unit tier of the packages the merge touched, IT185 and G5.6 (the two zero-schema-change checks that read the
+  renamed fingerprint query), `Integration Tests — Deterministic` (next's new bundles are members) and G3.4 alone
+  (D4-269) are re-run. The UI walks, the other gate suites and the harness are not: their inputs are unchanged.
 - **D4-263 · M8 lists two open deferrals, not four** (M8 final pass). Task M8.5's exit-test line "four deferrals
   listed with their expiries" predates D4-69, which removed OF4-1, OF4-2 and OF4-4 from D4-50's list; §10 lists OF4-5
   (expiry PR 6) and OF4-3 (out of scope, no deferred work), and Task M8.4 Step 4's `grep -c "expiry"` → 1 holds.
@@ -11014,7 +11029,7 @@ All resolved; the defaults are implemented and the kickoff only confirms the fac
 The owner's ruling of 2026-11-10 (D4-69) removed OF4-1, OF4-2, OF4-4 and OF4-6: CI gains the sidecar pytest job at M1
 (Task M1.6), M5.4 drops `'Materialized'` from `ModeBadgeClass`, M4.3 deletes the grid's `@deprecated` aliases, and M3.4
 deletes `ProductionModelPromotionGate` and rewrites RD9 and the `ps-live-*` rigs, each with the test or rig it breaks
-updated as caller maintenance (§2.6). Fifty-two flags are listed (OF4-12…OF4-15 added at M3, OF4-17 at M4's start, OF4-16 and OF4-18…OF4-26 at M4, OF4-27…OF4-33 at M4b, OF4-34…OF4-36 at M5's start, OF4-37…OF4-41 at M5's exit, OF4-42…OF4-47 at the M5b/M6/M7 integration, OF4-48…OF4-52 at the M5b–M7 final verification, OF4-53…OF4-54 at the post-audit verification, OF4-55…OF4-56 at M8); OF4-30 is closed and OF4-48…OF4-51 and OF4-53 are resolved, so forty-six remain, each decided out of scope with its
+updated as caller maintenance (§2.6). Fifty-three flags are listed (OF4-12…OF4-15 added at M3, OF4-17 at M4's start, OF4-16 and OF4-18…OF4-26 at M4, OF4-27…OF4-33 at M4b, OF4-34…OF4-36 at M5's start, OF4-37…OF4-41 at M5's exit, OF4-42…OF4-47 at the M5b/M6/M7 integration, OF4-48…OF4-52 at the M5b–M7 final verification, OF4-53…OF4-54 at the post-audit verification, OF4-55…OF4-57 at M8); OF4-30 is closed and OF4-34, OF4-48…OF4-51 and OF4-53 are resolved, so forty-six remain, each decided out of scope with its
 default implemented:
 
 - **OF4-3 · `packages/Angular/Explorer/core-entity-forms/src/lib/custom/RecordProcesses/**` stays out of scope**
@@ -11169,7 +11184,7 @@ default implemented:
   (recorded at M5's start). Every fresh install's CodeGen emits the `UQ_ArtifactGuestShareLink_MagicLinkInviteID`
   `EntityUniqueKey` insert and three `spUpdateEntityFieldRelatedEntityNameFieldMap` EXECs. The `EntityUniqueKey` ID is
   fresh on each run, so the check compares content, not bytes. The migration is next's (D-062). **Default,
-  implemented:** PR 4's tail and its D4-89 check exclude exactly those four statements; the fix belongs to next.
+  implemented:** PR 4's tail and its D4-89 check exclude exactly those four statements; the fix belongs to next. **Resolved at M8 (D4-271):** next's `V202611201630` ships the row.
 - **OF4-35 · next's MSQ7 (IT140) fails on a fresh install** (recorded at M5's start). next changed three queries' SQL
   after its last cold nightly. On a fresh install the first `mj sync push` stamps each query's fingerprint before it
   writes the new SQL row, so a second push changes it. Run alone afterwards, IT140 passes 10/10. next's PR CI starts
@@ -11264,6 +11279,11 @@ default implemented:
   grid's CSV header and the drivers' tooltips (PR 2/3's `AtRiskRules` wording) say a feature "raises" or "lowers" risk;
   G0.6's criterion allows only "associated with" or "weighted by". **Default:** out of PR 4's scope (PR 2/3's copy,
   D-062); the wording change ("associated with higher / lower risk") belongs with G0.6's activation.
+- **OF4-57 · next's `V202611201630` lacks one CodeGen statement** (M8.4 clean rebuild, the tail check on
+  `MJ_PS_PR4_claude`). `codegen --skipfiles` after `mj migrate` emits only `spUpdateEntityFieldRelatedEntityNameFieldMap
+  @EntityFieldID='EDA5A1D3-…', @RelatedEntityNameFieldMap='AgentChannel'` — `MJ: Agent Channel Participants.AgentChannelID`,
+  next's entity (OF4-9's and OF4-34's statements are gone: next fixed both). **Default:** recorded; next's tail, not
+  PR 4's.
 
 ## 10. PR description draft
 
@@ -11311,7 +11331,7 @@ are monitored on real outcomes.
   automatically, and migrates their artifacts to durable storage or marks them unscorable.
 
 **Generated facts** (regenerated before every checkpoint commit by `tools/pr-body.mjs`; do not edit by hand):
-- Migration: <!-- gen:migration -->migrations/v6/V202611192101__v6.3.x__PS_Honest_Serving_Schema.sql<!-- /gen:migration -->
+- Migration: <!-- gen:migration -->migrations/v6/V202611201631__v6.3.x__PS_Honest_Serving_Schema.sql<!-- /gen:migration -->
 - Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, PS_SEED_LIMIT, PS_SIGN_IN_URL, PS_STORAGE_PROVIDER, PW_BASE_URL, STORAGE_LOCAL_ROOT<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->29<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->29<!-- /gen:checks -->
@@ -11350,18 +11370,17 @@ re-created delete procedure is a superset of #6180's (it deletes the deleted mod
 same `MLModelID` clear, D4-32). A fresh install runs #6180's migration, then this PR's. M5.11 and M6.8 absorb #6180's
 shadow-scoring rows, PSI drift detector, drift action, drift job and IT166 (D4-31).
 
-**Coordination with `next`'s owners (found at M1).** next's `V202611101200__v6.3.x__Entity_Unique_Key_Sets.sql` created
-`__mj.EntityUniqueKey` without rows for PR 3's three unique constraints (`UQ_MLEvaluationProtocol_Lineage_Version`,
-`UQ_MLPredictionUnit_Lineage_Version`, `UQ_MLTrainingSnapshot_ContentHash`), so CodeGen writes them on any database
-built from `next`; this PR's tail carries them, each guarded by ID or `(EntityID, Name)` (D4-72). (The M1 tail also
-regenerated `spCreateEntityOrganicKey`/`spUpdateEntityOrganicKey`, which lacked `@Source`; next's
-`V202611101900__v6.3.x__ConversationTypes_Comments_FieldSuggestions.sql` re-creates both with it (its :3832, :3946), so
-the tail regenerated at the merge of next carries neither.) The tail's hand edits are four — the three
-`EntityUniqueKey` guards (D4-72) and the `AutoUpdateRelatedEntityInfo = 0` pin on `MJ: Latest Feature Values.EntityID`
-(D4-80) — and two generated blocks are deleted rather than edited: CodeGen's "Set LLM-identified FKs" block for that
-entity and the `MJ: Entities → MJ: Latest Feature Values` relationship CodeGen derived from that FK (D4-80). The
-`EntityUniqueKey` gap is reported to the owners of `V202611101200`; when `next` fixes it, the regenerated tail drops
-those rows and their guards go with them.
+**Coordination with `next`'s owners (found at M1, closed at M8).** next's `V202611101200__v6.3.x__Entity_Unique_Key_Sets.sql`
+created `__mj.EntityUniqueKey` without rows for PR 3's three unique constraints (`UQ_MLEvaluationProtocol_Lineage_Version`,
+`UQ_MLPredictionUnit_Lineage_Version`, `UQ_MLTrainingSnapshot_ContentHash`); this PR's tail carried them, guarded
+(D4-72), until next's `V202611201630__v6.3.x__ChiefOfStaff_ExtensibleSkills_And_AgentChannels.sql` shipped those rows
+(and the `MJ: Artifact Guest Share Links` key, OF4-34): the guarded inserts are removed and the tail no longer carries
+them (D4-271). (The M1 tail also regenerated `spCreateEntityOrganicKey`/`spUpdateEntityOrganicKey`, which lacked
+`@Source`; next's `V202611101900__v6.3.x__ConversationTypes_Comments_FieldSuggestions.sql` re-creates both with it, so
+the tail carries neither.) The tail's hand edits are two kinds — the `AutoUpdateRelatedEntityInfo = 0` pin on
+`MJ: Latest Feature Values.EntityID` (D4-80) and the `AutoUpdateIsNameField = 0` pins on `MJ: ML Models`' bounded-text
+columns — and two generated blocks are deleted rather than edited: CodeGen's "Set LLM-identified FKs" block for that
+entity and the `MJ: Entities → MJ: Latest Feature Values` relationship CodeGen derived from that FK (D4-80).
 
 **Changes outside Predictive Studio.** Each is a caller fix or an additive member another package needed:
 - `GraphQLDataProvider` — `GraphQLActionClient.RunAction` returns the action's output parameters in `Params`
@@ -13472,6 +13491,25 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   (reproduced locally with no Loom: 1 failed / 27) → moved to the regeneration lane (D4-266): unit lane 27/189 without
   Loom, regeneration lane 1/1. Shard 3 red — next's `spCreateRecordChangeContract.test.ts` timed out at 30 s (OF4-55;
   6.2 s locally, green on next).
+
+### 2026-11-20 — Claude (Opus 5.5) — M8.4 merge of next and retime
+
+- `git fetch origin` → `3c94a75e53` (11 ahead). merged next @3c94a75e53 (`1b915d8be5`), migration retimed
+  `V202611192101` → `V202611201631` (D-075; flyway rows of both databases). Conflicts: the RLS-filter folder
+  `.mj-sync.json` (one config, both pull filters), check-registry 252 → 254 next, ours 282 → 284, the four class
+  manifests (next's, regenerated), the MJUser form and MJServer `__mj.ts` (the form regenerated by CodeGen; `__mj.ts`, which
+  host CodeGen does not write, by `git merge-file` with the one import-line conflict unioned: 461 next + 5 PS = 466
+  classes); next added IT183/IT184, ours is IT185 (D4-270).
+- Next's `V202611201630` failed applied out of order on the dev databases (`UQ_EntityUniqueKey_EntityID_Name`): it now
+  ships PR 3's unique-key rows and OF4-34's, so the tail's three guarded inserts are removed (D4-271) and both databases
+  are rebuilt from clean (`196 applied`; tail check = OF4-57's one statement of next's; sync `184/60/16921/47`, 0 errors;
+  full CodeGen EXIT=0, its CodeGen_Run = OF4-9's two UPDATEs; provision 48; it-metadata `created 810`, 0 errors).
+  Identity: `IDENTITY-IDENTICAL`, entities 514, fields 8029, `(Entity, Field, Sequence)` identical, deterministic members
+  162, tests 295, gate rows 31.
+- `pnpm install` EXIT=0; root build 352/352 + 322/322 EXIT=0 (twice). Unit: integration-test-suite 78/1130 + rigs tsc 0 ·
+  core-entity-forms 90/722 + `test:types` 0 · Engine 124/1876 · TruthSuite 27/189 · MJCoreEntities 96/1688 · SQLParser
+  63/2175 (its five hash goldens regenerated for the renamed query's comment, red 5 first). Rulings D4-270…D4-272;
+  OF4-57.
 
 ## 12. Refresh log (append-only)
 

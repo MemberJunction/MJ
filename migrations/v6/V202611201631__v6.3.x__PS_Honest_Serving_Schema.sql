@@ -1248,9 +1248,10 @@ GO
  * V202611161958__v6.3.x__Artifact_Guest_Share_Links_And_WorkingState_Fixes (the MJ: Artifact
  * Guest Share Links unique key and three related-entity name-field maps), so they are not here.
  * Do NOT edit by hand: if the DDL above changes, re-run CodeGen and replace this section.
- * Five hand edits, each marked "HAND EDIT" where it is, must be re-applied after any regeneration: the
- * three EntityUniqueKey inserts for the training schema's existing constraints are guarded by ID or by
- * (EntityID, Name); the MJ: Latest Feature Values EntityID field is inserted with
+ * Two hand edits, each marked "HAND EDIT" where it is, must be re-applied after any regeneration (the
+ * three guarded EntityUniqueKey inserts for the training schema's constraints are gone: next's
+ * V202611201630__v6.3.x__ChiefOfStaff_ExtensibleSkills_And_AgentChannels ships those rows): the
+ * MJ: Latest Feature Values EntityID field is inserted with
  * AutoUpdateRelatedEntityInfo = 0; and (5) the seven bounded-text columns of MJ: ML Models that
  * CodeGen may pick as the name field are set to AutoUpdateIsNameField = 0. Two generated blocks are
  * deleted, not edited, whenever CodeGen emits them (no marker): a "Set LLM-identified FKs" block for
@@ -9608,24 +9609,15 @@ UPDATE [${flyway:defaultSchema}].[EntityField] SET [AutoUpdateIsNameField] = 0 W
 -- HAND EDIT (5) (re-apply after any tail regeneration): AutoUpdateIsNameField = 0 so CodeGen's name-field pick never makes MJ: ML Models.ArtifactStatus the name field; a name field on ML Models adds a joined name column to every view with a foreign key into MLModel
 UPDATE [${flyway:defaultSchema}].[EntityField] SET [AutoUpdateIsNameField] = 0 WHERE [EntityID] = 'A3997636-011D-46E0-BC01-8B1E61E1087B' AND [Name] = N'ArtifactStatus' AND [IsNameField] = 0;
 
-/* SQL text to sync entity unique keys (13 added, 0 updated, 0 removed) */
+/* SQL text to sync entity unique keys (10 added, 0 updated, 0 removed) */
 INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('dd3be67f-c35f-45a0-afe1-553285e7c93a', '18359693-D8DF-4E8F-B5E1-D2C17B742834', 'UQ_MLMonitoringResult_ModelPeriod', 'ModelID,PeriodGrain,Period', NULL);
 INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('cb945559-ef12-4233-a3d1-d2f033b073ce', '3BED585D-B150-4899-AB06-8A19624EA9BE', 'UQ_FeatureValue_ModelRow', 'MLModelScoringBindingID,EntityID,RecordID,EffectiveAsOf,Role', '([Source]=N''Model'')');
 INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('93275069-ad6d-46cb-bc40-23aa62f0bdef', '75F9DA13-10D3-4153-9299-E97F1ED296AD', 'UQ_MLOutputBinding_ModelSurface', 'ModelID,Surface', NULL);
--- HAND EDIT (re-apply after any tail regeneration): guarded, because V202611101200__v6.3.x__Entity_Unique_Key_Sets.sql created the table without this row and any database where CodeGen ran after it already has it, under its own ID, so the guard matches the unique key (EntityID, Name) too
-IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityUniqueKey] WHERE [ID] = 'b73646ed-db19-444e-9df2-5fc25e0ce986' OR ([EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND [Name] = 'UQ_MLEvaluationProtocol_Lineage_Version'))
-    INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('b73646ed-db19-444e-9df2-5fc25e0ce986', '7DB88C96-C922-4724-AE93-7B91798CEAFE', 'UQ_MLEvaluationProtocol_Lineage_Version', 'LineageRootID,Version', NULL);
 INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('60bf8799-8770-4fb9-bc38-53b42d43f66e', 'A3997636-011D-46E0-BC01-8B1E61E1087B', 'UX_MLModel_OneServingUnevaluatedPerPipeline', 'PipelineID', '([ServingWhileUnevaluated]=(1))');
 INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('13d270c1-93e1-4a75-83c7-7db302f3a152', 'A3997636-011D-46E0-BC01-8B1E61E1087B', 'UX_MLModel_PipelineVersion', 'PipelineID,Version', NULL);
 INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('c4d35846-8f14-4255-a95a-d1d87500e501', 'A3997636-011D-46E0-BC01-8B1E61E1087B', 'UX_MLModel_OnePublishedPerPipeline', 'PipelineID', '([Status]=N''Published'')');
 INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('78910fdd-18f4-48e0-824f-d84855e29ce6', 'BC5C5F60-2512-467A-BEC8-14B4D8D3B640', 'UX_MLModelPublishRecord_OnePublishPerRun', 'TrainingRunID', '([Kind]=''publish'' AND ([Purpose] IN (''publish'', ''adopt'')) AND [TrainingRunID] IS NOT NULL)');
 INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('82235b10-3719-4320-b793-8e90b8d810f7', 'BC5C5F60-2512-467A-BEC8-14B4D8D3B640', 'UX_MLModelPublishRecord_OneRunOutcome', 'TrainingRunID', '([Purpose]=''evaluate'' AND [TrainingRunID] IS NOT NULL)');
--- HAND EDIT (re-apply after any tail regeneration): guarded, because V202611101200__v6.3.x__Entity_Unique_Key_Sets.sql created the table without this row and any database where CodeGen ran after it already has it, under its own ID, so the guard matches the unique key (EntityID, Name) too
-IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityUniqueKey] WHERE [ID] = '50796e8c-8868-4157-af29-8c4d37f2b678' OR ([EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND [Name] = 'UQ_MLPredictionUnit_Lineage_Version'))
-    INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('50796e8c-8868-4157-af29-8c4d37f2b678', 'D5052EB0-354C-4C4D-80D8-2832FCC720E6', 'UQ_MLPredictionUnit_Lineage_Version', 'LineageRootID,Version', NULL);
--- HAND EDIT (re-apply after any tail regeneration): guarded, because V202611101200__v6.3.x__Entity_Unique_Key_Sets.sql created the table without this row and any database where CodeGen ran after it already has it, under its own ID, so the guard matches the unique key (EntityID, Name) too
-IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityUniqueKey] WHERE [ID] = '72c3af54-0097-4dd6-a3b2-4f16e80d24b0' OR ([EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND [Name] = 'UQ_MLTrainingSnapshot_ContentHash'))
-    INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('72c3af54-0097-4dd6-a3b2-4f16e80d24b0', 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', 'UQ_MLTrainingSnapshot_ContentHash', 'ContentHash', NULL);
 INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('5296bd6d-304d-4bbd-9483-a6a1bf7f0e3e', 'FD8EF230-65F3-496D-A117-7610572C35AA', 'UQ_MLModelScoringBinding_EntityFeature', 'TargetEntityID,FeatureName', '([TargetEntityID] IS NOT NULL)');
 
 /* SQL text to sync 3 entity field value row(s) for entity field ID 940329A6-0C44-44C2-B816-F192C3DDF75F */
