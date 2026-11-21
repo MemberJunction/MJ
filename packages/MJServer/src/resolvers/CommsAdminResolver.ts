@@ -24,6 +24,7 @@ import { CommunicationEngine, ComplianceGate, JurisdictionResolver } from '@memb
 import { CredentialEngine } from '@memberjunction/credentials';
 import type {
   BaseMessageResult,
+  DomainDNSRecord,
   MessageClass,
   ProviderCredentialsBase,
 } from '@memberjunction/communication-types';
@@ -136,6 +137,54 @@ function requireCommsAdmin(context: AppContext): string | null {
     return null;
   }
   return 'Owner privileges or "Communications: Admin" authorization required for Communications Admin operations';
+}
+
+function mergeDnsValidationRecords(
+  existingJson: string | null | undefined,
+  validated: DomainDNSRecord[],
+): DomainDNSRecord[] {
+  if (!existingJson) {
+    return validated;
+  }
+  let existing: DomainDNSRecord[] = [];
+  try {
+    const parsed = JSON.parse(existingJson) as unknown;
+    if (Array.isArray(parsed)) {
+      existing = parsed as DomainDNSRecord[];
+    }
+  } catch {
+    return validated;
+  }
+  if (existing.length === 0) {
+    return validated;
+  }
+
+  // Track which validation entries have been consumed so multiple DKIM records match in order
+  const remaining = [...validated];
+  const merged = existing.map((rec) => {
+    const idx = remaining.findIndex(
+      (v) =>
+        (v.Host && rec.Host && v.Host.toLowerCase() === rec.Host.toLowerCase()) ||
+        (v.Purpose === rec.Purpose && v.Type === rec.Type),
+    );
+    if (idx === -1) {
+      return rec;
+    }
+    const [match] = remaining.splice(idx, 1);
+    return {
+      ...rec,
+      Host: match.Value ? match.Host : rec.Host,
+      Value: match.Value || rec.Value,
+      Validated: match.Validated,
+    };
+  });
+
+  for (const leftover of remaining) {
+    if (leftover.Value || leftover.Purpose === 'DMARC') {
+      merged.push(leftover);
+    }
+  }
+  return merged;
 }
 
 function mapReasonToSuppressionType(reason: MJCommunicationSuppressionEntity['Reason']): string | undefined {
@@ -413,7 +462,7 @@ export class CommsAdminResolver {
     const now = new Date();
     domain.LastVerifiedAt = now;
     if (result.DNSRecords && result.DNSRecords.length > 0) {
-      domain.DNSRecords = JSON.stringify(result.DNSRecords);
+      domain.DNSRecords = JSON.stringify(mergeDnsValidationRecords(domain.DNSRecords, result.DNSRecords));
     }
     if (result.Verified) {
       domain.Status = 'Verified';

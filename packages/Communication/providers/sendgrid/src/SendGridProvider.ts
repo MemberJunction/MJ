@@ -69,6 +69,11 @@ export interface SendGridCredentials extends ProviderCredentialsBase {
      * Used by {@link ParseNotification} to verify `X-Twilio-Email-Event-Webhook-Signature`.
      */
     webhookVerificationKey?: string;
+    /**
+     * When true, skips the 10-minute replay window check (used by queued workers re-verifying
+     * signatures that were already validated at HTTP ingress).
+     */
+    skipReplayWindow?: boolean;
 }
 
 /**
@@ -281,7 +286,6 @@ export class SendGridProvider extends BaseCommunicationProvider {
      * `customArgs: { mj_log_id }` (never PII `CorrelationData`).
      */
     private buildSendGridMessage(message: ProcessedMessage, from: string): MailDataRequired {
-        const ctx = (message.ContextData ?? {}) as Record<string, unknown>;
         const msg: MailDataRequired = {
             to: message.To,
             from: {
@@ -293,14 +297,14 @@ export class SendGridProvider extends BaseCommunicationProvider {
             subject: message.ProcessedSubject,
             text: message.ProcessedBody,
             html: message.ProcessedHTMLBody,
-            trackingSettings: this.buildTrackingSettings(ctx)
+            trackingSettings: this.buildTrackingSettings(message)
         };
 
         if (message.Headers && Object.keys(message.Headers).length > 0) {
             msg.headers = { ...message.Headers };
         }
 
-        const logId = ctx['mj_log_id'] ?? ctx['CommunicationLogID'];
+        const logId = message.CorrelationLogID;
         if (typeof logId === 'string' && logId.trim().length > 0) {
             msg.customArgs = { mj_log_id: logId };
         }
@@ -316,24 +320,14 @@ export class SendGridProvider extends BaseCommunicationProvider {
      * Builds `trackingSettings` for SendGrid. Subscription tracking is always disabled;
      * `openTracking` and `clickTracking` are disabled when MJ first-party tracking is active.
      */
-    private buildTrackingSettings(ctx: Record<string, unknown>): NonNullable<MailDataRequired['trackingSettings']> {
-        const firstPartyActive = Boolean(
-            ctx['mjFirstPartyTracking'] ||
-            ctx['disableProviderTracking'] ||
-            ctx['DisableProviderTracking'] ||
-            ctx['TrackingToken'] ||
-            ctx['trackingToken']
-        );
-        const disableOpen = firstPartyActive || ctx['TrackOpens'] === false || ctx['trackOpens'] === false;
-        const disableClick = firstPartyActive || ctx['TrackClicks'] === false || ctx['trackClicks'] === false;
+    private buildTrackingSettings(message: ProcessedMessage): NonNullable<MailDataRequired['trackingSettings']> {
+        const disableTracking = Boolean(message.DisableProviderTracking);
 
         const settings: NonNullable<MailDataRequired['trackingSettings']> = {
             subscriptionTracking: { enable: false }
         };
-        if (disableOpen) {
+        if (disableTracking) {
             settings.openTracking = { enable: false };
-        }
-        if (disableClick) {
             settings.clickTracking = { enable: false };
         }
         return settings;
@@ -541,9 +535,7 @@ export class SendGridProvider extends BaseCommunicationProvider {
         if (!sig || !ts) {
             return fail('Missing SendGrid Event Webhook signature or timestamp header', 401, false);
         }
-        const skipReplayWindow = Boolean(
-            (credentials as { skipReplayWindow?: boolean } | undefined)?.skipReplayWindow,
-        );
+        const skipReplayWindow = Boolean(credentials?.skipReplayWindow);
         const verification = VerifySendGridWebhookSignature(
             verificationKey,
             rawBody,
@@ -1144,9 +1136,11 @@ function mapSendGridEventType(ev: SendGridWebhookEventPayload): NormalizedActivi
 }
 
 const SOFT_BOUNCE_CLASSIFICATIONS = new Set([
+    'technical',
     'technical failure',
     'content',
     'reputation',
+    'frequency/volume',
     'frequency or volume too high',
     'mailbox unavailable',
     'soft'

@@ -121,10 +121,7 @@ describe('SendGridProvider — Outbound V2 enhancements', () => {
     mockSgSend.mockResolvedValue([{ statusCode: 202, body: '', headers: {} }]);
 
     await provider.SendSingleMessage(createMessage({
-      ContextData: {
-        mjFirstPartyTracking: true,
-        TrackingToken: 'tok-123',
-      },
+      DisableProviderTracking: true,
     }));
 
     expect(mockSgSend).toHaveBeenCalledWith(expect.objectContaining({
@@ -140,8 +137,8 @@ describe('SendGridProvider — Outbound V2 enhancements', () => {
     mockSgSend.mockResolvedValue([{ statusCode: 202, body: '', headers: {} }]);
 
     await provider.SendSingleMessage(createMessage({
+      CorrelationLogID: 'log-uuid-1234',
       ContextData: {
-        mj_log_id: 'log-uuid-1234',
         CorrelationData: { ssn: '123-45-6789', fullName: 'Jane Doe' },
         email: 'pii@example.com',
       },

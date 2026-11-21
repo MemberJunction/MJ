@@ -126,6 +126,16 @@ export class Message {
     public Headers?: Record<string, string>;
 
     /**
+     * Optional CommunicationLog ID for provider webhook correlation (e.g., SendGrid customArgs).
+     */
+    public CorrelationLogID?: string;
+
+    /**
+     * When true, disables provider-side open/click tracking because MJ first-party tracking is active.
+     */
+    public DisableProviderTracking?: boolean;
+
+    /**
      * Optional. When true, the send is a DRY RUN: the engine and the provider execute their FULL
      * pipeline — validation, credential resolution, addressing, template resolution/rendering and
      * provider-specific payload construction — but the provider MUST NOT contact its external

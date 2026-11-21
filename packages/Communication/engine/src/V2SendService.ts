@@ -115,18 +115,21 @@ export function RewriteLinksForTracking(
   excludedUrls: ReadonlyArray<string> = [],
 ): string {
   const excluded = new Set(excludedUrls.filter(Boolean));
-  return html.replace(
-    /(<a\b[^>]*?\bhref\s*=\s*)(["'])(https?:\/\/[^"']+)\2/gi,
-    (fullMatch, prefix: string, quote: string, url: string) => {
-      const decodedUrl = url.replace(/&amp;/gi, '&');
-      if (excluded.has(decodedUrl) || excluded.has(url)) {
-        return fullMatch;
-      }
-      const sig = ComputeTrackingSignature(trackingToken, decodedUrl, secret);
-      const tracked = `${buildCommsRouteUrl(baseUrl, `/click/${trackingToken}`)}?u=${encodeURIComponent(decodedUrl)}&sig=${sig}`;
-      return `${prefix}${quote}${tracked}${quote}`;
-    },
-  );
+  return html.replace(/<a\b([^>]*)>/gi, (tagMatch: string, attrs: string) => {
+    const updatedAttrs = attrs.replace(
+      /\bhref\s*=\s*(["'])(https?:\/\/[^"']+)\1/i,
+      (hrefMatch: string, quote: string, url: string) => {
+        const decodedUrl = url.replace(/&amp;/gi, '&');
+        if (excluded.has(decodedUrl) || excluded.has(url)) {
+          return hrefMatch;
+        }
+        const sig = ComputeTrackingSignature(trackingToken, decodedUrl, secret);
+        const tracked = `${buildCommsRouteUrl(baseUrl, `/click/${trackingToken}`)}?u=${encodeURIComponent(decodedUrl)}&sig=${sig}`;
+        return `href=${quote}${tracked}${quote}`;
+      },
+    );
+    return `<a${updatedAttrs}>`;
+  });
 }
 
 export function InjectOpenPixel(
@@ -659,12 +662,8 @@ export class V2SendService {
     msg.HTMLBody = finalPayload.HTMLBody;
     msg.Headers = finalPayload.Headers;
     msg.DryRun = params.Envelope.DryRun;
-    msg.ContextData = {
-      mj_log_id: log.ID,
-      CommunicationLogID: log.ID,
-      mjFirstPartyTracking: true,
-      TrackingToken: trackingToken,
-    };
+    msg.CorrelationLogID = log.ID;
+    msg.DisableProviderTracking = true;
 
     const processed = new ProcessedMessageServer(msg);
     processed.ProcessedSubject = finalPayload.Subject ?? '';
