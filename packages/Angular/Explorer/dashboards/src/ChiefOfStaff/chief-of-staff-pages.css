@@ -3,6 +3,11 @@
     height: 100%;
 }
 
+/* Reserve bottom clearance inside page scroll bodies so the floating chat FAB never obscures content */
+mj-page-body {
+    padding-bottom: 88px;
+}
+
 .cos-agent-picker {
     display: inline-flex;
     align-items: center;
@@ -815,7 +820,8 @@
 }
 
 .cos-channel-item--paused {
-    border-left: 3px solid var(--mj-status-warning);
+    border-color: var(--mj-status-warning-border, var(--mj-status-warning));
+    background-color: var(--mj-status-warning-bg);
 }
 
 .cos-channel-item__top {
