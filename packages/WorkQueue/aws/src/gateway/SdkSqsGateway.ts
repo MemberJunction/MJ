@@ -8,17 +8,6 @@ import type { SqsGateway, SqsReceivedMessage, SqsReceiveRequest, SqsSendRequest 
 const MISSING_QUEUE_CODES = new Set(['QueueDoesNotExist', 'AWS.SimpleQueueService.NonExistentQueue']);
 const STALE_RECEIPT_CODES = new Set(['ReceiptHandleIsInvalid', 'MessageNotInflight']);
 
-export const SQS_MAX_DELAY_SECONDS = 900;
-
-/** Computes SQS `DelaySeconds` for a `ScheduledAt` timestamp, clamped to SQS's 0–900s range. */
-export function ComputeSqsDelaySeconds(scheduledAt: string | Date, nowMs: number = Date.now()): number {
-    const targetMs = scheduledAt instanceof Date ? scheduledAt.getTime() : Date.parse(scheduledAt);
-    if (!Number.isFinite(targetMs) || targetMs <= nowMs) {
-        return 0;
-    }
-    return Math.min(Math.ceil((targetMs - nowMs) / 1000), SQS_MAX_DELAY_SECONDS);
-}
-
 function clamp(value: number, min: number, max: number): number {
     return Math.min(Math.max(Math.floor(value), min), max);
 }
@@ -93,9 +82,6 @@ export class SdkSqsGateway implements SqsGateway {
             MessageBody: request.Body,
             ...(request.MessageGroupId ? { MessageGroupId: request.MessageGroupId } : {}),
             ...(request.MessageDeduplicationId ? { MessageDeduplicationId: request.MessageDeduplicationId } : {}),
-            ...(request.DelaySeconds !== undefined && request.DelaySeconds > 0
-                ? { DelaySeconds: clamp(request.DelaySeconds, 0, SQS_MAX_DELAY_SECONDS) }
-                : {}),
             ...(attributes.length > 0
                 ? { MessageAttributes: Object.fromEntries(attributes.map(([k, v]) => [k, { DataType: 'String', StringValue: v }])) }
                 : {}),

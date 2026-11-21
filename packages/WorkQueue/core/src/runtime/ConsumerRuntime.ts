@@ -4,7 +4,6 @@ import type { SubscriptionPolicy } from '../policy';
 import type { ITransportConsumer, ReceivedDelivery, SettleResult } from '../transport';
 import { DeliveryExecution } from './DeliveryExecution';
 import { ErrorMessageOf } from './outcomes';
-import { ExtractRateLimitKey, KeyedRateLimiter } from './RateLimiter';
 import type { ConsumerRuntimeOptions } from './types';
 
 interface RunningExecution<TPayload extends WorkJson> {
@@ -18,7 +17,6 @@ export class ConsumerRuntime<TPayload extends WorkJson = WorkJson> {
     private loopPromise: Promise<void> | null = null;
     /** Keyed by DeliveryExecution.ExecutionKey (DeliveryID + LeaseToken), never by DeliveryID alone. */
     private readonly executions = new Map<string, RunningExecution<TPayload>>();
-    private readonly rateLimiter: KeyedRateLimiter | null;
     private receiveController = new AbortController();
     private wakeResolver: (() => void) | null = null;
     private wakeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -31,9 +29,7 @@ export class ConsumerRuntime<TPayload extends WorkJson = WorkJson> {
         private readonly options: ConsumerRuntimeOptions,
         private readonly log: WorkLogger,
         private readonly now: () => number = () => Date.now(),
-    ) {
-        this.rateLimiter = policy.RateLimit ? new KeyedRateLimiter(policy.RateLimit) : null;
-    }
+    ) {}
 
     public get InFlightCount(): number {
         return this.executions.size;
@@ -126,14 +122,9 @@ export class ConsumerRuntime<TPayload extends WorkJson = WorkJson> {
             }
             if (deliveries.length > 0) {
                 idleMs = this.options.IdlePollMinMs;
-                for (const delivery of deliveries) {
-                    const delaySeconds = this.checkRateLimitDelaySeconds(delivery);
-                    if (delaySeconds !== null) {
-                        void this.deferRateLimited(delivery, delaySeconds);
-                        continue;
-                    }
+                deliveries.forEach((delivery) => {
                     void this.startExecution(delivery);
-                }
+                });
                 continue;
             }
             if (this.kickPending) {
@@ -251,45 +242,9 @@ export class ConsumerRuntime<TPayload extends WorkJson = WorkJson> {
                 results[index] = await this.releaseSkipped(delivery);
                 continue;
             }
-            const delaySeconds = this.checkRateLimitDelaySeconds(delivery);
-            if (delaySeconds !== null) {
-                results[index] = await this.deferRateLimited(delivery, delaySeconds);
-                blocked = true;
-                continue;
-            }
             const result = await this.startExecution(delivery);
             results[index] = result;
             blocked = !(result.Kind === 'Settled' && result.Status === 'Completed');
-        }
-    }
-
-    private checkRateLimitDelaySeconds(delivery: ReceivedDelivery<TPayload>): number | null {
-        if (!this.rateLimiter || !this.policy.RateLimit) {
-            return null;
-        }
-        const key = ExtractRateLimitKey(delivery.Message, this.policy.RateLimit.KeyPath);
-        const decision = this.rateLimiter.TryAcquire(key, this.now());
-        if (decision.Allowed) {
-            return null;
-        }
-        return Math.max(1, Math.ceil(decision.RetryAfterMs / 1000));
-    }
-
-    private async deferRateLimited(delivery: ReceivedDelivery<TPayload>, delaySeconds: number): Promise<SettleResult> {
-        const reason = `Rate limit exceeded; deferred ${delaySeconds}s`;
-        try {
-            if (this.consumer.Defer) {
-                return await this.consumer.Defer(delivery, delaySeconds, reason);
-            }
-            return await this.consumer.Retry(delivery, delaySeconds, reason);
-        } catch (error) {
-            const message = ErrorMessageOf(error);
-            this.log.Warn('Rate-limit deferral failed; lease will expire', {
-                Subscription: this.policy.SubscriptionName,
-                DeliveryID: delivery.DeliveryID,
-                Error: message,
-            });
-            return { Kind: 'Failed', DeliveryID: delivery.DeliveryID, Error: message };
         }
     }
 

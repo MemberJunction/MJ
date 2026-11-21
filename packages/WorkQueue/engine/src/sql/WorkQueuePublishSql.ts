@@ -1,4 +1,4 @@
-import { DELIVERY_INSERT_CHUNK, WorkQueueTables } from '../constants';
+import { DELIVERY_INSERT_CHUNK } from '../constants';
 import { ProcedureCallBuilder } from './ProcedureCallBuilder';
 import { WorkQueueProcedures } from './procedures';
 import type { DeliveryInsertRow, MessageInsertRow } from './rows';
@@ -52,21 +52,6 @@ export class WorkQueuePublishSql extends ProcedureCallBuilder implements Publish
             OrderKey: row.OrderKey,
         }));
         return this.Call(WorkQueueProcedures.InsertDeliveries, [{ Name: 'Deliveries', Value: JSON.stringify(deliveries) }]);
-    }
-
-    public ScheduleDeliveriesVisibleAt(messageID: string, visibleAtIso: string): SqlStatement {
-        const p = this.NewParams();
-        const msg = p.Add(messageID);
-        const visibleAt = p.Add(visibleAtIso);
-        const deliveries = this.Table(WorkQueueTables.Delivery);
-        const update = this.Context.PlatformKey === 'postgresql'
-            ? `UPDATE ${deliveries}
-SET "VisibleAt" = ${visibleAt}::timestamptz
-WHERE "MessageID" = ${msg}::uuid AND "Status" = 'Pending'`
-            : `UPDATE ${deliveries}
-SET [VisibleAt] = CAST(${visibleAt} AS DATETIMEOFFSET)
-WHERE [MessageID] = ${msg} AND [Status] = N'Pending'`;
-        return this.Statement(this.Context.Dialect.AffectedRowCountSQL(update, 'AffectedRows'), p);
     }
 
     public ReserveDeduplication(topicID: string, key: string, messageID: string, reserveSeconds: number): SqlStatement {

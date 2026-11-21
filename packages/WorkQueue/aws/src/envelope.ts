@@ -55,7 +55,6 @@ function hasValidScalars(raw: Record<string, unknown>): boolean {
         && typeof raw['PublishedAt'] === 'string'
         && isStringMap(raw['Attributes'])
         && optionalString(raw['PartitionKey']) && optionalString(raw['CorrelationID'])
-        && optionalString(raw['ScheduledAt'])
         && (raw['Payload'] === undefined || IsWorkJson(raw['Payload']));
 }
 
@@ -85,7 +84,6 @@ export function ParseEnvelopeBody(body: string): WorkMessage | null {
     if (raw['Payload'] !== undefined && IsWorkJson(raw['Payload'])) message.Payload = raw['Payload'];
     if (payloadRef) message.PayloadRef = payloadRef;
     if (typeof raw['CorrelationID'] === 'string') message.CorrelationID = raw['CorrelationID'];
-    if (typeof raw['ScheduledAt'] === 'string') message.ScheduledAt = raw['ScheduledAt'];
     return message;
 }
 

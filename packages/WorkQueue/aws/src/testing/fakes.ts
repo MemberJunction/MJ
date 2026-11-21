@@ -92,10 +92,9 @@ export class FakeSqsGateway implements SqsGateway {
                 return duplicate.MessageId;
             }
         }
-        const delaySeconds = Math.min(Math.max(Math.floor(request.DelaySeconds ?? 0), 0), 900);
         const message: FakeSqsMessage = {
             MessageId: `msg-${++this.sequence}`, Body: request.Body, Attributes: { ...(request.Attributes ?? {}) },
-            GroupId: request.MessageGroupId ?? null, DeduplicationId: dedupId, ReceiveCount: 0, VisibleAt: this.Now + delaySeconds * 1000,
+            GroupId: request.MessageGroupId ?? null, DeduplicationId: dedupId, ReceiveCount: 0, VisibleAt: this.Now,
             ReceiptHandle: null, SentTimestamp: this.Now, Deleted: false,
         };
         queue.Messages.push(message);

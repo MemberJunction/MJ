@@ -3,7 +3,7 @@ import {
     ChangeMessageVisibilityCommand, DeleteMessageCommand, GetQueueAttributesCommand, ReceiveMessageCommand,
     SendMessageCommand, SQSClient,
 } from '@aws-sdk/client-sqs';
-import { ComputeSqsDelaySeconds, SdkSqsGateway, SQS_MAX_DELAY_SECONDS } from '../gateway/SdkSqsGateway';
+import { SdkSqsGateway } from '../gateway/SdkSqsGateway';
 import { AwsGatewayError } from '../gateway/errors';
 
 const URL = 'https://sqs.us-east-1.amazonaws.com/123456789012/mj-wq-prod-email-unsubscribe';
@@ -119,16 +119,5 @@ describe('SdkSqsGateway.GetAttributes', () => {
         expect(Commands[0]).toBeInstanceOf(GetQueueAttributesCommand);
         expect((Commands[0] as GetQueueAttributesCommand).input).toEqual({ QueueUrl: URL, AttributeNames: ['All'] });
         expect(await harness(() => { throw awsError('QueueDoesNotExist'); }).Gateway.GetAttributes(URL)).toBeNull();
-    });
-
-    it('computes and clamps SQS DelaySeconds to 0..900 and passes it on Send', async () => {
-        const now = 1_800_000_000_000;
-        expect(ComputeSqsDelaySeconds(new Date(now - 5000), now)).toBe(0);
-        expect(ComputeSqsDelaySeconds(new Date(now + 120_000), now)).toBe(120);
-        expect(ComputeSqsDelaySeconds(new Date(now + 3_600_000), now)).toBe(SQS_MAX_DELAY_SECONDS);
-
-        const { Gateway, Commands } = harness(() => ({ MessageId: 'm-delay' }));
-        await Gateway.Send({ QueueUrl: URL, Body: '{}', DelaySeconds: 1500 });
-        expect((Commands[0] as SendMessageCommand).input.DelaySeconds).toBe(SQS_MAX_DELAY_SECONDS);
     });
 });

@@ -132,43 +132,6 @@ export class DatabaseTransportConsumer<TPayload extends WorkJson = WorkJson> imp
         return this.settleWrite(delivery, 'Pending', this.sql.Consume.ReleaseDelivery(delivery.DeliveryID, delivery.LeaseToken));
     }
 
-    /**
-     * Releases the delivery back to Pending without consuming an attempt and sets `VisibleAt`
-     * forward by `delaySeconds` inside a single transaction (used for rate-limit deferral).
-     */
-    public async Defer(delivery: ReceivedDelivery<TPayload>, delaySeconds: number, _reason: string): Promise<SettleResult> {
-        try {
-            return await RunInWorkQueueTransaction<SettleResult>(this.source, async tx => {
-                const txSql = CreateWorkQueueSqlBuilder(tx);
-                const releasedCount = await ExecuteWrite(
-                    tx,
-                    txSql.Consume.ReleaseDelivery(delivery.DeliveryID, delivery.LeaseToken),
-                    this.deps.ContextUser,
-                );
-                if (releasedCount !== 1) {
-                    return {
-                        Commit: false,
-                        Value: { Kind: 'LeaseLost', DeliveryID: delivery.DeliveryID },
-                    };
-                }
-                const clampedDelay = Math.max(0, Math.round(delaySeconds));
-                if (clampedDelay > 0) {
-                    await ExecuteWrite(
-                        tx,
-                        txSql.Consume.SetDeliveryVisibleAt(delivery.DeliveryID, clampedDelay),
-                        this.deps.ContextUser,
-                    );
-                }
-                return {
-                    Commit: true,
-                    Value: { Kind: 'Settled', DeliveryID: delivery.DeliveryID, Status: 'Pending' },
-                };
-            });
-        } catch (err) {
-            return { Kind: 'Failed', DeliveryID: delivery.DeliveryID, Error: ErrorText(err) };
-        }
-    }
-
     /** The cancelled delivery becomes Discarded now, freeing its key; anything else is LeaseLost with no change (03 §5). */
     public AcknowledgeCancel(delivery: ReceivedDelivery<TPayload>): Promise<SettleResult> {
         return this.settleWrite(delivery, 'Discarded', this.sql.Consume.AcknowledgeCancel(delivery.DeliveryID, delivery.LeaseToken));

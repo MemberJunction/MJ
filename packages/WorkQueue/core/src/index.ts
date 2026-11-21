@@ -20,7 +20,6 @@ export * from './runtime/types';
 export * from './runtime/outcomes';
 export * from './runtime/DeliveryExecution';
 export * from './runtime/ConsumerRuntime';
-export * from './runtime/RateLimiter';
 
 // Reference transport (the conformance kit lives in ./testing)
 export { InMemoryTransport, IN_MEMORY_TRANSPORT_CAPABILITIES } from './memory/InMemoryTransport';

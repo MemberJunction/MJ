@@ -1,6 +1,6 @@
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { ParseSubscriptionFilter, WORK_QUEUE_FILTER_SUPPORT, WorkQueueConfigurationError } from '@memberjunction/work-queue-core';
-import type { ExhaustionBehavior, FilterSupport, RateLimitConfig, SubscriptionBinding, SubscriptionPolicy, TopicBinding } from '@memberjunction/work-queue-core';
+import type { ExhaustionBehavior, FilterSupport, SubscriptionBinding, SubscriptionPolicy, TopicBinding } from '@memberjunction/work-queue-core';
 import { ParseJsonObject } from '../entities/validation';
 import type { SubscriptionRow, TopicRow, TransportRow } from './rows';
 
@@ -68,40 +68,6 @@ export function ResolveSubscriptionExhaustionBehavior(
     return undefined;
 }
 
-export function ResolveSubscriptionRateLimit(
-    subscription: Pick<SubscriptionRow, 'Name' | 'BindingConfig'>,
-): RateLimitConfig | undefined {
-    if (typeof subscription.BindingConfig !== 'string' || subscription.BindingConfig.trim() === '') {
-        return undefined;
-    }
-    const parsed = ParseJsonObject(subscription.BindingConfig, `Subscription ${subscription.Name} BindingConfig`);
-    const raw = parsed.RateLimit;
-    if (raw === undefined || raw === null) {
-        return undefined;
-    }
-    if (typeof raw !== 'object' || Array.isArray(raw)) {
-        throw new WorkQueueConfigurationError(`Subscription '${subscription.Name}' BindingConfig.RateLimit must be an object`);
-    }
-    const record = raw as Record<string, unknown>;
-    const maxPerWindow = record['MaxPerWindow'];
-    const windowMs = record['WindowMs'];
-    const keyPath = record['KeyPath'];
-    if (typeof maxPerWindow !== 'number' || !Number.isInteger(maxPerWindow) || maxPerWindow <= 0) {
-        throw new WorkQueueConfigurationError(`Subscription '${subscription.Name}' BindingConfig.RateLimit.MaxPerWindow must be a positive integer`);
-    }
-    if (typeof windowMs !== 'number' || !Number.isInteger(windowMs) || windowMs <= 0) {
-        throw new WorkQueueConfigurationError(`Subscription '${subscription.Name}' BindingConfig.RateLimit.WindowMs must be a positive integer`);
-    }
-    if (keyPath !== undefined && (typeof keyPath !== 'string' || keyPath.trim() === '')) {
-        throw new WorkQueueConfigurationError(`Subscription '${subscription.Name}' BindingConfig.RateLimit.KeyPath must be a non-empty string`);
-    }
-    return {
-        MaxPerWindow: maxPerWindow,
-        WindowMs: windowMs,
-        ...(typeof keyPath === 'string' ? { KeyPath: keyPath.trim() } : {}),
-    };
-}
-
 export function ToSubscriptionPolicy(subscription: SubscriptionRow, topic: TopicRow): SubscriptionPolicy {
     const policy: SubscriptionPolicy = {
         SubscriptionName: subscription.Name,
@@ -119,10 +85,6 @@ export function ToSubscriptionPolicy(subscription: SubscriptionRow, topic: Topic
     const exhaustionBehavior = ResolveSubscriptionExhaustionBehavior(subscription);
     if (exhaustionBehavior !== undefined) {
         policy.ExhaustionBehavior = exhaustionBehavior;
-    }
-    const rateLimit = ResolveSubscriptionRateLimit(subscription);
-    if (rateLimit !== undefined) {
-        policy.RateLimit = rateLimit;
     }
     return policy;
 }

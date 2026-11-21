@@ -101,11 +101,6 @@ export interface ITransportConsumer<TPayload extends WorkJson = WorkJson> {
     /** Database: no attempt consumed. SQS: the receive is already counted (spec 03 §5.1). */
     Release(delivery: ReceivedDelivery<TPayload>): Promise<SettleResult>;
     /**
-     * Defers an in-flight delivery back to Pending with a visibility delay without consuming an attempt
-     * (used for rate-limit deferral). Falls back to `Retry` if not implemented by a transport.
-     */
-    Defer?(delivery: ReceivedDelivery<TPayload>, delaySeconds: number, reason: string): Promise<SettleResult>;
-    /**
      * Token-fenced: a cancelled InFlight delivery held by this token → Discarded now, freeing its key (spec 03 §7).
      * Anything else → LeaseLost with no change. Transports without CancelInFlight always return LeaseLost.
      */

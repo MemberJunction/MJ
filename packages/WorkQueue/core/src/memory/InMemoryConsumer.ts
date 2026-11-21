@@ -43,10 +43,6 @@ export class InMemoryConsumer<TPayload extends WorkJson = WorkJson> implements I
         return this.store.Release(delivery);
     }
 
-    public async Defer(delivery: ReceivedDelivery<TPayload>, delaySeconds: number, _reason: string): Promise<SettleResult> {
-        return this.store.Defer(delivery, delaySeconds);
-    }
-
     public async AcknowledgeCancel(delivery: ReceivedDelivery<TPayload>): Promise<SettleResult> {
         return this.store.AcknowledgeCancel(delivery);
     }

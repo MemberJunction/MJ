@@ -256,35 +256,3 @@ describe('SqsTransportConsumer.DeadLetter', () => {
         expect(sqs.Messages(r.DeadLetterQueueUrl)).toHaveLength(0);
     });
 });
-
-describe('SqsTransportConsumer ScheduledAt and Defer', () => {
-    it('defers messages with a future ScheduledAt via ChangeVisibility until ScheduledAt arrives', async () => {
-        const scheduledAt = new Date(sqs.Now + 120_000).toISOString();
-        await sqs.Send({
-            QueueUrl: r.QueueUrl,
-            Body: JSON.stringify({ ...TestMessage(1), ScheduledAt: scheduledAt }),
-            MessageGroupId: 'g-sched',
-        });
-
-        // First receive sees ScheduledAt > Now, defers visibility by 120s, and returns []
-        expect(await consumer.Receive(1, 0, signal)).toHaveLength(0);
-        expect(sqs.Messages(r.QueueUrl)[0].VisibleAt).toBe(sqs.Now + 120_000);
-
-        // Once clock reaches ScheduledAt, the message is adopted
-        sqs.Advance(120);
-        const deliveries = await consumer.Receive(1, 0, signal);
-        expect(deliveries).toHaveLength(1);
-        expect(deliveries[0].Message.ScheduledAt).toBe(scheduledAt);
-    });
-
-    it('defers an in-flight delivery via ChangeVisibility when Defer is called', async () => {
-        await send(1);
-        const [delivery] = await consumer.Receive(1, 0, signal);
-        expect(await consumer.Defer(delivery, 45, 'Rate limit exceeded')).toEqual({
-            Kind: 'Settled',
-            DeliveryID: delivery.DeliveryID,
-            Status: 'Pending',
-        });
-        expect(sqs.Messages(r.QueueUrl)[0].VisibleAt).toBe(sqs.Now + 45_000);
-    });
-});

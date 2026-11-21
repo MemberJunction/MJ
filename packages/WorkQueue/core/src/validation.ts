@@ -37,7 +37,6 @@ export function ValidatePublishRequest(topic: TopicBinding, request: PublishRequ
         validatePayloadShape(request) ??
         validatePartitionKey(request) ??
         validateDeduplication(request) ??
-        validateScheduledAt(request) ??
         validateSize(topic, request)
     );
 }
@@ -57,7 +56,6 @@ export function BuildWorkMessage<TPayload extends WorkJson = WorkJson>(
         ...(request.PayloadRef !== undefined ? { PayloadRef: { ...request.PayloadRef } } : {}),
         ...(request.CorrelationID !== undefined ? { CorrelationID: request.CorrelationID } : {}),
         PublishedAt: publishedAt.toISOString(),
-        ...(request.ScheduledAt !== undefined ? { ScheduledAt: request.ScheduledAt.toISOString() } : {}),
     };
 }
 
@@ -178,16 +176,6 @@ function validateDeduplication(request: PublishRequest): PublishError | null {
         return invalidDeduplication(
             `DeduplicationTTLSeconds must be an integer from ${MIN_DEDUPLICATION_TTL_SECONDS} to ${MAX_DEDUPLICATION_TTL_SECONDS}`,
         );
-    }
-    return null;
-}
-
-function validateScheduledAt(request: PublishRequest): PublishError | null {
-    if (request.ScheduledAt === undefined) {
-        return null;
-    }
-    if (!(request.ScheduledAt instanceof Date) || Number.isNaN(request.ScheduledAt.getTime())) {
-        return CreatePublishError(PublishErrorCodes.BadRequest, 'ScheduledAt must be a valid Date');
     }
     return null;
 }
