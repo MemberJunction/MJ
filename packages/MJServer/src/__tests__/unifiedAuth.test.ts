@@ -22,6 +22,7 @@ const {
   mockGetValidationOptions,
   mockGetSigningKeys,
   mockGetByIssuer,
+  mockRequiresEmailVerified,
 } = vi.hoisted(() => {
   class _MockTokenExpiredError extends Error {
     constructor(public expiryDate: Date) {
@@ -41,6 +42,7 @@ const {
     mockGetValidationOptions: vi.fn(),
     mockGetSigningKeys: vi.fn(),
     mockGetByIssuer: vi.fn(),
+    mockRequiresEmailVerified: vi.fn(() => false),
   };
 });
 
@@ -93,13 +95,19 @@ vi.mock('../config.js', () => ({
   mj_core_schema: '__mj',
 }));
 
-vi.mock('@memberjunction/auth-providers', () => ({
-  TokenExpiredError: MockTokenExpiredError,
-  AuthProviderFactory: {
-    getInstance: () => ({ getByIssuer: mockGetByIssuer }),
-    get Instance() { return { getByIssuer: mockGetByIssuer }; },
-  },
-}));
+vi.mock('@memberjunction/auth-providers', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@memberjunction/auth-providers')>();
+  const instance = { getByIssuer: mockGetByIssuer, RequiresEmailVerified: mockRequiresEmailVerified };
+  return {
+    TokenExpiredError: MockTokenExpiredError,
+    CheckEmailVerified: actual.CheckEmailVerified,
+    DescribeEmailVerifiedRefusal: actual.DescribeEmailVerifiedRefusal,
+    AuthProviderFactory: {
+      getInstance: () => instance,
+      get Instance() { return instance; },
+    },
+  };
+});
 
 vi.mock('@memberjunction/api-keys', () => ({
   GetAPIKeyEngine: vi.fn(),
@@ -538,5 +546,106 @@ describe('login identity reporting', () => {
       expect.stringContaining("Login identity 'someone-else@example.org' resolved to user user-1 with a different email (test@example.com)"),
     );
     warn.mockRestore();
+  });
+});
+
+// ─── email_verified gate ────────────────────────────────────────────────────
+// The gate runs after the token is verified and before the user is resolved, so a refused
+// token never reaches VerifyUserRecord (which is also where new users are auto-provisioned).
+
+describe('email_verified gate', () => {
+  let middleware: ReturnType<typeof CreateUnifiedAuthMiddleware>;
+  let iat = 1_800_000_000;
+  let warn: ReturnType<typeof vi.spyOn>;
+  let error: ReturnType<typeof vi.spyOn>;
+
+  async function authenticate(claims: Record<string, unknown>): Promise<{ status: number; next: ReturnType<typeof vi.fn> }> {
+    iat += 1;
+    mockJwtDecode.mockReturnValue({
+      iss: 'https://test-issuer.com',
+      sub: 'user-1',
+      iat,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      ...claims,
+    });
+    const req = makeMockReq({ headers: { authorization: `Bearer gate-token-${iat}` } });
+    const res = makeMockRes();
+    const next = vi.fn();
+    await middleware(req, res, next);
+    return { status: res._status, next };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupSuccessfulAuth();
+    mockRequiresEmailVerified.mockReturnValue(false);
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    middleware = CreateUnifiedAuthMiddleware(mockDataSources);
+  });
+
+  afterEach(() => {
+    warn.mockRestore();
+    error.mockRestore();
+  });
+
+  it('refuses email_verified false before any user lookup', async () => {
+    const { status, next } = await authenticate({ email_verified: false });
+    expect(status).toBe(401);
+    expect(next).not.toHaveBeenCalled();
+    expect(mockJwtVerify).toHaveBeenCalledTimes(1);
+    expect(mockExtractUserInfo).not.toHaveBeenCalled();
+    expect(mockVerifyUserRecord).not.toHaveBeenCalled();
+  });
+
+  it('refuses the string "false" before any user lookup', async () => {
+    const { status } = await authenticate({ email_verified: 'false' });
+    expect(status).toBe(401);
+    expect(mockVerifyUserRecord).not.toHaveBeenCalled();
+  });
+
+  it('accepts email_verified true', async () => {
+    const { next } = await authenticate({ email_verified: true });
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(mockVerifyUserRecord).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts an absent claim by default', async () => {
+    const { next } = await authenticate({});
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(mockVerifyUserRecord).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses an absent claim before any user lookup when the provider requires it', async () => {
+    mockRequiresEmailVerified.mockReturnValue(true);
+    const { status, next } = await authenticate({});
+    expect(status).toBe(401);
+    expect(next).not.toHaveBeenCalled();
+    expect(mockRequiresEmailVerified).toHaveBeenCalledWith('https://test-issuer.com');
+    expect(mockVerifyUserRecord).not.toHaveBeenCalled();
+  });
+
+  it('accepts email_verified true when the provider requires it', async () => {
+    mockRequiresEmailVerified.mockReturnValue(true);
+    const { next } = await authenticate({ email_verified: true });
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-checks a token that is already in the auth cache', async () => {
+    // First request passes and caches the verified token; the provider is then switched to strict.
+    iat += 1;
+    const payload = { iss: 'https://test-issuer.com', sub: 'user-1', iat, exp: Math.floor(Date.now() / 1000) + 3600 };
+    mockJwtDecode.mockReturnValue(payload);
+    const headers = { authorization: `Bearer gate-cached-${iat}` };
+    const firstNext = vi.fn();
+    await middleware(makeMockReq({ headers }), makeMockRes(), firstNext);
+    expect(firstNext).toHaveBeenCalledTimes(1);
+
+    mockRequiresEmailVerified.mockReturnValue(true);
+    mockVerifyUserRecord.mockClear();
+    const res = makeMockRes();
+    await middleware(makeMockReq({ headers }), res, vi.fn());
+    expect(res._status).toBe(401);
+    expect(mockVerifyUserRecord).not.toHaveBeenCalled();
   });
 });

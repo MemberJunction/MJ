@@ -15,6 +15,8 @@ import { Router, Request, Response, urlencoded, json } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import * as crypto from 'crypto';
 import jwt from 'jsonwebtoken';
+import type { JwtPayload } from 'jsonwebtoken';
+import { AuthProviderFactory, CheckEmailVerified, DescribeEmailVerifiedRefusal, type EmailVerifiedCheck } from '@memberjunction/auth-providers';
 import {
   BuildAuthorizationServerMetadata,
   type AuthorizationServerMetadataOptions,
@@ -884,16 +886,22 @@ async function validateUpstreamUser(
     }
 
     // Decode without verification - we already exchanged with upstream provider
-    const decoded = jwt.decode(tokenToDecode) as {
-      sub?: string;
+    const decoded = jwt.decode(tokenToDecode) as (JwtPayload & {
       email?: string;
       preferred_username?: string;
       unique_name?: string;
       upn?: string;
-    } | null;
+    }) | null;
 
     if (!decoded) {
       return { valid: false, error: 'Failed to decode upstream token' };
+    }
+
+    // Refuse a token whose provider does not vouch for its email, before the user is looked up.
+    const emailCheck = CheckUpstreamEmailVerified(decoded);
+    if (!emailCheck.Allowed) {
+      console.warn(`OAuth Proxy: Upstream token refused for issuer ${decoded.iss ?? 'unknown'}: ${DescribeEmailVerifiedRefusal(emailCheck.Reason)}`);
+      return { valid: false, error: 'Email address is not verified by the identity provider' };
     }
 
     // Extract email from various claim locations
@@ -930,6 +938,15 @@ async function validateUpstreamUser(
     console.error('OAuth Proxy: User validation error:', error);
     return { valid: false, error: 'Failed to validate user' };
   }
+}
+
+/**
+ * Checks an upstream token's `email_verified` claim against the setting of the provider(s)
+ * registered for its issuer (`requireEmailVerified` in the auth provider config).
+ */
+export function CheckUpstreamEmailVerified(decoded: JwtPayload): EmailVerifiedCheck {
+  const requireEmailVerified = decoded.iss ? AuthProviderFactory.Instance.RequiresEmailVerified(decoded.iss) : false;
+  return CheckEmailVerified(decoded, requireEmailVerified);
 }
 
 /**

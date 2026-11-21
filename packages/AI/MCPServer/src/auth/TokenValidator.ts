@@ -18,7 +18,7 @@ import jwt from 'jsonwebtoken';
 import type { JwtPayload, JwtHeader, SigningKeyCallback } from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
 import type { UserInfo } from '@memberjunction/core';
-import { AuthProviderFactory } from '@memberjunction/auth-providers';
+import { AuthProviderFactory, CheckEmailVerified, DescribeEmailVerifiedRefusal } from '@memberjunction/auth-providers';
 import type { OAuthValidationResult, OAuthErrorCode, ProxyJWTClaims } from './types.js';
 
 /**
@@ -321,7 +321,8 @@ function isTokenExpired(token: string): { expired: boolean; exp?: number } {
  * 4. Verify issuer matches a configured provider
  * 5. Verify signature using JWKS
  * 6. Validate audience against provider's configured audience
- * 7. Extract user info from claims
+ * 7. Refuse a token whose `email_verified` claim is false (or absent, when the provider requires it)
+ * 8. Extract user info from claims
  *
  * @param token - The Bearer token (without "Bearer " prefix)
  * @returns Validation result with payload and user info if valid
@@ -364,7 +365,7 @@ export async function ValidateBearerToken(token: string): Promise<OAuthValidatio
   // use a different format than what the provider is configured with
   const factory = AuthProviderFactory.Instance;
   const issuerVariants = getAzureAdIssuerVariants(issuer);
-  let allProviders: Array<{ issuer: string; audience: string }> = [];
+  let allProviders: Array<{ issuer: string; audience: string; RequireEmailVerified?: boolean }> = [];
 
   for (const variant of issuerVariants) {
     allProviders = factory.getAllByIssuer(variant);
@@ -426,7 +427,16 @@ export async function ValidateBearerToken(token: string): Promise<OAuthValidatio
     return createError('invalid_token', error instanceof Error ? error.message : 'Token validation failed');
   }
 
-  // 5. Extract user info from claims
+  // 5. Refuse a token whose provider does not vouch for its email, before the user is resolved.
+  // The stricter setting wins where several providers share the issuer.
+  const requireEmailVerified = allProviders.some((p) => p.RequireEmailVerified === true);
+  const emailCheck = CheckEmailVerified(verifiedPayload, requireEmailVerified);
+  if (!emailCheck.Allowed) {
+    console.warn(`[TokenValidator] Token refused for issuer ${issuer}: ${DescribeEmailVerifiedRefusal(emailCheck.Reason)}`);
+    return createError('invalid_token', 'Email address is not verified by the identity provider');
+  }
+
+  // 6. Extract user info from claims
   const userInfo = extractUserInfoFromPayload(verifiedPayload);
 
   return {

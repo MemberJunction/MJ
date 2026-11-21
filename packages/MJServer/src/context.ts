@@ -6,6 +6,7 @@ import { Subject, firstValueFrom } from 'rxjs';
 import { AuthenticationError, AuthorizationError } from 'type-graphql';
 import sql from 'mssql';
 import { GetSigningKeys, GetSystemUser, GetValidationOptions, VerifyUserRecord, ExtractUserInfoFromPayload } from './auth/index.js';
+import { AssertTokenEmailVerified } from './auth/emailVerifiedGate.js';
 import { CloneUserForSessionContext } from './auth/sessionUserClone.js';
 import { EmailsMatch, ResolveUserLookupEmail, type LoginEmailResolution } from './auth/loginEmailResolution.js';
 import { GetAPIKeyActingContextResolver } from './auth/actingContextResolver.js';
@@ -543,6 +544,10 @@ export const GetUserPayload = async (
       await verifyAsync(issuer, token);
       AuthCache.set(authCacheKey, payload);
     }
+
+    // Refuse a token whose provider does not vouch for its email, before any user lookup or
+    // auto-provisioning. Runs for cached tokens too, so a provider config change takes effect.
+    AssertTokenEmailVerified(payload);
 
     // Use provider to extract user information
     const userInfo = ExtractUserInfoFromPayload(payload);

@@ -35,6 +35,19 @@ module.exports = {
    */
   authProviders: [
     /**
+     * EMAIL VERIFICATION (all providers)
+     *
+     * MemberJunction matches a login to a user by the token's email. A token whose
+     * `email_verified` claim is false is always refused.
+     *
+     * requireEmailVerified (optional, default false): when true, a token from that provider
+     * is also refused when the `email_verified` claim is absent. Turn it on for providers
+     * that send the claim (Auth0, Google, Okta and Cognito ID tokens). Leave it off for
+     * providers that never send it (Entra ID / MSAL, some Okta and Cognito access tokens),
+     * or every login from that provider is refused.
+     */
+
+    /**
      * Microsoft Authentication Library (MSAL) / Azure AD / Entra ID
      *
      * REDIRECT URI SETUP:
@@ -53,6 +66,8 @@ module.exports = {
       jwksUri: 'https://login.microsoftonline.com/${TENANT_ID}/discovery/v2.0/keys',
       clientId: '${WEB_CLIENT_ID}',
       tenantId: '${TENANT_ID}'
+      // requireEmailVerified is left off here: Entra ID tokens do not carry an
+      // email_verified claim, so turning it on would refuse every login.
     },
 
     /**
@@ -74,7 +89,10 @@ module.exports = {
       jwksUri: 'https://${AUTH0_DOMAIN}/.well-known/jwks.json',
       clientId: '${AUTH0_CLIENT_ID}',
       clientSecret: '${AUTH0_CLIENT_SECRET}',
-      domain: '${AUTH0_DOMAIN}'
+      domain: '${AUTH0_DOMAIN}',
+      // Optional: also refuse tokens with no email_verified claim (see EMAIL VERIFICATION above).
+      // The claim must be in the token MJ receives; add it with an Auth0 Action if it is not.
+      // requireEmailVerified: true
     },
 
     /**
