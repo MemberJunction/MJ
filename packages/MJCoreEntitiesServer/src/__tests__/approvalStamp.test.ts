@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import type { BaseEntity, RunViewParams } from '@memberjunction/core';
-import { ApplyApprovalRulesAsync, ApprovalRefusalResult, type ApprovalColumns } from '../custom/approvalStamp';
+import { ApplyApprovalRulesAsync, ApprovalRefusalResult, type ApprovalColumns, type ApproverRule } from '../custom/approvalStamp';
 
 const APPROVER = { ID: 'aaaaaaaa-0000-4000-8000-000000000001' };
 const EARLIER = new Date('2026-09-01T10:00:00.000Z');
@@ -100,6 +100,46 @@ describe('ApplyApprovalRulesAsync', () => {
         await expect(ApplyApprovalRulesAsync(unreadable.rec, 'ApprovalStatus', 'Pending')).rejects.toThrow('connection lost');
         const missing = record({ isSaved: true, stored: null });
         await expect(ApplyApprovalRulesAsync(missing.rec, 'ApprovalStatus', 'Pending')).rejects.toThrow('record not found');
+    });
+});
+
+/**
+ * Who may approve, when narrower than whoever may update the record (#6746: queries need the
+ * `Queries: Approve` authorization). Only the act of approving is checked.
+ */
+describe('ApplyApprovalRulesAsync with an approver rule', () => {
+    function rule(allowed: boolean): ApproverRule & { CanApprove: ReturnType<typeof vi.fn> } {
+        return { CanApprove: vi.fn(() => allowed), Refusal: 'Approving a query needs the authorization.' };
+    }
+
+    it('refuses a save that would approve when the context user fails the rule, and stamps nothing', async () => {
+        const { rec } = record({ isSaved: true, stored: { Status: 'Pending', ApprovedByUserID: null, ApprovedAt: null, ApprovedFingerprint: null } });
+        const denied = rule(false);
+        await expect(ApplyApprovalRulesAsync(rec, 'Status', 'Approved', denied)).rejects.toThrow('Approving a query needs the authorization.');
+        expect(denied.CanApprove).toHaveBeenCalledWith(APPROVER);
+        expect(rec.ApprovedByUserID).toBe('forged-user');
+    });
+
+    it('refuses a create with status Approved too', async () => {
+        const { rec } = record({ isSaved: false });
+        await expect(ApplyApprovalRulesAsync(rec, 'Status', 'Approved', rule(false))).rejects.toThrow('needs the authorization');
+    });
+
+    it('approves when the context user passes the rule', async () => {
+        const { rec } = record({ isSaved: false });
+        expect(await ApplyApprovalRulesAsync(rec, 'Status', 'Approved', rule(true))).toBe(true);
+        expect(rec.ApprovedByUserID).toBe(APPROVER.ID);
+    });
+
+    it('does not check saves that do not approve: drafts, and edits to a record already Approved', async () => {
+        const denied = rule(false);
+        const draft = record({ isSaved: false });
+        expect(await ApplyApprovalRulesAsync(draft.rec, 'Status', 'Pending', denied)).toBe(false);
+        const stored = { Status: 'Approved', ApprovedByUserID: 'original-approver', ApprovedAt: EARLIER, ApprovedFingerprint: 'fp-d1' };
+        const edit = record({ isSaved: true, stored });
+        expect(await ApplyApprovalRulesAsync(edit.rec, 'Status', 'Approved', denied)).toBe(false);
+        expect(edit.rec.ApprovedByUserID).toBe('original-approver');
+        expect(denied.CanApprove).not.toHaveBeenCalled();
     });
 });
 

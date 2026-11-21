@@ -12,7 +12,8 @@
  * (a query's dialect variants and parameters) are sorted by a semantic key first, so the same
  * rows read back in a different order give the same fingerprint.
  */
-import { CONTEXT_TOKEN_CONTRACT_VERSION } from '@memberjunction/core';
+import { AuthorizationEvaluator, CONTEXT_TOKEN_CONTRACT_VERSION } from '@memberjunction/core';
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { ComputeContentHashAsync, NormalizeUUID, OrdinalCompare, UUIDsEqual } from '@memberjunction/global';
 import type {
     MJComponentEntity,
@@ -175,6 +176,38 @@ export async function GetDashboardApprovalStateAsync(dashboard: DashboardDefinit
 /** Where a component version's approval stands. */
 export async function GetComponentApprovalStateAsync(component: ComponentDefinitionFields & Pick<MJComponentEntity, 'ApprovalStatus' | 'ApprovedFingerprint'>): Promise<ApprovalState> {
     return ApprovalStateOf({ Status: component.ApprovalStatus, ApprovedFingerprint: component.ApprovedFingerprint }, await ComputeComponentFingerprintAsync(component));
+}
+
+/**
+ * The authorization that lets a user approve a query. Any user with Create on `MJ: Queries` can
+ * save one, as a draft (`Pending`); approving it, which makes it MJ canon, needs this.
+ */
+export const APPROVE_QUERIES_AUTHORIZATION = 'Queries: Approve';
+
+/** Why the server refused a save that would approve a query. */
+export const QUERY_APPROVAL_REFUSAL =
+    `Approving a query needs the '${APPROVE_QUERIES_AUTHORIZATION}' authorization. Save it as Pending, and someone who holds it can approve it.`;
+
+/**
+ * Whether this user may approve queries: they hold {@link APPROVE_QUERIES_AUTHORIZATION}, directly
+ * or through an ancestor authorization, or they are an `Owner`-type user (the platform's top
+ * authority, never locked out of this).
+ *
+ * False without a user or when the authorization is not defined, so a deployment that has not
+ * synced the authorization yet fails closed. The server enforces this on save; clients use it to
+ * decide whether to offer approving at all.
+ */
+export function UserCanApproveQueries(
+    user: UserInfo | null | undefined,
+    provider: Pick<IMetadataProvider, 'Authorizations'> | null | undefined,
+): boolean {
+    if (!user) return false;
+    if (user.Type?.trim().toLowerCase() === 'owner') return true;
+    const authorizations = provider?.Authorizations ?? [];
+    const grant = authorizations.find((a) =>
+        a.Name?.trim().toLowerCase() === APPROVE_QUERIES_AUTHORIZATION.toLowerCase());
+    if (!grant) return false;
+    return new AuthorizationEvaluator().UserCanExecuteWithAncestors(grant, user, authorizations);
 }
 
 /** Empty text means the same as no text. */
