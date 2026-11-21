@@ -27,7 +27,7 @@
       "Name": "Daily Calendar Guard & Conflict Check",
       "WorkstreamKey": "calendar-daily-review",
       "Description": "Weekday morning scan of today's and tomorrow's calendar for double-bookings, missing prep, and focus-time erosion.",
-      "DefaultCronExpression": "30 7 * * 1-5",
+      "DefaultCronExpression": "15 7 * * 1-5",
       "DefaultWakeGate": null,
       "WakeReason": "Check today's and tomorrow's calendar for conflicts, overbooking, and unprotected focus time.",
       "OfferAt": "Onboarding",
@@ -37,8 +37,8 @@
       "ID": "F0294D16-F2B7-4DA2-897F-B9FB27FD5BF5"
     },
     "sync": {
-      "lastModified": "2026-11-20T22:01:59.931Z",
-      "checksum": "cd8fa4def95008312df74843392231d24c826b2b5baf2a1b0482c5a8a9e867ae"
+      "lastModified": "2026-11-21T15:59:22.853Z",
+      "checksum": "b0638c767ba863635b69697c1a1d40d4efa000b0fe2156bb3f700617c1f84819"
     }
   },
   {
