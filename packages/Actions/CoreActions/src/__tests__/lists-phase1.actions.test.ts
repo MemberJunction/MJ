@@ -68,10 +68,6 @@ describe('Phase 1 list actions', () => {
   });
 
   describe('MaterializeListFromViewAction', () => {
-    it('authorizes its caller itself: ListOperations reads the view and writes the list as the caller, so a UI user may run it', () => {
-      expect(Object.getOwnPropertyDescriptor(MaterializeListFromViewAction, 'AuthorizesCaller')?.value).toBe(true);
-    });
-
     it('maps params and delegates to MaterializeFromView', async () => {
       materializeMock.mockResolvedValue({
         Success: true,

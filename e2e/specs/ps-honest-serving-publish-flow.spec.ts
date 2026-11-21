@@ -21,7 +21,8 @@
  *   PS_UNEVALUATED_MODEL_ID=<a pre-change model the migration made Unevaluated> \
  *   npx playwright test --config e2e/playwright.config.ts e2e/specs/ps-honest-serving-publish-flow.spec.ts
  */
-import { test, expect, EXPLORER_BASE_URL, RedeemSignInLink, RequiredEnv } from '../fixtures';
+import { test, expect } from '../fixtures';
+import { EXPLORER_BASE_URL, RedeemSignInLink, RequiredEnv } from './ps-honest-serving.helpers';
 import type { Locator, Page } from '@playwright/test';
 
 /**

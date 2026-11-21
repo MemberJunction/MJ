@@ -5,8 +5,6 @@
  * and {@link GraphQLDataProvider} integration).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type * as GraphQLWs from 'graphql-ws';
-import type { Client as GraphQLWsClient } from 'graphql-ws';
 import { EntityInfo, getGraphQLTypeNameBase, InMemoryLocalStorageProvider } from '@memberjunction/core';
 import { MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
 import type { BaseEntityEvent } from '@memberjunction/core';
@@ -44,23 +42,6 @@ import {
 vi.mock('graphql-request', async () => {
     const wire = await import('./support/graphQLWire');
     return { gql: wire.FakeGql, GraphQLClient: wire.FakeGraphQLClient };
-});
-
-/**
- * Every socket in this file is a {@link FakeWsServerRegistry} socket. A provider's own direct `graphql-ws` client
- * (a tab with no kernel environment) gets this never-dialing client, so the suite's result does not depend on whatever
- * listens on ws://localhost:4000 (another developer's MJAPI refuses the socket 4403 and failed the run).
- */
-vi.mock('graphql-ws', async (importOriginal) => {
-    const actual = await importOriginal<typeof GraphQLWs>();
-    const createClient = (): GraphQLWsClient => ({
-        on: () => () => {},
-        subscribe: () => () => {},
-        iterate: () => (async function* () {})(),
-        dispose: () => {},
-        terminate: () => {},
-    });
-    return { ...actual, createClient };
 });
 
 // ── Test Fakes: MessageChannel Port Pairs, WebSocket Client, Storage & Fallback Hubs ──
@@ -1304,47 +1285,6 @@ describe('SharedTabKernel — Cross-Tab SharedWorker WS, Cache & IDB Multiplexin
         // BroadcastChannel + Web Locks elected strictly 1 leader among Tabs A..D sharing the same scope
         const leaders = [tabA, tabB, tabC, tabD].filter((t) => t.SharedTabKernel!.IsLeader);
         expect(leaders).toHaveLength(1);
-    });
-
-    // ── 6b. Isolation: no test in this file dials a real socket ─────────────
-
-    it('a provider without a kernel environment opens its direct subscription without dialing ws://localhost:4000', async () => {
-        const dialed: string[] = [];
-        /** Whatever listens on :4000 (another developer's MJAPI) refuses the socket the way MJAPI refuses a foreign token. */
-        class ForeignServerSocket {
-            public static readonly CONNECTING = 0;
-            public static readonly OPEN = 1;
-            public static readonly CLOSING = 2;
-            public static readonly CLOSED = 3;
-            public readyState = 0;
-            public protocol = 'graphql-transport-ws';
-            public onopen: (() => void) | null = null;
-            public onclose: ((ev: { code: number; reason: string; wasClean: boolean }) => void) | null = null;
-            public onerror: ((ev: unknown) => void) | null = null;
-            public onmessage: ((ev: { data: string }) => void) | null = null;
-            constructor(url: string) {
-                dialed.push(url);
-                queueMicrotask(() => {
-                    this.readyState = 3;
-                    this.onclose?.({ code: 4403, reason: 'Forbidden', wasClean: true });
-                });
-            }
-            public send(): void {}
-            public close(): void {
-                this.readyState = 3;
-            }
-        }
-        vi.stubGlobal('WebSocket', ForeignServerSocket);
-        try {
-            const p = createTestTabProvider({ sessionId: 'isolated-tab', kernelEnv: null });
-            providersToDispose.push(p);
-            const sub = p.Subscribe('subscription CacheInvalidation { cacheInvalidation { EntityName } }').subscribe({ next: () => {}, error: () => {} });
-            await new Promise<void>((resolve) => setTimeout(resolve, 20));
-            sub.unsubscribe();
-            expect(dialed).toEqual([]);
-        } finally {
-            vi.unstubAllGlobals();
-        }
     });
 
     // ── 7. Reproducible BEFORE vs AFTER 10-Tab Stress Benchmark ──────────────

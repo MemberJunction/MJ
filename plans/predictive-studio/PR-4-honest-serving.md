@@ -450,6 +450,8 @@ metadata-optional/integration-test/test-suites/.ps-gates-*.json
 # The deterministic suite gains the M5b bundle
 metadata-optional/integration-test/test-suites/.integration-suite.json
 e2e/**/ps-honest-serving*.spec.ts
+# D4-276: the honest-serving specs' own helpers, beside them
+e2e/specs/ps-honest-serving.helpers.ts
 guides/PREDICTIVE_STUDIO_GUIDE.md
 plans/predictive-studio/PR-4-honest-serving.md
 .changeset/ps-honest-serving.md
@@ -458,14 +460,6 @@ plans/predictive-studio/PR-4-honest-serving.md
 packages/TestingFramework/integration-test-suite/src/checks/predictive-shadow-drift.checks.ts
 packages/TestingFramework/integration-test-suite/src/__tests__/predictive-shadow-drift.checks.test.ts
 metadata-optional/integration-test/tests/integration/.IT166-predictive-shadow-drift.json
-# D4-184: Save as list for a non-Owner — Materialize List From View authorizes its caller itself (df98bde58d)
-packages/Actions/CoreActions/src/custom/lists/materialize-list-from-view.action.ts
-packages/Actions/CoreActions/src/__tests__/lists-phase1.actions.test.ts
-# D4-184: RunAction returns the action's output params, which Save as list reads (ffe1992413)
-packages/GraphQLDataProvider/src/graphQLActionClient.ts
-packages/GraphQLDataProvider/src/__tests__/graphQLActionClient.test.ts
-# D4-239: the shared tab kernel's suite never dials ws://localhost:4000 (phase 3 integration, 75b6460d48)
-packages/GraphQLDataProvider/src/__tests__/sharedTabKernel.test.ts
 # D4-176/D4-177: the record panel, the binding editor and the default view-authorization name exported (b41bdc773a, a76c70843d, 7d84ccb852)
 packages/Angular/Explorer/core-entity-forms/src/public-api.ts
 # D4-185: IT182 mints its identities through MJAPI with the FLS client's key helpers (734a6a77c3)
@@ -474,10 +468,7 @@ packages/TestingFramework/integration-test-suite/src/checks/fls-client.checks.ts
 packages/TestingFramework/integration-test-suite/src/__tests__/ps-prediction-serving.test.ts
 # D4-239: ServerBootstrapLite declares integration-engine, which next's Peer Sync class needs in the Lite manifest (e7e409f515)
 packages/ServerBootstrapLite/package.json
-# D4-255: the M5b–M7 self-audit fixes' new files outside the globs (M5b-24, M5b-32/M7-33, M5b-2, M6-43, M5b round 2)
-packages/GraphQLDataProvider/src/__tests__/graphQLActionClient.mergeOutputParams.test.ts
-e2e/fixtures.ts
-packages/TestingFramework/integration-test-suite/src/__tests__/mjapi-affinity.test.ts
+# D4-255: the M5b–M7 self-audit fixes' new files outside the globs (M6-43, M5b round 2; D4-274 removed the others)
 packages/TestingFramework/integration-test-suite/src/__tests__/ps-gate-monitoring.test.ts
 packages/Angular/Explorer/dashboards/src/__tests__/fixtures/test-entity-rows.ts
 ```
@@ -2384,7 +2375,7 @@ equal to Core's `TransitionRefusal`, D4-96). `publish`/`rollback` call `Lifecycl
 | Output bindings | At-Risk list, why-badge, predictions grid, record panel read their `MJ: ML Output Bindings` row at render (`AtRiskRules.ParseAtRiskRows` gets the binding and `OutputSemantics`; `ResolveRenewalPolarity` removed); an L2 bindings editor in the model detail (labels only; sort/direction fixed by semantics) | One component test per surface asserts it renders from its binding row |
 | Record panel (`record-panel` surface) | L3-mounted wildcard form panel `ModelPredictionPanel` (`core-entity-forms/src/lib/panels/model-predictions/`; no router) | Re-pointed per §5.8.5: authorized bindings only; value/class, probability, drivers and a history sparkline per prediction from Feature Values; a lineage view (model version, scoring run, as-of date, in-training flag marking an optimistic score); a "Derived values" section listing the record's pipeline features with confidence, reasoning and version; renders nothing without an authorized binding. DOM tests: authorized, unauthorized, history, lineage, derived values |
 | Scoring binding editor | L2 composite `ps-scoring-binding-editor` in `core-entity-forms/src/lib/custom/MLModels/`, hosted by the model detail; the Production view opens the detail's Bindings section (D4-48) | Creates and edits bindings (§5.8.2): pipeline, feature name, target entity, view authorization (default the seeded "View Model Predictions"), retention, optional column copy; states that a copied column value is governed by that entity's field permissions, not the binding's authorization (§5.8.4) |
-| Population-wide predictions | `MJ: Latest Feature Values` is an ordinary read-only entity in Explorer grids and views; the PS predictions grid and At-Risk list read it for a binding's `FeatureName` | Filter by feature and value, sort by value; a record-name column resolved in batches at display time opens the record; a selection becomes a List through the existing "Materialize List From View" action |
+| Population-wide predictions | `MJ: Latest Feature Values` is an ordinary read-only entity in Explorer grids and views; the PS predictions grid and At-Risk list read it for a binding's `FeatureName` | Filter by feature and value, sort by value; a record-name column resolved in batches at display time opens the record; a selection becomes a List the user creates ("Save as list": the `MJ: Lists` row and its `MJ: List Details` as the current user, in one transaction group, D4-275) |
 | Trust banner and model story | `ps-predictions-resource` and the story generator | "You can rely on this — <grade>" removed; copy generated from the stored gate decision and comparison ("beats the flat guess by X [lo, hi]") via PR 3's verdict rendering |
 
 ### 5.5 Seams and new code locations
@@ -7191,12 +7182,12 @@ D4-48: the editor is not imported into the dashboards package) · Test the edito
 (extended)
 
 **Interfaces:** the editor saves through `MJMLModelScoringBindingEntityServer`'s validation (M5) and shows each
-`ValidationErrorInfo` by field; the grid's selection becomes a List through the existing "Materialize List From View"
-action (§5.4). **As built (D4-183, D4-184):** "Save as list" (`ps-predictions-save-list`) takes the rows the grid's
-tier and decile filters show (1–5,000), saves them as a plain private `MJ: User Views` row (no `CustomWhereClause`),
-runs the action with string params (`RememberLineage = 'true'`) and opens the new List; the action declares
-`AuthorizesCaller` and `GraphQLActionClient.RunAction` returns its output params (`CreatedListID`); "Send to a list"
-stays (D4-121)
+`ValidationErrorInfo` by field; the grid's selection becomes a List the user creates (§5.4). **As built (D4-183,
+D4-275):** "Save as list" (`ps-predictions-save-list`) takes the rows the grid's tier and decile filters show
+(1–5,000) and creates, as the current user (the user's own List permissions decide), the `MJ: Lists` row of the target
+entity and one `MJ: List Details` row per record in one transaction group (the List's ID is its new record's, so each
+detail names it before anything is written; all of them or none), then opens the new List. No action, no view, and no
+change outside Predictive Studio (D4-274); "Send to a list" stays (D4-121)
 
 - [x] Step 1: Write the failing DOM tests:
   ```ts
@@ -10521,13 +10512,15 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   grid's row selection is single-row, so "Save as list" takes the rows the grid's tier and decile filters show (1 to
   5,000; the view names each record), saves them as a private `MJ: User Views` row on the target entity, runs the
   existing `Materialize List From View` action (`ViewID`, `ListName`, `RememberLineage = 'true'`) and opens the new
-  List. The view stays as the List's lineage source. "Send to a list" stays (D4-121).
+  List. The view stays as the List's lineage source. "Send to a list" stays (D4-121). **Amended by D4-275:** the
+  selection is still the filtered rows; the List and its details are created directly, with no view and no action.
 - **D4-184 · Save as list runs Materialize List From View for a non-Owner** (M5b.4 runtime, controller accepted at
   phase 2). The grid saves a plain private view (never `CustomWhereClause`, which MJ grants only an Owner) and passes
   every action param as a string; `Materialize List From View` declares `AuthorizesCaller` (ListOperations reads the
   view and writes the list as the caller, BaseAction's stated condition), and `GraphQLActionClient.RunAction` returns
   the action's outputs in `Params` (`MergeOutputParams`, MJAPI's index-keyed `ResultData`) so `CreatedListID` is
-  readable by name. Both fixes are outside Predictive Studio and are named in the PR description. The selection view also stores the selection as its `FilterState` (`in` rules of
+  readable by name. Both fixes are outside Predictive Studio and are named in the PR description. **Superseded by
+  D4-274/D4-275:** both fixes are reverted to `next` (owner directive) and Save as list no longer runs the action. The selection view also stores the selection as its `FilterState` (`in` rules of
   at most 500 IDs ORed, or one AND of `eq` rules per composite-key record), which compiles to the same records: a later
   save of the view recompiles `WhereClause` from `FilterState` (`MJUserViewEntityExtended.UpdateWhereClause`), so the
   ID list survives and a refresh of the lineage-linked List adds no other record. What remains: the view is the user's
@@ -10739,7 +10732,8 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
 - **D4-239 · The allowlist names the review and integration fixes outside it** (close-out round, controller ruling 6).
   Nine paths changed by D4-184's two fixes (Materialize List From View, `RunAction` output params), the phase-3 fixes
   (the shared tab kernel's suite, ServerBootstrapLite's `integration-engine` dependency for next's Peer Sync class),
-  M5b's exports and IT182's identity and teardown helpers are listed with the ruling each serves.
+  M5b's exports and IT182's identity and teardown helpers are listed with the ruling each serves. **Amended by D4-274:**
+  D4-184's two fixes and the shared tab kernel's suite are reverted to `next` and leave the allowlist.
 - **D4-240 · IT182's publish UPDATE and tag-keyed teardown SQL are a documented exception** (M5b self-audit, M5b-5).
   The publish UPDATE stays: Status is gate-owned and the PreSave guard re-derives a move into Published from training
   evidence the no-sidecar tier cannot produce (IT166 precedent; G5.6 publishes through the gate). The tag-keyed
@@ -10764,7 +10758,8 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   the pnpm package graph (the root declares no `@memberjunction/*` dependency), so it cannot import `EscapeSQLString`
   without a new root dependency and a lockfile change; `e2e/fixtures.ts`'s `SqlTextLiteral` escapes exactly as
   `EscapeSQLString` (NULs dropped, quotes doubled) and is the one helper both honest-serving specs use (with M7-33's
-  `EXPLORER_BASE_URL`, `RequiredEnv`, `RedeemSignInLink`).
+  `EXPLORER_BASE_URL`, `RequiredEnv`, `RedeemSignInLink`). **Amended by D4-276:** the helpers live in the PS-owned
+  `e2e/specs/ps-honest-serving.helpers.ts`; `e2e/fixtures.ts` is `next`'s again.
 - **D4-245 · A parity retrain's gate outcome goes into the run's `Details`, not the stored `Parity` JSON** (M6
   self-audit, M6-2). `CheckParity` returns `{ Parity, Retrain }` (`ChallengerStep.FromOutcome` of the retrain's gate
   outcome), the notification's wording comes from it and `MonitoredPeriodOutcome.ParityRetrain` carries it into
@@ -10817,7 +10812,8 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   M5b–M7 self-audit added outside the plan's globs are listed with the finding each serves: `MergeOutputParams`' test
   (M5b-24, a D4-184 file), `e2e/fixtures.ts` (the shared SQL-literal and sign-in helpers, M5b-32/M7-33, D4-244), IT182's
   MJAPI-affinity unit test (M5b-2), the monitoring-fixture unit test (M6-43) and the dashboards' typed entity-row test
-  fixture (M5b round 2, no `as unknown as` in M5b tests).
+  fixture (M5b round 2, no `as unknown as` in M5b tests). **Amended by D4-274/D4-276:** the `MergeOutputParams` test and
+  IT182's MJAPI-affinity test are deleted and `e2e/fixtures.ts` is `next`'s again; the last two remain.
 - **D4-256 · G0.10 gets a 20-minute budget** (post-audit verification). `W1 -> S5.4` runs eight single-threaded
   trainings on the one suite sidecar and had no `MaxExecutionTimeMS` (the 300 s default); it took 242 s in the final
   verification and timed out at 300 s twice under host load 26–29 (in the Containment suite and alone), while the
@@ -10939,6 +10935,27 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   deterministic tier once in the PR-lane form (the mutation form is CI's) and keeps the PS gate suites local. Clean
   rebuilds only when the migration file changes or a merge of next forces a retime; the review database is restored
   from a backup of the implementer database.
+- **D4-274 · PR 4 carries no unnecessary change outside Predictive Studio** (owner directive, 2026-11-21: "we do not
+  want to make any unnecessary changes outside of predictive studio as part of this work"). Reverted to `origin/next`'s
+  content: `GraphQLActionClient.RunAction`'s output params (`graphQLActionClient.ts`; its two PR 4 test files deleted),
+  the shared tab kernel's suite isolation (`sharedTabKernel.test.ts`, D4-239), "Materialize List From View"'s
+  `AuthorizesCaller` and its test (D4-184), the `primaryKey` sync wrote into IT114's metadata file, and `e2e/fixtures.ts`
+  (D4-276); IT182's MJAPI-affinity unit test is deleted (IT185 keeps its `requiresSharedServerDatabase` flag). Kept
+  outside PS, each needed by PS behaviour or ruled by the owner: RecordSetProcessor's parallel batches (F-L3-4),
+  CorePlus/MJServer's reserved agent-run keys, the React runtime's PS scoring utility, FeaturePipelines' Model-row cache
+  writes, the server entities, ServerBootstrapLite's `integration-engine` dependency and the generated files. The
+  changeset drops `@memberjunction/graphql-dataprovider` and `@memberjunction/core-actions` (no PR 4 change remains).
+- **D4-275 · Save as list stays, built in PS code with entity objects** (D4-274's item 6). The grid's "Send to a list"
+  path (D4-121) is the predictions resource's, and it adds the at-risk list's members by the risk floor (highest risk
+  first, at most the list limit); it does not turn the grid's tier/decile-filtered rows into a List, so it cannot replace
+  Save as list. Save as list now creates the `MJ: Lists` row and a `MJ: List Details` row per shown record as the
+  current user in one transaction group (the List's client-generated ID names each detail before anything is written)
+  and opens the List: no private view, no action, so neither D4-184 fix is needed. Tests first: four DOM cases (the
+  List, details and group; every record as the current user; a failed submit opens nothing; a refused detail submits
+  nothing).
+- **D4-276 · The honest-serving specs' helpers sit beside them** (D4-274's item 5). `EXPLORER_BASE_URL`, `RequiredEnv`,
+  `SqlTextLiteral` and `RedeemSignInLink` move unchanged into `e2e/specs/ps-honest-serving.helpers.ts` (not a spec:
+  `testMatch` is `**/*.spec.ts`), imported by the two honest-serving specs; the allowlist names it.
 
 #### Kickoff review (D-070)
 
@@ -11340,7 +11357,7 @@ are monitored on real outcomes.
 - Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, PS_SEED_LIMIT, PS_SIGN_IN_URL, PS_STORAGE_PROVIDER, PW_BASE_URL, STORAGE_LOCAL_ROOT<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->29<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->29<!-- /gen:checks -->
-- Head: <!-- gen:head -->c665be1214<!-- /gen:head -->
+- Head: <!-- gen:head -->ed1ddb5d39<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,
@@ -11387,22 +11404,17 @@ the tail carries neither.) The tail's hand edits are two kinds — the `AutoUpda
 columns — and two generated blocks are deleted rather than edited: CodeGen's "Set LLM-identified FKs" block for that
 entity and the `MJ: Entities → MJ: Latest Feature Values` relationship CodeGen derived from that FK (D4-80).
 
-**Changes outside Predictive Studio.** Each is a caller fix or an additive member another package needed:
-- `GraphQLDataProvider` — `GraphQLActionClient.RunAction` returns the action's output parameters in `Params`
-  (`MergeOutputParams` applies MJAPI's `ResultData`, also when it arrives index-keyed), as the server-side ActionEngine
-  does, so a client reads an output such as `CreatedListID` by name.
-- `CoreActions` — "Materialize List From View" declares `AuthorizesCaller` (it resolves the view and creates the list as
-  the caller, so the caller's own view, entity and List permissions decide), so a user without the action's explicit
-  grant can send a selection to a list.
-- `ServerBootstrapLite` declares `@memberjunction/integration-engine`: `next`'s Peer Sync work registers a class there,
-  so the regenerated Lite class manifest imports it.
+**Changes outside Predictive Studio.** Only what Predictive Studio needs or the owner ruled (D4-274; no other change
+outside it):
+- `RecordSetProcessor` base/engine — `MaxConcurrentBatches` on the batch path (parallel batches; F-L3-4, owner ruling).
 - `AI CorePlus` / `AI Agents` / `MJServer` — `RESERVED_AGENT_RUN_DATA_KEYS` gains the two Predictive Studio publishing
-  keys; the agent-run data guard's comments and one `base-agent.ts` log line follow.
+  keys; the agent-run data guard's comments and one `base-agent.ts` log line follow (owner ruling).
+- `React runtime` — the Predictive Studio ML scoring utility reads the scoring service's result.
 - `FeaturePipelines` — `FeatureValueCacheService` writes the `Model` rows of a binding (keyed upsert; a person's value
-  is never overwritten). `RecordSetProcessor` base/engine — `MaxConcurrentBatches` on the batch path. `React runtime` —
-  the ML scoring utility reads the scoring service's result. `MJCoreEntitiesServer` — server entities for publish
-  records, scoring bindings, output bindings and prediction units. `SQLParser` — the shipped-corpus goldens of one
-  Predictive Studio query regenerated.
+  is never overwritten). `MJCoreEntitiesServer` — server entities for publish records, scoring bindings, output
+  bindings and prediction units.
+- Generated files — CodeGen's entity classes, GraphQL schema, forms and class-registration manifests for PS's entities,
+  and the `SQLParser` shipped-corpus goldens of one Predictive Studio query.
 
 **Naming (program D-039).** Persisted JSON and wire property names ported from `reference/contracts/contracts.ts`
 (`Delivery`, publish-record JSON, `ScoredRow`, `MonitoringJobSpec`, …) keep the contract's camelCase and `Id` because
@@ -13576,6 +13588,25 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   item or carries a merge of `next`, and is recorded here as `### <date> — <agent> — R<k>`.
 - **Open deferrals:** OF4-5 (a kept incumbent-heuristic rule is recorded and not delivered) — expiry PR 6; OF4-3 out of
   scope, no deferred work. **Rulings:** D4-261…D4-273. **Flags:** OF4-55, OF4-56, OF4-57; OF4-34 resolved.
+
+### 2026-11-21 — Claude (Opus 5.5) — R1
+
+- **Owner item (changes outside Predictive Studio removed):** "we do not want to make any unnecessary changes outside of predictive studio as part of this work"
+  (D4-274). Reverted to `origin/next`: `GraphQLActionClient.RunAction` output params (+ its two PR 4 test files
+  deleted), `sharedTabKernel.test.ts`, Materialize List From View's `AuthorizesCaller` + its test, IT114's metadata file,
+  `e2e/fixtures.ts`; `mjapi-affinity.test.ts` deleted. Helpers → `e2e/specs/ps-honest-serving.helpers.ts` (D4-276).
+  Save as list kept and rebuilt in PS code with entity objects (D4-275; "Send to a list" adds the at-risk members by the
+  risk floor, not the grid's filtered rows): tests first, 3 red → 23/23 green. §10's outside list, the allowlist, M5b.4,
+  the coverage row and D4-183/184/239/244/255 amended; changeset drops `graphql-dataprovider` and `core-actions`.
+- **Verification:** root build 352/352 + 322/322; unit (0 failed) GraphQLDataProvider 53/772 · CoreActions 92/1232 ·
+  integration-test-suite 77/1129 + rigs tsc (alone; a parallel run timed out one cold import at 60 s) · dashboards
+  258/3154 · core-entity-forms 90/722. Record-panel walk (exact path, the new helpers) **2 passed**. Save as list on the
+  claude DB as `fv-walk-authorized@ps-walk.test` (UI + Developer, not Owner), Medium tier: List created and opened,
+  22 List Details (Sequence 0–21, 22 distinct records, `Active`), the List's Record Change `Create` by that user, no
+  User View written; the High tier (0 rows) keeps the button disabled. Seeds cleaned up; census = baseline. During the
+  seed, `sql-claude` was OOM-killed at its 4 GB limit (host swap 12.0 of 13.3 GB): restarted, `max server memory`
+  2560 MB, seeds cleaned and re-run. Repo gates check:guards, check:standards, check:ui, check:changeset,
+  check:claude-md, check:codegen-tail → exit 0. **Rulings:** D4-274…D4-276.
 
 ## 12. Refresh log (append-only)
 

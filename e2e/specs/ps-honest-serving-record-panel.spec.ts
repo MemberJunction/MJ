@@ -20,7 +20,8 @@
  *   npx playwright test --config e2e/playwright.config.ts e2e/specs/ps-honest-serving-record-panel.spec.ts
  */
 import { execFileSync } from 'child_process';
-import { test, expect, EXPLORER_BASE_URL, RedeemSignInLink, RequiredEnv, SqlTextLiteral } from '../fixtures';
+import { test, expect } from '../fixtures';
+import { EXPLORER_BASE_URL, RedeemSignInLink, RequiredEnv, SqlTextLiteral } from './ps-honest-serving.helpers';
 import type { Page } from '@playwright/test';
 
 /** The rows of `query` through PS_SQLCMD, each row's columns split on its `|` separator. */
