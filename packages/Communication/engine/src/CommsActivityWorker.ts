@@ -90,6 +90,7 @@ export class CommsActivityWorker {
     let processedCount = 0;
     let errorCount = 0;
     let raceDuplicates = 0;
+    const processedEvents: NormalizedActivityEvent[] = [];
 
     for (const event of deduped) {
       let claimedEvent: MJCommunicationProviderEventEntity | undefined;
@@ -107,6 +108,7 @@ export class CommsActivityWorker {
           claimedEvent = claim.Entity;
         }
         await this.processSingleEvent(event, persistActivity, contextUser);
+        processedEvents.push(event);
         processedCount++;
       } catch (err) {
         if (claimedEvent) {
@@ -121,7 +123,7 @@ export class CommsActivityWorker {
       }
     }
 
-    await this.dispatchDriverHooks(deduped, contextUser);
+    await this.dispatchDriverHooks(processedEvents, contextUser);
 
     return {
       ProcessedCount: processedCount,
@@ -546,27 +548,6 @@ export class CommsActivityWorker {
       endpoint.Status = 'Soft Bouncing';
     }
     await this.saveEndpoint(endpoint);
-
-    const policy = this.resolveSoftBouncePolicyConfig();
-    if (endpoint.SoftBounceCount >= policy.Threshold) {
-      const expiresAt = new Date(
-        event.OccurredAt.getTime() + policy.ExpiryDays * MS_PER_DAY,
-      );
-      await this.createSuppression(
-        {
-          CommunicationEndpointID: endpoint.ID,
-          BaseMessageTypeID: endpoint.BaseMessageTypeID,
-          Reason: 'Policy',
-          Source: 'Policy',
-          EffectiveAt: event.OccurredAt,
-          ExpiresAt: expiresAt,
-          CommunicationLogID: event.CommunicationLogID ?? null,
-          CommunicationSuppressionPolicyID: policy.PolicyID ?? null,
-          Notes: `Auto-suppressed after ${endpoint.SoftBounceCount} soft bounces`,
-        },
-        contextUser,
-      );
-    }
   }
 
   private resolveSoftBouncePolicyConfig(): SoftBouncePolicyConfig {
@@ -738,7 +719,7 @@ export class CommsActivityWorker {
         senderID,
         contextUser,
       );
-      const suppression = await this.createSuppression(
+      await this.createSuppression(
         {
           CommunicationEndpointID: endpoint?.ID ?? null,
           EntityID: event.Principal.EntityID,
@@ -755,25 +736,12 @@ export class CommsActivityWorker {
         },
         contextUser,
       );
-      if (suppression) {
-        await this.appendConsentAuditLog(
-          {
-            CommunicationSuppressionID: suppression.ID,
-            Action: 'Created',
-            PreviousValue: null,
-            // fls-guard: system-only audit log snapshot persisted internally, never egressed to a caller
-            NewValue: JSON.stringify(suppression.GetAll()),
-            event,
-          },
-          contextUser,
-        );
-      }
       return;
     }
 
     if (event.Principal) {
       // Rule 2: Principal + No Preference -> sender-scoped unsubscribe-all
-      const suppression = await this.createSuppression(
+      await this.createSuppression(
         {
           CommunicationEndpointID: endpoint?.ID ?? null,
           EntityID: event.Principal.EntityID,
@@ -790,25 +758,12 @@ export class CommsActivityWorker {
         },
         contextUser,
       );
-      if (suppression) {
-        await this.appendConsentAuditLog(
-          {
-            CommunicationSuppressionID: suppression.ID,
-            Action: 'Created',
-            PreviousValue: null,
-            // fls-guard: system-only audit log snapshot persisted internally, never egressed to a caller
-            NewValue: JSON.stringify(suppression.GetAll()),
-            event,
-          },
-          contextUser,
-        );
-      }
       return;
     }
 
     // Rule 3: No Principal -> endpoint suppression only
     if (endpoint) {
-      const suppression = await this.createSuppression(
+      await this.createSuppression(
         {
           CommunicationEndpointID: endpoint.ID,
           EntityID: null,
@@ -825,19 +780,6 @@ export class CommsActivityWorker {
         },
         contextUser,
       );
-      if (suppression) {
-        await this.appendConsentAuditLog(
-          {
-            CommunicationSuppressionID: suppression.ID,
-            Action: 'Created',
-            PreviousValue: null,
-            // fls-guard: system-only audit log snapshot persisted internally, never egressed to a caller
-            NewValue: JSON.stringify(suppression.GetAll()),
-            event,
-          },
-          contextUser,
-        );
-      }
     }
   }
 
@@ -968,6 +910,13 @@ export class CommsActivityWorker {
     }
   }
 
+  public async CreatePolicySuppression(
+    fields: Parameters<CommsActivityWorker['createSuppression']>[0],
+    contextUser: UserInfo,
+  ): Promise<MJCommunicationSuppressionEntity | undefined> {
+    return this.createSuppression(fields, contextUser);
+  }
+
   private async createSuppression(
     fields: {
       CommunicationEndpointID?: string | null;
@@ -1018,6 +967,25 @@ export class CommsActivityWorker {
         }`,
       );
     }
+
+    await this.appendConsentAuditLog(
+      {
+        CommunicationSuppressionID: suppression.ID,
+        Action: 'Created',
+        PreviousValue: null,
+        // fls-guard: system-only audit log snapshot persisted internally, never egressed to a caller
+        NewValue: JSON.stringify(suppression.GetAll()),
+        event: {
+          Source: fields.Source,
+          CommunicationLogID: fields.CommunicationLogID ?? undefined,
+          IPAddress: fields.IPAddress ?? undefined,
+          UserAgent: fields.UserAgent ?? undefined,
+          OccurredAt: fields.EffectiveAt,
+        } as NormalizedActivityEvent,
+      },
+      contextUser,
+    );
+
     return suppression;
   }
 
@@ -1076,19 +1044,34 @@ export class CommsActivityWorker {
     for (const [entityID, entityEvents] of byEntity) {
       const driver = this.getPrincipalDriver(entityID);
       if (driver) {
-        await driver.OnActivity(entityEvents, contextUser);
+        try {
+          await driver.OnActivity(entityEvents, contextUser);
+        } catch (err) {
+          LogError(
+            `CommsActivityWorker principal driver hook failed (${entityID}): ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        }
       }
     }
 
     const activePolicies = CommunicationEngineBase.Instance.SuppressionPolicies.filter(
       (p) => p.Status === 'Active',
     );
+    let ranSoftBouncePolicy = false;
     for (const policy of activePolicies) {
-      const driver =
+      if (policy.DriverClass === 'SoftBounceThresholdPolicy' || policy.Name === 'SoftBounceThresholdPolicy') {
+        ranSoftBouncePolicy = true;
+      }
+      let driver =
         MJGlobal.Instance.ClassFactory.CreateInstance<BaseCommunicationSuppressionPolicy>(
           BaseCommunicationSuppressionPolicy,
           policy.DriverClass,
         );
+      if (!driver && policy.DriverClass === 'SoftBounceThresholdPolicy') {
+        driver = new SoftBounceThresholdPolicy();
+      }
       if (!driver || typeof driver.Evaluate !== 'function') continue;
 
       let params: Record<string, unknown> = {};
@@ -1099,7 +1082,27 @@ export class CommsActivityWorker {
           params = {};
         }
       }
-      await driver.Evaluate(events, params, contextUser);
+      try {
+        await driver.Evaluate(events, params, contextUser);
+      } catch (err) {
+        LogError(
+          `CommsActivityWorker policy driver '${policy.DriverClass}' failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    }
+
+    if (!ranSoftBouncePolicy && events.some((e) => e.EventType === 'Soft Bounce')) {
+      try {
+        await new SoftBounceThresholdPolicy().Evaluate(events, {}, contextUser);
+      } catch (err) {
+        LogError(
+          `CommsActivityWorker default SoftBounceThresholdPolicy failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
     }
   }
 
@@ -1265,16 +1268,83 @@ export class CommsActivityWorker {
 }
 
 /**
- * Built-in policy driver registration for `SoftBounceThresholdPolicy` (evaluated inline
- * during soft-bounce event handling in `CommsActivityWorker`).
+ * Built-in policy driver for `SoftBounceThresholdPolicy`: evaluates soft-bounce
+ * counts against the configured threshold and creates a cooldown `Policy` suppression.
  */
 @RegisterClass(BaseCommunicationSuppressionPolicy, 'SoftBounceThresholdPolicy')
 export class SoftBounceThresholdPolicy extends BaseCommunicationSuppressionPolicy {
   public async Evaluate(
-    _events: NormalizedActivityEvent[],
-    _parameters: Record<string, unknown>,
-    _contextUser: UserInfo,
+    events: NormalizedActivityEvent[],
+    parameters: Record<string, unknown>,
+    contextUser: UserInfo,
   ): Promise<void> {
-    // Threshold evaluation and Policy suppression creation are performed inline by handleSoftBounce.
+    const softBounces = events.filter((e) => e.EventType === 'Soft Bounce' && e.CommunicationEndpointID);
+    if (softBounces.length === 0) return;
+
+    const thresholdCandidate = parameters.threshold ?? parameters.Threshold;
+    const threshold =
+      typeof thresholdCandidate === 'number' && thresholdCandidate > 0
+        ? thresholdCandidate
+        : DEFAULT_SOFT_BOUNCE_THRESHOLD;
+
+    const expiryCandidate = parameters.cooldownDays ?? parameters.ExpiryDays;
+    const expiryDays =
+      typeof expiryCandidate === 'number' && expiryCandidate > 0
+        ? expiryCandidate
+        : DEFAULT_SOFT_BOUNCE_EXPIRY_DAYS;
+
+    const policyId =
+      CommunicationEngineBase.Instance.SuppressionPolicies.find(
+        (p) =>
+          p.Status === 'Active' &&
+          (p.DriverClass === 'SoftBounceThresholdPolicy' || p.Name === 'SoftBounceThresholdPolicy'),
+      )?.ID ?? null;
+
+    const endpointIds = Array.from(
+      new Set(softBounces.map((e) => e.CommunicationEndpointID as string)),
+    );
+    const rv = RunView.FromMetadataProvider(CommunicationEngineBase.Instance.ProviderToUse);
+    const quoted = endpointIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+    const epRes = await rv.RunView<MJCommunicationEndpointEntity>(
+      {
+        EntityName: 'MJ: Communication Endpoints',
+        ExtraFilter: `ID IN (${quoted})`,
+        ResultType: 'entity_object',
+      },
+      contextUser,
+    );
+    if (!epRes.Success || !epRes.Results) return;
+
+    const epMap = new UUIDMap<MJCommunicationEndpointEntity>();
+    for (const ep of epRes.Results) {
+      epMap.Set(ep.ID, ep);
+    }
+
+    const seenEndpoints = new Set<string>();
+    const worker = new CommsActivityWorker();
+    for (const ev of softBounces) {
+      const epId = ev.CommunicationEndpointID as string;
+      const key = epId.toLowerCase();
+      if (seenEndpoints.has(key)) continue;
+      const endpoint = epMap.Get(epId);
+      if (!endpoint || endpoint.SoftBounceCount < threshold) continue;
+
+      seenEndpoints.add(key);
+      const expiresAt = new Date(ev.OccurredAt.getTime() + expiryDays * MS_PER_DAY);
+      await worker.CreatePolicySuppression(
+        {
+          CommunicationEndpointID: endpoint.ID,
+          BaseMessageTypeID: endpoint.BaseMessageTypeID,
+          Reason: 'Policy',
+          Source: 'Policy',
+          EffectiveAt: ev.OccurredAt,
+          ExpiresAt: expiresAt,
+          CommunicationLogID: ev.CommunicationLogID ?? null,
+          CommunicationSuppressionPolicyID: policyId,
+          Notes: `Auto-suppressed after ${endpoint.SoftBounceCount} soft bounces`,
+        },
+        contextUser,
+      );
+    }
   }
 }
