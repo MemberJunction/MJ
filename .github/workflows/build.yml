@@ -55,7 +55,7 @@ jobs:
       - name: Package the build for Open App CI
         if: github.event_name == 'push' && github.ref_name == 'next'
         run: |
-          find packages -name dist -type d -prune -not -path '*/node_modules/*' -print0 \
+          find packages -name node_modules -prune -o -name dist -type d -prune -print0 \
             | tar --null -czf mj-dist.tar.gz -T -
           ls -lh mj-dist.tar.gz
 
