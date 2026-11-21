@@ -1438,6 +1438,13 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      */
     parentActivatedSkillIDs?: readonly string[];
     /**
+     * Ancestor agent IDs whose narrowed `MJ: AI Agent User Policies` apply as strict policy ceilings
+     * for this sub-agent run (for example Chief of Staff delegating to `Align Strategic Planning Coach`).
+     * Set automatically by `BaseAgent.ExecuteSubAgent`; enforced by both `BaseAgent.checkUserActionPolicy`
+     * and `TypedActionPolicyGuard`.
+     */
+    policyCeilingAgentIDs?: readonly string[];
+    /**
      * Set when the PARENT run was tainted (had read untrusted content) when it invoked this sub-agent and
      * runs outside any task graph. It starts this run tainted, so its memory writes land `Pending` and any
      * graph it submits carries the taint, but unlike a tainted {@link SecurityEnvelope} it does not turn on

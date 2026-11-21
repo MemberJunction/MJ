@@ -1,5 +1,5 @@
 /**
- * The zero-schema-change measure of IT183 and gate G5.6 (Tasks M5b.6, M5b.7): two schema fingerprints differ in
+ * The zero-schema-change measure of IT185 and gate G5.6 (Tasks M5b.6, M5b.7): two schema fingerprints differ in
  * columns, migrations or entity metadata exactly when the stored query's values moved.
  */
 import { describe, it, expect } from 'vitest';
@@ -27,13 +27,13 @@ describe('PsPredictionServing.Delta', () => {
 
 describe('PsPredictionServing.TeardownSql (D4-230)', () => {
   const table = (entityName: string): string => `[t].[${entityName.replace(/[^A-Za-z]/g, '')}]`;
-  const tag = "IT183 1 (mj-integration-test — safe to delete)";
+  const tag = "IT185 1 (mj-integration-test — safe to delete)";
   const statements = (): string[] => PsPredictionServing.TeardownSql(tag, table).split(';').map((s) => s.trim()).filter((s) => s.length > 0);
   const position = (needle: string): number => statements().findIndex((s) => s.startsWith(`DELETE FROM ${needle}`));
 
   it('deletes every row Setup can have written by its tag alone, so a Setup that failed before its fixture was built leaves nothing', () => {
     const sql = PsPredictionServing.TeardownSql(tag, table);
-    expect(sql).toContain(`'IT183 1 (mj-integration-test — safe to delete)%'`);
+    expect(sql).toContain(`'IT185 1 (mj-integration-test — safe to delete)%'`);
     expect(sql).not.toMatch(/ID = '/);
     for (const entity of ['MJFeatureValues', 'MJMLScoringRuns', 'MJMLModelScoringBindings', 'MJMLModels', 'MJMLTrainingPipelines', 'MJFiles', 'MJKnowledgeHubSavedSearches']) {
       expect(position(`[t].[${entity}]`), entity).toBeGreaterThanOrEqual(0);
@@ -49,7 +49,7 @@ describe('PsPredictionServing.TeardownSql (D4-230)', () => {
   });
 
   it('escapes the tag', () => {
-    expect(PsPredictionServing.TeardownSql("IT183 o'clock", table)).toContain(`'IT183 o''clock%'`);
+    expect(PsPredictionServing.TeardownSql("IT185 o'clock", table)).toContain(`'IT185 o''clock%'`);
   });
 });
 

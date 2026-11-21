@@ -57,6 +57,7 @@ export const CONVERSATION_TYPE_CODES = {
     ROUTINE: 'ROUTINE',
     MEETING_ROOM: 'MEETING_ROOM',
     COMMENT: 'COMMENT',
+    AGENT_CHANNEL: 'AGENT_CHANNEL',
 } as const;
 
 export type BuiltInConversationTypeCode =
@@ -72,6 +73,7 @@ export const BUILT_IN_CONVERSATION_TYPE_IDS: Readonly<Record<BuiltInConversation
     ROUTINE: '18D12ABA-BE8C-4087-B440-835B6D077DD7',
     MEETING_ROOM: '2E9EF85D-D18A-4B8E-B6AB-F65C7F91A926',
     COMMENT: '17E6A105-AE51-43A2-9D56-290BC8D1D6BB',
+    AGENT_CHANNEL: '09E7A069-DB29-4329-BB29-4DF8CB998D94',
 };
 
 const BUILT_IN_CONVERSATION_TYPE_NAMES: Readonly<Record<string, BuiltInConversationTypeCode>> = {
@@ -81,6 +83,8 @@ const BUILT_IN_CONVERSATION_TYPE_NAMES: Readonly<Record<string, BuiltInConversat
     'meeting room': 'MEETING_ROOM',
     meeting_room: 'MEETING_ROOM',
     comment: 'COMMENT',
+    'agent channel': 'AGENT_CHANNEL',
+    agent_channel: 'AGENT_CHANNEL',
 };
 
 /**

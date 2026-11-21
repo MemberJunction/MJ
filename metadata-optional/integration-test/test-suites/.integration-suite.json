@@ -1440,6 +1440,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT183 - Chief of Staff World Seed",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "94286E34-FA78-43FF-AB6B-9DFD04AC9ED6"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT134 - FLS Close-out Over-The-Wire (client transport)",
             "Sequence": 77,
             "Status": "Active"
@@ -1781,7 +1792,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT183 - PS Prediction Serving — Zero Schema Change",
+            "TestID": "@lookup:MJ: Tests.Name=IT185 - PS Prediction Serving — Zero Schema Change",
             "Sequence": 49,
             "Status": "Active"
           },
@@ -2033,6 +2044,17 @@
           },
           "primaryKey": {
             "ID": "A75E0239-7423-476F-B9C1-24F44E373ED7"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT184 - Chief of Staff Live Agent Execution",
+            "Sequence": 19,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E5058DEF-D4C4-4C13-86C5-4364E862EDAF"
           }
         }
       ]

@@ -1,5 +1,5 @@
 /**
- * ps-prediction-serving.checks.ts — the 'ps-prediction-serving' bundle, "IT183 - PS Prediction Serving — Zero Schema
+ * ps-prediction-serving.checks.ts — the 'ps-prediction-serving' bundle, "IT185 - PS Prediction Serving — Zero Schema
  * Change" (Task M5b.6, D4-47, D-058, D-078): a model's prediction reaches a record as a `Source = 'Model'` Feature
  * Value, read live through `MJ: Latest Feature Values` and gated by the binding's view authorization, with no column, no
  * migration and no CodeGen run.
@@ -141,7 +141,7 @@ let setupTag: string | null = null;
 
 // ------------------------------------------------------------------------------------------------ shared steps ----
 
-/** The shared steps of IT183 and gate G5.6: the two wire identities, the gated reads, the panel replay, the fingerprint. */
+/** The shared steps of IT185 and gate G5.6: the two wire identities, the gated reads, the panel replay, the fingerprint. */
 export class PsPredictionServing {
     /** The bundle's fixture; throws when Setup did not build it. */
     public static Fixture(): ServingFixture {
@@ -153,7 +153,7 @@ export class PsPredictionServing {
      * Creates the restricted (UI role) and authorized (Developer role) scratch users, mints a user API key for each and
      * waits until each authenticates through MJAPI and reads `MJ: Latest Feature Values`. The users, roles, keys and
      * scope rules are written THROUGH MJAPI on a system-key connection, so MJAPI's own user and key-scope caches see
-     * them at once (written in process on a server transport, MJAPI saw them only on its timed reload: IT183 Setup was
+     * them at once (written in process on a server transport, MJAPI saw them only on its timed reload: IT185 Setup was
      * refused "No matching key scope rules" for over 200 s). When minting fails, whatever was created is released
      * before the error is rethrown (Setup's failure leaves no identity behind).
      */
@@ -341,7 +341,7 @@ export class PsPredictionServing {
     }
 }
 
-// -------------------------------------------------------------------------------------------- the IT183 world ----
+// -------------------------------------------------------------------------------------------- the IT185 world ----
 
 /** The sidecar double: every row's adverse probability is its `Tenure` cell plus `Offset`; it can fail one call. */
 class ServingSidecar implements ISidecarPredictor {
@@ -399,7 +399,7 @@ function tableOf(provider: IMetadataProvider, entityName: string): string {
 
 /** The bundle's SQL provider (server transport). */
 function sqlProvider(ctx: IntegrationCheckContext): DatabaseProviderBase {
-    if (!(ctx.Provider instanceof DatabaseProviderBase)) throw new Error('IT183 runs on the server transport (Configuration.transport = "server")');
+    if (!(ctx.Provider instanceof DatabaseProviderBase)) throw new Error('IT185 runs on the server transport (Configuration.transport = "server")');
     return ctx.Provider;
 }
 
@@ -447,7 +447,7 @@ async function minScores(ctx: IntegrationCheckContext, recordIds: readonly strin
 /** Builds the world: fingerprint, pipeline, Published model, records, two bindings, one scoring run, the two identities. */
 async function setup(ctx: IntegrationCheckContext): Promise<void> {
     fixture = null;
-    const tag = `IT183 ${Date.now()} ${TAG_SUFFIX}`;
+    const tag = `IT185 ${Date.now()} ${TAG_SUFFIX}`;
     setupTag = tag;
     const before = await PsPredictionServing.Fingerprint(ctx.Provider, ctx.User);
     const targetEntityId = ctx.Provider.EntityByName(TARGET)?.ID;
@@ -500,7 +500,7 @@ async function createPublishedModel(ctx: IntegrationCheckContext, tag: string, t
     await provider.ExecuteSQL(
         `UPDATE ${tableOf(provider, 'MJ: ML Models')} SET Status = 'Published', ArtifactFileID = '${EscapeSQLString(file.ID)}', ` +
             `ArtifactSha256 = '${createHash('sha256').update(bytes).digest('hex')}', OutputSemantics = '${EscapeSQLString(semantics)}' WHERE ID = '${EscapeSQLString(model.ID)}'`,
-        undefined, { isMutation: true, description: 'IT183: place the fixture model Published outside the lifecycle gate (no sidecar in this tier)' }, undefined,
+        undefined, { isMutation: true, description: 'IT185: place the fixture model Published outside the lifecycle gate (no sidecar in this tier)' }, undefined,
     );
     return { PipelineID: pipeline.ID, ModelID: model.ID, Artifacts: artifacts };
 }
@@ -528,16 +528,16 @@ async function teardown(ctx: IntegrationCheckContext): Promise<void> {
     // Two independent steps: a failed identity release never skips the fixture cleanup.
     if (f !== null) {
         try {
-            for (const warning of await PsPredictionServing.ReleaseIdentities(ctx, f.Identities)) console.warn(`      ⚠ IT183 teardown: ${warning}`);
+            for (const warning of await PsPredictionServing.ReleaseIdentities(ctx, f.Identities)) console.warn(`      ⚠ IT185 teardown: ${warning}`);
         } catch (e) {
-            console.warn(`      ⚠ IT183 teardown (identities): ${e instanceof Error ? e.message : String(e)}`);
+            console.warn(`      ⚠ IT185 teardown (identities): ${e instanceof Error ? e.message : String(e)}`);
         }
     }
     try {
         const provider = sqlProvider(ctx);
-        await provider.ExecuteSQL(PsPredictionServing.TeardownSql(tag, (entityName) => tableOf(provider, entityName)), undefined, { isMutation: true, description: 'IT183: delete its fixtures' }, undefined);
+        await provider.ExecuteSQL(PsPredictionServing.TeardownSql(tag, (entityName) => tableOf(provider, entityName)), undefined, { isMutation: true, description: 'IT185: delete its fixtures' }, undefined);
     } catch (e) {
-        console.warn(`      ⚠ IT183 teardown (fixtures): ${e instanceof Error ? e.message : String(e)}`);
+        console.warn(`      ⚠ IT185 teardown (fixtures): ${e instanceof Error ? e.message : String(e)}`);
     }
 }
 
@@ -667,7 +667,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('ps-prediction-serving', {
         try {
             await setup(ctx);
         } catch (e) {
-            console.warn(`      ⚠ IT183 setup: ${e instanceof Error ? e.message : String(e)}`);
+            console.warn(`      ⚠ IT185 setup: ${e instanceof Error ? e.message : String(e)}`);
         }
     },
     Teardown: teardown,

@@ -4,7 +4,7 @@
       "Name": "Predictive Studio: Schema Column Fingerprint",
       "CategoryID": "@lookup:MJ: Query Categories.Name=Predictive Studio",
       "UserQuestion": "Has the database schema, its migration history or the entity metadata changed since I last looked?",
-      "Description": "Returns one row: the number of columns in the database and a checksum over every column's object, name, ordinal and type, the number of applied migrations, and the newest MJ: Entities change. The Predictive Studio zero-schema-change checks (IT183, gate G5.6) read it before a model is published and bound and after it scores: a prediction reaches a record with no column, migration or CodeGen run, so all values stay the same.",
+      "Description": "Returns one row: the number of columns in the database and a checksum over every column's object, name, ordinal and type, the number of applied migrations, and the newest MJ: Entities change. The Predictive Studio zero-schema-change checks (IT185, gate G5.6) read it before a model is published and bound and after it scores: a prediction reaches a record with no column, migration or CodeGen run, so all values stay the same.",
       "SQL": "@file:SQL/predictive-studio-schema-fingerprint.sql",
       "TechnicalDescription": "SELECT COUNT(*) and CHECKSUM_AGG(CHECKSUM(object_id, name, column_id, system_type_id)) FROM sys.columns, COUNT(*) FROM __mj.flyway_schema_history and MAX(__mj_UpdatedAt) FROM __mj.Entity, as four scalar subqueries. No parameters. Single statement. SQL Server only (D-057).",
       "Status": "Approved",

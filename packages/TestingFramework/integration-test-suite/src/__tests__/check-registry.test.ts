@@ -46,6 +46,8 @@ import { OpenAppLocalSourceChecks } from '../checks/open-app-local-source.checks
 import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
 import { UserRoutinesChecks } from '../checks/user-routines.checks';
 import { ChiefOfStaffChecks } from '../checks/chief-of-staff.checks';
+import { ChiefOfStaffWorldChecks } from '../checks/chief-of-staff-world.checks';
+import { ChiefOfStaffLiveChecks } from '../checks/chief-of-staff-live.checks';
 import { WorkQueueRuntimeChecks } from '../checks/work-queue-runtime.checks';
 import { AgentLoopLiveChecks } from '../checks/agent-loop-live.checks';
 import { ShippedAgentsLiveChecks } from '../checks/shipped-agents-live.checks';
@@ -215,7 +217,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['diagnostics', DiagnosticsChecks, 4], // DIAG1-DIAG4 session capture, bundle assembly, encrypted intake (IT163)
         ['predictive-studio', PredictiveStudioChecks, 5],
         ['predictive-shadow-drift', PredictiveShadowDriftChecks, 2], // PSD1-PSD2 the live challenger's Model rows and its divergence on the monitoring period row (IT166, M6.8)
-        ['ps-prediction-serving', PsPredictionServingChecks, 8], // Z1-Z8 predictions served as Feature Values with zero schema change, gated by the binding's view authorization (IT183)
+        ['ps-prediction-serving', PsPredictionServingChecks, 8], // Z1-Z8 predictions served as Feature Values with zero schema change, gated by the binding's view authorization (IT185)
         ['remote-op-wire-progress', RemoteOpWireProgressChecks, 1],
         ['prompt-runner', PromptRunnerChecks, 1],
         ['ai-vendor-effort', AiVendorEffortChecks, 2],
@@ -231,7 +233,9 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['open-app-local-source', OpenAppLocalSourceChecks, 11], // OLS1-OLS11 install, upgrade and remove from a local folder (IT178)
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 18],
-        ['chief-of-staff', ChiefOfStaffChecks, 8], // COS1-COS8 ownership guards, run-now, policy cache, email approval-before-transport (IT157)
+        ['chief-of-staff', ChiefOfStaffChecks, 12], // COS1-COS12 ownership guards, run-now, policy cache, email approval-before-transport, extensible skills, rhythms, agent channels (IT157)
+        ['chief-of-staff-world', ChiefOfStaffWorldChecks, 3], // COSW1-COSW3 idempotent persistent Chief of Staff world seed: Jordan & Elena personas, active Coordinator policies, routines, suggestions, notes, Agent Channel (IT183)
+        ['chief-of-staff-live', ChiefOfStaffLiveChecks, 4], // COSL1-COSL4 live-model heuristic verification of shipped Chief of Staff via AgentRunner: typed actions, DraftOnly refusal, Agent Channel reply, zero raw SQL/CRUD (IT184)
         ['work-queue-runtime', WorkQueueRuntimeChecks, 19], // WR1-WR19 host, RunOnce, partitions, cancel, operators, sweeper, REST (IT105)
         ['conversation-compaction', ConversationCompactionChecks, 23], // CC1-CC23
         ['trailing-runtime-state', TrailingRuntimeStateChecks, 6], // TRS1-TRS6
@@ -422,7 +426,9 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'cache-gauntlet': 8,
         'cache-immutability': 15,
         'calendar-event-links': 2,
-        'chief-of-staff': 8,
+        'chief-of-staff': 12,
+        'chief-of-staff-live': 4,
+        'chief-of-staff-world': 3,
         'ciphertext-cache': 7,
         'class-resolution': 5,
         'client-cache': 26,
@@ -686,7 +692,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(282);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(284);
     });
 });
 
@@ -1297,6 +1303,10 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'agent-skills-live.SL5',
         'agent-wire-callback.WC1',
         'agent-wire-callback.WC2',
+        'chief-of-staff-live.COSL1',
+        'chief-of-staff-live.COSL2',
+        'chief-of-staff-live.COSL3',
+        'chief-of-staff-live.COSL4',
         'fp-live-jobtitle.L1',
         'native-tool-calling-live.NTC1',
         'native-tool-calling-live.NTC2',
