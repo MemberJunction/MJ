@@ -8,8 +8,12 @@ import {
     MJUserRoutineEntity,
     MJUserRoutineEntity_IRoutineWakeConfiguration,
 } from '@memberjunction/core-entities';
-import { MJAIAgentEntityExtended, TypedActionPolicyGuard } from '@memberjunction/ai-core-plus';
+import { AgentUserPolicyEngine, MJAIAgentEntityExtended, TypedActionPolicyGuard } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
+import {
+    VerifyActiveRhythmTemplate,
+    VerifyApprovedAgentRequest,
+} from './chief-of-staff-approval-helper';
 
 const DEFAULT_AGENT_NAME = 'Chief of Staff';
 
@@ -278,18 +282,6 @@ export class EnableAgentRhythmAction extends BaseAction {
                 };
             }
 
-            const confirmed = readBooleanParam(params, 'ConfirmedByUser', false);
-            const isAgentCall = Boolean(extractContextAgentId(params.Context));
-            if (isAgentCall && !confirmed) {
-                return {
-                    Success: false,
-                    ResultCode: 'APPROVAL_REQUIRED',
-                    Message:
-                        'Enabling a recurring agent rhythm requires explicit user confirmation (ConfirmedByUser = true) before materializing the routine.',
-                    Params: params.Params,
-                };
-            }
-
             const routineGuard = await TypedActionPolicyGuard.CheckEntityAccess({
                 entityName: 'MJ: User Routines',
                 operation: 'Create',
@@ -318,28 +310,59 @@ export class EnableAgentRhythmAction extends BaseAction {
             }
 
             const md: IMetadataProvider = params.Provider ?? Metadata.Provider;
+            const callingAgentId =
+                extractContextAgentId(params.Context) ||
+                AgentUserPolicyEngine.Instance.GetActiveExecutingAgentID();
+            if (callingAgentId) {
+                const confirmedApprovalRequestId = readStringParam(params, 'ConfirmedApprovalRequestID');
+                const approved = confirmedApprovalRequestId
+                    ? await VerifyApprovedAgentRequest(
+                          confirmedApprovalRequestId,
+                          contextUser.ID,
+                          agent.ID,
+                          contextUser,
+                          md
+                      )
+                    : false;
+                if (!approved) {
+                    return {
+                        Success: false,
+                        ResultCode: 'APPROVAL_REQUIRED',
+                        Message:
+                            'Enabling a recurring agent rhythm during agent execution requires a server-verified approved MJ: AI Agent Requests record (ConfirmedApprovalRequestID). Self-attested ConfirmedByUser is not sufficient.',
+                        Params: params.Params,
+                    };
+                }
+            }
+
             const rv = RunView.FromMetadataProvider(md);
 
-            const tplFilter = rhythmTemplateId
-                ? `ID='${EscapeSQLString(rhythmTemplateId)}' AND Status='Active'`
-                : `AgentID='${EscapeSQLString(agent.ID)}' AND LOWER(WorkstreamKey)='${EscapeSQLString(
-                      workstreamKey!.toLowerCase()
-                  )}' AND Status='Active'`;
-            const tplRes = await rv.RunView<MJAIAgentRhythmTemplateEntity>(
-                {
-                    EntityName: 'MJ: AI Agent Rhythm Templates',
-                    ExtraFilter: tplFilter,
-                    MaxRows: 1,
-                    ResultType: 'entity_object',
-                },
-                contextUser
-            );
-            const template = tplRes.Success ? tplRes.Results[0] ?? null : null;
+            let template: MJAIAgentRhythmTemplateEntity | null = null;
+            if (rhythmTemplateId) {
+                template = await VerifyActiveRhythmTemplate(rhythmTemplateId, agent.ID, contextUser, md);
+            } else {
+                const tplFilter = `AgentID='${EscapeSQLString(agent.ID)}' AND LOWER(WorkstreamKey)='${EscapeSQLString(
+                    workstreamKey!.toLowerCase()
+                )}' AND Status='Active'`;
+                const tplRes = await rv.RunView<MJAIAgentRhythmTemplateEntity>(
+                    {
+                        EntityName: 'MJ: AI Agent Rhythm Templates',
+                        ExtraFilter: tplFilter,
+                        MaxRows: 1,
+                        ResultType: 'entity_object',
+                    },
+                    contextUser
+                );
+                const candidate = tplRes.Success ? tplRes.Results[0] ?? null : null;
+                if (candidate && candidate.Status === 'Active' && UUIDsEqual(candidate.AgentID, agent.ID)) {
+                    template = candidate;
+                }
+            }
             if (!template) {
                 return {
                     Success: false,
                     ResultCode: 'NOT_FOUND',
-                    Message: `No active rhythm template found for ${
+                    Message: `No active rhythm template found for agent "${agent.Name}" matching ${
                         rhythmTemplateId ? `ID "${rhythmTemplateId}"` : `WorkstreamKey "${workstreamKey}"`
                     }.`,
                     Params: params.Params,

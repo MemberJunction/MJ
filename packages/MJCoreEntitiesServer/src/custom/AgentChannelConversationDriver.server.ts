@@ -16,8 +16,77 @@ import {
     MJAgentChannelEntity,
     MJConversationEntity,
 } from '@memberjunction/core-entities';
-import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, GetGlobalObjectStore, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { ConversationTypeDriver } from './ConversationAndCommentDrivers';
+
+/**
+ * Well-known `GetGlobalObjectStore()` key shared between `@memberjunction/core-entities-server`
+ * and `@memberjunction/ai-agents` so human replies saved directly to an `AGENT_CHANNEL`
+ * conversation wake peer participant agents without introducing a circular package dependency.
+ */
+export const AGENT_CHANNEL_HUMAN_POST_WAKE_HANDLER_KEY = '__MJ_AGENT_CHANNEL_HUMAN_POST_WAKE_HANDLER__';
+
+/**
+ * Optional message metadata passed from `MJConversationDetailEntityServer.Save()` to
+ * {@link AgentChannelConversationDriver.HandleHumanMessagePosted} so peer wake routines
+ * carry the posted message ID, author, and preview text.
+ */
+export interface AgentChannelHumanPostContext {
+    conversationDetailID?: string | null;
+    senderUserID?: string | null;
+    messagePreview?: string;
+    skipPeerWake?: boolean;
+}
+
+/**
+ * Event payload dispatched to the registered {@link AgentChannelHumanPostWakeHandler}
+ * whenever a direct human message is saved in an active `AGENT_CHANNEL` conversation.
+ */
+export interface AgentChannelHumanPostWakeEvent {
+    provider: IMetadataProvider;
+    channelID: string;
+    conversationDetailID: string | null;
+    senderUserID: string;
+    messagePreview: string;
+    contextUser: UserInfo;
+    now: Date;
+    reopenedFromPause: boolean;
+}
+
+/**
+ * Decoupled callback registered by `@memberjunction/ai-agents` (`AgentWakeTriggerService`)
+ * to schedule immediate peer participant wakes after a human posts in an Agent Channel.
+ */
+export type AgentChannelHumanPostWakeHandler = (
+    event: AgentChannelHumanPostWakeEvent
+) => Promise<number | void> | number | void;
+
+/**
+ * Registers (or clears when passed `null`) the process-wide handler invoked after a human
+ * participant posts directly in an `AGENT_CHANNEL` conversation.
+ */
+export function RegisterAgentChannelHumanPostWakeHandler(
+    handler: AgentChannelHumanPostWakeHandler | null
+): void {
+    const store = GetGlobalObjectStore();
+    if (!store) {
+        return;
+    }
+    if (handler) {
+        store[AGENT_CHANNEL_HUMAN_POST_WAKE_HANDLER_KEY] = handler;
+    } else {
+        delete store[AGENT_CHANNEL_HUMAN_POST_WAKE_HANDLER_KEY];
+    }
+}
+
+/**
+ * Returns the currently registered human-post wake handler, or `null` if none is registered.
+ */
+export function GetAgentChannelHumanPostWakeHandler(): AgentChannelHumanPostWakeHandler | null {
+    const store = GetGlobalObjectStore();
+    const candidate = store?.[AGENT_CHANNEL_HUMAN_POST_WAKE_HANDLER_KEY];
+    return typeof candidate === 'function' ? (candidate as AgentChannelHumanPostWakeHandler) : null;
+}
 
 function extractAgentChannelFromEntity(entity: BaseEntity): MJAgentChannelEntity | null {
     if (entity.EntityInfo?.Name === 'MJ: Agent Channels') {
@@ -37,6 +106,8 @@ export interface AgentChannelHumanMessageResult {
     updated: boolean;
     reopenedFromPause: boolean;
     channelStatus?: MJAgentChannelEntity['ChannelStatus'];
+    wakeHandlerInvoked?: boolean;
+    peerWakesTriggered?: number;
 }
 
 /**
@@ -152,13 +223,15 @@ export class AgentChannelConversationDriver extends ConversationTypeDriver {
     /**
      * Called after a direct human message (`Role === 'User'` and no `AgentID`) is saved to a
      * conversation. When the conversation is an `AGENT_CHANNEL`, resets `ConsecutiveAgentTurns`
-     * to `0`, updates `LastHumanMessageAt`, and re-opens `'Paused For Human'` channels to `'Open'`.
+     * to `0`, updates `LastHumanMessageAt`, re-opens `'Paused For Human'` channels to `'Open'`,
+     * and invokes the registered peer-agent wake hook so participant agents wake immediately.
      */
     public static async HandleHumanMessagePosted(
         provider: IMetadataProvider,
         conversationID: string,
         contextUser: UserInfo | null,
-        now: Date = new Date()
+        now: Date = new Date(),
+        messageContext?: AgentChannelHumanPostContext
     ): Promise<AgentChannelHumanMessageResult> {
         if (!provider || provider.ProviderType !== 'Database' || !conversationID) {
             return { isAgentChannel: false, updated: false, reopenedFromPause: false };
@@ -220,11 +293,43 @@ export class AgentChannelConversationDriver extends ConversationTypeDriver {
                 };
             }
 
+            let wakeHandlerInvoked = false;
+            let peerWakesTriggered: number | undefined;
+            const wakeHandler = messageContext?.skipPeerWake ? null : GetAgentChannelHumanPostWakeHandler();
+            const senderUserID = (messageContext?.senderUserID ?? contextUser?.ID ?? '').trim();
+            const actingUser = contextUser ?? systemUser;
+            if (wakeHandler && senderUserID && actingUser) {
+                wakeHandlerInvoked = true;
+                try {
+                    const count = await wakeHandler({
+                        provider,
+                        channelID: conversationID,
+                        conversationDetailID: messageContext?.conversationDetailID ?? null,
+                        senderUserID,
+                        messagePreview: messageContext?.messagePreview ?? '',
+                        contextUser: actingUser,
+                        now,
+                        reopenedFromPause: wasPaused,
+                    });
+                    if (typeof count === 'number') {
+                        peerWakesTriggered = count;
+                    }
+                } catch (wakeError) {
+                    LogError(
+                        `AgentChannelConversationDriver.HandleHumanMessagePosted wake hook failed on channel ${conversationID}: ${
+                            wakeError instanceof Error ? wakeError.message : String(wakeError)
+                        }`
+                    );
+                }
+            }
+
             return {
                 isAgentChannel: true,
                 updated: true,
                 reopenedFromPause: wasPaused,
                 channelStatus: channel.ChannelStatus,
+                wakeHandlerInvoked,
+                ...(peerWakesTriggered !== undefined ? { peerWakesTriggered } : {}),
             };
         } catch (error) {
             LogError(
