@@ -214,7 +214,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['open-app-local-source', OpenAppLocalSourceChecks, 11], // OLS1-OLS11 install, upgrade and remove from a local folder (IT178)
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 18],
-        ['chief-of-staff', ChiefOfStaffChecks, 8], // COS1-COS8 ownership guards, run-now, policy cache, email approval-before-transport (IT157)
+        ['chief-of-staff', ChiefOfStaffChecks, 12], // COS1-COS12 ownership guards, run-now, policy cache, email approval-before-transport, extensible skills, rhythms, agent channels (IT157)
         ['work-queue-runtime', WorkQueueRuntimeChecks, 19], // WR1-WR19 host, RunOnce, partitions, cancel, operators, sweeper, REST (IT105)
         ['conversation-compaction', ConversationCompactionChecks, 23], // CC1-CC23
         ['trailing-runtime-state', TrailingRuntimeStateChecks, 6], // TRS1-TRS6
@@ -405,7 +405,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'cache-gauntlet': 8,
         'cache-immutability': 15,
         'calendar-event-links': 2,
-        'chief-of-staff': 8,
+        'chief-of-staff': 12,
         'ciphertext-cache': 7,
         'class-resolution': 5,
         'client-cache': 26,
