@@ -9,23 +9,12 @@ import type {
   MJCommunicationProviderEntity,
   MJCommunicationSendingDomainEntity,
 } from '@memberjunction/core-entities';
-import type { CommsAdminLoadedMetadata } from './communications-admin.types';
-
-interface GqlCapableProvider {
-  ExecuteGQL(query: string, variables?: Record<string, unknown>): Promise<Record<string, unknown>>;
-}
-
-function asGqlProvider(provider: unknown): GqlCapableProvider | null {
-  if (
-    provider &&
-    typeof provider === 'object' &&
-    'ExecuteGQL' in provider &&
-    typeof (provider as { ExecuteGQL?: unknown }).ExecuteGQL === 'function'
-  ) {
-    return provider as GqlCapableProvider;
-  }
-  return null;
-}
+import {
+  ExecuteCommsRemoteOp,
+  type CommsAdminLoadedMetadata,
+  type CommsAdminMutationOpOutput,
+  type CommsSendingDomainOpOutput,
+} from './communications-admin.types';
 
 @Component({
   selector: 'mj-comms-sending-domains-tab',
@@ -270,24 +259,13 @@ export class CommsSendingDomainsTabComponent extends BaseAngularComponent implem
     this.cdr.markForCheck();
 
     try {
-      const gql = asGqlProvider(this.ProviderToUse);
-      if (!gql) {
-        throw new Error('GraphQL provider is not available.');
-      }
-      const mutation = `
-        mutation DeleteCommsSendingDomain($DomainID: String!) {
-          DeleteCommsSendingDomain(DomainID: $DomainID) {
-            Success
-            ErrorMessage
-          }
-        }
-      `;
-      const res = await gql.ExecuteGQL(mutation, { DomainID: domain.ID });
-      const payload = res['DeleteCommsSendingDomain'] as
-        | { Success: boolean; ErrorMessage?: string }
-        | undefined;
-      if (!payload?.Success) {
-        throw new Error(payload?.ErrorMessage || 'Failed to delete sending domain.');
+      const payload = await ExecuteCommsRemoteOp<{ DomainID: string }, CommsAdminMutationOpOutput>(
+        this.ProviderToUse,
+        'Communications.DeleteSendingDomain',
+        { DomainID: domain.ID },
+      );
+      if (!payload.Success) {
+        throw new Error(payload.ErrorMessage || 'Failed to delete sending domain.');
       }
       domain.Status = 'Revoked';
       if (this.SelectedDomain && UUIDsEqual(this.SelectedDomain.ID, domain.ID)) {
@@ -321,27 +299,13 @@ export class CommsSendingDomainsTabComponent extends BaseAngularComponent implem
     this.cdr.markForCheck();
 
     try {
-      const gql = asGqlProvider(this.ProviderToUse);
-      if (!gql) {
-        throw new Error('GraphQL provider is not available.');
-      }
-      const mutation = `
-        mutation CreateCommsSendingDomain($DomainID: String!) {
-          CreateCommsSendingDomain(DomainID: $DomainID) {
-            Success
-            Status
-            ProviderDomainID
-            DNSRecordsJSON
-            ErrorMessage
-          }
-        }
-      `;
-      const res = await gql.ExecuteGQL(mutation, { DomainID: domain.ID });
-      const payload = res['CreateCommsSendingDomain'] as
-        | { Success: boolean; Status?: string; ProviderDomainID?: string; DNSRecordsJSON?: string; ErrorMessage?: string }
-        | undefined;
-      if (!payload?.Success) {
-        throw new Error(payload?.ErrorMessage || 'Failed to create provider domain authentication.');
+      const payload = await ExecuteCommsRemoteOp<{ DomainID: string }, CommsSendingDomainOpOutput>(
+        this.ProviderToUse,
+        'Communications.CreateSendingDomain',
+        { DomainID: domain.ID },
+      );
+      if (!payload.Success) {
+        throw new Error(payload.ErrorMessage || 'Failed to create provider domain authentication.');
       }
       if (payload.DNSRecordsJSON) {
         domain.DNSRecords = payload.DNSRecordsJSON;
@@ -370,29 +334,11 @@ export class CommsSendingDomainsTabComponent extends BaseAngularComponent implem
     this.cdr.markForCheck();
 
     try {
-      const gql = asGqlProvider(this.ProviderToUse);
-      if (!gql) {
-        throw new Error('GraphQL provider is not available.');
-      }
-      const mutation = `
-        mutation VerifyCommsSendingDomain($DomainID: String!) {
-          VerifyCommsSendingDomain(DomainID: $DomainID) {
-            Success
-            Verified
-            Status
-            ProviderDomainID
-            DNSRecordsJSON
-            ErrorMessage
-          }
-        }
-      `;
-      const res = await gql.ExecuteGQL(mutation, { DomainID: domain.ID });
-      const payload = res['VerifyCommsSendingDomain'] as
-        | { Success: boolean; Verified?: boolean; Status?: string; DNSRecordsJSON?: string; ErrorMessage?: string }
-        | undefined;
-      if (!payload) {
-        throw new Error('No response from VerifyCommsSendingDomain.');
-      }
+      const payload = await ExecuteCommsRemoteOp<{ DomainID: string }, CommsSendingDomainOpOutput>(
+        this.ProviderToUse,
+        'Communications.VerifySendingDomain',
+        { DomainID: domain.ID },
+      );
       if (payload.DNSRecordsJSON) {
         domain.DNSRecords = payload.DNSRecordsJSON;
       }

@@ -3,23 +3,12 @@ import { FormsModule } from '@angular/forms';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import type { ComplianceGateResult, MessageClass } from '@memberjunction/communication-types';
-import type { CommsAdminLoadedMetadata } from './communications-admin.types';
-
-interface GqlCapableProvider {
-  ExecuteGQL(query: string, variables?: Record<string, unknown>): Promise<Record<string, unknown>>;
-}
-
-function asGqlProvider(provider: unknown): GqlCapableProvider | null {
-  if (
-    provider &&
-    typeof provider === 'object' &&
-    'ExecuteGQL' in provider &&
-    typeof (provider as { ExecuteGQL?: unknown }).ExecuteGQL === 'function'
-  ) {
-    return provider as GqlCapableProvider;
-  }
-  return null;
-}
+import {
+  ExecuteCommsRemoteOp,
+  type CommsAdminLoadedMetadata,
+  type CommsSimulateGateOpInput,
+  type CommsSimulateGateOpOutput,
+} from './communications-admin.types';
 
 @Component({
   selector: 'mj-comms-gate-simulator-tab',
@@ -161,25 +150,10 @@ export class CommsGateSimulatorTabComponent extends BaseAngularComponent {
     this.cdr.markForCheck();
 
     try {
-      const gql = asGqlProvider(this.ProviderToUse);
-      if (!gql) {
-        throw new Error('GraphQL provider is not available.');
-      }
-
-      const query = `
-        query SimulateCommsComplianceGate($Input: CommsGateSimulationInput!) {
-          SimulateCommsComplianceGate(Input: $Input) {
-            Success
-            Decision
-            Reason
-            Detail
-            ResultJSON
-            ErrorMessage
-          }
-        }
-      `;
-      const res = await gql.ExecuteGQL(query, {
-        Input: {
+      const payload = await ExecuteCommsRemoteOp<CommsSimulateGateOpInput, CommsSimulateGateOpOutput>(
+        this.ProviderToUse,
+        'Communications.SimulateComplianceGate',
+        {
           SenderID: this.SelectedSenderId,
           PrincipalID: this.SelectedPrincipalId || undefined,
           RecordID: this.RecordId.trim() || undefined,
@@ -187,12 +161,9 @@ export class CommsGateSimulatorTabComponent extends BaseAngularComponent {
           MessageClass: this.MessageClass,
           RecipientJurisdictionID: this.RecipientJurisdictionId || undefined,
         },
-      });
-      const payload = res['SimulateCommsComplianceGate'] as
-        | { Success: boolean; ResultJSON?: string; ErrorMessage?: string }
-        | undefined;
-      if (!payload?.Success || !payload.ResultJSON) {
-        throw new Error(payload?.ErrorMessage || 'Server gate simulation failed.');
+      );
+      if (!payload.Success || !payload.ResultJSON) {
+        throw new Error(payload.ErrorMessage || 'Server gate simulation failed.');
       }
       this.DecisionResult = JSON.parse(payload.ResultJSON) as ComplianceGateResult;
       this.DecisionJson = payload.ResultJSON;

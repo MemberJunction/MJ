@@ -63,8 +63,9 @@ describe('Communications Admin Dashboard Components', () => {
 
   it('CommsGateSimulatorTabComponent executes SimulateCommsComplianceGate on server via ExecuteGQL', async () => {
     const tab = new CommsGateSimulatorTabComponent();
-    const executeGQL = vi.fn().mockResolvedValue({
-      SimulateCommsComplianceGate: {
+    const routeOp = vi.fn().mockResolvedValue({
+      Success: true,
+      Output: {
         Success: true,
         Decision: 'Allowed',
         ResultJSON: JSON.stringify({
@@ -86,7 +87,7 @@ describe('Communications Admin Dashboard Components', () => {
         }),
       },
     });
-    Object.defineProperty(tab, 'ProviderToUse', { get: () => ({ ExecuteGQL: executeGQL }) });
+    Object.defineProperty(tab, 'ProviderToUse', { get: () => ({ RouteOperation: routeOp }) });
 
     tab.Metadata = {
       Senders: [{ ID: 'sender-1', Name: 'Default' } as unknown as MJCommunicationSenderEntity],
@@ -105,24 +106,29 @@ describe('Communications Admin Dashboard Components', () => {
 
     await tab.RunSimulation();
 
-    expect(executeGQL).toHaveBeenCalledTimes(1);
-    expect(executeGQL.mock.calls[0][1]).toMatchObject({
-      Input: { SenderID: 'sender-1', MessageClass: 'Marketing' },
+    expect(routeOp).toHaveBeenCalledWith('Communications.SimulateComplianceGate', {
+      SenderID: 'sender-1',
+      PrincipalID: undefined,
+      RecordID: undefined,
+      PreferenceID: undefined,
+      MessageClass: 'Marketing',
+      RecipientJurisdictionID: undefined,
     });
     expect(tab.DecisionResult?.Decision).toBe('Allowed');
     expect(tab.DecisionResult?.AuditSnapshot.ApplicableRegimes).toEqual(['CAN-SPAM']);
     expect(tab.ErrorMessage).toBe('');
   });
 
-  it('CommsSendingDomainsTabComponent calls CreateCommsSendingDomain and VerifyCommsSendingDomain mutations', async () => {
+  it('CommsSendingDomainsTabComponent calls CreateSendingDomain and VerifySendingDomain remote operations', async () => {
     const tab = new CommsSendingDomainsTabComponent();
     const refreshSpy = vi.fn();
     tab.RefreshRequested.subscribe(refreshSpy);
 
-    const executeGQL = vi
+    const routeOp = vi
       .fn()
       .mockResolvedValueOnce({
-        CreateCommsSendingDomain: {
+        Success: true,
+        Output: {
           Success: true,
           Status: 'Pending',
           ProviderDomainID: 'sg-dom-1',
@@ -132,7 +138,8 @@ describe('Communications Admin Dashboard Components', () => {
         },
       })
       .mockResolvedValueOnce({
-        VerifyCommsSendingDomain: {
+        Success: true,
+        Output: {
           Success: true,
           Verified: true,
           Status: 'Verified',
@@ -141,7 +148,7 @@ describe('Communications Admin Dashboard Components', () => {
           ]),
         },
       });
-    Object.defineProperty(tab, 'ProviderToUse', { get: () => ({ ExecuteGQL: executeGQL }) });
+    Object.defineProperty(tab, 'ProviderToUse', { get: () => ({ RouteOperation: routeOp }) });
 
     const domain = {
       ID: 'dom-1',
@@ -154,35 +161,53 @@ describe('Communications Admin Dashboard Components', () => {
     } as unknown as MJCommunicationSendingDomainEntity;
 
     await tab.GenerateDnsRecords(domain);
+    expect(routeOp).toHaveBeenNthCalledWith(1, 'Communications.CreateSendingDomain', { DomainID: 'dom-1' });
     expect(domain.ProviderDomainID).toBe('sg-dom-1');
     expect(tab.SelectedRecords).toHaveLength(1);
 
     await tab.VerifyDns(domain);
+    expect(routeOp).toHaveBeenNthCalledWith(2, 'Communications.VerifySendingDomain', { DomainID: 'dom-1' });
     expect(domain.Status).toBe('Verified');
     expect(domain.VerifiedAt).toBeInstanceOf(Date);
     expect(tab.StatusMessage).toContain('Verified');
     expect(refreshSpy).toHaveBeenCalledTimes(2);
   });
 
-  it('CommsEndpointsSuppressionsTabComponent revokes suppression via RevokeCommsSuppression mutation', async () => {
+  it('CommsEndpointsSuppressionsTabComponent revokes suppression and blocks endpoints via remote operations', async () => {
     const tab = new CommsEndpointsSuppressionsTabComponent();
     const searchSpy = vi.spyOn(tab, 'Search').mockResolvedValue(undefined);
-    const executeGQL = vi.fn().mockResolvedValue({
-      RevokeCommsSuppression: {
+    const routeOp = vi
+      .fn()
+      .mockResolvedValueOnce({
         Success: true,
-        WarningMessage: 'SendGrid returned 404 (already cleared)',
-      },
-    });
-    Object.defineProperty(tab, 'ProviderToUse', { get: () => ({ ExecuteGQL: executeGQL }) });
+        Output: {
+          Success: true,
+          WarningMessage: 'SendGrid returned 404 (already cleared)',
+        },
+      })
+      .mockResolvedValueOnce({
+        Success: true,
+        Output: {
+          Success: true,
+          SuppressionID: 'supp-new-1',
+        },
+      });
+    Object.defineProperty(tab, 'ProviderToUse', { get: () => ({ RouteOperation: routeOp }) });
 
     const supp = { ID: 'supp-1', Status: 'Active' } as unknown as MJCommunicationSuppressionEntity;
     await tab.RevokeSuppression(supp);
 
-    expect(executeGQL).toHaveBeenCalledWith(expect.stringContaining('RevokeCommsSuppression'), {
+    expect(routeOp).toHaveBeenNthCalledWith(1, 'Communications.RevokeSuppression', {
       SuppressionID: 'supp-1',
     });
     expect(tab.ErrorMessage).toContain('SendGrid returned 404');
-    expect(searchSpy).toHaveBeenCalledTimes(1);
+
+    const endpoint = { ID: 'ep-1' } as unknown as MJCommunicationEndpointEntity;
+    await tab.AddAdminBlock(endpoint);
+    expect(routeOp).toHaveBeenNthCalledWith(2, 'Communications.BlockEndpoint', {
+      EndpointID: 'ep-1',
+    });
+    expect(searchSpy).toHaveBeenCalledTimes(2);
   });
 
   it('CommunicationComplianceAdminResourceComponent exposes display name and icon class', async () => {

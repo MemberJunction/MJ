@@ -9,23 +9,12 @@ import type {
   MJCommunicationSuppressionEntity,
 } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
-import type { CommsAdminLoadedMetadata } from './communications-admin.types';
-
-interface GqlCapableProvider {
-  ExecuteGQL(query: string, variables?: Record<string, unknown>): Promise<Record<string, unknown>>;
-}
-
-function asGqlProvider(provider: unknown): GqlCapableProvider | null {
-  if (
-    provider &&
-    typeof provider === 'object' &&
-    'ExecuteGQL' in provider &&
-    typeof (provider as { ExecuteGQL?: unknown }).ExecuteGQL === 'function'
-  ) {
-    return provider as GqlCapableProvider;
-  }
-  return null;
-}
+import {
+  ExecuteCommsRemoteOp,
+  type CommsAdminLoadedMetadata,
+  type CommsAdminMutationOpOutput,
+  type CommsBlockEndpointOpOutput,
+} from './communications-admin.types';
 
 @Component({
   selector: 'mj-comms-endpoints-suppressions-tab',
@@ -236,22 +225,16 @@ export class CommsEndpointsSuppressionsTabComponent extends BaseAngularComponent
   }
 
   public async AddAdminBlock(endpoint: MJCommunicationEndpointEntity): Promise<void> {
+    this.ErrorMessage = '';
     try {
-      const p = this.ProviderToUse;
-      const supp = await p.GetEntityObject<MJCommunicationSuppressionEntity>(
-        'MJ: Communication Suppressions',
-        p.CurrentUser,
+      const payload = await ExecuteCommsRemoteOp<{ EndpointID: string }, CommsBlockEndpointOpOutput>(
+        this.ProviderToUse,
+        'Communications.BlockEndpoint',
+        { EndpointID: endpoint.ID },
       );
-      supp.CommunicationEndpointID = endpoint.ID;
-      supp.BaseMessageTypeID = endpoint.BaseMessageTypeID;
-      supp.Reason = 'Admin Block';
-      supp.Source = 'Admin';
-      supp.Status = 'Active';
-      supp.EffectiveAt = new Date();
-      if (!(await supp.Save())) {
-        throw new Error(supp.LatestResult?.CompleteMessage || 'Failed to add Admin Block.');
+      if (!payload.Success) {
+        throw new Error(payload.ErrorMessage || 'Failed to add Admin Block.');
       }
-      await this.appendSuppressionAudit(supp, 'Created', null, { Reason: 'Admin Block', Status: 'Active' });
       await this.Search();
     } catch (err: unknown) {
       this.ErrorMessage = err instanceof Error ? err.message : 'Failed to add Admin Block.';
@@ -262,66 +245,21 @@ export class CommsEndpointsSuppressionsTabComponent extends BaseAngularComponent
   public async RevokeSuppression(supp: MJCommunicationSuppressionEntity): Promise<void> {
     this.ErrorMessage = '';
     try {
-      const gql = asGqlProvider(this.ProviderToUse);
-      if (gql) {
-        const mutation = `
-          mutation RevokeCommsSuppression($SuppressionID: String!) {
-            RevokeCommsSuppression(SuppressionID: $SuppressionID) {
-              Success
-              ErrorMessage
-              WarningMessage
-            }
-          }
-        `;
-        const res = await gql.ExecuteGQL(mutation, { SuppressionID: supp.ID });
-        const payload = res['RevokeCommsSuppression'] as
-          | { Success: boolean; ErrorMessage?: string; WarningMessage?: string }
-          | undefined;
-        if (!payload?.Success) {
-          throw new Error(payload?.ErrorMessage || 'Failed to revoke suppression.');
-        }
-        if (payload.WarningMessage) {
-          this.ErrorMessage = `Revoked in MJ, but downstream provider returned warning: ${payload.WarningMessage}`;
-        }
-        await this.Search();
-        return;
+      const payload = await ExecuteCommsRemoteOp<{ SuppressionID: string }, CommsAdminMutationOpOutput>(
+        this.ProviderToUse,
+        'Communications.RevokeSuppression',
+        { SuppressionID: supp.ID },
+      );
+      if (!payload.Success) {
+        throw new Error(payload.ErrorMessage || 'Failed to revoke suppression.');
       }
-
-      const prevStatus = supp.Status;
-      const prevRevokedAt = supp.RevokedAt;
-      const prev = { Status: prevStatus };
-      supp.Status = 'Revoked';
-      supp.RevokedAt = new Date();
-      if (!(await supp.Save())) {
-        supp.Status = prevStatus;
-        supp.RevokedAt = prevRevokedAt;
-        throw new Error(supp.LatestResult?.CompleteMessage || 'Failed to revoke suppression.');
+      if (payload.WarningMessage) {
+        this.ErrorMessage = `Revoked in MJ, but downstream provider returned warning: ${payload.WarningMessage}`;
       }
-      await this.appendSuppressionAudit(supp, 'Revoked', prev, { Status: 'Revoked' });
       await this.Search();
     } catch (err: unknown) {
       this.ErrorMessage = err instanceof Error ? err.message : 'Failed to revoke suppression.';
       this.cdr.markForCheck();
     }
-  }
-
-  private async appendSuppressionAudit(
-    supp: MJCommunicationSuppressionEntity,
-    action: MJCommunicationConsentAuditLogEntity['Action'],
-    previous: Record<string, unknown> | null,
-    next: Record<string, unknown>,
-  ): Promise<void> {
-    const p = this.ProviderToUse;
-    const audit = await p.GetEntityObject<MJCommunicationConsentAuditLogEntity>(
-      'MJ: Communication Consent Audit Logs',
-      p.CurrentUser,
-    );
-    audit.CommunicationSuppressionID = supp.ID;
-    audit.Action = action;
-    audit.PreviousValue = previous ? JSON.stringify(previous) : null;
-    audit.NewValue = JSON.stringify(next);
-    audit.Source = 'Admin';
-    audit.ChangedByUserID = p.CurrentUser?.ID ?? null;
-    await audit.Save();
   }
 }

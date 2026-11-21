@@ -1,3 +1,4 @@
+import type { IRemoteOperationProvider } from '@memberjunction/core';
 import type {
   MJCommunicationBaseMessageTypeEntity,
   MJCommunicationComplianceRegimeEntity,
@@ -75,3 +76,69 @@ export type {
   MJCommunicationEndpointEntity,
   MJCommunicationSuppressionEntity,
 };
+
+export interface CommsSimulateGateOpInput {
+  SenderID: string;
+  PrincipalID?: string;
+  RecordID?: string;
+  PreferenceID?: string;
+  MessageClass: string;
+  RecipientJurisdictionID?: string;
+}
+
+export interface CommsSimulateGateOpOutput {
+  Success: boolean;
+  Decision?: string;
+  Reason?: string;
+  Detail?: string;
+  ResultJSON?: string;
+  ErrorMessage?: string;
+}
+
+export interface CommsSendingDomainOpOutput {
+  Success: boolean;
+  Verified?: boolean;
+  Status?: string;
+  ProviderDomainID?: string;
+  DNSRecordsJSON?: string;
+  ErrorMessage?: string;
+}
+
+export interface CommsAdminMutationOpOutput {
+  Success: boolean;
+  ErrorMessage?: string;
+  WarningMessage?: string;
+}
+
+export interface CommsBlockEndpointOpOutput {
+  Success: boolean;
+  SuppressionID?: string;
+  ErrorMessage?: string;
+}
+
+function isRemoteOperationProvider(provider: unknown): provider is IRemoteOperationProvider {
+  return (
+    Boolean(provider) &&
+    typeof provider === 'object' &&
+    'RouteOperation' in (provider as object) &&
+    typeof (provider as { RouteOperation?: unknown }).RouteOperation === 'function'
+  );
+}
+
+/**
+ * Dispatches a Communications Admin Remote Operation through `IRemoteOperationProvider.RouteOperation`.
+ */
+export async function ExecuteCommsRemoteOp<TInput, TOutput>(
+  provider: unknown,
+  operationKey: string,
+  input: TInput,
+): Promise<TOutput> {
+  if (!isRemoteOperationProvider(provider)) {
+    throw new Error('Remote operation provider is not available.');
+  }
+  const result = await provider.RouteOperation<TInput, TOutput>(operationKey, input);
+  if (!result.Success || result.Output === undefined) {
+    throw new Error(result.ErrorMessage || `Remote operation '${operationKey}' failed.`);
+  }
+  return result.Output;
+}
