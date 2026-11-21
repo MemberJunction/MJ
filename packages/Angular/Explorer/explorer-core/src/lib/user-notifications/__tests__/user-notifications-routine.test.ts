@@ -176,6 +176,25 @@ describe('ClassifyNotificationMessage & StripNotificationMarkdown — routine & 
     expect(stripped).toBe("Weekly Summary for Elena's Team Note: Review Northwind_Account & confirm.");
   });
 
+  it('handles pathological repeated bracket/newline/angle inputs in linear time without backtracking', () => {
+    const repeatedNewlines = '\n'.repeat(10_000) + '- item';
+    expect(ClassifyNotificationMessage(repeatedNewlines).Kind).toBe('markdown');
+
+    const repeatedBrackets = '['.repeat(10_000) + 'text';
+    expect(ClassifyNotificationMessage(repeatedBrackets).Kind).toBe('text');
+
+    const repeatedLinkStarts = '[]('.repeat(5_000);
+    expect(ClassifyNotificationMessage(repeatedLinkStarts).Kind).toBe('text');
+
+    const repeatedUnclosedLink = '[a]('.repeat(5_000);
+    expect(ClassifyNotificationMessage(repeatedUnclosedLink).Kind).toBe('text');
+
+    const balancedParenLink = 'Check [Northwind](https://example.com/wiki/Account_(US)) today.';
+    const classified = ClassifyNotificationMessage(balancedParenLink);
+    expect(classified.Kind).toBe('markdown');
+    expect(classified.Preview).toBe('Check Northwind today.');
+  });
+
   it('cleans entities and mention tokens in plain-text notifications (Kind === "text")', () => {
     const raw =
       'Routine &quot;Elena&#39;s Watch&quot; checked Northwind @{"_mode":"mention","type":"record","entityName":"Accounts","name":"Northwind","ID":"acc-1"} &amp; Contoso.';

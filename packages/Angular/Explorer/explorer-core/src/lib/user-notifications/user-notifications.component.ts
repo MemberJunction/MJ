@@ -336,10 +336,83 @@ function unwrapInlineCode(segment: string): string {
   return inner;
 }
 
+/**
+ * Linear-time O(n) scanner/replacer for Markdown links `[label](url)` — avoids
+ * polynomial regex backtracking on repeated `[` or `[](` sequences.
+ */
+function processMarkdownLinks(text: string, mode: 'detect'): boolean;
+function processMarkdownLinks(text: string, mode: 'strip'): string;
+function processMarkdownLinks(text: string, mode: 'detect' | 'strip'): boolean | string {
+  let out = '';
+  let cursor = 0;
+  let i = 0;
+  while (i < text.length) {
+    if (text[i] !== '[') {
+      i++;
+      continue;
+    }
+    const lineEnd = text.indexOf('\n', i + 1);
+    const searchLimit = lineEnd === -1 ? text.length : lineEnd;
+    let closeBracket = -1;
+    let nested = false;
+    for (let k = i + 1; k < searchLimit; k++) {
+      if (text[k] === '[') {
+        i = k;
+        nested = true;
+        break;
+      }
+      if (text[k] === ']') {
+        closeBracket = k;
+        break;
+      }
+    }
+    if (nested) {
+      continue;
+    }
+    if (closeBracket <= i + 1 || text[closeBracket + 1] !== '(') {
+      i = closeBracket !== -1 ? closeBracket + 1 : searchLimit;
+      continue;
+    }
+    let closeParen = -1;
+    let parenDepth = 1;
+    for (let k = closeBracket + 2; k < searchLimit; k++) {
+      const ch = text[k];
+      if (ch === '(') {
+        parenDepth++;
+      } else if (ch === ')') {
+        parenDepth--;
+        if (parenDepth === 0) {
+          closeParen = k;
+          break;
+        }
+      }
+    }
+    if (closeParen === -1) {
+      const nextClose = text.indexOf(')', closeBracket + 2);
+      i = nextClose === -1 || nextClose >= searchLimit ? searchLimit : closeBracket + 2;
+      continue;
+    }
+    if (mode === 'detect' && closeParen === closeBracket + 2) {
+      i = closeParen + 1;
+      continue;
+    }
+    if (mode === 'detect') {
+      return true;
+    }
+    out += text.slice(cursor, i);
+    out += text.slice(i + 1, closeBracket);
+    cursor = closeParen + 1;
+    i = cursor;
+  }
+  if (mode === 'detect') {
+    return false;
+  }
+  return out + text.slice(cursor);
+}
+
 function stripMarkdownSyntaxOutsideTokens(text: string): string {
   const stripChunk = (chunk: string): string =>
-    chunk
-      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    processMarkdownLinks(chunk, 'strip')
       .replace(/(^|\s)#{1,6}(?=\s|$)/g, '$1')
       .replace(/(^|\s)>+(?=\s|$)/g, '$1')
       .replace(/\*+/g, '')
@@ -398,7 +471,7 @@ export function ClassifyNotificationMessage(message: string): ClassifiedNotifica
     .filter(seg => !seg.isCode)
     .map(seg => seg.text)
     .join(' ');
-  const looksHtml = /^<!doctype\s|^<html[\s>]/i.test(trimmed) || /<\/?[a-z][^>]*>/i.test(nonCodeText);
+  const looksHtml = /^<!doctype\s|^<html[\s>]/i.test(trimmed) || /<\/?[a-z][^<>]*>/i.test(nonCodeText);
   if (looksHtml) {
     const doc = new DOMParser().parseFromString(trimmed, 'text/html');
     for (const el of Array.from(doc.querySelectorAll('style, script, link, meta, title'))) {
@@ -409,7 +482,13 @@ export function ClassifyNotificationMessage(message: string): ClassifiedNotifica
     return { Kind: 'html', Body: body, Preview: excerptValue(text), Expandable: true };
   }
 
-  const looksMarkdown = /(^|\n)#{1,6}\s|\*\*[^*]+\*\*|(^|\n)\s*[-*]\s+|\[[^\]]+\]\([^)]+\)|```|(?:^|\n)[ \t]*~~~/m.test(trimmed);
+  const looksMarkdown =
+    /^#{1,6}\s/m.test(trimmed) ||
+    /\*\*[^*]+\*\*/.test(trimmed) ||
+    /^[ \t]*[-*][ \t]+/m.test(trimmed) ||
+    trimmed.includes('```') ||
+    /^[ \t]*~~~/m.test(trimmed) ||
+    processMarkdownLinks(trimmed, 'detect');
   if (looksMarkdown) {
     const body = cleanNonHtmlMessage(trimmed);
     const preview = excerptValue(StripNotificationMarkdown(trimmed));
