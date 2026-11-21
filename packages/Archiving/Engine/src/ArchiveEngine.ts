@@ -287,8 +287,9 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
     // ========================================
 
     /**
-     * Processes all configured entities sequentially (order matters for dependency safety)
-     * and adds each entity's counts to totals as soon as that entity completes.
+     * Processes all configured entities sequentially (order matters for dependency safety).
+     * The processor adds each page's counts to totals as the page completes, so totals is
+     * current even when an entity throws partway through.
      */
     private async processAllEntities(
         configEntities: MJArchiveConfigurationEntityEntity[],
@@ -301,13 +302,8 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
         for (const configEntity of configEntities) {
             const processor = new ArchiveProcessor();
             const entityResult = await processor.ProcessEntity(
-                configEntity, config, archiveRun, storageManager, contextUser
+                configEntity, config, archiveRun, storageManager, contextUser, totals
             );
-
-            totals.Archived += entityResult.Archived;
-            totals.Failed += entityResult.Failed;
-            totals.Skipped += entityResult.Skipped;
-            totals.Bytes += entityResult.Bytes;
 
             const entityName = configEntity.Entity;
             LogStatus(
