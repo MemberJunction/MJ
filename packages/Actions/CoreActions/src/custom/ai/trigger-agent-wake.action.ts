@@ -15,6 +15,7 @@ import { AgentWakeResumeState, AgentWakeTriggerService } from '@memberjunction/a
  */
 @RegisterClass(BaseAction, 'Trigger Agent Wake')
 export class TriggerAgentWakeAction extends BaseAction {
+    public static override readonly AuthorizesCaller = true;
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             const contextUser = params.ContextUser;

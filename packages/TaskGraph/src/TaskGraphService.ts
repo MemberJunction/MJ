@@ -52,9 +52,11 @@ import {
     type WhileOperation,
     ConfigOf,
     IsDefaultHumanTaskProvider,
+    IsHumanTaskProviderRegistered,
+    HumanTaskProviderDefaults,
+    ResolveHumanStepProvider,
 } from '@memberjunction/ai-core-plus';
-import { EscapeSQLString, IsValidUUID, MJGlobal, UUIDSet, UUIDsEqual } from '@memberjunction/global';
-import { BaseHumanTaskProvider } from './HumanTaskProvider';
+import { EscapeSQLString, IsValidUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentDecisionService } from '@memberjunction/ai-agents';
@@ -684,6 +686,25 @@ export function FindCrossUserAssignments(spec: TaskGraphSpec, submitterUserID: s
 }
 
 /**
+ * The spec with every Human step that names no provider given `defaultKey`, or the spec unchanged when
+ * there is no default. A step that names a provider, the built-in `'AgentRequest'` included, keeps it.
+ * Pure; `Submit` passes `HumanTaskProviderDefaults.Instance.EffectiveKey`.
+ */
+export function ApplyDefaultHumanTaskProvider(spec: TaskGraphSpec, defaultKey: string | null): TaskGraphSpec {
+    if (!defaultKey) return spec;
+    let changed = false;
+    const tasks = spec.tasks.map((node) => {
+        if (node.kind !== 'Human') return node;
+        const human = ConfigOf(node, 'Human') ?? {};
+        const provider = ResolveHumanStepProvider(human.provider, defaultKey);
+        if (provider === human.provider) return node;
+        changed = true;
+        return { ...node, configuration: { ...human, provider } };
+    });
+    return changed ? { ...spec, tasks } : spec;
+}
+
+/**
  * Names the Human steps whose `provider` is not registered on this server, or `null` when all are.
  *
  * Asked of the SUBMITTING host, which in every MJ deployment loads the same server packages as the
@@ -695,7 +716,7 @@ export function FindUnregisteredHumanTaskProviders(spec: TaskGraphSpec): string 
     for (const node of spec.tasks) {
         const key = ConfigOf(node, 'Human')?.provider?.trim();
         if (!key || IsDefaultHumanTaskProvider(key)) continue;
-        if (MJGlobal.Instance.ClassFactory.GetRegistration(BaseHumanTaskProvider, key)) continue;
+        if (IsHumanTaskProviderRegistered(key)) continue;
         missing.set(key, [...(missing.get(key) ?? []), `"${node.name}"`]);
     }
     if (missing.size === 0) return null;
@@ -816,7 +837,11 @@ export class TaskGraphService {
      * A submitted graph therefore survives the submitting request, the submitting agent run, and
      * the submitting server — which is the entire point of Task rows over in-run state (D8).
      */
-    public async Submit(spec: TaskGraphSpec, context: TaskGraphSubmitContext): Promise<TaskGraphSubmitResult> {
+    public async Submit(submitted: TaskGraphSpec, context: TaskGraphSubmitContext): Promise<TaskGraphSubmitResult> {
+        // 0. The install's default human-task provider, stamped onto every Human step that names none.
+        //    Stamped here, once, rather than looked up when the step is reached: the row then records
+        //    which provider was used, and a later change to the setting does not reroute a run in flight.
+        const spec = ApplyDefaultHumanTaskProvider(submitted, HumanTaskProviderDefaults.Instance.EffectiveKey);
         // 1. Structural validation. Server-side is the source of truth even when a producer already
         //    validated client-side — the same function runs in both places, so they cannot disagree.
         const validation = ValidateTaskGraphSpec(spec);

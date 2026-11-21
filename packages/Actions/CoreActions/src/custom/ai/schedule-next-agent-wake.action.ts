@@ -6,6 +6,7 @@ import {
     MJUserRoutineEntity,
     MJUserRoutineEntity_IRoutineWakeConfiguration,
 } from '@memberjunction/core-entities';
+import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 
 /**
@@ -20,6 +21,7 @@ import { AIEngine } from '@memberjunction/aiengine';
  */
 @RegisterClass(BaseAction, 'Schedule Next Agent Wake')
 export class ScheduleNextAgentWakeAction extends BaseAction {
+    public static override readonly AuthorizesCaller = true;
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             const contextUser = params.ContextUser;
@@ -102,6 +104,32 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
                 workstreamKey,
                 params
             );
+
+            // Code-enforced recurring routine gate: during an agent run, the agent may not
+            // unilaterally create a brand-new Recurring routine without an approved rhythm
+            // template (`RhythmTemplateID`) or explicit user confirmation (`ConfirmedByUser`).
+            // Updating an already-existing routine or creating OneShot/Adaptive wakes remains allowed.
+            const callingAgentId =
+                (params.Context as { AgentID?: string } | undefined)?.AgentID?.trim() ||
+                AgentUserPolicyEngine.Instance.GetActiveExecutingAgentID();
+            const rhythmTemplateId = this.getStringParam(params, 'RhythmTemplateID');
+            const confirmedByUser = this.getBooleanParam(params, 'ConfirmedByUser');
+            if (
+                scheduleMode === 'Recurring' &&
+                !existingRoutine &&
+                callingAgentId &&
+                !rhythmTemplateId &&
+                !confirmedByUser
+            ) {
+                return {
+                    Success: false,
+                    ResultCode: 'APPROVAL_REQUIRED',
+                    Message:
+                        'Agents cannot create new Recurring routines autonomously. Offer an available rhythm template via List Available Rhythms and enable it with Enable Agent Rhythm after explicit user confirmation.',
+                    Params: params.Params,
+                };
+            }
+
             const md = params.Provider ?? new Metadata();
             const routine =
                 existingRoutine ??
@@ -395,6 +423,14 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
         if (val == null) return null;
         const str = String(val).trim();
         return str.length > 0 ? str : null;
+    }
+
+    private getBooleanParam(params: RunActionParams, name: string): boolean {
+        const val = this.getParamValue(params, name);
+        if (val == null) return false;
+        if (typeof val === 'boolean') return val;
+        const normalized = String(val).trim().toLowerCase();
+        return normalized === 'true' || normalized === '1' || normalized === 'yes';
     }
 
     private getNumericParam(params: RunActionParams, name: string): number | null {

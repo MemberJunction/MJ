@@ -34,5 +34,79 @@
       "lastModified": "2026-11-01T22:54:26.925Z",
       "checksum": "a244bace985daf371f11047ee2c0c98c12b4e2b282fa06507856fe0aff237686"
     }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Rhythm Templates",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Rhythm Templates&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow?create"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Suggestions",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": false,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Agent Suggestions - Own Rows Only",
+      "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Agent Suggestions - Own Rows Only"
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Suggestions&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow?create"
+    },
+    "sync": {
+      "lastModified": "2026-11-20T22:02:12.919Z",
+      "checksum": "fe346b7accff7a37b976760abfe53578f4d898157c148355eeb62cea65163c09"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Agent Channels",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": false,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Agent Channels - Participants Only",
+      "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Agent Channels - Participants Only"
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Agent Channels&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow?create"
+    },
+    "sync": {
+      "lastModified": "2026-11-20T22:02:12.936Z",
+      "checksum": "71c17e09b2442ee4db0505fe95ac59afb970402253e63af250a21dfb5a1a4041"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Agent Channel Participants",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": false,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Agent Channel Participants - Participants Only",
+      "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Agent Channel Participants - Participants Only"
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Agent Channel Participants&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow?create"
+    },
+    "sync": {
+      "lastModified": "2026-11-20T22:02:12.952Z",
+      "checksum": "2f9b12e7d8def1f5c91add52c54ce977610e4febc0142fffade25560bf8e071a"
+    }
   }
 ]

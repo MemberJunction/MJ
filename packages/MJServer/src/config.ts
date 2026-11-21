@@ -588,6 +588,17 @@ const decisionsSchema = z.object({
   tagMatch: z.string().optional().default(process.env.MJ_TAG_MATCH_DECISION_MODE || 'Shadow'),
 });
 
+/**
+ * Who answers human-in-the-loop asks: workflow Human steps that name no provider, and agents' feedback
+ * questions. By default the built-in inbox (`MJ: AI Agent Requests`). Set `defaultProvider` to the key a
+ * human-task provider registers under (for example `BizAppsTasks`) to send those asks there instead. The
+ * provider must declare `CanBeDefault` in its registration; one that does not, or is not loaded, is ignored
+ * with an error at startup and asks stay in the inbox. Env: `MJ_HUMAN_TASKS_DEFAULT_PROVIDER`.
+ */
+const humanTasksSchema = z.object({
+  defaultProvider: z.string().optional().default(process.env.MJ_HUMAN_TASKS_DEFAULT_PROVIDER || ''),
+});
+
 const magicLinkSchema = z.object({
   /** Master switch for the magic-link feature. When false, routes are not mounted and the auth provider is not registered. */
   enabled: zodBooleanWithTransforms().default(false),
@@ -1132,6 +1143,7 @@ const configInfoSchema = z.object({
   aiPromptRuns: aiPromptRunsSchema.optional(),
   feedbackSettings: feedbackSettingsSchema.optional().default({}),
   decisions: decisionsSchema.optional().default({}),
+  humanTasks: humanTasksSchema.optional().default({}),
   cors: corsSchema.optional().default({}),
   rateLimiting: rateLimitSchema.optional().default({}),
   startup: startupSchema.optional().default({}),

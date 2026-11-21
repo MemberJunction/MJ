@@ -272,6 +272,43 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "RhythmTemplateID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional MJ: AI Agent Rhythm Templates ID backing this recurring routine.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "525EF0FE-0A6F-41FC-9EBD-28396F7076BB"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:25.981Z",
+            "checksum": "5c33a3848b7cd7c3894f16de55a901eec427fb6ed5e2ecc181d8f17ce11c8029"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConfirmedByUser",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Set to true when the user explicitly confirmed creating a new Recurring routine.",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "55429DCD-B42A-4F89-A69F-0A39026FFF08"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:25.995Z",
+            "checksum": "5179411b643a1857132dfa5fe5a551600e7262e451dc1457f6adf4c10c53c7f5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "WakeAtISO",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -800,6 +837,24 @@
           "sync": {
             "lastModified": "2026-11-10T23:41:28.773Z",
             "checksum": "25c1366fc47519633853e777ec4a663be8e5aa0e988080b7c56631787863fef7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConfirmedApprovalRequestID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Approved MJ: AI Agent Requests ID authorizing this inter-agent request when sender CoordinationMode is Coordinator.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B2F54602-073E-44DC-9830-4C8B4FF341FA"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:26.017Z",
+            "checksum": "f4b34c025b5c0f56c59d12b57cdbf4a1ac4f46e363524db33f7861d20738e23c"
           }
         }
       ],
