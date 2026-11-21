@@ -26,6 +26,8 @@ import {
     MJAIAgentRequestEntity,
     MJAIAgentUserPolicyEntity,
     MJAIBridgeAgentIdentityEntity,
+    MJAgentChannelEntity,
+    MJAgentChannelParticipantEntity,
     MJUserRoutineEntity,
     MJUserRoutineEntity_IRoutineWakeConfiguration,
 } from '@memberjunction/core-entities';
@@ -146,7 +148,42 @@ export type AgentWakeTriggerResultCode =
     | 'IDENTITY_NOT_FOUND'
     | 'UNVERIFIED_EXTERNAL_SENDER'
     | 'SENDER_NOT_AUTHORIZED_FOR_IDENTITY'
+    | 'CHANNEL_PAUSED_LOOP_GUARD'
+    | 'CHANNEL_PAUSED_RATE_LIMIT'
     | 'SAVE_FAILED';
+
+/**
+ * Input for waking peer participants when a message is posted in an `AGENT_CHANNEL` conversation.
+ */
+export interface AgentChannelMessageWakeInput {
+    /** The Agent Channel / Conversation ID (`MJ: Agent Channels.ID`). */
+    channelID: string;
+    /** The `MJ: Conversation Details.ID` of the newly posted message. */
+    conversationDetailID?: string | null;
+    /** User ID on whose behalf the message was posted. */
+    senderUserID: string;
+    /** Optional agent ID if posted by an agent (null/undefined when posted directly by a human). */
+    senderAgentID?: string | null;
+    /** Short summary or preview of the posted message. */
+    messagePreview: string;
+    /** Acting user context (may be a non-Owner UI user; membership is verified before elevating to system user). */
+    contextUser: UserInfo;
+    /** Optional metadata provider override. */
+    metadataProvider?: IMetadataProvider;
+    /** Optional clock override for deterministic tests. */
+    now?: Date;
+}
+
+/**
+ * Aggregated outcome of waking peer participants in an Agent Channel.
+ */
+export interface AgentChannelWakeOutcome {
+    channelID: string;
+    channelStatus: MJAgentChannelEntity['ChannelStatus'];
+    pausedByGuard: boolean;
+    pauseReason: string | null;
+    results: AgentWakeTriggerResult[];
+}
 
 /**
  * Outcome of an event-driven wake trigger evaluation.
@@ -626,6 +663,294 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             metadataProvider: md,
             now,
         });
+    }
+
+    /**
+     * Wakes peer agent participants when a message is posted in an `AGENT_CHANNEL` conversation,
+     * enforcing persistent loop-guard (`ConsecutiveAgentTurns <= MaxConsecutiveAgentTurns`) and
+     * rolling 1-hour wake rate-limit (`HourlyWakeCount <= MaxHourlyWakes`) counters on
+     * `MJ: Agent Channels`.
+     *
+     * Authorization: validates that `input.contextUser` is either an active participant in the
+     * channel or a privileged system/Owner caller before elevating to the scheduler system user
+     * for cross-user wake routine writes.
+     */
+    public async TriggerWakeOnAgentChannelMessage(
+        input: AgentChannelMessageWakeInput
+    ): Promise<AgentChannelWakeOutcome> {
+        const now = input.now ?? new Date();
+        const md: IMetadataProvider = input.metadataProvider ?? Metadata.Provider;
+        const channelID = (input.channelID ?? '').trim();
+        const senderUserID = (input.senderUserID ?? '').trim();
+
+        if (!channelID || !senderUserID) {
+            return {
+                channelID,
+                channelStatus: 'Open',
+                pausedByGuard: false,
+                pauseReason: null,
+                results: [
+                    this.notTriggered(
+                        'MISSING_REQUIRED_INPUT',
+                        'channelID and senderUserID are required to trigger an Agent Channel wake.'
+                    ),
+                ],
+            };
+        }
+
+        if (!input.contextUser?.ID) {
+            return {
+                channelID,
+                channelStatus: 'Open',
+                pausedByGuard: false,
+                pauseReason: null,
+                results: [
+                    this.notTriggered(
+                        'POLICY_DENIED',
+                        'contextUser is required to trigger an Agent Channel wake.'
+                    ),
+                ],
+            };
+        }
+
+        const systemUser = UserCache.Instance.GetSystemUser() ?? input.contextUser;
+        const channel = await md.GetEntityObject<MJAgentChannelEntity>('MJ: Agent Channels', systemUser);
+        const loaded = await channel.Load(channelID);
+        if (!loaded) {
+            return {
+                channelID,
+                channelStatus: 'Resolved',
+                pausedByGuard: false,
+                pauseReason: 'Agent channel not found.',
+                results: [
+                    this.notTriggered('SKIPPED_NOT_APPLICABLE', `Agent channel "${channelID}" was not found.`),
+                ],
+            };
+        }
+
+        const rv = RunView.FromMetadataProvider(md);
+        const participantsResult = await rv.RunView<MJAgentChannelParticipantEntity>(
+            {
+                EntityName: 'MJ: Agent Channel Participants',
+                ExtraFilter: `AgentChannelID='${EscapeSQLString(channel.ID)}'`,
+                ResultType: 'entity_object',
+            },
+            systemUser
+        );
+        const participants = participantsResult.Success ? participantsResult.Results : [];
+
+        const callerIsParticipant = participants.some((p) => UUIDsEqual(p.UserID, input.contextUser.ID));
+        if (!callerIsParticipant && !this.isPrivilegedCrossUserWakeCaller(input.contextUser)) {
+            return {
+                channelID: channel.ID,
+                channelStatus: channel.ChannelStatus,
+                pausedByGuard: false,
+                pauseReason: null,
+                results: [
+                    this.notTriggered(
+                        'POLICY_DENIED',
+                        `Caller "${input.contextUser.ID}" is not an active participant in Agent Channel "${channel.ID}".`
+                    ),
+                ],
+            };
+        }
+
+        const senderIsParticipant = participants.some((p) => UUIDsEqual(p.UserID, senderUserID));
+        if (!senderIsParticipant) {
+            return {
+                channelID: channel.ID,
+                channelStatus: channel.ChannelStatus,
+                pausedByGuard: false,
+                pauseReason: null,
+                results: [
+                    this.notTriggered(
+                        'POLICY_DENIED',
+                        `Sender "${senderUserID}" is not an active participant in Agent Channel "${channel.ID}".`
+                    ),
+                ],
+            };
+        }
+
+        if (channel.ChannelStatus === 'Resolved') {
+            return {
+                channelID: channel.ID,
+                channelStatus: channel.ChannelStatus,
+                pausedByGuard: false,
+                pauseReason: null,
+                results: [
+                    this.notTriggered(
+                        'SKIPPED_NOT_APPLICABLE',
+                        `Agent Channel "${channel.ID}" is Resolved; no peer wakes scheduled.`
+                    ),
+                ],
+            };
+        }
+
+        const isAgentMessage = Boolean(input.senderAgentID && input.senderAgentID.trim().length > 0);
+        const peers = participants.filter((p) => !UUIDsEqual(p.UserID, senderUserID));
+
+        if (!isAgentMessage) {
+            // Human intervention resets consecutive-agent turn guard and re-opens a paused channel.
+            channel.ConsecutiveAgentTurns = 0;
+            channel.LastHumanMessageAt = now;
+            if (channel.ChannelStatus === 'Paused For Human') {
+                channel.ChannelStatus = 'Open';
+            }
+            const saved = await channel.Save();
+            if (!saved) {
+                const err = channel.LatestResult?.CompleteMessage || 'Failed to update Agent Channel after human message.';
+                LogError(`[AgentWakeTriggerService] ${err}`);
+                return {
+                    channelID: channel.ID,
+                    channelStatus: channel.ChannelStatus,
+                    pausedByGuard: false,
+                    pauseReason: null,
+                    results: [this.notTriggered('SAVE_FAILED', err)],
+                };
+            }
+        } else {
+            if (channel.ChannelStatus === 'Paused For Human') {
+                const pauseReason = `Agent Channel "${channel.Topic}" is already paused awaiting human review.`;
+                return {
+                    channelID: channel.ID,
+                    channelStatus: 'Paused For Human',
+                    pausedByGuard: true,
+                    pauseReason,
+                    results: [this.notTriggered('CHANNEL_PAUSED_LOOP_GUARD', pauseReason)],
+                };
+            }
+
+            const maxTurns = channel.MaxConsecutiveAgentTurns > 0 ? channel.MaxConsecutiveAgentTurns : 10;
+            const nextTurns = (channel.ConsecutiveAgentTurns ?? 0) + 1;
+            channel.ConsecutiveAgentTurns = nextTurns;
+
+            if (nextTurns > maxTurns) {
+                channel.ChannelStatus = 'Paused For Human';
+                await channel.Save();
+                const pauseReason = `Agent Channel "${channel.Topic}" paused after ${nextTurns} consecutive agent turns (limit: ${maxTurns}). A human participant must reply to resume.`;
+                return {
+                    channelID: channel.ID,
+                    channelStatus: 'Paused For Human',
+                    pausedByGuard: true,
+                    pauseReason,
+                    results: [this.notTriggered('CHANNEL_PAUSED_LOOP_GUARD', pauseReason)],
+                };
+            }
+
+            const oneHourMs = 60 * 60 * 1000;
+            const windowStart = channel.HourlyWakeWindowStart;
+            if (!windowStart || now.getTime() - windowStart.getTime() >= oneHourMs) {
+                channel.HourlyWakeWindowStart = now;
+                channel.HourlyWakeCount = 0;
+            }
+
+            const maxHourlyWakes = channel.MaxHourlyWakes > 0 ? channel.MaxHourlyWakes : 6;
+            if (peers.length > 0 && (channel.HourlyWakeCount ?? 0) + 1 > maxHourlyWakes) {
+                channel.ChannelStatus = 'Paused For Human';
+                await channel.Save();
+                const pauseReason = `Agent Channel "${channel.Topic}" paused after reaching the hourly wake limit (${maxHourlyWakes}/hour). A human participant must reply to resume.`;
+                return {
+                    channelID: channel.ID,
+                    channelStatus: 'Paused For Human',
+                    pausedByGuard: true,
+                    pauseReason,
+                    results: [this.notTriggered('CHANNEL_PAUSED_RATE_LIMIT', pauseReason)],
+                };
+            }
+
+            if (peers.length > 0) {
+                channel.HourlyWakeCount = (channel.HourlyWakeCount ?? 0) + 1;
+            }
+
+            const saved = await channel.Save();
+            if (!saved) {
+                const err = channel.LatestResult?.CompleteMessage || 'Failed to persist Agent Channel guard counters.';
+                LogError(`[AgentWakeTriggerService] ${err}`);
+                return {
+                    channelID: channel.ID,
+                    channelStatus: channel.ChannelStatus,
+                    pausedByGuard: false,
+                    pauseReason: null,
+                    results: [this.notTriggered('SAVE_FAILED', err)],
+                };
+            }
+        }
+
+        const workstreamKey = `channel-${channel.ID}`;
+        const trimmedPreview = (input.messagePreview ?? '').trim().slice(0, 500);
+        const results: AgentWakeTriggerResult[] = [];
+
+        for (const peer of peers) {
+            const policyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
+                peer.AgentID,
+                peer.UserID,
+                systemUser,
+                { provider: md }
+            );
+            if (policyLookup.status === 'error') {
+                results.push(
+                    this.notTriggered(
+                        'POLICY_DENIED',
+                        `Could not verify peer policy for user "${peer.UserID}": ${policyLookup.errorMessage}`
+                    )
+                );
+                continue;
+            }
+            const policy = policyLookup.policy;
+            if (policy && (policy.Status === 'Disabled' || policy.Status === 'Paused')) {
+                results.push(
+                    this.notTriggered(
+                        'POLICY_DENIED',
+                        `Peer user "${peer.UserID}" has ${policy.Status} policy for agent "${peer.AgentID}".`
+                    )
+                );
+                continue;
+            }
+            if (policy && policy.AllowInterAgentCoordination === false) {
+                results.push(
+                    this.notTriggered(
+                        'POLICY_DENIED',
+                        `Peer user "${peer.UserID}" has disabled inter-agent coordination.`
+                    )
+                );
+                continue;
+            }
+
+            const wakeReason = `New message in Agent Channel "${channel.Topic}": ${trimmedPreview || '(no preview)'}`;
+            const resumeState: AgentWakeResumeState = {
+                triggerType: 'AgentChannelMessage',
+                channelID: channel.ID,
+                topic: channel.Topic,
+                conversationDetailID: input.conversationDetailID ?? null,
+                senderUserID,
+                senderAgentID: input.senderAgentID ?? null,
+                messagePreview: trimmedPreview,
+                consecutiveAgentTurns: channel.ConsecutiveAgentTurns,
+                workstreamKey,
+                triggeredAt: now.toISOString(),
+            };
+
+            const wakeResult = await this.upsertImmediateWakeRoutine({
+                targetUserID: peer.UserID,
+                targetAgentID: peer.AgentID,
+                targetAgentName: policy?.Agent ?? null,
+                workstreamKey,
+                wakeReason,
+                resumeState,
+                contextUser: systemUser,
+                metadataProvider: md,
+                now,
+            });
+            results.push(wakeResult);
+        }
+
+        return {
+            channelID: channel.ID,
+            channelStatus: channel.ChannelStatus,
+            pausedByGuard: false,
+            pauseReason: null,
+            results,
+        };
     }
 
     private isPrivilegedCrossUserWakeCaller(user: UserInfo | undefined): boolean {

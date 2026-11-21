@@ -194,6 +194,30 @@ describe('UserMayWriteConversation', () => {
         expect(deniedRole.Allowed).toBe(false);
         expect(deniedRole.Reason).toMatch(/permission to post comments/i);
     });
+
+    it('allows enrolled participants and denies non-participants on AGENT_CHANNEL conversations', async () => {
+        const agentChannelTypeId = '09E7A069-DB29-4329-BB29-4DF8CB998D94';
+        const makeChannelProvider = (isParticipant: boolean) =>
+            ({
+                ProviderType: 'Database',
+                GetEntityObject: async () => ({
+                    UserID: 'other-owner',
+                    TypeID: agentChannelTypeId,
+                    Load: async () => true,
+                }),
+                RunView: async () => ({
+                    Success: true,
+                    Results: isParticipant ? [{ ID: 'part-1' }] : [],
+                }),
+            }) as never;
+
+        const allowed = await UserMayWriteConversation(makeChannelProvider(true), user, 'chan-1');
+        expect(allowed).toEqual({ Allowed: true, Reason: null, IsOwner: false, Loaded: true });
+
+        const denied = await UserMayWriteConversation(makeChannelProvider(false), user, 'chan-1');
+        expect(denied.Allowed).toBe(false);
+        expect(denied.Reason).toBe('You do not have access to this conversation.');
+    });
 });
 
 describe('UserMayDeleteConversation', () => {

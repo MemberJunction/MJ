@@ -32,6 +32,12 @@
         "metadata"
       ]
     },
+    "agent-skill-governance": {
+      "Severity": "error",
+      "Roots": [
+        "metadata"
+      ]
+    },
     "migration-existence-guards": {
       "Severity": "error",
       "Roots": [

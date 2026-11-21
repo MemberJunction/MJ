@@ -16,7 +16,7 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 // Generic media player — embedded by the audio/video artifact viewer plugins (standalone component).
 import { MJMediaPlayerComponent, MJStorageMediaPlayerComponent } from '@memberjunction/ng-media-player';
-import { MJEmptyStateComponent, MJAlertComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJEmptyStateComponent, MJAlertComponent, MJButtonDirective, MJMenuComponent, MJMenuItemComponent, MJMenuTriggerDirective } from '@memberjunction/ng-ui-components';
 
 // Import plugin components (note: base component is abstract and NOT declared)
 import { JsonArtifactViewerComponent } from './components/plugins/json-artifact-viewer.component';
@@ -155,6 +155,9 @@ import { QueryVersionDiffComponent } from './components/version-diff/query-versi
     MJEmptyStateComponent,
     MJAlertComponent,
     MJButtonDirective,
+    MJMenuComponent,
+    MJMenuItemComponent,
+    MJMenuTriggerDirective,
     MJVideoBadgeComponent,
     MJVideoFormatGlyphComponent,
     MJVideoBeatStripComponent,
