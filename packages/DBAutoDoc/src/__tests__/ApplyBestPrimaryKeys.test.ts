@@ -85,10 +85,28 @@ describe('ApplyBestPrimaryKeys', () => {
     expect(result).toEqual({ TablesFlagged: 0, ColumnsCleared: 0 });
   });
 
-  it('never touches a column no candidate names, so a key declared in the catalog survives', () => {
+  it('gives a table with a declared key no discovered key, so the two are never combined', () => {
     const s = state([column('DeclaredKey', true), column('ID'), column('Other')]);
-    ApplyBestPrimaryKeys(s, [candidate(['ID'], 90)], 70);
-    expect(flagged(s)).toEqual(['DeclaredKey', 'ID']);
+    const result = ApplyBestPrimaryKeys(s, [candidate(['ID'], 90)], 70);
+    expect(flagged(s)).toEqual(['DeclaredKey']);
+    expect(result).toEqual({ TablesFlagged: 0, ColumnsCleared: 0 });
+  });
+
+  it('marks the flags it sets and removes the marker when it clears them', () => {
+    const s = state([column('ID'), column('Code')]);
+    const candidates = [candidate(['ID'], 75), candidate(['Code'], 95)];
+    ApplyBestPrimaryKeys(s, candidates, 70);
+    candidates[1].status = 'rejected';
+    ApplyBestPrimaryKeys(s, candidates, 70);
+    const [id, code] = s.schemas[0].tables[0].columns;
+    expect(id.primaryKeySource).toBe('discovery');
+    expect(code.primaryKeySource).toBeUndefined();
+  });
+
+  it('treats unmarked flags a candidate names as discovered (state files from before the marker)', () => {
+    const s = state([column('ID', true), column('ProductKey', true), column('TypeKey', true)]);
+    ApplyBestPrimaryKeys(s, [candidate(['ID'], 75), candidate(['ProductKey', 'TypeKey'], 95, 'rejected')], 70);
+    expect(flagged(s)).toEqual(['ID']);
   });
 
   it('keeps the earlier candidate on a confidence tie', () => {
@@ -155,5 +173,14 @@ describe("AnalysisEngine: an LLM primary-key decision replaces the table's other
     expect(flagged(s)).toEqual(['A', 'B']);
     await engineFor(s)['processPKInsightFromLLM'](s, 'dbo', 'Price', { columns: ['Code'], confidence: 0.8, reasoning: 'r' });
     expect(flagged(s)).toEqual(['Code']);
+  });
+
+  it('ignores an LLM proposal for a table with a declared key', async () => {
+    const code = { ...column('Code'), statistics: uniqueStats };
+    const declared = { ...column('ID', true), statistics: uniqueStats };
+    const s = withCandidates(state([declared, code]), []);
+    await engineFor(s)['processPKInsightFromLLM'](s, 'dbo', 'Price', { columns: ['Code'], confidence: 0.9, reasoning: 'r' });
+    expect(flagged(s)).toEqual(['ID']);
+    expect(s.phases.keyDetection?.discovered.primaryKeys).toEqual([]);
   });
 });
