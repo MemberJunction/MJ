@@ -74,12 +74,70 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
      */
     private _providerInstanceCache: Map<string, BaseCommunicationProvider> = new Map();
     private _v2SendService = new V2SendService();
+    private _scheduledSweepTimer: ReturnType<typeof setInterval> | undefined;
+    private _scheduledSweepRunning = false;
 
     /**
      * Configures V2 dispatch behavior (chunk fan-out, tracking base URL, HMAC secret, instance enforcement mode).
      */
     public ConfigureV2Dispatch(config: V2DispatchConfig): void {
         this._v2SendService.Configure(config);
+    }
+
+    /**
+     * Processes due `Pending` V2 communication logs whose `ScheduledAt` has arrived.
+     */
+    public async ProcessDueScheduledLogs(
+        contextUser?: UserInfo,
+        batchSize = 50,
+    ): Promise<{ Processed: number; Sent: number; Failed: number; Redeferred: number }> {
+        if (!this.Loaded) {
+            throw new Error(`Metadata not loaded. Call Config() before accessing metadata.`);
+        }
+        const user = contextUser ?? this.ContextUser;
+        if (!user) {
+            throw new Error('ContextUser is required to process due scheduled logs');
+        }
+        return this._v2SendService.ProcessDueScheduledLogs(
+            user,
+            (name) => this.GetProvider(name),
+            batchSize,
+        );
+    }
+
+    /**
+     * Starts a periodic background sweep that dispatches due `Pending` scheduled/deferred V2 logs.
+     */
+    public StartScheduledDeferralSweep(intervalMs = 60_000): void {
+        if (this._scheduledSweepTimer) {
+            return;
+        }
+        this._scheduledSweepTimer = setInterval(() => {
+            if (this._scheduledSweepRunning || !this.Loaded || !this.ContextUser) {
+                return;
+            }
+            this._scheduledSweepRunning = true;
+            this.ProcessDueScheduledLogs(this.ContextUser)
+                .catch((err) => {
+                    LogError(`CommunicationEngine.StartScheduledDeferralSweep error: ${err instanceof Error ? err.message : String(err)}`);
+                })
+                .finally(() => {
+                    this._scheduledSweepRunning = false;
+                });
+        }, intervalMs);
+        if (typeof this._scheduledSweepTimer.unref === 'function') {
+            this._scheduledSweepTimer.unref();
+        }
+    }
+
+    /**
+     * Stops the periodic background sweep for scheduled/deferred V2 logs.
+     */
+    public StopScheduledDeferralSweep(): void {
+        if (this._scheduledSweepTimer) {
+            clearInterval(this._scheduledSweepTimer);
+            this._scheduledSweepTimer = undefined;
+        }
     }
 
     /**

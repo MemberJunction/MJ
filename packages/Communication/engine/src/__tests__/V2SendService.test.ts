@@ -291,4 +291,64 @@ describe('V2SendService chunk fan-out', () => {
     );
     expect(doneClaim.AlreadySent).toBe(true);
   });
+
+  it('defers sends with future Envelope.ScheduledAt to Pending logs with __deferredPayload', async () => {
+    const svc = new V2SendService();
+    const svcInternal = svc as unknown as {
+      EvaluateEligibility: ReturnType<typeof vi.fn>;
+      claimOrCreateV2Log: ReturnType<typeof vi.fn>;
+      executeInlineSend: (
+        params: Record<string, unknown>,
+        sender: Record<string, unknown>,
+        providerEntity: Record<string, unknown>,
+        run: Record<string, unknown>,
+        contextUser: Record<string, unknown>,
+        getProvider: (name: string) => { SendSingleMessage: ReturnType<typeof vi.fn> },
+      ) => Promise<{ DeferredCount: number; QueuedCount: number; Outcomes?: Array<{ Status: string; DeferUntil?: Date }> }>;
+    };
+
+    const futureDate = new Date(Date.now() + 3_600_000);
+    svcInternal.EvaluateEligibility = vi.fn().mockResolvedValue({
+      Sendable: [
+        {
+          Decision: 'Allowed',
+          Endpoint: { CommunicationEndpointID: 'ep-1', NormalizedValue: 'a@example.com' },
+          Obligations: {},
+          AuditSnapshot: {},
+        },
+      ],
+      Blocked: [],
+    });
+    svcInternal.claimOrCreateV2Log = vi.fn().mockResolvedValue({ Log: { ID: 'log-pending-1' } });
+    const sendSingleMock = vi.fn();
+
+    const result = await svcInternal.executeInlineSend(
+      {
+        Envelope: { MessageClass: 'Operational', ChannelID: 'chan-email', ScheduledAt: futureDate },
+        Payload: { Subject: 'Scheduled Hello', Body: 'Body text' },
+        Recipients: [{ Endpoint: { Address: 'a@example.com' } }],
+      },
+      { ID: 'sender-1', CredentialID: null },
+      { ID: 'prov-1', Name: 'SendGrid', MessageTypes: [{ ID: 'pmt-1', CommunicationBaseMessageTypeID: 'chan-email' }] },
+      { ID: 'run-1', Save: vi.fn().mockResolvedValue(true) },
+      {},
+      () => ({ SendSingleMessage: sendSingleMock }),
+    );
+
+    expect(sendSingleMock).not.toHaveBeenCalled();
+    expect(result.DeferredCount).toBe(1);
+    expect(result.QueuedCount).toBe(0);
+    expect(result.Outcomes?.[0].Status).toBe('Deferred');
+    expect(svcInternal.claimOrCreateV2Log).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      'prov-1',
+      'pmt-1',
+      'run-1',
+      expect.objectContaining({ DeferUntil: futureDate }),
+      'Pending',
+      expect.anything(),
+      expect.objectContaining({ Subject: 'Scheduled Hello', Body: 'Body text' }),
+    );
+  });
 });

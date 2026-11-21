@@ -93,6 +93,7 @@ export function ConfigureCommsV2WorkQueue(
         TrackingHMACSecret: resolvedSecret,
         EnqueueWork: enqueueWork,
     });
+    CommunicationEngine.Instance.StartScheduledDeferralSweep();
 
     TemplatedCommunicationService.Instance.Configure({
         EnqueueWork: enqueueWork,

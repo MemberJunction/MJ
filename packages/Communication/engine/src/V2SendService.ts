@@ -16,6 +16,7 @@ import {
   PrincipalAttributes,
   PrincipalMessageContext,
   PrincipalRecordRef,
+  ProviderCredentialsBase,
   ResolvedEndpoint,
   SendableRecipient,
   SendingEnvelope,
@@ -37,6 +38,7 @@ import type {
   MJCommunicationSuppressionEntity,
 } from '@memberjunction/core-entities';
 import { EscapeSQLString, MJGlobal, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { CredentialEngine } from '@memberjunction/credentials';
 import { ProcessedMessageServer } from './BaseProvider';
 import { ComplianceGate } from './compliance/ComplianceGate';
 import { JurisdictionResolver } from './compliance/JurisdictionResolver';
@@ -475,9 +477,16 @@ export class V2SendService {
     let queuedCount = 0;
     let deferredCount = 0;
     const provider = getProvider(providerEntity.Name);
+    const senderCredentials = await this.resolveSenderCredentials(
+      sender,
+      CommunicationEngineBase.Instance.ContextUser ?? contextUser,
+    );
     const pmt = providerEntity.MessageTypes.find((m) =>
       UUIDsEqual(m.CommunicationBaseMessageTypeID, params.Envelope.ChannelID),
     ) ?? providerEntity.MessageTypes[0];
+
+    const scheduledAt = params.Envelope.ScheduledAt;
+    const scheduledInFuture = scheduledAt != null && scheduledAt.getTime() > Date.now();
 
     for (let i = 0; i < eligibility.Sendable.length; i++) {
       const target = eligibility.Sendable[i];
@@ -492,15 +501,38 @@ export class V2SendService {
         return false;
       });
 
-      if (target.Decision === 'Deferred') {
+      if (target.Decision === 'Deferred' || scheduledInFuture) {
         deferredCount++;
-        const deferredLog = await this.claimOrCreateV2Log(params, sender, providerEntity.ID, pmt?.ID, run.ID, target, 'Pending', contextUser);
+        const deferUntil =
+          target.DeferUntil && scheduledAt && scheduledInFuture
+            ? (target.DeferUntil.getTime() > scheduledAt.getTime() ? target.DeferUntil : scheduledAt)
+            : (target.DeferUntil ?? (scheduledInFuture ? scheduledAt : undefined));
+        target.DeferUntil = deferUntil;
+        const deferredPayload: MessagePayload = {
+          ...params.Payload,
+          ...rawRecipient?.PayloadOverride,
+          Headers: {
+            ...(params.Payload?.Headers ?? {}),
+            ...(rawRecipient?.PayloadOverride?.Headers ?? {}),
+          },
+        };
+        const deferredLog = await this.claimOrCreateV2Log(
+          params,
+          sender,
+          providerEntity.ID,
+          pmt?.ID,
+          run.ID,
+          target,
+          'Pending',
+          contextUser,
+          deferredPayload,
+        );
         outcomes.push({
           Principal: target.Principal,
           Endpoint: target.Endpoint,
           CommunicationLogID: deferredLog.Log?.ID,
           Status: 'Deferred',
-          DeferUntil: target.DeferUntil,
+          DeferUntil: deferUntil,
         });
         continue;
       }
@@ -515,6 +547,7 @@ export class V2SendService {
         rawRecipient?.PayloadOverride,
         provider,
         contextUser,
+        senderCredentials,
       );
       if (outcome.Status === 'Sent' || outcome.Status === 'Queued') {
         queuedCount++;
@@ -545,6 +578,7 @@ export class V2SendService {
     override: Partial<MessagePayload> | undefined,
     provider: BaseCommunicationProvider,
     contextUser: UserInfo,
+    senderCredentials?: ProviderCredentialsBase,
   ): Promise<SendV2RecipientOutcome> {
     const claim = await this.claimOrCreateV2Log(
       params,
@@ -670,7 +704,7 @@ export class V2SendService {
     processed.ProcessedBody = finalPayload.Body ?? '';
     processed.ProcessedHTMLBody = finalPayload.HTMLBody ?? '';
 
-    const sendRes = await provider.SendSingleMessage(processed);
+    const sendRes = await provider.SendSingleMessage(processed, senderCredentials);
     log.Status = sendRes.Success ? 'Complete' : 'Failed';
     log.ProviderMessageID = sendRes.ProviderMessageID ?? log.ProviderMessageID;
     log.ErrorMessage = sendRes.Error || null;
@@ -1203,6 +1237,7 @@ export class V2SendService {
     target: SendableRecipient,
     initialStatus: 'In-Progress' | 'Pending',
     contextUser: UserInfo,
+    deferredPayload?: MessagePayload,
   ): Promise<{
     Log?: MJCommunicationLogEntity;
     AlreadySent?: boolean;
@@ -1295,8 +1330,12 @@ export class V2SendService {
     log.Direction = 'Sending';
     log.Status = initialStatus;
     log.MessageDate = new Date();
-    log.CorrelationData = params.Envelope.CorrelationData
-      ? JSON.stringify(params.Envelope.CorrelationData)
+    const correlationPayload =
+      initialStatus === 'Pending' && deferredPayload
+        ? { ...(params.Envelope.CorrelationData ?? {}), __deferredPayload: deferredPayload }
+        : params.Envelope.CorrelationData;
+    log.CorrelationData = correlationPayload
+      ? JSON.stringify(correlationPayload)
       : null;
     log.ComplianceDecision = JSON.stringify({
       Decision: target.Decision,
@@ -1500,5 +1539,175 @@ export class V2SendService {
     if (snapshot.FooterText && !finalPayload.HTMLBody && finalPayload.Body && !finalPayload.Body.includes(snapshot.FooterText)) {
       throw new Error('Protected compliance text footer failed integrity check');
     }
+  }
+
+  private async resolveSenderCredentials(
+    sender: MJCommunicationSenderEntity,
+    contextUser: UserInfo,
+  ): Promise<ProviderCredentialsBase | undefined> {
+    if (!sender.CredentialID) {
+      return undefined;
+    }
+    await CredentialEngine.Instance.Config(false, contextUser);
+    const resolved = await CredentialEngine.Instance.GetCredential('', {
+      credentialId: sender.CredentialID,
+      contextUser,
+      subsystem: 'Communication',
+    });
+    const values: ProviderCredentialsBase = { ...resolved.values };
+    values.disableEnvironmentFallback = true;
+    return values;
+  }
+
+  /**
+   * Queries due `Pending` CommunicationLog rows (`ScheduledAt <= GETUTCDATE()`) created by
+   * quiet-hours deferrals or future `Envelope.ScheduledAt`, re-evaluates compliance eligibility,
+   * and dispatches each eligible message (or marks Failed / re-defers if still in quiet hours).
+   */
+  public async ProcessDueScheduledLogs(
+    contextUser: UserInfo,
+    getProvider: (name: string) => BaseCommunicationProvider,
+    batchSize = 50,
+  ): Promise<{ Processed: number; Sent: number; Failed: number; Redeferred: number }> {
+    const bookkeepingUser = CommunicationEngineBase.Instance.ContextUser ?? contextUser;
+    const rv = this.getRunView();
+    const dueRes = await rv.RunView<MJCommunicationLogEntity>(
+      {
+        EntityName: 'MJ: Communication Logs',
+        ExtraFilter: "Status='Pending' AND ScheduledAt IS NOT NULL AND ScheduledAt <= GETUTCDATE() AND Direction='Sending'",
+        OrderBy: 'ScheduledAt ASC',
+        MaxRows: batchSize,
+        ResultType: 'entity_object',
+      },
+      bookkeepingUser,
+    );
+    if (!dueRes.Success || dueRes.Results.length === 0) {
+      return { Processed: 0, Sent: 0, Failed: 0, Redeferred: 0 };
+    }
+
+    let sent = 0;
+    let failed = 0;
+    let redeferred = 0;
+
+    for (const log of dueRes.Results) {
+      const { payload, userCorrelationData } = parseDeferredCorrelationData(log.CorrelationData);
+      if (!payload || !log.CommunicationSenderID || !log.RecipientAddress) {
+        log.Status = 'Failed';
+        log.ErrorMessage = 'Deferred log is missing payload, sender, or recipient address';
+        await log.Save();
+        failed++;
+        continue;
+      }
+
+      const sender = await this.resolveSender(log.CommunicationSenderID, bookkeepingUser);
+      const providerEntity = CommunicationEngineBase.Instance.Providers.find((p) =>
+        UUIDsEqual(p.ID, log.CommunicationProviderID),
+      );
+      if (!sender || !providerEntity) {
+        log.Status = 'Failed';
+        log.ErrorMessage = 'Deferred log sender or provider no longer exists';
+        await log.Save();
+        failed++;
+        continue;
+      }
+
+      const pmt = providerEntity.MessageTypes.find((m) =>
+        UUIDsEqual(m.ID, log.CommunicationProviderMessageTypeID),
+      ) ?? providerEntity.MessageTypes[0];
+      const channelID = pmt?.CommunicationBaseMessageTypeID ?? '';
+      if (!channelID) {
+        log.Status = 'Failed';
+        log.ErrorMessage = 'Unable to resolve channel for deferred communication log';
+        await log.Save();
+        failed++;
+        continue;
+      }
+
+      const envelope: SendingEnvelope = {
+        SenderID: sender.ID,
+        ProviderID: providerEntity.ID,
+        ChannelID: channelID,
+        PreferenceID: log.CommunicationPreferenceID ?? undefined,
+        MessageClass: (log.MessageClass as MessageClass) ?? 'Operational',
+        CorrelationData: userCorrelationData,
+      };
+      const recipient = {
+        Principal: log.EntityID && log.RecordID ? { EntityID: log.EntityID, RecordID: log.RecordID } : undefined,
+        Endpoint: { Address: log.RecipientAddress },
+      };
+
+      const eligibility = await this.EvaluateEligibility(
+        { Envelope: envelope, Recipients: [recipient] },
+        bookkeepingUser,
+      );
+      if (eligibility.Blocked.length > 0 || eligibility.Sendable.length === 0) {
+        const block = eligibility.Blocked[0];
+        log.Status = 'Failed';
+        log.ErrorMessage = block?.Detail ?? block?.Reason ?? 'Blocked during scheduled dispatch';
+        await log.Save();
+        failed++;
+        continue;
+      }
+
+      const target = eligibility.Sendable[0];
+      if (target.Decision === 'Deferred' && target.DeferUntil) {
+        log.ScheduledAt = target.DeferUntil;
+        await log.Save();
+        redeferred++;
+        continue;
+      }
+
+      const provider = getProvider(providerEntity.Name);
+      const senderCredentials = await this.resolveSenderCredentials(sender, bookkeepingUser);
+
+      const outcome = await this.dispatchSingleRecipient(
+        {
+          CommunicationRunID: log.CommunicationRunID ?? undefined,
+          Envelope: envelope,
+          Payload: payload,
+          Recipients: [recipient],
+        },
+        sender,
+        providerEntity.ID,
+        pmt,
+        log.CommunicationRunID ?? '',
+        target,
+        undefined,
+        provider,
+        bookkeepingUser,
+        senderCredentials,
+      );
+      if (outcome.Status === 'Sent' || outcome.Status === 'Queued') {
+        sent++;
+      } else {
+        failed++;
+      }
+    }
+
+    return {
+      Processed: dueRes.Results.length,
+      Sent: sent,
+      Failed: failed,
+      Redeferred: redeferred,
+    };
+  }
+}
+
+function parseDeferredCorrelationData(raw: string | null | undefined): {
+  payload?: MessagePayload;
+  userCorrelationData?: Record<string, string>;
+} {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== 'object') return {};
+    const deferred = parsed.__deferredPayload as MessagePayload | undefined;
+    const userEntries = Object.entries(parsed).filter(([k, v]) => k !== '__deferredPayload' && typeof v === 'string');
+    return {
+      payload: deferred,
+      userCorrelationData: userEntries.length > 0 ? (Object.fromEntries(userEntries) as Record<string, string>) : undefined,
+    };
+  } catch {
+    return {};
   }
 }
