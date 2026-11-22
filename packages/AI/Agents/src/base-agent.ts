@@ -307,7 +307,7 @@ import { ConversationMessageResolver } from './utils/ConversationMessageResolver
 import { AgentTreeBudgetTracker, type AgentRunTokenStats } from './AgentTreeBudgetTracker';
 import { BudgetEnforcementGuard, ComputeDayBoundaryWindow, type BudgetEnforcementInput } from './BudgetEnforcementGuard';
 import { DeterministicProgressDetector, type IterationProgressSample } from './DeterministicProgressDetector';
-import { FastConvergenceJudge } from './FastConvergenceJudge';
+import { FastConvergenceJudge, type FastJudgeUsageSettlement } from './FastConvergenceJudge';
 import {
     RunawayCheckpointManager,
     type PauseRunWithCheckpointInput,
@@ -895,7 +895,10 @@ export class BaseAgent {
     private __fastConvergenceJudge?: FastConvergenceJudge;
     /** Collaborator invoking a bounded sub-200ms judge strictly on Ambiguous progress windows. */
     private get _fastConvergenceJudge(): FastConvergenceJudge {
-        return (this.__fastConvergenceJudge ??= new FastConvergenceJudge());
+        return (this.__fastConvergenceJudge ??= new FastConvergenceJudge(
+            undefined,
+            (settlement) => this.handleLateFastJudgeUsage(settlement),
+        ));
     }
 
     private __checkpointManager?: RunawayCheckpointManager;
@@ -919,6 +922,8 @@ export class BaseAgent {
     private _priorNonStepTokensUsed: number = 0;
     private _fastJudgeCostUsd: number = 0;
     private _fastJudgeTokensUsed: number = 0;
+    private readonly _reconciledFastJudgeInvocationIds = new Set<string>();
+    private _agentRunLateSaveChain: Promise<void> = Promise.resolve();
     private _priorDayCostBaselineUsd: number | undefined = undefined;
     private _priorDayWallClockBaselineMs: number | undefined = undefined;
     private _lastObservedDaySnapshot: { DayBucketUTC: string; CostUsd: number; WallClockMs: number } | null = null;
@@ -3092,6 +3097,8 @@ export class BaseAgent {
         this._priorNonStepTokensUsed = 0;
         this._fastJudgeCostUsd = 0;
         this._fastJudgeTokensUsed = 0;
+        this._reconciledFastJudgeInvocationIds.clear();
+        this._agentRunLateSaveChain = Promise.resolve();
         this._priorDayCostBaselineUsd = undefined;
         this._priorDayWallClockBaselineMs = undefined;
         this._lastObservedDaySnapshot = null;
@@ -3100,7 +3107,7 @@ export class BaseAgent {
         this._lastRecordedCostUsd = 0;
         this._lastRemotePausePollMs = params.resumeCheckpointRunId ? 0 : Date.now();
         this._progressDetector.Reset();
-        this._fastConvergenceJudge.ResetCooldown();
+        this._fastConvergenceJudge.ResetTracking();
         const policyResolution = await this.resolveServerUserPolicy(params);
         this._resolvedUserPolicy = policyResolution.policy;
         this._activeLimitsResolution = this.resolveFullRunLimits(params);
@@ -5501,6 +5508,7 @@ export class BaseAgent {
         if (!this._agentRun) {
             return null;
         }
+        this.drainPendingFastJudgeUsage();
         const evalInput = this.buildBudgetEvaluationInput(params);
         const result = await this._budgetEnforcementGuard.Evaluate(evalInput);
         this.recordDayBudgetSnapshot(evalInput, result.Ledger);
@@ -5788,25 +5796,88 @@ export class BaseAgent {
     }
 
     private attributeFastJudgeUsage(evaluation: ProgressEvaluationResult): void {
-        if (!evaluation.FastJudgeInvoked || !evaluation.FastJudgeResult) {
+        this.drainPendingFastJudgeUsage();
+        if (!evaluation.FastJudgeInvoked || !evaluation.FastJudgeResult || evaluation.FastJudgeResult.TimedOut) {
             return;
         }
-        const costUsd = typeof evaluation.FastJudgeResult.CostUsd === 'number' && Number.isFinite(evaluation.FastJudgeResult.CostUsd)
-            ? Math.max(0, evaluation.FastJudgeResult.CostUsd)
+        this.reconcileFastJudgeUsage({
+            InvocationId: evaluation.FastJudgeResult.InvocationId,
+            CostUsd: evaluation.FastJudgeResult.CostUsd,
+            TokensUsed: evaluation.FastJudgeResult.TokensUsed,
+            SettledAfterDeadline: false,
+        });
+    }
+
+    private handleLateFastJudgeUsage(settlement: FastJudgeUsageSettlement): void {
+        this.reconcileFastJudgeUsage({
+            InvocationId: settlement.InvocationId,
+            CostUsd: settlement.CostUsd,
+            TokensUsed: settlement.TokensUsed,
+            SettledAfterDeadline: settlement.SettledAfterDeadline,
+        });
+    }
+
+    private drainPendingFastJudgeUsage(): void {
+        const pending = this.__fastConvergenceJudge?.DrainPendingLateUsage();
+        if (!pending || pending.length === 0) {
+            return;
+        }
+        for (const settlement of pending) {
+            this.handleLateFastJudgeUsage(settlement);
+        }
+    }
+
+    private reconcileFastJudgeUsage(usage: {
+        InvocationId?: string;
+        CostUsd?: number;
+        TokensUsed?: number;
+        SettledAfterDeadline: boolean;
+    }): void {
+        const costUsd = typeof usage.CostUsd === 'number' && Number.isFinite(usage.CostUsd)
+            ? Math.max(0, usage.CostUsd)
             : 0;
-        const tokensUsed = typeof evaluation.FastJudgeResult.TokensUsed === 'number' && Number.isFinite(evaluation.FastJudgeResult.TokensUsed)
-            ? Math.max(0, evaluation.FastJudgeResult.TokensUsed)
+        const tokensUsed = typeof usage.TokensUsed === 'number' && Number.isFinite(usage.TokensUsed)
+            ? Math.max(0, usage.TokensUsed)
             : 0;
+        if (costUsd <= 0 && tokensUsed <= 0) {
+            return;
+        }
+        if (usage.InvocationId) {
+            if (this._reconciledFastJudgeInvocationIds.has(usage.InvocationId)) {
+                return;
+            }
+            this._reconciledFastJudgeInvocationIds.add(usage.InvocationId);
+        }
         if (costUsd > 0) {
             this._fastJudgeCostUsd += costUsd;
             if (this._treeBudget) {
                 this._treeBudget.totalCost += costUsd;
             }
+            this._lastRecordedCostUsd += costUsd;
         }
         if (tokensUsed > 0) {
             this._fastJudgeTokensUsed += tokensUsed;
             if (this._treeBudget) {
                 this._treeBudget.totalTokens += tokensUsed;
+            }
+        }
+        if (this._agentRun) {
+            BudgetEnforcementGuard.RecordBatchedPromptCost({
+                AgentRun: this._agentRun,
+                CostEvents: this._budgetCostEvents,
+                DayCostBaselines: this._budgetDayBaselines,
+                CostUsd: costUsd,
+                TokensUsed: tokensUsed,
+            });
+            if (usage.SettledAfterDeadline && this._agentRun.ID && (this._agentRun.Status === 'Completed' || this._agentRun.Status === 'Paused')) {
+                const runRef = this._agentRun;
+                this._agentRunLateSaveChain = this._agentRunLateSaveChain.then(async () => {
+                    try {
+                        await runRef.Save({ SaveReturnMode: 'datestamps_only' });
+                    } catch {
+                        // Best-effort persistence for post-completion late judge settlement
+                    }
+                });
             }
         }
     }
@@ -16585,6 +16656,9 @@ The context is now within limits. Please retry your request with the recovered c
         this._priorNonStepTokensUsed = Math.max(0, restored.Checkpoint.CumulativeLedger.RunTokens - initialStepStats.TotalTokens);
         this._fastJudgeCostUsd = 0;
         this._fastJudgeTokensUsed = 0;
+        this._reconciledFastJudgeInvocationIds.clear();
+        this._agentRunLateSaveChain = Promise.resolve();
+        this._fastConvergenceJudge.ResetTracking();
         this._priorDayCostBaselineUsd = restored.PriorDayCostBaselineUsd;
         this._priorDayWallClockBaselineMs = restored.PriorDayWallClockBaselineMs;
         this._lastObservedDaySnapshot = {
@@ -23877,6 +23951,7 @@ The context is now within limits. Please retry your request with the recovered c
      */
     private calculateTokenStats(): AgentRunTokenStats {
         const stats = this._budgetTracker.CalculateRunTokenStats(this._agentRun);
+        this.drainPendingFastJudgeUsage();
         if (
             this._priorNonStepCostUsd > 0 ||
             this._priorNonStepTokensUsed > 0 ||

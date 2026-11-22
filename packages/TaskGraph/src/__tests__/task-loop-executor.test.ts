@@ -270,4 +270,106 @@ describe('a While loop must be able to reach its exit condition', () => {
         expect(executed).toEqual([0, 1, 2, 3, 4]);
         expect(secondPass.Output.results).toEqual(['item-0', 'item-1', 'item-2', 'item-3', 'item-4']);
     });
+
+    it('wires LoopExecutionOptions into parallel ForEach with OnIterationGovernance, LoopCursorSnapshot, and ResumeFromCursor without replaying completed indices', async () => {
+        const executed: number[] = [];
+        const op: ForEachOperation = {
+            collectionPath: 'static:["p0","p1","p2","p3","p4","p5"]',
+            executionMode: 'parallel',
+            maxConcurrency: 2,
+        };
+
+        const firstPass = await RunForEachLoop(
+            op,
+            {},
+            async ({ Index, Bindings }) => {
+                executed.push(Index);
+                return { Success: true, Output: `done-${Bindings['item']}`, CostUsd: 0.1, TokensUsed: 50 };
+            },
+            {
+                OnIterationGovernance: async ({ CompletedIterations }) =>
+                    CompletedIterations >= 4
+                        ? { ShouldPause: true, Reason: 'Budget exhausted after 2 parallel batches' }
+                        : { ShouldPause: false },
+            },
+        );
+
+        expect(firstPass.Success).toBe(false);
+        expect(firstPass.Paused).toBe(true);
+        expect(firstPass.PauseReason).toBe('Budget exhausted after 2 parallel batches');
+        expect(firstPass.LoopCursorSnapshot).toEqual({
+            LoopType: 'ForEach',
+            NextIterationIndex: 4,
+            CompletedIndices: [0, 1, 2, 3],
+            PartialResults: ['done-p0', 'done-p1', 'done-p2', 'done-p3', null, null],
+            SucceededCount: 4,
+            FailedCount: 0,
+        });
+        expect(executed).toEqual([0, 1, 2, 3]);
+
+        const secondPass = await RunForEachLoop(
+            op,
+            {},
+            async ({ Index, Bindings }) => {
+                executed.push(Index);
+                return { Success: true, Output: `done-${Bindings['item']}`, CostUsd: 0.1, TokensUsed: 50 };
+            },
+            {
+                ResumeFromCursor: firstPass.LoopCursorSnapshot,
+            },
+        );
+
+        expect(secondPass.Success).toBe(true);
+        expect(executed).toEqual([0, 1, 2, 3, 4, 5]);
+        expect(secondPass.Output.results).toEqual(['done-p0', 'done-p1', 'done-p2', 'done-p3', 'done-p4', 'done-p5']);
+        expect(secondPass.Output.succeeded).toBe(6);
+    });
+
+    it('pauses While loop with LoopCursorSnapshot and resumes via ResumeFromCursor without replaying completed iterations', async () => {
+        const executed: number[] = [];
+        const op: WhileOperation = { condition: 'i < 5', maxIterations: 10 };
+
+        const firstPass = await RunWhileLoop(
+            op,
+            (iteration) => ({ Success: true, Value: iteration < 5 }),
+            async ({ Index }) => {
+                executed.push(Index);
+                return { Success: true, Output: `while-${Index}` };
+            },
+            {
+                OnIterationGovernance: async ({ CompletedIterations, LastOutcome }) =>
+                    LastOutcome && CompletedIterations >= 2
+                        ? { ShouldPause: true, Reason: 'While loop governance pause' }
+                        : { ShouldPause: false },
+            },
+        );
+
+        expect(firstPass.Success).toBe(false);
+        expect(firstPass.Paused).toBe(true);
+        expect(firstPass.LoopCursorSnapshot).toEqual({
+            LoopType: 'While',
+            NextIterationIndex: 2,
+            CompletedIndices: [0, 1],
+            PartialResults: ['while-0', 'while-1'],
+            SucceededCount: 2,
+            FailedCount: 0,
+        });
+        expect(executed).toEqual([0, 1]);
+
+        const secondPass = await RunWhileLoop(
+            op,
+            (iteration) => ({ Success: true, Value: iteration < 5 }),
+            async ({ Index }) => {
+                executed.push(Index);
+                return { Success: true, Output: `while-${Index}` };
+            },
+            {
+                ResumeFromCursor: firstPass.LoopCursorSnapshot,
+            },
+        );
+
+        expect(secondPass.Success).toBe(true);
+        expect(executed).toEqual([0, 1, 2, 3, 4]);
+        expect(secondPass.Output.results).toEqual(['while-0', 'while-1', 'while-2', 'while-3', 'while-4']);
+    });
 });

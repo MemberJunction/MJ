@@ -523,4 +523,78 @@ describe('FastConvergenceJudge — Ambiguous-only invocation, <200ms bound, and 
         expect(diag?.FastJudgeEntries[0].TokensUsed).toBe(120);
         expect(diag?.FastJudgeEntries[2].UsedFallback).toBe(true);
     });
+
+    it('CR-JUDGE-TIMEOUT-USAGE: bounds fallback latency while reconciling late-settled judge CostUsd and TokensUsed exactly once via OnLateUsageSettled and queue', async () => {
+        const config = createDetectorConfig({
+            MinIterationsBeforeCheck: 6,
+            FastJudgeTimeoutMs: 40,
+            FastJudgeFailureFallback: 'ContinueWithWarning',
+        });
+        const ambiguousDet = detector.Evaluate(config, makeAmbiguousSamples(6));
+
+        // 1) Callback mode: evaluator ignores AbortSignal and resolves at 80ms with billable usage
+        const settlements: Array<{ InvocationId: string; CostUsd: number; TokensUsed: number }> = [];
+        const slowUnabortableEvaluator: FastConvergenceJudgeEvaluator = async () => {
+            await new Promise((resolve) => setTimeout(resolve, 80));
+            return {
+                Converging: true,
+                Reason: 'Late response ignoring abort signal',
+                LatencyMs: 80,
+                TimedOut: false,
+                UsedFallback: false,
+                Source: 'Model',
+                CostUsd: 0.075,
+                TokensUsed: 720,
+            };
+        };
+
+        const t0 = Date.now();
+        const judged = await judge.EvaluateIfAmbiguous({
+            DetectorResult: ambiguousDet,
+            Iteration: 6,
+            StateSummary: 'late-settling judge callback test',
+            Config: config,
+            Evaluator: slowUnabortableEvaluator,
+            OnLateUsageSettled: (s) => {
+                settlements.push({ InvocationId: s.InvocationId, CostUsd: s.CostUsd, TokensUsed: s.TokensUsed });
+            },
+        });
+        const elapsedMs = Date.now() - t0;
+
+        // Bounded sub-200ms decision returned immediately without inline cost
+        expect(elapsedMs).toBeLessThan(200);
+        expect(judged.FastJudgeResult?.TimedOut).toBe(true);
+        expect(judged.FastJudgeResult?.UsedFallback).toBe(true);
+        expect(judged.FastJudgeResult?.CostUsd).toBeUndefined();
+        expect(judged.FastJudgeResult?.TokensUsed).toBeUndefined();
+        expect(judged.FastJudgeResult?.InvocationId).toBeDefined();
+        expect(settlements).toHaveLength(0);
+
+        await judge.WaitForPendingEvaluations();
+        expect(settlements).toHaveLength(1);
+        expect(settlements[0].InvocationId).toBe(judged.FastJudgeResult?.InvocationId);
+        expect(settlements[0].CostUsd).toBeCloseTo(0.075, 6);
+        expect(settlements[0].TokensUsed).toBe(720);
+        expect(judge.DrainPendingLateUsage()).toHaveLength(0);
+
+        // 2) Pending queue mode (no callback supplied): DrainPendingLateUsage returns the entry exactly once
+        judge.ResetCooldown();
+        const queuedJudgeResult = await judge.EvaluateIfAmbiguous({
+            DetectorResult: ambiguousDet,
+            Iteration: 12,
+            StateSummary: 'late-settling judge queue test',
+            Config: config,
+            Evaluator: slowUnabortableEvaluator,
+        });
+        expect(queuedJudgeResult.FastJudgeResult?.TimedOut).toBe(true);
+
+        await judge.WaitForPendingEvaluations();
+        const drainedFirst = judge.DrainPendingLateUsage();
+        expect(drainedFirst).toHaveLength(1);
+        expect(drainedFirst[0].InvocationId).toBe(queuedJudgeResult.FastJudgeResult?.InvocationId);
+        expect(drainedFirst[0].CostUsd).toBeCloseTo(0.075, 6);
+        expect(drainedFirst[0].TokensUsed).toBe(720);
+        // Second drain is empty — guaranteed single reconciliation
+        expect(judge.DrainPendingLateUsage()).toHaveLength(0);
+    });
 });

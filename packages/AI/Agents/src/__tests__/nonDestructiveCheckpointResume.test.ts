@@ -26,6 +26,7 @@ import type { MJAIAgentRequestEntity, MJAIAgentTypeEntity, MJAIPromptEntity, MJA
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActiveRunGovernanceRegistry } from '../ActiveRunGovernanceRegistry';
+import { BudgetEnforcementGuard } from '../BudgetEnforcementGuard';
 import { AgentRunWatchdog } from '../agent-run-watchdog';
 import { BaseAgent } from '../base-agent';
 import {
@@ -2486,5 +2487,249 @@ describe('Non-destructive pause, persisted checkpoint, owner notification, and h
         // Preserves prior step cost ($0.06) + prior judge cost ($0.05) + post-resume step ($0.02) = $0.13
         expect(resumed.agentRun.TotalCost).toBeCloseTo(0.13, 5);
         expect(resumed.agentRun.TotalTokensUsed).toBe(6_200);
+    });
+
+    it('CR-JUDGE-TIMEOUT-USAGE: reconciles late-settled timed-out FastConvergenceJudge CostUsd/TokensUsed once into run, tree, and shared budget ledger without blocking fallback', async () => {
+        const provider = harness.CreateProvider();
+        const contextUser = { ID: USER_ID, Name: 'Alice Owner', Email: 'alice@example.com' } as UserInfo;
+        const agentEntity = {
+            ID: AGENT_ID,
+            Name: 'LateJudgeBillingAgent',
+            TypeID: AGENT_TYPE_ID,
+            Status: 'Active',
+            MaxCostPerRun: null,
+            MaxTokensPerRun: null,
+            MaxTimePerRun: null,
+            MaxIterationsPerRun: null,
+            TypeConfiguration: null,
+        } as Partial<MJAIAgentEntityExtended> as MJAIAgentEntityExtended;
+
+        const makeAmbiguousTurn = (idx: number) =>
+            makePromptResult(
+                {
+                    taskComplete: false,
+                    reasoning: idx % 2 === 0
+                        ? `Inspecting schema partition ${idx} metadata without mutating state`
+                        : `Evaluating selectivity for candidate partition ${idx * 13}`,
+                    nextStep: {
+                        type: 'Actions',
+                        actions: [{ name: 'ProcessBatchItem', params: {} }],
+                    },
+                },
+                0.02,
+                1_800,
+            );
+
+        // Turn 4 delays long enough for the late judge promise (80ms) to settle before Turn 4's budget check
+        const agent = new TestableCheckpointAgent([
+            () => makeAmbiguousTurn(1),
+            () => makeAmbiguousTurn(2),
+            () => makeAmbiguousTurn(3),
+            async () => {
+                await new Promise((resolve) => setTimeout(resolve, 110));
+                return makeAmbiguousTurn(4);
+            },
+            () =>
+                makePromptResult(
+                    {
+                        taskComplete: true,
+                        message: 'Done',
+                        payloadChangeRequest: { newElements: { finished: true } },
+                    },
+                    0.01,
+                    100,
+                ),
+        ]);
+
+        // 3 turns = $0.06 + 5,400 tokens. At step 6, FastConvergenceJudge times out at 30ms (ContinueWithWarning),
+        // then settles at 80ms with CostUsd=$0.07 + TokensUsed=700 -> total $0.13 >= $0.10 PerRun ceiling!
+        const pauseResult = await agent.Execute({
+            agent: agentEntity,
+            conversationMessages: [{ role: 'user', content: 'Run with slow unabortable judge' }],
+            contextUser,
+            provider,
+            userId: USER_ID,
+            limitsOverride: {
+                Budgets: {
+                    PerRun: { MaxCostUsd: 0.10, MaxWallClockMs: 60_000 },
+                    AllowedInFlightOvershootUsd: 0,
+                },
+                ProgressDetector: {
+                    Enabled: true,
+                    MinIterationsBeforeCheck: 6,
+                    WindowSize: 6,
+                    AmbiguityLowScoreThreshold: 0.25,
+                    AmbiguityHighScoreThreshold: 0.65,
+                    FastJudgeEnabled: true,
+                    FastJudgeTimeoutMs: 30,
+                    FastJudgeFailureFallback: 'ContinueWithWarning',
+                },
+            },
+            fastConvergenceJudgeEvaluator: async () => {
+                await new Promise((resolve) => setTimeout(resolve, 75));
+                return {
+                    Converging: true,
+                    Reason: 'Late-settling model confirmed convergence',
+                    LatencyMs: 75,
+                    TimedOut: false,
+                    UsedFallback: false,
+                    Source: 'Model',
+                    CostUsd: 0.07,
+                    TokensUsed: 700,
+                };
+            },
+        });
+
+        expect(pauseResult.paused).toBe(true);
+        expect(pauseResult.pausedReason).toBe('BudgetExceeded');
+        // 4 prompt turns ($0.08, 7200 tok) + 1 late judge ($0.07, 700 tok) = $0.15, 7900 tokens — reconciled ONCE!
+        expect(pauseResult.agentRun.TotalCost).toBeCloseTo(0.15, 5);
+        expect(pauseResult.agentRun.TotalTokensUsed).toBe(7_900);
+        expect(pauseResult.runawayCheckpoint?.CumulativeLedger.RunCostUsd).toBeCloseTo(0.15, 5);
+
+        // Shared ledger evaluation for a subsequent run by same user sees $0.15 in __budgetCostEvents/TotalCost
+        const runSnapshots = Array.from(harness.Runs.values()).map((r) => ({
+            ID: r.ID,
+            ParentRunID: r.ParentRunID ?? null,
+            UserID: r.UserID,
+            TotalCost: r.TotalCost,
+            TotalCostRollup: r.TotalCostRollup ?? r.TotalCost,
+            StartedAt: r.StartedAt,
+            CompletedAt: r.CompletedAt,
+            __mj_UpdatedAt: new Date(),
+            ScheduledJobRunID: r.ScheduledJobRunID ?? null,
+            Status: r.Status,
+            Data: r.Data,
+        }));
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn(async () => ({ Success: true, Results: [] })),
+            RunViews: vi.fn(async (paramsArray: Array<unknown>) =>
+                paramsArray.map(() => ({ Success: true, Results: runSnapshots })),
+            ),
+        } as Partial<RunView> as RunView);
+
+        const guard = new BudgetEnforcementGuard();
+        const sharedCheck = await guard.Evaluate({
+            Budgets: {
+                ...CODE_FALLBACK_LIMITS.Budgets,
+                PerUserPerDay: { MaxCostUsd: 0.17, MaxWallClockMs: null, DayBoundaryTimezone: 'UTC' },
+                AllowedInFlightOvershootUsd: 0,
+            },
+            AgentRunID: '99999999-9999-4999-8999-999999999991',
+            UserID: USER_ID,
+            CurrentRunCostUsd: 0.03,
+            CurrentRunStartedAtMs: Date.now() - 100,
+            Provider: provider,
+            ContextUser: contextUser,
+        });
+        expect(sharedCheck.Exceeded).toBe(true);
+        expect(sharedCheck.Breach?.Scope).toBe('PerUserPerDay');
+        expect(sharedCheck.Ledger.UserDailyCostUsd).toBeCloseTo(0.18, 5);
+    });
+
+    it('CR-APPROVAL-CLOSES-PAUSE-EARLY: keeps PausedIntervals open on ApproveCheckpoint at t1 and excludes full t0->t2 window across PerRun, PerRoutine, and PerUserPerDay when resumed at t2', async () => {
+        const provider = harness.CreateProvider();
+        const contextUser = { ID: USER_ID } as UserInfo;
+        const checkpointManager = new RunawayCheckpointManager();
+
+        const tStart = Date.UTC(2026, 10, 21, 10, 0, 0);
+        const t0Pause = tStart + 5_000;     // 5s active before pause
+        const t1Approve = tStart + 35_000;  // approved 30s after pause
+        const t2Resume = tStart + 185_000;  // resumed 150s after approval (180s total paused)
+        const tNow = tStart + 190_000;      // 5s active after resume -> 10s total active wall-clock!
+
+        const run = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
+        run.UserID = USER_ID;
+        run.ScheduledJobRunID = 'routine-cr-pause-early';
+        run.StartedAt = new Date(tStart);
+        await run.Save();
+
+        await checkpointManager.PauseRunWithCheckpoint({
+            AgentRun: run,
+            AgentID: AGENT_ID,
+            AgentName: 'ApprovalIntervalAgent',
+            UserID: USER_ID,
+            RoutineID: 'routine-cr-pause-early',
+            PauseReason: 'BudgetExceeded',
+            Summary: 'Paused at t0',
+            CompletedPromptTurns: 2,
+            ConversationMessages: [{ role: 'user', content: 'Work' }],
+            InFlightPayload: { ok: true },
+            Scratchpad: { notes: '', tasks: [] },
+            CumulativeLedger: {
+                RunCostUsd: 0.1,
+                RunWallClockMs: 5_000,
+                RunTokens: 100,
+                RoutineCostUsd: 0.1,
+                RoutineWallClockMs: 5_000,
+                UserDailyCostUsd: 0.1,
+                UserDailyWallClockMs: 5_000,
+                PausedWallClockMs: 0,
+                PausedIntervals: [],
+                DayBucketUTC: '2026-11-21',
+                DayBoundaryTimezone: 'UTC',
+                AsOfISO: new Date(t0Pause).toISOString(),
+            },
+            Provider: provider,
+            ContextUser: contextUser,
+            NowMs: t0Pause,
+        });
+
+        const approved = await checkpointManager.ApproveCheckpoint({
+            AgentRun: run,
+            ApprovedByUserID: APPROVER_ID,
+            BudgetExtension: { NewPerRunMaxWallClockMs: 15_000, NewPerRoutineMaxWallClockMs: 15_000, NewPerUserDailyMaxWallClockMs: 15_000 },
+            Provider: provider,
+            ContextUser: contextUser,
+            NowMs: t1Approve,
+        });
+
+        // Critical invariant: ApproveCheckpoint MUST keep PausedIntervals open (ResumedAtMs === null)
+        expect(approved.HumanApproval.Status).toBe('Approved');
+        expect(approved.CumulativeLedger.PausedIntervals).toEqual([{ PausedAtMs: t0Pause, ResumedAtMs: null }]);
+
+        const restored = await checkpointManager.PrepareResumeFromCheckpoint({
+            AgentRun: run,
+            BaseBudgets: {
+                ...CODE_FALLBACK_LIMITS.Budgets,
+                PerRun: { MaxCostUsd: 10, MaxWallClockMs: 15_000, MaxTokens: null },
+                PerRoutine: { MaxCostUsd: 10, MaxWallClockMs: 15_000 },
+                PerUserPerDay: { MaxCostUsd: 10, MaxWallClockMs: 15_000, DayBoundaryTimezone: 'UTC' },
+                CountPausedTimeTowardsWallClock: false,
+            },
+            Provider: provider,
+            ContextUser: contextUser,
+            NowMs: t2Resume,
+        });
+
+        expect(restored.PausedIntervals).toEqual([{ PausedAtMs: t0Pause, ResumedAtMs: t2Resume }]);
+        expect(restored.Checkpoint.CumulativeLedger.PausedWallClockMs).toBe(180_000);
+
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn(async () => ({ Success: true, Results: [] })),
+            RunViews: vi.fn(async (paramsArray: Array<unknown>) =>
+                paramsArray.map(() => ({ Success: true, Results: [] })),
+            ),
+        } as Partial<RunView> as RunView);
+
+        const guard = new BudgetEnforcementGuard();
+        const evalRes = await guard.Evaluate({
+            Budgets: restored.ExtendedBudgets,
+            AgentRunID: run.ID,
+            UserID: USER_ID,
+            RoutineID: 'routine-cr-pause-early',
+            CurrentRunCostUsd: 0.1,
+            CurrentRunStartedAtMs: tStart,
+            PausedIntervals: restored.PausedIntervals,
+            NowMs: tNow,
+            Provider: provider,
+            ContextUser: contextUser,
+        });
+
+        // Total elapsed is 190,000ms, entire 180,000ms pause (t0 -> t2) excluded -> 10,000ms active across all 3 scopes
+        expect(evalRes.Exceeded).toBe(false);
+        expect(evalRes.Ledger.RunWallClockMs).toBe(10_000);
+        expect(evalRes.Ledger.RoutineWallClockMs).toBe(10_000);
+        expect(evalRes.Ledger.UserDailyWallClockMs).toBe(10_000);
     });
 });

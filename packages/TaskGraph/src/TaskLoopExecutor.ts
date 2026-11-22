@@ -40,6 +40,8 @@ export type LoopIterationOutcome = {
     Success: boolean;
     Output?: unknown;
     ErrorMessage?: string;
+    CostUsd?: number;
+    TokensUsed?: number;
 };
 
 /** Runs the loop body once. Supplied by the dispatcher, which owns the action and agent runners. */
@@ -52,6 +54,22 @@ export type LoopBodyInvoker = (iteration: {
     Bindings: Record<string, unknown>;
 }) => Promise<LoopIterationOutcome>;
 
+/** Per-iteration outcome paired with its collection index for parallel batch governance. */
+export interface LoopIterationBatchOutcome {
+    Index: number;
+    Outcome: LoopIterationOutcome;
+}
+
+/** Durable cursor snapshot captured when a loop pauses mid-execution for governance. */
+export interface LoopCursorSnapshot {
+    LoopType: 'ForEach' | 'While';
+    NextIterationIndex: number;
+    CompletedIndices: number[];
+    PartialResults: LoopIterationOutcome['Output'][];
+    SucceededCount: number;
+    FailedCount: number;
+}
+
 /** Verdict returned by an optional inter-iteration governance hook. */
 export interface LoopIterationGovernanceVerdict {
     ShouldPause: boolean;
@@ -59,19 +77,22 @@ export interface LoopIterationGovernanceVerdict {
     Status?: string;
 }
 
-/** Optional governance callback checked between sequential loop iterations (budget/progress/pause). */
+/** Optional governance callback checked between sequential or parallel loop iterations/batches (budget/progress/pause). */
 export type LoopIterationGovernanceHook = (info: {
     LoopType: 'ForEach' | 'While';
     NextIterationIndex: number;
     CompletedIterations: number;
     ResultsSoFar: readonly LoopIterationOutcome['Output'][];
+    CompletedIndices?: readonly number[];
     LastOutcome?: LoopIterationOutcome;
+    BatchOutcomes?: readonly LoopIterationBatchOutcome[];
 }) => Promise<LoopIterationGovernanceVerdict>;
 
 /** Execution options supporting resume cursors and inter-iteration governance checks. */
 export interface LoopExecutionOptions {
     StartIndex?: number;
     InitialResults?: readonly LoopIterationOutcome['Output'][];
+    ResumeFromCursor?: LoopCursorSnapshot;
     OnIterationGovernance?: LoopIterationGovernanceHook;
 }
 
@@ -81,6 +102,7 @@ export type LoopExecutionResult = {
     Paused?: boolean;
     PauseReason?: string;
     ResumeCursorIndex?: number;
+    LoopCursorSnapshot?: LoopCursorSnapshot;
     /** Persisted to `Task.OutputPayload` — what downstream steps and conditions can read. */
     Output: {
         iterations: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
@@ -144,7 +166,7 @@ export async function RunForEachLoop(
     }));
 
     return op.executionMode === 'parallel'
-        ? runParallel(plan, invokeBody, op.maxConcurrency ?? resolvedLimits.ResourceGuards.MaxLoopConcurrency, op.continueOnError === true)
+        ? executeForEachParallel(plan, invokeBody, op.maxConcurrency ?? resolvedLimits.ResourceGuards.MaxLoopConcurrency, op.continueOnError === true, options)
         : runSequential(plan, invokeBody, op.continueOnError === true, op.delayBetweenIterationsMs ?? 0, options);
 }
 
@@ -167,10 +189,18 @@ export async function RunWhileLoop(
 ): Promise<LoopExecutionResult> {
     const limit = iterationLimit(op.maxIterations, LimitsConfigResolver.Resolve().Limits.WhileLoopMaxIterations);
     const attemptVar = op.itemVariable || 'attempt';
-    const startIndex = Math.max(0, options?.StartIndex ?? 0);
-    const results: LoopIterationOutcome['Output'][] = options?.InitialResults ? [...options.InitialResults] : [];
-    let succeeded = results.length;
-    let failed = 0;
+    const resumed = options?.ResumeFromCursor;
+    const startIndex = Math.max(0, resumed?.NextIterationIndex ?? options?.StartIndex ?? 0);
+    const results: LoopIterationOutcome['Output'][] = resumed
+        ? [...resumed.PartialResults]
+        : options?.InitialResults
+            ? [...options.InitialResults]
+            : [];
+    const completedIndices: number[] = resumed
+        ? [...resumed.CompletedIndices]
+        : Array.from({ length: startIndex }, (_, i) => i);
+    let succeeded = resumed?.SucceededCount ?? results.length;
+    let failed = resumed?.FailedCount ?? 0;
     let index = startIndex;
 
     while (index < limit) {
@@ -178,18 +208,12 @@ export async function RunWhileLoop(
             const gov = await options.OnIterationGovernance({
                 LoopType: 'While',
                 NextIterationIndex: index,
-                CompletedIterations: index,
+                CompletedIterations: completedIndices.length,
                 ResultsSoFar: results,
+                CompletedIndices: [...completedIndices],
             });
             if (gov.ShouldPause) {
-                return {
-                    Success: false,
-                    Paused: true,
-                    PauseReason: gov.Reason,
-                    ResumeCursorIndex: index,
-                    Output: { iterations: index, succeeded, failed, results },
-                    ErrorMessage: gov.Reason,
-                };
+                return buildPausedLoopResult('While', index, completedIndices, results, succeeded, failed, gov.Reason);
             }
         }
 
@@ -207,6 +231,7 @@ export async function RunWhileLoop(
 
         const outcome = await invokeBody({ Index: index, Bindings: { [attemptVar]: index } });
         results.push(outcome.Output ?? null);
+        completedIndices.push(index);
         if (outcome.Success) succeeded++;
         else {
             failed++;
@@ -224,19 +249,13 @@ export async function RunWhileLoop(
             const postGov = await options.OnIterationGovernance({
                 LoopType: 'While',
                 NextIterationIndex: index,
-                CompletedIterations: index,
+                CompletedIterations: completedIndices.length,
                 ResultsSoFar: results,
+                CompletedIndices: [...completedIndices],
                 LastOutcome: outcome,
             });
             if (postGov.ShouldPause) {
-                return {
-                    Success: false,
-                    Paused: true,
-                    PauseReason: postGov.Reason,
-                    ResumeCursorIndex: index,
-                    Output: { iterations: index, succeeded, failed, results },
-                    ErrorMessage: postGov.Reason,
-                };
+                return buildPausedLoopResult('While', index, completedIndices, results, succeeded, failed, postGov.Reason);
             }
         }
         if (op.delayBetweenIterationsMs) await delay(op.delayBetweenIterationsMs);
@@ -259,79 +278,134 @@ async function runSequential(
     delayMs: number,
     options?: LoopExecutionOptions,
 ): Promise<LoopExecutionResult> {
-    const startIndex = Math.max(0, options?.StartIndex ?? 0);
-    const results: LoopIterationOutcome['Output'][] = options?.InitialResults ? [...options.InitialResults] : [];
-    let succeeded = results.length;
-    let failed = 0;
+    const resumed = options?.ResumeFromCursor;
+    const startIndex = Math.max(0, resumed?.NextIterationIndex ?? options?.StartIndex ?? 0);
+    const completedSet = new Set<number>(
+        resumed?.CompletedIndices ?? plan.filter((p) => p.Index < startIndex).map((p) => p.Index),
+    );
+    const results: LoopIterationOutcome['Output'][] = resumed
+        ? [...resumed.PartialResults]
+        : options?.InitialResults
+            ? [...options.InitialResults]
+            : [];
+    let succeeded = resumed?.SucceededCount ?? results.length;
+    let failed = resumed?.FailedCount ?? 0;
 
-    for (const iteration of plan) {
-        if (iteration.Index < startIndex) {
+    for (let pos = 0; pos < plan.length; pos++) {
+        const iteration = plan[pos];
+        if (completedSet.has(iteration.Index) || iteration.Index < startIndex) {
             continue;
         }
         if (options?.OnIterationGovernance) {
+            const completedSorted = sortedIndices(completedSet);
             const gov = await options.OnIterationGovernance({
                 LoopType: 'ForEach',
                 NextIterationIndex: iteration.Index,
-                CompletedIterations: iteration.Index,
+                CompletedIterations: completedSorted.length,
                 ResultsSoFar: results,
+                CompletedIndices: completedSorted,
             });
             if (gov.ShouldPause) {
-                return {
-                    Success: false,
-                    Paused: true,
-                    PauseReason: gov.Reason,
-                    ResumeCursorIndex: iteration.Index,
-                    Output: { iterations: results.length, succeeded, failed, results },
-                    ErrorMessage: gov.Reason,
-                };
+                return buildPausedLoopResult('ForEach', iteration.Index, completedSorted, results, succeeded, failed, gov.Reason);
             }
         }
 
         const outcome = await invokeBody(iteration);
-        results.push(outcome.Output ?? null);
+        if (iteration.Index < results.length) {
+            results[iteration.Index] = outcome.Output ?? null;
+        } else {
+            while (results.length < iteration.Index) {
+                results.push(null);
+            }
+            results.push(outcome.Output ?? null);
+        }
+        completedSet.add(iteration.Index);
         if (outcome.Success) succeeded++;
         else {
             failed++;
             if (!continueOnError) {
                 return {
                     Success: false,
-                    Output: { iterations: results.length, succeeded, failed, results },
+                    Output: { iterations: completedSet.size, succeeded, failed, results },
                     ErrorMessage: `Iteration ${iteration.Index + 1} failed: ${outcome.ErrorMessage ?? 'no reason given'}.`,
                 };
             }
         }
-        if (delayMs) await delay(delayMs);
+
+        const hasMoreIterations = plan.slice(pos + 1).some((p) => !completedSet.has(p.Index) && p.Index >= startIndex);
+        if (options?.OnIterationGovernance) {
+            const completedSorted = sortedIndices(completedSet);
+            const postGov = await options.OnIterationGovernance({
+                LoopType: 'ForEach',
+                NextIterationIndex: iteration.Index + 1,
+                CompletedIterations: completedSorted.length,
+                ResultsSoFar: results,
+                CompletedIndices: completedSorted,
+                LastOutcome: outcome,
+            });
+            if (postGov.ShouldPause && hasMoreIterations) {
+                return buildPausedLoopResult('ForEach', iteration.Index + 1, completedSorted, results, succeeded, failed, postGov.Reason);
+            }
+        }
+        if (delayMs && hasMoreIterations) await delay(delayMs);
     }
 
     return summarize(results, succeeded, failed, continueOnError);
 }
 
 /**
- * Iterations in bounded-concurrency batches, results kept in iteration order.
- *
- * Order matters even when execution does not: an output mapping that writes `results[index]` and a
- * downstream step that reads it both assume position means iteration number. Returning results in
- * completion order would scramble that in a way nothing detects.
+ * Iterations in bounded-concurrency batches, results kept in iteration order, with inter-batch
+ * governance checks and durable cursor resume support.
  */
-async function runParallel(
+async function executeForEachParallel(
     plan: Array<{ Index: number; Item?: unknown; Bindings: Record<string, unknown> }>,
     invokeBody: LoopBodyInvoker,
     maxConcurrency: number,
     continueOnError: boolean,
+    options?: LoopExecutionOptions,
 ): Promise<LoopExecutionResult> {
     const size = Math.max(1, maxConcurrency);
+    const resumed = options?.ResumeFromCursor;
+    const startIndex = Math.max(0, resumed?.NextIterationIndex ?? options?.StartIndex ?? 0);
+    const completedSet = new Set<number>(
+        resumed?.CompletedIndices ?? plan.filter((p) => p.Index < startIndex).map((p) => p.Index),
+    );
     const results: unknown[] = new Array(plan.length).fill(null);
-    let succeeded = 0;
-    let failed = 0;
+    const seedResults = resumed?.PartialResults ?? options?.InitialResults;
+    if (seedResults) {
+        for (let i = 0; i < seedResults.length && i < results.length; i++) {
+            results[i] = seedResults[i];
+        }
+    }
+    let succeeded = resumed?.SucceededCount ?? completedSet.size;
+    let failed = resumed?.FailedCount ?? 0;
     let firstFailure: string | undefined;
 
-    for (let start = 0; start < plan.length; start += size) {
-        const batch = plan.slice(start, start + size);
+    const pendingPlan = plan.filter((item) => !completedSet.has(item.Index));
+    for (let start = 0; start < pendingPlan.length; start += size) {
+        const batch = pendingPlan.slice(start, start + size);
+        if (options?.OnIterationGovernance) {
+            const completedSorted = sortedIndices(completedSet);
+            const gov = await options.OnIterationGovernance({
+                LoopType: 'ForEach',
+                NextIterationIndex: batch[0].Index,
+                CompletedIterations: completedSorted.length,
+                ResultsSoFar: results,
+                CompletedIndices: completedSorted,
+            });
+            if (gov.ShouldPause) {
+                return buildPausedLoopResult('ForEach', batch[0].Index, completedSorted, results, succeeded, failed, gov.Reason);
+            }
+        }
+
         const outcomes = await Promise.all(batch.map((iteration) => invokeBody(iteration)));
+        const batchOutcomes: LoopIterationBatchOutcome[] = [];
 
         outcomes.forEach((outcome, offset) => {
             const iteration = batch[offset];
             results[iteration.Index] = outcome.Output ?? null;
+            completedSet.add(iteration.Index);
+            batchOutcomes.push({ Index: iteration.Index, Outcome: outcome });
             if (outcome.Success) succeeded++;
             else {
                 failed++;
@@ -343,11 +417,62 @@ async function runParallel(
         // The in-flight batch is allowed to finish rather than abandoned: its work is already
         // running, and half-recorded results are worse than one extra batch.
         if (failed > 0 && !continueOnError) {
-            return { Success: false, Output: { iterations: start + batch.length, succeeded, failed, results }, ErrorMessage: firstFailure };
+            return { Success: false, Output: { iterations: completedSet.size, succeeded, failed, results }, ErrorMessage: firstFailure };
+        }
+
+        const hasMoreBatches = start + size < pendingPlan.length;
+        const nextIndex = hasMoreBatches ? pendingPlan[start + size].Index : plan.length;
+        if (options?.OnIterationGovernance) {
+            const completedSorted = sortedIndices(completedSet);
+            const postGov = await options.OnIterationGovernance({
+                LoopType: 'ForEach',
+                NextIterationIndex: nextIndex,
+                CompletedIterations: completedSorted.length,
+                ResultsSoFar: results,
+                CompletedIndices: completedSorted,
+                LastOutcome: outcomes[outcomes.length - 1],
+                BatchOutcomes: batchOutcomes,
+            });
+            if (postGov.ShouldPause && hasMoreBatches) {
+                return buildPausedLoopResult('ForEach', nextIndex, completedSorted, results, succeeded, failed, postGov.Reason);
+            }
         }
     }
 
     return summarize(results, succeeded, failed, continueOnError);
+}
+
+function sortedIndices(set: ReadonlySet<number>): number[] {
+    return [...set].sort((a, b) => a - b);
+}
+
+function buildPausedLoopResult(
+    loopType: 'ForEach' | 'While',
+    nextIterationIndex: number,
+    completedIndices: number[],
+    results: unknown[],
+    succeeded: number,
+    failed: number,
+    pauseReason?: string,
+): LoopExecutionResult {
+    const partialResults = [...results];
+    const snapshot: LoopCursorSnapshot = {
+        LoopType: loopType,
+        NextIterationIndex: nextIterationIndex,
+        CompletedIndices: [...completedIndices],
+        PartialResults: partialResults,
+        SucceededCount: succeeded,
+        FailedCount: failed,
+    };
+    return {
+        Success: false,
+        Paused: true,
+        PauseReason: pauseReason,
+        ResumeCursorIndex: nextIterationIndex,
+        LoopCursorSnapshot: snapshot,
+        Output: { iterations: completedIndices.length, succeeded, failed, results: partialResults },
+        ErrorMessage: pauseReason,
+    };
 }
 
 /**

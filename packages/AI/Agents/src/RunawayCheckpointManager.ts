@@ -442,13 +442,14 @@ export class RunawayCheckpointManager {
             DecisionNotes: input.DecisionNotes ?? checkpoint.HumanApproval.DecisionNotes ?? null,
             BudgetExtension: input.BudgetExtension ?? checkpoint.HumanApproval.BudgetExtension,
         };
+        const openIntervals = this.openPauseInterval(
+            checkpoint.CumulativeLedger.PausedIntervals,
+            checkpoint.PausedAtMs,
+        );
         checkpoint.CumulativeLedger = {
             ...checkpoint.CumulativeLedger,
-            PausedIntervals: this.closeOpenPauseInterval(checkpoint.CumulativeLedger.PausedIntervals, nowMs),
-            PausedWallClockMs: ComputeTotalPausedMs(
-                this.closeOpenPauseInterval(checkpoint.CumulativeLedger.PausedIntervals, nowMs),
-                nowMs,
-            ),
+            PausedIntervals: openIntervals,
+            PausedWallClockMs: ComputeTotalPausedMs(openIntervals, nowMs),
             AsOfISO: approvedAtISO,
         };
 

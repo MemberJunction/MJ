@@ -203,6 +203,8 @@ export interface FastConvergenceJudgeResult {
     TimedOut: boolean;
     UsedFallback: boolean;
     Source: 'Model' | 'Fallback' | 'Error';
+    /** Unique invocation correlation ID used for exactly-once late usage reconciliation. */
+    InvocationId?: string;
     /** Billable USD cost incurred by this judge invocation for budget attribution. */
     CostUsd?: number;
     /** Total tokens consumed by this judge invocation for budget attribution. */

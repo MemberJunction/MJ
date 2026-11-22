@@ -18,7 +18,8 @@ import {
     type TaskGraphDecisionQuestion,
     type TaskGraphNodeConfigMap,
 } from '@memberjunction/ai-core-plus';
-import type { MJTaskEntity_ITaskStepConfiguration } from '@memberjunction/core-entities';
+import type { MJTaskEntity_ITaskLoopIteration, MJTaskEntity_ITaskStepConfiguration } from '@memberjunction/core-entities';
+import type { LoopCursorSnapshot } from './TaskLoopExecutor';
 import { ParseConditionOutput } from './condition-gate';
 import type { TaskCompensationStepMetadata } from './saga-compensation';
 
@@ -81,6 +82,15 @@ export type TaskStepConfiguration = MJTaskEntity_ITaskStepConfiguration & {
         governanceCostUsd?: number;
         /** Durable token count recorded at node settlement for governance budget reconstruction. */
         governanceTokensUsed?: number;
+        /** Durable loop cursor state persisted on the Task row when a loop pauses mid-execution under governance. */
+        loopCursor?: {
+            Cursor: LoopCursorSnapshot;
+            LivePayload: Record<string, unknown>;
+            IterationTrace: MJTaskEntity_ITaskLoopIteration[];
+            AccumulatedCostUsd: number;
+            AccumulatedTokensUsed: number;
+            IsOutputTainted: boolean;
+        };
     };
 };
 

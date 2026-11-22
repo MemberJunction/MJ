@@ -22,6 +22,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { ActiveRunGovernanceRegistry } from '../ActiveRunGovernanceRegistry';
 import { BaseAgent } from '../base-agent';
+import { RunawayCheckpointManager } from '../RunawayCheckpointManager';
 import {
     LimitsGetDiagnosticsServerOperation,
     LimitsPauseRunServerOperation,
@@ -1276,5 +1277,205 @@ describe('Limits.* BaseRemotableOperation implementations', () => {
         expect(flushedCp?.PendingStepDecision?.step).toBe('Retry');
         // Cooperative pause request signal was cleared once acknowledged
         expect(sharedData).not.toContain('__cooperativePauseRequest');
+    });
+
+    it('CR-APPROVAL-CLOSES-PAUSE-EARLY: PrepareResume=false keeps PausedIntervals open at t1 so entire t0->t2 pause is excluded across PerRun, PerRoutine, and PerUserPerDay', async () => {
+        const { BudgetEnforcementGuard } = await import('../BudgetEnforcementGuard');
+        const t0Start = Date.UTC(2026, 10, 21, 14, 0, 0);
+        const t0Pause = t0Start + 4_000;
+        const t1Approve = t0Start + 24_000;
+        const t2Resume = t0Start + 124_000;
+        const t3Eval = t0Start + 129_000;
+
+        const routineId = 'routine-prepare-resume-false-1';
+        const runId = 'aaaaaaaa-1111-4111-8111-000000000099';
+        const initialCheckpoint: RunawayCheckpointState = {
+            SchemaVersion: 'mj-runaway-checkpoint/v1',
+            CheckpointID: 'cp-cr-pause-early-1',
+            AgentRunID: runId,
+            AgentID: AGENT_ID,
+            AgentName: 'DelayedResumeAgent',
+            UserID: OWNER_USER.ID,
+            RoutineID: routineId,
+            PausedAtISO: new Date(t0Pause).toISOString(),
+            PausedAtMs: t0Pause,
+            PauseReason: 'BudgetExceeded',
+            Summary: 'Paused at t0',
+            CompletedStepCount: 2,
+            CompletedStepIDs: ['s1', 's2'],
+            CompletedPromptTurns: 2,
+            CompletedNodeIDs: [],
+            ConversationMessages: [{ Role: 'user', Content: 'Go' }],
+            InFlightPayload: { ok: true },
+            Scratchpad: { notes: '', tasks: [] },
+            NextStepSummary: 'Actions',
+            Evidence: { RecentStepSummaries: [] },
+            CumulativeLedger: {
+                RunCostUsd: 0.25,
+                RunWallClockMs: 4_000,
+                RunTokens: 400,
+                RoutineCostUsd: 0.25,
+                RoutineWallClockMs: 4_000,
+                UserDailyCostUsd: 0.25,
+                UserDailyWallClockMs: 4_000,
+                PausedWallClockMs: 0,
+                PausedIntervals: [{ PausedAtMs: t0Pause, ResumedAtMs: null }],
+                DayBucketUTC: '2026-11-21',
+                DayBoundaryTimezone: 'UTC',
+                AsOfISO: new Date(t0Pause).toISOString(),
+            },
+            HumanApproval: { Status: 'Pending' },
+        };
+
+        let persistedStatus = 'Paused';
+        let persistedData = AttachRunawayCheckpointToRunData(null, initialCheckpoint);
+        let cpCache: RunawayCheckpointState | null = initialCheckpoint;
+
+        const runEntity = {
+            ID: runId,
+            AgentID: AGENT_ID,
+            Agent: 'DelayedResumeAgent',
+            UserID: OWNER_USER.ID,
+            ScheduledJobRunID: routineId,
+            StartedAt: new Date(t0Start),
+            CompletedAt: null,
+            TotalCost: 0.25,
+            TotalCostRollup: 0.25,
+            get Status() { return persistedStatus; },
+            set Status(v: string) { persistedStatus = v; },
+            get Data() { return persistedData; },
+            set Data(v: string | null) { persistedData = v ?? ''; },
+            get RunawayCheckpoint() { return cpCache ?? ExtractRunawayCheckpointFromRunData(persistedData); },
+            set RunawayCheckpoint(v: RunawayCheckpointState | null) { cpCache = v; },
+            LatestResult: { CompleteMessage: '' },
+            Load: vi.fn(async () => true),
+            Save: vi.fn(async () => true),
+        } as Partial<MJAIAgentRunEntityExtended> as MJAIAgentRunEntityExtended;
+
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn(async () => ({ Success: true, Results: [] })),
+            RunViews: vi.fn(async () => [
+                {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: runId,
+                            ParentRunID: null,
+                            UserID: OWNER_USER.ID,
+                            TotalCost: 0.25,
+                            TotalCostRollup: 0.25,
+                            StartedAt: new Date(t0Start),
+                            CompletedAt: null,
+                            __mj_UpdatedAt: new Date(t1Approve),
+                            ScheduledJobRunID: routineId,
+                            Status: persistedStatus,
+                            Data: persistedData,
+                        },
+                    ],
+                },
+                {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: runId,
+                            ParentRunID: null,
+                            UserID: OWNER_USER.ID,
+                            TotalCost: 0.25,
+                            TotalCostRollup: 0.25,
+                            StartedAt: new Date(t0Start),
+                            CompletedAt: null,
+                            __mj_UpdatedAt: new Date(t1Approve),
+                            ScheduledJobRunID: routineId,
+                            Status: persistedStatus,
+                            Data: persistedData,
+                        },
+                    ],
+                },
+            ]),
+        } as Partial<RunView> as RunView);
+
+        const provider = {
+            Authorizations: [],
+            GetEntityObject: vi.fn(async () => runEntity),
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+
+        const resumeOp = new LimitsResumePausedRunServerOperation();
+        try {
+            vi.useFakeTimers();
+            vi.setSystemTime(t1Approve);
+
+            // 1) Approve ONLY (PrepareResume: false) at t1Approve
+            const approveOnlyRes = await resumeOp.ExecuteServer(
+                {
+                    AgentRunID: runId,
+                    PrepareResume: false,
+                    BudgetExtension: { NewPerRunMaxWallClockMs: 20_000, NewPerRoutineMaxWallClockMs: 20_000, NewPerUserDailyMaxWallClockMs: 20_000 },
+                },
+                { provider, user: OWNER_USER, emitProgress: () => undefined },
+            );
+            expect(approveOnlyRes.Success).toBe(true);
+            expect(approveOnlyRes.Output?.Status).toBe('Paused');
+            expect(persistedStatus).toBe('Paused');
+            const cpAfterApprove = ExtractRunawayCheckpointFromRunData(persistedData);
+            expect(cpAfterApprove?.HumanApproval.Status).toBe('Approved');
+            expect(cpAfterApprove?.CumulativeLedger.PausedIntervals).toEqual([{ PausedAtMs: t0Pause, ResumedAtMs: null }]);
+
+            // 2) Advance to t2Resume (100s after approval) and actually resume
+            vi.setSystemTime(t2Resume);
+            let capturedPreparedIntervals: Array<{ PausedAtMs: number; ResumedAtMs?: number | null }> = [];
+            ActiveRunGovernanceRegistry.Instance.RegisterContinuationDispatcher(async (dispatchInput) => {
+                capturedPreparedIntervals = dispatchInput.RestoredContext.PausedIntervals;
+                await new RunawayCheckpointManager().CommitResumeRunningState({
+                    AgentRun: dispatchInput.RestoredContext.AgentRun,
+                    Preparation: dispatchInput.RestoredContext,
+                    MarkStarted: true,
+                    NowMs: t2Resume,
+                });
+                return { Dispatched: true, Claimed: true, Status: 'Running', Message: 'Resumed' };
+            });
+
+            const resumeRes = await resumeOp.ExecuteServer(
+                { AgentRunID: runId },
+                { provider, user: OWNER_USER, emitProgress: () => undefined },
+            );
+            expect(resumeRes.Success).toBe(true);
+            expect(resumeRes.Output?.Success).toBe(true);
+            expect(resumeRes.Output?.Status).toBe('Running');
+            expect(capturedPreparedIntervals).toEqual([{ PausedAtMs: t0Pause, ResumedAtMs: t2Resume }]);
+            expect(ExtractRunawayCheckpointFromRunData(persistedData)?.CumulativeLedger.PausedIntervals).toEqual([
+                { PausedAtMs: t0Pause, ResumedAtMs: t2Resume },
+            ]);
+
+            // 3) Evaluate active wall clock at t3Eval across PerRun, PerRoutine, and PerUserPerDay
+            const guard = new BudgetEnforcementGuard();
+            const evalRes = await guard.Evaluate({
+                Budgets: {
+                    ...CODE_FALLBACK_LIMITS.Budgets,
+                    PerRun: { MaxCostUsd: 10, MaxWallClockMs: 20_000, MaxTokens: null },
+                    PerRoutine: { MaxCostUsd: 10, MaxWallClockMs: 20_000 },
+                    PerUserPerDay: { MaxCostUsd: 10, MaxWallClockMs: 20_000, DayBoundaryTimezone: 'UTC' },
+                    CountPausedTimeTowardsWallClock: false,
+                },
+                AgentRunID: runId,
+                UserID: OWNER_USER.ID,
+                RoutineID: routineId,
+                CurrentRunCostUsd: 0.25,
+                CurrentRunStartedAtMs: t0Start,
+                PausedIntervals: capturedPreparedIntervals,
+                NowMs: t3Eval,
+                Provider: provider,
+                ContextUser: OWNER_USER,
+            });
+            // 4,000ms (t0Start->t0Pause) + 5,000ms (t2Resume->t3Eval) = 9,000ms (entire 120,000ms t0Pause->t2Resume excluded!)
+            expect(evalRes.Exceeded).toBe(false);
+            expect(evalRes.Ledger.RunWallClockMs).toBe(9_000);
+            expect(evalRes.Ledger.RoutineWallClockMs).toBe(9_000);
+            expect(evalRes.Ledger.UserDailyWallClockMs).toBe(9_000);
+        } finally {
+            vi.useRealTimers();
+            ActiveRunGovernanceRegistry.Instance.RegisterContinuationDispatcher(null);
+            LoadLimitsOperations();
+            ActiveRunGovernanceRegistry.Instance.ClearDispatchedClaims();
+        }
     });
 });

@@ -116,6 +116,7 @@ interface StoredTaskRow {
     InputPayload: string | null;
     OutputPayload: string | null;
     Configuration: string | null;
+    SecurityEnvelope?: string | null;
     __mj_UpdatedAt: Date;
 }
 
@@ -185,6 +186,7 @@ class GovernanceInMemoryDb {
                   InputPayload: null,
                   OutputPayload: null,
                   Configuration: null,
+                  SecurityEnvelope: null,
                   __mj_UpdatedAt: new Date(),
               };
         const db = this;
@@ -233,6 +235,19 @@ class GovernanceInMemoryDb {
             set OutputPayload(v: string | null) { backing.OutputPayload = v; },
             get Configuration() { return backing.Configuration; },
             set Configuration(v: string | null) { backing.Configuration = v; },
+            get ConfigurationObject() {
+                if (!backing.Configuration) return null;
+                try {
+                    return JSON.parse(backing.Configuration) as MJTaskEntity['ConfigurationObject'];
+                } catch {
+                    return null;
+                }
+            },
+            set ConfigurationObject(v: MJTaskEntity['ConfigurationObject'] | null) {
+                backing.Configuration = v ? JSON.stringify(v) : null;
+            },
+            get SecurityEnvelope() { return backing.SecurityEnvelope ?? null; },
+            set SecurityEnvelope(v: string | null) { backing.SecurityEnvelope = v; },
             LatestResult: { CompleteMessage: '' },
             NewRecord: () => true,
             Load: async (id: string) => {
@@ -1869,6 +1884,519 @@ describe('TaskGraphGovernanceCoordinator — default opt-in, 5-tier policy scope
             expect(disp.Governance.IsLocallyPaused(parentId)).toBe(false);
         } finally {
             await disp.Stop();
+        }
+    });
+
+    it('CR-LOOP-GOVERNANCE-WIRING (sequential ForEach): pauses loop mid-execution on budget breach without failing/completing task, persists durable cursor, and completes remaining items on replacement worker without replay', async () => {
+        const db = new GovernanceInMemoryDb();
+        const provider = db.CreateProvider();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation((p) => p as Partial<RunView> as RunView);
+
+        const runIdLoopSeq = '50000000-0000-4000-8000-000000000051';
+        const submitRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', TEST_USER);
+        submitRun.ID = runIdLoopSeq;
+        submitRun.Status = 'Running';
+        await submitRun.Save();
+
+        const seenIterationsDisp1: unknown[] = [];
+        const seenIterationsDisp2: unknown[] = [];
+        const frames1: TaskGraphFrame[] = [];
+
+        const disp1 = new TaskGraphDispatcher(
+            { CreateProvider: async () => provider },
+            { RunAgentForTask: async () => ({ Success: true }) },
+            TEST_USER,
+            {
+                InstanceID: 'loop-seq-disp-1',
+                MaxConcurrentTasks: 1,
+                PollIntervalSeconds: 0.01,
+                HeartbeatIntervalSeconds: 60,
+                ReconciliationIntervalSeconds: 60,
+            },
+            undefined,
+            { OnFrame: (f) => frames1.push(f) },
+            {
+                RunActionForTask: async (ctx) => {
+                    const p = ctx.InputPayload as Record<string, unknown>;
+                    seenIterationsDisp1.push(p['val']);
+                    return {
+                        Success: true,
+                        Output: { processed: p['val'] },
+                        CostUsd: 0.10,
+                        TokensUsed: 100,
+                    };
+                },
+            },
+        );
+
+        const spec: TaskGraphSpec = {
+            workflowName: 'Sequential ForEach Governance Graph',
+            tasks: [
+                {
+                    tempId: 'loop-seq',
+                    name: 'Sequential Loop Step',
+                    description: 'ForEach over 5 items',
+                    kind: 'ForEach',
+                    configuration: {
+                        collectionPath: 'static:["A","B","C","D","E"]',
+                        itemVariable: 'item',
+                        indexVariable: 'idx',
+                        action: {
+                            name: 'StepAction',
+                            params: { val: 'item' },
+                        },
+                    },
+                },
+            ],
+        };
+
+        let parentId = '';
+        let loopTaskId = '';
+        await disp1.Start();
+        try {
+            const service = new TaskGraphService();
+            const subRes = await service.Submit(spec, {
+                EnvironmentID: 'env-1',
+                Provider: provider,
+                ContextUser: TEST_USER,
+                AgentRunID: runIdLoopSeq,
+                LimitsOverride: {
+                    Budgets: {
+                        PerRun: { MaxCostUsd: 0.25, MaxWallClockMs: 60_000 },
+                        AllowedInFlightOvershootUsd: 0,
+                    },
+                },
+            });
+            expect(subRes.Success).toBe(true);
+            parentId = subRes.ParentTaskID!;
+            const children = db.TasksByParent.get(parentId.toLowerCase()) ?? [];
+            expect(children).toHaveLength(1);
+            loopTaskId = children[0].ID;
+
+            await waitUntil(
+                () =>
+                    disp1.Governance.GetGraphDiagnostics(parentId)?.PausedByGovernance === true &&
+                    db.Tasks.get(loopTaskId.toLowerCase())?.Status === 'Pending',
+                5_000,
+                () => disp1.Kick(),
+            );
+
+            // Budget ($0.25) tripped after 3 items ($0.30); items D & E must NOT have run.
+            expect(seenIterationsDisp1).toEqual(['A', 'B', 'C']);
+            const pausedTask = db.Tasks.get(loopTaskId.toLowerCase())!;
+            expect(pausedTask.Status).toBe('Pending');
+            expect(pausedTask.ClaimedBy).toBeNull();
+            const pausedCfg = JSON.parse(pausedTask.Configuration!) as {
+                runtime?: {
+                    governanceCostUsd?: number;
+                    loopCursor?: {
+                        AccumulatedCostUsd: number;
+                        Cursor: { NextIterationIndex: number; CompletedIndices: number[]; PartialResults: unknown[] };
+                    };
+                };
+            };
+            expect(pausedCfg.runtime?.loopCursor?.Cursor.NextIterationIndex).toBe(3);
+            expect(pausedCfg.runtime?.loopCursor?.Cursor.CompletedIndices).toEqual([0, 1, 2]);
+            expect(pausedCfg.runtime?.loopCursor?.AccumulatedCostUsd).toBeCloseTo(0.30, 5);
+            expect(frames1.some((f) => f.Kind === 'TaskCompleted' || f.Kind === 'TaskFailed')).toBe(false);
+        } finally {
+            await disp1.Stop();
+        }
+
+        // Replacement worker (fresh Governance coordinator, zero in-memory state)
+        const disp2 = new TaskGraphDispatcher(
+            { CreateProvider: async () => provider },
+            { RunAgentForTask: async () => ({ Success: true }) },
+            TEST_USER,
+            {
+                InstanceID: 'loop-seq-disp-2',
+                MaxConcurrentTasks: 1,
+                PollIntervalSeconds: 0.01,
+                HeartbeatIntervalSeconds: 60,
+                ReconciliationIntervalSeconds: 60,
+            },
+            undefined,
+            undefined,
+            {
+                RunActionForTask: async (ctx) => {
+                    const p = ctx.InputPayload as Record<string, unknown>;
+                    seenIterationsDisp2.push(p['val']);
+                    return {
+                        Success: true,
+                        Output: { processed: p['val'] },
+                        CostUsd: 0.10,
+                        TokensUsed: 100,
+                    };
+                },
+            },
+        );
+
+        const settlementSpy = vi.spyOn(disp2.Governance, 'RecordNodeSettlementAndEvaluate');
+        await disp2.Start();
+        try {
+            const approveRes = await disp2.Governance.ApproveAndResumePausedGraph({
+                ParentTaskID: parentId,
+                Provider: provider,
+                ContextUser: TEST_USER,
+                BudgetExtension: { NewPerRunMaxCostUsd: 1.0 },
+            });
+            expect(approveRes.Success).toBe(true);
+
+            await waitUntil(
+                () => db.Tasks.get(parentId.toLowerCase())?.Status === 'Complete',
+                5_000,
+                () => disp2.Kick(),
+            );
+
+            // Replacement worker executed ONLY remaining items D & E without replaying A, B, C!
+            expect(seenIterationsDisp2).toEqual(['D', 'E']);
+            const completedLoop = db.Tasks.get(loopTaskId.toLowerCase())!;
+            expect(completedLoop.Status).toBe('Complete');
+            const out = JSON.parse(completedLoop.OutputPayload!) as { results: Array<{ processed: string }> };
+            expect(out.results.map((r) => r.processed)).toEqual(['A', 'B', 'C', 'D', 'E']);
+            const finalCfg = JSON.parse(completedLoop.Configuration!) as {
+                runtime?: { loopCursor?: unknown; iterations?: Array<{ cost?: number }> };
+            };
+            expect(finalCfg.runtime?.loopCursor).toBeUndefined();
+            expect(finalCfg.runtime?.iterations).toHaveLength(5);
+            const settled = await settlementSpy.mock.results[0]?.value;
+            expect(settled?.Ledger?.RunCostUsd).toBeCloseTo(0.50, 5);
+        } finally {
+            await disp2.Stop();
+        }
+    });
+
+    it('CR-LOOP-GOVERNANCE-WIRING (While loop): pauses spinning While loop on ProgressStalled with durable cursor and resumes cleanly on replacement worker after approval', async () => {
+        const db = new GovernanceInMemoryDb();
+        const provider = db.CreateProvider();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation((p) => p as Partial<RunView> as RunView);
+
+        const runIdWhile = '50000000-0000-4000-8000-000000000052';
+        const submitRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', TEST_USER);
+        submitRun.ID = runIdWhile;
+        submitRun.Status = 'Running';
+        await submitRun.Save();
+
+        const disp1Calls: number[] = [];
+        const disp2Calls: number[] = [];
+
+        const disp1 = new TaskGraphDispatcher(
+            { CreateProvider: async () => provider },
+            { RunAgentForTask: async () => ({ Success: true }) },
+            TEST_USER,
+            {
+                InstanceID: 'loop-while-disp-1',
+                MaxConcurrentTasks: 1,
+                PollIntervalSeconds: 0.01,
+                HeartbeatIntervalSeconds: 60,
+                ReconciliationIntervalSeconds: 60,
+            },
+            undefined,
+            undefined,
+            {
+                RunActionForTask: async () => {
+                    disp1Calls.push(disp1Calls.length);
+                    // Identical non-progressing response triggers DeterministicProgressDetector stall
+                    return {
+                        Success: true,
+                        Output: { waiting: true, status: 'unchanged' },
+                        CostUsd: 0.02,
+                        TokensUsed: 500,
+                    };
+                },
+            },
+        );
+
+        const spec: TaskGraphSpec = {
+            workflowName: 'While Loop Progress Stall Graph',
+            tasks: [
+                {
+                    tempId: 'loop-while',
+                    name: 'While Polling Step',
+                    description: 'While loop subject to progress stall',
+                    kind: 'While',
+                    configuration: {
+                        condition: 'payload.done !== true',
+                        maxIterations: 50,
+                        action: {
+                            name: 'StepAction',
+                            params: {},
+                        },
+                    },
+                },
+            ],
+        };
+
+        let parentId = '';
+        let loopTaskId = '';
+        await disp1.Start();
+        try {
+            const service = new TaskGraphService();
+            const subRes = await service.Submit(spec, {
+                EnvironmentID: 'env-1',
+                Provider: provider,
+                ContextUser: TEST_USER,
+                AgentRunID: runIdWhile,
+                LimitsOverride: {
+                    Budgets: { PerRun: { MaxCostUsd: 10.0 } },
+                    ProgressDetector: {
+                        Enabled: true,
+                        MinIterationsBeforeCheck: 4,
+                        WindowSize: 4,
+                        NoPayloadDeltaWindowCount: 3,
+                        FastJudgeEnabled: false,
+                    },
+                },
+            });
+            expect(subRes.Success).toBe(true);
+            parentId = subRes.ParentTaskID!;
+            loopTaskId = (db.TasksByParent.get(parentId.toLowerCase()) ?? [])[0].ID;
+
+            await waitUntil(
+                () =>
+                    disp1.Governance.GetGraphDiagnostics(parentId)?.PausedByGovernance === true &&
+                    db.Tasks.get(loopTaskId.toLowerCase())?.Status === 'Pending',
+                5_000,
+                () => disp1.Kick(),
+            );
+
+            // Paused early at iteration 4 instead of spinning to 50
+            expect(disp1Calls).toHaveLength(4);
+            expect(disp1.Governance.GetGraphDiagnostics(parentId)?.LastProgressResult?.Classification).toBe('Stalled');
+            const pausedTask = db.Tasks.get(loopTaskId.toLowerCase())!;
+            expect(pausedTask.Status).toBe('Pending');
+            const pausedCfg = JSON.parse(pausedTask.Configuration!) as {
+                runtime?: { loopCursor?: { Cursor: { LoopType: string; NextIterationIndex: number; CompletedIndices: number[] } } };
+            };
+            expect(pausedCfg.runtime?.loopCursor?.Cursor.LoopType).toBe('While');
+            expect(pausedCfg.runtime?.loopCursor?.Cursor.NextIterationIndex).toBe(4);
+            expect(pausedCfg.runtime?.loopCursor?.Cursor.CompletedIndices).toEqual([0, 1, 2, 3]);
+        } finally {
+            await disp1.Stop();
+        }
+
+        // Replacement worker now returns progressing result that flips `done: true`
+        const disp2 = new TaskGraphDispatcher(
+            { CreateProvider: async () => provider },
+            { RunAgentForTask: async () => ({ Success: true }) },
+            TEST_USER,
+            {
+                InstanceID: 'loop-while-disp-2',
+                MaxConcurrentTasks: 1,
+                PollIntervalSeconds: 0.01,
+                HeartbeatIntervalSeconds: 60,
+                ReconciliationIntervalSeconds: 60,
+            },
+            undefined,
+            undefined,
+            {
+                RunActionForTask: async () => {
+                    const idx = disp2Calls.length;
+                    disp2Calls.push(idx);
+                    return {
+                        Success: true,
+                        Output: idx === 0 ? { progress: 'step-5' } : { done: true, progress: 'finished' },
+                        CostUsd: 0.02,
+                        TokensUsed: 100,
+                    };
+                },
+            },
+        );
+
+        await disp2.Start();
+        try {
+            const approveRes = await disp2.Governance.ApproveAndResumePausedGraph({
+                ParentTaskID: parentId,
+                Provider: provider,
+                ContextUser: TEST_USER,
+                BudgetExtension: { ResetProgressDetectorWindow: true },
+            });
+            expect(approveRes.Success).toBe(true);
+
+            await waitUntil(
+                () => db.Tasks.get(parentId.toLowerCase())?.Status === 'Complete',
+                5_000,
+                () => disp2.Kick(),
+            );
+
+            expect(disp2Calls).toHaveLength(2);
+            const completedLoop = db.Tasks.get(loopTaskId.toLowerCase())!;
+            expect(completedLoop.Status).toBe('Complete');
+            const out = JSON.parse(completedLoop.OutputPayload!) as { iterations: number; results: unknown[] };
+            expect(out.iterations).toBe(6);
+            expect(out.results).toHaveLength(6);
+        } finally {
+            await disp2.Stop();
+        }
+    });
+
+    it('CR-LOOP-GOVERNANCE-WIRING (parallel ForEach): pauses between parallel batches on budget breach, persists cursor across worker replacement, and completes remaining items without replaying completed indices', async () => {
+        const db = new GovernanceInMemoryDb();
+        const provider = db.CreateProvider();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation((p) => p as Partial<RunView> as RunView);
+
+        const runIdParallel = '50000000-0000-4000-8000-000000000053';
+        const submitRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', TEST_USER);
+        submitRun.ID = runIdParallel;
+        submitRun.Status = 'Running';
+        await submitRun.Save();
+
+        const disp1Items: unknown[] = [];
+        const disp2Items: unknown[] = [];
+
+        const disp1 = new TaskGraphDispatcher(
+            { CreateProvider: async () => provider },
+            { RunAgentForTask: async () => ({ Success: true }) },
+            TEST_USER,
+            {
+                InstanceID: 'loop-par-disp-1',
+                MaxConcurrentTasks: 1,
+                PollIntervalSeconds: 0.01,
+                HeartbeatIntervalSeconds: 60,
+                ReconciliationIntervalSeconds: 60,
+            },
+            undefined,
+            undefined,
+            {
+                RunActionForTask: async (ctx) => {
+                    const p = ctx.InputPayload as Record<string, unknown>;
+                    disp1Items.push(p['val']);
+                    return {
+                        Success: true,
+                        Output: { item: p['val'] },
+                        CostUsd: 0.10,
+                        TokensUsed: 100,
+                    };
+                },
+            },
+        );
+
+        const spec: TaskGraphSpec = {
+            workflowName: 'Parallel ForEach Governance Graph',
+            tasks: [
+                {
+                    tempId: 'loop-par',
+                    name: 'Parallel Loop Step',
+                    description: 'Parallel ForEach over 6 items',
+                    kind: 'ForEach',
+                    configuration: {
+                        collectionPath: 'static:["P0","P1","P2","P3","P4","P5"]',
+                        itemVariable: 'item',
+                        indexVariable: 'idx',
+                        executionMode: 'parallel',
+                        maxConcurrency: 2,
+                        action: {
+                            name: 'StepAction',
+                            params: { val: 'item' },
+                        },
+                    },
+                },
+            ],
+        };
+
+        let parentId = '';
+        let loopTaskId = '';
+        await disp1.Start();
+        try {
+            const service = new TaskGraphService();
+            const subRes = await service.Submit(spec, {
+                EnvironmentID: 'env-1',
+                Provider: provider,
+                ContextUser: TEST_USER,
+                AgentRunID: runIdParallel,
+                LimitsOverride: {
+                    Budgets: {
+                        PerRun: { MaxCostUsd: 0.15, MaxWallClockMs: 60_000 },
+                        AllowedInFlightOvershootUsd: 0,
+                    },
+                },
+            });
+            expect(subRes.Success).toBe(true);
+            parentId = subRes.ParentTaskID!;
+            loopTaskId = (db.TasksByParent.get(parentId.toLowerCase()) ?? [])[0].ID;
+
+            await waitUntil(
+                () =>
+                    disp1.Governance.GetGraphDiagnostics(parentId)?.PausedByGovernance === true &&
+                    db.Tasks.get(loopTaskId.toLowerCase())?.Status === 'Pending',
+                5_000,
+                () => disp1.Kick(),
+            );
+
+            // Batch 0 ([P0, P1]) cost $0.20 >= $0.15, so batches 1 & 2 did NOT launch
+            expect(disp1Items).toHaveLength(2);
+            expect(new Set(disp1Items)).toEqual(new Set(['P0', 'P1']));
+            const pausedTask = db.Tasks.get(loopTaskId.toLowerCase())!;
+            expect(pausedTask.Status).toBe('Pending');
+            const pausedCfg = JSON.parse(pausedTask.Configuration!) as {
+                runtime?: { loopCursor?: { Cursor: { NextIterationIndex: number; CompletedIndices: number[] } } };
+            };
+            expect(pausedCfg.runtime?.loopCursor?.Cursor.CompletedIndices).toEqual([0, 1]);
+            expect(pausedCfg.runtime?.loopCursor?.Cursor.NextIterationIndex).toBe(2);
+        } finally {
+            await disp1.Stop();
+        }
+
+        const disp2 = new TaskGraphDispatcher(
+            { CreateProvider: async () => provider },
+            { RunAgentForTask: async () => ({ Success: true }) },
+            TEST_USER,
+            {
+                InstanceID: 'loop-par-disp-2',
+                MaxConcurrentTasks: 1,
+                PollIntervalSeconds: 0.01,
+                HeartbeatIntervalSeconds: 60,
+                ReconciliationIntervalSeconds: 60,
+            },
+            undefined,
+            undefined,
+            {
+                RunActionForTask: async (ctx) => {
+                    const p = ctx.InputPayload as Record<string, unknown>;
+                    disp2Items.push(p['val']);
+                    return {
+                        Success: true,
+                        Output: { item: p['val'] },
+                        CostUsd: 0.10,
+                        TokensUsed: 100,
+                    };
+                },
+            },
+        );
+
+        const settlementSpy = vi.spyOn(disp2.Governance, 'RecordNodeSettlementAndEvaluate');
+        await disp2.Start();
+        try {
+            const approveRes = await disp2.Governance.ApproveAndResumePausedGraph({
+                ParentTaskID: parentId,
+                Provider: provider,
+                ContextUser: TEST_USER,
+                BudgetExtension: { NewPerRunMaxCostUsd: 1.5 },
+            });
+            expect(approveRes.Success).toBe(true);
+
+            await waitUntil(
+                () => db.Tasks.get(parentId.toLowerCase())?.Status === 'Complete',
+                5_000,
+                () => disp2.Kick(),
+            );
+
+            // Replacement worker executed ONLY remaining items [P2, P3, P4, P5]
+            expect(disp2Items).toHaveLength(4);
+            expect(new Set(disp2Items)).toEqual(new Set(['P2', 'P3', 'P4', 'P5']));
+            const completedLoop = db.Tasks.get(loopTaskId.toLowerCase())!;
+            expect(completedLoop.Status).toBe('Complete');
+            const out = JSON.parse(completedLoop.OutputPayload!) as { results: Array<{ item: string }> };
+            expect(out.results.map((r) => r.item)).toEqual(['P0', 'P1', 'P2', 'P3', 'P4', 'P5']);
+            const finalCfg = JSON.parse(completedLoop.Configuration!) as {
+                runtime?: { loopCursor?: unknown; iterations?: Array<{ cost?: number }> };
+            };
+            expect(finalCfg.runtime?.loopCursor).toBeUndefined();
+            expect(finalCfg.runtime?.iterations).toHaveLength(6);
+            const settled = await settlementSpy.mock.results[0]?.value;
+            expect(settled?.Ledger?.RunCostUsd).toBeCloseTo(0.60, 5);
+        } finally {
+            await disp2.Stop();
         }
     });
 });

@@ -33,6 +33,7 @@ import type {
 import { EscapeSQLString, IsPlainObject, IsValidUUID, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
     AgentUserPolicyEngine,
+    AttachRunawayCheckpointToAgentRun,
     ExtractLimitsDiagnosticsFromRunData,
     ExtractRunawayCheckpointFromAgentRun,
     ExtractRunawayCheckpointFromRunData,
@@ -40,6 +41,7 @@ import {
     type BudgetBreachDetail,
     type BudgetEnforcementResult,
     type BudgetExtensionGrant,
+    type BudgetPausedInterval,
     type BudgetScope,
     type BudgetScopeStatus,
     type CumulativeBudgetLedger,
@@ -53,6 +55,7 @@ import {
     ApplyBudgetExtensionToBudgets,
     BudgetEnforcementGuard,
     ComputeDayBoundaryWindow,
+    ComputeTotalPausedMs,
     DeterministicProgressDetector,
     RunawayCheckpointManager,
     type PauseRunWithCheckpointInput,
@@ -67,6 +70,7 @@ import {
     type PendingGovernanceCheckpointContext,
     type TaskGraphDebugState,
 } from './debug-state';
+import type { LoopIterationBatchOutcome, LoopIterationGovernanceVerdict } from './TaskLoopExecutor';
 import type { TaskGraphGovernanceConfig, TaskGraphObserver } from './types';
 
 interface SettledNodeMetrics {
@@ -109,6 +113,8 @@ interface GraphGovernanceState {
     CheckpointBaselineWallClockMs: number;
     CheckpointBaselineTokens: number;
     CheckpointBaselineNodeIDs: string[];
+    CheckpointBaselineLoopCosts: Map<string, number>;
+    PausedIntervals: BudgetPausedInterval[];
     IncrementalCostUsd: number;
     TokensUsed: number;
     CompletedNodeCount: number;
@@ -620,7 +626,8 @@ export class TaskGraphGovernanceCoordinator {
             CurrentRunCostUsd: totals.SettledCostUsd,
             PriorRunCostUsd: totals.UnattributedPriorCostUsd,
             CurrentRunStartedAtMs: state.StartedAtMs,
-            PriorRunWallClockMs: state.CheckpointBaselineWallClockMs,
+            PriorRunWallClockMs: state.PausedIntervals.length > 0 ? 0 : state.CheckpointBaselineWallClockMs,
+            PausedIntervals: state.PausedIntervals,
             CurrentRunTokens: totals.TotalTokens,
             NowMs: Date.now(),
             Provider: args.Provider,
@@ -669,6 +676,171 @@ export class TaskGraphGovernanceCoordinator {
             DebugStateCache: args.DebugStateCache,
         });
         return evalResult;
+    }
+
+    /**
+     * Evaluates inter-iteration / inter-batch budget and deterministic progress governance for an
+     * in-flight `ForEach` or `While` loop node. When a budget ceiling or stall triggers, durably
+     * pauses the graph and returns `{ ShouldPause: true, Reason }` so the loop stops cleanly at a
+     * safe iteration boundary without marking the task failed or completed.
+     */
+    public async EvaluateLoopIterationGovernance(args: {
+        Provider: IMetadataProvider;
+        ContextUser: UserInfo;
+        Parent: MJTaskEntity | null;
+        Task: MJTaskEntity;
+        LoopType: 'ForEach' | 'While';
+        IterationIndex: number;
+        CompletedIterations: number;
+        AccumulatedLoopCostUsd: number;
+        AccumulatedLoopTokensUsed: number;
+        LivePayload: Record<string, unknown>;
+        LastOutcome?: {
+            Success: boolean;
+            Output?: unknown;
+            ErrorMessage?: string;
+            CostUsd?: number;
+            TokensUsed?: number;
+        };
+        BatchOutcomes?: readonly LoopIterationBatchOutcome[];
+        Observer?: TaskGraphObserver;
+        DebugStateCache?: Map<string, TaskGraphDebugState>;
+    }): Promise<LoopIterationGovernanceVerdict> {
+        const graphID = args.Task.ParentID ?? args.Task.ID;
+        const state = this.getOrCreateState(graphID, args.Parent);
+        if (!state.GovernanceEnabled) {
+            return { ShouldPause: false };
+        }
+
+        const shouldSyncNodes =
+            !state.HydratedFromCheckpoint ||
+            state.KnownChildCount <= TaskGraphGovernanceCoordinator.FULL_SYNC_SMALL_GRAPH_THRESHOLD ||
+            Date.now() - state.LastNodeSyncAtMs >= TaskGraphGovernanceCoordinator.CONCURRENT_SYNC_MIN_INTERVAL_MS;
+        await this.ensureHydratedFromDurableState(args.Provider, state, args.ContextUser, shouldSyncNodes);
+
+        const nodeKey = this.normId(args.Task.ID);
+        if (nodeKey) {
+            state.SettledNodeAccounting.set(nodeKey, {
+                CostUsd: Math.max(0, args.AccumulatedLoopCostUsd),
+                TokensUsed: Math.max(0, args.AccumulatedLoopTokensUsed),
+            });
+        }
+
+        if (state.PausePersistencePending) {
+            await this.FlushPendingPausePersistence(
+                args.Provider,
+                graphID,
+                args.ContextUser,
+                args.Observer,
+                args.DebugStateCache,
+            );
+            return {
+                ShouldPause: true,
+                Reason: state.PendingPauseContext?.Summary ?? 'Graph pause persistence pending',
+                Status: 'PausePersistencePending',
+            };
+        }
+        if (state.PausedByGovernance) {
+            return {
+                ShouldPause: true,
+                Reason: state.LastBudgetResult?.Breach?.Reason ?? state.LastProgressResult?.Reason ?? 'Graph paused by governance',
+                Status: 'Paused',
+            };
+        }
+
+        const totals = this.computeSettlementTotals(state);
+        state.IncrementalCostUsd = totals.SettledCostUsd;
+        state.TokensUsed = totals.TotalTokens;
+
+        const resolvedLimits = this.resolveStateLimits(state);
+        state.LastResolvedLimits = resolvedLimits;
+        const effectiveBudgets = state.ExtendedBudgets ?? resolvedLimits.Budgets;
+
+        const evalResult = await this.budgetGuard.Evaluate({
+            Budgets: effectiveBudgets,
+            AgentRunID: state.SubmittingAgentRunID,
+            UserID: state.UserID,
+            RoutineID: state.RoutineID,
+            CurrentRunCostUsd: totals.SettledCostUsd,
+            PriorRunCostUsd: totals.UnattributedPriorCostUsd,
+            CurrentRunStartedAtMs: state.StartedAtMs,
+            PriorRunWallClockMs: state.PausedIntervals.length > 0 ? 0 : state.CheckpointBaselineWallClockMs,
+            PausedIntervals: state.PausedIntervals,
+            CurrentRunTokens: totals.TotalTokens,
+            NowMs: Date.now(),
+            Provider: args.Provider,
+            ContextUser: args.ContextUser,
+        });
+        state.EvaluationCount++;
+        state.LastBudgetResult = evalResult;
+
+        let pauseReason: RunawayPauseReason | null = null;
+        let pauseSummary = '';
+        if (evalResult.Exceeded && evalResult.Breach) {
+            pauseReason = evalResult.LedgerUnavailable ? 'LedgerUnavailable' : 'BudgetExceeded';
+            pauseSummary = evalResult.Breach.Reason;
+        } else if (this.shouldEvaluateProgress(resolvedLimits)) {
+            const outcomesToRecord: Array<{
+                Index: number;
+                Outcome: { Success: boolean; Output?: unknown; ErrorMessage?: string; CostUsd?: number; TokensUsed?: number };
+            }> = args.BatchOutcomes && args.BatchOutcomes.length > 0
+                ? args.BatchOutcomes.map((b) => ({ Index: b.Index, Outcome: b.Outcome }))
+                : args.LastOutcome
+                    ? [{ Index: args.IterationIndex, Outcome: args.LastOutcome }]
+                    : [];
+
+            for (const entry of outcomesToRecord) {
+                const outcomeText = entry.Outcome.Output !== undefined
+                    ? (typeof entry.Outcome.Output === 'string'
+                        ? entry.Outcome.Output
+                        : JSON.stringify(entry.Outcome.Output))
+                    : (entry.Outcome.ErrorMessage ?? args.Task.Name);
+                const payloadFingerprint = JSON.stringify({
+                    payload: args.LivePayload,
+                    output: entry.Outcome.Output ?? null,
+                });
+                state.ProgressDetector.RecordSample({
+                    IterationIndex: entry.Index + 1,
+                    StepType: args.LoopType,
+                    StepSignature: `${args.LoopType}:${args.Task.Name}:${entry.Index}`,
+                    RecordsCreatedOrChanged: 0,
+                    TasksClosed: 0,
+                    OutputText: outcomeText.slice(0, 2000),
+                    PayloadFingerprint: payloadFingerprint,
+                    TokensSpent: entry.Outcome.TokensUsed ?? (this.config?.DefaultNodeTokens ?? 0),
+                    ErrorSignature: entry.Outcome.Success ? null : (entry.Outcome.ErrorMessage ?? 'iteration-failed'),
+                });
+            }
+
+            if (outcomesToRecord.length > 0) {
+                const prog = state.ProgressDetector.Evaluate(resolvedLimits.ProgressDetector);
+                state.LastProgressResult = prog;
+                if (prog.Checked && prog.Classification === 'Stalled') {
+                    pauseReason = 'ProgressStalled';
+                    pauseSummary = prog.Reason;
+                }
+            }
+        }
+
+        if (!pauseReason) {
+            return { ShouldPause: false };
+        }
+
+        await this.pauseGraphAndPersistCheckpoint({
+            Provider: args.Provider,
+            ContextUser: args.ContextUser,
+            State: state,
+            PauseReason: pauseReason,
+            Summary: pauseSummary,
+            BudgetResult: evalResult,
+            Observer: args.Observer,
+            DebugStateCache: args.DebugStateCache,
+        });
+        return {
+            ShouldPause: true,
+            Reason: pauseSummary,
+            Status: state.PausePersistencePending ? 'PausePersistencePending' : 'Paused',
+        };
     }
 
     /**
@@ -858,6 +1030,9 @@ export class TaskGraphGovernanceCoordinator {
         let checkpointId: string | null = null;
         let extendedBudgets: MJLimitsBudgetsConfig | null = baseBudgets;
         let priorCostUsd = 0;
+        let resumedPausedIntervals: BudgetPausedInterval[] = [];
+        let shouldResetProgressWindow = input.BudgetExtension?.ResetProgressDetectorWindow !== false;
+        const resumeNowMs = Date.now();
 
         if (agentRun) {
             const existingCp = ExtractRunawayCheckpointFromAgentRun(agentRun);
@@ -870,7 +1045,29 @@ export class TaskGraphGovernanceCoordinator {
                     DecisionNotes: input.DecisionNotes ?? null,
                     Provider: input.Provider,
                     ContextUser: input.ContextUser,
+                    NowMs: resumeNowMs,
                 });
+            // Close any open pause interval at the actual resume transition (ApproveCheckpoint leaves it open).
+            const closedIntervals = this.closeOpenIntervalsAtResume(
+                approvedCp.CumulativeLedger.PausedIntervals,
+                approvedCp.PausedAtMs,
+                resumeNowMs,
+            );
+            const hadOpenInterval = approvedCp.CumulativeLedger.PausedIntervals.some(
+                (i) => i.ResumedAtMs === undefined || i.ResumedAtMs === null,
+            );
+            if (hadOpenInterval || approvedCp.CumulativeLedger.PausedIntervals.length === 0) {
+                approvedCp.CumulativeLedger = {
+                    ...approvedCp.CumulativeLedger,
+                    PausedIntervals: closedIntervals,
+                    PausedWallClockMs: ComputeTotalPausedMs(closedIntervals, resumeNowMs),
+                    AsOfISO: new Date(resumeNowMs).toISOString(),
+                };
+                AttachRunawayCheckpointToAgentRun(agentRun, approvedCp);
+                await agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+            }
+            resumedPausedIntervals = closedIntervals;
+            shouldResetProgressWindow = approvedCp.HumanApproval.BudgetExtension?.ResetProgressDetectorWindow !== false;
             checkpointId = approvedCp.CheckpointID;
             priorCostUsd = approvedCp.CumulativeLedger.RunCostUsd;
             extendedBudgets = ApplyBudgetExtensionToBudgets(baseBudgets, approvedCp.HumanApproval.BudgetExtension);
@@ -878,6 +1075,7 @@ export class TaskGraphGovernanceCoordinator {
             const standaloneOutcome = await this.saveStandaloneApprovedCheckpoint(
                 input,
                 parentDebug.pendingCheckpointContext ?? null,
+                resumeNowMs,
             );
             if (!standaloneOutcome.Saved) {
                 return {
@@ -890,6 +1088,8 @@ export class TaskGraphGovernanceCoordinator {
                     Message: standaloneOutcome.ErrorMessage ?? `Failed to persist approval on standalone graph '${input.ParentTaskID}'.`,
                 };
             }
+            resumedPausedIntervals = standaloneOutcome.PausedIntervals;
+            shouldResetProgressWindow = standaloneOutcome.AppliedExtension?.ResetProgressDetectorWindow !== false;
             checkpointId = standaloneOutcome.CheckpointID;
             priorCostUsd = standaloneOutcome.PriorCostUsd;
             extendedBudgets = ApplyBudgetExtensionToBudgets(baseBudgets, standaloneOutcome.AppliedExtension);
@@ -923,10 +1123,14 @@ export class TaskGraphGovernanceCoordinator {
             existingState.CheckpointStatusSyncedInDebug = false;
             existingState.PendingPauseContext = null;
             existingState.ExtendedBudgets = extendedBudgets;
+            existingState.PausedIntervals = resumedPausedIntervals;
             existingState.HydratedFromCheckpoint = true;
             existingState.AgentEntity = agentEntity;
             existingState.UserPolicyEntity = userPolicyEntity;
             existingState.PolicyScopeHydrated = true;
+            if (shouldResetProgressWindow) {
+                existingState.ProgressDetector.Reset();
+            }
         }
 
         KickTaskGraphDispatchers();
@@ -981,6 +1185,10 @@ export class TaskGraphGovernanceCoordinator {
                 checkpointedNodesCost += entry.CostUsd;
             }
         }
+        for (const [loopNodeKey, prePauseCost] of state.CheckpointBaselineLoopCosts.entries()) {
+            const entry = state.SettledNodeAccounting.get(loopNodeKey);
+            checkpointedNodesCost += entry ? Math.min(entry.CostUsd, prePauseCost) : prePauseCost;
+        }
         const unattributedPriorCostUsd = Math.max(0, state.CheckpointBaselineCostUsd - checkpointedNodesCost);
         return {
             SettledCostUsd: settledCostUsd,
@@ -1023,6 +1231,8 @@ export class TaskGraphGovernanceCoordinator {
             CheckpointBaselineWallClockMs: 0,
             CheckpointBaselineTokens: 0,
             CheckpointBaselineNodeIDs: [],
+            CheckpointBaselineLoopCosts: new Map<string, number>(),
+            PausedIntervals: [],
             IncrementalCostUsd: 0,
             TokensUsed: 0,
             CompletedNodeCount: 0,
@@ -1288,12 +1498,22 @@ export class TaskGraphGovernanceCoordinator {
                     cp.CumulativeLedger.RunWallClockMs,
                 );
                 state.CheckpointBaselineTokens = Math.max(state.CheckpointBaselineTokens, cp.CumulativeLedger.RunTokens);
+                if (cp.CumulativeLedger.PausedIntervals.length > 0) {
+                    state.PausedIntervals = cp.CumulativeLedger.PausedIntervals.map((p) => ({ ...p }));
+                }
                 if (cp.Status === 'Paused') {
                     state.CheckpointPersisted = true;
                     if (durableDebug.checkpointPersisted !== false) {
                         state.PausedByGovernance = true;
                     }
                     return cp;
+                }
+                if (cp.Status === 'Approved' && state.PausedIntervals.some((p) => p.ResumedAtMs == null)) {
+                    state.PausedIntervals = this.closeOpenIntervalsAtResume(
+                        state.PausedIntervals,
+                        Date.parse(cp.PausedAtISO) || Date.now(),
+                        Date.now(),
+                    );
                 }
             }
             if (this.isGovernanceDebugPause(durableDebug) && durableDebug.checkpointPersisted !== false) {
@@ -1349,6 +1569,9 @@ export class TaskGraphGovernanceCoordinator {
                 cp.CumulativeLedger.RunWallClockMs,
             );
             state.CheckpointBaselineTokens = Math.max(state.CheckpointBaselineTokens, cp.CumulativeLedger.RunTokens);
+            if (cp.CumulativeLedger.PausedIntervals.length > 0) {
+                state.PausedIntervals = cp.CumulativeLedger.PausedIntervals.map((p) => ({ ...p }));
+            }
 
             if (run.Status === 'Paused' && cp.HumanApproval.Status !== 'Approved') {
                 // Fail closed across restarts: an unapproved paused checkpoint blocks dispatch even if debug flag cleared.
@@ -1357,6 +1580,13 @@ export class TaskGraphGovernanceCoordinator {
                 return;
             }
             if (cp.HumanApproval.Status === 'Approved') {
+                if (state.PausedIntervals.some((p) => p.ResumedAtMs == null)) {
+                    state.PausedIntervals = this.closeOpenIntervalsAtResume(
+                        state.PausedIntervals,
+                        cp.PausedAtMs,
+                        Date.now(),
+                    );
+                }
                 state.PausedByGovernance = false;
             }
         } catch (err) {
@@ -1507,11 +1737,26 @@ export class TaskGraphGovernanceCoordinator {
         rows: readonly Pick<ProjectedTaskSettlementRow, 'ID' | 'Status' | 'Configuration'>[],
     ): void {
         for (const row of rows) {
-            if (!row?.ID || (row.Status !== 'Complete' && row.Status !== 'Failed')) {
+            if (!row?.ID) {
                 continue;
             }
             const nodeKey = this.normId(row.ID);
             if (!nodeKey) {
+                continue;
+            }
+            if (row.Status === 'Pending') {
+                const pausedLoopMetrics = this.extractPausedLoopMetrics(row.Configuration);
+                if (pausedLoopMetrics) {
+                    if (!state.SettledNodeAccounting.has(nodeKey)) {
+                        state.SettledNodeAccounting.set(nodeKey, pausedLoopMetrics);
+                    }
+                    if (!state.CheckpointBaselineLoopCosts.has(nodeKey)) {
+                        state.CheckpointBaselineLoopCosts.set(nodeKey, pausedLoopMetrics.CostUsd);
+                    }
+                }
+                continue;
+            }
+            if (row.Status !== 'Complete' && row.Status !== 'Failed') {
                 continue;
             }
             if (!state.CompletedNodeSet.has(nodeKey)) {
@@ -1532,6 +1777,26 @@ export class TaskGraphGovernanceCoordinator {
         const totals = this.computeSettlementTotals(state);
         state.IncrementalCostUsd = totals.SettledCostUsd;
         state.TokensUsed = totals.TotalTokens;
+    }
+
+    private extractPausedLoopMetrics(configurationJson: string | null | undefined): SettledNodeMetrics | null {
+        if (typeof configurationJson !== 'string' || configurationJson.trim().length === 0) {
+            return null;
+        }
+        const parsed = SafeJSONParse<Record<string, RunawayJsonValue>>(configurationJson);
+        if (!IsPlainObject(parsed)) {
+            return null;
+        }
+        const runtime = parsed['runtime'];
+        if (!IsPlainObject(runtime) || !IsPlainObject(runtime['loopCursor'])) {
+            return null;
+        }
+        const cursor = runtime['loopCursor'];
+        const costRaw = cursor['AccumulatedCostUsd'] ?? runtime['governanceCostUsd'];
+        const tokensRaw = cursor['AccumulatedTokensUsed'] ?? runtime['governanceTokensUsed'];
+        const cost = typeof costRaw === 'number' && Number.isFinite(costRaw) ? Math.max(0, costRaw) : 0;
+        const tokens = typeof tokensRaw === 'number' && Number.isFinite(tokensRaw) ? Math.max(0, tokensRaw) : 0;
+        return { CostUsd: cost, TokensUsed: tokens };
     }
 
     private extractPersistedNodeMetrics(configurationJson: string | null | undefined): SettledNodeMetrics | null {
@@ -1572,6 +1837,10 @@ export class TaskGraphGovernanceCoordinator {
         const { State } = args;
         if (State.PausedByGovernance && State.CheckpointPersisted && State.DebugFieldsPersisted) {
             return;
+        }
+        const pauseNowMs = Date.now();
+        if (!State.PausedIntervals.some((p) => p.ResumedAtMs === undefined || p.ResumedAtMs === null)) {
+            State.PausedIntervals = [...State.PausedIntervals, { PausedAtMs: pauseNowMs, ResumedAtMs: null }];
         }
         // Fail-closed claim barrier immediately: IsLocallyPaused / IsGraphBlockedByGovernance block new claims
         // while PausedByGovernance remains false until BOTH debug fields and checkpoint persistence succeed.
@@ -1964,17 +2233,25 @@ export class TaskGraphGovernanceCoordinator {
             if (!(await parentTask.Load(state.GraphID))) {
                 return `Standalone root task '${state.GraphID}' could not be loaded`;
             }
-            const dayWin = ComputeDayBoundaryWindow(Date.now(), pending.BudgetResult.Ledger.DayBoundaryTimezone || 'UTC');
+            const nowMs = Date.now();
+            const dayWin = ComputeDayBoundaryWindow(nowMs, pending.BudgetResult.Ledger.DayBoundaryTimezone || 'UTC');
+            const openIntervals = pending.BudgetResult.Ledger.PausedIntervals.some(
+                (p) => p.ResumedAtMs === undefined || p.ResumedAtMs === null,
+            )
+                ? pending.BudgetResult.Ledger.PausedIntervals.map((p) => ({ ...p }))
+                : [...pending.BudgetResult.Ledger.PausedIntervals.map((p) => ({ ...p })), { PausedAtMs: nowMs, ResumedAtMs: null }];
             const checkpoint: StandaloneGraphGovernanceCheckpointState = {
                 CheckpointID: randomUUID(),
                 Status: 'Paused',
                 PauseReason: pending.PauseReason,
                 Summary: pending.Summary,
-                PausedAtISO: pending.BudgetResult.Ledger.AsOfISO || new Date().toISOString(),
+                PausedAtISO: pending.BudgetResult.Ledger.AsOfISO || new Date(nowMs).toISOString(),
                 CompletedNodeCount: state.CompletedNodeCount,
                 CompletedNodeIDs: [...state.CompletedNodeIDs],
                 CumulativeLedger: {
                     ...pending.BudgetResult.Ledger,
+                    PausedIntervals: openIntervals,
+                    PausedWallClockMs: ComputeTotalPausedMs(openIntervals, nowMs),
                     DayBucketUTC: dayWin.DayBucketUTC,
                 },
                 ...(pending.BudgetResult.Breach ? { BudgetBreach: pending.BudgetResult.Breach } : {}),
@@ -1993,11 +2270,13 @@ export class TaskGraphGovernanceCoordinator {
     private async saveStandaloneApprovedCheckpoint(
         input: ApproveAndResumePausedGraphInput,
         pendingDebugContext: PendingGovernanceCheckpointContext | null,
+        resumeNowMs: number = Date.now(),
     ): Promise<{
         Saved: boolean;
         CheckpointID: string | null;
         PriorCostUsd: number;
         AppliedExtension: BudgetExtensionGrant | undefined;
+        PausedIntervals: BudgetPausedInterval[];
         ErrorMessage?: string;
     }> {
         try {
@@ -2008,16 +2287,24 @@ export class TaskGraphGovernanceCoordinator {
                     CheckpointID: null,
                     PriorCostUsd: 0,
                     AppliedExtension: input.BudgetExtension,
+                    PausedIntervals: [],
                     ErrorMessage: `Standalone root task '${input.ParentTaskID}' could not be loaded.`,
                 };
             }
             const existingCp = this.extractStandaloneCheckpointFromConfiguration(parentTask.Configuration);
             if (existingCp?.Status === 'Approved' && !input.BudgetExtension && !input.DecisionNotes) {
+                const pausedAtFallback = Date.parse(existingCp.PausedAtISO) || resumeNowMs;
+                const closed = this.closeOpenIntervalsAtResume(
+                    existingCp.CumulativeLedger.PausedIntervals,
+                    pausedAtFallback,
+                    resumeNowMs,
+                );
                 return {
                     Saved: true,
                     CheckpointID: existingCp.CheckpointID,
                     PriorCostUsd: existingCp.CumulativeLedger.RunCostUsd,
                     AppliedExtension: existingCp.BudgetExtension,
+                    PausedIntervals: closed,
                 };
             }
             const fallbackLedger: CumulativeBudgetLedger = pendingDebugContext?.cumulativeLedger ?? {
@@ -2030,26 +2317,38 @@ export class TaskGraphGovernanceCoordinator {
                 UserDailyWallClockMs: 0,
                 PausedWallClockMs: 0,
                 PausedIntervals: [],
-                DayBucketUTC: new Date().toISOString().slice(0, 10),
+                DayBucketUTC: new Date(resumeNowMs).toISOString().slice(0, 10),
                 DayBoundaryTimezone: 'UTC',
-                AsOfISO: new Date().toISOString(),
+                AsOfISO: new Date(resumeNowMs).toISOString(),
             };
+            const baseLedger = existingCp?.CumulativeLedger ?? fallbackLedger;
+            const pausedAtFallback = Date.parse(existingCp?.PausedAtISO ?? pendingDebugContext?.pausedAtIso ?? '') || resumeNowMs;
+            const closedIntervals = this.closeOpenIntervalsAtResume(
+                baseLedger.PausedIntervals,
+                pausedAtFallback,
+                resumeNowMs,
+            );
             const appliedExtension = input.BudgetExtension ?? existingCp?.BudgetExtension;
             const approvedCp: StandaloneGraphGovernanceCheckpointState = {
                 CheckpointID: existingCp?.CheckpointID || randomUUID(),
                 Status: 'Approved',
                 PauseReason: existingCp?.PauseReason ?? pendingDebugContext?.reason ?? 'BudgetExceeded',
                 Summary: existingCp?.Summary ?? pendingDebugContext?.reasonDetail ?? 'Standalone graph governance pause',
-                PausedAtISO: existingCp?.PausedAtISO ?? pendingDebugContext?.pausedAtIso ?? new Date().toISOString(),
+                PausedAtISO: existingCp?.PausedAtISO ?? pendingDebugContext?.pausedAtIso ?? new Date(resumeNowMs).toISOString(),
                 CompletedNodeCount: existingCp?.CompletedNodeCount ?? pendingDebugContext?.pausedAtIteration ?? 0,
                 CompletedNodeIDs: existingCp?.CompletedNodeIDs ?? pendingDebugContext?.completedTaskIds ?? [],
-                CumulativeLedger: existingCp?.CumulativeLedger ?? fallbackLedger,
+                CumulativeLedger: {
+                    ...baseLedger,
+                    PausedIntervals: closedIntervals,
+                    PausedWallClockMs: ComputeTotalPausedMs(closedIntervals, resumeNowMs),
+                    AsOfISO: new Date(resumeNowMs).toISOString(),
+                },
                 ...(existingCp?.BudgetBreach
                     ? { BudgetBreach: existingCp.BudgetBreach }
                     : pendingDebugContext?.budgetBreach
                         ? { BudgetBreach: pendingDebugContext.budgetBreach }
                         : {}),
-                ApprovedAtISO: new Date().toISOString(),
+                ApprovedAtISO: new Date(resumeNowMs).toISOString(),
                 ApprovedByUserID: input.ApprovedByUserID ?? input.ContextUser.ID,
                 ...(appliedExtension ? { BudgetExtension: appliedExtension } : {}),
                 DecisionNotes: input.DecisionNotes ?? existingCp?.DecisionNotes ?? null,
@@ -2061,6 +2360,7 @@ export class TaskGraphGovernanceCoordinator {
                     CheckpointID: approvedCp.CheckpointID,
                     PriorCostUsd: approvedCp.CumulativeLedger.RunCostUsd,
                     AppliedExtension: appliedExtension,
+                    PausedIntervals: closedIntervals,
                     ErrorMessage: parentTask.LatestResult?.CompleteMessage || `Failed to save approval on standalone task '${input.ParentTaskID}'.`,
                 };
             }
@@ -2069,6 +2369,7 @@ export class TaskGraphGovernanceCoordinator {
                 CheckpointID: approvedCp.CheckpointID,
                 PriorCostUsd: approvedCp.CumulativeLedger.RunCostUsd,
                 AppliedExtension: appliedExtension,
+                PausedIntervals: closedIntervals,
             };
         } catch (err) {
             return {
@@ -2076,9 +2377,27 @@ export class TaskGraphGovernanceCoordinator {
                 CheckpointID: null,
                 PriorCostUsd: 0,
                 AppliedExtension: input.BudgetExtension,
+                PausedIntervals: [],
                 ErrorMessage: err instanceof Error ? err.message : String(err),
             };
         }
+    }
+
+    private closeOpenIntervalsAtResume(
+        existing: readonly BudgetPausedInterval[],
+        pausedAtFallbackMs: number,
+        resumedAtMs: number,
+    ): BudgetPausedInterval[] {
+        if (!existing || existing.length === 0) {
+            return pausedAtFallbackMs < resumedAtMs
+                ? [{ PausedAtMs: pausedAtFallbackMs, ResumedAtMs: resumedAtMs }]
+                : [];
+        }
+        return existing.map((interval) =>
+            interval.ResumedAtMs === undefined || interval.ResumedAtMs === null
+                ? { PausedAtMs: interval.PausedAtMs, ResumedAtMs: resumedAtMs }
+                : { ...interval },
+        );
     }
 
     private async persistPauseCheckpointIfNeeded(

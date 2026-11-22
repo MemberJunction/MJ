@@ -10,9 +10,10 @@
  * @module @memberjunction/ai-agents
  */
 
+import { randomUUID } from 'node:crypto';
 import { BaseLLM } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
-import { LimitsConfigResolver, LogStatus, UserInfo, type MJLimitsProgressDetectorConfig } from '@memberjunction/core';
+import { LimitsConfigResolver, LogError, LogStatus, UserInfo, type MJLimitsProgressDetectorConfig } from '@memberjunction/core';
 import {
     AppendProgressDiagnosticToRunData,
     type AIPromptExecutionScope,
@@ -29,6 +30,19 @@ export type FastConvergenceJudgeEvaluator = (input: {
     Signal?: AbortSignal;
 }) => Promise<FastConvergenceJudgeResult>;
 
+/** Billable usage settlement emitted when a timed-out judge invocation finishes after its deadline. */
+export interface FastJudgeUsageSettlement {
+    InvocationId: string;
+    Iteration: number;
+    CostUsd: number;
+    TokensUsed: number;
+    TimedOut: boolean;
+    SettledAfterDeadline: boolean;
+}
+
+/** Callback invoked when a timed-out judge call settles after the bounded decision deadline. */
+export type FastJudgeLateUsageHandler = (settlement: FastJudgeUsageSettlement) => void | Promise<void>;
+
 /** Input parameters for {@link FastConvergenceJudge.EvaluateIfAmbiguous}. */
 export interface FastJudgeEvaluateInput {
     DetectorResult: ProgressEvaluationResult;
@@ -40,6 +54,7 @@ export interface FastJudgeEvaluateInput {
     ContextUser?: UserInfo;
     ExecutionScope?: AIPromptExecutionScope;
     Evaluator?: FastConvergenceJudgeEvaluator;
+    OnLateUsageSettled?: FastJudgeLateUsageHandler;
     NowMs?: number;
 }
 
@@ -52,14 +67,47 @@ const FAST_JUDGE_REASON_MAX_CHARS = 240; // Tuning: cap diagnostic reason length
 export class FastConvergenceJudge {
     private lastEvaluatedIteration: number | null = null;
     private readonly decisionService: AgentDecisionService;
+    private readonly pendingLateUsages: FastJudgeUsageSettlement[] = [];
+    private readonly activeEvaluations = new Set<Promise<void>>();
+    private readonly reconciledInvocationIds = new Set<string>();
+    private onLateUsageSettled?: FastJudgeLateUsageHandler;
 
-    constructor(decisionService?: AgentDecisionService) {
+    constructor(decisionService?: AgentDecisionService, onLateUsageSettled?: FastJudgeLateUsageHandler) {
         this.decisionService = decisionService ?? new AgentDecisionService();
+        this.onLateUsageSettled = onLateUsageSettled;
+    }
+
+    /** Registers or updates the default handler invoked when timed-out judge evaluations settle late. */
+    public SetOnLateUsageSettled(handler: FastJudgeLateUsageHandler | undefined): void {
+        this.onLateUsageSettled = handler;
+    }
+
+    /** Drains any queued late-usage settlements that settled after timeout without a callback consumer. */
+    public DrainPendingLateUsage(): FastJudgeUsageSettlement[] {
+        if (this.pendingLateUsages.length === 0) {
+            return [];
+        }
+        return this.pendingLateUsages.splice(0, this.pendingLateUsages.length);
+    }
+
+    /** Awaits all background late-settling evaluator promises (primarily for clean shutdown and tests). */
+    public async WaitForPendingEvaluations(): Promise<void> {
+        if (this.activeEvaluations.size === 0) {
+            return;
+        }
+        await Promise.allSettled([...this.activeEvaluations]);
     }
 
     /** Resets cooldown tracking (e.g. when resetting progress window on human resume). */
     public ResetCooldown(): void {
         this.lastEvaluatedIteration = null;
+    }
+
+    /** Clears pending late usage and invocation tracking (e.g. when resetting judge state for a new run). */
+    public ResetTracking(): void {
+        this.lastEvaluatedIteration = null;
+        this.pendingLateUsages.length = 0;
+        this.reconciledInvocationIds.clear();
     }
 
     /**
@@ -119,15 +167,34 @@ export class FastConvergenceJudge {
         input: FastJudgeEvaluateInput,
         config: MJLimitsProgressDetectorConfig,
     ): Promise<FastConvergenceJudgeResult> {
+        const invocationId = randomUUID();
         const timeoutMs = Math.max(1, config.FastJudgeTimeoutMs);
         const boundedSummary = input.StateSummary.slice(0, Math.max(1, config.FastJudgeMaxInputChars));
         const startMs = Date.now();
         const abortController = new AbortController();
         let timerId: ReturnType<typeof setTimeout> | undefined;
+        let deadlineExpired = false;
 
         const evaluationPromise = this.invokeEvaluator(input, boundedSummary, abortController.signal);
+        const lateSettlementTracker = evaluationPromise
+            .then((settled) => {
+                if (!deadlineExpired) {
+                    return;
+                }
+                this.recordLateUsageIfNeeded(invocationId, input.Iteration, settled, input.OnLateUsageSettled);
+            })
+            .catch((err) => {
+                const msg = err instanceof Error ? err.message : String(err);
+                LogError(`[FastConvergenceJudge] Late evaluator settlement tracking error: ${msg}`);
+            })
+            .finally(() => {
+                this.activeEvaluations.delete(lateSettlementTracker);
+            });
+        this.activeEvaluations.add(lateSettlementTracker);
+
         const timeoutPromise = new Promise<FastConvergenceJudgeResult>((resolve) => {
             timerId = setTimeout(() => {
+                deadlineExpired = true;
                 if (!abortController.signal.aborted) {
                     abortController.abort(`FastConvergenceJudge exceeded ${timeoutMs}ms budget`);
                 }
@@ -146,8 +213,12 @@ export class FastConvergenceJudge {
 
         try {
             const result = await Promise.race([evaluationPromise, timeoutPromise]);
+            if (!deadlineExpired) {
+                this.reconciledInvocationIds.add(invocationId);
+            }
             return {
                 ...result,
+                InvocationId: invocationId,
                 Reason: this.truncateReason(result.Reason),
                 LatencyMs: Math.min(timeoutMs, Math.max(0, result.LatencyMs || Date.now() - startMs)),
             };
@@ -156,6 +227,52 @@ export class FastConvergenceJudge {
                 clearTimeout(timerId);
             }
         }
+    }
+
+    private recordLateUsageIfNeeded(
+        invocationId: string,
+        iteration: number,
+        settled: FastConvergenceJudgeResult,
+        inlineHandler?: FastJudgeLateUsageHandler,
+    ): void {
+        if (this.reconciledInvocationIds.has(invocationId)) {
+            return;
+        }
+        const costUsd = typeof settled.CostUsd === 'number' && Number.isFinite(settled.CostUsd)
+            ? Math.max(0, settled.CostUsd)
+            : 0;
+        const tokensUsed = typeof settled.TokensUsed === 'number' && Number.isFinite(settled.TokensUsed)
+            ? Math.max(0, settled.TokensUsed)
+            : 0;
+        if (costUsd <= 0 && tokensUsed <= 0) {
+            return;
+        }
+        this.reconciledInvocationIds.add(invocationId);
+        const settlement: FastJudgeUsageSettlement = {
+            InvocationId: invocationId,
+            Iteration: iteration,
+            CostUsd: costUsd,
+            TokensUsed: tokensUsed,
+            TimedOut: true,
+            SettledAfterDeadline: true,
+        };
+        const handler = inlineHandler ?? this.onLateUsageSettled;
+        if (handler) {
+            try {
+                const res = handler(settlement);
+                if (res && typeof (res as Promise<void>).catch === 'function') {
+                    void (res as Promise<void>).catch((err) => {
+                        const msg = err instanceof Error ? err.message : String(err);
+                        LogError(`[FastConvergenceJudge] OnLateUsageSettled handler failed: ${msg}`);
+                    });
+                }
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                LogError(`[FastConvergenceJudge] OnLateUsageSettled handler threw: ${msg}`);
+            }
+            return;
+        }
+        this.pendingLateUsages.push(settlement);
     }
 
     private async invokeEvaluator(

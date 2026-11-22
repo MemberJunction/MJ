@@ -112,7 +112,12 @@ import {
     ParseTaskGraphDebugState,
     type TaskGraphDebugState,
 } from './debug-state';
-import { RunForEachLoop, RunWhileLoop, type LoopBodyInvoker } from './TaskLoopExecutor';
+import {
+    RunForEachLoop,
+    RunWhileLoop,
+    type LoopBodyInvoker,
+    type LoopExecutionOptions,
+} from './TaskLoopExecutor';
 import { RegisterTaskGraphKick } from './task-graph-kick';
 import {
     BuildCompensationEscalationSummary,
@@ -278,6 +283,9 @@ import {
  */
 type TaskBodyOutcome = {
     Success: boolean;
+    Paused?: boolean;
+    PauseReason?: string;
+    LoopCursorState?: NonNullable<TaskStepConfiguration['runtime']>['loopCursor'];
     Output?: unknown;
     ErrorMessage?: string;
     AgentRunID?: string | null;
@@ -1404,6 +1412,10 @@ export class TaskGraphDispatcher implements IShutdownable {
             // attempt on the row, so the retry survives this process and runs on whichever instance
             // is free once its moment comes — and nothing downstream reacts to a failure that may
             // still succeed.
+            if (result.Paused) {
+                await this.persistPausedLoopTask(provider, taskID, result);
+                return;
+            }
             if (!result.Success && await this.scheduleRetryIfAllowed(provider, task, result, ownerUserID)) {
                 return;
             }
@@ -1426,6 +1438,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                         result.ActionInput,
                         governanceMetrics?.CostUsd,
                         governanceMetrics?.TokensUsed,
+                        null,
                     ),
                 },
                 this.contextUser,
@@ -4267,7 +4280,16 @@ export class TaskGraphDispatcher implements IShutdownable {
         // it a mapping like `RecordID: data.ID` reached the action as the literal "data.ID".
         const context = await this.graphContext(provider, task, prehydrated);
         const nodeEnvelope = this.nodeEnvelope(task, context, prehydrated);
-        const outcome = await this.runTaskBodyOfKind(task, provider, rawPayload, dependencyOutputs, context, nodeEnvelope, onProgress);
+        const outcome = await this.runTaskBodyOfKind(
+            task,
+            provider,
+            rawPayload,
+            dependencyOutputs,
+            context,
+            nodeEnvelope,
+            onProgress,
+            prehydrated?.parentTask ?? null,
+        );
         return { ...outcome, IsOutputTainted: this.inputTaintOf(nodeEnvelope) || outcome.IsOutputTainted === true };
     }
 
@@ -4280,6 +4302,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         context: GraphContext,
         nodeEnvelope: { Envelope: TaskSecurityEnvelope | undefined } | { Refusal: string },
         onProgress?: TaskRunProgressCallback,
+        parentTask?: MJTaskEntity | null,
     ): Promise<TaskBodyOutcome> {
         const config = task.ConfigurationObject;
 
@@ -4287,7 +4310,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         // through the very same runners as a one-shot step.
         if (task.StepType === 'ForEach' || task.StepType === 'While') {
             return {
-                ...await this.runLoopTask(task, provider, rawPayload, dependencyOutputs, context, nodeEnvelope),
+                ...await this.runLoopTask(task, provider, rawPayload, dependencyOutputs, context, nodeEnvelope, parentTask),
                 PayloadAtStart: rawPayload,
             };
         }
@@ -5075,6 +5098,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         dependencyOutputs: Map<string, unknown>,
         graphContext: GraphContext,
         startEnvelope: { Envelope: TaskSecurityEnvelope | undefined } | { Refusal: string },
+        parentTask?: MJTaskEntity | null,
     ): Promise<TaskBodyOutcome> {
         const config = task.ConfigurationObject as TaskStepConfiguration | null;
         const op = task.StepType === 'ForEach' ? config?.forEach : config?.while;
@@ -5109,12 +5133,16 @@ export class TaskGraphDispatcher implements IShutdownable {
         if ('Refusal' in startEnvelope) {
             return this.refusedNode(task, startEnvelope.Refusal);
         }
+        const savedCursor = config?.runtime?.loopCursor;
         // Monotonic across passes as well as across nodes: once a pass reports tainted output, every
         // later pass reads it through the running payload, so it runs tainted too.
         let loopEnvelope = startEnvelope.Envelope;
         const markLoopTainted = (): void => {
             loopEnvelope = WithInputTaint(loopEnvelope, true);
         };
+        if (savedCursor?.IsOutputTainted) {
+            markLoopTainted();
+        }
         const executionProvider = provider;
 
         // Pre-resolve ActionIDs once for multi-step action bodies (`op.steps[]`). Submit stamps
@@ -5144,13 +5172,21 @@ export class TaskGraphDispatcher implements IShutdownable {
         // become false: the loop burned every iteration re-examining the original input and always
         // took the give-up branch, making the other branch unreachable. The loop ran, reported
         // success, and its result was predetermined.
-        let livePayload: Record<string, unknown> = { ...payload };
+        let livePayload: Record<string, unknown> = savedCursor?.LivePayload
+            ? { ...savedCursor.LivePayload }
+            : { ...payload };
 
         // One entry per pass, so the loop's work exists somewhere the platform can see it. Without
         // this a loop is a single childless node: the run tree reaches nested work through six links
         // and an iteration is none of them, so the passes were invisible to the timeline AND their
         // spend was missing from the settlement rollup. See ITaskStepRuntime.iterations.
-        const iterationTrace: MJTaskEntity_ITaskLoopIteration[] = [];
+        const iterationTrace: MJTaskEntity_ITaskLoopIteration[] = savedCursor?.IterationTrace
+            ? [...savedCursor.IterationTrace]
+            : [];
+
+        const graphID = task.ParentID ?? task.ID;
+        let accumulatedCostUsd = savedCursor?.AccumulatedCostUsd ?? 0;
+        let accumulatedTokensUsed = savedCursor?.AccumulatedTokensUsed ?? 0;
 
         // Bounds what the trace's payloads may cost. The pointers are never budgeted — those are the
         // durable record of the work and must survive whatever the payloads do.
@@ -5159,9 +5195,23 @@ export class TaskGraphDispatcher implements IShutdownable {
             task.StepType === 'ForEach' && (op as ForEachOperation).executionMode === 'parallel';
         const deferredFoldsByIndex = new Map<number, LoopStepFold[]>();
 
+        const recordIterationMetrics = (outcome: { CostUsd?: number; TokensUsed?: number }): { CostUsd: number; TokensUsed: number } => {
+            const resolvedMetrics = this.governance?.ResolveNodeSettlementMetrics(
+                graphID,
+                parentTask ?? null,
+                outcome.CostUsd,
+                outcome.TokensUsed,
+            );
+            const iterCost = resolvedMetrics?.CostUsd ?? outcome.CostUsd ?? 0;
+            const iterTokens = resolvedMetrics?.TokensUsed ?? outcome.TokensUsed ?? 0;
+            accumulatedCostUsd += iterCost;
+            accumulatedTokensUsed += iterTokens;
+            return { CostUsd: iterCost, TokensUsed: iterTokens };
+        };
+
         const invokeBody: LoopBodyInvoker = async ({ Index, Bindings }) => {
             if (multiSteps && stepActionIds) {
-                return this.executeMultiStepLoopPass({
+                const multiOutcome = await this.executeMultiStepLoopPass({
                     task,
                     op,
                     steps: multiSteps,
@@ -5181,6 +5231,12 @@ export class TaskGraphDispatcher implements IShutdownable {
                     securityEnvelope: loopEnvelope,
                     onIterationTainted: markLoopTainted,
                 });
+                const metrics = recordIterationMetrics(multiOutcome);
+                return {
+                    ...multiOutcome,
+                    CostUsd: metrics.CostUsd,
+                    TokensUsed: metrics.TokensUsed,
+                };
             }
 
             // Bindings go INTO `iterationPayload` AND are passed explicitly to `ResolveLoopBodyParams`,
@@ -5205,10 +5261,23 @@ export class TaskGraphDispatcher implements IShutdownable {
              * still ran the passes before it, and their runs are real spend that must not vanish
              * because the loop as a whole did not finish.
              */
-            const absorb = <T extends { Success: boolean; Output?: unknown; ErrorMessage?: string; PromptRunID?: string; AgentRunID?: string; ActionLogID?: string; IsOutputTainted?: boolean }>(outcome: T, bodyInput: unknown): T => {
+            const absorb = <
+                T extends {
+                    Success: boolean;
+                    Output?: unknown;
+                    ErrorMessage?: string;
+                    PromptRunID?: string;
+                    AgentRunID?: string;
+                    ActionLogID?: string;
+                    IsOutputTainted?: boolean;
+                    CostUsd?: number;
+                    TokensUsed?: number;
+                },
+            >(outcome: T, bodyInput: unknown): T => {
                 if (outcome.IsOutputTainted) {
                     markLoopTainted();
                 }
+                const metrics = recordIterationMetrics(outcome);
                 livePayload = this.foldIterationOutput(task, livePayload, outcome.Output, bodyOutputMapping);
                 iterationTrace.push({
                     index: Index,
@@ -5239,7 +5308,11 @@ export class TaskGraphDispatcher implements IShutdownable {
                     success: outcome.Success,
                     errorMessage: outcome.ErrorMessage,
                 });
-                return outcome;
+                return {
+                    ...outcome,
+                    CostUsd: metrics.CostUsd,
+                    TokensUsed: metrics.TokensUsed,
+                };
             };
 
             // A prompt body is checked FIRST because it is the only one whose id lives in its own
@@ -5313,8 +5386,46 @@ export class TaskGraphDispatcher implements IShutdownable {
         };
 
         const evaluator = this.conditionEvaluator ?? new DispatcherConditionEvaluator();
+        const loopOptions: LoopExecutionOptions = {
+            ...(savedCursor?.Cursor ? { ResumeFromCursor: savedCursor.Cursor } : {}),
+            OnIterationGovernance: async (info) => {
+                if (isParallelForEach && info.BatchOutcomes && info.BatchOutcomes.length > 0) {
+                    const batchIndices = info.BatchOutcomes
+                        .map((b) => b.Index)
+                        .sort((a, b) => a - b);
+                    for (const idx of batchIndices) {
+                        const folds = deferredFoldsByIndex.get(idx);
+                        if (folds) {
+                            for (const fold of folds) {
+                                livePayload = this.foldIterationOutput(task, livePayload, fold.Output, fold.Mapping);
+                            }
+                            deferredFoldsByIndex.delete(idx);
+                        }
+                    }
+                }
+                if (!this.governance) {
+                    return { ShouldPause: false };
+                }
+                return this.governance.EvaluateLoopIterationGovernance({
+                    Provider: executionProvider,
+                    ContextUser: this.contextUser,
+                    Parent: parentTask ?? null,
+                    Task: task,
+                    LoopType: info.LoopType,
+                    IterationIndex: info.LastOutcome ? Math.max(0, info.NextIterationIndex - 1) : info.NextIterationIndex,
+                    CompletedIterations: info.CompletedIterations,
+                    AccumulatedLoopCostUsd: accumulatedCostUsd,
+                    AccumulatedLoopTokensUsed: accumulatedTokensUsed,
+                    LivePayload: livePayload,
+                    LastOutcome: info.LastOutcome,
+                    BatchOutcomes: info.BatchOutcomes,
+                    Observer: this.observer,
+                    DebugStateCache: this.debugStateByGraph,
+                });
+            },
+        };
         const outcome = task.StepType === 'ForEach'
-            ? await RunForEachLoop(op as ForEachOperation, { payload: livePayload, ...graphContext.Invocation }, invokeBody)
+            ? await RunForEachLoop(op as ForEachOperation, { payload: livePayload, ...graphContext.Invocation }, invokeBody, loopOptions)
             : await RunWhileLoop(
                 op as WhileOperation,
                 (iteration) => evaluator.Evaluate(
@@ -5328,6 +5439,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     { ...graphContext.Invocation, ...livePayload, payload: livePayload, iteration },
                 ),
                 invokeBody,
+                loopOptions,
             );
 
         if (isParallelForEach) {
@@ -5340,6 +5452,29 @@ export class TaskGraphDispatcher implements IShutdownable {
                 }
             }
             iterationTrace.sort((a, b) => a.index - b.index);
+        }
+
+        if (outcome.Paused && outcome.LoopCursorSnapshot) {
+            iterationTrace.sort((a, b) => a.index - b.index);
+            return {
+                Success: false,
+                Paused: true,
+                PauseReason: outcome.PauseReason,
+                AgentRunID: null,
+                ErrorMessage: outcome.ErrorMessage,
+                Iterations: iterationTrace.length > 0 ? iterationTrace : undefined,
+                IsOutputTainted: loopEnvelope?.IsRunTainted === true,
+                CostUsd: accumulatedCostUsd,
+                TokensUsed: accumulatedTokensUsed,
+                LoopCursorState: {
+                    Cursor: outcome.LoopCursorSnapshot,
+                    LivePayload: livePayload,
+                    IterationTrace: iterationTrace,
+                    AccumulatedCostUsd: accumulatedCostUsd,
+                    AccumulatedTokensUsed: accumulatedTokensUsed,
+                    IsOutputTainted: loopEnvelope?.IsRunTainted === true,
+                },
+            };
         }
 
         return {
@@ -5356,6 +5491,8 @@ export class TaskGraphDispatcher implements IShutdownable {
             // is what used to make it match nothing.
             Output: this.applyStepOutputMapping(task, livePayload, outcome.Output, config?.outputMapping),
             IsOutputTainted: loopEnvelope?.IsRunTainted === true,
+            CostUsd: accumulatedCostUsd,
+            TokensUsed: accumulatedTokensUsed,
         };
     }
 
@@ -5427,7 +5564,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         budget: IterationPayloadBudget;
         securityEnvelope?: TaskSecurityEnvelope;
         onIterationTainted?: () => void;
-    }): Promise<{ Success: boolean; Output?: unknown; ErrorMessage?: string; ActionLogID?: string }> {
+    }): Promise<{ Success: boolean; Output?: unknown; ErrorMessage?: string; ActionLogID?: string; CostUsd?: number; TokensUsed?: number }> {
         const {
             task, op, steps, stepActionIds, index, bindings,
             getLivePayload, setLivePayload, deferLivePayloadFold, deferredFoldsByIndex,
@@ -5445,6 +5582,8 @@ export class TaskGraphDispatcher implements IShutdownable {
         let workingPayload: Record<string, unknown> = structuredClone(getLivePayload());
         let lastActionLogID: string | undefined;
         let lastStepOutput: Record<string, unknown> | undefined;
+        let passCostUsd = 0;
+        let passTokensUsed = 0;
         // A later step reads an earlier step's output, so taint is monotonic within the pass too.
         let stepEnvelope = securityEnvelope;
 
@@ -5532,6 +5671,12 @@ export class TaskGraphDispatcher implements IShutdownable {
             if (actionOutcome.ActionLogID) {
                 lastActionLogID = actionOutcome.ActionLogID;
             }
+            if (typeof actionOutcome.CostUsd === 'number' && Number.isFinite(actionOutcome.CostUsd)) {
+                passCostUsd += Math.max(0, actionOutcome.CostUsd);
+            }
+            if (typeof actionOutcome.TokensUsed === 'number' && Number.isFinite(actionOutcome.TokensUsed)) {
+                passTokensUsed += Math.max(0, actionOutcome.TokensUsed);
+            }
             if (actionOutcome.IsOutputTainted) {
                 stepEnvelope = WithInputTaint(stepEnvelope, true);
                 onIterationTainted?.();
@@ -5547,7 +5692,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     success: false,
                     errorMessage: errMsg,
                 });
-                return { Success: false, ErrorMessage: errMsg, ActionLogID: lastActionLogID };
+                return { Success: false, ErrorMessage: errMsg, ActionLogID: lastActionLogID, CostUsd: passCostUsd, TokensUsed: passTokensUsed };
             }
 
             const stepOutput: Record<string, unknown> =
@@ -5592,6 +5737,8 @@ export class TaskGraphDispatcher implements IShutdownable {
             Success: true,
             Output: combinedOutput,
             ActionLogID: lastActionLogID,
+            CostUsd: passCostUsd,
+            TokensUsed: passTokensUsed,
         };
     }
 
@@ -6371,6 +6518,51 @@ export class TaskGraphDispatcher implements IShutdownable {
      * Returns `undefined` when there is nothing to record, so the guarded write omits the column
      * rather than rewriting it with what it already held.
      */
+    private async persistPausedLoopTask(
+        provider: IMetadataProvider,
+        taskID: string,
+        result: TaskBodyOutcome,
+    ): Promise<void> {
+        const freshTask = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+        if (!(await freshTask.Load(taskID))) {
+            LogError(`[TaskGraphDispatcher] Could not reload paused loop task ${taskID} to persist cursor.`);
+            return;
+        }
+        if (freshTask.Status !== 'In Progress' || freshTask.ClaimedBy !== this.config.InstanceID) {
+            LogError(`[TaskGraphDispatcher] Lost ownership on paused loop task ${taskID}; skipping cursor persistence.`);
+            return;
+        }
+        const graphID = freshTask.ParentID ?? taskID;
+        const metrics = this.governance.ResolveNodeSettlementMetrics(
+            graphID,
+            null,
+            result.CostUsd,
+            result.TokensUsed,
+        );
+        const updatedConfig = this.configurationWithRuntime(
+            freshTask,
+            result.PromptRunID,
+            result.ActionLogID,
+            result.Iterations,
+            result.PayloadAtStart,
+            result.IsOutputTainted,
+            result.ActionInput,
+            metrics?.CostUsd ?? result.CostUsd,
+            metrics?.TokensUsed ?? result.TokensUsed,
+            result.LoopCursorState ?? null,
+        );
+        freshTask.Status = 'Pending';
+        freshTask.ClaimedBy = null;
+        freshTask.ClaimExpiresAt = null;
+        if (updatedConfig !== undefined) {
+            freshTask.Configuration = updatedConfig;
+        }
+        const saved = await this.saveWithRuntimeAuthority(freshTask);
+        if (!saved) {
+            LogError(`[TaskGraphDispatcher] Failed to return paused loop task ${taskID} to Pending with cursor.`);
+        }
+    }
+
     private configurationWithRuntime(
         task: MJTaskEntity,
         promptRunID: string | undefined,
@@ -6381,7 +6573,10 @@ export class TaskGraphDispatcher implements IShutdownable {
         actionInput?: Record<string, unknown>,
         governanceCostUsd?: number,
         governanceTokensUsed?: number,
+        loopCursor?: NonNullable<TaskStepConfiguration['runtime']>['loopCursor'] | null,
     ): string | undefined {
+        const existing = this.parseConfiguration(task) as TaskStepConfiguration | undefined;
+        const clearingCursor = loopCursor === null && Boolean(existing?.runtime?.loopCursor);
         if (
             !promptRunID &&
             !actionLogID &&
@@ -6390,14 +6585,19 @@ export class TaskGraphDispatcher implements IShutdownable {
             isOutputTainted === undefined &&
             !actionInput &&
             governanceCostUsd === undefined &&
-            governanceTokensUsed === undefined
+            governanceTokensUsed === undefined &&
+            !loopCursor &&
+            !clearingCursor
         ) return undefined;
 
-        const existing = this.parseConfiguration(task);
+        const baseRuntime = existing?.runtime ? { ...existing.runtime } : {};
+        if (loopCursor === null) {
+            delete baseRuntime.loopCursor;
+        }
         const merged: TaskStepConfiguration = {
             ...existing,
             runtime: {
-                ...existing?.runtime,
+                ...baseRuntime,
                 ...(promptRunID ? { promptRunID } : {}),
                 ...(actionLogID ? { actionLogID } : {}),
                 // Replaced wholesale rather than appended: this is the trace of the loop's LAST
@@ -6414,6 +6614,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 ...(actionInput ? { actionInput } : {}),
                 ...(governanceCostUsd !== undefined ? { governanceCostUsd } : {}),
                 ...(governanceTokensUsed !== undefined ? { governanceTokensUsed } : {}),
+                ...(loopCursor ? { loopCursor } : {}),
             },
         };
         return JSON.stringify(merged);

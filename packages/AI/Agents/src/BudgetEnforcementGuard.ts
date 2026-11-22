@@ -23,6 +23,7 @@ import {
 } from '@memberjunction/core';
 import type { MJAIAgentRunEntity } from '@memberjunction/core-entities';
 import {
+    AttachBudgetAttributionToRunData,
     ExtractBudgetCostEventsFromRunData,
     ExtractBudgetDayBaselinesFromRunData,
     ExtractLimitsDiagnosticsFromRunData,
@@ -35,6 +36,7 @@ import {
     type BudgetScope,
     type BudgetScopeStatus,
     type CumulativeBudgetLedger,
+    type MJAIAgentRunEntityExtended,
     type RunawayJsonObject,
 } from '@memberjunction/ai-core-plus';
 import { EscapeSQLString, IsPlainObject, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
@@ -489,6 +491,49 @@ function applyScopeExtensions(next: MJLimitsBudgetsConfig, ext: BudgetExtensionG
  * and `PerUserPerDay` scopes.
  */
 export class BudgetEnforcementGuard {
+    /**
+     * Records a billable prompt/judge cost delta (including late-settled timed-out judge calls)
+     * onto the active run's timestamped budget cost events and denormalized run totals so
+     * subsequent `PerRun`, `PerRoutine`, and `PerUserPerDay` ledger queries reflect the charge.
+     */
+    public static RecordBatchedPromptCost(args: {
+        AgentRun?: Pick<MJAIAgentRunEntityExtended, 'Data' | 'TotalCost' | 'TotalTokensUsed'> | null;
+        CostEvents?: BudgetCostEvent[];
+        DayCostBaselines?: Record<string, number>;
+        CostUsd?: number;
+        TokensUsed?: number;
+        TimestampMs?: number;
+    }): { RecordedCostUsd: number; RecordedTokensUsed: number } {
+        const recordedCostUsd = typeof args.CostUsd === 'number' && Number.isFinite(args.CostUsd)
+            ? Math.max(0, args.CostUsd)
+            : 0;
+        const recordedTokensUsed = typeof args.TokensUsed === 'number' && Number.isFinite(args.TokensUsed)
+            ? Math.max(0, args.TokensUsed)
+            : 0;
+        if (recordedCostUsd <= 0 && recordedTokensUsed <= 0) {
+            return { RecordedCostUsd: 0, RecordedTokensUsed: 0 };
+        }
+        const timestampMs = args.TimestampMs ?? Date.now();
+        if (args.CostEvents && recordedCostUsd > 0) {
+            args.CostEvents.push({ TimestampMs: timestampMs, CostUsd: recordedCostUsd });
+        }
+        if (args.AgentRun) {
+            if (recordedCostUsd > 0) {
+                args.AgentRun.TotalCost = Math.max(0, args.AgentRun.TotalCost ?? 0) + recordedCostUsd;
+            }
+            if (recordedTokensUsed > 0) {
+                args.AgentRun.TotalTokensUsed = Math.max(0, args.AgentRun.TotalTokensUsed ?? 0) + recordedTokensUsed;
+            }
+            if (args.CostEvents || args.DayCostBaselines) {
+                args.AgentRun.Data = AttachBudgetAttributionToRunData(args.AgentRun.Data, {
+                    CostEvents: args.CostEvents ?? [],
+                    DayCostBaselines: args.DayCostBaselines ?? {},
+                });
+            }
+        }
+        return { RecordedCostUsd: recordedCostUsd, RecordedTokensUsed: recordedTokensUsed };
+    }
+
     /**
      * Evaluates all configured budget scopes and dimensions against live and historical usage.
      */
