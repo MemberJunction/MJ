@@ -766,6 +766,8 @@ export class ListMyAgentRoutinesAction extends BaseAction {
                     WorkstreamKey: cfg.workstreamKey ?? null,
                     WakeReason: cfg.wakeReason ?? null,
                     Description: r.Description,
+                    AgentConfigurationID: r.AgentConfigurationID ?? null,
+                    AgentConfiguration: r.AgentConfiguration ?? null,
                 };
             }).filter((row) => !workstreamFilter || (row.WorkstreamKey ?? '').toLowerCase() === workstreamFilter);
 

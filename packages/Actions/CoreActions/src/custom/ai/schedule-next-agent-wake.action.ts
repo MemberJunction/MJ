@@ -3,9 +3,16 @@ import { BaseAction } from '@memberjunction/actions';
 import { EscapeSQLString, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, LogError, Metadata, RunView } from '@memberjunction/core';
 import {
+    MJAIAgentRhythmTemplateEntity,
     MJUserRoutineEntity,
     MJUserRoutineEntity_IRoutineWakeConfiguration,
 } from '@memberjunction/core-entities';
+import {
+    CheckActivePolicyForAgentAndUser,
+    LookupActiveRhythmTemplateForWorkstream,
+    ResolveAgentConfigurationIDInput,
+    ResolveRoutineSeededAgentConfigurationID,
+} from '@memberjunction/ai-agents';
 import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import {
@@ -73,6 +80,22 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
                 };
             }
 
+            const md: IMetadataProvider = params.Provider ?? Metadata.Provider;
+            const policyEval = await CheckActivePolicyForAgentAndUser(
+                agentId,
+                contextUser.ID,
+                contextUser,
+                { provider: md, preferCache: true }
+            );
+            if (!policyEval.Allowed) {
+                return {
+                    Success: false,
+                    ResultCode: 'POLICY_DENIED',
+                    Message: policyEval.Reason,
+                    Params: params.Params,
+                };
+            }
+
             const fallbackWakeConfig =
                 this.parseObjectParam<Record<string, unknown>>(params, 'WakeConfigurationJSON') ?? null;
             const resumeState =
@@ -102,10 +125,10 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
                 ...(wakeGate ? { wakeGate } : {}),
             };
 
-            const md: IMetadataProvider = params.Provider ?? Metadata.Provider;
             const rhythmTemplateId = this.getStringParam(params, 'RhythmTemplateID');
+            let verifiedTemplate: MJAIAgentRhythmTemplateEntity | null = null;
             if (rhythmTemplateId) {
-                const verifiedTemplate = await VerifyActiveRhythmTemplate(
+                verifiedTemplate = await VerifyActiveRhythmTemplate(
                     rhythmTemplateId,
                     agentId,
                     contextUser,
@@ -120,6 +143,28 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
                     };
                 }
                 resumeState['rhythmTemplateID'] = verifiedTemplate.ID;
+            }
+
+            const hasExplicitConfigParam = params.Params.some(
+                (p) => p.Name.trim().toLowerCase() === 'agentconfigurationid'
+            );
+            const rawAgentConfigID = hasExplicitConfigParam
+                ? (this.getStringParam(params, 'AgentConfigurationID') ?? null)
+                : undefined;
+            const rawModelTier = this.getStringParam(params, 'ModelTier');
+            const configResolution = await ResolveAgentConfigurationIDInput({
+                agentConfigurationID: rawAgentConfigID,
+                modelTier: rawModelTier,
+                contextUser,
+                metadataProvider: md,
+            });
+            if (configResolution.ErrorMessage) {
+                return {
+                    Success: false,
+                    ResultCode: 'VALIDATION_ERROR',
+                    Message: configResolution.ErrorMessage,
+                    Params: params.Params,
+                };
             }
 
             const existingRoutine = await this.findExistingWakeRoutine(
@@ -189,6 +234,29 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
                 resumeState,
             });
             routine.WakeConfigurationObject = wakeConfig;
+            if (!existingRoutine) {
+                let templateDefaultConfigID = verifiedTemplate?.DefaultAgentConfigurationID ?? null;
+                if (!templateDefaultConfigID && !configResolution.Provided && workstreamKey !== 'default') {
+                    const matchedTemplate = await LookupActiveRhythmTemplateForWorkstream({
+                        agentID: agentId,
+                        workstreamKey,
+                        contextUser,
+                        metadataProvider: md,
+                    });
+                    templateDefaultConfigID = matchedTemplate?.DefaultAgentConfigurationID ?? null;
+                }
+                routine.AgentConfigurationID = await ResolveRoutineSeededAgentConfigurationID({
+                    explicitAgentConfigurationID: configResolution.Provided
+                        ? configResolution.ConfigurationID
+                        : undefined,
+                    templateDefaultAgentConfigurationID: templateDefaultConfigID,
+                    workstreamKey,
+                    contextUser,
+                    metadataProvider: md,
+                });
+            } else if (configResolution.Provided) {
+                routine.AgentConfigurationID = configResolution.ConfigurationID;
+            }
             if (nextRunAt) {
                 routine.NextRunAt = nextRunAt;
             }

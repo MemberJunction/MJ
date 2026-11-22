@@ -505,6 +505,19 @@ describe('convertTopToLimit', () => {
     expect(result).not.toContain('LIMIT');
     expect(result).toContain('SELECT TOP 10 Name FROM Users');
   });
+
+  it('stops at ELSE boundary so LIMIT does not bleed into the ELSE branch', () => {
+    const input = [
+      'IF cond THEN',
+      '    SELECT TOP 0 * FROM __mj."vwUsers" WHERE 1=0',
+      'ELSE',
+      '    SELECT * FROM __mj."vwUsers" WHERE "ID" = p_ID;',
+      'END IF;',
+    ].join('\n');
+    const result = ConvertTopToLimit(input);
+    expect(result).toContain('WHERE 1=0\nLIMIT 0\nELSE');
+    expect(result).not.toMatch(/WHERE "ID" = p_ID;\s*LIMIT 0/);
+  });
 });
 
 // ---------------------------------------------------------------------------

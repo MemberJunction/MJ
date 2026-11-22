@@ -180,6 +180,26 @@
             "lastModified": "2026-05-14T02:09:03.955Z",
             "checksum": "a3551e0d0bd09cc54d7b74086cc6945b3ef1761f9e3e071ba38c01489bf24c4d"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Graph Context",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7E8FB53D-9F7E-4214-BCFD-E7E327B88E3D"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Find Graph Path",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "8C59879A-20E9-4118-9369-6B7FC8B01A5E"
+          }
         }
       ],
       "MJ: AI Agent Relationships": [

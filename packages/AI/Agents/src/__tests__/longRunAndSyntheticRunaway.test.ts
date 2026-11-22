@@ -683,6 +683,31 @@ describe('Epic 1a End-to-End Acceptance: Long-Run Workflows/Channels & Early Syn
                 if (params.EntityName === 'MJ: Agent Channel Participants') {
                     return { Success: true, Results: participants };
                 }
+                if (params.EntityName === 'MJ: AI Agent User Policies') {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: 'policy-alice-long',
+                                AgentID: AGENT_ID,
+                                UserID: alice.ID,
+                                Status: 'Active',
+                                AllowInterAgentCoordination: true,
+                                EmailChannelMode: 'DraftOnly',
+                                Agent: 'Chief of Staff',
+                            },
+                            {
+                                ID: 'policy-bob-long',
+                                AgentID: AGENT_ID,
+                                UserID: bob.ID,
+                                Status: 'Active',
+                                AllowInterAgentCoordination: true,
+                                EmailChannelMode: 'DraftOnly',
+                                Agent: 'Chief of Staff',
+                            },
+                        ],
+                    };
+                }
                 return { Success: true, Results: [] };
             }),
         } as Partial<RunView> as RunView);
@@ -866,6 +891,31 @@ describe('Epic 1a End-to-End Acceptance: Long-Run Workflows/Channels & Early Syn
             RunView: vi.fn(async (params: { EntityName: string }) => {
                 if (params.EntityName === 'MJ: Agent Channel Participants') {
                     return { Success: true, Results: participants };
+                }
+                if (params.EntityName === 'MJ: AI Agent User Policies') {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: 'policy-alice-long',
+                                AgentID: AGENT_ID,
+                                UserID: alice.ID,
+                                Status: 'Active',
+                                AllowInterAgentCoordination: true,
+                                EmailChannelMode: 'DraftOnly',
+                                Agent: 'Chief of Staff',
+                            },
+                            {
+                                ID: 'policy-bob-long',
+                                AgentID: AGENT_ID,
+                                UserID: bob.ID,
+                                Status: 'Active',
+                                AllowInterAgentCoordination: true,
+                                EmailChannelMode: 'DraftOnly',
+                                Agent: 'Chief of Staff',
+                            },
+                        ],
+                    };
                 }
                 return { Success: true, Results: [] };
             }),
