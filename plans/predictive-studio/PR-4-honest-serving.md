@@ -13606,6 +13606,21 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
 - **Open deferrals:** OF4-5 (a kept incumbent-heuristic rule is recorded and not delivered) — expiry PR 6; OF4-3 out of
   scope, no deferred work. **Rulings:** D4-261…D4-273. **Flags:** OF4-55, OF4-56, OF4-57; OF4-34 resolved.
 
+### 2026-11-22 — Claude (Opus 5.5) — R2 (the publishing switches leave CorePlus, D4-278)
+
+- **Why:** the owner's review — Predictive Studio named in `ai/coreplus/agent-types` (`RESERVED_AGENT_RUN_DATA_KEYS` and
+  four doc/comment sites) is a layering fault. Ruling D4-278 supersedes M4b.5's reserved-key mechanism.
+- **Done:** `packages/AI/CorePlus/src/{agent-run-data-keys.ts,agent-types.ts,__tests__/agent-run-data-keys.test.ts}`,
+  `packages/AI/Agents/src/base-agent.ts`, `packages/MJServer/src/resolvers/{RunAIAgentResolver.ts,agent-run-data-guard.ts}`
+  back to the merge-base's content (no PR 4 source change remains in CorePlus, AI Agents or MJServer outside generated
+  files; changeset drops `ai-core-plus`, `ai-agents`). `PredictiveStudioPipelineBuilderAgent.ReadsPublishingSwitches`:
+  `TrustReservedRunData === true && !parentRun`; `AutoPublishOf` / `ProtocolPromotionOf` read the keys only then.
+- **Tests:** builder agent — untrusted caller, sub-agent under a trusted root, and the two value-shape cases red (4)
+  before the change, `53 passed` after; Engine `1876/1876`, TruthSuite `189/189` (harness tests read the run as MJServer
+  hands it), CorePlus `1335/1335`, Agents `5189/5189`, MJServer `3878 passed · 66 skipped`; edited test files tsc 0.
+- **Runtime:** MJAPI :4041 + sidecar :64203 rebuilt; `W3 -> C1.1` → `✓ ps-gate-w3-c1-1.G0.3`, `C1 -> S9.1` →
+  `✓ ps-gate-c1-s9-1.G3.6` (trusted top-level harness runs still publish). `check:guards`, `check:standards` exit 0.
+
 ### 2026-11-21 — Claude (Opus 5.5) — R1
 
 - **Owner item (changes outside Predictive Studio removed):** "we do not want to make any unnecessary changes outside of predictive studio as part of this work"
