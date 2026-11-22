@@ -36,7 +36,7 @@ export class MJAIAgentRunEntityExtended extends MJAIAgentRunEntity {
     /** What a stop reports when the check itself failed. */
     public static readonly StopCheckFailedMessage = 'Unable to verify who may stop this run.';
     /** Maximum number of `ParentRunID` hops walked when resolving a child sub-agent run's conversation. */
-    private static readonly MaxParentRunWalkHops = 8;
+    private static readonly maxParentRunWalkHops = 8;
 
     /**
      * Marks this run instance as a trusted server-initiated cancellation (for example, `BaseAgent`
@@ -77,7 +77,7 @@ export class MJAIAgentRunEntityExtended extends MJAIAgentRunEntity {
      * Verifies {@link StopPermitted} against the persisted database row for the context user on the server.
      * Reads `Status`, `UserID`, `ConversationID`, and `ParentRunID` directly from the database so client-spoofed
      * `OldValues___`, `UserID`, or `ConversationID` fields cannot bypass authorization. Walks `ParentRunID`
-     * (up to {@link MaxParentRunWalkHops} hops with a cycle guard) when a child sub-agent run has no direct
+     * (up to {@link maxParentRunWalkHops} hops with a cycle guard) when a child sub-agent run has no direct
      * `ConversationID`.
      */
     private async contextUserMayStop(): Promise<boolean> {
@@ -144,7 +144,7 @@ export class MJAIAgentRunEntityExtended extends MJAIAgentRunEntity {
         }
         const visited = new Set<string>([persisted.ID.toLowerCase()]);
         let parentRunId = persisted.ParentRunID;
-        for (let hop = 0; hop < MJAIAgentRunEntityExtended.MaxParentRunWalkHops && parentRunId; hop++) {
+        for (let hop = 0; hop < MJAIAgentRunEntityExtended.maxParentRunWalkHops && parentRunId; hop++) {
             const normalizedParentId = parentRunId.toLowerCase();
             if (visited.has(normalizedParentId)) {
                 break;
