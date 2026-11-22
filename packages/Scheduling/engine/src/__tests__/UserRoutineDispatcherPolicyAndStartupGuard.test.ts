@@ -105,7 +105,10 @@ vi.mock('@memberjunction/actions', async (importOriginal) => {
 import { EntityInfo, UserInfo } from '@memberjunction/core';
 import {
     AgentWakeTriggerService,
+    BuildUserAppWakeKey,
     EventWakeCoalescer,
+    ResolveAgentConfigurationIDInput,
+    ResolveSeededRoutineAgentConfigurationID,
     WakeStartupGuard,
 } from '@memberjunction/ai-agents';
 import { UserRoutineDispatcherDriver } from '../drivers/UserRoutineDispatcherDriver';
@@ -171,6 +174,7 @@ class InMemoryRoutineEntity {
             resumeState: { applicationID: 'app-tasks', pendingEvents: [{ taskID: 't-1' }] },
         };
         this.WakeConfiguration = overrides.WakeConfiguration ?? JSON.stringify(this.WakeConfigurationObject);
+        this.AgentConfigurationID = overrides.AgentConfigurationID ?? null;
         this.onSave = onSave;
     }
 
@@ -852,5 +856,279 @@ describe('UserRoutineDispatcherDriver — Active Policy Gating, Coalescing Recov
             'dup-1',
             'dup-2',
         ]);
+    });
+
+    it('AT-1 (dispatcher boundary): Two users on the same rhythm (Draft vs High) execute AgentRunner with their respective tier configurationId', async () => {
+        const fastConfigID = '3A1C5A15-8DAA-44E5-A098-F20085E6C93F';
+        const highPowerConfigID = 'B6B9D780-52B2-431B-93AB-AC83FEF78553';
+        const dailyCalTemplateID = 'F0294D16-F2B7-4DA2-897F-B9FB27FD5BF5';
+
+        runViewMock.mockImplementation(async (params: RunViewParams) => {
+            if (params.EntityName === 'MJ: AI Configurations' && params.ExtraFilter?.includes("Name='High Power'")) {
+                return {
+                    Success: true,
+                    Results: [{ ID: highPowerConfigID, Name: 'High Power', Status: 'Active' }],
+                    TotalRowCount: 1,
+                    RowCount: 1,
+                    UserViewID: '',
+                    ExecutionTime: 0,
+                    ErrorMessage: '',
+                };
+            }
+            return { Success: true, Results: [], TotalRowCount: 0, RowCount: 0, UserViewID: '', ExecutionTime: 0, ErrorMessage: '' };
+        });
+
+        const highTierInput = await ResolveAgentConfigurationIDInput({
+            modelTier: 'High',
+            contextUser: SYSTEM,
+        });
+        expect(highTierInput).toEqual({ Provided: true, ConfigurationID: highPowerConfigID });
+
+        // User 1 uses template default (Draft -> Fast, AgentConfigurationID = null falling back to template)
+        const aliceRoutine = makeRoutine({
+            ID: 'R-TIER-ALICE',
+            UserID: 'U-ACTIVE',
+            TargetID: 'AGENT-1',
+            RoutineType: 'Scheduled',
+            ScheduleMode: 'OneShot',
+            NextRunAt: PAST,
+            AgentConfigurationID: null,
+            WakeConfigurationObject: {
+                workstreamKey: 'calendar-daily-review',
+                resumeState: { rhythmTemplateID: dailyCalTemplateID },
+            },
+        });
+
+        // User 2 customizes the same rhythm to High (High Power)
+        const bobRoutine = makeRoutine({
+            ID: 'R-TIER-BOB',
+            UserID: 'U-ACTIVE-2',
+            TargetID: 'AGENT-1',
+            RoutineType: 'Scheduled',
+            ScheduleMode: 'OneShot',
+            NextRunAt: PAST,
+            AgentConfigurationID: ResolveSeededRoutineAgentConfigurationID({
+                explicitAgentConfigurationID: highTierInput.ConfigurationID,
+                templateDefaultAgentConfigurationID: fastConfigID,
+            }),
+            WakeConfigurationObject: {
+                workstreamKey: 'calendar-daily-review',
+                resumeState: { rhythmTemplateID: dailyCalTemplateID },
+            },
+        });
+
+        runViewMock.mockImplementation(async (params: RunViewParams) => {
+            if (params.EntityName === 'MJ: User Routines') {
+                return {
+                    Success: true,
+                    Results: [aliceRoutine, bobRoutine],
+                    TotalRowCount: 2,
+                    RowCount: 2,
+                    UserViewID: '',
+                    ExecutionTime: 0,
+                    ErrorMessage: '',
+                };
+            }
+            if (params.EntityName === 'MJ: AI Agent User Policies') {
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: 'POL-A',
+                            AgentID: 'AGENT-1',
+                            UserID: 'U-ACTIVE',
+                            Status: 'Active',
+                            AllowInterAgentCoordination: true,
+                            EmailChannelMode: 'DraftOnly',
+                            Agent: 'Chief of Staff',
+                        },
+                        {
+                            ID: 'POL-B',
+                            AgentID: 'AGENT-1',
+                            UserID: 'U-ACTIVE-2',
+                            Status: 'Active',
+                            AllowInterAgentCoordination: true,
+                            EmailChannelMode: 'DraftOnly',
+                            Agent: 'Chief of Staff',
+                        },
+                    ],
+                    TotalRowCount: 2,
+                    RowCount: 2,
+                    UserViewID: '',
+                    ExecutionTime: 0,
+                    ErrorMessage: '',
+                };
+            }
+            if (params.EntityName === 'MJ: AI Agent Rhythm Templates') {
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: dailyCalTemplateID,
+                            AgentID: 'AGENT-1',
+                            WorkstreamKey: 'calendar-daily-review',
+                            DefaultAgentConfigurationID: fastConfigID,
+                        },
+                    ],
+                    TotalRowCount: 1,
+                    RowCount: 1,
+                    UserViewID: '',
+                    ExecutionTime: 0,
+                    ErrorMessage: '',
+                };
+            }
+            return { Success: true, Results: [], TotalRowCount: 0, RowCount: 0, UserViewID: '', ExecutionTime: 0, ErrorMessage: '' };
+        });
+
+        const sweep = await driver.Execute(buildContext());
+        expect(sweep.Success).toBe(true);
+        expect(sweep.Details?.RoutinesRun).toBe(2);
+        expect(agentRunMock).toHaveBeenCalledTimes(2);
+
+        const capturedConfigs = agentRunMock.mock.calls.map((call) => ({
+            userId: (call[0] as { contextUser: UserInfo; configurationId?: string }).contextUser.ID,
+            configurationId: (call[0] as { contextUser: UserInfo; configurationId?: string }).configurationId,
+        }));
+        expect(capturedConfigs).toEqual(
+            expect.arrayContaining([
+                { userId: 'U-ACTIVE', configurationId: fastConfigID },
+                { userId: 'U-ACTIVE-2', configurationId: highPowerConfigID },
+            ])
+        );
+    });
+
+    it('AT-2 (dispatcher boundary): Assigning 20 tasks within one minute with interleaved dispatcher sweeps executes ONE wake with all 20 events', async () => {
+        const routinesByID = new Map<string, MJUserRoutineEntity>();
+        let seq = 0;
+
+        const provider = {
+            GetEntityObject: vi.fn(async () => {
+                const routine = makeRoutine({
+                    ID: `R-BURST-${++seq}`,
+                    UserID: 'U-ACTIVE',
+                    TargetID: 'AGENT-1',
+                    RoutineType: 'AgentWake',
+                    ScheduleMode: 'OneShot',
+                });
+                const origSave = routine.Save.bind(routine);
+                routine.Save = async () => {
+                    const ok = await origSave();
+                    if (ok) {
+                        routinesByID.set(routine.ID, routine);
+                    }
+                    return ok;
+                };
+                return routine;
+            }),
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+
+        runViewMock.mockImplementation(async (params: RunViewParams) => {
+            if (params.EntityName === 'MJ: AI Agent User Policies') {
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: 'POL-A',
+                            AgentID: 'AGENT-1',
+                            UserID: 'U-ACTIVE',
+                            Status: 'Active',
+                            AllowInterAgentCoordination: true,
+                            EmailChannelMode: 'DraftOnly',
+                            Agent: 'Chief of Staff',
+                        },
+                    ],
+                    TotalRowCount: 1,
+                    RowCount: 1,
+                    UserViewID: '',
+                    ExecutionTime: 0,
+                    ErrorMessage: '',
+                };
+            }
+            if (params.EntityName === 'MJ: Users') {
+                return {
+                    Success: true,
+                    Results: [{ ID: 'U-ACTIVE', IsActive: true }],
+                    TotalRowCount: 1,
+                    RowCount: 1,
+                    UserViewID: '',
+                    ExecutionTime: 0,
+                    ErrorMessage: '',
+                };
+            }
+            if (params.EntityName === 'MJ: AI Agents') {
+                return {
+                    Success: true,
+                    Results: [{ ID: 'AGENT-1', Name: 'Chief of Staff', Status: 'Active' }],
+                    TotalRowCount: 1,
+                    RowCount: 1,
+                    UserViewID: '',
+                    ExecutionTime: 0,
+                    ErrorMessage: '',
+                };
+            }
+            if (params.EntityName === 'MJ: User Routines') {
+                const allRoutines = Array.from(routinesByID.values());
+                return {
+                    Success: true,
+                    Results: allRoutines,
+                    TotalRowCount: allRoutines.length,
+                    RowCount: allRoutines.length,
+                    UserViewID: '',
+                    ExecutionTime: 0,
+                    ErrorMessage: '',
+                };
+            }
+            return { Success: true, Results: [], TotalRowCount: 0, RowCount: 0, UserViewID: '', ExecutionTime: 0, ErrorMessage: '' };
+        });
+
+        for (let i = 1; i <= 20; i++) {
+            const eventAt = new Date(BASE_NOW.getTime() + (i - 1) * 2_500);
+            vi.setSystemTime(eventAt);
+            const triggerResult = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+                targetUserID: 'U-ACTIVE',
+                targetAgentID: 'AGENT-1',
+                workstreamKey: `task:epic3-${i}`,
+                applicationID: 'app-tasks',
+                wakeReason: `Assigned task #${i}`,
+                resumeState: {
+                    triggerType: 'TaskAssigned',
+                    taskID: `epic3-${i}`,
+                    subject: `Task #${i}`,
+                },
+                contextUser: SYSTEM,
+                metadataProvider: provider,
+                now: eventAt,
+            });
+            expect(triggerResult.triggered).toBe(true);
+            if (i % 4 === 0) {
+                await driver.Execute(buildContext());
+            }
+        }
+
+        expect(routinesByID.size).toBe(1);
+        expect(agentRunMock).toHaveBeenCalledTimes(0);
+
+        const singleRoutine = Array.from(routinesByID.values())[0];
+        const resumeState = singleRoutine.WakeConfigurationObject?.resumeState as {
+            coalesceKey?: string;
+            pendingEvents?: Array<{ taskID?: string }>;
+        } | undefined;
+        expect(resumeState?.coalesceKey).toBe(BuildUserAppWakeKey('U-ACTIVE', 'app-tasks'));
+        expect(resumeState?.pendingEvents).toHaveLength(20);
+
+        // Advance past 60s collection window -> dispatcher executes ONE wake with all 20 events
+        vi.setSystemTime(new Date(BASE_NOW.getTime() + 61_000));
+        const finalSweep = await driver.Execute(buildContext());
+        expect(finalSweep.Success).toBe(true);
+        expect(finalSweep.Details?.RoutinesRun).toBe(1);
+        expect(agentRunMock).toHaveBeenCalledTimes(1);
+
+        const deliveredPayload = agentRunMock.mock.calls[0][0].payload as {
+            _wakeContext?: { resumeState?: { pendingEvents?: Array<{ taskID?: string }> } };
+        };
+        const deliveredEvents = deliveredPayload._wakeContext?.resumeState?.pendingEvents ?? [];
+        expect(deliveredEvents).toHaveLength(20);
+        expect(deliveredEvents[0].taskID).toBe('epic3-1');
+        expect(deliveredEvents[19].taskID).toBe('epic3-20');
     });
 });

@@ -21,7 +21,6 @@ export class MJUserRoutineFormComponent extends BaseFormComponent {
             { sectionKey: 'schedulingAndTiming', sectionName: 'Scheduling and Timing', isExpanded: true },
             { sectionKey: 'notifications', sectionName: 'Notifications', isExpanded: true },
             { sectionKey: 'executionHistory', sectionName: 'Execution History', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJUserRoutineRuns', sectionName: 'User Routine Runs', isExpanded: false },
             { sectionKey: 'mJUserRoutineRecipients', sectionName: 'User Routine Recipients', isExpanded: false },

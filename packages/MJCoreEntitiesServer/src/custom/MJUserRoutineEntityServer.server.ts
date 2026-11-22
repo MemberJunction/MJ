@@ -19,10 +19,13 @@ import { RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global
 import { MJUserRoutineEntity, MJUserRoutineEntity_IRoutineWakeConfiguration, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity } from '@memberjunction/core-entities';
 import { CronExpressionHelper, ComputeRoutineNextRunAt } from '@memberjunction/scheduling-engine';
 
+type SqlParamValue = string | number | boolean | Date | null | undefined;
+type TimestampInput = Date | string | number | boolean | object | null | undefined;
+
 interface TransactionalSqlProvider {
     ExecuteSQL<T>(
         query: string,
-        parameters?: unknown[],
+        parameters?: SqlParamValue[],
         options?: ExecuteSQLOptions,
         contextUser?: UserInfo
     ): Promise<Array<T>>;
@@ -469,7 +472,7 @@ export class MJUserRoutineEntityServer extends MJUserRoutineEntity {
         return sqlProvider.PlatformKey === 'postgresql' ? `$${index + 1}` : `@p${index}`;
     }
 
-    private parseTimestampMs(raw: unknown): number | null {
+    private parseTimestampMs(raw: TimestampInput): number | null {
         if (raw instanceof Date) {
             const ms = raw.getTime();
             return Number.isNaN(ms) ? null : ms;

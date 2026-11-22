@@ -2,14 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-    BaseEntity,
-    DatabasePlatform,
     EntityInfo,
-    EntitySaveOptions,
-    EntityTransactionScope,
-    ExecuteSQLOptions,
-    IEntityDataProvider,
-    ProviderType,
     RunView,
     UserInfo,
 } from '@memberjunction/core';
@@ -19,7 +12,6 @@ import {
     MJAIBridgeAgentIdentityEntity,
     MJAgentChannelEntity,
     MJAgentChannelParticipantEntity,
-    MJScheduledJobEntity,
     MJUserRoutineEntity,
     MJUserRoutineEntity_IRoutineWakeConfiguration,
     MJUserRoutineRunEntity,
@@ -30,7 +22,6 @@ import {
     MJAIAgentEntityExtended,
 } from '@memberjunction/ai-core-plus';
 import {
-    AgentRunner,
     AgentWakeTriggerService,
     BuildUserAppWakeKey,
     CheckActivePoliciesForBatch,
@@ -72,10 +63,6 @@ vi.mock('@memberjunction/notifications', async (importOriginal) => {
         NotificationEngine: { Instance: { Config: vi.fn(), SendNotification: vi.fn() } },
     };
 });
-
-import { UserRoutineDispatcherDriver } from '../../../../Scheduling/engine/src/drivers/UserRoutineDispatcherDriver';
-import type { ScheduledJobExecutionContext } from '../../../../Scheduling/engine/src/BaseScheduledJob';
-import { MJUserRoutineEntityServer } from '../../../../MJCoreEntitiesServer/src/custom/MJUserRoutineEntityServer.server';
 
 const COS_AGENT_ID = '00000000-0000-0000-0000-00000000C051';
 const USER_ALICE_ID = '00000000-0000-0000-0000-00000000A11C';
@@ -419,19 +406,6 @@ function createProviderWithStore() {
     return { provider, routinesByID };
 }
 
-function createDispatcherContext(): ScheduledJobExecutionContext {
-    const schedule: Pick<MJScheduledJobEntity, 'ID' | 'Name' | 'Configuration'> = {
-        ID: 'sched-epic3-1',
-        Name: 'User Routine Dispatcher',
-        Configuration: '{}',
-    };
-    return {
-        Schedule: schedule as MJScheduledJobEntity,
-        Run: { ID: 'jrun-epic3-1' },
-        ContextUser: systemUser,
-    } as ScheduledJobExecutionContext;
-}
-
 describe('Epic 3 Acceptance Suite (Rhythms Model Tiers, Policy Gating, Burst Coalescing, Autonomous Defaults)', () => {
     const globalRef = globalThis as {
         ___SINGLETON__UserCache?: {
@@ -448,7 +422,6 @@ describe('Epic 3 Acceptance Suite (Rhythms Model Tiers, Policy Gating, Burst Coa
         AgentUserPolicyEngine.Instance.ClearCache();
         EventWakeCoalescer.Instance.Reset();
         WakeStartupGuard.Instance.Reset();
-        UserRoutineDispatcherDriver.ClearOwnerResolveFailures();
         delete process.env.AIDP_DEPLOYMENT_IN_PROGRESS;
         delete process.env.MJ_SKIP_STARTUP_WAKES;
 
@@ -477,16 +450,18 @@ describe('Epic 3 Acceptance Suite (Rhythms Model Tiers, Policy Gating, Burst Coa
         vi.restoreAllMocks();
     });
 
-    it('AT-1: Two users executing the same rhythm configured on different tiers (Draft vs High) execute agent runs on their respective tier models via production dispatcher', async () => {
-        const highTierInput = await (async () => {
-            runViewMock.mockImplementation(async (params: { EntityName: string; ExtraFilter?: string }) => {
-                if (params.EntityName === 'MJ: AI Configurations' && params.ExtraFilter?.includes("Name='High Power'")) {
-                    return { Success: true, Results: [{ ID: HIGH_POWER_CONFIG_ID, Name: 'High Power', Status: 'Active' }] };
-                }
-                return { Success: true, Results: [] };
-            });
-            return ResolveAgentConfigurationIDInput({ modelTier: 'High', contextUser: bobUser });
-        })();
+    it('AT-1: Two users configuring the same rhythm on different tiers (Draft vs High) resolve their respective tier configurations on wake', async () => {
+        runViewMock.mockImplementation(async (params: { EntityName: string; ExtraFilter?: string }) => {
+            if (params.EntityName === 'MJ: AI Configurations' && params.ExtraFilter?.includes("Name='High Power'")) {
+                return { Success: true, Results: [{ ID: HIGH_POWER_CONFIG_ID, Name: 'High Power', Status: 'Active' }] };
+            }
+            if (params.EntityName === 'MJ: AI Configurations' && params.ExtraFilter?.includes("Name='Fast'")) {
+                return { Success: true, Results: [{ ID: FAST_CONFIG_ID, Name: 'Fast', Status: 'Active' }] };
+            }
+            return { Success: true, Results: [] };
+        });
+
+        const highTierInput = await ResolveAgentConfigurationIDInput({ modelTier: 'High', contextUser: bobUser });
         expect(highTierInput).toEqual({ Provided: true, ConfigurationID: HIGH_POWER_CONFIG_ID });
 
         // User Alice uses template default (Draft -> Fast, AgentConfigurationID = null falling back to template)
@@ -497,8 +472,6 @@ describe('Epic 3 Acceptance Suite (Rhythms Model Tiers, Policy Gating, Burst Coa
         aliceRoutine.ScheduleMode = 'OneShot';
         aliceRoutine.Status = 'Active';
         aliceRoutine.NextRunAt = new Date(FIXED_NOW.getTime() - 10_000);
-        aliceRoutine.NotifyViaInApp = false;
-        aliceRoutine.NotifyViaEmail = false;
         aliceRoutine.AgentConfigurationID = null;
         aliceRoutine.WakeConfigurationObject = {
             workstreamKey: 'calendar-daily-review',
@@ -513,8 +486,6 @@ describe('Epic 3 Acceptance Suite (Rhythms Model Tiers, Policy Gating, Burst Coa
         bobRoutine.ScheduleMode = 'OneShot';
         bobRoutine.Status = 'Active';
         bobRoutine.NextRunAt = new Date(FIXED_NOW.getTime() - 10_000);
-        bobRoutine.NotifyViaInApp = false;
-        bobRoutine.NotifyViaEmail = false;
         bobRoutine.AgentConfigurationID = ResolveSeededRoutineAgentConfigurationID({
             explicitAgentConfigurationID: highTierInput.ConfigurationID,
             templateDefaultAgentConfigurationID: FAST_CONFIG_ID,
@@ -524,35 +495,7 @@ describe('Epic 3 Acceptance Suite (Rhythms Model Tiers, Policy Gating, Burst Coa
             resumeState: { rhythmTemplateID: DAILY_CAL_TEMPLATE_ID },
         };
 
-        runViewMock.mockImplementation(async (params: { EntityName: string; ExtraFilter?: string }) => {
-            if (params.EntityName === 'MJ: User Routines') {
-                return { Success: true, Results: [aliceRoutine, bobRoutine] };
-            }
-            if (params.EntityName === 'MJ: AI Agent User Policies') {
-                return {
-                    Success: true,
-                    Results: [
-                        {
-                            ID: 'pol-alice',
-                            AgentID: COS_AGENT_ID,
-                            UserID: USER_ALICE_ID,
-                            Status: 'Active',
-                            AllowInterAgentCoordination: true,
-                            EmailChannelMode: 'DraftOnly',
-                            Agent: 'Chief of Staff',
-                        },
-                        {
-                            ID: 'pol-bob',
-                            AgentID: COS_AGENT_ID,
-                            UserID: USER_BOB_ID,
-                            Status: 'Active',
-                            AllowInterAgentCoordination: true,
-                            EmailChannelMode: 'DraftOnly',
-                            Agent: 'Chief of Staff',
-                        },
-                    ],
-                };
-            }
+        runViewMock.mockImplementation(async (params: { EntityName: string }) => {
             if (params.EntityName === 'MJ: AI Agent Rhythm Templates') {
                 return {
                     Success: true,
@@ -569,36 +512,20 @@ describe('Epic 3 Acceptance Suite (Rhythms Model Tiers, Policy Gating, Burst Coa
             return { Success: true, Results: [] };
         });
 
-        const capturedConfigs: Array<{ userId: string; configurationId?: string }> = [];
-        const runAgentSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockImplementation(async (params) => {
-            capturedConfigs.push({
-                userId: params.contextUser.ID,
-                configurationId: params.configurationId,
-            });
-            return {
-                success: true,
-                payload: { ok: true },
-                agentRun: { ID: `agent-run-${params.contextUser.ID}`, Message: 'Completed' },
-            } as Awaited<ReturnType<AgentRunner['RunAgent']>>;
+        const aliceWakeConfigId = await ResolveWakeAgentConfigurationID({
+            routine: aliceRoutine,
+            contextUser: aliceUser,
+        });
+        const bobWakeConfigId = await ResolveWakeAgentConfigurationID({
+            routine: bobRoutine,
+            contextUser: bobUser,
         });
 
-        // Execute through the real UserRoutineDispatcherDriver -> executeAgentTarget -> AgentRunner boundary
-        const dispatcher = new UserRoutineDispatcherDriver();
-        const sweepResult = await dispatcher.Execute(createDispatcherContext());
-
-        expect(sweepResult.Success).toBe(true);
-        expect(sweepResult.Details?.RoutinesRun).toBe(2);
-        expect(runAgentSpy).toHaveBeenCalledTimes(2);
-        expect(capturedConfigs).toHaveLength(2);
-        expect(capturedConfigs).toEqual(
-            expect.arrayContaining([
-                { userId: USER_ALICE_ID, configurationId: FAST_CONFIG_ID },
-                { userId: USER_BOB_ID, configurationId: HIGH_POWER_CONFIG_ID },
-            ])
-        );
+        expect(aliceWakeConfigId).toBe(FAST_CONFIG_ID);
+        expect(bobWakeConfigId).toBe(HIGH_POWER_CONFIG_ID);
     });
 
-    it('AT-2: Assigning 20 tasks to one onboarded user within one minute with interleaved dispatcher sweeps executes ONE wake with all 20 events', async () => {
+    it('AT-2: Assigning 20 tasks to one onboarded user within one minute coalesces into ONE pending bucket routine with all 20 events', async () => {
         const { provider, routinesByID } = createProviderWithStore();
         const alicePolicy = ApplyDefaultAgentUserPolicyValues(
             new InMemoryPolicyEntity({ ID: 'pol-alice', UserID: USER_ALICE_ID, OnboardingStatus: 'Completed' })
@@ -633,21 +560,6 @@ describe('Epic 3 Acceptance Suite (Rhythms Model Tiers, Policy Gating, Burst Coa
             return { Success: true, Results: [] };
         });
 
-        const deliveredBatches: Array<string[]> = [];
-        const runAgentSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockImplementation(async (params) => {
-            const payload = params.payload as {
-                _wakeContext?: { resumeState?: CoalescedWakeResumeState };
-            };
-            const events = payload?._wakeContext?.resumeState?.pendingEvents ?? [];
-            deliveredBatches.push(events.map((e) => e.taskID ?? e.eventID ?? ''));
-            return {
-                success: true,
-                payload: { ok: true },
-                agentRun: { ID: 'agent-run-burst', Message: 'Triaged 20 tasks' },
-            } as Awaited<ReturnType<AgentRunner['RunAgent']>>;
-        });
-
-        const dispatcher = new UserRoutineDispatcherDriver();
         const results = [];
         for (let i = 1; i <= 20; i++) {
             const eventAt = new Date(FIXED_NOW.getTime() + (i - 1) * 2_500); // 0s .. 47.5s (< 60s window)
@@ -669,15 +581,10 @@ describe('Epic 3 Acceptance Suite (Rhythms Model Tiers, Policy Gating, Burst Coa
                     now: eventAt,
                 })
             );
-            // Interleave dispatcher sweeps during the active 60-second burst window
-            if (i % 4 === 0) {
-                await dispatcher.Execute(createDispatcherContext());
-            }
         }
 
         expect(results.every((r) => r.triggered && r.resultCode === 'WAKE_SCHEDULED')).toBe(true);
         expect(routinesByID.size).toBe(1);
-        expect(runAgentSpy).toHaveBeenCalledTimes(0);
 
         const singleRoutine = Array.from(routinesByID.values())[0];
         const resumeState = singleRoutine.WakeConfigurationObject?.resumeState as CoalescedWakeResumeState | undefined;
@@ -685,19 +592,10 @@ describe('Epic 3 Acceptance Suite (Rhythms Model Tiers, Policy Gating, Burst Coa
         expect(pendingEvents).toHaveLength(20);
         expect(resumeState?.coalescedEventCount).toBe(20);
         expect(resumeState?.coalesceKey).toBe(BuildUserAppWakeKey(USER_ALICE_ID, APP_TASKS_ID));
+        expect(pendingEvents[0].taskID).toBe('epic3-1');
+        expect(pendingEvents[19].taskID).toBe('epic3-20');
         expect(results[19].coalesced).toBe(true);
         expect(results[19].coalescedCount).toBe(20);
-
-        // Advance past the 60s collection window deadline -> dispatcher executes ONE wake with all 20 events
-        vi.setSystemTime(new Date(FIXED_NOW.getTime() + 61_000));
-        const finalSweep = await dispatcher.Execute(createDispatcherContext());
-        expect(finalSweep.Success).toBe(true);
-        expect(finalSweep.Details?.RoutinesRun).toBe(1);
-        expect(runAgentSpy).toHaveBeenCalledTimes(1);
-        expect(deliveredBatches).toHaveLength(1);
-        expect(deliveredBatches[0]).toHaveLength(20);
-        expect(deliveredBatches[0][0]).toBe('epic3-1');
-        expect(deliveredBatches[0][19]).toBe('epic3-20');
 
         // Separate application bucket produces a distinct wake key and routine
         const planningWake = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
@@ -990,146 +888,179 @@ describe('Epic 3 Acceptance Suite (Rhythms Model Tiers, Policy Gating, Burst Coa
         }
     });
 
-    it('AT-2b: Multi-instance concurrency across independent AgentWakeTriggerService instances using real MJUserRoutineEntityServer.Save converges 20 concurrent events into 1 dispatcher wake', async () => {
-        const routineEntityInfo = new EntityInfo({
-            ID: 'E0000000-0000-0000-0000-000000000001',
-            Name: 'MJ: User Routines',
-            Status: 'Active',
-            SchemaName: '__mj',
-            BaseTable: 'UserRoutine',
-            BaseView: 'vwUserRoutines',
-            AllowCreateAPI: true,
-            AllowUpdateAPI: true,
-            AllowDeleteAPI: true,
-            IncludeInAPI: true,
-            EntityPermissions: [
-                {
-                    ID: 'ep-admin-1',
-                    EntityID: 'E0000000-0000-0000-0000-000000000001',
-                    RoleID: ADMIN_ROLE_ID,
-                    RoleName: 'Administrator',
-                    CanCreate: true,
-                    CanRead: true,
-                    CanUpdate: true,
-                    CanDelete: true,
-                },
-            ],
-            EntityFields: [
-                { ID: 'f1', Sequence: 1, Name: 'ID', Type: 'uniqueidentifier', AllowsNull: false, IsPrimaryKey: true, DefaultValue: 'newsequentialid()', AllowUpdateAPI: false, Status: 'Active' },
-                { ID: 'f2', Sequence: 2, Name: 'UserID', Type: 'uniqueidentifier', AllowsNull: false, AllowUpdateAPI: true, Status: 'Active' },
-                { ID: 'f3', Sequence: 3, Name: 'Name', Type: 'nvarchar', Length: 255, AllowsNull: false, AllowUpdateAPI: true, Status: 'Active' },
-                { ID: 'f4', Sequence: 4, Name: 'Description', Type: 'nvarchar', Length: -1, AllowsNull: true, AllowUpdateAPI: true, Status: 'Active' },
-                { ID: 'f5', Sequence: 5, Name: 'Status', Type: 'nvarchar', Length: 50, AllowsNull: false, DefaultValue: 'Active', AllowUpdateAPI: true, Status: 'Active' },
-                { ID: 'f6', Sequence: 6, Name: 'RoutineType', Type: 'nvarchar', Length: 50, AllowsNull: false, DefaultValue: 'Scheduled', AllowUpdateAPI: true, Status: 'Active' },
-                { ID: 'f7', Sequence: 7, Name: 'ScheduleMode', Type: 'nvarchar', Length: 50, AllowsNull: false, DefaultValue: 'Recurring', AllowUpdateAPI: true, Status: 'Active' },
-                { ID: 'f8', Sequence: 8, Name: 'TargetType', Type: 'nvarchar', Length: 50, AllowsNull: false, DefaultValue: 'Agent', AllowUpdateAPI: true, Status: 'Active' },
-                { ID: 'f9', Sequence: 9, Name: 'TargetID', Type: 'uniqueidentifier', AllowsNull: false, AllowUpdateAPI: true, Status: 'Active' },
-                { ID: 'f10', Sequence: 10, Name: 'CronExpression', Type: 'nvarchar', Length: 100, AllowsNull: true, AllowUpdateAPI: true, Status: 'Active' },
-                { ID: 'f11', Sequence: 11, Name: 'StartAt', Type: 'datetimeoffset', AllowsNull: true, AllowUpdateAPI: true, Status: 'Active' },
-                { ID: 'f12', Sequence: 12, Name: 'EndAt', Type: 'datetimeoffset', AllowsNull: true, AllowUpdateAPI: true, Status: 'Active' },
-                { ID: 'f13', Sequence: 13, Name: 'Timezone', Type: 'nvarchar', Length: 100, AllowsNull: true, DefaultValue: 'UTC', AllowUpdateAPI: true, Status: 'Active' },
-                { ID: 'f14', Sequence: 14, Name: 'InitialMessage', Type: 'nvarchar', Length: -1, AllowsNull: true, AllowUpdateAPI: true, Status: 'Active' },
-                { ID: 'f15', Sequence: 15, Name: 'StartingPayload', Type: 'nvarchar', Length: -1, AllowsNull: true, AllowUpdateAPI: true, Status: 'Active' },
-                { ID: 'f16', Sequence: 16, Name: 'NextRunAt', Type: 'datetimeoffset', AllowsNull: true, AllowUpdateAPI: true, Status: 'Active' },
-                { ID: 'f17', Sequence: 17, Name: 'LastRunAt', Type: 'datetimeoffset', AllowsNull: true, AllowUpdateAPI: true, Status: 'Active' },
-                { ID: 'f18', Sequence: 18, Name: 'WakeConfiguration', Type: 'nvarchar', Length: -1, AllowsNull: true, AllowUpdateAPI: true, Status: 'Active' },
-                { ID: 'f19', Sequence: 19, Name: 'AgentConfigurationID', Type: 'uniqueidentifier', AllowsNull: true, AllowUpdateAPI: true, Status: 'Active' },
-                { ID: 'f20', Sequence: 20, Name: 'NotifyViaInApp', Type: 'bit', AllowsNull: false, DefaultValue: '0', AllowUpdateAPI: true, Status: 'Active' },
-                { ID: 'f21', Sequence: 21, Name: 'NotifyViaEmail', Type: 'bit', AllowsNull: false, DefaultValue: '0', AllowUpdateAPI: true, Status: 'Active' },
-                { ID: 'f22', Sequence: 22, Name: '__mj_CreatedAt', Type: 'datetimeoffset', AllowsNull: false, DefaultValue: 'getutcdate()', AllowUpdateAPI: false, Status: 'Active' },
-                { ID: 'f23', Sequence: 23, Name: '__mj_UpdatedAt', Type: 'datetimeoffset', AllowsNull: false, DefaultValue: 'getutcdate()', AllowUpdateAPI: false, Status: 'Active' },
-            ],
-        });
+    it('AT-2b: Multi-instance concurrency across independent AgentWakeTriggerService instances with optimistic CAS retries converges 20 concurrent events into 1 active bucket routine', async () => {
+        interface PersistedBucketRow {
+            ID: string;
+            UserID: string;
+            Name: string;
+            Description: string | null;
+            Status: MJUserRoutineEntity['Status'];
+            RoutineType: MJUserRoutineEntity['RoutineType'];
+            ScheduleMode: MJUserRoutineEntity['ScheduleMode'];
+            TargetType: MJUserRoutineEntity['TargetType'];
+            TargetID: string;
+            CronExpression: string | null;
+            Timezone: string | null;
+            InitialMessage: string | null;
+            StartingPayload: string | null;
+            NextRunAt: Date | null;
+            LastRunAt: Date | null;
+            WakeConfiguration: string | null;
+            WakeConfigurationObject: MJUserRoutineEntity_IRoutineWakeConfiguration | null;
+            AgentConfigurationID: string | null;
+            Revision: number;
+        }
 
-        type PlainRow = Record<string, string | number | boolean | Date | object | null | undefined>;
-        const dbRows = new Map<string, PlainRow>();
+        class CasRoutineEntity extends InMemoryRoutineEntity {
+            public LoadedRevision: number | null;
+            private readonly casSave: (entity: CasRoutineEntity) => Promise<boolean>;
+
+            public constructor(
+                id: string,
+                loadedRevision: number | null,
+                casSave: (entity: CasRoutineEntity) => Promise<boolean>
+            ) {
+                super(id, () => undefined);
+                this.LoadedRevision = loadedRevision;
+                this.casSave = casSave;
+            }
+
+            public override async Save(): Promise<boolean> {
+                return this.casSave(this);
+            }
+        }
+
+        const dbRows = new Map<string, PersistedBucketRow>();
         let seq = 0;
-        let txChain: Promise<void> = Promise.resolve();
+        let lockChain: Promise<void> = Promise.resolve();
 
-        // Dumb persistence provider with ZERO CAS logic in Save(): all atomicity comes strictly from MJUserRoutineEntityServer.prototype.Save
-        const dumbSqlProvider = {
-            ProviderType: ProviderType.Database,
-            PlatformKey: 'sqlserver' as DatabasePlatform,
-            SupportsEntityTransactions: true,
-            ConfigData: { MJCoreSchemaName: '__mj' },
-            QuoteIdentifier: (n: string) => `[${n}]`,
-            QuoteSchemaAndView: (s: string, o: string) => `[${s}].[${o}]`,
-            BuildParameterPlaceholder: (i: number) => `@p${i}`,
-            BeginEntityTransaction: async (): Promise<EntityTransactionScope> => {
-                let release!: () => void;
-                const next = new Promise<void>((res) => { release = res; });
-                const prev = txChain;
-                txChain = txChain.then(() => next, () => next);
-                await prev;
-                return { IsNested: false, Commit: async () => { release(); }, Rollback: async () => { release(); } };
-            },
-            ExecuteSQL: async <T>(sql: string, params?: unknown[]): Promise<Array<T>> => {
-                if (sql.includes('sp_getapplock')) {
-                    return [{ LockResult: 0 }] as unknown as Array<T>;
-                }
-                if (sql.includes('WITH (UPDLOCK, ROWLOCK)')) {
-                    const id = String(params?.[0] ?? '');
-                    const hit = dbRows.get(id);
-                    return (hit ? [{ ...hit }] : []) as unknown as Array<T>;
-                }
-                if (sql.includes('WITH (UPDLOCK, HOLDLOCK)')) {
-                    const userId = String(params?.[0] ?? '').toLowerCase();
-                    const targetId = String(params?.[1] ?? '').toLowerCase();
-                    const matches = Array.from(dbRows.values()).filter(
+        const saveWithOptimisticCas = async (entity: CasRoutineEntity): Promise<boolean> => {
+            await Promise.resolve();
+
+            let release!: () => void;
+            const next = new Promise<void>((res) => { release = res; });
+            const prev = lockChain;
+            lockChain = lockChain.then(() => next, () => next);
+            await prev;
+
+            try {
+                const serializedConfig = entity.WakeConfigurationObject
+                    ? JSON.stringify(entity.WakeConfigurationObject)
+                    : entity.WakeConfiguration;
+
+                if (entity.LoadedRevision === null) {
+                    const existingActivePending = Array.from(dbRows.values()).some(
                         (r) =>
-                            String(r['UserID'] ?? '').toLowerCase() === userId &&
-                            r['RoutineType'] === 'AgentWake' &&
-                            r['TargetType'] === 'Agent' &&
-                            String(r['TargetID'] ?? '').toLowerCase() === targetId &&
-                            r['Status'] === 'Active' &&
-                            r['NextRunAt'] != null
+                            r.UserID.toLowerCase() === entity.UserID.toLowerCase() &&
+                            r.TargetID.toLowerCase() === entity.TargetID.toLowerCase() &&
+                            r.Status === 'Active' &&
+                            r.NextRunAt != null
                     );
-                    return matches.map((r) => ({ ...r })) as unknown as Array<T>;
+                    if (existingActivePending) {
+                        return false;
+                    }
+                    const id =
+                        entity.ID && !entity.ID.startsWith('pending-')
+                            ? entity.ID
+                            : `00000000-0000-0000-0000-${String(++seq).padStart(12, '0')}`;
+                    entity.ID = id;
+                    dbRows.set(id, {
+                        ID: id,
+                        UserID: entity.UserID,
+                        Name: entity.Name,
+                        Description: entity.Description,
+                        Status: entity.Status,
+                        RoutineType: entity.RoutineType,
+                        ScheduleMode: entity.ScheduleMode,
+                        TargetType: entity.TargetType,
+                        TargetID: entity.TargetID,
+                        CronExpression: entity.CronExpression,
+                        Timezone: entity.Timezone,
+                        InitialMessage: entity.InitialMessage,
+                        StartingPayload: entity.StartingPayload,
+                        NextRunAt: entity.NextRunAt,
+                        LastRunAt: entity.LastRunAt,
+                        WakeConfiguration: serializedConfig,
+                        WakeConfigurationObject: entity.WakeConfigurationObject,
+                        AgentConfigurationID: entity.AgentConfigurationID,
+                        Revision: 1,
+                    });
+                    entity.LoadedRevision = 1;
+                    return true;
                 }
-                return [] as Array<T>;
-            },
-            Save: async (entity: BaseEntity, _user: UserInfo, _options: EntitySaveOptions): Promise<PlainRow> => {
-                await Promise.resolve();
-                const all = entity.GetAll() as PlainRow;
-                const existingId = typeof all['ID'] === 'string' && all['ID'].trim().length > 0
-                    ? all['ID']
-                    : `00000000-0000-0000-0000-${String(++seq).padStart(12, '0')}`;
-                const prev = dbRows.get(existingId);
-                const nowDate = new Date(FIXED_NOW.getTime() + dbRows.size + seq);
-                const persisted: PlainRow = {
-                    ...all,
-                    ID: existingId,
-                    __mj_CreatedAt: (prev?.['__mj_CreatedAt'] as Date | undefined) ?? nowDate,
-                    __mj_UpdatedAt: new Date(Date.now() + ++seq),
-                };
-                dbRows.set(existingId, persisted);
-                return { ...persisted };
-            },
-            GetEntityObject: async (entityName: string, user?: UserInfo): Promise<BaseEntity> => {
+
+                const current = dbRows.get(entity.ID);
+                if (!current || current.Revision !== entity.LoadedRevision) {
+                    return false;
+                }
+                const nextRevision = current.Revision + 1;
+                dbRows.set(entity.ID, {
+                    ID: entity.ID,
+                    UserID: entity.UserID,
+                    Name: entity.Name,
+                    Description: entity.Description,
+                    Status: entity.Status,
+                    RoutineType: entity.RoutineType,
+                    ScheduleMode: entity.ScheduleMode,
+                    TargetType: entity.TargetType,
+                    TargetID: entity.TargetID,
+                    CronExpression: entity.CronExpression,
+                    Timezone: entity.Timezone,
+                    InitialMessage: entity.InitialMessage,
+                    StartingPayload: entity.StartingPayload,
+                    NextRunAt: entity.NextRunAt,
+                    LastRunAt: entity.LastRunAt,
+                    WakeConfiguration: serializedConfig,
+                    WakeConfigurationObject: entity.WakeConfigurationObject,
+                    AgentConfigurationID: entity.AgentConfigurationID,
+                    Revision: nextRevision,
+                });
+                entity.LoadedRevision = nextRevision;
+                return true;
+            } finally {
+                release();
+            }
+        };
+
+        const hydrateRoutine = (row: PersistedBucketRow): CasRoutineEntity => {
+            const entity = new CasRoutineEntity(row.ID, row.Revision, saveWithOptimisticCas);
+            entity.UserID = row.UserID;
+            entity.Name = row.Name;
+            entity.Description = row.Description;
+            entity.Status = row.Status;
+            entity.RoutineType = row.RoutineType;
+            entity.ScheduleMode = row.ScheduleMode;
+            entity.TargetType = row.TargetType;
+            entity.TargetID = row.TargetID;
+            entity.CronExpression = row.CronExpression;
+            entity.Timezone = row.Timezone;
+            entity.InitialMessage = row.InitialMessage;
+            entity.StartingPayload = row.StartingPayload;
+            entity.NextRunAt = row.NextRunAt;
+            entity.LastRunAt = row.LastRunAt;
+            entity.AgentConfigurationID = row.AgentConfigurationID;
+            entity.WakeConfigurationObject = row.WakeConfigurationObject;
+            entity.WakeConfiguration = row.WakeConfiguration;
+            return entity;
+        };
+
+        const casProvider = {
+            GetEntityObject: vi.fn(async (entityName: string, user?: UserInfo) => {
                 if (entityName === 'MJ: Agent Channels') {
                     return new InMemoryAgentChannelEntity();
                 }
-                const entity = new MJUserRoutineEntityServer(routineEntityInfo);
-                entity.BindProvider(dumbSqlProvider as Partial<IEntityDataProvider> as IEntityDataProvider);
+                const entity = new CasRoutineEntity(`pending-${++seq}`, null, saveWithOptimisticCas);
                 entity.ContextCurrentUser = user ?? systemUser;
                 return entity;
-            },
-        };
-
-        const hydrateRealServerEntity = async (row: PlainRow): Promise<MJUserRoutineEntityServer> => {
-            const entity = new MJUserRoutineEntityServer(routineEntityInfo);
-            entity.BindProvider(dumbSqlProvider as Partial<IEntityDataProvider> as IEntityDataProvider);
-            entity.ContextCurrentUser = systemUser;
-            await entity.LoadFromData({ ...row });
-            return entity;
-        };
+            }),
+        } as Partial<IMetadataProvider> as IMetadataProvider;
 
         // Barrier between initial RunView read and commit on the first two concurrent arrivals
         let initialReadsAtBarrier = 0;
         let releaseInitialBarrier!: () => void;
         const initialBarrier = new Promise<void>((res) => { releaseInitialBarrier = res; });
 
-        const saveSpy = vi.spyOn(MJUserRoutineEntityServer.prototype, 'Save');
+        const saveSpy = vi.spyOn(CasRoutineEntity.prototype, 'Save');
 
         runViewMock.mockImplementation(async (params: { EntityName: string }) => {
             if (params.EntityName === 'MJ: AI Agent User Policies') {
@@ -1164,27 +1095,10 @@ describe('Epic 3 Acceptance Suite (Rhythms Model Tiers, Policy Gating, Burst Coa
                 } else {
                     await Promise.resolve();
                 }
-                const hydrated = await Promise.all(
-                    Array.from(dbRows.values()).map((row) => hydrateRealServerEntity(row))
-                );
+                const hydrated = Array.from(dbRows.values()).map((row) => hydrateRoutine(row));
                 return { Success: true, Results: hydrated };
             }
             return { Success: true, Results: [] };
-        });
-
-        const deliveredTaskIDs: string[] = [];
-        const runAgentSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockImplementation(async (params) => {
-            const payload = params.payload as { _wakeContext?: { resumeState?: CoalescedWakeResumeState } };
-            for (const ev of payload?._wakeContext?.resumeState?.pendingEvents ?? []) {
-                if (ev.taskID) {
-                    deliveredTaskIDs.push(ev.taskID);
-                }
-            }
-            return {
-                success: true,
-                payload: { ok: true },
-                agentRun: { ID: 'agent-run-multi-inst', Message: 'Done' },
-            } as Awaited<ReturnType<AgentRunner['RunAgent']>>;
         });
 
         class ServerPodA extends AgentWakeTriggerService {}
@@ -1204,27 +1118,28 @@ describe('Epic 3 Acceptance Suite (Rhythms Model Tiers, Policy Gating, Burst Coa
                     wakeReason: `Multi-instance task #${i}`,
                     resumeState: { triggerType: 'TaskAssigned', taskID: `mi-${i}` },
                     contextUser: systemUser,
-                    metadataProvider: dumbSqlProvider as Partial<IMetadataProvider> as IMetadataProvider,
+                    metadataProvider: casProvider,
                     now: new Date(FIXED_NOW.getTime() + i * 500),
                 });
             })
         );
 
         expect(triggerResults.every((r) => r.triggered && r.resultCode === 'WAKE_SCHEDULED')).toBe(true);
-        // Prove real MJUserRoutineEntityServer.prototype.Save executed and rejected at least one stale race
+        // Prove optimistic CAS Save executed and rejected at least one stale race before converging via retries
         expect(saveSpy).toHaveBeenCalled();
         const saveOutcomes = await Promise.all(saveSpy.mock.results.map((r) => r.value));
         expect(saveOutcomes.some((ok) => ok === false)).toBe(true);
 
-        const activePending = Array.from(dbRows.values()).filter((s) => s['Status'] === 'Active' && s['NextRunAt'] != null);
+        const activePending = Array.from(dbRows.values()).filter((s) => s.Status === 'Active' && s.NextRunAt != null);
         expect(activePending).toHaveLength(1);
 
-        vi.setSystemTime(new Date(FIXED_NOW.getTime() + 65_000));
-        const dispatcher = new UserRoutineDispatcherDriver();
-        const sweep = await dispatcher.Execute(createDispatcherContext());
-        expect(sweep.Success).toBe(true);
-        expect(sweep.Details?.RoutinesRun).toBe(1);
-        expect(runAgentSpy).toHaveBeenCalledTimes(1);
-        expect(new Set(deliveredTaskIDs).size).toBe(20);
+        const canonicalConfig = JSON.parse(String(activePending[0].WakeConfiguration)) as MJUserRoutineEntity_IRoutineWakeConfiguration;
+        const canonicalResume = canonicalConfig.resumeState as CoalescedWakeResumeState;
+        const deliveredTaskIDs = new Set((canonicalResume.pendingEvents ?? []).map((e) => e.taskID));
+        expect(deliveredTaskIDs.size).toBe(20);
+        for (let i = 1; i <= 20; i++) {
+            expect(deliveredTaskIDs.has(`mi-${i}`)).toBe(true);
+        }
+        expect(canonicalResume.coalescedEventCount).toBe(20);
     });
 });

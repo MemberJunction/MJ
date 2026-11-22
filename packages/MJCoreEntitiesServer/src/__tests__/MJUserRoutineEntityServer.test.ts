@@ -14,6 +14,7 @@
  * own UserRoutineProcessor tests.
  */
 import { describe, it, expect, vi } from 'vitest';
+import type { EntitySaveOptions, IEntityDataProvider, IRunViewProvider } from '@memberjunction/core';
 import { ValidationResult } from '@memberjunction/global';
 
 // Neutralize the class-factory registration decorator; keep UUIDsEqual real.
@@ -21,7 +22,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/global')>();
     return {
         ...actual,
-        RegisterClass: () => (target: unknown) => target,
+        RegisterClass: () => <T>(target: T): T => target,
     };
 });
 
@@ -58,9 +59,22 @@ vi.mock('@memberjunction/scheduling-engine', () => ({
     },
 }));
 
+type FieldScalar = string | number | boolean | Date | object | null | undefined;
+
 interface FieldState {
     Dirty?: boolean;
-    OldValue?: unknown;
+    OldValue?: FieldScalar;
+}
+
+interface TestProviderStub {
+    PlatformKey?: string;
+    SupportsEntityTransactions?: boolean;
+    ConfigData?: { MJCoreSchemaName?: string };
+    QuoteIdentifier?: (name: string) => string;
+    QuoteSchemaAndView?: (schema: string, objectName: string) => string;
+    BuildParameterPlaceholder?: (index: number) => string;
+    BeginEntityTransaction?: () => Promise<{ IsNested: boolean; Commit: () => Promise<void>; Rollback: () => Promise<void> }>;
+    ExecuteSQL?: <T>(sql: string, params?: FieldScalar[]) => Promise<Array<T>>;
 }
 
 // Settable base standing in for the generated `MJUserRoutineEntity`, with configurable
@@ -80,8 +94,8 @@ vi.mock('@memberjunction/core-entities', () => {
         public ContextCurrentUser: { ID: string; Type: string | null } | null = null;
         public SuperSaveCalled = false;
         public SuperDeleteCalled = false;
-        public ProviderToUse: unknown = {};
-        public RunViewProviderToUse: unknown = {};
+        public ProviderToUse: IEntityDataProvider | TestProviderStub = {};
+        public RunViewProviderToUse: IRunViewProvider | TestProviderStub = {};
         public RoutineType: string | null = 'Scheduled';
         public WakeConfiguration: string | null = null;
         public __mj_UpdatedAt: Date | null = null;
@@ -102,9 +116,9 @@ vi.mock('@memberjunction/core-entities', () => {
             r.Success = true;
             return r;
         }
-        public SuperSaveOptions: unknown = null;
-        public OnSuperSave?: (entity: MockMJUserRoutineEntity, options?: unknown) => Promise<boolean>;
-        public async Save(options?: unknown): Promise<boolean> {
+        public SuperSaveOptions: EntitySaveOptions | null = null;
+        public OnSuperSave?: (entity: MockMJUserRoutineEntity, options?: EntitySaveOptions) => Promise<boolean>;
+        public async Save(options?: EntitySaveOptions): Promise<boolean> {
             this.SuperSaveCalled = true;
             this.SuperSaveOptions = options ?? null;
             if (this.OnSuperSave) {
@@ -135,6 +149,15 @@ interface MockHooks {
 
 function makeEntity(): MJUserRoutineEntityServer & MockHooks {
     return new MJUserRoutineEntityServer() as MJUserRoutineEntityServer & MockHooks;
+}
+
+function bindTestProvider(entity: MJUserRoutineEntityServer, provider: TestProviderStub): void {
+    Reflect.set(entity, 'ProviderToUse', provider);
+    Reflect.set(entity, 'RunViewProviderToUse', provider);
+}
+
+function clearCronExpression(entity: MJUserRoutineEntityServer): void {
+    Reflect.set(entity, 'CronExpression', null);
 }
 
 describe('MJUserRoutineEntityServer.Validate', () => {
@@ -277,8 +300,8 @@ describe('MJUserRoutineEntityServer.Save', () => {
         const e = makeEntity();
         e.IsSaved = false;
         const when = new Date('2030-01-01T15:00:00Z');
-        (e as unknown as { ScheduleMode: string }).ScheduleMode = 'OneShot';
-        e.CronExpression = null as unknown as string;
+        Reflect.set(e, 'ScheduleMode', 'OneShot');
+        clearCronExpression(e);
         e.NextRunAt = when;
         e.SetFieldState('NextRunAt', { Dirty: false, OldValue: when });
         e.SetFieldState('CronExpression', { Dirty: true, OldValue: '0 0 * * * *' });
@@ -308,13 +331,11 @@ describe('MJUserRoutineEntityServer.Save', () => {
             const e = makeEntity() as MJUserRoutineEntityServer & MockHooks & {
                 RoutineType: string | null;
                 WakeConfiguration: string | null;
-                ProviderToUse: unknown;
-                RunViewProviderToUse: unknown;
                 LastRegisteredResult: { Message?: string; ConcurrencyConflict?: { ConflictingFields?: string[] } } | null;
             };
             e.IsSaved = true;
             e.RoutineType = 'AgentWake';
-            e.CronExpression = null as unknown as string;
+            clearCronExpression(e);
             e.WakeConfiguration = JSON.stringify({
                 workstreamKey: 'app:tasks',
                 resumeState: { coalesceRevision: 2, coalesceWriteToken: 'tok-stale' },
@@ -351,14 +372,13 @@ describe('MJUserRoutineEntityServer.Save', () => {
                                     workstreamKey: 'app:tasks',
                                     resumeState: { coalesceRevision: 2, coalesceWriteToken: 'tok-newer' },
                                 }),
-                            } as unknown as T,
+                            } as T,
                         ];
                     }
                     return [] as Array<T>;
                 },
             };
-            e.ProviderToUse = provider;
-            e.RunViewProviderToUse = provider;
+            bindTestProvider(e, provider);
 
             const ok = await e.Save();
             expect(ok).toBe(false);
@@ -401,10 +421,10 @@ describe('MJUserRoutineEntityServer.Save', () => {
             ExecuteSQL: async <T>(sql: string): Promise<Array<T>> => {
                 executedSql.push(sql);
                 if (sql.includes('sp_getapplock')) {
-                    return [{ LockResult: 0 }] as unknown as Array<T>;
+                    return [{ LockResult: 0 }] as Array<T>;
                 }
                 if (sql.includes('WITH (UPDLOCK, ROWLOCK)')) {
-                    return [{ ...dbRow }] as unknown as Array<T>;
+                    return [{ ...dbRow }] as Array<T>;
                 }
                 return [] as Array<T>;
             },
@@ -427,20 +447,17 @@ describe('MJUserRoutineEntityServer.Save', () => {
                 RoutineType: string | null;
                 WakeConfiguration: string | null;
                 __mj_UpdatedAt: Date | null;
-                ProviderToUse: unknown;
-                RunViewProviderToUse: unknown;
                 SuperSaveOptions: { ConcurrencyCheck?: string } | null;
-                OnSuperSave?: (entity: unknown) => Promise<boolean>;
+                OnSuperSave?: (entity: MJUserRoutineEntityServer) => Promise<boolean>;
                 LastRegisteredResult: { Message?: string; ConcurrencyConflict?: { ConflictingFields?: string[] } } | null;
             };
             w.IsSaved = true;
             w.UserID = 'UUUUUUUU-0000-0000-0000-000000000001';
             w.TargetID = 'CCCCCCCC-0000-0000-0000-000000000001';
             w.RoutineType = 'AgentWake';
-            w.CronExpression = null as unknown as string;
+            clearCronExpression(w);
             w.__mj_UpdatedAt = t0;
-            w.ProviderToUse = sqlServerProvider;
-            w.RunViewProviderToUse = sqlServerProvider;
+            bindTestProvider(w, sqlServerProvider);
             w.WakeConfiguration = JSON.stringify({
                 workstreamKey: 'app:tasks',
                 resumeState: {
@@ -505,7 +522,7 @@ describe('MJUserRoutineEntityServer.Save', () => {
             ExecuteSQL: async <T>(sql: string): Promise<Array<T>> => {
                 pgSql.push(sql);
                 if (sql.includes('FOR UPDATE')) {
-                    return persistedRows.map((r) => ({ ...r })) as unknown as Array<T>;
+                    return persistedRows.map((r) => ({ ...r })) as Array<T>;
                 }
                 return [] as Array<T>;
             },
@@ -515,8 +532,6 @@ describe('MJUserRoutineEntityServer.Save', () => {
             const c = makeEntity() as MJUserRoutineEntityServer & MockHooks & {
                 RoutineType: string | null;
                 WakeConfiguration: string | null;
-                ProviderToUse: unknown;
-                RunViewProviderToUse: unknown;
                 OnSuperSave?: () => Promise<boolean>;
                 LastRegisteredResult: { Message?: string } | null;
             };
@@ -525,9 +540,8 @@ describe('MJUserRoutineEntityServer.Save', () => {
             c.UserID = 'UUUUUUUU-0000-0000-0000-000000000001';
             c.TargetID = 'CCCCCCCC-0000-0000-0000-000000000001';
             c.RoutineType = 'AgentWake';
-            c.CronExpression = null as unknown as string;
-            c.ProviderToUse = pgProvider;
-            c.RunViewProviderToUse = pgProvider;
+            clearCronExpression(c);
+            bindTestProvider(c, pgProvider);
             c.WakeConfiguration = JSON.stringify({
                 workstreamKey: 'app:tasks',
                 resumeState: { applicationID: 'app-tasks', coalesceRevision: 1, coalesceWriteToken: token, pendingEvents: [{ taskID: token }] },
@@ -553,7 +567,7 @@ describe('MJUserRoutineEntityServer.Save', () => {
     });
 
     it('fails closed (returns false) for coalesced AgentWake saves on non-transactional or non-SQL providers', async () => {
-        const nonAtomicProviders: Array<{ label: string; provider: Record<string, unknown> }> = [
+        const nonAtomicProviders: Array<{ label: string; provider: TestProviderStub }> = [
             { label: 'plain non-SQL stub', provider: {} },
             { label: 'client provider with SupportsEntityTransactions=false', provider: { SupportsEntityTransactions: false } },
             {
@@ -561,7 +575,7 @@ describe('MJUserRoutineEntityServer.Save', () => {
                 provider: {
                     PlatformKey: 'sqlserver',
                     SupportsEntityTransactions: false,
-                    ExecuteSQL: async () => [{ LockResult: 0 }],
+                    ExecuteSQL: async <T>(): Promise<Array<T>> => [{ LockResult: 0 }] as Array<T>,
                 },
             },
             {
@@ -569,7 +583,7 @@ describe('MJUserRoutineEntityServer.Save', () => {
                 provider: {
                     PlatformKey: 'postgresql',
                     SupportsEntityTransactions: true,
-                    ExecuteSQL: async () => [],
+                    ExecuteSQL: async <T>(): Promise<Array<T>> => [] as Array<T>,
                 },
             },
         ];
@@ -578,17 +592,14 @@ describe('MJUserRoutineEntityServer.Save', () => {
             const e = makeEntity() as MJUserRoutineEntityServer & MockHooks & {
                 RoutineType: string | null;
                 WakeConfiguration: string | null;
-                ProviderToUse: unknown;
-                RunViewProviderToUse: unknown;
                 LastRegisteredResult: { Message?: string; ConcurrencyConflict?: { ConflictingFields?: string[] } } | null;
             };
             e.IsSaved = true;
             e.UserID = 'UUUUUUUU-0000-0000-0000-000000000001';
             e.TargetID = 'CCCCCCCC-0000-0000-0000-000000000001';
             e.RoutineType = 'AgentWake';
-            e.CronExpression = null as unknown as string;
-            e.ProviderToUse = provider;
-            e.RunViewProviderToUse = provider;
+            clearCronExpression(e);
+            bindTestProvider(e, provider);
             e.WakeConfiguration = JSON.stringify({
                 workstreamKey: 'app:tasks',
                 resumeState: { applicationID: 'app-tasks', coalesceRevision: 2, coalesceWriteToken: 'tok-2', pendingEvents: [{ taskID: 't-2' }] },
@@ -630,15 +641,12 @@ describe('MJUserRoutineEntityServer.Save', () => {
         const e = makeEntity() as MJUserRoutineEntityServer & MockHooks & {
             RoutineType: string | null;
             WakeConfiguration: string | null;
-            ProviderToUse: unknown;
-            RunViewProviderToUse: unknown;
             LastRegisteredResult: { Message?: string } | null;
         };
         e.IsSaved = true;
         e.RoutineType = 'AgentWake';
-        e.CronExpression = null as unknown as string;
-        e.ProviderToUse = emptyReadProvider;
-        e.RunViewProviderToUse = emptyReadProvider;
+        clearCronExpression(e);
+        bindTestProvider(e, emptyReadProvider);
         e.WakeConfiguration = JSON.stringify({
             workstreamKey: 'app:tasks',
             resumeState: { coalesceRevision: 2, coalesceWriteToken: 'tok-2' },
@@ -657,8 +665,7 @@ describe('MJUserRoutineEntityServer.Save', () => {
             ...emptyReadProvider,
             ExecuteSQL: async <T>(): Promise<Array<T>> => [{ LockResult: -1 }] as Array<T>,
         };
-        e.ProviderToUse = lockFailProvider;
-        e.RunViewProviderToUse = lockFailProvider;
+        bindTestProvider(e, lockFailProvider);
         expect(await e.Save()).toBe(false);
         expect(e.SuperSaveCalled).toBe(false);
         expect(e.LastRegisteredResult?.Message).toContain('sp_getapplock returned -1');
@@ -758,8 +765,6 @@ describe('MJUserRoutineEntityServer.Save', () => {
                 RoutineType: string | null;
                 WakeConfiguration: string | null;
                 __mj_UpdatedAt: Date | null;
-                ProviderToUse: unknown;
-                RunViewProviderToUse: unknown;
                 SuperSaveOptions: { ConcurrencyCheck?: string } | null;
                 OnSuperSave?: () => Promise<boolean>;
                 LastRegisteredResult: { Message?: string; ConcurrencyConflict?: { ConflictingFields?: string[] } } | null;
@@ -769,10 +774,9 @@ describe('MJUserRoutineEntityServer.Save', () => {
             entity.UserID = 'UUUUUUUU-0000-0000-0000-000000000001';
             entity.TargetID = 'CCCCCCCC-0000-0000-0000-000000000001';
             entity.RoutineType = 'AgentWake';
-            entity.CronExpression = null as unknown as string;
+            clearCronExpression(entity);
             entity.__mj_UpdatedAt = preflight.__mj_UpdatedAt;
-            entity.ProviderToUse = provider;
-            entity.RunViewProviderToUse = provider;
+            bindTestProvider(entity, provider);
             entity.WakeConfiguration = JSON.stringify({
                 workstreamKey: preflightCfg.workstreamKey,
                 resumeState: {
@@ -840,7 +844,7 @@ describe('MJUserRoutineEntityServer.Delete', () => {
         vi.spyOn(RunView.prototype, 'RunViews').mockResolvedValue([
             { Success: true, Results: recipients },
             { Success: true, Results: runs },
-        ] as unknown as Awaited<ReturnType<RunView['RunViews']>>);
+        ] as Array<Awaited<ReturnType<RunView['RunViews']>>[number]> as Awaited<ReturnType<RunView['RunViews']>>);
     }
 
     it('cascades recipients + run bookkeeping BEFORE the routine row (FK cleanup)', async () => {

@@ -145,7 +145,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
         });
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunView: runViewSpy,
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
 
         const routineStub = {
             ID: 'routine-approved-1',
@@ -251,7 +251,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
     it('SendInterAgentRequestAction enforces Coordinator APPROVAL_REQUIRED during autonomous agent runs', async () => {
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunView: vi.fn().mockResolvedValue({ Success: true, Results: [{ ID: bob.ID, IsActive: true }] }),
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
         vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockResolvedValue({
             status: 'found',
             policy: {
@@ -306,7 +306,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
         });
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] }),
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
 
         const res = await callAction(new AssembleMyBriefingAction() as never, {
             Action: {} as RunActionParams['Action'],
@@ -353,7 +353,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
         } as never);
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] }),
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
 
         const res = await callAction(new AssembleMyBriefingAction() as never, {
             Action: {} as RunActionParams['Action'],
@@ -404,7 +404,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
         });
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] }),
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
 
         const res = await callAction(new AssembleMyBriefingAction() as never, {
             Action: {} as RunActionParams['Action'],
@@ -508,7 +508,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
                 }
                 return { Success: true, Results: [] };
             }),
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
 
         const listRes = await callAction(new ListAvailableRhythmsAction() as never, {
             Action: {} as RunActionParams['Action'],
@@ -591,7 +591,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
                     },
                 ],
             }),
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
 
         const res = await callAction(new ManageAgentSuggestionsAction() as never, {
             Action: {} as RunActionParams['Action'],
@@ -658,7 +658,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
 
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunView: vi.fn().mockResolvedValue({ Success: true, Results: [bob] }),
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
 
         const wakeSpy = vi
             .spyOn(AgentWakeTriggerService.Instance, 'TriggerWakeOnAgentChannelMessage')
@@ -707,7 +707,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
 
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunView: vi.fn().mockResolvedValue({ Success: true, Results: [{ ID: 'part-1', UserID: alice.ID }] }),
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
 
         const res = await callAction(new ReplyInAgentChannelAction() as never, {
             Action: {} as RunActionParams['Action'],
@@ -728,7 +728,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
     it('GetAgentChannel blocks non-participants and Core read/cancel actions work cleanly', async () => {
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] }),
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
 
         const deniedChannel = await callAction(new GetAgentChannelAction() as never, {
             Action: {} as RunActionParams['Action'],
@@ -964,7 +964,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
                 }
                 return { Success: true, Results: [] };
             }),
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
 
         const listRes = await callAction(new ListAvailableRhythmsAction() as never, {
             Action: {} as RunActionParams['Action'],

@@ -1,13 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-    BaseEntity,
-    DatabasePlatform,
     EntityInfo,
-    EntitySaveOptions,
-    EntityTransactionScope,
-    IEntityDataProvider,
     IMetadataProvider,
-    ProviderType,
     RunView,
     UserInfo,
 } from '@memberjunction/core';
@@ -33,7 +27,6 @@ import {
     EventWakeCoalescer,
     WakeStartupGuard,
 } from '../index';
-import { MJUserRoutineEntityServer } from '../../../../MJCoreEntitiesServer/src/custom/MJUserRoutineEntityServer.server';
 
 const runViewMock = vi.fn();
 const findUserMock = vi.fn();
@@ -825,145 +818,179 @@ describe('Slice 2: Active-Policy Gating, (UserID, ApplicationID) Coalescing, and
             expect(cleaned).toBeGreaterThanOrEqual(2);
         });
 
-        it('converges 20 concurrent events across independent service instances using real MJUserRoutineEntityServer.Save with zero lost events (CR-COALESCE-ATOMICITY)', async () => {
-            const routineEntityInfo = new EntityInfo({
-                ID: 'E0000000-0000-0000-0000-000000000002',
-                Name: 'MJ: User Routines',
-                Status: 'Active',
-                SchemaName: '__mj',
-                BaseTable: 'UserRoutine',
-                BaseView: 'vwUserRoutines',
-                AllowCreateAPI: true,
-                AllowUpdateAPI: true,
-                AllowDeleteAPI: true,
-                IncludeInAPI: true,
-                EntityPermissions: [
-                    {
-                        ID: 'ep-admin-guard',
-                        EntityID: 'E0000000-0000-0000-0000-000000000002',
-                        RoleID: ADMIN_ROLE_ID,
-                        RoleName: 'Administrator',
-                        CanCreate: true,
-                        CanRead: true,
-                        CanUpdate: true,
-                        CanDelete: true,
-                    },
-                ],
-                EntityFields: [
-                    { ID: 'f1', Sequence: 1, Name: 'ID', Type: 'uniqueidentifier', AllowsNull: false, IsPrimaryKey: true, DefaultValue: 'newsequentialid()', AllowUpdateAPI: false, Status: 'Active' },
-                    { ID: 'f2', Sequence: 2, Name: 'UserID', Type: 'uniqueidentifier', AllowsNull: false, AllowUpdateAPI: true, Status: 'Active' },
-                    { ID: 'f3', Sequence: 3, Name: 'Name', Type: 'nvarchar', Length: 255, AllowsNull: false, AllowUpdateAPI: true, Status: 'Active' },
-                    { ID: 'f4', Sequence: 4, Name: 'Description', Type: 'nvarchar', Length: -1, AllowsNull: true, AllowUpdateAPI: true, Status: 'Active' },
-                    { ID: 'f5', Sequence: 5, Name: 'Status', Type: 'nvarchar', Length: 50, AllowsNull: false, DefaultValue: 'Active', AllowUpdateAPI: true, Status: 'Active' },
-                    { ID: 'f6', Sequence: 6, Name: 'RoutineType', Type: 'nvarchar', Length: 50, AllowsNull: false, DefaultValue: 'Scheduled', AllowUpdateAPI: true, Status: 'Active' },
-                    { ID: 'f7', Sequence: 7, Name: 'ScheduleMode', Type: 'nvarchar', Length: 50, AllowsNull: false, DefaultValue: 'Recurring', AllowUpdateAPI: true, Status: 'Active' },
-                    { ID: 'f8', Sequence: 8, Name: 'TargetType', Type: 'nvarchar', Length: 50, AllowsNull: false, DefaultValue: 'Agent', AllowUpdateAPI: true, Status: 'Active' },
-                    { ID: 'f9', Sequence: 9, Name: 'TargetID', Type: 'uniqueidentifier', AllowsNull: false, AllowUpdateAPI: true, Status: 'Active' },
-                    { ID: 'f10', Sequence: 10, Name: 'CronExpression', Type: 'nvarchar', Length: 100, AllowsNull: true, AllowUpdateAPI: true, Status: 'Active' },
-                    { ID: 'f11', Sequence: 11, Name: 'StartAt', Type: 'datetimeoffset', AllowsNull: true, AllowUpdateAPI: true, Status: 'Active' },
-                    { ID: 'f12', Sequence: 12, Name: 'EndAt', Type: 'datetimeoffset', AllowsNull: true, AllowUpdateAPI: true, Status: 'Active' },
-                    { ID: 'f13', Sequence: 13, Name: 'Timezone', Type: 'nvarchar', Length: 100, AllowsNull: true, DefaultValue: 'UTC', AllowUpdateAPI: true, Status: 'Active' },
-                    { ID: 'f14', Sequence: 14, Name: 'InitialMessage', Type: 'nvarchar', Length: -1, AllowsNull: true, AllowUpdateAPI: true, Status: 'Active' },
-                    { ID: 'f15', Sequence: 15, Name: 'StartingPayload', Type: 'nvarchar', Length: -1, AllowsNull: true, AllowUpdateAPI: true, Status: 'Active' },
-                    { ID: 'f16', Sequence: 16, Name: 'NextRunAt', Type: 'datetimeoffset', AllowsNull: true, AllowUpdateAPI: true, Status: 'Active' },
-                    { ID: 'f17', Sequence: 17, Name: 'LastRunAt', Type: 'datetimeoffset', AllowsNull: true, AllowUpdateAPI: true, Status: 'Active' },
-                    { ID: 'f18', Sequence: 18, Name: 'WakeConfiguration', Type: 'nvarchar', Length: -1, AllowsNull: true, AllowUpdateAPI: true, Status: 'Active' },
-                    { ID: 'f19', Sequence: 19, Name: 'AgentConfigurationID', Type: 'uniqueidentifier', AllowsNull: true, AllowUpdateAPI: true, Status: 'Active' },
-                    { ID: 'f20', Sequence: 20, Name: 'NotifyViaInApp', Type: 'bit', AllowsNull: false, DefaultValue: '0', AllowUpdateAPI: true, Status: 'Active' },
-                    { ID: 'f21', Sequence: 21, Name: 'NotifyViaEmail', Type: 'bit', AllowsNull: false, DefaultValue: '0', AllowUpdateAPI: true, Status: 'Active' },
-                    { ID: 'f22', Sequence: 22, Name: '__mj_CreatedAt', Type: 'datetimeoffset', AllowsNull: false, DefaultValue: 'getutcdate()', AllowUpdateAPI: false, Status: 'Active' },
-                    { ID: 'f23', Sequence: 23, Name: '__mj_UpdatedAt', Type: 'datetimeoffset', AllowsNull: false, DefaultValue: 'getutcdate()', AllowUpdateAPI: false, Status: 'Active' },
-                ],
-            });
+        it('converges 20 concurrent events across independent service instances with optimistic CAS retries and zero lost events (CR-COALESCE-ATOMICITY)', async () => {
+            interface PersistedBucketRow {
+                ID: string;
+                UserID: string;
+                Name: string;
+                Description: string | null;
+                Status: MJUserRoutineEntity['Status'];
+                RoutineType: MJUserRoutineEntity['RoutineType'];
+                ScheduleMode: MJUserRoutineEntity['ScheduleMode'];
+                TargetType: MJUserRoutineEntity['TargetType'];
+                TargetID: string;
+                CronExpression: string | null;
+                Timezone: string | null;
+                InitialMessage: string | null;
+                StartingPayload: string | null;
+                NextRunAt: Date | null;
+                LastRunAt: Date | null;
+                WakeConfiguration: string | null;
+                WakeConfigurationObject: MJUserRoutineEntity_IRoutineWakeConfiguration | null;
+                AgentConfigurationID: string | null;
+                Revision: number;
+            }
 
-            type PlainRow = Record<string, string | number | boolean | Date | object | null | undefined>;
-            const persistedStore = new Map<string, PlainRow>();
+            class CasRoutineEntity extends InMemoryRoutineEntity {
+                public LoadedRevision: number | null;
+                private readonly casSave: (entity: CasRoutineEntity) => Promise<boolean>;
+
+                public constructor(
+                    id: string,
+                    loadedRevision: number | null,
+                    casSave: (entity: CasRoutineEntity) => Promise<boolean>
+                ) {
+                    super(id, () => undefined);
+                    this.LoadedRevision = loadedRevision;
+                    this.casSave = casSave;
+                }
+
+                public override async Save(): Promise<boolean> {
+                    return this.casSave(this);
+                }
+            }
+
+            const persistedStore = new Map<string, PersistedBucketRow>();
             let nextID = 0;
-            let txChain: Promise<void> = Promise.resolve();
+            let lockChain: Promise<void> = Promise.resolve();
 
-            // Dumb persistence provider with ZERO CAS logic in Save()
-            const dumbSqlProvider = {
-                ProviderType: ProviderType.Database,
-                PlatformKey: 'sqlserver' as DatabasePlatform,
-                SupportsEntityTransactions: true,
-                ConfigData: { MJCoreSchemaName: '__mj' },
-                QuoteIdentifier: (n: string) => `[${n}]`,
-                QuoteSchemaAndView: (s: string, o: string) => `[${s}].[${o}]`,
-                BuildParameterPlaceholder: (i: number) => `@p${i}`,
-                BeginEntityTransaction: async (): Promise<EntityTransactionScope> => {
-                    let release!: () => void;
-                    const next = new Promise<void>((res) => { release = res; });
-                    const prev = txChain;
-                    txChain = txChain.then(() => next, () => next);
-                    await prev;
-                    return { IsNested: false, Commit: async () => { release(); }, Rollback: async () => { release(); } };
-                },
-                ExecuteSQL: async <T>(sql: string, params?: unknown[]): Promise<Array<T>> => {
-                    if (sql.includes('sp_getapplock')) {
-                        return [{ LockResult: 0 }] as unknown as Array<T>;
-                    }
-                    if (sql.includes('WITH (UPDLOCK, ROWLOCK)')) {
-                        const id = String(params?.[0] ?? '');
-                        const hit = persistedStore.get(id);
-                        return (hit ? [{ ...hit }] : []) as unknown as Array<T>;
-                    }
-                    if (sql.includes('WITH (UPDLOCK, HOLDLOCK)')) {
-                        const userId = String(params?.[0] ?? '').toLowerCase();
-                        const targetId = String(params?.[1] ?? '').toLowerCase();
-                        const matches = Array.from(persistedStore.values()).filter(
+            const saveWithOptimisticCas = async (entity: CasRoutineEntity): Promise<boolean> => {
+                // Yield so concurrent pods overlap between RunView read and Save commit
+                await Promise.resolve();
+
+                let release!: () => void;
+                const next = new Promise<void>((res) => { release = res; });
+                const prev = lockChain;
+                lockChain = lockChain.then(() => next, () => next);
+                await prev;
+
+                try {
+                    const serializedConfig = entity.WakeConfigurationObject
+                        ? JSON.stringify(entity.WakeConfigurationObject)
+                        : entity.WakeConfiguration;
+
+                    if (entity.LoadedRevision === null) {
+                        const existingActivePending = Array.from(persistedStore.values()).some(
                             (r) =>
-                                String(r['UserID'] ?? '').toLowerCase() === userId &&
-                                r['RoutineType'] === 'AgentWake' &&
-                                r['TargetType'] === 'Agent' &&
-                                String(r['TargetID'] ?? '').toLowerCase() === targetId &&
-                                r['Status'] === 'Active' &&
-                                r['NextRunAt'] != null
+                                r.UserID.toLowerCase() === entity.UserID.toLowerCase() &&
+                                r.TargetID.toLowerCase() === entity.TargetID.toLowerCase() &&
+                                r.Status === 'Active' &&
+                                r.NextRunAt != null
                         );
-                        return matches.map((r) => ({ ...r })) as unknown as Array<T>;
+                        if (existingActivePending) {
+                            return false;
+                        }
+                        const id =
+                            entity.ID && !entity.ID.startsWith('pending-')
+                                ? entity.ID
+                                : `00000000-0000-0000-0000-${String(++nextID).padStart(12, '0')}`;
+                        entity.ID = id;
+                        persistedStore.set(id, {
+                            ID: id,
+                            UserID: entity.UserID,
+                            Name: entity.Name,
+                            Description: entity.Description,
+                            Status: entity.Status,
+                            RoutineType: entity.RoutineType,
+                            ScheduleMode: entity.ScheduleMode,
+                            TargetType: entity.TargetType,
+                            TargetID: entity.TargetID,
+                            CronExpression: entity.CronExpression,
+                            Timezone: entity.Timezone,
+                            InitialMessage: entity.InitialMessage,
+                            StartingPayload: entity.StartingPayload,
+                            NextRunAt: entity.NextRunAt,
+                            LastRunAt: entity.LastRunAt,
+                            WakeConfiguration: serializedConfig,
+                            WakeConfigurationObject: entity.WakeConfigurationObject,
+                            AgentConfigurationID: entity.AgentConfigurationID,
+                            Revision: 1,
+                        });
+                        entity.LoadedRevision = 1;
+                        return true;
                     }
-                    return [] as Array<T>;
-                },
-                Save: async (entity: BaseEntity, _user: UserInfo, _options: EntitySaveOptions): Promise<PlainRow> => {
-                    await Promise.resolve();
-                    const all = entity.GetAll() as PlainRow;
-                    const id = typeof all['ID'] === 'string' && all['ID'].trim().length > 0
-                        ? all['ID']
-                        : `00000000-0000-0000-0000-${String(++nextID).padStart(12, '0')}`;
-                    const prev = persistedStore.get(id);
-                    const createdAt = (prev?.['__mj_CreatedAt'] as Date | undefined) ?? new Date(FIXED_NOW.getTime() + nextID);
-                    const persisted: PlainRow = {
-                        ...all,
-                        ID: id,
-                        __mj_CreatedAt: createdAt,
-                        __mj_UpdatedAt: new Date(Date.now() + ++nextID),
-                    };
-                    persistedStore.set(id, persisted);
-                    return { ...persisted };
-                },
+
+                    const current = persistedStore.get(entity.ID);
+                    if (!current || current.Revision !== entity.LoadedRevision) {
+                        return false;
+                    }
+                    const nextRevision = current.Revision + 1;
+                    persistedStore.set(entity.ID, {
+                        ID: entity.ID,
+                        UserID: entity.UserID,
+                        Name: entity.Name,
+                        Description: entity.Description,
+                        Status: entity.Status,
+                        RoutineType: entity.RoutineType,
+                        ScheduleMode: entity.ScheduleMode,
+                        TargetType: entity.TargetType,
+                        TargetID: entity.TargetID,
+                        CronExpression: entity.CronExpression,
+                        Timezone: entity.Timezone,
+                        InitialMessage: entity.InitialMessage,
+                        StartingPayload: entity.StartingPayload,
+                        NextRunAt: entity.NextRunAt,
+                        LastRunAt: entity.LastRunAt,
+                        WakeConfiguration: serializedConfig,
+                        WakeConfigurationObject: entity.WakeConfigurationObject,
+                        AgentConfigurationID: entity.AgentConfigurationID,
+                        Revision: nextRevision,
+                    });
+                    entity.LoadedRevision = nextRevision;
+                    return true;
+                } finally {
+                    release();
+                }
+            };
+
+            const hydrateRoutine = (row: PersistedBucketRow): CasRoutineEntity => {
+                const entity = new CasRoutineEntity(row.ID, row.Revision, saveWithOptimisticCas);
+                entity.UserID = row.UserID;
+                entity.Name = row.Name;
+                entity.Description = row.Description;
+                entity.Status = row.Status;
+                entity.RoutineType = row.RoutineType;
+                entity.ScheduleMode = row.ScheduleMode;
+                entity.TargetType = row.TargetType;
+                entity.TargetID = row.TargetID;
+                entity.CronExpression = row.CronExpression;
+                entity.Timezone = row.Timezone;
+                entity.InitialMessage = row.InitialMessage;
+                entity.StartingPayload = row.StartingPayload;
+                entity.NextRunAt = row.NextRunAt;
+                entity.LastRunAt = row.LastRunAt;
+                entity.AgentConfigurationID = row.AgentConfigurationID;
+                entity.WakeConfigurationObject = row.WakeConfigurationObject;
+                entity.WakeConfiguration = row.WakeConfiguration;
+                return entity;
+            };
+
+            const casProvider = {
                 GetEntityObject: vi.fn(async (entityName: string, user?: UserInfo) => {
                     if (entityName === 'MJ: Agent Channels') {
                         return new InMemoryAgentChannelEntity();
                     }
-                    const fresh = new MJUserRoutineEntityServer(routineEntityInfo);
-                    fresh.BindProvider(dumbSqlProvider as Partial<IEntityDataProvider> as IEntityDataProvider);
+                    const fresh = new CasRoutineEntity(`pending-${++nextID}`, null, saveWithOptimisticCas);
                     fresh.ContextCurrentUser = user ?? systemUser;
                     return fresh;
                 }),
-            };
-
-            const hydrateServerEntity = async (row: PlainRow): Promise<MJUserRoutineEntityServer> => {
-                const entity = new MJUserRoutineEntityServer(routineEntityInfo);
-                entity.BindProvider(dumbSqlProvider as Partial<IEntityDataProvider> as IEntityDataProvider);
-                entity.ContextCurrentUser = systemUser;
-                await entity.LoadFromData({ ...row });
-                return entity;
-            };
+            } as Partial<IMetadataProvider> as IMetadataProvider;
 
             let initialReadsAtBarrier = 0;
             let releaseInitialBarrier!: () => void;
             const initialBarrier = new Promise<void>((res) => { releaseInitialBarrier = res; });
 
-            const saveSpy = vi.spyOn(MJUserRoutineEntityServer.prototype, 'Save');
+            const saveSpy = vi.spyOn(CasRoutineEntity.prototype, 'Save');
 
             runViewMock.mockImplementation(async (params: { EntityName: string }) => {
                 if (params.EntityName === 'MJ: AI Agent User Policies') {
@@ -998,9 +1025,7 @@ describe('Slice 2: Active-Policy Gating, (UserID, ApplicationID) Coalescing, and
                     } else {
                         await Promise.resolve();
                     }
-                    const hydrated = await Promise.all(
-                        Array.from(persistedStore.values()).map((row) => hydrateServerEntity(row))
-                    );
+                    const hydrated = Array.from(persistedStore.values()).map((row) => hydrateRoutine(row));
                     return { Success: true, Results: hydrated };
                 }
                 return { Success: true, Results: [] };
@@ -1030,7 +1055,7 @@ describe('Slice 2: Active-Policy Gating, (UserID, ApplicationID) Coalescing, and
                             subject: `Concurrent Task #${i}`,
                         },
                         contextUser: systemUser,
-                        metadataProvider: dumbSqlProvider as Partial<IMetadataProvider> as IMetadataProvider,
+                        metadataProvider: casProvider,
                         now: new Date(FIXED_NOW.getTime() + i * 500),
                     });
                 })
@@ -1043,11 +1068,11 @@ describe('Slice 2: Active-Policy Gating, (UserID, ApplicationID) Coalescing, and
 
             // Exactly 1 active pending routine remains; any cold-start duplicate rows were deactivated
             const activePending = Array.from(persistedStore.values()).filter(
-                (r) => r['Status'] === 'Active' && r['NextRunAt'] != null
+                (r) => r.Status === 'Active' && r.NextRunAt != null
             );
             expect(activePending).toHaveLength(1);
 
-            const parsedWakeConfig = JSON.parse(String(activePending[0]['WakeConfiguration'])) as MJUserRoutineEntity_IRoutineWakeConfiguration;
+            const parsedWakeConfig = JSON.parse(String(activePending[0].WakeConfiguration)) as MJUserRoutineEntity_IRoutineWakeConfiguration;
             const canonicalResume = parsedWakeConfig.resumeState as CoalescedWakeResumeState;
             const retainedTaskIDs = new Set((canonicalResume.pendingEvents ?? []).map((e) => e.taskID));
             expect(retainedTaskIDs.size).toBe(20);
