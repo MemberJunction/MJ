@@ -1166,4 +1166,60 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
         expect(routineStub.AgentConfigurationID).toBe(highPowerCfgID);
         expect(JSON.parse(enabledRes.Message!).AgentConfigurationID).toBe(highPowerCfgID);
     });
+
+    it('AssembleMyBriefingAction includes Team section for managers with direct reports and omits Team for individual contributors', async () => {
+        vi.spyOn(ActionEngineServer.Instance, 'Config').mockResolvedValue(undefined);
+        vi.spyOn(AIEngine.Instance, 'GetBriefingActionsForAgent').mockReturnValue([]);
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn(async (p: { EntityName: string; ExtraFilter?: string }) => {
+                if (p.EntityName === 'MJ: Users' && p.ExtraFilter?.includes(alice.ID)) {
+                    return {
+                        Success: true,
+                        Results: [{ ID: alice.ID, EmployeeID: 'emp-alice', Email: alice.Email, IsActive: true }],
+                    };
+                }
+                if (p.EntityName === 'MJ: Employees' && p.ExtraFilter?.includes("SupervisorID='emp-alice'")) {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: 'emp-bob',
+                                FirstName: 'Bob',
+                                LastName: 'Manager',
+                                Email: 'bob@example.com',
+                                Title: 'Engineer',
+                                SupervisorID: 'emp-alice',
+                                Active: true,
+                            },
+                        ],
+                    };
+                }
+                return { Success: true, Results: [] };
+            }),
+        } as Partial<RunView> as RunView);
+
+        const managerBriefingRes = await callAction(new AssembleMyBriefingAction() as never, {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: alice,
+            Filters: [],
+            Params: [{ Name: 'HorizonDays', Type: 'Input', Value: 7 }],
+        });
+        expect(managerBriefingRes.Success).toBe(true);
+        const managerPayload = JSON.parse(managerBriefingRes.Message!) as {
+            Team?: { DirectReportCount: number; DirectReports: Array<{ Email: string }> };
+        };
+        expect(managerPayload.Team).toBeDefined();
+        expect(managerPayload.Team?.DirectReportCount).toBe(1);
+        expect(managerPayload.Team?.DirectReports[0]?.Email).toBe('bob@example.com');
+
+        const icBriefingRes = await callAction(new AssembleMyBriefingAction() as never, {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: bob,
+            Filters: [],
+            Params: [{ Name: 'HorizonDays', Type: 'Input', Value: 7 }],
+        });
+        expect(icBriefingRes.Success).toBe(true);
+        const icPayload = JSON.parse(icBriefingRes.Message!) as Record<string, unknown>;
+        expect('Team' in icPayload).toBe(false);
+    });
 });

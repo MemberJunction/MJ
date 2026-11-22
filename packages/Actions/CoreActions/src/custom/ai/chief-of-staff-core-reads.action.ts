@@ -18,6 +18,12 @@ import {
     MJAIAgentEntityExtended,
     TypedActionPolicyGuard,
 } from '@memberjunction/ai-core-plus';
+import {
+    AssembleChiefOfStaffBriefingEnvelope,
+    BuildTeamBriefingSection,
+    type TeamBriefingSection,
+    type TeamDirectReportSummary,
+} from '@memberjunction/ai-agents';
 import { AIEngine } from '@memberjunction/aiengine';
 import { UserCache } from '@memberjunction/generic-database-provider';
 
@@ -329,8 +335,9 @@ export class AssembleMyBriefingAction extends BaseAction {
                 (entry) => !includeSkillSet || includeSkillSet.has(entry.skill.Name.trim().toLowerCase())
             );
 
-            const [coreState, skillBriefings] = await Promise.all([
+            const [coreState, teamSection, skillBriefings] = await Promise.all([
                 this.loadCoreBriefingState(agent.ID, contextUser, params.Context, md),
+                this.loadTeamBriefingSection(contextUser, params.Context, md),
                 Promise.all(
                     briefingEntries.map((entry) =>
                         this.runBriefingContributor(
@@ -346,14 +353,14 @@ export class AssembleMyBriefingAction extends BaseAction {
                 ),
             ]);
 
-            const payload = {
-                GeneratedAtISO: new Date().toISOString(),
+            const payload = AssembleChiefOfStaffBriefingEnvelope({
                 HorizonDays: horizonDays,
                 Agent: { AgentID: agent.ID, Name: agent.Name },
                 User: { UserID: contextUser.ID, Name: contextUser.Name, Email: contextUser.Email },
                 Core: coreState,
                 SkillBriefings: skillBriefings,
-            };
+                Team: teamSection,
+            });
 
             const outParams = setOutputParam(params, 'BriefingJSON', JSON.stringify(payload));
             return {
@@ -542,6 +549,50 @@ export class AssembleMyBriefingAction extends BaseAction {
             ActiveRoutines: activeRoutines,
             AgentChannels: activeChannels,
             OpenSuggestions: openSuggestions,
+        };
+    }
+
+    private async loadTeamBriefingSection(
+        contextUser: UserInfo,
+        actionContext: unknown,
+        md: IMetadataProvider
+    ): Promise<TeamBriefingSection | null> {
+        const empGuard = await TypedActionPolicyGuard.CheckEntityAccess({
+            entityName: 'MJ: Employees',
+            operation: 'Read',
+            contextUser,
+            actionContext,
+            provider: md,
+        });
+        if (!empGuard.Allowed) {
+            return null;
+        }
+        const team = await BuildTeamBriefingSection({
+            ContextUser: contextUser,
+            MetadataProvider: md,
+        });
+        if (!team) {
+            return null;
+        }
+        const maskedReports: TeamDirectReportSummary[] = TypedActionPolicyGuard.MaskRows(
+            team.DirectReports.map((r) => ({
+                EmployeeID: r.EmployeeID,
+                UserID: r.UserID,
+                Name: r.Name,
+                Email: r.Email,
+                Title: r.Title,
+            })),
+            empGuard.DeniedFieldPatterns
+        ).map((masked) => ({
+            EmployeeID: masked.EmployeeID ?? '',
+            UserID: masked.UserID ?? null,
+            Name: masked.Name ?? '',
+            Email: masked.Email ?? '',
+            Title: masked.Title ?? null,
+        }));
+        return {
+            ...team,
+            DirectReports: maskedReports,
         };
     }
 

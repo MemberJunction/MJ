@@ -756,6 +756,16 @@
             "lastModified": "2026-11-21T15:59:22.185Z",
             "checksum": "353396d6834e89904a13209288acfca2663fdae5b8758557e4cbb835b149a881"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SkillID": "@lookup:MJ: AI Skills.Name=Growth Coach",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "A5C240F4-2838-4CB5-8472-2E6F9A7C2D2C"
+          }
         }
       ]
     },

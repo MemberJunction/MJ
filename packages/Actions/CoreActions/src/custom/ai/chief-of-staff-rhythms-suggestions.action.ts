@@ -518,6 +518,9 @@ export class EnableAgentRhythmAction extends BaseAction {
             routine.Status = 'Active';
             routine.InitialMessage = `[AgentWake:${template.WorkstreamKey}] ${template.WakeReason}`;
             routine.WakeConfigurationObject = wakeConfig;
+            if (template.SkillID && !routine.RequestedSkillIDs) {
+                routine.RequestedSkillIDs = JSON.stringify([template.SkillID]);
+            }
 
             const saved = await routine.Save();
             if (!saved) {
