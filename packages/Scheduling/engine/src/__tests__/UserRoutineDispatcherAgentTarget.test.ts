@@ -30,12 +30,19 @@ vi.mock('@memberjunction/core', async (importOriginal) => ({
         GetEntityObject = vi.fn(async () => ({ ID: 'AGENT-1', Name: 'Chief of Staff', Load: agentLoad }));
     },
 }));
-vi.mock('@memberjunction/ai-agents', () => ({
+vi.mock('@memberjunction/ai-agents', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/ai-agents')>()),
     AgentRunner: class { RunAgentInConversation = runInConversation; RunAgent = vi.fn(); },
     ResolveWakeAgentConfigurationID: resolveWakeConfig,
 }));
-vi.mock('@memberjunction/ai-prompts', () => ({ AIPromptRunner: class {} }));
-vi.mock('@memberjunction/actions', () => ({ ActionEngineServer: { Instance: { Config: vi.fn(), RunAction: vi.fn() } } }));
+vi.mock('@memberjunction/ai-prompts', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/ai-prompts')>()),
+    AIPromptRunner: class {},
+}));
+vi.mock('@memberjunction/actions', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/actions')>()),
+    ActionEngineServer: { Instance: { Config: vi.fn(), RunAction: vi.fn() } },
+}));
 
 import { UserRoutineDispatcherDriver } from '../drivers/UserRoutineDispatcherDriver';
 

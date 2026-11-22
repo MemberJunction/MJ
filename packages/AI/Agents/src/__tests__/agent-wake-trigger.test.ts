@@ -202,8 +202,11 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
             expect(savedRoutines[0].Name).toBe('Chief of Staff — Wake (approval-resolution)');
         });
 
-        it('falls back to "AgentWake (<key>)" when no policy names the agent', async () => {
+        it('falls back to "AgentWake (<key>)" when an active policy does not name the agent', async () => {
             const { provider, savedRoutines } = createMockMetadataProvider();
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(
+                createPolicy({ AgentID: COS_AGENT_ID, UserID: USER_ALICE_ID, Status: 'Active', Agent: undefined })
+            );
             runViewMock.mockResolvedValue({ Success: true, Results: [] });
 
             const approvalRequest = {
@@ -215,6 +218,28 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
             await AgentWakeTriggerService.Instance.TriggerWakeOnAgentRequestResolution(approvalRequest, aliceUser, provider, FIXED_NOW);
 
             expect(savedRoutines[0].Name).toBe('AgentWake (approval-resolution)');
+        });
+
+        it('denies TriggerWakeOnAgentRequestResolution with POLICY_DENIED when user has no policy at all', async () => {
+            const { provider, savedRoutines } = createMockMetadataProvider();
+            runViewMock.mockResolvedValue({ Success: true, Results: [] });
+
+            const approvalRequest = {
+                ID: 'req-no-policy-1', AgentID: COS_AGENT_ID, RequestForUserID: USER_ALICE_ID,
+                Status: 'Approved', Request: 'Send the update', Response: null, ResponseData: null,
+                ResponseByUserID: USER_ALICE_ID, RespondedAt: FIXED_NOW, Comments: null,
+            } as unknown as MJAIAgentRequestEntity;
+
+            const result = await AgentWakeTriggerService.Instance.TriggerWakeOnAgentRequestResolution(
+                approvalRequest,
+                aliceUser,
+                provider,
+                FIXED_NOW
+            );
+
+            expect(result.triggered).toBe(false);
+            expect(result.resultCode).toBe('POLICY_DENIED');
+            expect(savedRoutines).toHaveLength(0);
         });
 
         it('wakes the target user Chief of Staff on incoming InterAgent request and wakes sender Chief of Staff on resolution', async () => {

@@ -125,6 +125,22 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
                 }
                 return { Success: true, Results: [] };
             }
+            if (p.EntityName === 'MJ: AI Agent User Policies') {
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: 'pol-alice-cos',
+                            AgentID: cosAgent.ID,
+                            UserID: alice.ID,
+                            Status: 'Active',
+                            AllowInterAgentCoordination: true,
+                            EmailChannelMode: 'DraftOnly',
+                            Agent: 'Chief of Staff',
+                        },
+                    ],
+                };
+            }
             return { Success: true, Results: [] };
         });
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
@@ -474,6 +490,22 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
                     }
                     return { Success: true, Results: [] };
                 }
+                if (p.EntityName === 'MJ: AI Agent User Policies') {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: 'pol-alice-cos',
+                                AgentID: cosAgent.ID,
+                                UserID: alice.ID,
+                                Status: 'Active',
+                                AllowInterAgentCoordination: true,
+                                EmailChannelMode: 'DraftOnly',
+                                Agent: 'Chief of Staff',
+                            },
+                        ],
+                    };
+                }
                 return { Success: true, Results: [] };
             }),
         } as unknown as RunView);
@@ -802,6 +834,22 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
                     return {
                         Success: true,
                         Results: [{ ID: fastCfgID, Name: 'Fast', Status: 'Active' }],
+                    };
+                }
+                if (p.EntityName === 'MJ: AI Agent User Policies') {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: 'pol-alice-cos',
+                                AgentID: cosAgent.ID,
+                                UserID: alice.ID,
+                                Status: 'Active',
+                                AllowInterAgentCoordination: true,
+                                EmailChannelMode: 'DraftOnly',
+                                Agent: 'Chief of Staff',
+                            },
+                        ],
                     };
                 }
                 return { Success: true, Results: [] };

@@ -114,6 +114,44 @@ vi.mock('@memberjunction/ai-agents', () => ({
             TriggerWakeForWorkstream: (...args: unknown[]) => triggerWakeForWorkstreamMock(...args),
         },
     },
+    CheckActivePolicyForAgentAndUser: async (
+        agentID: string,
+        userID: string,
+        contextUser: UserInfo
+    ) => {
+        const res = await runViewMock(
+            {
+                EntityName: 'MJ: AI Agent User Policies',
+                ExtraFilter: `(AgentID = '${agentID}' AND UserID = '${userID}')`,
+                Fields: ['ID', 'AgentID', 'UserID', 'Status', 'AllowInterAgentCoordination', 'EmailChannelMode', 'Agent'],
+                ResultType: 'simple',
+            },
+            contextUser
+        );
+        if (!res?.Success) {
+            return {
+                Allowed: false,
+                Reason: 'Policy lookup failed.',
+                Policy: null,
+                LookupStatus: 'error',
+            };
+        }
+        const row = (res.Results as Array<{ Status?: string }> | undefined)?.[0] ?? null;
+        if (!row) {
+            return {
+                Allowed: false,
+                Reason: `User ${userID} has no coordination policy for agent ${agentID}.`,
+                Policy: null,
+                LookupStatus: 'not_found',
+            };
+        }
+        return {
+            Allowed: row.Status === 'Active',
+            Reason: row.Status === 'Active' ? 'Active policy verified.' : `Policy status is ${row.Status}.`,
+            Policy: row,
+            LookupStatus: 'found',
+        };
+    },
     LookupActiveRhythmTemplateForWorkstream: vi.fn(async () => null),
     ResolveSeededRoutineAgentConfigurationID: (p: {
         explicitAgentConfigurationID?: string | null;
@@ -164,9 +202,27 @@ describe('Chief of Staff Actions Suite', () => {
         agentsList.length = 0;
         agentsList.push({ ID: 'cos-agent-id', Name: 'Chief of Staff' });
         canUserRunAgentMock.mockReset().mockReturnValue(true);
-        runViewMock.mockReset().mockImplementation(async (rvParams?: { EntityName?: string }) => {
+        runViewMock.mockReset().mockImplementation(async (rvParams?: { EntityName?: string; ExtraFilter?: string }) => {
             if (rvParams?.EntityName === 'MJ: Users') {
                 return { Success: true, Results: [{ ID: 'target-user', IsActive: true }] };
+            }
+            if (rvParams?.EntityName === 'MJ: AI Agent User Policies') {
+                const match = rvParams.ExtraFilter?.match(/UserID\s*=\s*'([^']+)'/i);
+                const userID = match?.[1] ?? 'user-abc';
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: 'policy-active-default',
+                            AgentID: 'cos-agent-id',
+                            UserID: userID,
+                            Status: 'Active',
+                            AllowInterAgentCoordination: true,
+                            EmailChannelMode: 'DraftOnly',
+                            Agent: 'Chief of Staff',
+                        },
+                    ],
+                };
             }
             return { Success: true, Results: [] };
         });
@@ -306,6 +362,39 @@ describe('Chief of Staff Actions Suite', () => {
             expect(routineStub.ScheduleMode).toBe('Recurring');
             expect(routineStub.CronExpression).toBe('0 8 * * 1-5');
         });
+
+        it('rejects ScheduleNextAgentWakeAction with POLICY_DENIED when user has no policy or Paused policy', async () => {
+            runViewMock.mockResolvedValueOnce({ Success: true, Results: [] });
+            const noPolicyRes = await invokeAction(new ScheduleNextAgentWakeAction(), {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('user-no-policy'),
+                Filters: [],
+                Params: [
+                    { Name: 'AgentName', Type: 'Input', Value: 'Chief of Staff' },
+                    { Name: 'ScheduleMode', Type: 'Input', Value: 'Recurring' },
+                    { Name: 'CronExpression', Type: 'Input', Value: '0 8 * * 1-5' },
+                ],
+            });
+            expect(noPolicyRes.Success).toBe(false);
+            expect(noPolicyRes.ResultCode).toBe('POLICY_DENIED');
+
+            runViewMock.mockResolvedValueOnce({
+                Success: true,
+                Results: [{ ID: 'pol-p', AgentID: 'cos-agent-id', UserID: 'user-paused', Status: 'Paused' }],
+            });
+            const pausedRes = await invokeAction(new ScheduleNextAgentWakeAction(), {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('user-paused'),
+                Filters: [],
+                Params: [
+                    { Name: 'AgentName', Type: 'Input', Value: 'Chief of Staff' },
+                    { Name: 'ScheduleMode', Type: 'Input', Value: 'Recurring' },
+                    { Name: 'CronExpression', Type: 'Input', Value: '0 8 * * 1-5' },
+                ],
+            });
+            expect(pausedRes.Success).toBe(false);
+            expect(pausedRes.ResultCode).toBe('POLICY_DENIED');
+        });
     });
 
     describe('ScheduleNextAgentWakeAction — the declared parameter names', () => {
@@ -411,6 +500,22 @@ describe('Chief of Staff Actions Suite', () => {
 
             // Server-verified Approved MJ: AI Agent Requests row succeeds in agent context
             runViewMock.mockImplementation(async (rvParams?: { EntityName?: string }) => {
+                if (rvParams?.EntityName === 'MJ: AI Agent User Policies') {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: 'pol-ok-1',
+                                AgentID: 'cos-agent-id',
+                                UserID: 'user-abc',
+                                Status: 'Active',
+                                AllowInterAgentCoordination: true,
+                                EmailChannelMode: 'DraftOnly',
+                                Agent: 'Chief of Staff',
+                            },
+                        ],
+                    };
+                }
                 if (rvParams?.EntityName === 'MJ: AI Agent Requests') {
                     return {
                         Success: true,
