@@ -7,6 +7,7 @@
  */
 export * from './generic/Segmentation.types';
 export * from './generic/BaseSegmenter';
+export * from './generic/CaptionCueParser';
 export * from './generic/StructuralTextSegmenter';
 export * from './generic/SemanticTextSegmenter';
 export * from './generic/TranscriptSegmenter';

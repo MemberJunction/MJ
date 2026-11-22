@@ -6,9 +6,10 @@ import { ConversationEngine, type ConversationScope, MJArtifactEntity, MJArtifac
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ArtifactFileService } from '../services/artifact-file.service';
 import { ArtifactIconService } from '../services/artifact-icon.service';
-import { renderComponentFixture, query, queryAll, text, capture, StubEmptyStateComponent } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, text, capture, StubEmptyStateComponent, overlayQuery, overlayQueryAll, clearOverlayContainers } from '@memberjunction/ng-test-utils';
+import { MJMenuComponent, MJMenuItemComponent, MJMenuTriggerDirective } from '@memberjunction/ng-ui-components';
 import { ArtifactViewerPanelComponent } from './artifact-viewer-panel.component';
-import type { ArtifactNavigationAnchor, ArtifactSelectionAnchor, ArtifactViewerTab, ArtifactViewerViewMode, NavigationRequest, PreVerifiedFrozenSnapshotEntry } from './base-artifact-viewer.component';
+import type { ArtifactExportOption, ArtifactNavigationAnchor, ArtifactSelectionAnchor, ArtifactViewerTab, ArtifactViewerViewMode, NavigationRequest, PreVerifiedFrozenSnapshotEntry } from './base-artifact-viewer.component';
 import type { InteractiveFormApplyResult } from '../services/interactive-form-apply.service';
 import { DocumentCollaborationService, type LivingReportScheduleSummary } from '../services/document-collaboration.service';
 import { ArtifactVersionCompareComponent } from './version-diff/artifact-version-compare.component';
@@ -50,7 +51,7 @@ function stubEntity<T extends object>(fields: Partial<T>): T {
   return Object.assign(Object.create(null) as T, fields);
 }
 
-const CHILDREN = [FormsModule, PluginViewerStub, CodeEditorStub, MarkdownStub, StubEmptyStateComponent, ArtifactVersionCompareComponent];
+const CHILDREN = [FormsModule, PluginViewerStub, CodeEditorStub, MarkdownStub, StubEmptyStateComponent, ArtifactVersionCompareComponent, MJMenuComponent, MJMenuItemComponent, MJMenuTriggerDirective];
 const ARTIFACT = stubEntity<MJArtifactEntity>({ Name: 'Q3 Report', Description: 'Quarterly numbers' });
 const VERSION = stubEntity<MJArtifactVersionEntity>({ ID: 'v1', VersionNumber: 2 });
 
@@ -442,8 +443,14 @@ describe('ArtifactViewerPanelComponent — collection and link rows by version I
   });
 });
 
-describe('ArtifactViewerPanelComponent (DOM) — PDF export menu', () => {
-  type PluginViewerLike = { SupportsPDFExport: boolean; ExportPDF: (orientation: 'portrait' | 'landscape') => Promise<void> };
+describe('ArtifactViewerPanelComponent (DOM) — Export menu', () => {
+  afterEach(() => clearOverlayContainers());
+  type PluginViewerLike = { GetExportOptions: () => ArtifactExportOption[]; RunExport: (key: string) => Promise<void> };
+  const QUERY_OPTIONS: ArtifactExportOption[] = [
+    { Key: 'excel', Label: 'Excel (.xlsx)', Icon: 'fa-solid fa-file-excel', Group: 'Results' },
+    { Key: 'csv', Label: 'CSV (.csv)', Icon: 'fa-solid fa-file-csv', Group: 'Results' },
+    { Key: 'sql', Label: 'SQL (.sql)', Icon: 'fa-solid fa-database', Group: 'Query' },
+  ];
   function renderWithPlugin(plugin: PluginViewerLike, notification = { CreateSimpleNotification: vi.fn() }) {
     vi.spyOn(ArtifactViewerPanelComponent.prototype, 'ngOnInit').mockResolvedValue(undefined);
     const f = renderComponentFixture(ArtifactViewerPanelComponent, {
@@ -461,37 +468,91 @@ describe('ArtifactViewerPanelComponent (DOM) — PDF export menu', () => {
     return { f, notification };
   }
 
-  it('shows no PDF button when the plugin does not support PDF export', () => {
-    const { f } = renderWithPlugin({ SupportsPDFExport: false, ExportPDF: vi.fn(async () => undefined) });
-    expect(query(f, '.export-pdf-btn')).toBeNull();
+  it('shows no Export button when the plugin offers no export options', () => {
+    const { f } = renderWithPlugin({ GetExportOptions: () => [], RunExport: vi.fn(async () => undefined) });
+    expect(query(f, '.export-btn')).toBeNull();
   });
 
-  it('shows the PDF button, with its menu closed, when the plugin supports PDF export', () => {
-    const { f } = renderWithPlugin({ SupportsPDFExport: true, ExportPDF: vi.fn(async () => undefined) });
-    expect(query(f, '.export-pdf-btn')).not.toBeNull();
-    expect(query(f, '.export-pdf-dropdown')).toBeNull();
+  it('shows the Export button, with its menu closed, when the plugin offers export options', () => {
+    const { f } = renderWithPlugin({ GetExportOptions: () => QUERY_OPTIONS, RunExport: vi.fn(async () => undefined) });
+    expect(query(f, '.export-btn')).not.toBeNull();
+    expect(overlayQuery('mj-menu')).toBeNull();
   });
 
-  it('opens a Portrait / Landscape menu and exports in the chosen orientation', async () => {
-    const exportPDF = vi.fn(async () => undefined);
-    const { f } = renderWithPlugin({ SupportsPDFExport: true, ExportPDF: exportPDF });
-    (query(f, '.export-pdf-btn') as HTMLButtonElement).click();
+  it('lists the options under their group labels and runs the chosen one', async () => {
+    const runExport = vi.fn(async () => undefined);
+    const { f } = renderWithPlugin({ GetExportOptions: () => QUERY_OPTIONS, RunExport: runExport });
+    (query(f, '.export-btn') as HTMLButtonElement).click();
     f.detectChanges();
-    const items = queryAll(f, '.export-pdf-dropdown button');
-    expect(items.map((item) => item.textContent?.trim())).toEqual(['PDF – Portrait', 'PDF – Landscape']);
-    (items[1] as HTMLButtonElement).click();
+    expect(overlayQueryAll('.export-group-label').map((label) => label.textContent?.trim())).toEqual(['Results', 'Query']);
+    const items = overlayQueryAll('mj-menu-item') as HTMLElement[];
+    expect(items.map((item) => item.querySelector('.export-option-label')?.textContent?.trim())).toEqual(['Excel (.xlsx)', 'CSV (.csv)', 'SQL (.sql)']);
+    items[1].click();
+    f.detectChanges();
     await f.whenStable();
-    expect(exportPDF).toHaveBeenCalledWith('landscape');
-    expect(f.componentInstance.ShowPDFMenu).toBe(false);
-    expect(f.componentInstance.IsExportingPDF).toBe(false);
+    expect(runExport).toHaveBeenCalledWith('csv');
+    expect(overlayQuery('mj-menu')).toBeNull();
+    expect(f.componentInstance.IsExporting).toBe(false);
+  });
+
+  it('does not run an unavailable option when the handler is called directly', async () => {
+    const runExport = vi.fn(async () => undefined);
+    const sheet: ArtifactExportOption = { Key: 'live-sheet', Label: 'Live Sheet', Icon: 'fa-solid fa-table-cells', Group: 'Save as', DisabledReason: 'Save the query first' };
+    const { f } = renderWithPlugin({ GetExportOptions: () => [...QUERY_OPTIONS, sheet], RunExport: runExport });
+    await f.componentInstance.OnExport(sheet);
+    expect(runExport).not.toHaveBeenCalled();
+  });
+
+  /** A keydown as a browser sends it: the CDK menu reads the legacy `keyCode`. */
+  function key(target: HTMLElement, name: 'ArrowDown'): void {
+    const event = new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'keyCode', { value: 40 });
+    target.dispatchEvent(event);
+  }
+
+  it('moves between the export options with the arrow keys', () => {
+    const { f } = renderWithPlugin({ GetExportOptions: () => QUERY_OPTIONS, RunExport: vi.fn(async () => undefined) });
+    const trigger = query(f, '.export-btn') as HTMLButtonElement;
+    trigger.focus();
+    key(trigger, 'ArrowDown');
+    f.detectChanges();
+    const items = overlayQueryAll('mj-menu-item') as HTMLElement[];
+    expect(document.activeElement).toBe(items[0]);
+    key(items[0], 'ArrowDown');
+    expect(document.activeElement).toBe(items[1]);
+  });
+
+  it('lets the keyboard reach an unavailable option and read its reason, but does not run it', async () => {
+    const runExport = vi.fn(async () => undefined);
+    const options: ArtifactExportOption[] = [
+      ...QUERY_OPTIONS,
+      { Key: 'live-sheet', Label: 'Live Sheet', Icon: 'fa-solid fa-table-cells', Description: 'Spreadsheet that stays current', Group: 'Save as', DisabledReason: 'Save the query first' },
+    ];
+    const { f } = renderWithPlugin({ GetExportOptions: () => options, RunExport: runExport });
+    const trigger = query(f, '.export-btn') as HTMLButtonElement;
+    trigger.focus();
+    key(trigger, 'ArrowDown');
+    f.detectChanges();
+    const items = overlayQueryAll('mj-menu-item') as HTMLElement[];
+    for (const item of items.slice(0, 3)) {
+      key(item, 'ArrowDown');
+    }
+    const sheet = items[3];
+    expect(document.activeElement).toBe(sheet);
+    expect(sheet.getAttribute('aria-disabled')).toBe('true');
+    expect(sheet.querySelector('.export-option-desc')?.textContent?.trim()).toBe('Save the query first');
+    sheet.click();
+    f.detectChanges();
+    await f.whenStable();
+    expect(runExport).not.toHaveBeenCalled();
   });
 
   it('reports a failed export and re-enables the button', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const { f, notification } = renderWithPlugin({ SupportsPDFExport: true, ExportPDF: vi.fn(async () => { throw new Error('capture failed'); }) });
-    await f.componentInstance.OnExportPDF('portrait');
-    expect(notification.CreateSimpleNotification).toHaveBeenCalledWith(expect.stringContaining('Could not create the PDF'), 'error', 5000);
-    expect(f.componentInstance.IsExportingPDF).toBe(false);
+    const { f, notification } = renderWithPlugin({ GetExportOptions: () => QUERY_OPTIONS, RunExport: vi.fn(async () => { throw new Error('query failed'); }) });
+    await f.componentInstance.OnExport(QUERY_OPTIONS[0]);
+    expect(notification.CreateSimpleNotification).toHaveBeenCalledWith(expect.stringContaining('Could not export Excel (.xlsx)'), 'error', 5000);
+    expect(f.componentInstance.IsExporting).toBe(false);
   });
 });
 

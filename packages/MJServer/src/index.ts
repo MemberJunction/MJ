@@ -301,6 +301,7 @@ export * from './resolvers/FileCategoryResolver.js';
 export * from './resolvers/FileResolver.js';
 export * from './rest/MediaAccessKeys.js';
 export * from './rest/MediaStreamHandler.js';
+export * from './rest/UploadTokenManager.js';
 export * from './routeRateLimitConfigUnits.js';
 export * from './rest/RealtimeRecordingHandler.js';
 export * from './resolvers/InfoResolver.js';
@@ -349,7 +350,7 @@ import type { RequestHandler, ErrorRequestHandler } from 'express';
 import type { ApolloServerPlugin } from '@apollo/server';
 import type { GraphQLSchema } from 'graphql';
 import { BaseServerMiddleware, ServerMiddlewareContext } from './middleware/BaseServerMiddleware.js';
-import { SuppressTaskGraphSubmission } from '@memberjunction/ai-core-plus';
+import { HumanTaskProviderDefaults, SuppressTaskGraphSubmission } from '@memberjunction/ai-core-plus';
 import { NotificationEngine } from '@memberjunction/notifications';
 
 export type MJServerOptions = {
@@ -1179,6 +1180,9 @@ const setupComplete$ = new ReplaySubject(1);
   // The restricted-field check runs in MJCoreEntitiesServer, which reads no config of its own.
   SetRestrictedFieldClassifierDecisionMode(configInfo.decisions?.restrictedFieldClassifier);
   SetTagMatchDecisionMode(configInfo.decisions?.tagMatch);
+  // Who answers Human steps that name no provider, and agents' questions (`humanTasks.defaultProvider`).
+  // App packages are loaded before serve(), so a configured provider is already registered here.
+  HumanTaskProviderDefaults.Instance.Configure(configInfo.humanTasks?.defaultProvider);
 
   // ─── Resolve middleware-contributed resolver paths and merge into resolvers ───
   let allResolvers = resolvers;

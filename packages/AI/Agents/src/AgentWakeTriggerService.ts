@@ -21,11 +21,13 @@
  */
 
 import { IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo, WellKnownUserSource } from '@memberjunction/core';
-import { BaseSingleton, EscapeSQLString, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, GetGlobalObjectStore, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
     MJAIAgentRequestEntity,
     MJAIAgentUserPolicyEntity,
     MJAIBridgeAgentIdentityEntity,
+    MJAgentChannelEntity,
+    MJAgentChannelParticipantEntity,
     MJUserRoutineEntity,
     MJUserRoutineEntity_IRoutineWakeConfiguration,
 } from '@memberjunction/core-entities';
@@ -146,7 +148,42 @@ export type AgentWakeTriggerResultCode =
     | 'IDENTITY_NOT_FOUND'
     | 'UNVERIFIED_EXTERNAL_SENDER'
     | 'SENDER_NOT_AUTHORIZED_FOR_IDENTITY'
+    | 'CHANNEL_PAUSED_LOOP_GUARD'
+    | 'CHANNEL_PAUSED_RATE_LIMIT'
     | 'SAVE_FAILED';
+
+/**
+ * Input for waking peer participants when a message is posted in an `AGENT_CHANNEL` conversation.
+ */
+export interface AgentChannelMessageWakeInput {
+    /** The Agent Channel / Conversation ID (`MJ: Agent Channels.ID`). */
+    channelID: string;
+    /** The `MJ: Conversation Details.ID` of the newly posted message. */
+    conversationDetailID?: string | null;
+    /** User ID on whose behalf the message was posted. */
+    senderUserID: string;
+    /** Optional agent ID if posted by an agent (null/undefined when posted directly by a human). */
+    senderAgentID?: string | null;
+    /** Short summary or preview of the posted message. */
+    messagePreview: string;
+    /** Acting user context (may be a non-Owner UI user; membership is verified before elevating to system user). */
+    contextUser: UserInfo;
+    /** Optional metadata provider override. */
+    metadataProvider?: IMetadataProvider;
+    /** Optional clock override for deterministic tests. */
+    now?: Date;
+}
+
+/**
+ * Aggregated outcome of waking peer participants in an Agent Channel.
+ */
+export interface AgentChannelWakeOutcome {
+    channelID: string;
+    channelStatus: MJAgentChannelEntity['ChannelStatus'];
+    pausedByGuard: boolean;
+    pauseReason: string | null;
+    results: AgentWakeTriggerResult[];
+}
 
 /**
  * Outcome of an event-driven wake trigger evaluation.
@@ -178,13 +215,59 @@ interface ImmediateWakeRoutineParams {
     now: Date;
 }
 
+/**
+ * Well-known `GetGlobalObjectStore()` key shared with `@memberjunction/core-entities-server`
+ * (`AgentChannelConversationDriver`) so direct human replies in an `AGENT_CHANNEL` conversation
+ * immediately wake peer participant agents with zero circular package dependencies.
+ */
+export const AGENT_CHANNEL_HUMAN_POST_WAKE_HANDLER_KEY = '__MJ_AGENT_CHANNEL_HUMAN_POST_WAKE_HANDLER__';
+
+interface AgentChannelHumanPostWakeEventPayload {
+    provider: IMetadataProvider;
+    channelID: string;
+    conversationDetailID: string | null;
+    senderUserID: string;
+    messagePreview: string;
+    contextUser: UserInfo;
+    now: Date;
+    reopenedFromPause: boolean;
+}
+
 export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerService> {
     public constructor() {
         super();
+        this.RegisterAgentChannelHumanPostWakeHook();
     }
 
     public static get Instance(): AgentWakeTriggerService {
         return AgentWakeTriggerService.getInstance<AgentWakeTriggerService>();
+    }
+
+    /**
+     * Registers this service as the process-wide human-post wake handler on
+     * `GetGlobalObjectStore()` so `AgentChannelConversationDriver.HandleHumanMessagePosted`
+     * immediately wakes peer participant agents whenever a human posts in an `AGENT_CHANNEL`.
+     */
+    public RegisterAgentChannelHumanPostWakeHook(): void {
+        const store = GetGlobalObjectStore();
+        if (!store) {
+            return;
+        }
+        store[AGENT_CHANNEL_HUMAN_POST_WAKE_HANDLER_KEY] = async (
+            event: AgentChannelHumanPostWakeEventPayload
+        ): Promise<number> => {
+            const outcome = await AgentWakeTriggerService.Instance.TriggerWakeOnAgentChannelMessage({
+                channelID: event.channelID,
+                conversationDetailID: event.conversationDetailID,
+                senderUserID: event.senderUserID,
+                senderAgentID: null,
+                messagePreview: event.messagePreview,
+                contextUser: event.contextUser,
+                metadataProvider: event.provider,
+                now: event.now,
+            });
+            return outcome.results.filter((r) => r.triggered).length;
+        };
     }
 
     /**
@@ -386,9 +469,13 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
      * 1. Recipient address (`toAddress`) must match an active `Email` bridge identity.
      * 2. Sender address (`fromAddress`) must match an active internal MJ User (`Email === fromAddress`
      *    case-insensitively). External/unverified senders are rejected.
-     * 3. If the bridge identity's `Configuration` pins `allowedUserID`, `senderUser.ID` must match it.
-     * 4. If the sender has an `MJ: AI Agent User Policies` row for the agent, it must not be
-     *    `Disabled` or `Paused`, and `EmailChannelMode` must not be `'Disabled'`.
+     * 3. If the bridge identity's `UserID` is populated (a dedicated per-user mailbox identity),
+     *    `senderUser.ID` must match `identity.UserID`; otherwise `SENDER_NOT_AUTHORIZED_FOR_IDENTITY`
+     *    is returned. If the bridge identity's `Configuration` pins `allowedUserID`, `senderUser.ID`
+     *    must also match it, and `allowedEmailDomains` (if configured) must include the sender's domain.
+     * 4. The sender must have an existing `Active` `MJ: AI Agent User Policies` onboarding row for the
+     *    agent (`!policy || policy.Status !== 'Active'` returns `POLICY_DENIED`), and `EmailChannelMode`
+     *    must not be `'Disabled'`.
      * 5. The resulting `AgentWake` routine is saved in the verified `senderUser`'s `contextUser` scope.
      */
     public async RouteInboundUtilityMailboxWake(
@@ -434,7 +521,13 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             );
         }
 
-        // 3. Enforce optional identity-level Configuration constraints (e.g., allowedUserID / allowedEmailDomains)
+        // 3. Enforce per-user bridge identity ownership and optional Configuration constraints
+        if (identity.UserID && !UUIDsEqual(identity.UserID, senderUser.ID)) {
+            return this.notTriggered(
+                'SENDER_NOT_AUTHORIZED_FOR_IDENTITY',
+                `Sender user ${senderUser.ID} is not authorized for user-owned bridge identity ${identity.ID}.`
+            );
+        }
         const identityConfig = identity.Configuration
             ? SafeJSONParse<UtilityMailboxIdentityConfiguration>(identity.Configuration)
             : null;
@@ -471,19 +564,17 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             );
         }
         const policy: MJAIAgentUserPolicyEntity | null = policyLookup.policy;
-        if (policy) {
-            if (policy.Status === 'Disabled' || policy.Status === 'Paused') {
-                return this.notTriggered(
-                    'POLICY_DENIED',
-                    `User ${senderUser.Email} has ${policy.Status} policy for agent ${identity.AgentID}.`
-                );
-            }
-            if (policy.EmailChannelMode === 'Disabled') {
-                return this.notTriggered(
-                    'POLICY_DENIED',
-                    `User ${senderUser.Email} has EmailChannelMode="Disabled" for agent ${identity.AgentID}.`
-                );
-            }
+        if (!policy || policy.Status !== 'Active') {
+            const reason = !policy
+                ? `User ${senderUser.Email} has no active policy for agent ${identity.AgentID}; wake suppressed until the user onboards.`
+                : `User ${senderUser.Email} has ${policy.Status} policy for agent ${identity.AgentID}; wake suppressed.`;
+            return this.notTriggered('POLICY_DENIED', reason);
+        }
+        if (policy.EmailChannelMode === 'Disabled') {
+            return this.notTriggered(
+                'POLICY_DENIED',
+                `User ${senderUser.Email} has EmailChannelMode="Disabled" for agent ${identity.AgentID}.`
+            );
         }
 
         // 5. Schedule immediate AgentWake routine in senderUser's contextUser scope
@@ -595,11 +686,11 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             );
         }
         const policy: MJAIAgentUserPolicyEntity | null = policyLookup.policy;
-        if (policy && (policy.Status === 'Disabled' || policy.Status === 'Paused')) {
-            return this.notTriggered(
-                'POLICY_DENIED',
-                `Target user policy for agent "${resolvedAgent.Name ?? resolvedAgent.ID}" is ${policy.Status}; wake suppressed.`
-            );
+        if (!policy || policy.Status !== 'Active') {
+            const reason = !policy
+                ? `Target user "${targetUserID}" has no active policy for agent "${resolvedAgent.Name ?? resolvedAgent.ID}"; wake suppressed until the user onboards.`
+                : `Target user policy for agent "${resolvedAgent.Name ?? resolvedAgent.ID}" is ${policy.Status}; wake suppressed.`;
+            return this.notTriggered('POLICY_DENIED', reason);
         }
 
         const baseResumeState: AgentWakeResumeState = input.resumeState ?? {};
@@ -626,6 +717,294 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             metadataProvider: md,
             now,
         });
+    }
+
+    /**
+     * Wakes peer agent participants when a message is posted in an `AGENT_CHANNEL` conversation,
+     * enforcing persistent loop-guard (`ConsecutiveAgentTurns <= MaxConsecutiveAgentTurns`) and
+     * rolling 1-hour wake rate-limit (`HourlyWakeCount <= MaxHourlyWakes`) counters on
+     * `MJ: Agent Channels`.
+     *
+     * Authorization: validates that `input.contextUser` is either an active participant in the
+     * channel or a privileged system/Owner caller before elevating to the scheduler system user
+     * for cross-user wake routine writes.
+     */
+    public async TriggerWakeOnAgentChannelMessage(
+        input: AgentChannelMessageWakeInput
+    ): Promise<AgentChannelWakeOutcome> {
+        const now = input.now ?? new Date();
+        const md: IMetadataProvider = input.metadataProvider ?? Metadata.Provider;
+        const channelID = (input.channelID ?? '').trim();
+        const senderUserID = (input.senderUserID ?? '').trim();
+
+        if (!channelID || !senderUserID) {
+            return {
+                channelID,
+                channelStatus: 'Open',
+                pausedByGuard: false,
+                pauseReason: null,
+                results: [
+                    this.notTriggered(
+                        'MISSING_REQUIRED_INPUT',
+                        'channelID and senderUserID are required to trigger an Agent Channel wake.'
+                    ),
+                ],
+            };
+        }
+
+        if (!input.contextUser?.ID) {
+            return {
+                channelID,
+                channelStatus: 'Open',
+                pausedByGuard: false,
+                pauseReason: null,
+                results: [
+                    this.notTriggered(
+                        'POLICY_DENIED',
+                        'contextUser is required to trigger an Agent Channel wake.'
+                    ),
+                ],
+            };
+        }
+
+        const systemUser = UserCache.Instance.GetSystemUser() ?? input.contextUser;
+        const channel = await md.GetEntityObject<MJAgentChannelEntity>('MJ: Agent Channels', systemUser);
+        const loaded = await channel.Load(channelID);
+        if (!loaded) {
+            return {
+                channelID,
+                channelStatus: 'Resolved',
+                pausedByGuard: false,
+                pauseReason: 'Agent channel not found.',
+                results: [
+                    this.notTriggered('SKIPPED_NOT_APPLICABLE', `Agent channel "${channelID}" was not found.`),
+                ],
+            };
+        }
+
+        const rv = RunView.FromMetadataProvider(md);
+        const participantsResult = await rv.RunView<MJAgentChannelParticipantEntity>(
+            {
+                EntityName: 'MJ: Agent Channel Participants',
+                ExtraFilter: `AgentChannelID='${EscapeSQLString(channel.ID)}'`,
+                ResultType: 'entity_object',
+            },
+            systemUser
+        );
+        const participants = participantsResult.Success ? participantsResult.Results : [];
+
+        const callerIsParticipant = participants.some((p) => UUIDsEqual(p.UserID, input.contextUser.ID));
+        if (!callerIsParticipant && !this.isPrivilegedCrossUserWakeCaller(input.contextUser)) {
+            return {
+                channelID: channel.ID,
+                channelStatus: channel.ChannelStatus,
+                pausedByGuard: false,
+                pauseReason: null,
+                results: [
+                    this.notTriggered(
+                        'POLICY_DENIED',
+                        `Caller "${input.contextUser.ID}" is not an active participant in Agent Channel "${channel.ID}".`
+                    ),
+                ],
+            };
+        }
+
+        const senderIsParticipant = participants.some((p) => UUIDsEqual(p.UserID, senderUserID));
+        if (!senderIsParticipant) {
+            return {
+                channelID: channel.ID,
+                channelStatus: channel.ChannelStatus,
+                pausedByGuard: false,
+                pauseReason: null,
+                results: [
+                    this.notTriggered(
+                        'POLICY_DENIED',
+                        `Sender "${senderUserID}" is not an active participant in Agent Channel "${channel.ID}".`
+                    ),
+                ],
+            };
+        }
+
+        if (channel.ChannelStatus === 'Resolved') {
+            return {
+                channelID: channel.ID,
+                channelStatus: channel.ChannelStatus,
+                pausedByGuard: false,
+                pauseReason: null,
+                results: [
+                    this.notTriggered(
+                        'SKIPPED_NOT_APPLICABLE',
+                        `Agent Channel "${channel.ID}" is Resolved; no peer wakes scheduled.`
+                    ),
+                ],
+            };
+        }
+
+        const isAgentMessage = Boolean(input.senderAgentID && input.senderAgentID.trim().length > 0);
+        const peers = participants.filter((p) => !UUIDsEqual(p.UserID, senderUserID));
+
+        if (!isAgentMessage) {
+            // Human intervention resets consecutive-agent turn guard and re-opens a paused channel.
+            channel.ConsecutiveAgentTurns = 0;
+            channel.LastHumanMessageAt = now;
+            if (channel.ChannelStatus === 'Paused For Human') {
+                channel.ChannelStatus = 'Open';
+            }
+            const saved = await channel.Save();
+            if (!saved) {
+                const err = channel.LatestResult?.CompleteMessage || 'Failed to update Agent Channel after human message.';
+                LogError(`[AgentWakeTriggerService] ${err}`);
+                return {
+                    channelID: channel.ID,
+                    channelStatus: channel.ChannelStatus,
+                    pausedByGuard: false,
+                    pauseReason: null,
+                    results: [this.notTriggered('SAVE_FAILED', err)],
+                };
+            }
+        } else {
+            if (channel.ChannelStatus === 'Paused For Human') {
+                const pauseReason = `Agent Channel "${channel.Topic}" is already paused awaiting human review.`;
+                return {
+                    channelID: channel.ID,
+                    channelStatus: 'Paused For Human',
+                    pausedByGuard: true,
+                    pauseReason,
+                    results: [this.notTriggered('CHANNEL_PAUSED_LOOP_GUARD', pauseReason)],
+                };
+            }
+
+            const maxTurns = channel.MaxConsecutiveAgentTurns > 0 ? channel.MaxConsecutiveAgentTurns : 10;
+            const nextTurns = (channel.ConsecutiveAgentTurns ?? 0) + 1;
+            channel.ConsecutiveAgentTurns = nextTurns;
+
+            if (nextTurns > maxTurns) {
+                channel.ChannelStatus = 'Paused For Human';
+                await channel.Save();
+                const pauseReason = `Agent Channel "${channel.Topic}" paused after ${nextTurns} consecutive agent turns (limit: ${maxTurns}). A human participant must reply to resume.`;
+                return {
+                    channelID: channel.ID,
+                    channelStatus: 'Paused For Human',
+                    pausedByGuard: true,
+                    pauseReason,
+                    results: [this.notTriggered('CHANNEL_PAUSED_LOOP_GUARD', pauseReason)],
+                };
+            }
+
+            const oneHourMs = 60 * 60 * 1000;
+            const windowStart = channel.HourlyWakeWindowStart;
+            if (!windowStart || now.getTime() - windowStart.getTime() >= oneHourMs) {
+                channel.HourlyWakeWindowStart = now;
+                channel.HourlyWakeCount = 0;
+            }
+
+            const maxHourlyWakes = channel.MaxHourlyWakes > 0 ? channel.MaxHourlyWakes : 6;
+            if (peers.length > 0 && (channel.HourlyWakeCount ?? 0) + 1 > maxHourlyWakes) {
+                channel.ChannelStatus = 'Paused For Human';
+                await channel.Save();
+                const pauseReason = `Agent Channel "${channel.Topic}" paused after reaching the hourly wake limit (${maxHourlyWakes}/hour). A human participant must reply to resume.`;
+                return {
+                    channelID: channel.ID,
+                    channelStatus: 'Paused For Human',
+                    pausedByGuard: true,
+                    pauseReason,
+                    results: [this.notTriggered('CHANNEL_PAUSED_RATE_LIMIT', pauseReason)],
+                };
+            }
+
+            if (peers.length > 0) {
+                channel.HourlyWakeCount = (channel.HourlyWakeCount ?? 0) + 1;
+            }
+
+            const saved = await channel.Save();
+            if (!saved) {
+                const err = channel.LatestResult?.CompleteMessage || 'Failed to persist Agent Channel guard counters.';
+                LogError(`[AgentWakeTriggerService] ${err}`);
+                return {
+                    channelID: channel.ID,
+                    channelStatus: channel.ChannelStatus,
+                    pausedByGuard: false,
+                    pauseReason: null,
+                    results: [this.notTriggered('SAVE_FAILED', err)],
+                };
+            }
+        }
+
+        const workstreamKey = `channel-${channel.ID}`;
+        const trimmedPreview = (input.messagePreview ?? '').trim().slice(0, 500);
+        const results: AgentWakeTriggerResult[] = [];
+
+        for (const peer of peers) {
+            const policyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
+                peer.AgentID,
+                peer.UserID,
+                systemUser,
+                { provider: md }
+            );
+            if (policyLookup.status === 'error') {
+                results.push(
+                    this.notTriggered(
+                        'POLICY_DENIED',
+                        `Could not verify peer policy for user "${peer.UserID}": ${policyLookup.errorMessage}`
+                    )
+                );
+                continue;
+            }
+            const policy = policyLookup.policy;
+            if (policy && (policy.Status === 'Disabled' || policy.Status === 'Paused')) {
+                results.push(
+                    this.notTriggered(
+                        'POLICY_DENIED',
+                        `Peer user "${peer.UserID}" has ${policy.Status} policy for agent "${peer.AgentID}".`
+                    )
+                );
+                continue;
+            }
+            if (policy && policy.AllowInterAgentCoordination === false) {
+                results.push(
+                    this.notTriggered(
+                        'POLICY_DENIED',
+                        `Peer user "${peer.UserID}" has disabled inter-agent coordination.`
+                    )
+                );
+                continue;
+            }
+
+            const wakeReason = `New message in Agent Channel "${channel.Topic}": ${trimmedPreview || '(no preview)'}`;
+            const resumeState: AgentWakeResumeState = {
+                triggerType: 'AgentChannelMessage',
+                channelID: channel.ID,
+                topic: channel.Topic,
+                conversationDetailID: input.conversationDetailID ?? null,
+                senderUserID,
+                senderAgentID: input.senderAgentID ?? null,
+                messagePreview: trimmedPreview,
+                consecutiveAgentTurns: channel.ConsecutiveAgentTurns,
+                workstreamKey,
+                triggeredAt: now.toISOString(),
+            };
+
+            const wakeResult = await this.upsertImmediateWakeRoutine({
+                targetUserID: peer.UserID,
+                targetAgentID: peer.AgentID,
+                targetAgentName: policy?.Agent ?? null,
+                workstreamKey,
+                wakeReason,
+                resumeState,
+                contextUser: systemUser,
+                metadataProvider: md,
+                now,
+            });
+            results.push(wakeResult);
+        }
+
+        return {
+            channelID: channel.ID,
+            channelStatus: channel.ChannelStatus,
+            pausedByGuard: false,
+            pauseReason: null,
+            results,
+        };
     }
 
     private isPrivilegedCrossUserWakeCaller(user: UserInfo | undefined): boolean {
@@ -834,7 +1213,13 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
     }
 
     private wakeEventKey(event: AgentWakeResumeState): string {
-        const id = event['requestID'] ?? event['messageID'] ?? event['eventID'] ?? event['recordID'] ?? '';
+        const id =
+            event['requestID'] ??
+            event['messageID'] ??
+            event['conversationDetailID'] ??
+            event['eventID'] ??
+            event['recordID'] ??
+            '';
         const qualifier = event['status'] ?? event['wakeReason'] ?? '';
         return `${String(event['triggerType'] ?? '')}:${String(id)}:${String(qualifier)}`.toLowerCase();
     }
@@ -1006,3 +1391,7 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
         };
     }
 }
+
+// Register the human-post Agent Channel wake hook on module import so any human post via
+// UI, GraphQL, or API triggers peer wakes even before `AgentWakeTriggerService.Instance` is touched.
+AgentWakeTriggerService.Instance.RegisterAgentChannelHumanPostWakeHook();

@@ -3,7 +3,7 @@ import { DataSnapshot } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MarkdownService } from '@memberjunction/ng-markdown';
 import { MountInteractiveDiagram, type DiagramViewerInstance } from '@memberjunction/ai-diagrams/viewer';
-import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
+import { BaseArtifactViewerPluginComponent, FILE_EXPORT_KEY, type ArtifactExportOption } from '../base-artifact-viewer.component';
 
 /**
  * Viewer component for SVG artifacts.
@@ -157,6 +157,18 @@ export class SvgArtifactViewerComponent extends BaseArtifactViewerPluginComponen
       this.viewerInstance.Destroy();
       this.viewerInstance = null;
     }
+  }
+
+  /** The SVG source, once loaded. */
+  public override GetExportOptions(): ArtifactExportOption[] {
+    return this.SvgContent ? [this.FileExportOption('SVG (.svg)', 'fa-solid fa-file-image', 'The image source')] : [];
+  }
+
+  public override async RunExport(key: string): Promise<void> {
+    if (key !== FILE_EXPORT_KEY) {
+      return super.RunExport(key);
+    }
+    this.DownloadTextFile(this.SvgContent, this.ExportFileName('svg'), 'image/svg+xml');
   }
 
   public override GetCurrentStateSnapshot(): DataSnapshot | null {

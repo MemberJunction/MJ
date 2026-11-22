@@ -30,6 +30,20 @@ const PIPELINE_COLUMN_EXTENSIONS: readonly (readonly [string, string])[] = [
     ['ExtractorKeyOverride', 'extractorKeyOverride'],
     ['VectorRecordID', 'vectorRecordID'], // the receipt Delete and a re-embed need
     ['DiscoverState', 'discoverState'], // where an unfinished walk of a source stopped
+    ['SegmentTitle', 'segmentTitle'],
+    ['Transcript', 'transcript'],
+    ['Description', 'description'],
+    ['SegmenterKey', 'segmenterKey'],
+    ['ParentChunkID', 'parentChunkID'],
+];
+
+const PIPELINE_NUMERIC_COLUMN_EXTENSIONS: readonly (readonly [string, string])[] = [
+    ['Sequence', 'sequence'],
+    ['StartMs', 'startMs'],
+    ['EndMs', 'endMs'],
+    ['StartOffset', 'startOffset'],
+    ['EndOffset', 'endOffset'],
+    ['PageNumber', 'pageNumber'],
 ];
 
 /** Builds working records from persisted rows. */
@@ -97,9 +111,11 @@ export class WorkingRecordHydrator {
         if (lastSyncedAt !== null) {
             record.SetExtension('Pipeline', 'lastSyncedAt', lastSyncedAt);
         }
-        const sequence = this.hasField(entityObject, 'Sequence') ? this.readColumn(entityObject, 'Sequence') : null;
-        if (typeof sequence === 'number') {
-            record.SetExtension('Pipeline', 'sequence', sequence);
+        for (const [column, key] of PIPELINE_NUMERIC_COLUMN_EXTENSIONS) {
+            const num = this.hasField(entityObject, column) ? this.readColumn(entityObject, column) : null;
+            if (typeof num === 'number') {
+                record.SetExtension('Pipeline', key, num);
+            }
         }
         this.restoreFields(record, entity, entityObject);
         return record;

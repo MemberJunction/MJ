@@ -81,6 +81,7 @@ export * from './memory-note-gate';
 export * from './memory-decision-uses';
 export * from './query-builder-agent';
 export * from './MJAIAgentRequestEntityServer';
+export * from './agent-request-human-task';
 export * from './AgentWakeTriggerService';
 export * from './KnowledgeAgent';
 export * from './DuplicateReasoningAgentProvider';

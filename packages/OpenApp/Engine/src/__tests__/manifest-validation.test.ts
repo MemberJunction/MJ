@@ -417,6 +417,135 @@ describe('packages[].platform (#4428)', () => {
     });
 });
 
+describe('publicPages', () => {
+    /** A manifest with one browser-capable client package and the given public pages. */
+    function withPublicPages(publicPages: unknown, packages?: unknown): Record<string, unknown> {
+        return {
+            ...minimalManifest(),
+            packages: packages ?? { client: [{ name: '@acme/lumen-public', role: 'components' }] },
+            publicPages,
+        };
+    }
+
+    const lumenPage = { slug: 'lumen', package: '@acme/lumen-public', export: 'LumenLandingPageComponent', title: 'Lumen' };
+
+    it('accepts a page whose package is a client package', () => {
+        const r = ValidateManifestObject(withPublicPages([lumenPage]));
+        expect(r.Success, r.Errors?.join(' ')).toBe(true);
+        expect(r.Manifest?.publicPages?.[0].slug).toBe('lumen');
+    });
+
+    it('accepts a page whose package is a shared package that runs in the browser', () => {
+        const r = ValidateManifestObject(withPublicPages([lumenPage], { shared: [{ name: '@acme/lumen-public', role: 'library' }] }));
+        expect(r.Success, r.Errors?.join(' ')).toBe(true);
+    });
+
+    it('rejects a slug that is not lowercase kebab-case', () => {
+        for (const slug of ['Lumen', 'lumen-', '-lumen', 'lu--men', 'lu men', 'lu/men', '']) {
+            const r = ValidateManifestObject(withPublicPages([{ ...lumenPage, slug }]));
+            expect(r.Success, slug).toBe(false);
+        }
+    });
+
+    it('rejects a slug longer than 64 characters', () => {
+        const r = ValidateManifestObject(withPublicPages([{ ...lumenPage, slug: 'a'.repeat(65) }]));
+        expect(r.Success).toBe(false);
+    });
+
+    it('rejects duplicate slugs, naming the slug', () => {
+        const r = ValidateManifestObject(withPublicPages([lumenPage, { ...lumenPage, export: 'Other' }]));
+        expect(r.Success).toBe(false);
+        expect(r.Errors?.join(' ')).toContain('lumen');
+    });
+
+    it('rejects an export that is not a single JavaScript identifier', () => {
+        const r = ValidateManifestObject(withPublicPages([{ ...lumenPage, export: 'a.b' }]));
+        expect(r.Success).toBe(false);
+    });
+
+    it('rejects a page whose package is not declared in packages.client or packages.shared', () => {
+        const r = ValidateManifestObject(withPublicPages([lumenPage], { server: [{ name: '@acme/lumen-public', role: 'library' }] }));
+        expect(r.Success).toBe(false);
+        expect(r.Errors?.join(' ')).toContain('@acme/lumen-public');
+    });
+
+    it('rejects a page whose package is a shared package that runs only in Node', () => {
+        const r = ValidateManifestObject(withPublicPages([lumenPage], { shared: [{ name: '@acme/lumen-public', role: 'library', platform: 'node' }] }));
+        expect(r.Success).toBe(false);
+        expect(r.Errors?.join(' ')).toContain('@acme/lumen-public');
+    });
+
+    it('keeps a page description for the link preview', () => {
+        const r = ValidateManifestObject(withPublicPages([{ ...lumenPage, description: 'Lighting plans for every room.' }]));
+        expect(r.Success, r.Errors?.join(' ')).toBe(true);
+        expect(r.Manifest?.publicPages?.[0].description).toBe('Lighting plans for every room.');
+    });
+
+    it('rejects a slug that a visitor could take for a sign-in or account address', () => {
+        for (const slug of ['login', 'signin', 'sign-in', 'auth', 'sso', 'oauth', 'account', 'admin', 'password', 'reset']) {
+            const r = ValidateManifestObject(withPublicPages([{ ...lumenPage, slug }]));
+            expect(r.Success, slug).toBe(false);
+            expect(r.Errors?.join(' ')).toContain('reserved');
+        }
+    });
+
+    it('keeps subPaths, and a page has none by default', () => {
+        const r = ValidateManifestObject(withPublicPages([{ ...lumenPage, subPaths: true }, { ...lumenPage, slug: 'pricing' }]));
+        expect(r.Success, r.Errors?.join(' ')).toBe(true);
+        const pages = r.Manifest?.publicPages ?? [];
+        expect('slug' in pages[0] && pages[0].subPaths).toBe(true);
+        expect('slug' in pages[1] && pages[1].subPaths).toBeUndefined();
+    });
+
+    describe('error pages', () => {
+        const errorPage = { role: 'error', scope: 'lumen', package: '@acme/lumen-public', export: 'LumenNotFoundPage' };
+
+        it('accepts an error page under a slug of the same app, and one at the root', () => {
+            const r = ValidateManifestObject(withPublicPages([lumenPage, errorPage, { ...errorPage, scope: 'lumen/guides' }, { ...errorPage, scope: '' }]));
+            expect(r.Success, r.Errors?.join(' ')).toBe(true);
+            expect(r.Manifest?.publicPages?.[1]).toMatchObject({ role: 'error', scope: 'lumen' });
+        });
+
+        it('rejects an error page whose scope does not start with a slug of the same app', () => {
+            const r = ValidateManifestObject(withPublicPages([lumenPage, { ...errorPage, scope: 'other/guides' }]));
+            expect(r.Success).toBe(false);
+            expect(r.Errors?.join(' ')).toContain('other/guides');
+        });
+
+        it('rejects a scope that is not folders of lowercase words', () => {
+            for (const scope of ['Lumen', '/lumen', 'lumen/', 'lumen//x', '../lumen', 'lumen/a b']) {
+                expect(ValidateManifestObject(withPublicPages([lumenPage, { ...errorPage, scope }])).Success, scope).toBe(false);
+            }
+        });
+
+        it('rejects two error pages with the same scope, naming the scope', () => {
+            const r = ValidateManifestObject(withPublicPages([lumenPage, errorPage, errorPage]));
+            expect(r.Success).toBe(false);
+            expect(r.Errors?.join(' ')).toContain('"lumen"');
+        });
+
+        it('rejects an error page whose package does not run in the browser', () => {
+            const r = ValidateManifestObject(withPublicPages([lumenPage, { ...errorPage, package: '@acme/missing' }]));
+            expect(r.Success).toBe(false);
+            expect(r.Errors?.join(' ')).toContain('@acme/missing');
+        });
+
+        it('rejects an entry that is both a page and an error page', () => {
+            expect(ValidateManifestObject(withPublicPages([{ ...lumenPage, role: 'error' }])).Success).toBe(false);
+        });
+    });
+
+    it('rejects a title longer than 120 characters', () => {
+        const r = ValidateManifestObject(withPublicPages([{ ...lumenPage, title: 'a'.repeat(121) }]));
+        expect(r.Success).toBe(false);
+    });
+
+    it('rejects a description longer than 300 characters', () => {
+        const r = ValidateManifestObject(withPublicPages([{ ...lumenPage, description: 'a'.repeat(301) }]));
+        expect(r.Success).toBe(false);
+    });
+});
+
 /**
  * String-aware JSONC comment stripper: removes `//` line and `/* *\/` block comments
  * while preserving comment-like sequences (e.g. `https://`) inside quoted strings.

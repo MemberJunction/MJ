@@ -663,7 +663,7 @@ const GRAPH_VIEW_CSS = `
                     </div>
 
                     <div class="mj-graph-inspector-actions">
-                        @if (SelectedNode.Status === 'Proposed') {
+                        @if (CanApproveNodes && SelectedNode.Status === 'Proposed') {
                             <button
                                 type="button"
                                 class="mj-graph-tool-btn"
@@ -830,6 +830,8 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     @Input() public FocalNodeId?: string;
     @Input() public ActiveCategoryFilter: string | null = null;
     @Input() public AutoOpenInspector = false;
+    /** Whether the user may approve proposed graph concepts into Canon (fail-closed default `false`). */
+    @Input() public CanApproveNodes = false;
     @Input() public ShowToolbar = true;
     @Input() public ShowLegend = true;
     @Input() public ShowInspector = true;
@@ -1276,6 +1278,9 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     }
 
     public TriggerNodeAction(node: GraphNode, action: GraphNodeActionKind, payload?: Record<string, unknown>): void {
+        if (action === 'approve' && !this.CanApproveNodes) {
+            return;
+        }
         const beforeEvent = new BeforeNodeActionEventArgs(node, action, payload);
         this.BeforeNodeAction.emit(beforeEvent);
         if (beforeEvent.Cancel) return;

@@ -18,19 +18,25 @@ import {
     MJGraphConceptTypeEntity,
     MJGraphEdgeEntity,
     MJGraphEdgeTypeEntity,
+    MJGraphEntity,
+    MJGraphTypeEntity,
     MJQueryEntity,
 } from '@memberjunction/core-entities';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
     ExistingGraphConceptSeed,
+    FindAuthorityTier,
     GraphAuthorityTier,
     GraphAuthorityTierDescriptor,
     GraphConceptType,
     GraphConceptTypeDescriptor,
+    GraphTypeDescriptor,
+    GroundingModeFromGraphTypeValue,
     ResolvedGraphOverlayConfig,
     SchemaGroundingTarget,
     SynthesizedGraphConcept,
     SynthesizedGraphEdge,
+    TaxonomyModeFromGraphTypeValue,
 } from '@memberjunction/content-pipeline-base';
 import { WhereEqual } from '../Filters.js';
 import type { GraphStageUpsertStatus, IGraphOverlayStore } from './GraphStage.js';
@@ -72,9 +78,7 @@ export class EntityGraphOverlayStore implements IGraphOverlayStore {
         for (const row of result.Results ?? []) {
             this.conceptIDByNameCache.set(`${graphID.toLowerCase()}::${row.Name.trim().toLowerCase()}`, row.ID);
             const parsedSynonyms = row.Synonyms ? (SafeJSONParse<string[]>(row.Synonyms) ?? []) : [];
-            const tierName = row.AuthorityTierID
-                ? (tierNameByID.get(row.AuthorityTierID.toLowerCase()) ?? row.AuthorityTier ?? 'Reference')
-                : 'Reference';
+            const tierName = (row.AuthorityTierID ? tierNameByID.get(row.AuthorityTierID.toLowerCase()) : undefined) ?? row.AuthorityTier ?? undefined;
             seeds.push({
                 ConceptID: row.ID,
                 Name: row.Name,
@@ -89,6 +93,48 @@ export class EntityGraphOverlayStore implements IGraphOverlayStore {
             });
         }
         return seeds;
+    }
+
+    /**
+     * The `MJ: Graph Types` row of the graph, with its overlay defaults. Returns `null` when the graph
+     * or its type cannot be read. Two plain reads rather than one subquery, so the filter stays
+     * dialect-neutral.
+     */
+    public async LoadGraphType(
+        graphID: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<GraphTypeDescriptor | null> {
+        const rv = RunView.FromMetadataProvider(provider);
+        const graphResult = await rv.RunView<MJGraphEntity>(
+            { EntityName: 'MJ: Graphs', Fields: ['ID', 'GraphTypeID'], ExtraFilter: WhereEqual({ ID: graphID }), ResultType: 'simple', MaxRows: 1 },
+            contextUser,
+        );
+        const graphTypeID = graphResult.Success ? graphResult.Results?.[0]?.GraphTypeID : undefined;
+        if (!graphTypeID) {
+            LogError(`EntityGraphOverlayStore.LoadGraphType: graph '${graphID}' could not be read: ${graphResult.ErrorMessage ?? 'not found'}`);
+            return null;
+        }
+        const typeResult = await rv.RunView<MJGraphTypeEntity>(
+            { EntityName: 'MJ: Graph Types', ExtraFilter: WhereEqual({ ID: graphTypeID }), ResultType: 'simple', MaxRows: 1 },
+            contextUser,
+        );
+        const row = typeResult.Success ? typeResult.Results?.[0] : undefined;
+        if (!row) {
+            LogError(`EntityGraphOverlayStore.LoadGraphType: graph type '${graphTypeID}' could not be read: ${typeResult.ErrorMessage ?? 'not found'}`);
+            return null;
+        }
+        return {
+            ID: row.ID,
+            Name: row.Name,
+            Description: row.Description,
+            IsCanon: row.IsCanon,
+            Rank: row.Rank,
+            IconClass: row.IconClass,
+            DefaultAuthorityTierID: row.DefaultAuthorityTierID,
+            DefaultConceptTaxonomyMode: TaxonomyModeFromGraphTypeValue(row.DefaultConceptTaxonomyMode),
+            DefaultGroundingMode: GroundingModeFromGraphTypeValue(row.DefaultGroundingMode),
+        };
     }
 
     public async LoadConceptTypes(
@@ -245,12 +291,28 @@ export class EntityGraphOverlayStore implements IGraphOverlayStore {
 
         if (concept.ExistingConceptID) {
             loadedExisting = await entity.InnerLoad(CompositeKey.FromID(concept.ExistingConceptID)); // first-pk-ok: single PK ID
+            if (!loadedExisting) {
+                throw new Error(
+                    `Could not load existing MJ: Graph Concepts record '${concept.ExistingConceptID}' in graph '${graphID}'.`,
+                );
+            }
+        }
+
+        if (loadedExisting && (entity.Status === 'Approved' || entity.Status === 'Deprecated')) {
+            // Preserve human-governed Approved and Deprecated concepts in place: pipeline re-runs may link
+            // new edges to an existing Approved concept ID, but must never overwrite its definition or status
+            // without a Graph: Approve Edges steward.
+            this.conceptIDByNameCache.set(`${graphID.toLowerCase()}::${entity.Name.trim().toLowerCase()}`, entity.ID);
+            return entity.ID;
         }
 
         if (!loadedExisting) {
             entity.NewRecord();
             entity.GraphID = graphID;
             entity.Status = status;
+            // Synthesized from document chunks: the provenance access policy keeps it behind its
+            // sources even after they are retracted (an authored concept stays 'Declared').
+            entity.Origin = 'Inferred';
         }
 
         const conceptTypeID = await this.resolveConceptTypeID(concept, contextUser, provider);
@@ -275,7 +337,7 @@ export class EntityGraphOverlayStore implements IGraphOverlayStore {
             }
         }
 
-        const saved = await entity.Save();
+        const saved = await this.saveEntityUnderPipelinePolicy(entity, 'MJ: Graph Concepts', contextUser);
         if (!saved) {
             throw new Error(
                 `Failed to save MJ: Graph Concepts '${concept.Name}': ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`,
@@ -329,7 +391,7 @@ export class EntityGraphOverlayStore implements IGraphOverlayStore {
             edgeEntity.Description = edge.Description;
             edgeEntity.Attributes = edge.Attributes ? JSON.stringify(edge.Attributes) : null;
 
-            if (await this.saveEdgeUnderPipelinePolicy(edgeEntity, contextUser)) {
+            if (await this.saveEntityUnderPipelinePolicy(edgeEntity, 'MJ: Graph Edges', contextUser)) {
                 savedCount++;
             } else {
                 LogError(
@@ -342,22 +404,25 @@ export class EntityGraphOverlayStore implements IGraphOverlayStore {
     }
 
     /**
-     * Saves an edge this stage synthesized inside the {@link GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION}
-     * server operation scope, bound to the run's user. The edge's `Approved` status comes from the
-     * content source's `GraphOverlay` policy, not from that user (the scheduler's user, an on-demand
-     * runner or an uploader), so `MJGraphEdgeEntityServer` accepts a new `Inferred` + `Approved` edge in
-     * this scope without `Graph: Approve Edges`. The scope covers only this save: no API caller can
-     * enter it, and it approves nothing but a newly created `Inferred` edge.
+     * Saves a newly synthesized graph concept or edge inside {@link GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION},
+     * bound to the run's user and the single target entity (`'MJ: Graph Concepts'` or `'MJ: Graph Edges'`).
+     * The row's `Approved` status comes from the content source's `GraphOverlay` policy rather than the
+     * triggering user's own `Graph: Approve Edges` grant. Client CRUD boundaries mask this scope, and
+     * entity-server validation rejects anything except newly created policy-approved rows.
      */
-    private saveEdgeUnderPipelinePolicy(edgeEntity: MJGraphEdgeEntity, contextUser: UserInfo): Promise<boolean> {
+    private saveEntityUnderPipelinePolicy(
+        entity: MJGraphConceptEntity | MJGraphEdgeEntity,
+        entityName: 'MJ: Graph Concepts' | 'MJ: Graph Edges',
+        contextUser: UserInfo,
+    ): Promise<boolean> {
         return ServerOperationScopeManager.Instance.RunWithAuthority(
             {
                 operationKey: GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION,
                 source: 'ServerEngine',
-                allowedEntities: ['MJ: Graph Edges'],
+                allowedEntities: [entityName],
                 userId: contextUser.ID,
             },
-            () => edgeEntity.Save(),
+            () => entity.Save(),
         );
     }
 
@@ -386,13 +451,11 @@ export class EntityGraphOverlayStore implements IGraphOverlayStore {
         if (concept.AuthorityTierID) {
             return concept.AuthorityTierID;
         }
-        const tiers = await this.LoadAuthorityTiers(contextUser, provider);
-        const norm = concept.AuthorityTier.trim().toLowerCase().replace(/\s+/g, '');
-        const matched = tiers.find((t) => t.Name.trim().toLowerCase().replace(/\s+/g, '') === norm);
-        if (matched) {
-            return matched.ID;
+        if (!concept.AuthorityTier) {
+            return null; // unranked
         }
-        return tiers.find((t) => t.Name.trim().toLowerCase() === 'reference')?.ID ?? null;
+        const tiers = await this.LoadAuthorityTiers(contextUser, provider);
+        return FindAuthorityTier(concept.AuthorityTier, tiers)?.ID ?? null;
     }
 
     private async ensureEdgeTypesLoaded(

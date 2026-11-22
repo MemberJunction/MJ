@@ -83,5 +83,60 @@
       "lastModified": "2026-11-10T23:41:22.400Z",
       "checksum": "c4c7629e469272e3dd8e9126a5a0c55740d0b179130596a273e6d4c9153f5e86"
     }
+  },
+  {
+    "fields": {
+      "Name": "Library Knowledge",
+      "Description": "Knowledge graph over the documents people write in MJ Docs. The Content Pipeline synthesizes concepts from their text; [[Name]] links and shared concepts relate documents to each other. Every node is visible only to people who can open the document it came from.",
+      "GraphTypeID": "@lookup:MJ: Graph Types.Name=Knowledge",
+      "LoadMode": "OnDemand",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "F38FAED7-250E-4A27-ABD5-70A633FA063A"
+    },
+    "relatedEntities": {
+      "MJ: Graph Edge Providers": [
+        {
+          "fields": {
+            "GraphID": "@parent:ID",
+            "Name": "Document Links",
+            "Description": "LinksTo edges from the [[Name]] references in a document, recorded as MJ: Record Links by the artifact graph indexer.",
+            "DriverClass": "RecordLinkEdgeProvider",
+            "Configuration": {
+              "LinkTypes": [
+                "LinksTo"
+              ],
+              "EdgeType": "LinksTo",
+              "DefaultWeight": 0.8
+            },
+            "Sequence": 10,
+            "IsActive": true
+          },
+          "primaryKey": {
+            "ID": "607AA7B2-1E8C-45C7-AE97-373683763E56"
+          }
+        },
+        {
+          "fields": {
+            "GraphID": "@parent:ID",
+            "Name": "Shared Concepts",
+            "Description": "SharesConceptWith edges between documents that were sources of the same synthesized concept, derived on read and weighted by how many concepts they share.",
+            "DriverClass": "SharedConceptEdgeProvider",
+            "Configuration": {
+              "EntityNames": [
+                "MJ: Artifacts"
+              ],
+              "MinSharedConcepts": 1
+            },
+            "Sequence": 20,
+            "IsActive": true
+          },
+          "primaryKey": {
+            "ID": "431D637F-5121-40D6-830B-129A93B14638"
+          }
+        }
+      ]
+    }
   }
 ]

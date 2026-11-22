@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import type { WorkQueueDeadLetterRow, WorkQueuePartitionStateRow } from '@memberjunction/core-entities';
 import {
-    FormatBacklog, FormatBindingIssues, FormatDeadLetters, FormatPartitions, FormatStatsTable, FormatTable, HasBindingErrors, ParseBindingImport,
-    RequireOperationOutput, ToPartitionCondition,
+    FormatBacklog, FormatBindingIssues, FormatDeadLetters, FormatPartitions, FormatStatsTable, FormatSweep, FormatTable, HasBindingErrors, ParseBindingImport,
+    RequireOperationOutput, SweepFailed, ToPartitionCondition,
 } from '../lib/work-queue/queue-format.js';
 
 const DEAD_LETTER: WorkQueueDeadLetterRow = {
@@ -48,6 +48,20 @@ describe('queue formatting', () => {
         expect(FormatBacklog({ supported: true, claimable: 7, inFlight: 2, total: 9, capped: false })).toBe('claimable 7 · in flight 2 · total 9');
         expect(FormatBacklog({ supported: true, claimable: 1000, inFlight: 2, total: 1002, capped: true })).toBe('claimable 1000 · in flight 2 · total 1002 (capped at 1000 — the real backlog is at least this large)');
         expect(FormatBacklog({ supported: false, claimable: 0, inFlight: 0, total: 0, capped: false })).toBe("This subscription's transport reports no backlog; scale from the transport's own metrics.");
+    });
+
+    it('renders a sweeper pass, marking failed steps and a skipped pass', () => {
+        expect(FormatSweep({ ExpireLeases: 2, PurgeRetention: 150, PurgeDeduplications: 0 })).toBe('expired leases 2 · purged retention 150 · purged deduplications 0');
+        expect(FormatSweep({ ExpireLeases: -1, PurgeRetention: 3, PurgeDeduplications: 1 })).toBe('expired leases failed · purged retention 3 · purged deduplications 1');
+        expect(FormatSweep({})).toBe('Skipped: another instance holds the sweep lock.');
+        expect(FormatSweep({ Pass: -1 })).toBe('Sweeper pass failed; see the log.');
+    });
+
+    it('flags a sweep as failed only when a step or the pass reports -1', () => {
+        expect(SweepFailed({ ExpireLeases: 2, PurgeRetention: 150, PurgeDeduplications: 0 })).toBe(false);
+        expect(SweepFailed({})).toBe(false);
+        expect(SweepFailed({ ExpireLeases: -1, PurgeRetention: 3, PurgeDeduplications: 1 })).toBe(true);
+        expect(SweepFailed({ Pass: -1 })).toBe(true);
     });
 
     it('renders binding issues and detects errors', () => {

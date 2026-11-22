@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams, ActionParam, ActionRunScopeIsBound
 import { BaseAction } from "@memberjunction/actions";
 import { IsPlainObject, NormalizeUUID, RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo } from "@memberjunction/core";
+import { AIEngine } from "@memberjunction/aiengine";
 import {
     SearchEngine,
     SearchAudience,
@@ -938,9 +939,21 @@ export class ScopedSearchAction extends BaseAction {
         return undefined;
     }
 
-    /** Load the skill principal. Mirrors loadAgent; null when it cannot be loaded. */
+    /**
+     * Load the skill principal from AIEngine's shared metadata cache first, falling back to direct
+     * entity load; returns null when it cannot be loaded. Reading from AIEngine skips the per-user
+     * `entity.Load` read check on the skill definition row, which is safe because a skill principal
+     * only narrows search scope rather than widening data access.
+     */
     private async loadSkill(skillID: string, contextUser: UserInfo): Promise<MJAISkillEntity | null> {
         try {
+            try {
+                await AIEngine.Instance.Config(false, contextUser);
+                const cached = AIEngine.Instance.Skills?.find(s => UUIDsEqual(s.ID, skillID));
+                if (cached) return cached;
+            } catch {
+                // Fall back to direct entity load if AIEngine cache is unavailable
+            }
             const md = new Metadata(); // global-provider-ok: same rationale as loadAgent below
             const entity = await md.GetEntityObject<MJAISkillEntity>('MJ: AI Skills', contextUser);
             const loaded = await entity.Load(skillID);
@@ -953,8 +966,21 @@ export class ScopedSearchAction extends BaseAction {
         }
     }
 
+    /**
+     * Load the agent principal from AIEngine's shared metadata cache first, falling back to direct
+     * entity load; returns null when it cannot be loaded. Reading from AIEngine skips the per-user
+     * `entity.Load` read check on the agent definition row, which is safe because an agent principal
+     * only narrows search scope rather than widening data access.
+     */
     private async loadAgent(agentID: string, contextUser: UserInfo): Promise<MJAIAgentEntity | null> {
         try {
+            try {
+                await AIEngine.Instance.Config(false, contextUser);
+                const cached = AIEngine.Instance.Agents?.find(a => UUIDsEqual(a.ID, agentID));
+                if (cached) return cached;
+            } catch {
+                // Fall back to direct entity load if AIEngine cache is unavailable
+            }
             const md = new Metadata(); // global-provider-ok: BaseAction has no bound IMetadataProvider; contextUser is the per-request scope
             const entity = await md.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', contextUser);
             const loaded = await entity.Load(agentID);

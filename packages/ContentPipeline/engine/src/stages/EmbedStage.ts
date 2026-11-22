@@ -422,11 +422,23 @@ export abstract class BaseEmbedStage extends BasePipelineStage {
     }
     private _infrastructure?: ContentVectorInfrastructure;
 
-    /** The text to embed — the decorator first, so a chunk still reads in context. */
+    /** The text to embed — the decorator and segment title first, so a chunk still reads in context. */
     private textFor(record: WorkingRecord): string {
-        const text = (record.Get('Text') as string | null) ?? '';
+        const rawBody =
+            (record.Get('Text') as string | null) ||
+            record.GetExtension<string>('Pipeline', 'transcript') ||
+            record.GetExtension<string>('Pipeline', 'description') ||
+            '';
+        if (rawBody.trim().length === 0) {
+            return '';
+        }
+        const segmentTitle = record.GetExtension<string>('Pipeline', 'segmentTitle');
+        const body =
+            segmentTitle && segmentTitle.trim().length > 0 && !rawBody.startsWith(segmentTitle.trim())
+                ? `${segmentTitle.trim()}\n${rawBody}`
+                : rawBody;
         const decorator = record.Get('Decorator');
-        return typeof decorator === 'string' && decorator.length > 0 ? `${decorator}\n\n${text}` : text;
+        return typeof decorator === 'string' && decorator.length > 0 ? `${decorator}\n\n${body}` : body;
     }
 
     /**
