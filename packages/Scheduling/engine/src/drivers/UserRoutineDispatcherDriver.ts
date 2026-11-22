@@ -28,7 +28,14 @@ import {
     MJUserNotificationEntity,
     MJTemplateEntityExtended,
 } from '@memberjunction/core-entities';
-import { MJAIAgentEntityExtended, MJAIPromptEntityExtended, AIPromptParams } from '@memberjunction/ai-core-plus';
+import {
+    MJAIAgentEntityExtended,
+    MJAIPromptEntityExtended,
+    AIPromptParams,
+    ConversationUtility,
+    MentionContent,
+    SpecialContentToken,
+} from '@memberjunction/ai-core-plus';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ActionEngineServer } from '@memberjunction/actions';
@@ -117,6 +124,68 @@ function persistedRunStatus(run: MJUserRoutineRunEntity): MJUserRoutineRunEntity
 
 /** Name of the metadata-seeded default notification template (resolved BY NAME, never hardcoded ID). */
 const DEFAULT_NOTIFICATION_TEMPLATE_NAME = 'User Routine Notification - Default';
+
+function isRecordMentionToken(token: SpecialContentToken): token is SpecialContentToken & { content: MentionContent } {
+    return token.mode === 'mention' && 'type' in token.content && token.content.type === 'record';
+}
+
+/**
+ * Visible label for a `record` mention token, matching `ConversationUtility`'s fallback rules.
+ */
+export function ResolveRecordLinkLabel(content: MentionContent): string {
+    const explicitName = (content.name ?? '').trim();
+    return explicitName || content.entityName || 'record';
+}
+
+function endsWithRecordTitle(prefix: string, label: string): boolean {
+    if (!label) {
+        return false;
+    }
+    const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const trailingTitlePattern = new RegExp(`(?:^|[\\s(\\[\\"'*_\`>:])${escapedLabel}[*_\`"'\\]]*[ \\t]*$`, 'i');
+    return trailingTitlePattern.test(prefix);
+}
+
+/**
+ * Converts `@{"_mode":...}` tokens in a routine result summary into clean plain text via
+ * `ConversationUtility.ToPlainText`, omitting duplicate `record` mention pills that
+ * immediately follow the same record title (e.g. `Northwind @{...}` -> `Northwind` rather
+ * than `Northwind Northwind`).
+ */
+export function FormatRoutinePlainResultSummary(
+    summary: string,
+    recordLinkLabel: (content: MentionContent) => string = ResolveRecordLinkLabel
+): string {
+    if (!summary) {
+        return '';
+    }
+    const tokens = ConversationUtility.ParseSpecialContent(summary);
+    if (tokens.length === 0) {
+        return ConversationUtility.ToPlainText(summary);
+    }
+
+    let deduplicated = '';
+    let cursor = 0;
+    for (const token of tokens) {
+        deduplicated += summary.slice(cursor, token.startIndex);
+        cursor = token.endIndex;
+
+        if (isRecordMentionToken(token)) {
+            const label = recordLinkLabel(token.content);
+            if (endsWithRecordTitle(deduplicated, label)) {
+                const nextChar = summary[token.endIndex] ?? '';
+                if (nextChar === '' || /^[\s.,;:!?)\]}'"]/.test(nextChar)) {
+                    deduplicated = deduplicated.replace(/[ \t]+$/, '');
+                }
+                continue;
+            }
+        }
+        deduplicated += token.originalText;
+    }
+    deduplicated += summary.slice(cursor);
+
+    return ConversationUtility.ToPlainText(deduplicated);
+}
 
 /** Name of the metadata-seeded `MJ: User Notification Types` row used for in-app delivery. */
 const NOTIFICATION_TYPE_NAME = 'User Routine';
@@ -1148,45 +1217,54 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
      * NotificationTemplateID when set, else the metadata-seeded default template resolved
      * BY NAME. Falls back to a plain-text body when no template resolves or rendering fails.
      */
-    private async renderNotificationMessage(
+    protected async renderNotificationMessage(
         routine: MJUserRoutineEntity,
         run: MJUserRoutineRunEntity,
         contextUser: UserInfo
     ): Promise<string> {
-        const fallback = this.buildPlainTextMessage(routine, run);
         try {
             await TemplateEngineServer.Instance.Config(false, contextUser);
             const template = this.resolveNotificationTemplate(routine);
             if (!template) {
-                return fallback;
+                return this.buildPlainTextMessage(routine, run);
             }
             // In-app messages prefer the compact Text (Markdown) body when the template
             // provides one — the HTML body is email-styled and belongs to the email channel.
             const content = template.GetHighestPriorityContent('Text') ?? template.GetHighestPriorityContent();
             if (!content) {
-                return fallback;
+                return this.buildPlainTextMessage(routine, run);
             }
+            const isHtml = content.Type?.trim().toLowerCase() === 'html';
+            const rawSummary = run.ResultSummary ?? '';
+            const resultSummary = isHtml ? rawSummary : FormatRoutinePlainResultSummary(rawSummary);
             // BaseEntity getters are not spreadable — GetAll() yields plain objects for the renderer.
             const data = {
                 routine: routine.GetAll(),
                 run: run.GetAll(),
-                resultSummary: run.ResultSummary ?? '',
+                resultSummary,
                 status: run.Status,
             };
-            const rendered = await TemplateEngineServer.Instance.RenderTemplate(template, content, data, true, undefined, { ContextUser: contextUser });
+            const rendered = await TemplateEngineServer.Instance.RenderTemplate(
+                template,
+                content,
+                data,
+                true,
+                undefined,
+                { ContextUser: contextUser, autoescape: isHtml }
+            );
             if (rendered.Success && rendered.Output) {
                 return rendered.Output;
             }
             this.logError(`Template render failed for routine "${routine.Name}": ${rendered.Message ?? 'unknown'} — using plain-text fallback`);
-            return fallback;
+            return this.buildPlainTextMessage(routine, run);
         } catch (error) {
             this.logError(`Template resolution failed for routine "${routine.Name}" — using plain-text fallback`, error);
-            return fallback;
+            return this.buildPlainTextMessage(routine, run);
         }
     }
 
     /** Resolve the routine's template (by ID) or the seeded default (by name) from the template cache. */
-    private resolveNotificationTemplate(routine: MJUserRoutineEntity): MJTemplateEntityExtended | undefined {
+    protected resolveNotificationTemplate(routine: MJUserRoutineEntity): MJTemplateEntityExtended | undefined {
         if (routine.NotificationTemplateID) {
             const own = TemplateEngineServer.Instance.Templates.find(t => UUIDsEqual(t.ID, routine.NotificationTemplateID!));
             if (own) {
@@ -1203,7 +1281,8 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         const statusLine = run.Status === 'Success'
             ? `completed successfully at ${when}.`
             : `failed at ${when}.${run.ErrorMessage ? `\nError: ${run.ErrorMessage}` : ''}`;
-        const summary = run.ResultSummary ? `\n\n${run.ResultSummary}` : '';
+        const formattedSummary = run.ResultSummary ? FormatRoutinePlainResultSummary(run.ResultSummary) : '';
+        const summary = formattedSummary ? `\n\n${formattedSummary}` : '';
         return `Routine "${routine.Name}" ${statusLine}${summary}`;
     }
 

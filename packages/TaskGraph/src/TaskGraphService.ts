@@ -51,8 +51,12 @@ import {
     type ForEachOperation,
     type WhileOperation,
     ConfigOf,
+    IsDefaultHumanTaskProvider,
+    IsHumanTaskProviderRegistered,
+    HumanTaskProviderDefaults,
+    ResolveHumanStepProvider,
 } from '@memberjunction/ai-core-plus';
-import { EscapeSQLString, IsValidUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, GetGlobalObjectStore, IsValidUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentDecisionService } from '@memberjunction/ai-agents';
@@ -427,6 +431,9 @@ export const TASK_TYPE_NAME = TASK_GRAPH_WORKFLOW_TYPE_NAME;
  */
 const DISPATCHABLE_KINDS: ReadonlyArray<TaskGraphSpecNode['kind']> = [
     'Agent', 'Action', 'Human', 'ForEach', 'While', 'Prompt', 'Decision',
+    // Waiting steps: never claimed, completed by a signal (External) or a clock (Wait). The
+    // dispatcher reaches and settles them through WaitingStepRunner.
+    'External', 'Wait',
 ];
 
 /**
@@ -481,13 +488,27 @@ export function BuildStepConfiguration(node: TaskGraphSpecNode): TaskStepConfigu
     // `expiresInHours` as well as instructions: dropping it here is what would leave the deadline in
     // the spec and out of the row the dispatcher actually reads, so the request would be raised with
     // no ExpiresAt and the author's timeout would silently not exist.
+    //
+    // `provider` and `providerConfiguration` for the same reason: dropped, a Human step meant for a
+    // plugged-in provider silently fell back to the built-in inbox, raised an ask nobody watches, and
+    // never reached the provider at all.
     const human = ConfigOf(node, 'Human');
-    if (human?.instructions || human?.expiresInHours) {
-        config.human = { instructions: human.instructions, expiresInHours: human.expiresInHours };
+    if (human?.instructions || human?.expiresInHours || human?.provider || human?.providerConfiguration) {
+        config.human = {
+            instructions: human.instructions,
+            expiresInHours: human.expiresInHours,
+            ...(human.provider ? { provider: human.provider } : {}),
+            ...(human.providerConfiguration ? { providerConfiguration: human.providerConfiguration } : {}),
+        };
     }
 
     const external = ConfigOf(node, 'External');
     if (external) config.external = external;
+
+    // A Wait's moment. Without it the row says "Wait" and nothing else, and the dispatcher can only
+    // fail the step — which it does, by name, rather than continue immediately.
+    const wait = ConfigOf(node, 'Wait');
+    if (wait) config.wait = wait;
 
     // The questions and state, plus the node's tempId: conditions name a decision by the tempId it
     // was submitted under (`decisions.<tempId>.<question>`), and the row keeps no other copy of it.
@@ -627,9 +648,10 @@ export function FindUnrunnableKinds(spec: TaskGraphSpec): string | null {
 
     const detail = offenders.map((t) => `"${t.name}" (${t.kind})`).join(', ');
     return (
-        `"${spec.workflowName}" cannot be run yet: ${detail}. ` +
-        `The dispatcher runs agent, action, person and loop steps. Prompt steps and steps completed ` +
-        `by an outside system are not supported yet — replace them, or split them out of this workflow.`
+        `"${spec.workflowName}" cannot be run: ${detail}. ` +
+        `The dispatcher runs ${DISPATCHABLE_KINDS.join(', ')} steps; this server does not know the ` +
+        `kind named, which usually means it was authored for a newer version. Replace the step, or ` +
+        `update this server.`
     );
 }
 
@@ -661,6 +683,60 @@ export function FindCrossUserAssignments(spec: TaskGraphSpec, submitterUserID: s
         `workflow. Assigning a step to someone else is not available yet (#3524) — a workflow can ` +
         `only ask the person who started it. Remove assignToUserID from those steps.`
     );
+}
+
+/**
+ * The spec with every Human step that names no provider given `defaultKey`, or the spec unchanged when
+ * there is no default. A step that names a provider, the built-in `'AgentRequest'` included, keeps it.
+ * Pure; `Submit` passes `HumanTaskProviderDefaults.Instance.EffectiveKey`.
+ */
+export function ApplyDefaultHumanTaskProvider(spec: TaskGraphSpec, defaultKey: string | null): TaskGraphSpec {
+    if (!defaultKey) return spec;
+    let changed = false;
+    const tasks = spec.tasks.map((node) => {
+        if (node.kind !== 'Human') return node;
+        const human = ConfigOf(node, 'Human') ?? {};
+        const provider = ResolveHumanStepProvider(human.provider, defaultKey);
+        if (provider === human.provider) return node;
+        changed = true;
+        return { ...node, configuration: { ...human, provider } };
+    });
+    return changed ? { ...spec, tasks } : spec;
+}
+
+/**
+ * Names the Human steps whose `provider` is not registered on this server, or `null` when all are.
+ *
+ * Asked of the SUBMITTING host, which in every MJ deployment loads the same server packages as the
+ * dispatching one. The dispatcher re-checks when it reaches the step, so a host that differs still
+ * fails the step with the provider's name rather than waiting forever.
+ */
+export function FindUnregisteredHumanTaskProviders(spec: TaskGraphSpec): string | null {
+    const missing = new Map<string, string[]>();
+    for (const node of spec.tasks) {
+        const key = ConfigOf(node, 'Human')?.provider?.trim();
+        if (!key || IsDefaultHumanTaskProvider(key)) continue;
+        if (IsHumanTaskProviderRegistered(key)) continue;
+        missing.set(key, [...(missing.get(key) ?? []), `"${node.name}"`]);
+    }
+    if (missing.size === 0) return null;
+    const detail = [...missing.entries()].map(([key, steps]) => `${steps.join(', ')} → "${key}"`).join('; ');
+    return (
+        `"${spec.workflowName}" was not started: these Human steps name a provider no package on this server ` +
+        `registers: ${detail}. Load the package that registers it, or remove "provider" to use the built-in inbox.`
+    );
+}
+
+/**
+ * The correlation key an External step can be stamped with AT SUBMIT: a literal key. A payload path
+ * is resolved only when the step is reached, so it returns `null` here.
+ *
+ * Stamping a literal key up front is what lets a signal that arrives before the step is reached find
+ * it — and be held on it — rather than missing it because the key column was still empty.
+ */
+export function SubmitTimeCorrelationKey(node: TaskGraphSpecNode): string | null {
+    const key = ConfigOf(node, 'External')?.correlationKey?.trim();
+    return key && !key.startsWith('payload.') ? key : null;
 }
 
 /**
@@ -702,6 +778,7 @@ function isNameValueJson(json: string): boolean {
 export type RetryableTask = Pick<
     MJTaskEntity,
     'Status' | 'StepType' | 'ErrorMessage' | 'StartedAt' | 'CompletedAt' | 'PercentComplete' | 'ClaimedBy' | 'ClaimExpiresAt' | 'OutputPayload'
+    | 'AttemptCount' | 'NextAttemptAt'
 >;
 
 /**
@@ -724,6 +801,10 @@ export function PrepareTaskForRetry(task: RetryableTask): void {
     // Clear any stale claim so the task is immediately claimable.
     task.ClaimedBy = null;
     task.ClaimExpiresAt = null;
+    // A person retrying a step starts its retry budget over, and does not wait out a backoff the
+    // dispatcher scheduled before they stepped in.
+    task.AttemptCount = 0;
+    task.NextAttemptAt = null;
 }
 
 export class TaskGraphService {
@@ -737,13 +818,33 @@ export class TaskGraphService {
     private readonly claims = new TaskClaimStore('task-graph-service', 0);
 
     /**
-     * Saves a row of a graph inside {@link TASK_GRAPH_RUNTIME_SECURITY_OPERATION}, bound to the caller: a workflow, its
-     * steps and its edges are written only by this service and the dispatcher (`MJTaskEntityServer`,
-     * `MJTaskDependencyEntityServer`), so a graph is created and changed through the service, never by an ordinary save.
+     * Resolves the server's System User for internal engine writes to `MJ: Task Types`, `MJ: Tasks`,
+     * and `MJ: Task Dependencies` — entities that non-Owner `UI` users deliberately hold read-only
+     * permissions on because workflows are persisted exclusively through this service (never via
+     * direct client CRUD). Falls back to `context.ContextUser` when no `UserCache` is loaded (e.g.
+     * isolated unit tests).
+     *
+     * Caller authorization (`resolveAgents`, `resolveActions`, `resolvePrompts`,
+     * `FindCrossUserAssignments`, `AuthorizeGraphControl`) and row attribution
+     * (`submittedByUserID`, `Human` step `UserID`, `SecurityEnvelope`) ALWAYS remain bound to
+     * `context.ContextUser`.
+     */
+    private servicePersistenceUser(context: TaskGraphSubmitContext): UserInfo {
+        const store = GetGlobalObjectStore() as {
+            ___SINGLETON__UserCache?: { GetSystemUser?: () => UserInfo | undefined };
+        } | null;
+        return store?.___SINGLETON__UserCache?.GetSystemUser?.() ?? context.ContextUser;
+    }
+
+    /**
+     * Saves a row of a graph inside {@link TASK_GRAPH_RUNTIME_SECURITY_OPERATION}, bound to the
+     * persistence user that owns `row`: a workflow, its steps and its edges are written only by
+     * this service and the dispatcher (`MJTaskEntityServer`, `MJTaskDependencyEntityServer`), so a
+     * graph is created and changed through the service, never by an ordinary save.
      */
     private saveAsService(row: { Save(): Promise<boolean> }, entityName: 'MJ: Tasks' | 'MJ: Task Dependencies', context: TaskGraphSubmitContext): Promise<boolean> {
         return ServerOperationScopeManager.Instance.RunWithAuthority(
-            { operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION, source: 'ServerEngine', allowedEntities: [entityName], userId: context.ContextUser.ID },
+            { operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION, source: 'ServerEngine', allowedEntities: [entityName], userId: this.servicePersistenceUser(context).ID },
             () => row.Save(),
         );
     }
@@ -756,7 +857,11 @@ export class TaskGraphService {
      * A submitted graph therefore survives the submitting request, the submitting agent run, and
      * the submitting server — which is the entire point of Task rows over in-run state (D8).
      */
-    public async Submit(spec: TaskGraphSpec, context: TaskGraphSubmitContext): Promise<TaskGraphSubmitResult> {
+    public async Submit(submitted: TaskGraphSpec, context: TaskGraphSubmitContext): Promise<TaskGraphSubmitResult> {
+        // 0. The install's default human-task provider, stamped onto every Human step that names none.
+        //    Stamped here, once, rather than looked up when the step is reached: the row then records
+        //    which provider was used, and a later change to the setting does not reroute a run in flight.
+        const spec = ApplyDefaultHumanTaskProvider(submitted, HumanTaskProviderDefaults.Instance.EffectiveKey);
         // 1. Structural validation. Server-side is the source of truth even when a producer already
         //    validated client-side — the same function runs in both places, so they cannot disagree.
         const validation = ValidateTaskGraphSpec(spec);
@@ -784,6 +889,15 @@ export class TaskGraphService {
         if (misassigned) {
             LogError(`[TaskGraphService] ${misassigned}`);
             return { Success: false, ErrorMessage: misassigned };
+        }
+
+        // 1b-iii. Human-task providers. A Human step handed to a provider nobody registered on this
+        //         server would be reached, fail, and stop the workflow mid-run; refused here instead,
+        //         by name, while the graph is still the author's to fix.
+        const unregistered = FindUnregisteredHumanTaskProviders(spec);
+        if (unregistered) {
+            LogError(`[TaskGraphService] ${unregistered}`);
+            return { Success: false, ErrorMessage: unregistered };
         }
 
         // 1c. Chain depth. A flow that dispatches a graph containing itself recurses without bound,
@@ -1165,7 +1279,8 @@ export class TaskGraphService {
     /** {@link Retry}, with the reason when the retry is refused, for a caller that shows it to a person. */
     public async RetryTask(taskID: string, context: TaskGraphSubmitContext, inputPayload?: unknown): Promise<TaskGraphRetryOutcome> {
         try {
-            const task = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
+            const persistenceUser = this.servicePersistenceUser(context);
+            const task = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', persistenceUser);
             if (!(await task.Load(taskID))) return { Success: false, ErrorMessage: 'The task could not be loaded.' };
             const editedInput = inputPayload === undefined
                 ? undefined
@@ -1175,7 +1290,7 @@ export class TaskGraphService {
                 LogError(`[TaskGraphService] Cannot retry task ${taskID}: ${refusal}.`);
                 return { Success: false, ErrorMessage: `The task cannot be retried: ${refusal}.` };
             }
-            const siblings = task.ParentID ? await this.loadChildren(task.ParentID, context) : [];
+            const siblings = task.ParentID ? await this.loadChildren(task.ParentID, context, persistenceUser) : [];
             const rollingBack = task.ParentID ? await this.rollbackStartedRefusal(task.ParentID, siblings, context) : null;
             if (rollingBack) {
                 LogError(`[TaskGraphService] Cannot retry task ${taskID}: ${rollingBack}`);
@@ -1816,10 +1931,11 @@ export class TaskGraphService {
      * first is what created the window, so the fix cannot be a better check.
      */
     private async ensureTaskType(context: TaskGraphSubmitContext): Promise<string> {
-        const found = await this.findTaskTypeID(context);
+        const persistenceUser = this.servicePersistenceUser(context);
+        const found = await this.findTaskTypeID(context, persistenceUser);
         if (found) return found;
 
-        const tt = await context.Provider.GetEntityObject<MJTaskTypeEntity>('MJ: Task Types', context.ContextUser);
+        const tt = await context.Provider.GetEntityObject<MJTaskTypeEntity>('MJ: Task Types', persistenceUser);
         tt.NewRecord();
         tt.Name = TASK_TYPE_NAME;
         tt.Description = 'Tasks created by agent-orchestrated workflows.';
@@ -1828,7 +1944,7 @@ export class TaskGraphService {
         // The insert lost. Almost certainly to the unique index and another process that got there
         // first — so re-read before treating it as a failure. Any other cause falls through to the
         // throw below with its own message intact.
-        const winner = await this.findTaskTypeID(context);
+        const winner = await this.findTaskTypeID(context, persistenceUser);
         if (winner) return winner;
 
         throw new Error(`Could not create task type: ${tt.LatestResult?.CompleteMessage ?? 'unknown error'}`);
@@ -1843,7 +1959,7 @@ export class TaskGraphService {
      * the resolution deterministic on a database that still has some, and the warning makes the
      * situation visible rather than merely survivable.
      */
-    private async findTaskTypeID(context: TaskGraphSubmitContext): Promise<string | null> {
+    private async findTaskTypeID(context: TaskGraphSubmitContext, user: UserInfo = context.ContextUser): Promise<string | null> {
         const existing = await RunView.FromMetadataProvider(context.Provider).RunView<{ ID: string }>(
             {
                 EntityName: 'MJ: Task Types',
@@ -1853,7 +1969,7 @@ export class TaskGraphService {
                 ResultType: 'simple',
                 MaxRows: 2,
             },
-            context.ContextUser,
+            user,
         );
         const rows = existing.Results ?? [];
         if (rows.length > 1) {
@@ -1877,7 +1993,7 @@ export class TaskGraphService {
      * transaction, so a graph never becomes visible to a dispatcher without them.
      */
     private async seedBreakpoints(parentID: string, taskIDs: string[], context: TaskGraphSubmitContext): Promise<void> {
-        const parent = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
+        const parent = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.servicePersistenceUser(context));
         if (!(await parent.Load(parentID))) {
             throw new Error(`Could not load parent task ${parentID} to seed breakpoints`);
         }
@@ -1892,7 +2008,7 @@ export class TaskGraphService {
 
     /** Writes the parent task that represents the graph as a whole. */
     private async persistParent(spec: TaskGraphSpec, taskTypeID: string, context: TaskGraphSubmitContext): Promise<string> {
-        const parent = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
+        const parent = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.servicePersistenceUser(context));
         parent.NewRecord();
         parent.Name = spec.workflowName;
         parent.Description = spec.reasoning || 'Orchestrated workflow';
@@ -1973,9 +2089,10 @@ export class TaskGraphService {
                 (t.dependsOn ?? []).map((d) => ({ From: NormalizeDependency(d).tempId, To: t.tempId })),
             ),
         );
+        const persistenceUser = this.servicePersistenceUser(context);
         await Promise.all(
             spec.tasks.map(async (node) => {
-                const task = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
+                const task = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', persistenceUser);
                 task.NewRecord();
                 if (task.ID) {
                     map.set(node.tempId, task.ID);
@@ -2021,6 +2138,14 @@ export class TaskGraphService {
                         // machine task for claiming and reclamation; `StepType` is what routes it to the
                         // decision runner rather than the prompt runner.
                         task.PromptID = promptIDsByName.get(DecisionPromptNameOf(node)!)!;
+                        break;
+                    case 'External':
+                        // Nothing runs it, so no executor column. A literal correlation key is stamped
+                        // now so an early signal can find the step and be held on it.
+                        task.CorrelationKey = SubmitTimeCorrelationKey(node);
+                        break;
+                    case 'Wait':
+                        // Nothing runs it either: the dispatcher stamps its DueAt when it is reached.
                         break;
                     case 'ForEach':
                     case 'While': {
@@ -2134,6 +2259,7 @@ export class TaskGraphService {
         taskIDMap: Map<string, string>,
         context: TaskGraphSubmitContext,
     ): Promise<void> {
+        const persistenceUser = this.servicePersistenceUser(context);
         const edgeWrites: Promise<void>[] = [];
         for (const node of spec.tasks) {
             const taskID = taskIDMap.get(node.tempId);
@@ -2145,7 +2271,7 @@ export class TaskGraphService {
 
                 edgeWrites.push(
                     (async () => {
-                        const dep = await context.Provider.GetEntityObject<MJTaskDependencyEntity>('MJ: Task Dependencies', context.ContextUser);
+                        const dep = await context.Provider.GetEntityObject<MJTaskDependencyEntity>('MJ: Task Dependencies', persistenceUser);
                         dep.NewRecord();
                         dep.TaskID = taskID;
                         dep.DependsOnTaskID = dependsOnTaskID;
@@ -2175,7 +2301,7 @@ export class TaskGraphService {
         await Promise.all(edgeWrites);
     }
 
-    private async loadChildren(parentTaskID: string, context: TaskGraphSubmitContext): Promise<MJTaskEntity[]> {
+    private async loadChildren(parentTaskID: string, context: TaskGraphSubmitContext, user: UserInfo = context.ContextUser): Promise<MJTaskEntity[]> {
         // `BypassCache` for the reason the dispatcher documents at every one of its reads (C4): task
         // status is written by the claim protocol's direct SQL, which fires no cache invalidation.
         // A cached read here returns PRE-EXECUTION state, and both callers act on status — Cancel's
@@ -2184,7 +2310,7 @@ export class TaskGraphService {
         // exists to prevent, performed by the guard itself.
         // Type-scoped for the same reason the sub-graph walk is (R3-10): these rows are about to be
         // written, and `MJ: Tasks` holds conversation tasks and users' own to-dos too.
-        const typeID = await this.findTaskTypeID(context);
+        const typeID = await this.findTaskTypeID(context, user);
         const ofType = typeID ? `TypeID='${typeID}' AND ` : '';
         const result = await RunView.FromMetadataProvider(context.Provider).RunView<MJTaskEntity>(
             {
@@ -2193,7 +2319,7 @@ export class TaskGraphService {
                 ResultType: 'entity_object',
                 BypassCache: true,
             },
-            context.ContextUser,
+            user,
         );
         return (result.Success ? result.Results : []) ?? [];
     }

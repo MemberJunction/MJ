@@ -25,6 +25,12 @@ export interface NavigationRequest {
 
   /** Query parameters to pass to the navigation target (e.g., { queryId: 'xxx' }) */
   queryParams?: Record<string, string>;
+
+  /** An artifact to open in its own tab. When set, hosts open it and ignore the nav item. */
+  ArtifactID?: string;
+
+  /** Tab title for {@link ArtifactID}. */
+  ArtifactName?: string;
 }
 
 /**
@@ -130,6 +136,35 @@ export interface PreVerifiedFrozenSnapshotEntry {
 }
 
 export type PreVerifiedFrozenSnapshotMap = Record<string, PreVerifiedFrozenSnapshotEntry>;
+
+/**
+ * One entry in the artifact viewer header's Export menu.
+ * A viewer lists its entries in {@link BaseArtifactViewerPluginComponent.GetExportOptions}
+ * and runs the chosen one in {@link BaseArtifactViewerPluginComponent.RunExport}.
+ */
+export interface ArtifactExportOption {
+  /** Key passed back to `RunExport`. Unique within one viewer. */
+  Key: string;
+  /** Menu label, e.g. "Excel (.xlsx)". */
+  Label: string;
+  /** Font Awesome icon classes, e.g. "fa-solid fa-file-excel". */
+  Icon: string;
+  /** Optional short hint shown under the label. */
+  Description?: string;
+  /** Optional heading. Options next to each other with the same group show under one heading. */
+  Group?: string;
+  /** When set, the option shows greyed out with this text in place of its description, and does not run. */
+  DisabledReason?: string;
+}
+
+/** The PDF entries every viewer that supports PDF export gets by default. */
+const PDF_EXPORT_OPTIONS: ReadonlyArray<ArtifactExportOption> = [
+  { Key: 'pdf-portrait', Label: 'PDF – Portrait', Icon: 'fa-solid fa-file-pdf' },
+  { Key: 'pdf-landscape', Label: 'PDF – Landscape', Icon: 'fa-solid fa-file-pdf fa-rotate-90' },
+];
+
+/** Export key for a viewer's one downloadable file: the uploaded file, or the source it shows. */
+export const FILE_EXPORT_KEY = 'file';
 
 /**
  * Abstract base component for all artifact viewer plugins.
@@ -490,6 +525,32 @@ export abstract class BaseArtifactViewerPluginComponent extends BaseAngularCompo
   }
 
   /**
+   * The formats this viewer can export, shown in the artifact viewer header's Export menu.
+   * The header shows no Export button when this returns an empty list.
+   *
+   * Default: the portrait and landscape PDF entries when {@link SupportsPDFExport} is true.
+   * Subclasses override to list other formats, and may include the PDF entries too.
+   */
+  public GetExportOptions(): ArtifactExportOption[] {
+    return this.SupportsPDFExport ? [...PDF_EXPORT_OPTIONS] : [];
+  }
+
+  /**
+   * Runs the export option with the given key, which came from {@link GetExportOptions}.
+   * Throws when the export fails, so the header can tell the user.
+   *
+   * Default: runs the PDF entries through {@link ExportPDF}. Subclasses that add options
+   * handle their own keys and pass the rest to `super.RunExport`.
+   */
+  public async RunExport(key: string): Promise<void> {
+    if (key === 'pdf-portrait' || key === 'pdf-landscape') {
+      await this.ExportPDF(key === 'pdf-landscape' ? 'landscape' : 'portrait');
+      return;
+    }
+    throw new Error(`Unknown export option: ${key}`);
+  }
+
+  /**
    * Whether this plugin provides a domain-specific visual diff viewer for comparing two versions
    * of the artifact inside the Git-style Version Compare workspace.
    *
@@ -596,6 +657,31 @@ export abstract class BaseArtifactViewerPluginComponent extends BaseAngularCompo
     const response = await fetch(url);
     const blob = await response.blob();
     const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = fileName;
+    anchor.click();
+    URL.revokeObjectURL(objectUrl);
+  }
+
+  /** The Export menu entry for the viewer's one downloadable file. */
+  protected FileExportOption(label: string, icon: string, description: string): ArtifactExportOption {
+    return { Key: FILE_EXPORT_KEY, Label: label, Icon: icon, Description: description };
+  }
+
+  /** The uploaded file's name, else the artifact's name, else the fallback. */
+  protected OriginalFileName(fallback: string): string {
+    return this.artifactVersion?.FileName?.trim() || this.getDisplayTitle()?.trim() || fallback;
+  }
+
+  /** The artifact's name with the given extension, for a downloaded file. */
+  protected ExportFileName(extension: string): string {
+    return `${this.getDisplayTitle()?.trim() || 'artifact'}.${extension}`;
+  }
+
+  /** Saves text as a file in the browser. */
+  protected DownloadTextFile(text: string, fileName: string, mimeType: string): void {
+    const objectUrl = URL.createObjectURL(new Blob([text], { type: mimeType }));
     const anchor = document.createElement('a');
     anchor.href = objectUrl;
     anchor.download = fileName;

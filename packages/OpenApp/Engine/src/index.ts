@@ -7,8 +7,8 @@
  */
 
 // Manifest schema and validation
-export { MjAppManifestSchema, mjAppManifestSchema } from './manifest/manifest-schema.js';
-export type { MJAppManifest, ManifestPackageEntry, PackageRole } from './manifest/manifest-schema.js';
+export { MjAppManifestSchema, mjAppManifestSchema, IsManifestPublicErrorPage, PUBLIC_PAGE_SLUG_PATTERN, RESERVED_PUBLIC_PAGE_SLUGS } from './manifest/manifest-schema.js';
+export type { MJAppManifest, ManifestPackageEntry, ManifestPublicErrorPage, ManifestPublicPage, ManifestPublicPageEntry, PackageRole } from './manifest/manifest-schema.js';
 export { LoadManifestFromFile, ParseAndValidateManifest, ValidateManifestObject } from './manifest/manifest-loader.js';
 export type { ManifestLoadResult } from './manifest/manifest-loader.js';
 export { ResolvePackagePlatform, PackageRunsOnTier } from './manifest/package-platform.js';
@@ -103,15 +103,17 @@ export type { RefreshDatabaseConfig } from './install/open-app-metadata-refresh.
 export type { MigrationRunOptions, MigrationRunResult, FlywayDatabaseConfig, SkywayDatabaseConfig } from './install/migration-runner.js';
 
 export { AddAppPackages, RemoveAppPackages, RunNpmInstall, RunPackageInstall, RunPackageInstallAsync, ResolvePackageInstallTimeoutMs, IsDefaultNpmRegistry, DEFAULT_PACKAGE_INSTALL_TIMEOUT_MS, PACKAGE_INSTALL_TIMEOUT_ENV_VAR, BumpPrefixedDependencies, DetectPackageManager, detectPackageManager, HasPnpmCatalog, hasPnpmCatalog } from './install/package-manager.js';
-export type { PackageManagerOptions, PackageOperationResult, PackageManagerType, VersionStrategy, WorkspaceTarget } from './install/package-manager.js';
+export type { PackageManagerOptions, AppPackageGroups, PackageOperationResult, PackageManagerType, VersionStrategy, WorkspaceTarget } from './install/package-manager.js';
 
 export {
     AddServerDynamicPackages,
     AddClientDynamicPackages,
+    AddPublicPages,
+    CheckPublicPageSlugConflicts,
     RemoveServerDynamicPackages,
     PruneDynamicPackagesNotInManifest,
     ToggleServerDynamicPackages, SetNewUserTemplate } from './install/config-manager.js';
-export type { DynamicPackageEntry, ConfigOperationResult } from './install/config-manager.js';
+export type { DynamicPackageEntry, PublicPageConfigEntry, ConfigOperationResult } from './install/config-manager.js';
 export { OfferTemplateUser, NamesFromEmail, TEMPLATE_USER_ENV, type TemplateUserContext } from './install/template-user.js';
 
 export { AngularConfigManager, DerivePrebundleExcludePatterns } from './install/angular-config-manager.js';

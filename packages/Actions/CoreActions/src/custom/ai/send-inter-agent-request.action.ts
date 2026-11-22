@@ -6,6 +6,7 @@ import { MJAIAgentRequestEntity } from '@memberjunction/core-entities';
 import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { UserCache } from '@memberjunction/generic-database-provider';
+import { VerifyApprovedAgentRequest } from './chief-of-staff-approval-helper';
 
 
 /**
@@ -47,6 +48,7 @@ export interface InterAgentCoordinationEnvelope {
  */
 @RegisterClass(BaseAction, 'Send Inter-Agent Request')
 export class SendInterAgentRequestAction extends BaseAction {
+    public static override readonly AuthorizesCaller = true;
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             const contextUser = params.ContextUser;
@@ -152,12 +154,37 @@ export class SendInterAgentRequestAction extends BaseAction {
                         Params: params.Params,
                     };
                 }
+                const callingAgentId =
+                    (params.Context as { AgentID?: string } | undefined)?.AgentID?.trim() ||
+                    AgentUserPolicyEngine.Instance.GetActiveExecutingAgentID();
+                const confirmedApprovalRequestId = this.getStringParam(params, 'ConfirmedApprovalRequestID');
+                if (senderPolicy.CoordinationMode === 'Coordinator' && callingAgentId) {
+                    const approvalMd = params.Provider ?? Metadata.Provider;
+                    const approved = confirmedApprovalRequestId
+                        ? await VerifyApprovedAgentRequest(
+                              confirmedApprovalRequestId,
+                              contextUser.ID,
+                              senderAgent.ID,
+                              contextUser,
+                              approvalMd
+                          )
+                        : false;
+                    if (!approved) {
+                        return {
+                            Success: false,
+                            ResultCode: 'APPROVAL_REQUIRED',
+                            Message: `Your "${ senderAgent.Name }" CoordinationMode is "Coordinator". Present this outreach to ${contextUser.Name || 'the user'} for approval and re-invoke with a server-verified ConfirmedApprovalRequestID once approved.`,
+                            Params: params.Params,
+                        };
+                    }
+                }
             }
 
+            const targetPolicyReadUser = this.resolveRequestSaveUser(contextUser, targetUserId);
             const targetPolicyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
                 targetAgent.ID,
                 targetUserId,
-                contextUser,
+                targetPolicyReadUser,
                 { provider: params.Provider }
             );
             if (targetPolicyLookup.status === 'error') {

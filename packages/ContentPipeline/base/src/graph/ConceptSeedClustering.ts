@@ -14,6 +14,7 @@
 
 import {
     GetAuthorityTierRank,
+    FindAuthorityTier,
     GetConceptTypeRank,
     type ConceptTaxonomyMode,
     type GraphAuthorityTier,
@@ -72,8 +73,10 @@ export interface SchemaGroundingTarget {
 export interface SeedClusterConflictCandidate {
     readonly HigherAuthorityChunkID: string;
     readonly LowerAuthorityChunkID: string;
-    readonly HigherAuthorityTier: GraphAuthorityTier;
-    readonly LowerAuthorityTier: GraphAuthorityTier;
+    /** Tier name of the higher-authority chunk, or `null` when unranked. */
+    readonly HigherAuthorityTier: GraphAuthorityTier | null;
+    /** Tier name of the lower-authority chunk, or `null` when unranked. */
+    readonly LowerAuthorityTier: GraphAuthorityTier | null;
     readonly Reason: string;
 }
 
@@ -95,8 +98,8 @@ export interface ConceptSeedCluster {
     readonly ExistingConceptMatchScore: number;
     /** Chunks routed to this concept, sorted highest `AuthorityTier` first, then newest `EffectiveDate`. */
     readonly Chunks: readonly ContentChunkSeedInput[];
-    /** Highest authority tier among all contributing chunks. */
-    readonly HighestAuthorityTier: GraphAuthorityTier;
+    /** Highest authority tier among all contributing chunks, or `null` when every chunk is unranked. */
+    readonly HighestAuthorityTier: GraphAuthorityTier | null;
     /** Resolved `MJ: Graph Authority Tiers` ID for `HighestAuthorityTier` when authority tier descriptors are provided. */
     readonly HighestAuthorityTierID?: string | null;
     /** Union of governed tag names across the cluster's chunks. */
@@ -509,23 +512,18 @@ export function ClusterContentIntoConceptSeeds(
             uniqueChunksMap.set(c.ChunkID, c);
         }
         const sortedChunks = Array.from(uniqueChunksMap.values()).sort((a, b) => {
-            const rankDiff =
-                GetAuthorityTierRank(b.AuthorityTier, configuredAuthorityTiers) -
-                GetAuthorityTierRank(a.AuthorityTier, configuredAuthorityTiers);
+            const rankDiff = tierRankOf(b, configuredAuthorityTiers) - tierRankOf(a, configuredAuthorityTiers);
             if (rankDiff !== 0) return rankDiff;
             const timeA = a.EffectiveDate?.getTime() ?? 0;
             const timeB = b.EffectiveDate?.getTime() ?? 0;
             return timeB - timeA;
         });
 
-        const highestTier = sortedChunks[0]?.AuthorityTier ?? bucket.matchedConcept?.AuthorityTier ?? 'Reference';
-        const normTier = highestTier.trim().toLowerCase().replace(/\s+/g, '');
+        const highestTier = sortedChunks[0]?.AuthorityTier ?? bucket.matchedConcept?.AuthorityTier ?? null;
         const resolvedAuthorityTierID =
             sortedChunks[0]?.AuthorityTierID ??
             bucket.matchedConcept?.AuthorityTierID ??
-            configuredAuthorityTiers.find(
-                (t) => t.Name.trim().toLowerCase().replace(/\s+/g, '') === normTier,
-            )?.ID ??
+            FindAuthorityTier(highestTier, configuredAuthorityTiers)?.ID ??
             null;
 
         const inferredType =
@@ -577,8 +575,8 @@ export function ClusterContentIntoConceptSeeds(
     candidateClusters.sort(
         (a, b) =>
             b.Chunks.length - a.Chunks.length ||
-            GetAuthorityTierRank(b.HighestAuthorityTier, configuredAuthorityTiers) -
-                GetAuthorityTierRank(a.HighestAuthorityTier, configuredAuthorityTiers) ||
+            GetAuthorityTierRank(b.HighestAuthorityTierID ?? b.HighestAuthorityTier, configuredAuthorityTiers) -
+                GetAuthorityTierRank(a.HighestAuthorityTierID ?? a.HighestAuthorityTier, configuredAuthorityTiers) ||
             a.ConceptTypeRank - b.ConceptTypeRank ||
             a.ConceptName.localeCompare(b.ConceptName),
     );
@@ -717,8 +715,8 @@ function detectPotentialChunkConflicts(
                 conflicts.push({
                     HigherAuthorityChunkID: a.ChunkID,
                     LowerAuthorityChunkID: b.ChunkID,
-                    HigherAuthorityTier: a.AuthorityTier ?? 'Reference',
-                    LowerAuthorityTier: b.AuthorityTier ?? 'Reference',
+                    HigherAuthorityTier: a.AuthorityTier ?? null,
+                    LowerAuthorityTier: b.AuthorityTier ?? null,
                     Reason: `Conflicting day thresholds (${Array.from(attrA.days).join('/')} days vs. ${Array.from(attrB.days).join('/')} days)`,
                 });
                 continue;
@@ -728,8 +726,8 @@ function detectPotentialChunkConflicts(
                 conflicts.push({
                     HigherAuthorityChunkID: a.ChunkID,
                     LowerAuthorityChunkID: b.ChunkID,
-                    HigherAuthorityTier: a.AuthorityTier ?? 'Reference',
-                    LowerAuthorityTier: b.AuthorityTier ?? 'Reference',
+                    HigherAuthorityTier: a.AuthorityTier ?? null,
+                    LowerAuthorityTier: b.AuthorityTier ?? null,
                     Reason: `Conflicting currency thresholds ($${Array.from(attrA.usd).join('/$')} vs. $${Array.from(attrB.usd).join('/$')})`,
                 });
             }
@@ -765,4 +763,12 @@ function hasDisjointNumbers(setA: ReadonlySet<string>, setB: ReadonlySet<string>
 
 function normalizeExactKey(raw: string): string {
     return TokenizeConceptPhrase(raw).sort().join('_');
+}
+
+/** A chunk's tier rank, resolved by its tier ID when present and otherwise by its tier name. */
+function tierRankOf(
+    chunk: Pick<ContentChunkSeedInput, 'AuthorityTier' | 'AuthorityTierID'>,
+    tiers: readonly GraphAuthorityTierDescriptor[],
+): number {
+    return GetAuthorityTierRank(chunk.AuthorityTierID ?? chunk.AuthorityTier, tiers);
 }

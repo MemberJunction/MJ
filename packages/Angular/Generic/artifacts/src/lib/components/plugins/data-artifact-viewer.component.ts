@@ -1,18 +1,27 @@
-import { Component, OnInit, ChangeDetectorRef, Output, EventEmitter, Type } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef, Output, EventEmitter, Type, ViewChild } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { EscapeSQLString, RegisterClass } from '@memberjunction/global';
 import { DataSnapshot, DataTable, DataComputation, MJColumnDescriptor, NormalizeToTables, Metadata, RunQuery, RunView, CompositeKey } from '@memberjunction/core';
 import { QueryEngine, ArtifactMetadataEngine, ParseQuerySaveMessage } from '@memberjunction/core-entities';
-import type { MJArtifactVersionEntity, MJQueryEntity, QueryDiagnosticLine } from '@memberjunction/core-entities';
-import { QueryGridColumnConfig, QueryEntityLinkClickEvent, resolveTargetEntity } from '@memberjunction/ng-query-viewer';
+import type { MJArtifactVersionEntity, MJQueryEntity, MJQueryParameterEntity, QueryDiagnosticLine } from '@memberjunction/core-entities';
+import { ExcelAddinClient } from '@memberjunction/excel-addin';
+import {
+  HasRequiredParameterValues,
+  QueryDataGridComponent,
+  QueryGridColumnConfig,
+  QueryEntityLinkClickEvent,
+  resolveTargetEntity,
+  ToExcelParameterValues,
+} from '@memberjunction/ng-query-viewer';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
-import { BaseArtifactViewerPluginComponent, ArtifactViewerTab, IArtifactVersionDiffViewer, NavigationRequest } from '../base-artifact-viewer.component';
+import { BaseArtifactViewerPluginComponent, ArtifactExportOption, ArtifactViewerTab, IArtifactVersionDiffViewer, NavigationRequest } from '../base-artifact-viewer.component';
 import { QueryVersionDiffComponent } from '../version-diff/query-version-diff.component';
 import { SaveQueryResult } from './save-query-dialog.component';
 import type { SaveAsListKeyColumn, SaveAsListRequest } from './save-as-list-dialog.component';
 import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CreateDataSnapshot, BuildMultiTableSql } from '../../snapshot-helpers';
+import { CreateLiveSheetHelperForProvider } from '../../services/live-sheet-client-tool.helper';
 
 /**
  * Data artifact content shape as parsed from JSON.
@@ -45,6 +54,42 @@ interface DataArtifactSpec {
 
 /** The column set of a result with no columns, shared so cached lookups keyed on it stay stable. */
 const NO_COLUMNS: MJColumnDescriptor[] = [];
+
+/** The result formats the Export menu offers, in menu order. */
+type ResultExportFormat = 'excel' | 'csv' | 'json';
+
+/** Export menu entries for the results, without their group (the group names the active table). */
+const RESULT_EXPORT_OPTIONS: ReadonlyArray<Omit<ArtifactExportOption, 'Group'> & { Key: ResultExportFormat }> = [
+  { Key: 'excel', Label: 'Excel (.xlsx)', Icon: 'fa-solid fa-file-excel', Description: 'Workbook with typed columns' },
+  { Key: 'csv', Label: 'CSV (.csv)', Icon: 'fa-solid fa-file-csv', Description: 'Plain text, opens anywhere' },
+  { Key: 'json', Label: 'JSON (.json)', Icon: 'fa-solid fa-file-code', Description: 'Rows as objects, for code' },
+];
+
+const SAVE_AS_GROUP = 'Save as';
+
+/** Export menu entry that opens the save panel for a query that has no saved query yet. */
+const SAVE_QUERY_OPTION: ArtifactExportOption = {
+  Key: 'saved-query',
+  Label: 'Saved Query',
+  Icon: 'fa-solid fa-floppy-disk',
+  Description: 'Reuse it in Queries and dashboards',
+  Group: SAVE_AS_GROUP,
+};
+
+/** Export menu entry that saves this version's SQL as a second saved query. */
+const NEW_SAVED_QUERY_OPTION: ArtifactExportOption = {
+  Key: 'saved-query-new',
+  Label: 'New saved query',
+  Icon: 'fa-solid fa-plus',
+  Description: 'Keep the original as it is',
+  Group: SAVE_AS_GROUP,
+};
+
+/** Why a target that reads the saved query is unavailable, for the states that block it. */
+const SAVED_QUERY_NEEDED: Partial<Record<QuerySyncState, string>> = {
+  'no-query-latest': 'Save the query first',
+  'outdated-latest': 'Update the saved query first',
+};
 
 /**
  * Describes the relationship between the current artifact version's SQL
@@ -89,6 +134,18 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   @Output() override navigationRequest = new EventEmitter<NavigationRequest>();
   public override tabsChanged = new EventEmitter<void>();
 
+  /** The grid showing the active table. The Export menu exports through it. */
+  @ViewChild(QueryDataGridComponent) public ResultsGrid?: QueryDataGridComponent;
+
+  /** Most rows one export fetches, so a very large result cannot exhaust the browser. Same cap as the Query Viewer. */
+  private static readonly EXPORT_MAX_ROWS = 100000;
+
+  /** How the last full-result fetch for an export ended, so the user hears when it was cut short. */
+  private lastExportFetch: 'complete' | 'capped' | 'failed' = 'complete';
+
+  /** True when the host serves the Excel add-in, so the Export menu can offer Excel (live). */
+  public ExcelAddinEnabled = false;
+
   public spec: DataArtifactSpec | null = null;
   public GridData: DataTable['rows'] = [];
   public GridColumnConfigs: QueryGridColumnConfig[] | null = null;
@@ -97,7 +154,6 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   public HasError = false;
   public ErrorMessage = '';
   public ShowSaveDialog = false;
-  public ShowUpdateDropdown = false;
   public IsSaving = false;
   public SavingMessage = '';
 
@@ -181,7 +237,6 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   public OnShowSaveAsList(): void {
     this.SaveAsListError = null;
     this.ShowSaveAsList = true;
-    this.ShowUpdateDropdown = false;
   }
 
   /**
@@ -355,6 +410,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
       // Load cached metadata and resolve query sync state
       await this.initQuerySyncState();
+      void this.resolveExcelAddinAvailability();
 
       // Load data for the first (active) table
       if (this.ResolvedTables.length > 0) {
@@ -756,17 +812,6 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   /** Show the save panel for creating a brand-new query */
   public OnShowSaveDialog(): void {
     this.ShowSaveDialog = true;
-    this.ShowUpdateDropdown = false;
-  }
-
-  /** Toggle the update query dropdown */
-  public OnToggleUpdateDropdown(): void {
-    this.ShowUpdateDropdown = !this.ShowUpdateDropdown;
-  }
-
-  /** Close the dropdown (e.g., on outside click) */
-  public OnCloseDropdown(): void {
-    this.ShowUpdateDropdown = false;
   }
 
   /**
@@ -774,7 +819,6 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
    * Only available from the latest version (Scenario 3).
    */
   public async OnUpdateExistingQuery(): Promise<void> {
-    this.ShowUpdateDropdown = false;
     if (!this.spec?.savedQueryId || !this.spec.metadata?.sql) return;
     this.UpdateQueryError = null;
     this.UpdateQueryDiagnostics = [];
@@ -837,15 +881,6 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     this.UpdateQueryError = isRuleRefusal
       ? (parsed.Headline ?? 'The saved query was not updated:')
       : (message?.trim() || 'The saved query could not be updated.');
-  }
-
-  /**
-   * Save as a new query (from the dropdown).
-   * Opens the save dialog which creates a fresh query record.
-   */
-  public OnSaveAsNewQuery(): void {
-    this.ShowUpdateDropdown = false;
-    this.ShowSaveDialog = true;
   }
 
   /** Handle successful save from the dialog (both initial save and "save as new") */
@@ -987,6 +1022,252 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     return DataSnapshot.FromTables(tables, this.spec.title);
   }
 
+  // ─── Export ─────────────────────────────────────────────────────
+
+  /**
+   * The Export menu: the active table's results as files (and as a live Excel workbook), the SQL,
+   * and the places the query or its records can be saved.
+   */
+  public override GetExportOptions(): ArtifactExportOption[] {
+    return [...this.resultExportOptions(), ...this.queryExportOptions(), ...this.saveAsExportOptions()];
+  }
+
+  public override async RunExport(key: string): Promise<void> {
+    const resultFormat = RESULT_EXPORT_OPTIONS.find((option) => option.Key === key)?.Key;
+    if (resultFormat) {
+      return this.exportResults(resultFormat);
+    }
+    switch (key) {
+      case 'excel-live':
+        return this.openInExcel();
+      case 'sql':
+        return this.downloadSql();
+      case 'saved-query-update':
+        return this.OnUpdateExistingQuery();
+      case 'live-sheet':
+        return this.createLiveSheet();
+      case 'saved-query':
+      case 'saved-query-new':
+        this.OnShowSaveDialog();
+        break;
+      case 'list':
+        this.OnShowSaveAsList();
+        break;
+      default:
+        return super.RunExport(key);
+    }
+    this.cdr.detectChanges();
+  }
+
+  /** Excel, CSV, JSON and Excel (live) of the active table, while its results are on screen. */
+  private resultExportOptions(): ArtifactExportOption[] {
+    const table = this.ActiveTable;
+    if (!table || !this.HasData || this.IsLoading) {
+      return [];
+    }
+    const options: ArtifactExportOption[] = [...RESULT_EXPORT_OPTIONS];
+    if (this.ExcelAddinEnabled && this.offersSavedQueryTargets) {
+      options.push({
+        Key: 'excel-live',
+        Label: 'Excel (live)',
+        Icon: 'fa-solid fa-arrows-rotate',
+        Description: 'Workbook that refreshes from MemberJunction',
+        DisabledReason: this.savedQueryBlocker ?? this.missingParameterBlocker,
+      });
+    }
+    const group = this.IsMultiTable ? `Results · ${table.name}` : 'Results';
+    return options.map((option) => ({ ...option, Group: group }));
+  }
+
+  private queryExportOptions(): ArtifactExportOption[] {
+    if (!this.getArtifactSql()) {
+      return [];
+    }
+    return [{ Key: 'sql', Label: 'SQL (.sql)', Icon: 'fa-solid fa-database', Description: 'The query text', Group: 'Query' }];
+  }
+
+  /** Saved query (save, update or save new), List, and Live Sheet. */
+  private saveAsExportOptions(): ArtifactExportOption[] {
+    const options = this.savedQueryOptions();
+    if (this.CanSaveAsList) {
+      options.push({ Key: 'list', Label: 'List', Icon: 'fa-solid fa-list-check', Description: 'These records, kept up to date', Group: SAVE_AS_GROUP });
+    }
+    if (this.offersSavedQueryTargets) {
+      options.push({
+        Key: 'live-sheet',
+        Label: 'Live Sheet',
+        Icon: 'fa-solid fa-table-cells',
+        Description: 'Spreadsheet artifact that stays current',
+        Group: SAVE_AS_GROUP,
+        DisabledReason: this.savedQueryBlocker,
+      });
+    }
+    return options;
+  }
+
+  private savedQueryOptions(): ArtifactExportOption[] {
+    if (!this.offersSavedQueryTargets) {
+      return [];
+    }
+    if (this.QuerySyncState === 'no-query-latest') {
+      return [SAVE_QUERY_OPTION];
+    }
+    if (this.QuerySyncState === 'outdated-latest') {
+      const update: ArtifactExportOption = {
+        Key: 'saved-query-update',
+        Label: `Update “${this.SavedQueryDisplayName}”`,
+        Icon: 'fa-solid fa-arrow-up-from-bracket',
+        Description: 'Replace the saved SQL with this version',
+        Group: SAVE_AS_GROUP,
+      };
+      return [update, NEW_SAVED_QUERY_OPTION];
+    }
+    return [];
+  }
+
+  /**
+   * True when the menu offers the targets that save or read the saved query: the artifact has SQL,
+   * and this is the latest version or the version the query was saved at.
+   */
+  private get offersSavedQueryTargets(): boolean {
+    const state = this.QuerySyncState;
+    return !!this.spec?.metadata?.sql && (state === 'no-query-latest' || state === 'synced' || state === 'outdated-latest');
+  }
+
+  /** Why Excel (live) and Live Sheet can't run yet: there is no saved query, or it is behind this version. */
+  private get savedQueryBlocker(): string | undefined {
+    return SAVED_QUERY_NEEDED[this.QuerySyncState];
+  }
+
+  private get missingParameterBlocker(): string | undefined {
+    return HasRequiredParameterValues(this.spec?.parameters ?? null, this.savedQueryParameters)
+      ? undefined
+      : 'A required parameter has no value';
+  }
+
+  /** The saved query's parameter definitions. */
+  private get savedQueryParameters(): MJQueryParameterEntity[] {
+    const queryId = this.spec?.savedQueryId;
+    return queryId ? this.queryEngine.GetQueryParameters(queryId) : [];
+  }
+
+  /** Asks the host, once per provider (the client caches the answer), whether it serves the Excel add-in. */
+  private async resolveExcelAddinAvailability(): Promise<void> {
+    try {
+      this.ExcelAddinEnabled = await ExcelAddinClient.Instance.IsEnabled(this.ProviderToUse);
+    } catch (error) {
+      // The menu then leaves out Excel (live); the client already treats an unreadable status as off.
+      console.warn('[DataArtifactViewer] Excel add-in status check failed:', error);
+    }
+  }
+
+  /** Downloads a workbook that loads the saved query, with this artifact's parameter values, and refreshes it. */
+  private async openInExcel(): Promise<void> {
+    const queryId = this.spec?.savedQueryId;
+    if (!queryId) {
+      throw new Error('Save the query first.');
+    }
+    const parameters = ToExcelParameterValues(this.spec?.parameters ?? null, this.savedQueryParameters);
+    const result = await ExcelAddinClient.Instance.OpenInExcel([{ Kind: 'Query', ID: queryId, Parameters: parameters }], this.ProviderToUse);
+    if (!result.Success) {
+      throw new Error(result.ErrorMessage || 'The workbook could not be built.');
+    }
+    MJNotificationService.Instance.CreateSimpleNotification(
+      `Downloaded ${result.FileName}. Open it in Excel and sign in to load the data.`, 'success', 5000);
+  }
+
+  /**
+   * Creates a Sheets artifact with a live table on the saved query, then asks the host to open it.
+   * A host that does not open artifacts finds no nav item named '' and does nothing.
+   */
+  private async createLiveSheet(): Promise<void> {
+    const queryId = this.spec?.savedQueryId;
+    if (!queryId) {
+      throw new Error('Save the query first.');
+    }
+    const helper = CreateLiveSheetHelperForProvider(this.ProviderToUse, this.ProviderToUse?.CurrentUser);
+    if (!helper) {
+      throw new Error('A live sheet needs a signed-in user on a server connection.');
+    }
+    const parameters = this.spec?.parameters;
+    const result = await helper.CreateLiveSheetFromQuery({
+      QueryID: queryId,
+      QueryName: this.SavedQueryDisplayName,
+      ...(parameters && Object.keys(parameters).length > 0 ? { Parameters: { ...parameters } } : {}),
+    });
+    if (!result.Success || !result.ArtifactID) {
+      throw new Error(result.ErrorMessage || 'The live sheet could not be created.');
+    }
+    const name = result.ArtifactName || `${this.SavedQueryDisplayName} — Live Sheet`;
+    MJNotificationService.Instance.CreateSimpleNotification(`Created "${name}". Opening it…`, 'success', 5000);
+    this.navigationRequest.emit({ navItemName: '', ArtifactID: result.ArtifactID, ArtifactName: name });
+  }
+
+  /**
+   * Every row of the active table, for export. A live query runs again without paging, up to
+   * {@link EXPORT_MAX_ROWS} rows; inline rows are returned as they are.
+   * Bound to the grid's `ExportDataProvider`, so it must stay an arrow function.
+   */
+  public readonly ExportAllRows = async (): Promise<Record<string, unknown>[]> => {
+    const table = this.ActiveTable;
+    const sql = table?.metadata?.sql;
+    if (!sql) {
+      return table?.rows ?? [];
+    }
+    const maxRows = DataArtifactViewerComponent.EXPORT_MAX_ROWS;
+    const result = await this.RunQueryToUse.RunQuery({ SQL: sql, StartRow: 0, MaxRows: maxRows });
+    if (!result.Success) {
+      this.lastExportFetch = 'failed';
+      throw new Error(result.ErrorMessage || 'Query failed');
+    }
+    this.lastExportFetch = result.Results.length >= maxRows ? 'capped' : 'complete';
+    return result.Results;
+  };
+
+  /** Exports the active table through the results grid, which fetches every row through {@link ExportAllRows}. */
+  private async exportResults(format: ResultExportFormat): Promise<void> {
+    if (!this.ResultsGrid) {
+      throw new Error('The results are not on screen yet.');
+    }
+    this.lastExportFetch = 'complete';
+    const result = await this.ResultsGrid.Export({ format, fileName: this.exportFileName }, true);
+    if (!result.success) {
+      throw new Error(result.error || `The ${format} export failed.`);
+    }
+    this.notifyIfExportIncomplete();
+  }
+
+  /** The grid falls back to the rows on screen when the full fetch fails, so say when that happened. */
+  private notifyIfExportIncomplete(): void {
+    if (this.lastExportFetch === 'capped') {
+      const cap = DataArtifactViewerComponent.EXPORT_MAX_ROWS.toLocaleString();
+      MJNotificationService.Instance.CreateSimpleNotification(`Exported the first ${cap} rows. The query returns more.`, 'warning', 6000);
+    } else if (this.lastExportFetch === 'failed') {
+      MJNotificationService.Instance.CreateSimpleNotification('Could not run the query again, so the file has only the rows on screen.', 'warning', 6000);
+    }
+  }
+
+  private downloadSql(): void {
+    const sql = this.getArtifactSql();
+    if (!sql) {
+      throw new Error('This artifact has no SQL.');
+    }
+    this.DownloadTextFile(sql, `${this.exportFileName}.sql`, 'application/sql');
+  }
+
+  /** File name for exports, without the extension. */
+  private get exportFileName(): string {
+    return this.spec?.title?.trim() || 'query-results';
+  }
+
+  /** The artifact's SQL: every table's query with headers for a multi-table artifact, else the single query. */
+  private getArtifactSql(): string | null {
+    if (this.IsMultiTable) {
+      return BuildMultiTableSql(this.ResolvedTables) || null;
+    }
+    return this.spec?.metadata?.sql || null;
+  }
+
   // ─── Tabs ───────────────────────────────────────────────────────
 
   /**
@@ -1005,24 +1286,14 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     }
 
     // SQL tab — multi-table shows all queries with headers
-    if (this.IsMultiTable) {
-      const multiSql = BuildMultiTableSql(this.ResolvedTables);
-      if (multiSql) {
-        tabs.push({
-          label: 'SQL',
-          icon: 'fa-database',
-          contentType: 'code',
-          language: 'sql',
-          content: multiSql
-        });
-      }
-    } else if (this.spec?.metadata?.sql) {
+    const sql = this.getArtifactSql();
+    if (sql) {
       tabs.push({
         label: 'SQL',
         icon: 'fa-database',
         contentType: 'code',
         language: 'sql',
-        content: this.spec.metadata.sql
+        content: sql
       });
     }
 

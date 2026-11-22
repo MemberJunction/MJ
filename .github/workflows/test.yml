@@ -74,11 +74,14 @@ jobs:
     outputs:
       relevant: ${{ steps.filter.outputs.relevant }}
     steps:
+      # The diff below reads commit and tree data only, so the job checks out .github/ and
+      # the root files and downloads no other file content.
       - name: Checkout repo
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
           filter: blob:none
+          sparse-checkout: .github
           persist-credentials: false
       - name: Check changed paths
         id: filter
@@ -218,7 +221,9 @@ jobs:
             -e 's/\*\*/@@GLOBSTAR@@/g' -e 's/\*/[^\/]*/g' -e 's/@@GLOBSTAR@@/.*/g' \
             -e 's/^/^/' -e 's/$/$/' "$RUNNER_TEMP/unit-test-paths.txt" | paste -sd'|' -)"
           git fetch --no-tags origin "$PR_BASE_REF"
-          CHANGED="$(git diff --name-only "origin/$PR_BASE_REF...HEAD")"
+          # --no-renames: rename detection reads file content, which this clone does not have.
+          # A rename then lists both its old and its new path.
+          CHANGED="$(git diff --name-only --no-renames "origin/$PR_BASE_REF...HEAD")"
           if echo "$CHANGED" | grep -qE "$RE"; then
             echo "relevant=true" >> "$GITHUB_OUTPUT"
           else
@@ -557,19 +562,22 @@ jobs:
       #
       # Backed by org-level secrets/variables: SECRET `TURBO_TOKEN`, VARIABLE `TURBO_TEAM`, and
       # SECRET `TURBO_REMOTE_CACHE_SIGNATURE_KEY`. `TURBO_API` is only for a self-hosted cache
-      # server and is deliberately unset. Fork PRs never receive the secrets, so they degrade to a
-      # cold local cache rather than failing — the same inert behavior this block had before the
-      # credentials existed.
+      # server and is deliberately unset. PR-triggered runs (fork or same-repo) never receive the
+      # secrets: the token can WRITE cache entries and the signature key signs them, so handing both
+      # to unreviewed PR code would let it upload poisoned, correctly-signed artifacts keyed to
+      # next's or a release commit's task hashes — which release-test.yml would then replay as a
+      # passing gate. PR runs therefore degrade to a cold local cache rather than failing — the
+      # same inert behavior this block had before the credentials existed.
       #
       # turbo.json sets `remoteCache.signature`, so artifacts are HMAC-signed on upload and
       # verified on download; anything that fails verification is treated as a cache miss. Every
       # job that runs turbo needs ALL FOUR vars. A job holding the token but missing the signature
       # key does NOT fail — it logs `signing artifact failed` and silently uploads nothing, so a
       # missed job degrades to write-nothing rather than breaking the run.
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
     outputs:
       turbo_filter: ${{ steps.scope.outputs.turbo_filter }}
       shards: ${{ steps.plan.outputs.shards }}
@@ -594,8 +602,8 @@ jobs:
 
       # Turbo's cache is the single biggest lever on this workflow's runtime. Runners are
       # ephemeral, so without this every run reported `0 cached` and rebuilt all ~300 packages
-      # from scratch. (`cache: 'pnpm'` in mj-setup caches only the pnpm STORE, which is why
-      # installs are a fast ~17s; it does nothing for build outputs.)
+      # from scratch. (mj-setup caches only the pnpm STORE, which keeps installs fast; it does
+      # nothing for build outputs.)
       #
       # Restore-only here; the matching save runs after the build, and ONLY on the backstop
       # events. See the save step for why PRs deliberately don't write their own entry.
@@ -878,22 +886,23 @@ jobs:
           --health-timeout 3s
           --health-retries 10
     env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
       # Consumed by the Redis-gated suites. No key prefix is set here: those suites choose their
       # own (`test-integration`), and each job gets its own Redis service container, so there is no
       # keyspace to share with anyone.
       REDIS_URL: redis://127.0.0.1:6379
     steps:
       # fetch-depth 1: a shard runs tests against the working tree and never diffs a base ref.
+      # No blobless filter: a shard needs every file of the commit, and one download of the
+      # full commit is faster than a filtered fetch plus a second download during checkout.
       - name: Checkout repo
         uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 1
-          filter: blob:none
 
       - uses: ./.github/actions/mj-setup
 
@@ -1001,10 +1010,10 @@ jobs:
     permissions:
       contents: read
     env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v7
@@ -1146,6 +1155,8 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
           filter: blob:none
+          # The alarm script is the only file this job reads.
+          sparse-checkout: .github
 
       - name: Alert on backstop failure
         if: failure() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
@@ -1274,16 +1285,15 @@ jobs:
     permissions:
       contents: read
     env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v7
         with:
           persist-credentials: false
-          filter: blob:none
 
       - uses: ./.github/actions/mj-setup
 

@@ -196,10 +196,10 @@ Input: `"42, 17, 99"` → split → `"42"` → regex → `"42"` → coerce → `
 
 ## Error Handling
 
-- If a transform step fails, the entire field mapping for that record is marked as errored
-- The record still processes — other fields continue mapping
-- Errors are logged in the RunDetail's `ErrorJSON` for debugging
-- A `null` or `undefined` input value skips the pipeline and maps directly to `null`
+- Each step's `OnError` decides what a failure does: `'Null'` (the default) sets the field to `null` and keeps going, so other fields continue mapping; `'Skip'` leaves the field out of the mapped record; `'Fail'` rethrows, which fails mapping for that entity map's batch (other entity maps continue).
+- Errors are recorded in the run's `ErrorLog` (the first 100) on `MJ: Company Integration Runs`.
+- A `null` or `undefined` input value runs through the pipeline like any other value, and each step decides the result: `direct` returns its `DefaultValue` (when set), `lookup` returns its `Default` (or `null`), and string steps such as `regex` and `split` treat it as an empty string.
+- Steps are read as `{ "Type": ..., "Config": { ... } }` (PascalCase). The pipeline JSON is not validated, so a step written with other keys (for example lowercase `type`) fails as an unknown transform type, and under the default `OnError: 'Null'` the field silently maps to `null`.
 
 ## API
 

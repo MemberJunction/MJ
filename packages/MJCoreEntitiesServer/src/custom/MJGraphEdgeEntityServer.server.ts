@@ -17,6 +17,7 @@ import {
     EvaluateAuthorizationChecks,
     FormatGraphNodeKey,
     GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION,
+    GRAPH_PIPELINE_EVIDENCE_RETRACTION_OPERATION,
     GraphEngine,
     IsGraphDataProvider,
     MJGraphEdgeEntity,
@@ -339,13 +340,22 @@ export function ApproveEdgesDenialReason(user: UserInfo | undefined, authorizati
  * The refusal for deleting an edge whose stored `Status` is `storedStatus`, or `null` when allowed.
  * Removing an `Approved` edge undoes a review decision, so it needs `Graph: Approve Edges`; a
  * `Proposed` or `Rejected` edge may be deleted by anyone the entity permissions allow.
+ *
+ * The one exception is the Content Pipeline retracting the evidence of a chunk it deletes
+ * (`pipelineRetraction`, true only inside {@link GRAPH_PIPELINE_EVIDENCE_RETRACTION_OPERATION}): an
+ * `Inferred` edge whose chunk is gone is not a decision anyone made to keep, so it may go. A
+ * `Declared` edge is never covered.
  */
 export function GraphEdgeDeleteRefusal(
     storedStatus: MJGraphEdgeEntity['Status'] | null | undefined,
     user: UserInfo | undefined,
     authorizations: AuthorizationInfo[] | undefined,
+    pipelineRetraction?: { InScope: boolean; Origin: MJGraphEdgeEntity['Origin'] | null | undefined },
 ): string | null {
     if (storedStatus !== 'Approved') {
+        return null;
+    }
+    if (pipelineRetraction?.InScope && pipelineRetraction.Origin === 'Inferred') {
         return null;
     }
     const denial = ApproveEdgesDenialReason(user, authorizations);
@@ -394,6 +404,17 @@ export function IsInGraphPipelineApprovalScope(user: UserInfo | undefined): bool
         return false;
     }
     return ServerOperationScopeManager.Instance.IsOperationActive([GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION], GRAPH_EDGES_ENTITY_NAME, user);
+}
+
+/**
+ * True while the current async call chain is inside a {@link GRAPH_PIPELINE_EVIDENCE_RETRACTION_OPERATION}
+ * server operation scope bound to `user`. Masked the same way as {@link IsInGraphPipelineApprovalScope}.
+ */
+export function IsInGraphPipelineRetractionScope(user: UserInfo | undefined): boolean {
+    if (!user) {
+        return false;
+    }
+    return ServerOperationScopeManager.Instance.IsOperationActive([GRAPH_PIPELINE_EVIDENCE_RETRACTION_OPERATION], GRAPH_EDGES_ENTITY_NAME, user);
 }
 
 function approvalError(reason: string, nextStatus: MJGraphEdgeEntity['Status'] | null | undefined): ValidationErrorInfo {
@@ -642,13 +663,17 @@ export class MJGraphEdgeEntityServer extends MJGraphEdgeEntity {
     }
 
     /**
-     * Refuses deleting an `Approved` edge without `Graph: Approve Edges` ({@link GraphEdgeDeleteRefusal}).
+     * Refuses deleting an `Approved` edge without `Graph: Approve Edges` ({@link GraphEdgeDeleteRefusal}),
+     * except an `Inferred` edge the Content Pipeline retracts inside its retraction scope.
      * The delete path loads the stored row first, so `Status` is the stored value.
      */
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         const provider = this.ProviderToUse;
         const authorizations = IsGraphDataProvider(provider) ? provider.Authorizations : undefined;
-        const refusal = GraphEdgeDeleteRefusal(this.previousStatus() ?? this.Status, this.ContextCurrentUser, authorizations);
+        const refusal = GraphEdgeDeleteRefusal(this.previousStatus() ?? this.Status, this.ContextCurrentUser, authorizations, {
+            InScope: IsInGraphPipelineRetractionScope(this.ContextCurrentUser),
+            Origin: this.Origin,
+        });
         if (refusal) {
             const result = new BaseEntityResult();
             result.Success = false;

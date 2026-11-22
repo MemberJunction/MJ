@@ -26,7 +26,7 @@ Components attach styles one of three ways, and one of them needs host cooperati
 
 1. **Inline `styles` in the component** (most components) — nothing to do.
 2. **`styleUrls` compiled into the component** (`page-header`, `slide-panel`) — nothing to do.
-3. **Global stylesheets shipped as assets** — the form controls and overlay chrome (`button`, `dialog`, `dropdown`, `combobox`, `input`, `datepicker`, `splitter`, `accordion`, `window`, `chip`, `switch`/`progress`, `tabs`) ship their `.scss` to `dist` and expect the **host application** to import them globally.
+3. **Global stylesheets shipped as assets** — the form controls, card-grid, and overlay chrome (`button`, `dialog`, `dropdown`, `combobox`, `input`, `datepicker`, `splitter`, `accordion`, `window`, `chip`, `switch`/`progress`, `tabs`, `card-grid`) ship their `.scss` to `dist` and expect the **host application** to import them globally.
 
 **If your app runs inside MJ Explorer (`explorer-app`), category 3 is already handled** — the shell imports all of them. A standalone host must add these to its global stylesheet:
 
@@ -43,6 +43,7 @@ Components attach styles one of three ways, and one of them needs host cooperati
 @import '@memberjunction/ng-ui-components/dist/lib/accordion/accordion';
 @import '@memberjunction/ng-ui-components/dist/lib/window/window';
 @import '@memberjunction/ng-ui-components/dist/lib/tabs/tabs';
+@import '@memberjunction/ng-ui-components/dist/lib/card-grid/card-grid';
 ```
 
 `tabs` is the shared `.mj-tabs*` chrome consumed by BOTH `mj-workspace-tab-strip` (this package) and `mj-tabstrip` (`@memberjunction/ng-tabstrip`) — without it either strip renders as unstyled divs, so a standalone host using tab strips must include it.

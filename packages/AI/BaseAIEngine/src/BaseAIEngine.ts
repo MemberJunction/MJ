@@ -1553,6 +1553,40 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     /**
+     * The subset of {@link GetSkillActionIDs} marked as briefing contributors (`Role = 'Briefing' | 'Both'`).
+     * Invoked in parallel by `Assemble My Briefing` so a Loop agent (such as Chief of Staff) collects
+     * deterministic per-app briefing sections without relying on prompt memory or cluttering its tool list.
+     */
+    public GetSkillBriefingActionIDs(skillID: string): string[] {
+        return this._skillActions
+            .filter(sa => UUIDsEqual(sa.SkillID, skillID) && (sa.Role === 'Briefing' || sa.Role === 'Both'))
+            .map(sa => sa.ActionID);
+    }
+
+    /**
+     * Returns every briefing contributor (`Role = 'Briefing' | 'Both'`) across all skills granted
+     * to `agent` that `user` is permitted to use (via {@link GetSkillsForAgent}). Deduplicates by `ActionID`.
+     */
+    public GetBriefingActionsForAgent(
+        agent: MJAIAgentEntityExtended,
+        user?: UserInfo
+    ): Array<{ skill: MJAISkillEntity; actionID: string }> {
+        const skills = this.GetSkillsForAgent(agent, user);
+        const seen = new Set<string>();
+        const entries: Array<{ skill: MJAISkillEntity; actionID: string }> = [];
+        for (const skill of skills) {
+            for (const actionID of this.GetSkillBriefingActionIDs(skill.ID)) {
+                const key = actionID.trim().toLowerCase();
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    entries.push({ skill, actionID });
+                }
+            }
+        }
+        return entries;
+    }
+
+    /**
      * Returns the sub-agent IDs bundled into a skill (via "MJ: AI Skill Sub Agents"). Callers
      * resolve the full `MJAIAgentEntityExtended` objects via `this.Agents` / `GetAgentByID`.
      */

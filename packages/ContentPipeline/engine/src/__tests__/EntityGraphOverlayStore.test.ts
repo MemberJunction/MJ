@@ -6,8 +6,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { ServerOperationScopeManager, type IMetadataProvider, type RunViewParams, type RunViewResult, type UserInfo } from '@memberjunction/core';
-import { GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION, type MJGraphEdgeEntity } from '@memberjunction/core-entities';
-import type { SynthesizedGraphEdge } from '@memberjunction/content-pipeline-base';
+import { GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION, type MJGraphConceptEntity, type MJGraphEdgeEntity } from '@memberjunction/core-entities';
+import type { SynthesizedGraphConcept, SynthesizedGraphEdge } from '@memberjunction/content-pipeline-base';
 import { EntityGraphOverlayStore } from '../stages/EntityGraphOverlayStore.js';
 
 const GRAPH_ID = '9C1E2F00-0000-4000-8000-000000000001';
@@ -101,5 +101,142 @@ describe('EntityGraphOverlayStore.UpsertEdges', () => {
     it('leaves no scope behind once the save is done', async () => {
         await new EntityGraphOverlayStore().UpsertEdges(GRAPH_ID, CONCEPT_ID, [sourcedFrom()], 'Approved', runUser, makeProvider([]));
         expect(ServerOperationScopeManager.Instance.IsOperationActive([GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION], 'MJ: Graph Edges', runUser)).toBe(false);
+    });
+});
+
+interface ConceptSaveRecord {
+    Name: string;
+    Status: string;
+    InScope: boolean;
+}
+
+class RecordingConcept {
+    public ID = '';
+    public GraphID = '';
+    public ParentID: string | null = null;
+    public Name = '';
+    public ConceptTypeID = '';
+    public AuthorityTierID: string | null = null;
+    public Description = '';
+    public Specification: string | null = null;
+    public Synonyms: string | null = null;
+    public Status: 'Draft' | 'Proposed' | 'Approved' | 'Deprecated' = 'Draft';
+    public LatestResult = { CompleteMessage: '' };
+
+    public constructor(
+        private readonly user: UserInfo,
+        private readonly saves: ConceptSaveRecord[],
+        private readonly existingById: ReadonlyMap<string, { Name: string; Status: 'Draft' | 'Proposed' | 'Approved' | 'Deprecated' }>,
+    ) {}
+
+    public async InnerLoad(key: { GetValueByIndex(idx: number): unknown }): Promise<boolean> {
+        const id = String(key.GetValueByIndex(0) ?? '');
+        const found = this.existingById.get(id);
+        if (!found) {
+            return false;
+        }
+        this.ID = id;
+        this.Name = found.Name;
+        this.Status = found.Status;
+        return true;
+    }
+
+    public NewRecord(): boolean {
+        this.ID = CONCEPT_ID;
+        return true;
+    }
+
+    public async Save(): Promise<boolean> {
+        await Promise.resolve();
+        this.saves.push({
+            Name: this.Name,
+            Status: this.Status,
+            InScope: ServerOperationScopeManager.Instance.IsOperationActive([GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION], 'MJ: Graph Concepts', this.user),
+        });
+        return true;
+    }
+}
+
+function makeConceptProvider(
+    saves: ConceptSaveRecord[],
+    existingById: ReadonlyMap<string, { Name: string; Status: 'Draft' | 'Proposed' | 'Approved' | 'Deprecated' }> = new Map(),
+): IMetadataProvider {
+    const provider = {
+        Entities: [],
+        RunView: async (params: RunViewParams): Promise<RunViewResult> => {
+            if (params.EntityName === 'MJ: Graph Concept Types') {
+                return {
+                    Success: true,
+                    Results: [{ ID: '9C1E2F00-0000-4000-8000-0000000000C1', Name: 'Policy', Description: null, Rank: 10, IconClass: null }],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 0,
+                    ErrorMessage: '',
+                    UserViewRunID: '',
+                };
+            }
+            if (params.EntityName === 'MJ: Graph Authority Tiers') {
+                return {
+                    Success: true,
+                    Results: [{ ID: '9C1E2F00-0000-4000-8000-0000000000A1', Name: 'Reference', Description: null, Rank: 20, IconClass: null }],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 0,
+                    ErrorMessage: '',
+                    UserViewRunID: '',
+                };
+            }
+            return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
+        },
+        GetEntityObject: async (_entityName: string, user: UserInfo): Promise<MJGraphConceptEntity> =>
+            new RecordingConcept(user, saves, existingById) as unknown as MJGraphConceptEntity,
+    };
+    return provider as unknown as IMetadataProvider;
+}
+
+function synthesizedConcept(existingId?: string): SynthesizedGraphConcept {
+    return {
+        Name: 'Grace Period',
+        ConceptType: 'Policy',
+        AuthorityTier: 'Reference',
+        Description: 'Grace period rule.',
+        Specification: '60 days.',
+        Synonyms: ['Grace Window'],
+        Confidence: 0.9,
+        Citations: [],
+        ExistingConceptID: existingId,
+    };
+}
+
+describe('EntityGraphOverlayStore.UpsertConcept', () => {
+    it('saves a newly created Approved concept inside the pipeline approval scope bound to the run user', async () => {
+        const saves: ConceptSaveRecord[] = [];
+        const id = await new EntityGraphOverlayStore().UpsertConcept(GRAPH_ID, synthesizedConcept(), 'Approved', runUser, makeConceptProvider(saves));
+        expect(id).toBe(CONCEPT_ID);
+        expect(saves).toEqual([{ Name: 'Grace Period', Status: 'Approved', InScope: true }]);
+        expect(ServerOperationScopeManager.Instance.IsOperationActive([GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION], 'MJ: Graph Concepts', runUser)).toBe(false);
+    });
+
+    it('preserves existing Approved and Deprecated concepts without calling Save(), while still updating Proposed ones', async () => {
+        for (const protectedStatus of ['Approved', 'Deprecated'] as const) {
+            const saves: ConceptSaveRecord[] = [];
+            const existing = new Map([[CONCEPT_ID, { Name: 'Grace Period', Status: protectedStatus }]]);
+            const id = await new EntityGraphOverlayStore().UpsertConcept(GRAPH_ID, synthesizedConcept(CONCEPT_ID), 'Approved', runUser, makeConceptProvider(saves, existing));
+            expect(id).toBe(CONCEPT_ID);
+            expect(saves).toEqual([]);
+        }
+
+        const proposedSaves: ConceptSaveRecord[] = [];
+        const existingProposed = new Map([[CONCEPT_ID, { Name: 'Grace Period', Status: 'Proposed' as const }]]);
+        await new EntityGraphOverlayStore().UpsertConcept(GRAPH_ID, synthesizedConcept(CONCEPT_ID), 'Approved', runUser, makeConceptProvider(proposedSaves, existingProposed));
+        expect(proposedSaves).toEqual([{ Name: 'Grace Period', Status: 'Proposed', InScope: true }]);
+    });
+
+    it('fails closed when ExistingConceptID is provided but cannot be loaded', async () => {
+        const saves: ConceptSaveRecord[] = [];
+        await expect(
+            new EntityGraphOverlayStore().UpsertConcept(GRAPH_ID, synthesizedConcept(CONCEPT_ID), 'Approved', runUser, makeConceptProvider(saves, new Map())),
+        ).rejects.toThrow(`Could not load existing MJ: Graph Concepts record '${CONCEPT_ID}'`);
+        expect(saves).toEqual([]);
     });
 });

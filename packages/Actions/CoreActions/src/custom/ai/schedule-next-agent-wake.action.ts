@@ -1,12 +1,17 @@
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { EscapeSQLString, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
-import { LogError, Metadata, RunView } from '@memberjunction/core';
+import { IMetadataProvider, LogError, Metadata, RunView } from '@memberjunction/core';
 import {
     MJUserRoutineEntity,
     MJUserRoutineEntity_IRoutineWakeConfiguration,
 } from '@memberjunction/core-entities';
+import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
+import {
+    VerifyActiveRhythmTemplate,
+    VerifyApprovedAgentRequest,
+} from './chief-of-staff-approval-helper';
 
 /**
  * Action that allows an autonomous agent (such as the Chief of Staff agent) to self-schedule
@@ -20,6 +25,7 @@ import { AIEngine } from '@memberjunction/aiengine';
  */
 @RegisterClass(BaseAction, 'Schedule Next Agent Wake')
 export class ScheduleNextAgentWakeAction extends BaseAction {
+    public static override readonly AuthorizesCaller = true;
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             const contextUser = params.ContextUser;
@@ -96,16 +102,69 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
                 ...(wakeGate ? { wakeGate } : {}),
             };
 
+            const md: IMetadataProvider = params.Provider ?? Metadata.Provider;
+            const rhythmTemplateId = this.getStringParam(params, 'RhythmTemplateID');
+            if (rhythmTemplateId) {
+                const verifiedTemplate = await VerifyActiveRhythmTemplate(
+                    rhythmTemplateId,
+                    agentId,
+                    contextUser,
+                    md
+                );
+                if (!verifiedTemplate) {
+                    return {
+                        Success: false,
+                        ResultCode: 'VALIDATION_ERROR',
+                        Message: `RhythmTemplateID "${rhythmTemplateId}" does not match an Active MJ: AI Agent Rhythm Templates row for agent "${agentName}".`,
+                        Params: params.Params,
+                    };
+                }
+                resumeState['rhythmTemplateID'] = verifiedTemplate.ID;
+            }
+
             const existingRoutine = await this.findExistingWakeRoutine(
                 contextUser.ID,
                 agentId,
                 workstreamKey,
                 params
             );
-            const md = params.Provider ?? new Metadata();
+
+            // Code-enforced recurring routine gate: during an agent run, the agent may NOT
+            // unilaterally create a brand-new Recurring routine without a server-verified
+            // Approved `MJ: AI Agent Requests` record (`ConfirmedApprovalRequestID`).
+            // Self-attested `ConfirmedByUser = true` and unverified `RhythmTemplateID` strings
+            // are NEVER accepted as proof of user confirmation inside agent context.
+            // Direct human/UI calls (outside agent context) and updating existing routines or
+            // creating OneShot/Adaptive wakes remain allowed.
+            const callingAgentId =
+                (params.Context as { AgentID?: string } | undefined)?.AgentID?.trim() ||
+                AgentUserPolicyEngine.Instance.GetActiveExecutingAgentID();
+            const confirmedApprovalRequestId = this.getStringParam(params, 'ConfirmedApprovalRequestID');
+            if (scheduleMode === 'Recurring' && !existingRoutine && callingAgentId) {
+                const approved = confirmedApprovalRequestId
+                    ? await VerifyApprovedAgentRequest(
+                          confirmedApprovalRequestId,
+                          contextUser.ID,
+                          agentId,
+                          contextUser,
+                          md
+                      )
+                    : false;
+                if (!approved) {
+                    return {
+                        Success: false,
+                        ResultCode: 'APPROVAL_REQUIRED',
+                        Message:
+                            'Agents cannot create new Recurring routines without a server-verified approved MJ: AI Agent Requests record (ConfirmedApprovalRequestID). Offer the rhythm or cadence to the user and re-invoke with ConfirmedApprovalRequestID after approval.',
+                        Params: params.Params,
+                    };
+                }
+            }
+
+            const entityMd = params.Provider ?? new Metadata();
             const routine =
                 existingRoutine ??
-                (await md.GetEntityObject<MJUserRoutineEntity>('MJ: User Routines', contextUser));
+                (await entityMd.GetEntityObject<MJUserRoutineEntity>('MJ: User Routines', contextUser));
 
             const effectiveCronExpression = this.resolveEffectiveCronExpression(
                 params,
@@ -395,6 +454,14 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
         if (val == null) return null;
         const str = String(val).trim();
         return str.length > 0 ? str : null;
+    }
+
+    private getBooleanParam(params: RunActionParams, name: string): boolean {
+        const val = this.getParamValue(params, name);
+        if (val == null) return false;
+        if (typeof val === 'boolean') return val;
+        const normalized = String(val).trim().toLowerCase();
+        return normalized === 'true' || normalized === '1' || normalized === 'yes';
     }
 
     private getNumericParam(params: RunActionParams, name: string): number | null {

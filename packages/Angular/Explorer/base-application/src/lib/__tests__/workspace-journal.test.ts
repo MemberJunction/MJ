@@ -19,6 +19,7 @@ vi.mock('@angular/core', () => ({
 
 vi.mock('@memberjunction/core', () => ({
   Metadata: class {},
+  EntitySaveOptions: class { SkipOldValuesCheck = false; },
   LogError: vi.fn(),
   LogStatus: vi.fn(),
 }));
@@ -30,7 +31,7 @@ class FakeWorkspace {
   Configuration = '';
   __mj_UpdatedAt: Date = new Date('2026-10-01T10:00:00.000Z');
   saves: string[] = [];
-  Save = vi.fn(async () => {
+  Save = vi.fn(async (_options?: { SkipOldValuesCheck?: boolean }) => {
     this.saves.push(this.Configuration);
     this.__mj_UpdatedAt = new Date(this.__mj_UpdatedAt.getTime() + 60_000);
     return true;
@@ -290,6 +291,38 @@ describe('WorkspaceStateManager — refresh inside the save window', () => {
       expect(listeners.has('doc:visibilitychange')).toBe(true);
     } finally {
       vi.unstubAllGlobals();
+    }
+  });
+});
+
+/**
+ * With the server's concurrency check, a row changed after this tab read it (another tab or device,
+ * or our own save that landed after a dropped connection) refused this tab's save and, since the
+ * entity kept its old values, every later one until a page reload, each writing an MJ: Error Logs
+ * row. The layout row is the user's own, so it is saved without the check and the last layout saved
+ * wins (the client then sends no OldValues and the server applies the change).
+ */
+describe('WorkspaceStateManager — layout saves skip the concurrency check', () => {
+  beforeEach(() => {
+    engineState.constrained = false;
+    engineState.workspaces = [];
+  });
+
+  it('saves every layout change with SkipOldValuesCheck', async () => {
+    const ws = new FakeWorkspace();
+    ws.Configuration = JSON.stringify(config(['a', 'b', 'c'], 'a'));
+    engineState.workspaces = [ws];
+    const m = managerWith(new MemoryStorage());
+    await m.Initialize('user-1');
+
+    m.SetActiveTab('b');
+    await m.FlushPendingSave();
+    m.SetActiveTab('c');
+    await m.FlushPendingSave();
+
+    expect(ws.Save).toHaveBeenCalledTimes(2);
+    for (const [options] of ws.Save.mock.calls) {
+      expect(options?.SkipOldValuesCheck).toBe(true);
     }
   });
 });

@@ -10,6 +10,7 @@ import {
 import { EscapeSQLString, RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { MJConversationDetailEntityExtended, MJConversationEntity } from "@memberjunction/core-entities";
 import { InspectAndStampRestrictedFieldsForComment } from "./RestrictedFieldCommentClassifier";
+import { AgentChannelConversationDriver } from "./AgentChannelConversationDriver.server";
 
 /**
  * Server-side subclass of MJConversationDetailEntity that:
@@ -31,6 +32,7 @@ export class MJConversationDetailEntityServer extends MJConversationDetailEntity
      * runs FLS restricted-field inspection for anchored conversations, then calls super.Save().
      */
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        const isNewRecord = !this.IsSaved;
         if (this.ShouldFlagOriginalMessageChanged()) {
             this.OriginalMessageChanged = true;
         }
@@ -38,6 +40,17 @@ export class MJConversationDetailEntityServer extends MJConversationDetailEntity
         if (problem) {
             this.recordCreateFailure(problem);
             return false;
+        }
+        if (isNewRecord && this.ConversationID && this.ContextCurrentUser) {
+            const channelRefusal = await AgentChannelConversationDriver.CheckParticipantCanPost(
+                this.ProviderToUse as unknown as IMetadataProvider,
+                this.ConversationID,
+                this.ContextCurrentUser
+            );
+            if (channelRefusal) {
+                this.recordCreateFailure(channelRefusal, 'create');
+                return false;
+            }
         }
         const checkFls =
             this.CheckAndStampAnchoredRestrictedFields ??
@@ -47,7 +60,21 @@ export class MJConversationDetailEntityServer extends MJConversationDetailEntity
             this.recordCreateFailure(flsRefusal, this.IsSaved ? 'update' : 'create');
             return false;
         }
-        return super.Save(options);
+        const saved = await super.Save(options);
+        if (saved && isNewRecord && this.ConversationID && !this.AgentID && this.Role === 'User') {
+            await AgentChannelConversationDriver.HandleHumanMessagePosted(
+                this.ProviderToUse as unknown as IMetadataProvider,
+                this.ConversationID,
+                this.ContextCurrentUser,
+                new Date(),
+                {
+                    conversationDetailID: this.ID ?? null,
+                    senderUserID: this.UserID ?? this.ContextCurrentUser?.ID ?? null,
+                    messagePreview: this.Message ?? '',
+                }
+            );
+        }
+        return saved;
     }
 
     /**
