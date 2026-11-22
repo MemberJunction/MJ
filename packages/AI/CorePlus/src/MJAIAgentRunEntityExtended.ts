@@ -7,6 +7,11 @@ import {
     ExtractLimitsDiagnosticsFromRunData,
     type LimitsDiagnosticsSnapshot,
 } from "./limits-diagnostics";
+import {
+    AttachRunawayCheckpointToRunData,
+    ExtractRunawayCheckpointFromRunData,
+    type RunawayCheckpointState,
+} from "./runaway-governance";
 
 @RegisterClass(BaseEntity, "MJ: AI Agent Runs")
 export class MJAIAgentRunEntityExtended extends MJAIAgentRunEntity {
@@ -155,6 +160,28 @@ export class MJAIAgentRunEntityExtended extends MJAIAgentRunEntity {
         this._limitsDiagnosticsSnapshot = value;
         if (value) {
             this.Data = AttachLimitsDiagnosticsToRunData(this.Data, value);
+        }
+    }
+
+    private _runawayCheckpoint: RunawayCheckpointState | null = null;
+    /**
+     * Persisted non-destructive runaway pause/resume checkpoint recorded for this run.
+     * Setting this property also persists the checkpoint under `__runawayCheckpoint` in `this.Data`.
+     */
+    public get RunawayCheckpoint(): RunawayCheckpointState | null {
+        if (this._runawayCheckpoint) {
+            return this._runawayCheckpoint;
+        }
+        const extracted = ExtractRunawayCheckpointFromRunData(this.Data);
+        if (extracted) {
+            this._runawayCheckpoint = extracted;
+        }
+        return extracted;
+    }
+    public set RunawayCheckpoint(value: RunawayCheckpointState | null) {
+        this._runawayCheckpoint = value;
+        if (value) {
+            this.Data = AttachRunawayCheckpointToRunData(this.Data, value);
         }
     }
     

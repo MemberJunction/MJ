@@ -74,5 +74,6 @@ export * from './realtime-recording-shard-format';
 export * from './AgentUserPolicyEngine';
 export * from './TypedActionPolicyGuard';
 export * from './limits-diagnostics';
+export * from './runaway-governance';
 
 
