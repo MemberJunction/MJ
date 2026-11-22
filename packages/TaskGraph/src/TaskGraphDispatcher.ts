@@ -1423,12 +1423,22 @@ export class TaskGraphDispatcher implements IShutdownable {
             if (!result.Success && await this.scheduleRetryIfAllowed(provider, task, result, ownerUserID)) {
                 return;
             }
-            const governanceMetrics = this.governance.ResolveNodeSettlementMetrics(
+            const governanceMetrics = await this.governance.ResolveOrRecoverNodeSettlementMetrics(
+                provider,
                 graphID,
                 hydrated?.parentTask ?? null,
-                result.CostUsd,
-                result.TokensUsed,
+                this.contextUser,
+                {
+                    CostUsd: result.CostUsd,
+                    TokensUsed: result.TokensUsed,
+                    AgentRunID: result.AgentRunID ?? task.AgentRunID ?? null,
+                    PromptRunID: result.PromptRunID ?? null,
+                    Iterations: result.Iterations,
+                    Configuration: task.Configuration,
+                },
             );
+            const settledCostUsd = result.CostUsd ?? governanceMetrics?.CostUsd;
+            const settledTokensUsed = result.TokensUsed ?? governanceMetrics?.TokensUsed;
             const recorded = await this.claims.CompleteClaimed(
                 provider,
                 taskID,
@@ -1480,8 +1490,11 @@ export class TaskGraphDispatcher implements IShutdownable {
                     Parent: hydrated?.parentTask ?? null,
                     Task: task,
                     Success: result.Success,
-                    CostUsd: result.CostUsd,
-                    TokensUsed: result.TokensUsed,
+                    CostUsd: settledCostUsd,
+                    TokensUsed: settledTokensUsed,
+                    AgentRunID: result.AgentRunID ?? task.AgentRunID ?? null,
+                    PromptRunID: result.PromptRunID ?? null,
+                    Iterations: result.Iterations,
                     CostEvents: result.CostEvents,
                     Observer: this.observer,
                     DebugStateCache: this.debugStateByGraph,
@@ -5399,8 +5412,18 @@ export class TaskGraphDispatcher implements IShutdownable {
             }), agentInput);
         };
 
+        const resolvedLoopLimits = this.governance
+            ? await this.governance.ResolveGraphLimits({
+                Provider: executionProvider,
+                ContextUser: this.contextUser,
+                SubmittingUser: graphContext.ExecutionUser,
+                Parent: parentTask ?? null,
+                GraphID: graphID,
+            })
+            : undefined;
         const evaluator = this.conditionEvaluator ?? new DispatcherConditionEvaluator();
         const loopOptions: LoopExecutionOptions = {
+            ResolvedLimits: resolvedLoopLimits,
             ...(savedCursor?.Cursor ? { ResumeFromCursor: savedCursor.Cursor } : {}),
             OnIterationGovernance: async (info) => {
                 if (isParallelForEach && info.BatchOutcomes && info.BatchOutcomes.length > 0) {
@@ -5948,7 +5971,7 @@ export class TaskGraphDispatcher implements IShutdownable {
 
         if (!result.Success || !result.Answers) {
             const message = result.ErrorMessage || `Decision "${task.Name}" returned no answers.`;
-            if (Object.keys(kept).length > 0) return this.decisionStillHolding(task, config, kept, message, result.PromptRunID);
+            if (Object.keys(kept).length > 0) return this.decisionStillHolding(task, config, kept, message, result.PromptRunID, result.CostUsd, result.TokensUsed);
             return {
                 Success: false,
                 AgentRunID: null,
@@ -5958,6 +5981,8 @@ export class TaskGraphDispatcher implements IShutdownable {
                 Output: payload,
                 // A failed call can still have cost tokens; the rollup reaches it through this.
                 PromptRunID: result.PromptRunID,
+                CostUsd: result.CostUsd,
+                TokensUsed: result.TokensUsed,
             };
         }
         // A kept answer is never replaced, whatever the call returned for its question.
@@ -5968,6 +5993,8 @@ export class TaskGraphDispatcher implements IShutdownable {
             // Only the answers a condition may act on; each other one is replaced by why it is held.
             Output: BuildDecisionStepOutput(payload, config.nodeId, DecisionStepOutputAnswers(task.Name, config.questions, answers)),
             PromptRunID: result.PromptRunID,
+            CostUsd: result.CostUsd,
+            TokensUsed: result.TokensUsed,
         };
     }
 
@@ -5995,6 +6022,8 @@ export class TaskGraphDispatcher implements IShutdownable {
         kept: Record<string, TaskGraphDecisionAnswer>,
         reason: string,
         promptRunID?: string,
+        costUsd?: number,
+        tokensUsed?: number,
     ): TaskBodyOutcome {
         LogError(
             `[TaskGraphDispatcher] Decision "${task.Name}" (${task.ID}) was retried and could not answer again: ${reason}. ` +
@@ -6005,6 +6034,8 @@ export class TaskGraphDispatcher implements IShutdownable {
             AgentRunID: null,
             Output: StillHoldingDecisionOutput(task.OutputPayload, task.Name, config.nodeId, config.questions, kept, reason),
             PromptRunID: promptRunID,
+            ...(costUsd !== undefined ? { CostUsd: costUsd } : {}),
+            ...(tokensUsed !== undefined ? { TokensUsed: tokensUsed } : {}),
         };
     }
 
@@ -6556,11 +6587,19 @@ export class TaskGraphDispatcher implements IShutdownable {
             return;
         }
         const graphID = freshTask.ParentID ?? taskID;
-        const metrics = this.governance.ResolveNodeSettlementMetrics(
+        const metrics = await this.governance.ResolveOrRecoverNodeSettlementMetrics(
+            provider,
             graphID,
             null,
-            result.CostUsd,
-            result.TokensUsed,
+            this.contextUser,
+            {
+                CostUsd: result.CostUsd,
+                TokensUsed: result.TokensUsed,
+                AgentRunID: result.AgentRunID ?? freshTask.AgentRunID ?? null,
+                PromptRunID: result.PromptRunID ?? null,
+                Iterations: result.Iterations,
+                Configuration: freshTask.Configuration,
+            },
         );
         const updatedConfig = this.configurationWithRuntime(
             freshTask,

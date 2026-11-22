@@ -21,11 +21,14 @@ import {
 import type {
     MJAIAgentEntity,
     MJAIAgentUserPolicyEntity,
+    MJAIPromptEntity,
     MJTaskDependencyEntity,
     MJTaskEntity,
 } from '@memberjunction/core-entities';
 import {
+    AgentUserPolicyEngine,
     ExtractRunawayCheckpointFromRunData,
+    type FastConvergenceJudgeResult,
     type MJAIAgentRunEntityExtended,
     type RunawayCheckpointState,
     type RunawayJsonObject,
@@ -41,7 +44,7 @@ import { TaskGraphDispatcher } from '../TaskGraphDispatcher';
 import { TaskGraphGovernanceCoordinator } from '../TaskGraphGovernanceCoordinator';
 import type { LoopCursorSnapshot } from '../TaskLoopExecutor';
 import { TaskGraphService } from '../TaskGraphService';
-import type { TaskActionRunner, TaskAgentRunner, TaskGraphFrame } from '../types';
+import type { TaskActionRunner, TaskAgentRunner, TaskGraphFrame, TaskPromptRunner } from '../types';
 
 interface LoopTestActionInput {
     val?: string;
@@ -93,8 +96,10 @@ type GovernanceRunViewRow =
     | StoredTaskRow
     | StoredDepRow
     | StoredAgentRunRow
+    | StoredPromptRunRow
     | Partial<MJAIAgentEntity>
     | Partial<MJAIAgentUserPolicyEntity>
+    | Partial<MJAIPromptEntity>
     | MJTaskEntity;
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
@@ -176,8 +181,22 @@ interface StoredAgentRunRow {
     Message: string | null;
     TotalCost: number;
     TotalCostRollup: number;
+    TotalTokensUsed?: number | null;
+    TotalTokensUsedRollup?: number | null;
     Data: string | null;
     Steps: MJAIAgentRunEntityExtended['Steps'];
+}
+
+interface StoredPromptRunRow {
+    ID: string;
+    PromptID: string;
+    TotalCost: number | null;
+    Cost?: number | null;
+    TokensUsed: number | null;
+    TokensUsedRollup?: number | null;
+    TokensPrompt?: number | null;
+    TokensCompletion?: number | null;
+    Success: boolean;
 }
 
 interface GovernanceTestGlobalStore {
@@ -192,7 +211,9 @@ class GovernanceInMemoryDb {
     public readonly TasksByParent = new Map<string, StoredTaskRow[]>();
     public readonly DepsByTask = new Map<string, StoredDepRow[]>();
     public readonly AgentRuns = new Map<string, StoredAgentRunRow>();
+    public readonly PromptRuns = new Map<string, StoredPromptRunRow>();
     public Agents: Array<Partial<MJAIAgentEntity>> = [];
+    public Prompts: Array<Partial<MJAIPromptEntity>> = [];
     public UserPolicies: Array<Partial<MJAIAgentUserPolicyEntity>> = [];
     public Authorizations: AuthorizationInfo[] = [];
     public AgentRunSaveMode: 'ok' | 'false' | 'throw' = 'ok';
@@ -612,11 +633,36 @@ class GovernanceInMemoryDb {
         if (params.EntityName === 'MJ: AI Agents') {
             return { Success: true, Results: this.Agents };
         }
+        if (params.EntityName === 'MJ: AI Prompts') {
+            return { Success: true, Results: this.Prompts };
+        }
         if (params.EntityName === 'MJ: AI Agent User Policies') {
             return { Success: true, Results: this.UserPolicies };
         }
+        if (params.EntityName === 'MJ: AI Prompt Runs') {
+            let rows = Array.from(this.PromptRuns.values());
+            const inMatch = /\bID IN \(([^)]+)\)/.exec(filter);
+            if (inMatch?.[1]) {
+                const targetIds = new Set(
+                    inMatch[1].split(',').map((s) => s.trim().replace(/^'|'$/g, '').toLowerCase()),
+                );
+                rows = rows.filter((r) => targetIds.has(r.ID.toLowerCase()));
+            }
+            const idMatch = /\bID='([^']+)'/.exec(filter);
+            if (idMatch?.[1]) {
+                rows = rows.filter((r) => r.ID.toLowerCase() === idMatch[1].toLowerCase());
+            }
+            return { Success: true, Results: rows };
+        }
         if (params.EntityName === 'MJ: AI Agent Runs') {
             let rows = Array.from(this.AgentRuns.values());
+            const inMatch = /\bID IN \(([^)]+)\)/.exec(filter);
+            if (inMatch?.[1]) {
+                const targetIds = new Set(
+                    inMatch[1].split(',').map((s) => s.trim().replace(/^'|'$/g, '').toLowerCase()),
+                );
+                rows = rows.filter((r) => targetIds.has(r.ID.toLowerCase()));
+            }
             const idMatch = /\bID='([^']+)'/.exec(filter);
             if (idMatch?.[1]) {
                 rows = rows.filter((r) => r.ID.toLowerCase() === idMatch[1].toLowerCase());
@@ -750,6 +796,7 @@ class GovernanceInMemoryDb {
                         ? children.map((c) => ({
                             ID: c.ID,
                             Status: c.Status,
+                            AgentRunID: c.AgentRunID,
                             StartedAt: c.StartedAt,
                             CompletedAt: c.CompletedAt,
                             __mj_UpdatedAt: c.__mj_UpdatedAt,
@@ -4189,5 +4236,1125 @@ describe('TaskGraphGovernanceCoordinator — default opt-in, 5-tier policy scope
         } finally {
             dateNowSpy.mockRestore();
         }
+    });
+});
+
+describe('CR-DURABLE-LOOP-CEILING: 5-tier loop iteration & concurrency bounds in TaskGraphDispatcher', () => {
+    beforeEach(() => {
+        capturedErrors.length = 0;
+        vi.clearAllMocks();
+        LimitsConfigResolver.Instance.ClearMjConfigLimits();
+        AgentUserPolicyEngine.Instance.ClearCache();
+    });
+
+    it('enforces WorkflowMetadata, UserAgentPolicy, and unauthorized vs authorized RunOverride ceilings for ForEach and While loops including resume', async () => {
+        const db = new GovernanceInMemoryDb();
+        const provider = db.CreateProvider();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation((p) => p as Partial<RunView> as RunView);
+
+        const ownerUser = {
+            ID: '10000000-0000-4000-8000-000000000099',
+            Name: 'Owner User',
+            Email: 'owner@example.com',
+            Type: 'Owner',
+            IsActive: true,
+        } as UserInfo;
+
+        const store = globalThis as GovernanceTestGlobalStore;
+        const priorUserCache = store.___SINGLETON__UserCache;
+        store.___SINGLETON__UserCache = {
+            Users: [TEST_USER, ownerUser],
+            FindUser: async ({ ID }) => [TEST_USER, ownerUser].find((u) => u.ID.toLowerCase() === (ID ?? '').toLowerCase()),
+        };
+
+        try {
+            db.UserPolicies = [
+                {
+                    ID: 'policy-loop-1',
+                    AgentID: AGENT_ID,
+                    UserID: TEST_USER.ID,
+                    Status: 'Active',
+                    InstructionsOverride:
+                        '<!-- mj-limits: {"ForEachMaxIterations":3,"WhileLoopMaxIterations":4,"ResourceGuards":{"MaxLoopConcurrency":2}} -->',
+                },
+            ];
+
+            // 1) Unauthorized explicit op.maxIterations (10) + unauthorized RunOverride (8) MUST clamp to UserAgentPolicy (3) and concurrency (2)
+            let peakConcurrency = 0;
+            let inFlight = 0;
+            const forEachSeen: number[] = [];
+            const disp1 = new TaskGraphDispatcher(
+                { CreateProvider: async () => provider },
+                { RunAgentForTask: async () => ({ Success: true }) },
+                TEST_USER,
+                {
+                    InstanceID: 'loop-ceiling-disp-1',
+                    MaxConcurrentTasks: 1,
+                    PollIntervalSeconds: 0.01,
+                    HeartbeatIntervalSeconds: 60,
+                    ReconciliationIntervalSeconds: 60,
+                },
+                undefined,
+                undefined,
+                {
+                    RunActionForTask: async (ctx) => {
+                        inFlight++;
+                        peakConcurrency = Math.max(peakConcurrency, inFlight);
+                        forEachSeen.push(forEachSeen.length);
+                        await new Promise((r) => setTimeout(r, 10));
+                        inFlight--;
+                        return { Success: true, Output: { ran: ctx.TaskID }, CostUsd: 0.01, TokensUsed: 10 };
+                    },
+                },
+            );
+            await disp1.Start();
+            try {
+                const service = new TaskGraphService();
+                const subRes = await service.Submit(
+                    {
+                        workflowName: 'Unauthorized ForEach Ceiling Test',
+                        tasks: [
+                            {
+                                tempId: 'fe-step',
+                                name: 'ForEach Step',
+                                description: 'Bounded ForEach',
+                                kind: 'ForEach',
+                                configuration: {
+                                    collectionPath: 'static:[1,2,3,4,5,6,7,8,9,10]',
+                                    maxIterations: 10,
+                                    executionMode: 'parallel',
+                                    maxConcurrency: 6,
+                                    action: { name: 'StepAction', params: {} },
+                                },
+                            },
+                        ],
+                    },
+                    {
+                        EnvironmentID: 'env-1',
+                        Provider: provider,
+                        ContextUser: TEST_USER,
+                        AgentID: AGENT_ID,
+                        WorkflowMetadata: { ForEachMaxIterations: 7 },
+                        LimitsOverride: { ForEachMaxIterations: 8, ResourceGuards: { MaxLoopConcurrency: 5 } },
+                    },
+                );
+                expect(subRes.Success).toBe(true);
+                await waitUntil(
+                    () => db.Tasks.get(subRes.ParentTaskID!.toLowerCase())?.Status === 'Complete',
+                    5_000,
+                    () => disp1.Kick(),
+                );
+                expect(forEachSeen).toHaveLength(3);
+                expect(peakConcurrency).toBeLessThanOrEqual(2);
+            } finally {
+                await disp1.Stop();
+            }
+
+            // 2) While loop: WorkflowMetadata (WhileLoopMaxIterations=3) + budget pause at 2 iterations -> resume in disp2 enforces ceiling 3 across resume!
+            db.UserPolicies = [];
+            AgentUserPolicyEngine.Instance.ClearCache();
+            const whileRunId = '50000000-0000-4000-8000-000000000071';
+            const whileRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', TEST_USER);
+            whileRun.ID = whileRunId;
+            whileRun.AgentID = AGENT_ID;
+            whileRun.UserID = TEST_USER.ID;
+            whileRun.Status = 'Running';
+            await whileRun.Save();
+
+            const whileCalls1: number[] = [];
+            const dispWhile1 = new TaskGraphDispatcher(
+                { CreateProvider: async () => provider },
+                { RunAgentForTask: async () => ({ Success: true }) },
+                TEST_USER,
+                {
+                    InstanceID: 'while-ceiling-disp-1',
+                    MaxConcurrentTasks: 1,
+                    PollIntervalSeconds: 0.01,
+                    HeartbeatIntervalSeconds: 60,
+                    ReconciliationIntervalSeconds: 60,
+                },
+                undefined,
+                undefined,
+                {
+                    RunActionForTask: async () => {
+                        whileCalls1.push(whileCalls1.length);
+                        return { Success: true, Output: { keepGoing: true }, CostUsd: 0.05, TokensUsed: 50 };
+                    },
+                },
+            );
+            let whileParentId = '';
+            let whileChildId = '';
+            await dispWhile1.Start();
+            try {
+                const service = new TaskGraphService();
+                const subWhile = await service.Submit(
+                    {
+                        workflowName: 'While Ceiling Pause/Resume Graph',
+                        tasks: [
+                            {
+                                tempId: 'while-step',
+                                name: 'While Step',
+                                description: 'While with ceiling across resume',
+                                kind: 'While',
+                                configuration: {
+                                    condition: 'true',
+                                    maxIterations: 20, // above WorkflowMetadata=3 and UserPolicy=4 -> clamped to 3!
+                                    action: { name: 'StepAction', params: {} },
+                                },
+                            },
+                        ],
+                    },
+                    {
+                        EnvironmentID: 'env-1',
+                        Provider: provider,
+                        ContextUser: TEST_USER,
+                        AgentID: AGENT_ID,
+                        AgentRunID: whileRunId,
+                        WorkflowMetadata: { WhileLoopMaxIterations: 3 },
+                        LimitsOverride: { Budgets: { PerRun: { MaxCostUsd: 0.09 } } },
+                    },
+                );
+                expect(subWhile.Success).toBe(true);
+                whileParentId = subWhile.ParentTaskID!;
+                whileChildId = (db.TasksByParent.get(whileParentId.toLowerCase()) ?? [])[0].ID;
+
+                await waitUntil(
+                    () =>
+                        dispWhile1.Governance.GetGraphDiagnostics(whileParentId)?.PausedByGovernance === true &&
+                        db.Tasks.get(whileChildId.toLowerCase())?.Status === 'Pending',
+                    5_000,
+                    () => dispWhile1.Kick(),
+                );
+                expect(whileCalls1).toHaveLength(2);
+            } finally {
+                await dispWhile1.Stop();
+            }
+
+            // Resume in a fresh dispatcher: only 1 remaining iteration (index 2) runs before hitting the 3-iteration ceiling
+            const whileCalls2: number[] = [];
+            const dispWhile2 = new TaskGraphDispatcher(
+                { CreateProvider: async () => provider },
+                { RunAgentForTask: async () => ({ Success: true }) },
+                TEST_USER,
+                {
+                    InstanceID: 'while-ceiling-disp-2',
+                    MaxConcurrentTasks: 1,
+                    PollIntervalSeconds: 0.01,
+                    HeartbeatIntervalSeconds: 60,
+                    ReconciliationIntervalSeconds: 60,
+                },
+                undefined,
+                undefined,
+                {
+                    RunActionForTask: async () => {
+                        whileCalls2.push(whileCalls2.length);
+                        return { Success: true, Output: { keepGoing: true }, CostUsd: 0.05, TokensUsed: 50 };
+                    },
+                },
+            );
+            await dispWhile2.Start();
+            try {
+                const approveRes = await dispWhile2.Governance.ApproveAndResumePausedGraph({
+                    ParentTaskID: whileParentId,
+                    Provider: provider,
+                    ContextUser: TEST_USER,
+                    BudgetExtension: { NewPerRunMaxCostUsd: 5.0 },
+                });
+                expect(approveRes.Success).toBe(true);
+
+                await waitUntil(
+                    () => db.Tasks.get(whileParentId.toLowerCase())?.Status === 'Complete',
+                    5_000,
+                    () => dispWhile2.Kick(),
+                );
+                expect(whileCalls2).toHaveLength(1);
+                const completedWhileOut = JSON.parse(db.Tasks.get(whileChildId.toLowerCase())!.OutputPayload!) as { iterations: number };
+                expect(completedWhileOut.iterations).toBe(3);
+            } finally {
+                await dispWhile2.Stop();
+            }
+
+            // 3) Authorized Owner principal raising ceiling via Tier-5 RunOverride (ForEachMaxIterations: 5 > UserPolicy: 3)
+            AgentUserPolicyEngine.Instance.ClearCache();
+            db.UserPolicies = [
+                {
+                    ID: 'policy-loop-owner',
+                    AgentID: AGENT_ID,
+                    UserID: ownerUser.ID,
+                    Status: 'Active',
+                    InstructionsOverride: '<!-- mj-limits: {"ForEachMaxIterations":3} -->',
+                },
+            ];
+            const ownerSeen: number[] = [];
+            const dispOwner = new TaskGraphDispatcher(
+                { CreateProvider: async () => provider },
+                { RunAgentForTask: async () => ({ Success: true }) },
+                ownerUser,
+                {
+                    InstanceID: 'owner-ceiling-disp',
+                    MaxConcurrentTasks: 1,
+                    PollIntervalSeconds: 0.01,
+                    HeartbeatIntervalSeconds: 60,
+                    ReconciliationIntervalSeconds: 60,
+                },
+                undefined,
+                undefined,
+                {
+                    RunActionForTask: async () => {
+                        ownerSeen.push(ownerSeen.length);
+                        return { Success: true, Output: { idx: ownerSeen.length }, CostUsd: 0.01, TokensUsed: 10 };
+                    },
+                },
+            );
+            await dispOwner.Start();
+            try {
+                const service = new TaskGraphService();
+                const ownerSub = await service.Submit(
+                    {
+                        workflowName: 'Authorized Owner ForEach Override',
+                        tasks: [
+                            {
+                                tempId: 'fe-owner',
+                                name: 'ForEach Owner',
+                                description: 'Authorized override',
+                                kind: 'ForEach',
+                                configuration: {
+                                    collectionPath: 'static:[1,2,3,4,5,6,7]',
+                                    action: { name: 'StepAction', params: {} },
+                                },
+                            },
+                        ],
+                    },
+                    {
+                        EnvironmentID: 'env-1',
+                        Provider: provider,
+                        ContextUser: ownerUser,
+                        AgentID: AGENT_ID,
+                        LimitsOverride: { ForEachMaxIterations: 5 },
+                    },
+                );
+                expect(ownerSub.Success).toBe(true);
+                await waitUntil(
+                    () => db.Tasks.get(ownerSub.ParentTaskID!.toLowerCase())?.Status === 'Complete',
+                    5_000,
+                    () => dispOwner.Kick(),
+                );
+                expect(ownerSeen).toHaveLength(5);
+            } finally {
+                await dispOwner.Stop();
+            }
+        } finally {
+            store.___SINGLETON__UserCache = priorUserCache;
+        }
+    });
+});
+
+describe('CR-PRODUCTION-WORKFLOW-USAGE: Prompt/Agent billing propagation, durable recovery, and no double-counting', () => {
+    beforeEach(() => {
+        capturedErrors.length = 0;
+        vi.clearAllMocks();
+        LimitsConfigResolver.Instance.ClearMjConfigLimits();
+        AgentUserPolicyEngine.Instance.ClearCache();
+    });
+
+    it('recovers billing from persisted PromptRunID and AgentRunID without double-counting across graph & agent ledgers, including prompt-bodied loop pause & resume', async () => {
+        const db = new GovernanceInMemoryDb();
+        const provider = db.CreateProvider();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation((p) => p as Partial<RunView> as RunView);
+
+        const PROMPT_ID = '70000000-0000-4000-8000-000000000001';
+        db.Prompts = [{ ID: PROMPT_ID, Name: 'LoopPrompt' }];
+        db.Agents = [{ ID: AGENT_ID, Name: 'WorkerAgent' }];
+
+        // 1) Pre-populated settled Prompt & Agent nodes with NO inline governanceCostUsd -> Coordinator hydration MUST recover from PromptRuns & AgentRuns!
+        const parentId = randomUUID();
+        const submitRunId = randomUUID();
+        const childAgentRunId = randomUUID();
+        const childPromptRunId = randomUUID();
+
+        db.AgentRuns.set(submitRunId.toLowerCase(), {
+            ID: submitRunId,
+            AgentID: AGENT_ID,
+            UserID: TEST_USER.ID,
+            ParentRunID: null,
+            ScheduledJobRunID: ROUTINE_ID,
+            Status: 'Running',
+            StartedAt: new Date(Date.now() - 10_000),
+            CompletedAt: null,
+            Success: null,
+            ErrorMessage: null,
+            Message: null,
+            TotalCost: 0,
+            TotalCostRollup: 0,
+            Data: null,
+            Steps: [],
+        });
+        db.AgentRuns.set(childAgentRunId.toLowerCase(), {
+            ID: childAgentRunId,
+            AgentID: AGENT_ID,
+            UserID: TEST_USER.ID,
+            ParentRunID: null, // intentionally unlinked ParentRunID to prove KnownChildAgentRunIDs prevents double-counting!
+            ScheduledJobRunID: ROUTINE_ID,
+            Status: 'Completed',
+            StartedAt: new Date(Date.now() - 8_000),
+            CompletedAt: new Date(Date.now() - 6_000),
+            Success: true,
+            ErrorMessage: null,
+            Message: null,
+            TotalCost: 0.30,
+            TotalCostRollup: 0.30,
+            TotalTokensUsed: 1500,
+            Data: null,
+            Steps: [],
+        });
+        db.PromptRuns.set(childPromptRunId.toLowerCase(), {
+            ID: childPromptRunId,
+            PromptID: PROMPT_ID,
+            TotalCost: 0.20,
+            TokensUsed: 800,
+            Success: true,
+        });
+
+        const parentRow: StoredTaskRow = {
+            ID: parentId,
+            ParentID: null,
+            TypeID: WORKFLOW_TYPE_ID,
+            Name: 'Hydrated Billing Graph',
+            Description: null,
+            Status: 'In Progress',
+            StepType: 'Action',
+            ActionID: null,
+            AgentID: AGENT_ID,
+            PromptID: null,
+            UserID: TEST_USER.ID,
+            AgentRunID: submitRunId,
+            ConversationDetailID: null,
+            ClaimedBy: null,
+            ClaimExpiresAt: null,
+            StartedAt: new Date(Date.now() - 10_000),
+            CompletedAt: null,
+            PercentComplete: 50,
+            ErrorMessage: null,
+            InputPayload: JSON.stringify({
+                continuation: 'message',
+                reinvokeDepth: 0,
+                failureSemantics: 'block',
+                submittedByAgentRunID: submitRunId,
+                submittedByAgentID: AGENT_ID,
+                submittedByUserID: TEST_USER.ID,
+                routineID: ROUTINE_ID,
+                governanceEnabled: true,
+                limitsOverride: {
+                    Budgets: {
+                        PerRun: { MaxCostUsd: 2.0 },
+                        PerRoutine: { MaxCostUsd: 0.65 },
+                    },
+                },
+            }),
+            Configuration: null,
+            __mj_UpdatedAt: new Date(),
+        };
+        const settledAgentTaskRow: StoredTaskRow = {
+            ID: randomUUID(),
+            ParentID: parentId,
+            TypeID: WORKFLOW_TYPE_ID,
+            Name: 'Child Agent Task',
+            Description: null,
+            Status: 'Complete',
+            StepType: 'Agent',
+            ActionID: null,
+            AgentID: AGENT_ID,
+            PromptID: null,
+            UserID: null,
+            AgentRunID: childAgentRunId,
+            ConversationDetailID: null,
+            ClaimedBy: null,
+            ClaimExpiresAt: null,
+            StartedAt: new Date(Date.now() - 8_000),
+            CompletedAt: new Date(Date.now() - 6_000),
+            PercentComplete: 100,
+            ErrorMessage: null,
+            InputPayload: null,
+            OutputPayload: '{"ok":true}',
+            Configuration: JSON.stringify({ runtime: {} }), // no governanceCostUsd!
+            __mj_UpdatedAt: new Date(),
+        };
+        const settlingPromptTaskRow: StoredTaskRow = {
+            ...settledAgentTaskRow,
+            ID: randomUUID(),
+            Name: 'Child Prompt Task',
+            StepType: 'Prompt',
+            AgentID: null,
+            PromptID: PROMPT_ID,
+            AgentRunID: null,
+            Configuration: JSON.stringify({ runtime: { promptRunID: childPromptRunId } }),
+        };
+        db.Tasks.set(parentId.toLowerCase(), parentRow);
+        db.Tasks.set(settledAgentTaskRow.ID.toLowerCase(), settledAgentTaskRow);
+        db.Tasks.set(settlingPromptTaskRow.ID.toLowerCase(), settlingPromptTaskRow);
+        db.TasksByParent.set(parentId.toLowerCase(), [settledAgentTaskRow, settlingPromptTaskRow]);
+
+        const coordHydrate = new TaskGraphGovernanceCoordinator(new TaskClaimStore('billing-hydrate-coord', 60));
+        // Settle the prompt task WITHOUT inline CostUsd/TokensUsed -> recovers $0.20 + 800 tokens from PromptRuns AND hydrates $0.30 + 1500 tokens from AgentRuns without double-counting childAgentRunId!
+        const evalRes = await coordHydrate.RecordNodeSettlementAndEvaluate({
+            Provider: provider,
+            ContextUser: TEST_USER,
+            Parent: db.wrapTaskPublic(parentRow),
+            Task: db.wrapTaskPublic(settlingPromptTaskRow),
+            Success: true,
+            PromptRunID: childPromptRunId,
+        });
+        expect(evalRes?.Ledger.RunCostUsd).toBeCloseTo(0.50, 5);
+        expect(evalRes?.Ledger.RunTokens).toBe(2300);
+        // Routine cost MUST be $0.50 (NOT $0.80 double-counting childAgentRunId!)
+        expect(evalRes?.Ledger.RoutineCostUsd).toBeCloseTo(0.50, 5);
+        expect(evalRes?.Exceeded).toBe(false);
+
+        // 2) End-to-end prompt-bodied ForEach loop through TaskGraphDispatcher: propagates prompt CostUsd/TokensUsed,
+        //    triggers budget checkpoint pause at 2 items, and accumulates correctly after approve & resume!
+        const loopRunId = '50000000-0000-4000-8000-000000000072';
+        const loopRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', TEST_USER);
+        loopRun.ID = loopRunId;
+        loopRun.AgentID = AGENT_ID;
+        loopRun.UserID = TEST_USER.ID;
+        loopRun.Status = 'Running';
+        await loopRun.Save();
+
+        let promptPass = 0;
+        const makePromptRunner = (): TaskPromptRunner => ({
+            RunPromptForTask: async () => {
+                promptPass++;
+                const prId = randomUUID();
+                db.PromptRuns.set(prId.toLowerCase(), {
+                    ID: prId,
+                    PromptID: PROMPT_ID,
+                    TotalCost: 0.15,
+                    TokensUsed: 300,
+                    Success: true,
+                });
+                return {
+                    Success: true,
+                    Output: { pass: promptPass },
+                    PromptRunID: prId,
+                    CostUsd: 0.15,
+                    TokensUsed: 300,
+                };
+            },
+        });
+
+        const dispLoop1 = new TaskGraphDispatcher(
+            { CreateProvider: async () => provider },
+            { RunAgentForTask: async () => ({ Success: true }) },
+            TEST_USER,
+            {
+                InstanceID: 'prompt-loop-disp-1',
+                MaxConcurrentTasks: 1,
+                PollIntervalSeconds: 0.01,
+                HeartbeatIntervalSeconds: 60,
+                ReconciliationIntervalSeconds: 60,
+            },
+            undefined,
+            undefined,
+            undefined,
+            makePromptRunner(),
+        );
+        let loopParentId = '';
+        let loopChildId = '';
+        await dispLoop1.Start();
+        try {
+            const service = new TaskGraphService();
+            const subRes = await service.Submit(
+                {
+                    workflowName: 'Prompt ForEach Billing Graph',
+                    tasks: [
+                        {
+                            tempId: 'prompt-fe',
+                            name: 'Prompt ForEach',
+                            description: 'Prompt-bodied loop',
+                            kind: 'ForEach',
+                            configuration: {
+                                collectionPath: 'static:["a","b","c"]',
+                                prompt: { name: 'LoopPrompt' },
+                            },
+                        },
+                    ],
+                },
+                {
+                    EnvironmentID: 'env-1',
+                    Provider: provider,
+                    ContextUser: TEST_USER,
+                    AgentID: AGENT_ID,
+                    AgentRunID: loopRunId,
+                    LimitsOverride: { Budgets: { PerRun: { MaxCostUsd: 0.25 } } },
+                },
+            );
+            expect(subRes.Success).toBe(true);
+            loopParentId = subRes.ParentTaskID!;
+            loopChildId = (db.TasksByParent.get(loopParentId.toLowerCase()) ?? [])[0].ID;
+
+            await waitUntil(
+                () =>
+                    dispLoop1.Governance.GetGraphDiagnostics(loopParentId)?.PausedByGovernance === true &&
+                    db.Tasks.get(loopChildId.toLowerCase())?.Status === 'Pending',
+                5_000,
+                () => dispLoop1.Kick(),
+            );
+            expect(promptPass).toBe(2);
+            expect(dispLoop1.Governance.GetGraphDiagnostics(loopParentId)?.CumulativeCostUsd).toBeCloseTo(0.30, 5);
+            expect(dispLoop1.Governance.GetGraphDiagnostics(loopParentId)?.TokensUsed).toBe(600);
+        } finally {
+            await dispLoop1.Stop();
+        }
+
+        const dispLoop2 = new TaskGraphDispatcher(
+            { CreateProvider: async () => provider },
+            { RunAgentForTask: async () => ({ Success: true }) },
+            TEST_USER,
+            {
+                InstanceID: 'prompt-loop-disp-2',
+                MaxConcurrentTasks: 1,
+                PollIntervalSeconds: 0.01,
+                HeartbeatIntervalSeconds: 60,
+                ReconciliationIntervalSeconds: 60,
+            },
+            undefined,
+            undefined,
+            undefined,
+            makePromptRunner(),
+        );
+        await dispLoop2.Start();
+        try {
+            const approveRes = await dispLoop2.Governance.ApproveAndResumePausedGraph({
+                ParentTaskID: loopParentId,
+                Provider: provider,
+                ContextUser: TEST_USER,
+                BudgetExtension: { NewPerRunMaxCostUsd: 2.0 },
+            });
+            expect(approveRes.Success).toBe(true);
+
+            await waitUntil(
+                () => db.Tasks.get(loopParentId.toLowerCase())?.Status === 'Complete',
+                5_000,
+                () => dispLoop2.Kick(),
+            );
+            expect(promptPass).toBe(3);
+            const settledTask = db.Tasks.get(loopChildId.toLowerCase())!;
+            const settledCfg = JSON.parse(settledTask.Configuration!) as TaskStepConfiguration;
+            expect(settledCfg.runtime?.governanceCostUsd).toBeCloseTo(0.45, 5);
+            expect(settledCfg.runtime?.governanceTokensUsed).toBe(900);
+        } finally {
+            await dispLoop2.Stop();
+        }
+    });
+});
+
+describe('CR-WORKFLOW-AMBIGUOUS-JUDGE: FastConvergenceJudge integration in TaskGraphGovernanceCoordinator', () => {
+    beforeEach(() => {
+        capturedErrors.length = 0;
+        vi.clearAllMocks();
+        LimitsConfigResolver.Instance.ClearMjConfigLimits();
+        AgentUserPolicyEngine.Instance.ClearCache();
+    });
+
+    function buildNodeAndParent(db: GovernanceInMemoryDb, limitsOverride: NonNullable<TaskGraphSpec['limitsOverride']>, submitRunId: string | null = null) {
+        const parentId = randomUUID();
+        const parentRow: StoredTaskRow = {
+            ID: parentId,
+            ParentID: null,
+            TypeID: WORKFLOW_TYPE_ID,
+            Name: 'Ambiguous Judge Graph',
+            Description: null,
+            Status: 'In Progress',
+            StepType: 'Action',
+            ActionID: null,
+            AgentID: AGENT_ID,
+            PromptID: null,
+            UserID: TEST_USER.ID,
+            AgentRunID: submitRunId,
+            ConversationDetailID: null,
+            ClaimedBy: null,
+            ClaimExpiresAt: null,
+            StartedAt: new Date(),
+            CompletedAt: null,
+            PercentComplete: 0,
+            ErrorMessage: null,
+            InputPayload: JSON.stringify({
+                continuation: 'message',
+                reinvokeDepth: 0,
+                failureSemantics: 'block',
+                submittedByAgentRunID: submitRunId,
+                submittedByAgentID: AGENT_ID,
+                submittedByUserID: TEST_USER.ID,
+                routineID: ROUTINE_ID,
+                governanceEnabled: true,
+                limitsOverride,
+            }),
+            Configuration: null,
+            __mj_UpdatedAt: new Date(),
+        };
+        db.Tasks.set(parentId.toLowerCase(), parentRow);
+        return { parentId, parentRow };
+    }
+
+    function makeChildTask(db: GovernanceInMemoryDb, parentId: string, name: string, outputPayload: string): StoredTaskRow {
+        const row: StoredTaskRow = {
+            ID: randomUUID(),
+            ParentID: parentId,
+            TypeID: WORKFLOW_TYPE_ID,
+            Name: name,
+            Description: null,
+            Status: 'Complete',
+            StepType: 'Action',
+            ActionID: ACTION_ID,
+            AgentID: null,
+            PromptID: null,
+            UserID: null,
+            AgentRunID: null,
+            ConversationDetailID: null,
+            ClaimedBy: null,
+            ClaimExpiresAt: null,
+            StartedAt: new Date(),
+            CompletedAt: new Date(),
+            PercentComplete: 100,
+            ErrorMessage: null,
+            InputPayload: null,
+            OutputPayload: outputPayload,
+            Configuration: JSON.stringify({ runtime: { governanceCostUsd: 0.02, governanceTokensUsed: 100 } }),
+            __mj_UpdatedAt: new Date(),
+        };
+        db.Tasks.set(row.ID.toLowerCase(), row);
+        const list = db.TasksByParent.get(parentId.toLowerCase()) ?? [];
+        list.push(row);
+        db.TasksByParent.set(parentId.toLowerCase(), list);
+        return row;
+    }
+
+    it('never invokes FastConvergenceJudge on Converging or Stalled, invokes strictly on Ambiguous, attributes judge usage, and pauses on non-convergence with resume', async () => {
+        const db = new GovernanceInMemoryDb();
+        const provider = db.CreateProvider();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation((p) => p as Partial<RunView> as RunView);
+
+        const judgeCalls: Array<{ Iteration: number; StateSummary: string }> = [];
+        let nextVerdict: FastConvergenceJudgeResult = {
+            Converging: true,
+            Reason: 'Making incremental progress across batches',
+            LatencyMs: 12,
+            TimedOut: false,
+            UsedFallback: false,
+            Source: 'Model',
+            CostUsd: 0.03,
+            TokensUsed: 150,
+        };
+
+        const coord = new TaskGraphGovernanceCoordinator(new TaskClaimStore('judge-coord-1', 60), {
+            EvaluateProgress: true,
+            FastConvergenceJudgeEvaluator: async (input) => {
+                judgeCalls.push({ Iteration: input.Iteration, StateSummary: input.StateSummary });
+                return nextVerdict;
+            },
+        });
+
+        // 1) Progressing (Converging) samples -> judge NOT called
+        const { parentId: convParentId, parentRow: convParent } = buildNodeAndParent(db, {
+            Budgets: { PerRun: { MaxCostUsd: 10 } },
+            ProgressDetector: {
+                Enabled: true,
+                MinIterationsBeforeCheck: 3,
+                WindowSize: 3,
+                FastJudgeEnabled: true,
+            },
+        });
+        for (let i = 1; i <= 3; i++) {
+            const child = makeChildTask(db, convParentId, `ConvStep-${i}`, JSON.stringify({ step: i, detail: `distinct-${i}` }));
+            await coord.RecordNodeSettlementAndEvaluate({
+                Provider: provider,
+                ContextUser: TEST_USER,
+                Parent: db.wrapTaskPublic(convParent),
+                Task: db.wrapTaskPublic(child),
+                Success: true,
+                CostUsd: 0.02,
+                TokensUsed: 100,
+            });
+        }
+        expect(coord.GetGraphDiagnostics(convParentId)?.LastProgressResult?.Classification).toBe('Converging');
+        expect(judgeCalls).toHaveLength(0);
+
+        // 2) Stalled samples (via EvaluateLoopIterationGovernance with identical outputs) -> judge NOT called, pauses as ProgressStalled
+        const { parentId: stallParentId, parentRow: stallParent } = buildNodeAndParent(db, {
+            Budgets: { PerRun: { MaxCostUsd: 10 } },
+            ProgressDetector: {
+                Enabled: true,
+                MinIterationsBeforeCheck: 3,
+                WindowSize: 3,
+                NoPayloadDeltaWindowCount: 3,
+                FastJudgeEnabled: true,
+            },
+        });
+        const stallLoopTask = makeChildTask(db, stallParentId, 'StallLoop', '{}');
+        stallLoopTask.Status = 'In Progress';
+        for (let i = 0; i < 3; i++) {
+            const verdict = await coord.EvaluateLoopIterationGovernance({
+                Provider: provider,
+                ContextUser: TEST_USER,
+                Parent: db.wrapTaskPublic(stallParent),
+                Task: db.wrapTaskPublic(stallLoopTask),
+                LoopType: 'While',
+                IterationIndex: i,
+                CompletedIterations: i + 1,
+                AccumulatedLoopCostUsd: (i + 1) * 0.02,
+                AccumulatedLoopTokensUsed: (i + 1) * 100,
+                LivePayload: { fixed: true },
+                LastOutcome: { Success: true, Output: { same: 'output' }, CostUsd: 0.02, TokensUsed: 100 },
+            });
+            if (i < 2) expect(verdict.ShouldPause).toBe(false);
+            else expect(verdict.ShouldPause).toBe(true);
+        }
+        expect(coord.GetGraphDiagnostics(stallParentId)?.LastProgressResult?.Classification).toBe('Stalled');
+        expect(judgeCalls).toHaveLength(0);
+
+        // 3) Ambiguous samples in EvaluateLoopIterationGovernance:
+        //    - distinct outputs (novel) with 0 records/tasks closed & token spend -> composite score ~0.48 in [0.25, 0.65) => Ambiguous!
+        const submitRunId = randomUUID();
+        db.AgentRuns.set(submitRunId.toLowerCase(), {
+            ID: submitRunId,
+            AgentID: AGENT_ID,
+            UserID: TEST_USER.ID,
+            ParentRunID: null,
+            ScheduledJobRunID: ROUTINE_ID,
+            Status: 'Running',
+            StartedAt: new Date(),
+            CompletedAt: null,
+            Success: null,
+            ErrorMessage: null,
+            Message: null,
+            TotalCost: 0,
+            TotalCostRollup: 0,
+            Data: null,
+            Steps: [],
+        });
+        const { parentId: ambParentId, parentRow: ambParent } = buildNodeAndParent(
+            db,
+            {
+                Budgets: { PerRun: { MaxCostUsd: 10 } },
+                ProgressDetector: {
+                    Enabled: true,
+                    MinIterationsBeforeCheck: 3,
+                    WindowSize: 3,
+                    NoPayloadDeltaWindowCount: 5,
+                    AmbiguityLowScoreThreshold: 0.25,
+                    AmbiguityHighScoreThreshold: 0.65,
+                    FastJudgeEnabled: true,
+                    FastJudgeMinIntervalIterations: 2,
+                    FastJudgeMaxInputChars: 120,
+                    FastJudgeTimeoutMs: 150,
+                    FastJudgeFailureFallback: 'ContinueWithWarning',
+                },
+            },
+            submitRunId,
+        );
+        const ambLoopTask = makeChildTask(db, ambParentId, 'AmbiguousLoop', '{}');
+        ambLoopTask.Status = 'In Progress';
+
+        const ambLoopOutputs = [
+            'Evaluating partition 1 candidate index selectivity and residual filter predicates',
+            'Evaluating partition 2 candidate index selectivity and residual filter predicates',
+            'Evaluating partition 3 candidate index selectivity and residual filter predicates',
+            'Evaluating partition 4 candidate index selectivity and residual filter predicates',
+            'Evaluating partition 5 candidate index selectivity and residual filter predicates',
+        ];
+
+        // Iterations 0..2: at iter 2 (3rd sample), detector classifies Ambiguous -> judge called (Converging: true, CostUsd: 0.03, TokensUsed: 150)
+        for (let i = 0; i < 3; i++) {
+            const verdict = await coord.EvaluateLoopIterationGovernance({
+                Provider: provider,
+                ContextUser: TEST_USER,
+                Parent: db.wrapTaskPublic(ambParent),
+                Task: db.wrapTaskPublic(ambLoopTask),
+                LoopType: 'While',
+                IterationIndex: i,
+                CompletedIterations: i + 1,
+                AccumulatedLoopCostUsd: (i + 1) * 0.02,
+                AccumulatedLoopTokensUsed: (i + 1) * 200,
+                LivePayload: { phase: i % 2 },
+                LastOutcome: {
+                    Success: true,
+                    Output: ambLoopOutputs[i],
+                    CostUsd: 0.02,
+                    TokensUsed: 200,
+                },
+            });
+            expect(verdict.ShouldPause).toBe(false);
+        }
+        expect(judgeCalls).toHaveLength(1);
+        expect(judgeCalls[0].StateSummary.length).toBeLessThanOrEqual(120);
+        const diagAfterConverging = coord.GetGraphDiagnostics(ambParentId)!;
+        expect(diagAfterConverging.FastJudgeCostUsd).toBeCloseTo(0.03, 5);
+        expect(diagAfterConverging.FastJudgeTokensUsed).toBe(150);
+        expect(diagAfterConverging.CumulativeCostUsd).toBeCloseTo(0.09, 5); // 0.06 loop + 0.03 judge
+        expect(diagAfterConverging.FastJudgeEntries).toHaveLength(1);
+        expect(diagAfterConverging.FastJudgeEntries[0].Converging).toBe(true);
+
+        // Iteration 3 (within FastJudgeMinIntervalIterations=2 cooldown: 4 - 3 < 2) -> judge NOT invoked!
+        const cooldownVerdict = await coord.EvaluateLoopIterationGovernance({
+            Provider: provider,
+            ContextUser: TEST_USER,
+            Parent: db.wrapTaskPublic(ambParent),
+            Task: db.wrapTaskPublic(ambLoopTask),
+            LoopType: 'While',
+            IterationIndex: 3,
+            CompletedIterations: 4,
+            AccumulatedLoopCostUsd: 0.08,
+            AccumulatedLoopTokensUsed: 800,
+            LivePayload: { phase: 1 },
+            LastOutcome: { Success: true, Output: ambLoopOutputs[3], CostUsd: 0.02, TokensUsed: 200 },
+        });
+        expect(cooldownVerdict.ShouldPause).toBe(false);
+        expect(judgeCalls).toHaveLength(1);
+
+        // Iteration 4 (after cooldown: 5 - 3 >= 2) with Converging: false -> pauses non-destructively as FastJudgeStalled and supports ApproveAndResumePausedGraph!
+        nextVerdict = {
+            Converging: false,
+            Reason: 'Oscillating without converging toward exit condition',
+            LatencyMs: 18,
+            TimedOut: false,
+            UsedFallback: false,
+            Source: 'Model',
+            CostUsd: 0.04,
+            TokensUsed: 200,
+        };
+        const stalledVerdict = await coord.EvaluateLoopIterationGovernance({
+            Provider: provider,
+            ContextUser: TEST_USER,
+            Parent: db.wrapTaskPublic(ambParent),
+            Task: db.wrapTaskPublic(ambLoopTask),
+            LoopType: 'While',
+            IterationIndex: 4,
+            CompletedIterations: 5,
+            AccumulatedLoopCostUsd: 0.10,
+            AccumulatedLoopTokensUsed: 1000,
+            LivePayload: { phase: 0 },
+            LastOutcome: { Success: true, Output: ambLoopOutputs[4], CostUsd: 0.02, TokensUsed: 200 },
+        });
+        expect(judgeCalls).toHaveLength(2);
+        expect(stalledVerdict.ShouldPause).toBe(true);
+        expect(coord.GetGraphDiagnostics(ambParentId)?.PausedByGovernance).toBe(true);
+        expect(coord.GetGraphDiagnostics(ambParentId)?.FastJudgeCostUsd).toBeCloseTo(0.07, 5);
+        expect(coord.GetGraphDiagnostics(ambParentId)?.CumulativeCostUsd).toBeCloseTo(0.17, 5);
+
+        const persistedCp = ExtractRunawayCheckpointFromRunData(db.AgentRuns.get(submitRunId.toLowerCase())?.Data);
+        expect(persistedCp?.PauseReason).toBe('FastJudgeStalled');
+        expect(persistedCp?.Evidence.FastJudgeResult?.Converging).toBe(false);
+
+        const resumeRes = await coord.ApproveAndResumePausedGraph({
+            ParentTaskID: ambParentId,
+            Provider: provider,
+            ContextUser: TEST_USER,
+            BudgetExtension: { ResetProgressDetectorWindow: true },
+        });
+        expect(resumeRes.Success).toBe(true);
+        expect(coord.GetGraphDiagnostics(ambParentId)?.PausedByGovernance).toBe(false);
+
+        // 4) RecordNodeSettlementAndEvaluate ALSO invokes FastConvergenceJudge on Ambiguous node settlements
+        const { parentId: nodeAmbParentId, parentRow: nodeAmbParent } = buildNodeAndParent(db, {
+            Budgets: { PerRun: { MaxCostUsd: 10 } },
+            ProgressDetector: {
+                Enabled: true,
+                MinIterationsBeforeCheck: 3,
+                WindowSize: 3,
+                NoPayloadDeltaWindowCount: 5,
+                RepeatingErrorWindowCount: 5,
+                AmbiguityLowScoreThreshold: 0.25,
+                AmbiguityHighScoreThreshold: 0.65,
+                FastJudgeEnabled: true,
+                FastJudgeMinIntervalIterations: 1,
+            },
+        });
+        for (let i = 0; i < 3; i++) {
+            const child = makeChildTask(db, nodeAmbParentId, `AmbStep-${i}`, ambLoopOutputs[i]);
+            child.Status = 'Failed';
+            child.ErrorMessage = `retryable-transient-${i}`;
+            await coord.RecordNodeSettlementAndEvaluate({
+                Provider: provider,
+                ContextUser: TEST_USER,
+                Parent: db.wrapTaskPublic(nodeAmbParent),
+                Task: db.wrapTaskPublic(child),
+                Success: false,
+                CostUsd: 0.02,
+                TokensUsed: 200,
+            });
+        }
+        expect(judgeCalls).toHaveLength(3);
+        expect(coord.GetGraphDiagnostics(nodeAmbParentId)?.PausedByGovernance).toBe(true);
+        expect(coord.GetGraphDiagnostics(nodeAmbParentId)?.LastProgressResult?.FastJudgeInvoked).toBe(true);
+    });
+
+    it('applies ContinueWithWarning fallback on sub-200ms timeout and invalid judge responses, attributing late-settled judge usage', async () => {
+        const db = new GovernanceInMemoryDb();
+        const provider = db.CreateProvider();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation((p) => p as Partial<RunView> as RunView);
+
+        let mode: 'timeout' | 'invalid' = 'timeout';
+        const coord = new TaskGraphGovernanceCoordinator(new TaskClaimStore('judge-fallback-coord', 60), {
+            EvaluateProgress: true,
+            FastConvergenceJudgeEvaluator: async () => {
+                if (mode === 'timeout') {
+                    await new Promise((resolve) => setTimeout(resolve, 120));
+                    return {
+                        Converging: true,
+                        Reason: 'Late response after 40ms deadline',
+                        LatencyMs: 120,
+                        TimedOut: false,
+                        UsedFallback: false,
+                        Source: 'Model',
+                        CostUsd: 0.05,
+                        TokensUsed: 250,
+                    };
+                }
+                // Invalid response missing required boolean Converging
+                const malformed = {
+                    Converging: true,
+                    Reason: 'malformed',
+                    LatencyMs: 1,
+                    TimedOut: false,
+                    UsedFallback: false,
+                    Source: 'Model' as const,
+                };
+                Reflect.deleteProperty(malformed, 'Converging');
+                return malformed;
+            },
+        });
+
+        const parentId = randomUUID();
+        const parentRow: StoredTaskRow = {
+            ID: parentId,
+            ParentID: null,
+            TypeID: WORKFLOW_TYPE_ID,
+            Name: 'Timeout Fallback Judge Graph',
+            Description: null,
+            Status: 'In Progress',
+            StepType: 'Action',
+            ActionID: null,
+            AgentID: AGENT_ID,
+            PromptID: null,
+            UserID: TEST_USER.ID,
+            AgentRunID: null,
+            ConversationDetailID: null,
+            ClaimedBy: null,
+            ClaimExpiresAt: null,
+            StartedAt: new Date(),
+            CompletedAt: null,
+            PercentComplete: 0,
+            ErrorMessage: null,
+            InputPayload: JSON.stringify({
+                continuation: 'message',
+                reinvokeDepth: 0,
+                failureSemantics: 'block',
+                submittedByUserID: TEST_USER.ID,
+                governanceEnabled: true,
+                limitsOverride: {
+                    Budgets: { PerRun: { MaxCostUsd: 10 } },
+                    ProgressDetector: {
+                        Enabled: true,
+                        MinIterationsBeforeCheck: 3,
+                        WindowSize: 3,
+                        NoPayloadDeltaWindowCount: 5,
+                        AmbiguityLowScoreThreshold: 0.25,
+                        AmbiguityHighScoreThreshold: 0.65,
+                        FastJudgeEnabled: true,
+                        FastJudgeTimeoutMs: 40,
+                        FastJudgeMinIntervalIterations: 1,
+                        FastJudgeFailureFallback: 'ContinueWithWarning',
+                    },
+                },
+            }),
+            Configuration: null,
+            __mj_UpdatedAt: new Date(),
+        };
+        db.Tasks.set(parentId.toLowerCase(), parentRow);
+
+        const loopTask: StoredTaskRow = {
+            ID: randomUUID(),
+            ParentID: parentId,
+            TypeID: WORKFLOW_TYPE_ID,
+            Name: 'FallbackLoop',
+            Description: null,
+            Status: 'In Progress',
+            StepType: 'While',
+            ActionID: ACTION_ID,
+            AgentID: null,
+            PromptID: null,
+            UserID: null,
+            AgentRunID: null,
+            ConversationDetailID: null,
+            ClaimedBy: null,
+            ClaimExpiresAt: null,
+            StartedAt: new Date(),
+            CompletedAt: null,
+            PercentComplete: 0,
+            ErrorMessage: null,
+            InputPayload: null,
+            OutputPayload: null,
+            Configuration: null,
+            __mj_UpdatedAt: new Date(),
+        };
+        db.Tasks.set(loopTask.ID.toLowerCase(), loopTask);
+
+        const fallbackOutputs = [
+            'Evaluating partition 1 candidate index selectivity and residual filter predicates',
+            'Evaluating partition 2 candidate index selectivity and residual filter predicates',
+            'Evaluating partition 3 candidate index selectivity and residual filter predicates',
+            'Evaluating partition 4 candidate index selectivity and residual filter predicates',
+        ];
+
+        // 1) Timeout fallback does NOT block beyond ~40ms, returns ShouldPause: false, and records late-settled usage after WaitForPendingJudgeEvaluations
+        for (let i = 0; i < 3; i++) {
+            const t0 = Date.now();
+            const verdict = await coord.EvaluateLoopIterationGovernance({
+                Provider: provider,
+                ContextUser: TEST_USER,
+                Parent: db.wrapTaskPublic(parentRow),
+                Task: db.wrapTaskPublic(loopTask),
+                LoopType: 'While',
+                IterationIndex: i,
+                CompletedIterations: i + 1,
+                AccumulatedLoopCostUsd: (i + 1) * 0.01,
+                AccumulatedLoopTokensUsed: (i + 1) * 200,
+                LivePayload: { phase: i % 2 },
+                LastOutcome: {
+                    Success: true,
+                    Output: fallbackOutputs[i],
+                    CostUsd: 0.01,
+                    TokensUsed: 200,
+                },
+            });
+            expect(verdict.ShouldPause).toBe(false);
+            if (i === 2) {
+                expect(Date.now() - t0).toBeLessThan(110);
+            }
+        }
+        expect(coord.GetGraphDiagnostics(parentId)?.LastProgressResult?.FastJudgeResult?.TimedOut).toBe(true);
+        expect(coord.GetGraphDiagnostics(parentId)?.LastProgressResult?.FastJudgeResult?.UsedFallback).toBe(true);
+        await coord.WaitForPendingJudgeEvaluations(parentId);
+        expect(coord.GetGraphDiagnostics(parentId)?.FastJudgeCostUsd).toBeCloseTo(0.05, 5);
+        expect(coord.GetGraphDiagnostics(parentId)?.FastJudgeTokensUsed).toBe(250);
+
+        // 2) Invalid judge response applies ContinueWithWarning fallback
+        mode = 'invalid';
+        const invalidVerdict = await coord.EvaluateLoopIterationGovernance({
+            Provider: provider,
+            ContextUser: TEST_USER,
+            Parent: db.wrapTaskPublic(parentRow),
+            Task: db.wrapTaskPublic(loopTask),
+            LoopType: 'While',
+            IterationIndex: 3,
+            CompletedIterations: 4,
+            AccumulatedLoopCostUsd: 0.04,
+            AccumulatedLoopTokensUsed: 800,
+            LivePayload: { phase: 1 },
+            LastOutcome: { Success: true, Output: fallbackOutputs[3], CostUsd: 0.01, TokensUsed: 200 },
+        });
+        expect(invalidVerdict.ShouldPause).toBe(false);
+        expect(coord.GetGraphDiagnostics(parentId)?.LastProgressResult?.FastJudgeResult?.UsedFallback).toBe(true);
+        expect(coord.GetGraphDiagnostics(parentId)?.LastProgressResult?.FastJudgeResult?.Reason).toContain('invalid response');
     });
 });

@@ -20,11 +20,13 @@
  *
  * @module @memberjunction/task-graph
  */
-import { CODE_FALLBACK_LIMITS, LimitsConfigResolver, LogError, LogStatus } from '@memberjunction/core';
+import { CODE_FALLBACK_LIMITS, LimitsConfigResolver, LogError, LogStatus, type MJLimitsConfig } from '@memberjunction/core';
 import {
+    ResolveAgentRunLimits,
     ResolveMappedInput,
     type ForEachOperation,
     type PayloadMappingContext,
+    type ResolveAgentRunLimitsInput,
     type WhileOperation,
 } from '@memberjunction/ai-core-plus';
 
@@ -88,12 +90,16 @@ export type LoopIterationGovernanceHook = (info: {
     BatchOutcomes?: readonly LoopIterationBatchOutcome[];
 }) => Promise<LoopIterationGovernanceVerdict>;
 
-/** Execution options supporting resume cursors and inter-iteration governance checks. */
+/** Execution options supporting resume cursors, 5-tier limits resolution, and inter-iteration governance checks. */
 export interface LoopExecutionOptions {
     StartIndex?: number;
     InitialResults?: readonly LoopIterationOutcome['Output'][];
     ResumeFromCursor?: LoopCursorSnapshot;
     OnIterationGovernance?: LoopIterationGovernanceHook;
+    /** Pre-resolved 5-tier limits from the caller (e.g., TaskGraphDispatcher / governance coordinator). */
+    ResolvedLimits?: MJLimitsConfig;
+    /** Optional 5-tier limits resolution context used when `ResolvedLimits` is not already supplied. */
+    LimitsResolutionInput?: ResolveAgentRunLimitsInput;
 }
 
 /** What a whole loop step produced. */
@@ -146,7 +152,7 @@ export async function RunForEachLoop(
         );
     }
 
-    const resolvedLimits = LimitsConfigResolver.Resolve().Limits;
+    const resolvedLimits = resolveLoopLimits(options);
     const limit = iterationLimit(op.maxIterations, resolvedLimits.ForEachMaxIterations);
     const items = collection.slice(0, limit);
     if (items.length < collection.length) {
@@ -164,9 +170,10 @@ export async function RunForEachLoop(
         Item: item,
         Bindings: { [itemVar]: item, [indexVar]: index },
     }));
+    const maxConcurrency = concurrencyLimit(op.maxConcurrency, resolvedLimits.ResourceGuards.MaxLoopConcurrency);
 
     return op.executionMode === 'parallel'
-        ? executeForEachParallel(plan, invokeBody, op.maxConcurrency ?? resolvedLimits.ResourceGuards.MaxLoopConcurrency, op.continueOnError === true, options)
+        ? executeForEachParallel(plan, invokeBody, maxConcurrency, op.continueOnError === true, options)
         : runSequential(plan, invokeBody, op.continueOnError === true, op.delayBetweenIterationsMs ?? 0, options);
 }
 
@@ -187,7 +194,8 @@ export async function RunWhileLoop(
     invokeBody: LoopBodyInvoker,
     options?: LoopExecutionOptions,
 ): Promise<LoopExecutionResult> {
-    const limit = iterationLimit(op.maxIterations, LimitsConfigResolver.Resolve().Limits.WhileLoopMaxIterations);
+    const resolvedLimits = resolveLoopLimits(options);
+    const limit = iterationLimit(op.maxIterations, resolvedLimits.WhileLoopMaxIterations);
     const attemptVar = op.itemVariable || 'attempt';
     const resumed = options?.ResumeFromCursor;
     const startIndex = Math.max(0, resumed?.NextIterationIndex ?? options?.StartIndex ?? 0);
@@ -483,14 +491,48 @@ function summarize(results: unknown[], succeeded: number, failed: number, contin
 }
 
 /**
- * Turns `maxIterations` into a ceiling.
- *
- * Follows the convention `ForEachOperation` already documents: undefined takes the default, **0
- * means unlimited**, and a positive number is the limit. The zero case is the one worth stating —
- * read as a limit it would run the loop zero times, which looks exactly like an empty collection.
+ * Resolves the effective 5-tier {@link MJLimitsConfig} for a loop execution.
+ * Uses pre-resolved limits from the dispatcher/coordinator when provided, or resolves via
+ * {@link ResolveAgentRunLimits} when context is supplied, failing closed on ceiling overrides
+ * when no authorized principal is supplied.
  */
-function iterationLimit(maxIterations: number | undefined, fallback: number): number {
-    return maxIterations === undefined ? fallback : maxIterations;
+function resolveLoopLimits(options?: LoopExecutionOptions): MJLimitsConfig {
+    if (options?.ResolvedLimits) {
+        return options.ResolvedLimits;
+    }
+    if (options?.LimitsResolutionInput) {
+        return ResolveAgentRunLimits(options.LimitsResolutionInput).Limits;
+    }
+    return LimitsConfigResolver.Resolve(undefined, {
+        EnforceUserPolicyAsCeiling: true,
+        EnforceConfiguredCeilings: true,
+        AllowAuthorizedCeilingOverride: false,
+    }).Limits;
+}
+
+/**
+ * Clamps an optional explicit iteration bound against the resolved authorized 5-tier ceiling.
+ * Preserves explicit lower values (including `0` for zero iterations) while preventing any
+ * unverified step-level `maxIterations` from exceeding the authorized ceiling.
+ */
+function iterationLimit(maxIterations: number | undefined, resolvedAuthorizedMax: number): number {
+    const ceiling = Math.max(0, Math.floor(resolvedAuthorizedMax));
+    if (maxIterations === undefined || !Number.isFinite(maxIterations)) {
+        return ceiling;
+    }
+    return Math.min(Math.max(0, Math.floor(maxIterations)), ceiling);
+}
+
+/**
+ * Clamps an optional explicit parallel concurrency bound against the resolved authorized
+ * `ResourceGuards.MaxLoopConcurrency` ceiling, enforcing at least `1`.
+ */
+function concurrencyLimit(maxConcurrency: number | undefined, resolvedAuthorizedMaxConcurrency: number): number {
+    const ceiling = Math.max(1, Math.floor(resolvedAuthorizedMaxConcurrency));
+    if (maxConcurrency === undefined || !Number.isFinite(maxConcurrency)) {
+        return ceiling;
+    }
+    return Math.min(Math.max(1, Math.floor(maxConcurrency)), ceiling);
 }
 
 

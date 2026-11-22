@@ -10,7 +10,7 @@
  * Each test below names the specific wrong-but-plausible behaviour it rules out.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { LimitsConfigResolver } from '@memberjunction/core';
+import { LimitsConfigResolver, type UserInfo } from '@memberjunction/core';
 import {
     RunForEachLoop,
     RunWhileLoop,
@@ -457,5 +457,58 @@ describe('a While loop must be able to reach its exit condition', () => {
         expect(finishedSparse.Success).toBe(true);
         expect(executedSparse).toEqual([1, 3, 4]);
         expect(finishedSparse.Output.results).toEqual(['sparse-0', 'sparse-1', 'sparse-2', 'sparse-3', 'sparse-4']);
+    });
+
+    it('CR-DURABLE-LOOP-CEILING: clamps explicit op.maxIterations and op.maxConcurrency above resolved 5-tier ceiling while preserving lower explicit bounds', async () => {
+        const standardUser = { ID: 'std-user-1', Type: 'User', IsActive: true } as UserInfo;
+
+        const { seen: clampedForEach, invoke: invokeForEach } = recorder();
+        const forEachRes = await RunForEachLoop(
+            {
+                collectionPath: 'static:[1,2,3,4,5,6,7,8,9,10]',
+                maxIterations: 10,
+                executionMode: 'parallel',
+                maxConcurrency: 8,
+            },
+            {},
+            invokeForEach,
+            {
+                LimitsResolutionInput: {
+                    WorkflowMetadata: { ForEachMaxIterations: 4 },
+                    RunOverride: { ResourceGuards: { MaxLoopConcurrency: 2 } },
+                    ContextUser: standardUser,
+                },
+            },
+        );
+        expect(forEachRes.Success).toBe(true);
+        expect(clampedForEach).toHaveLength(4);
+
+        const { seen: lowerPreserved, invoke: invokeLower } = recorder();
+        await RunForEachLoop(
+            { collectionPath: 'static:[1,2,3,4,5]', maxIterations: 2 },
+            {},
+            invokeLower,
+            {
+                LimitsResolutionInput: {
+                    WorkflowMetadata: { ForEachMaxIterations: 4 },
+                    ContextUser: standardUser,
+                },
+            },
+        );
+        expect(lowerPreserved).toHaveLength(2);
+
+        const { seen: clampedWhile, invoke: invokeWhile } = recorder();
+        await RunWhileLoop(
+            { condition: 'true', maxIterations: 50 },
+            () => ({ Success: true, Value: true }),
+            invokeWhile,
+            {
+                LimitsResolutionInput: {
+                    WorkflowMetadata: { WhileLoopMaxIterations: 3 },
+                    ContextUser: standardUser,
+                },
+            },
+        );
+        expect(clampedWhile).toHaveLength(3);
     });
 });

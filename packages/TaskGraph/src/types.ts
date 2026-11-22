@@ -9,6 +9,7 @@ import type {
     TaskGraphDecisionAnswer,
     TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
+import type { FastConvergenceJudgeEvaluator } from '@memberjunction/ai-agents';
 import type { MJLimitsOverride } from '@memberjunction/core';
 
 /**
@@ -211,6 +212,10 @@ export type TaskDecisionRunResult = {
      * cost reaches the graph's rollup.
      */
     PromptRunID?: string;
+    /** Optional USD cost incurred by executing this decision node for budget governance accounting. */
+    CostUsd?: number;
+    /** Optional token count consumed by executing this decision node. */
+    TokensUsed?: number;
 };
 
 /**
@@ -611,6 +616,11 @@ export type TaskGraphGovernanceConfig = {
     EvaluateProgress?: boolean;
     /** Optional callback invoked when a governance pause emits an owner notification. */
     OnOwnerNotification?: (payload: OwnerPauseNotificationPayload) => Promise<void> | void;
+    /**
+     * Optional custom evaluator callback for the sub-200ms `FastConvergenceJudge` when
+     * `DeterministicProgressDetector` classifies a window as `Ambiguous`.
+     */
+    FastConvergenceJudgeEvaluator?: FastConvergenceJudgeEvaluator;
 };
 
 /** Defaults chosen so a heartbeat has several chances to land before a claim lapses. */

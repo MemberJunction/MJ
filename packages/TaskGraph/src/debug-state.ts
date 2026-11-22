@@ -28,6 +28,8 @@ import type {
     BudgetDimension,
     BudgetScope,
     CumulativeBudgetLedger,
+    FastConvergenceJudgeResult,
+    ProgressEvaluationResult,
     RunawayJsonObject,
     RunawayJsonValue,
     RunawayPauseReason,
@@ -65,6 +67,8 @@ export interface PendingGovernanceCheckpointContext {
     completedTaskIds: string[];
     cumulativeLedger?: CumulativeBudgetLedger;
     budgetBreach?: BudgetBreachDetail;
+    progressEvaluation?: ProgressEvaluationResult;
+    fastJudgeResult?: FastConvergenceJudgeResult;
 }
 
 /**
@@ -226,6 +230,14 @@ function parsePendingCheckpointContext(
     const breachRaw = obj['budgetBreach'];
     if (IsPlainObject(breachRaw) && typeof breachRaw['Scope'] === 'string' && typeof breachRaw['Reason'] === 'string') {
         parsed.budgetBreach = breachRaw as Partial<BudgetBreachDetail> as BudgetBreachDetail;
+    }
+    const progressRaw = obj['progressEvaluation'];
+    if (IsPlainObject(progressRaw) && typeof progressRaw['Classification'] === 'string' && typeof progressRaw['Reason'] === 'string') {
+        parsed.progressEvaluation = progressRaw as Partial<ProgressEvaluationResult> as ProgressEvaluationResult;
+    }
+    const judgeRaw = obj['fastJudgeResult'];
+    if (IsPlainObject(judgeRaw) && typeof judgeRaw['Converging'] === 'boolean' && typeof judgeRaw['Reason'] === 'string') {
+        parsed.fastJudgeResult = judgeRaw as Partial<FastConvergenceJudgeResult> as FastConvergenceJudgeResult;
     }
 
     return parsed;

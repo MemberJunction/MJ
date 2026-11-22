@@ -637,4 +637,40 @@ describe('TaskGraphAgentRunner security envelope (S1, S2, S7)', () => {
     it('lists no change when no action is gated', () => {
         expect(TaintedActionRemovals([{ ID: SAFE_ACTION, Config_Object: null }])).toEqual([]);
     });
+
+    it('CR-PRODUCTION-WORKFLOW-USAGE: propagates CostUsd and TokensUsed from agentRun on success and paid failure', async () => {
+        runAgent.mockResolvedValueOnce({
+            success: true,
+            payload: { done: true },
+            agentRun: {
+                ID: 'step-run-paid-ok',
+                Message: 'Done',
+                TotalCostRollup: 0.42,
+                TotalCost: 0.18,
+                TotalTokensUsedRollup: 4200,
+                TotalTokensUsed: 1800,
+            },
+        });
+        const runner = new TaskGraphAgentRunner();
+        const successOutcome = await runner.RunAgentForTask(makeParams());
+        expect(successOutcome.Success).toBe(true);
+        expect(successOutcome.AgentRunID).toBe('step-run-paid-ok');
+        expect(successOutcome.CostUsd).toBeCloseTo(0.42, 6);
+        expect(successOutcome.TokensUsed).toBe(4200);
+
+        runAgent.mockResolvedValueOnce({
+            success: false,
+            agentRun: {
+                ID: 'step-run-paid-fail',
+                ErrorMessage: 'Tool timeout after 2 turns',
+                TotalCost: 0.19,
+                TotalTokensUsed: 1950,
+            },
+        });
+        const failureOutcome = await runner.RunAgentForTask(makeParams());
+        expect(failureOutcome.Success).toBe(false);
+        expect(failureOutcome.AgentRunID).toBe('step-run-paid-fail');
+        expect(failureOutcome.CostUsd).toBeCloseTo(0.19, 6);
+        expect(failureOutcome.TokensUsed).toBe(1950);
+    });
 });
