@@ -1009,4 +1009,63 @@ describe('BudgetEnforcementGuard — all 6 scope x dimension combinations', () =
         expect(resPausedIncluded.Exceeded).toBe(true);
         expect(resPausedIncluded.Ledger.RoutineWallClockMs).toBe(75_000); // 70,000 total wall + 5,000 active
     });
+
+    it('uses configured DayBoundaryTimezone bucket for DayCostBaselines lookups inside batched RunViews ledger', async () => {
+        const guard = new BudgetEnforcementGuard();
+        // 2026-11-21T02:00:00Z is 2026-11-20 21:00:00 in America/New_York (local day bucket '2026-11-20')
+        const nowMs = Date.UTC(2026, 10, 21, 2, 0, 0);
+        const budgets = createBudgets({
+            PerRun: { MaxCostUsd: 50, MaxWallClockMs: 600_000, MaxTokens: null },
+            PerUserPerDay: { MaxCostUsd: 1.0, MaxWallClockMs: null, DayBoundaryTimezone: 'America/New_York' },
+        });
+
+        // Historical run started on 2026-11-19 local NY time, had $4.00 cumulative cost at start of local day '2026-11-20',
+        // and currently has TotalCost=$4.60 -> only $0.60 belongs to local day '2026-11-20'
+        const historicalRow: AgentRunBudgetLedgerRow = {
+            ID: 'ffffffff-ffff-4fff-8fff-fffffffffff1',
+            ParentRunID: null,
+            UserID: USER_ID,
+            TotalCost: 4.6,
+            TotalCostRollup: 4.6,
+            StartedAt: new Date(Date.UTC(2026, 10, 19, 18, 0, 0)),
+            CompletedAt: null,
+            __mj_UpdatedAt: new Date(nowMs),
+            ScheduledJobRunID: null,
+            Status: 'Running',
+            Data: JSON.stringify({
+                __budgetDayBaselines: {
+                    '2026-11-20': 4.0,
+                    '2026-11-21': 4.55,
+                },
+            }),
+        };
+
+        const { Provider } = createMockRunViewsProvider([], [historicalRow]);
+
+        const within = await guard.Evaluate({
+            Budgets: budgets,
+            AgentRunID: ACTIVE_RUN_ID,
+            UserID: USER_ID,
+            CurrentRunCostUsd: 0.25, // 0.60 + 0.25 = 0.85 < 1.00
+            CurrentRunStartedAtMs: nowMs - 1_000,
+            NowMs: nowMs,
+            Provider,
+        });
+        expect(within.Exceeded).toBe(false);
+        expect(within.Ledger.DayBucketUTC).toBe('2026-11-20');
+        expect(within.Ledger.UserDailyCostUsd).toBeCloseTo(0.85, 5);
+
+        const breached = await guard.Evaluate({
+            Budgets: budgets,
+            AgentRunID: ACTIVE_RUN_ID,
+            UserID: USER_ID,
+            CurrentRunCostUsd: 0.45, // 0.60 + 0.45 = 1.05 >= 1.00
+            CurrentRunStartedAtMs: nowMs - 1_000,
+            NowMs: nowMs,
+            Provider,
+        });
+        expect(breached.Exceeded).toBe(true);
+        expect(breached.Breach?.Scope).toBe('PerUserPerDay');
+        expect(breached.Ledger.UserDailyCostUsd).toBeCloseTo(1.05, 5);
+    });
 });

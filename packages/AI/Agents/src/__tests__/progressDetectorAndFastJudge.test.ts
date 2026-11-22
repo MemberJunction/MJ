@@ -400,7 +400,127 @@ describe('FastConvergenceJudge — Ambiguous-only invocation, <200ms bound, and 
         } finally {
             if (prior) {
                 factory.Register(BaseLLM, prior.SubClass, 'OpenAILLM', 1000);
+            } else {
+                class RestoredNonTestLLM {
+                    public constructor(_apiKey?: string) {}
+                }
+                factory.Register(BaseLLM, RestoredNonTestLLM, 'OpenAILLM', 1000);
             }
         }
+    });
+
+    it('bounds invocation frequency via FastJudgeMinIntervalIterations, truncates input, attributes model CostUsd/TokensUsed, and applies deterministic invalid-response/unavailable fallbacks', async () => {
+        const config = createDetectorConfig({
+            MinIterationsBeforeCheck: 6,
+            FastJudgeMinIntervalIterations: 5,
+            FastJudgeMaxInputChars: 24,
+            FastJudgeFailureFallback: 'PauseForHuman',
+        });
+        const ambiguousDet = detector.Evaluate(config, makeAmbiguousSamples(6));
+        const runStub: Pick<MJAIAgentRunEntityExtended, 'ID' | 'Data'> = {
+            ID: '66666666-6666-4666-8666-666666666666',
+            Data: null,
+        };
+
+        // 1) Cooldown + input truncation + CostUsd/TokensUsed attribution via AgentDecisionService
+        const decisionService = new AgentDecisionService();
+        const askSpy = vi.spyOn(decisionService, 'Ask')
+            .mockResolvedValueOnce({
+                success: true,
+                status: 'Completed',
+                cancelled: false,
+                Answers: {
+                    isConverging: { Kind: 'Choice', Value: 'converging', Confidence: 0.92 },
+                },
+                cost: 0.015,
+                tokensUsed: 120,
+            })
+            .mockResolvedValueOnce({
+                success: true,
+                status: 'Completed',
+                cancelled: false,
+                Answers: {
+                    isConverging: { Kind: 'Choice', Value: 'invalid-choice-value', Confidence: 0.1 },
+                },
+                cost: 0.005,
+                tokensUsed: 40,
+            })
+            .mockResolvedValueOnce({
+                success: false,
+                status: 'Failed',
+                cancelled: false,
+                errorMessage: 'Decision model unavailable',
+                Answers: {},
+            });
+
+        const boundedJudge = new FastConvergenceJudge(decisionService);
+
+        const firstEval = await boundedJudge.EvaluateIfAmbiguous({
+            DetectorResult: ambiguousDet,
+            Iteration: 6,
+            StateSummary: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ-EXTRA-CHARS-TRUNCATED',
+            Config: config,
+            AgentRun: runStub,
+            ContextUser: { ID: 'user-judge-1' } as UserInfo,
+        });
+        expect(askSpy).toHaveBeenCalledTimes(1);
+        expect(askSpy.mock.calls[0][0].State).toBe('ABCDEFGHIJKLMNOPQRSTUVWX');
+        expect(firstEval.Classification).toBe('Converging');
+        expect(firstEval.FastJudgeResult?.UsedFallback).toBe(false);
+        expect(firstEval.FastJudgeResult?.CostUsd).toBeCloseTo(0.015, 6);
+        expect(firstEval.FastJudgeResult?.TokensUsed).toBe(120);
+
+        // Within FastJudgeMinIntervalIterations (iteration 8 - 6 < 5) -> skipped by cooldown
+        const cooldownEval = await boundedJudge.EvaluateIfAmbiguous({
+            DetectorResult: ambiguousDet,
+            Iteration: 8,
+            StateSummary: 'cooldown check',
+            Config: config,
+            AgentRun: runStub,
+            ContextUser: { ID: 'user-judge-1' } as UserInfo,
+        });
+        expect(askSpy).toHaveBeenCalledTimes(1);
+        expect(cooldownEval.FastJudgeResult?.UsedFallback).toBe(true);
+        expect(cooldownEval.FastJudgeResult?.Reason).toContain('cooldown');
+
+        // After cooldown (iteration 11 - 6 >= 5) with invalid Choice value -> deterministic PauseForHuman fallback + usage preserved
+        const invalidChoiceEval = await boundedJudge.EvaluateIfAmbiguous({
+            DetectorResult: ambiguousDet,
+            Iteration: 11,
+            StateSummary: 'invalid choice response',
+            Config: config,
+            AgentRun: runStub,
+            ContextUser: { ID: 'user-judge-1' } as UserInfo,
+        });
+        expect(askSpy).toHaveBeenCalledTimes(2);
+        expect(invalidChoiceEval.FastJudgeResult?.UsedFallback).toBe(true);
+        expect(invalidChoiceEval.FastJudgeResult?.Source).toBe('Fallback');
+        expect(invalidChoiceEval.FastJudgeResult?.Reason).toContain('invalid choice value');
+        expect(invalidChoiceEval.FastJudgeResult?.CostUsd).toBeCloseTo(0.005, 6);
+        expect(invalidChoiceEval.FastJudgeResult?.TokensUsed).toBe(40);
+        expect(invalidChoiceEval.Classification).toBe('Stalled');
+
+        // Unavailable model after cooldown reset -> deterministic Error fallback
+        boundedJudge.ResetCooldown();
+        const unavailableEval = await boundedJudge.EvaluateIfAmbiguous({
+            DetectorResult: ambiguousDet,
+            Iteration: 12,
+            StateSummary: 'unavailable model',
+            Config: config,
+            AgentRun: runStub,
+            ContextUser: { ID: 'user-judge-1' } as UserInfo,
+        });
+        expect(askSpy).toHaveBeenCalledTimes(3);
+        expect(unavailableEval.FastJudgeResult?.UsedFallback).toBe(true);
+        expect(unavailableEval.FastJudgeResult?.Source).toBe('Error');
+        expect(unavailableEval.FastJudgeResult?.Reason).toContain('Decision model unavailable');
+        expect(unavailableEval.Classification).toBe('Stalled');
+
+        // Diagnostics recorded cost and tokens alongside fallback entries
+        const diag = ExtractProgressDiagnosticsFromRunData(runStub.Data);
+        expect(diag?.FastJudgeEntries).toHaveLength(4);
+        expect(diag?.FastJudgeEntries[0].CostUsd).toBeCloseTo(0.015, 6);
+        expect(diag?.FastJudgeEntries[0].TokensUsed).toBe(120);
+        expect(diag?.FastJudgeEntries[2].UsedFallback).toBe(true);
     });
 });

@@ -15,6 +15,7 @@ import { MJGlobal } from '@memberjunction/global';
 import { LimitsConfigResolver, LogStatus, UserInfo, type MJLimitsProgressDetectorConfig } from '@memberjunction/core';
 import {
     AppendProgressDiagnosticToRunData,
+    type AIPromptExecutionScope,
     type FastConvergenceJudgeResult,
     type MJAIAgentRunEntityExtended,
     type ProgressEvaluationResult,
@@ -37,6 +38,7 @@ export interface FastJudgeEvaluateInput {
     AgentRun?: Pick<MJAIAgentRunEntityExtended, 'ID' | 'Data'> | null;
     AgentID?: string;
     ContextUser?: UserInfo;
+    ExecutionScope?: AIPromptExecutionScope;
     Evaluator?: FastConvergenceJudgeEvaluator;
     NowMs?: number;
 }
@@ -170,9 +172,19 @@ export class FastConvergenceJudge {
                     Iteration: input.Iteration,
                     Signal: signal,
                 });
+                const elapsedMs = Date.now() - startMs;
+                if (!custom || typeof custom.Converging !== 'boolean' || typeof custom.Reason !== 'string') {
+                    return this.applyFallbackResult(
+                        config,
+                        elapsedMs,
+                        signal.aborted,
+                        'Fallback',
+                        'FastConvergenceJudge evaluator returned invalid response format',
+                    );
+                }
                 return {
                     ...custom,
-                    LatencyMs: custom.LatencyMs >= 0 ? custom.LatencyMs : Date.now() - startMs,
+                    LatencyMs: typeof custom.LatencyMs === 'number' && custom.LatencyMs >= 0 ? custom.LatencyMs : elapsedMs,
                 };
             }
             return await this.askDecisionModel(input, stateSummary, signal, config, startMs);
@@ -229,10 +241,27 @@ export class FastConvergenceJudge {
             },
             ContextUser: input.ContextUser,
             AgentID: input.AgentID,
+            ExecutionScope: input.ExecutionScope,
             CancellationToken: signal,
         });
 
         const latencyMs = Date.now() - startMs;
+        const costUsd = Math.max(
+            0,
+            decision.cost ??
+                decision.promptRun?.TotalCost ??
+                decision.promptRun?.Cost ??
+                decision.DecisionResult?.Usage?.cost ??
+                0,
+        );
+        const tokensUsed = Math.max(
+            0,
+            decision.tokensUsed ??
+                decision.promptRun?.TokensUsedRollup ??
+                decision.promptRun?.TokensUsed ??
+                decision.DecisionResult?.Usage?.totalTokens ??
+                0,
+        );
         if (!decision.success) {
             return this.applyFallbackResult(
                 config,
@@ -240,20 +269,36 @@ export class FastConvergenceJudge {
                 signal.aborted,
                 'Error',
                 decision.errorMessage ?? 'Fast judge decision model failed',
+                costUsd,
+                tokensUsed,
             );
         }
 
         const answer = decision.Answers?.isConverging;
         if (answer?.Kind === 'Choice') {
-            const converging = answer.Value === 'converging';
-            return {
-                Converging: converging,
-                Reason: `Fast judge answered ${answer.Value} (confidence=${answer.Confidence.toFixed(2)})`,
-                LatencyMs: latencyMs,
-                TimedOut: false,
-                UsedFallback: false,
-                Source: 'Model',
-            };
+            const normalizedChoice = typeof answer.Value === 'string' ? answer.Value.trim().toLowerCase() : '';
+            if (normalizedChoice === 'converging' || normalizedChoice === 'stalled') {
+                const converging = normalizedChoice === 'converging';
+                return {
+                    Converging: converging,
+                    Reason: `Fast judge answered ${normalizedChoice} (confidence=${answer.Confidence.toFixed(2)})`,
+                    LatencyMs: latencyMs,
+                    TimedOut: false,
+                    UsedFallback: false,
+                    Source: 'Model',
+                    ...(costUsd > 0 ? { CostUsd: costUsd } : {}),
+                    ...(tokensUsed > 0 ? { TokensUsed: tokensUsed } : {}),
+                };
+            }
+            return this.applyFallbackResult(
+                config,
+                latencyMs,
+                false,
+                'Fallback',
+                `Fast judge model returned invalid choice value '${String(answer.Value)}'`,
+                costUsd,
+                tokensUsed,
+            );
         }
 
         return this.applyFallbackResult(
@@ -262,6 +307,8 @@ export class FastConvergenceJudge {
             false,
             'Fallback',
             'Fast judge model returned unexpected answer format',
+            costUsd,
+            tokensUsed,
         );
     }
 
@@ -271,6 +318,8 @@ export class FastConvergenceJudge {
         timedOut: boolean,
         source: FastConvergenceJudgeResult['Source'],
         baseReason: string,
+        costUsd?: number,
+        tokensUsed?: number,
     ): FastConvergenceJudgeResult {
         const converging = config.FastJudgeFailureFallback === 'ContinueWithWarning';
         return {
@@ -280,6 +329,8 @@ export class FastConvergenceJudge {
             TimedOut: timedOut,
             UsedFallback: true,
             Source: source,
+            ...(typeof costUsd === 'number' && costUsd > 0 ? { CostUsd: costUsd } : {}),
+            ...(typeof tokensUsed === 'number' && tokensUsed > 0 ? { TokensUsed: tokensUsed } : {}),
         };
     }
 

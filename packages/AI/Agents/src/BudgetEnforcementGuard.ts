@@ -661,6 +661,7 @@ export class BudgetEnforcementGuard {
             ExcludeRunID: input.AgentRunID ?? null,
             DayStartISO: dayStartISO,
             DayEndISO: dayEndISO,
+            DayBoundaryTimezone: input.Budgets.PerUserPerDay.DayBoundaryTimezone,
             NeedRoutine: needRoutine,
             NeedUserDaily: needUserDaily,
             CountPausedTimeTowardsWallClock: input.Budgets.CountPausedTimeTowardsWallClock,
@@ -676,6 +677,7 @@ export class BudgetEnforcementGuard {
         ExcludeRunID: string | null;
         DayStartISO: string;
         DayEndISO: string;
+        DayBoundaryTimezone?: string;
         NeedRoutine: boolean;
         NeedUserDaily: boolean;
         CountPausedTimeTowardsWallClock: boolean;
@@ -770,7 +772,7 @@ export class BudgetEnforcementGuard {
             };
         }
 
-        const dayWindow = ComputeDayBoundaryWindow(args.NowMs);
+        const dayWindow = ComputeDayBoundaryWindow(args.NowMs, args.DayBoundaryTimezone);
         return {
             Routine: this.aggregateLedgerRows(routineRows, args.ExcludeRunID, args.CountPausedTimeTowardsWallClock, args.NowMs),
             UserDaily: this.aggregateLedgerRows(userDailyRows, args.ExcludeRunID, args.CountPausedTimeTowardsWallClock, args.NowMs, {

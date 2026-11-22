@@ -915,6 +915,10 @@ export class BaseAgent {
         Waiters: Array<(res: CooperativePauseResult | null) => void>;
     } | null = null;
     private _checkpointStepCostBaseline: number = 0;
+    private _priorNonStepCostUsd: number = 0;
+    private _priorNonStepTokensUsed: number = 0;
+    private _fastJudgeCostUsd: number = 0;
+    private _fastJudgeTokensUsed: number = 0;
     private _priorDayCostBaselineUsd: number | undefined = undefined;
     private _priorDayWallClockBaselineMs: number | undefined = undefined;
     private _lastObservedDaySnapshot: { DayBucketUTC: string; CostUsd: number; WallClockMs: number } | null = null;
@@ -3084,6 +3088,10 @@ export class BaseAgent {
         this._pendingLoopCursorToResume = null;
         this._cooperativePauseState = null;
         this._checkpointStepCostBaseline = 0;
+        this._priorNonStepCostUsd = 0;
+        this._priorNonStepTokensUsed = 0;
+        this._fastJudgeCostUsd = 0;
+        this._fastJudgeTokensUsed = 0;
         this._priorDayCostBaselineUsd = undefined;
         this._priorDayWallClockBaselineMs = undefined;
         this._lastObservedDaySnapshot = null;
@@ -5683,11 +5691,16 @@ export class BaseAgent {
                 AgentRun: this._agentRun,
                 AgentID: params.agent.ID,
                 ContextUser: params.contextUser,
+                ExecutionScope: this._runExecutionScope,
                 Evaluator: params.fastConvergenceJudgeEvaluator,
             })
             : detResult;
 
+        this.attributeFastJudgeUsage(evaluated);
         if (evaluated.Classification !== 'Stalled') {
+            if (evaluated.FastJudgeInvoked && evaluated.FastJudgeResult && ((evaluated.FastJudgeResult.CostUsd ?? 0) > 0 || (evaluated.FastJudgeResult.TokensUsed ?? 0) > 0)) {
+                return this.checkAndPauseOnBudgetBreach(params, inFlightPayload, nextStep);
+            }
             return null;
         }
 
@@ -5774,15 +5787,36 @@ export class BaseAgent {
         return parts.join('\n').slice(0, 2000);
     }
 
+    private attributeFastJudgeUsage(evaluation: ProgressEvaluationResult): void {
+        if (!evaluation.FastJudgeInvoked || !evaluation.FastJudgeResult) {
+            return;
+        }
+        const costUsd = typeof evaluation.FastJudgeResult.CostUsd === 'number' && Number.isFinite(evaluation.FastJudgeResult.CostUsd)
+            ? Math.max(0, evaluation.FastJudgeResult.CostUsd)
+            : 0;
+        const tokensUsed = typeof evaluation.FastJudgeResult.TokensUsed === 'number' && Number.isFinite(evaluation.FastJudgeResult.TokensUsed)
+            ? Math.max(0, evaluation.FastJudgeResult.TokensUsed)
+            : 0;
+        if (costUsd > 0) {
+            this._fastJudgeCostUsd += costUsd;
+            if (this._treeBudget) {
+                this._treeBudget.totalCost += costUsd;
+            }
+        }
+        if (tokensUsed > 0) {
+            this._fastJudgeTokensUsed += tokensUsed;
+            if (this._treeBudget) {
+                this._treeBudget.totalTokens += tokensUsed;
+            }
+        }
+    }
+
     private buildBudgetEvaluationInput(params: ExecuteAgentParams): BudgetEnforcementInput {
         const budgets = this._activeBudgets ?? this.resolvedLimits(params).Budgets;
         const tokenStats = this.calculateTokenStats();
-        const nonStepPriorCost = this._resumedCheckpointContext
-            ? Math.max(0, this._resumedCheckpointContext.PriorCumulativeCostUsd - this._checkpointStepCostBaseline)
-            : 0;
         const startedAtMs = this._agentRun?.StartedAt ? new Date(this._agentRun.StartedAt).getTime() : Date.now();
         const nowMs = Date.now();
-        const currentTotalRunCostUsd = nonStepPriorCost + Math.max(0, tokenStats.TotalCost);
+        const currentTotalRunCostUsd = Math.max(0, tokenStats.TotalCost);
         const costDeltaUsd = currentTotalRunCostUsd - this._lastRecordedCostUsd;
         if (costDeltaUsd > 0) {
             this._budgetCostEvents.push({ TimestampMs: nowMs, CostUsd: costDeltaUsd });
@@ -5808,7 +5842,7 @@ export class BaseAgent {
             CurrentRunCostUsd: tokenStats.TotalCost,
             CurrentRunStartedAtMs: startedAtMs,
             CurrentRunTokens: tokenStats.TotalTokens,
-            PriorRunCostUsd: nonStepPriorCost,
+            PriorRunCostUsd: 0,
             PriorDayCostBaselineUsd: this._priorDayCostBaselineUsd,
             PriorDayWallClockBaselineMs: this._priorDayWallClockBaselineMs,
             CostEvents: this._budgetCostEvents,
@@ -16545,7 +16579,12 @@ The context is now within limits. Please retry your request with the recovered c
                 },
             };
         }
-        this._checkpointStepCostBaseline = this.calculateTokenStats().TotalCost;
+        const initialStepStats = this.calculateTokenStats();
+        this._checkpointStepCostBaseline = initialStepStats.TotalCost;
+        this._priorNonStepCostUsd = Math.max(0, restored.PriorCumulativeCostUsd - this._checkpointStepCostBaseline);
+        this._priorNonStepTokensUsed = Math.max(0, restored.Checkpoint.CumulativeLedger.RunTokens - initialStepStats.TotalTokens);
+        this._fastJudgeCostUsd = 0;
+        this._fastJudgeTokensUsed = 0;
         this._priorDayCostBaselineUsd = restored.PriorDayCostBaselineUsd;
         this._priorDayWallClockBaselineMs = restored.PriorDayWallClockBaselineMs;
         this._lastObservedDaySnapshot = {
@@ -22406,9 +22445,11 @@ The context is now within limits. Please retry your request with the recovered c
                         AgentRun: this._agentRun,
                         AgentID: args.Params.agent.ID,
                         ContextUser: args.Params.contextUser,
+                        ExecutionScope: this._runExecutionScope,
                         Evaluator: args.Params.fastConvergenceJudgeEvaluator,
                     })
                     : detResult;
+                this.attributeFastJudgeUsage(evaluated);
                 if (evaluated.Classification === 'Stalled') {
                     const pauseReason: RunawayPauseReason = evaluated.FastJudgeInvoked ? 'FastJudgeStalled' : 'ProgressStalled';
                     const ledger = await this.captureCurrentBudgetLedger(args.Params);
@@ -22422,6 +22463,20 @@ The context is now within limits. Please retry your request with the recovered c
                         FastJudgeResult: evaluated.FastJudgeResult,
                         Ledger: ledger,
                     });
+                } else if (
+                    evaluated.FastJudgeInvoked &&
+                    evaluated.FastJudgeResult &&
+                    ((evaluated.FastJudgeResult.CostUsd ?? 0) > 0 || (evaluated.FastJudgeResult.TokensUsed ?? 0) > 0)
+                ) {
+                    const postJudgeBudgetPaused = await this.checkAndPauseOnBudgetBreach(
+                        args.Params,
+                        args.WorkingPayload,
+                        args.LoopDecision,
+                        cursor,
+                    );
+                    if (postJudgeBudgetPaused) {
+                        return postJudgeBudgetPaused;
+                    }
                 }
             }
         }
@@ -23821,7 +23876,20 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     private calculateTokenStats(): AgentRunTokenStats {
-        return this._budgetTracker.CalculateRunTokenStats(this._agentRun);
+        const stats = this._budgetTracker.CalculateRunTokenStats(this._agentRun);
+        if (
+            this._priorNonStepCostUsd > 0 ||
+            this._priorNonStepTokensUsed > 0 ||
+            this._fastJudgeCostUsd > 0 ||
+            this._fastJudgeTokensUsed > 0
+        ) {
+            return {
+                ...stats,
+                TotalTokens: stats.TotalTokens + this._priorNonStepTokensUsed + this._fastJudgeTokensUsed,
+                TotalCost: stats.TotalCost + this._priorNonStepCostUsd + this._fastJudgeCostUsd,
+            };
+        }
+        return stats;
     }
 
     /**

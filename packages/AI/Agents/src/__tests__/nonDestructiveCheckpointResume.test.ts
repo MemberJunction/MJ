@@ -2358,4 +2358,133 @@ describe('Non-destructive pause, persisted checkpoint, owner notification, and h
             finalBatch: 'C',
         });
     });
+
+    it('attributes FastConvergenceJudge CostUsd and TokensUsed to run budget and triggers non-destructive BudgetExceeded pause when judge spend breaches ceiling', async () => {
+        const provider = harness.CreateProvider();
+        const contextUser = { ID: USER_ID, Name: 'Alice Owner', Email: 'alice@example.com' } as UserInfo;
+        const agentEntity = {
+            ID: AGENT_ID,
+            Name: 'JudgeBudgetAttributionAgent',
+            TypeID: AGENT_TYPE_ID,
+            Status: 'Active',
+            MaxCostPerRun: null,
+            MaxTokensPerRun: null,
+            MaxTimePerRun: null,
+            MaxIterationsPerRun: null,
+            TypeConfiguration: null,
+        } as Partial<MJAIAgentEntityExtended> as MJAIAgentEntityExtended;
+
+        const makeAmbiguousTurn = (idx: number) =>
+            makePromptResult(
+                {
+                    taskComplete: false,
+                    reasoning: idx % 2 === 0
+                        ? `Inspecting schema partition ${idx} metadata without mutating state`
+                        : `Evaluating selectivity for candidate partition ${idx * 13}`,
+                    nextStep: {
+                        type: 'Actions',
+                        actions: [{ name: 'ProcessBatchItem', params: {} }],
+                    },
+                },
+                0.02,
+                1_800,
+            );
+
+        // 3 prompt turns = 6 steps (3 Prompt + 3 Actions), total step cost = $0.06, step tokens = 5,400.
+        // At step 6, ProgressDetector classifies Ambiguous and invokes FastConvergenceJudge which returns Converging: true
+        // but incurs CostUsd = $0.05 and TokensUsed = 600 -> cumulative $0.11 >= $0.10 PerRun MaxCostUsd!
+        const agent = new TestableCheckpointAgent([
+            () => makeAmbiguousTurn(1),
+            () => makeAmbiguousTurn(2),
+            () => makeAmbiguousTurn(3),
+            () =>
+                makePromptResult(
+                    {
+                        taskComplete: true,
+                        message: 'Completed after budget extension approving judge spend',
+                        payloadChangeRequest: { newElements: { doneAfterJudgeBudgetPause: true } },
+                    },
+                    0.02,
+                    200,
+                ),
+        ]);
+
+        const pauseResult = await agent.Execute({
+            agent: agentEntity,
+            conversationMessages: [{ role: 'user', content: 'Explore partitions under tight dollar budget' }],
+            contextUser,
+            provider,
+            userId: USER_ID,
+            limitsOverride: {
+                Budgets: {
+                    PerRun: { MaxCostUsd: 0.10, MaxWallClockMs: 60_000 },
+                    AllowedInFlightOvershootUsd: 0,
+                },
+                ProgressDetector: {
+                    Enabled: true,
+                    MinIterationsBeforeCheck: 6,
+                    WindowSize: 6,
+                    AmbiguityLowScoreThreshold: 0.25,
+                    AmbiguityHighScoreThreshold: 0.65,
+                    FastJudgeEnabled: true,
+                    FastJudgeTimeoutMs: 200,
+                },
+            },
+            fastConvergenceJudgeEvaluator: async () => ({
+                Converging: true,
+                Reason: 'Exploration is converging across candidate partitions',
+                LatencyMs: 18,
+                TimedOut: false,
+                UsedFallback: false,
+                Source: 'Model',
+                CostUsd: 0.05,
+                TokensUsed: 600,
+            }),
+        });
+
+        expect(pauseResult.paused).toBe(true);
+        expect(pauseResult.pausedReason).toBe('BudgetExceeded');
+        expect(pauseResult.budgetBreach?.Scope).toBe('PerRun');
+        expect(pauseResult.budgetBreach?.Dimension).toBe('CostUsd');
+        expect(pauseResult.agentRun.TotalCost).toBeCloseTo(0.11, 5);
+        expect(pauseResult.agentRun.TotalTokensUsed).toBe(6_000);
+        expect(pauseResult.runawayCheckpoint?.CumulativeLedger.RunCostUsd).toBeCloseTo(0.11, 5);
+        expect(pauseResult.runawayCheckpoint?.CumulativeLedger.RunTokens).toBe(6_000);
+
+        const cpManager = new RunawayCheckpointManager();
+        await cpManager.ApproveCheckpoint({
+            AgentRunID: pauseResult.agentRun.ID,
+            ApprovedByUserID: APPROVER_ID,
+            BudgetExtension: { AdditionalCostUsd: 0.25, ResetProgressDetectorWindow: true },
+            Provider: provider,
+            ContextUser: contextUser,
+        });
+
+        const resumed = await agent.ResumePausedRun<{ doneAfterJudgeBudgetPause?: boolean }, { doneAfterJudgeBudgetPause?: boolean }>({
+            agent: agentEntity,
+            conversationMessages: [{ role: 'user', content: 'Finish after budget extension' }],
+            contextUser,
+            provider,
+            userId: USER_ID,
+            resumeCheckpointRunId: pauseResult.agentRun.ID,
+            limitsOverride: {
+                Budgets: {
+                    PerRun: { MaxCostUsd: 0.10, MaxWallClockMs: 60_000 },
+                    AllowedInFlightOvershootUsd: 0,
+                },
+                ProgressDetector: {
+                    Enabled: true,
+                    MinIterationsBeforeCheck: 6,
+                    WindowSize: 6,
+                    FastJudgeEnabled: true,
+                },
+            },
+        });
+
+        expect(resumed.success).toBe(true);
+        expect(resumed.payload).toEqual({ doneAfterJudgeBudgetPause: true });
+        // Preserves prior step cost ($0.06) + prior judge cost ($0.05) + post-resume step ($0.02) = $0.13
+        expect(resumed.agentRun.TotalCost).toBeCloseTo(0.13, 5);
+        expect(resumed.agentRun.TotalTokensUsed).toBe(6_200);
+    });
 });

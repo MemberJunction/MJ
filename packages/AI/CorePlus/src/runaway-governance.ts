@@ -203,6 +203,10 @@ export interface FastConvergenceJudgeResult {
     TimedOut: boolean;
     UsedFallback: boolean;
     Source: 'Model' | 'Fallback' | 'Error';
+    /** Billable USD cost incurred by this judge invocation for budget attribution. */
+    CostUsd?: number;
+    /** Total tokens consumed by this judge invocation for budget attribution. */
+    TokensUsed?: number;
 }
 
 /** Full progress detector evaluation result (optionally enriched with fast judge output). */
@@ -228,6 +232,8 @@ export interface FastJudgeDiagnosticEntry {
     TimedOut: boolean;
     UsedFallback: boolean;
     Source: FastConvergenceJudgeResult['Source'];
+    CostUsd?: number;
+    TokensUsed?: number;
 }
 
 /** Aggregated progress diagnostics persisted under `AIAgentRun.Data.__progressDiagnostics`. */
@@ -901,12 +907,33 @@ function parseCheckpointStepSummaries(raw: RunawayJsonValue | undefined): Checkp
     return summaries;
 }
 
+function parseFastJudgeResult(raw: RunawayJsonValue | undefined): FastConvergenceJudgeResult | undefined {
+    if (!isRunawayObject(raw) || typeof raw['Converging'] !== 'boolean' || typeof raw['Reason'] !== 'string') {
+        return undefined;
+    }
+    const src = raw['Source'];
+    const source: FastConvergenceJudgeResult['Source'] =
+        src === 'Model' || src === 'Fallback' || src === 'Error' ? src : 'Fallback';
+    return {
+        Converging: raw['Converging'],
+        Reason: raw['Reason'],
+        LatencyMs: typeof raw['LatencyMs'] === 'number' ? raw['LatencyMs'] : 0,
+        TimedOut: raw['TimedOut'] === true,
+        UsedFallback: raw['UsedFallback'] === true,
+        Source: source,
+        ...(typeof raw['CostUsd'] === 'number' && Number.isFinite(raw['CostUsd']) ? { CostUsd: Math.max(0, raw['CostUsd']) } : {}),
+        ...(typeof raw['TokensUsed'] === 'number' && Number.isFinite(raw['TokensUsed']) ? { TokensUsed: Math.max(0, raw['TokensUsed']) } : {}),
+    };
+}
+
 function parsePauseEvidence(raw: RunawayJsonValue | undefined): RunawayPauseEvidence {
     if (!isRunawayObject(raw)) {
         return { RecentStepSummaries: [] };
     }
+    const fastJudgeResult = parseFastJudgeResult(raw['FastJudgeResult']);
     return {
         BudgetBreach: parseBudgetBreachDetail(raw['BudgetBreach']),
+        ...(fastJudgeResult ? { FastJudgeResult: fastJudgeResult } : {}),
         RecentStepSummaries: parseCheckpointStepSummaries(raw['RecentStepSummaries']),
     };
 }
@@ -930,6 +957,8 @@ function parseFastJudgeDiagnosticEntries(raw: RunawayJsonValue | undefined): Fas
                 TimedOut: item['TimedOut'] === true,
                 UsedFallback: item['UsedFallback'] === true,
                 Source: source,
+                ...(typeof item['CostUsd'] === 'number' && Number.isFinite(item['CostUsd']) ? { CostUsd: Math.max(0, item['CostUsd']) } : {}),
+                ...(typeof item['TokensUsed'] === 'number' && Number.isFinite(item['TokensUsed']) ? { TokensUsed: Math.max(0, item['TokensUsed']) } : {}),
             });
         }
     }
@@ -1081,6 +1110,12 @@ export function AppendProgressDiagnosticToRunData(
             TimedOut: evaluation.FastJudgeResult.TimedOut,
             UsedFallback: evaluation.FastJudgeResult.UsedFallback,
             Source: evaluation.FastJudgeResult.Source,
+            ...(typeof evaluation.FastJudgeResult.CostUsd === 'number' && Number.isFinite(evaluation.FastJudgeResult.CostUsd)
+                ? { CostUsd: Math.max(0, evaluation.FastJudgeResult.CostUsd) }
+                : {}),
+            ...(typeof evaluation.FastJudgeResult.TokensUsed === 'number' && Number.isFinite(evaluation.FastJudgeResult.TokensUsed)
+                ? { TokensUsed: Math.max(0, evaluation.FastJudgeResult.TokensUsed) }
+                : {}),
         });
     }
 
