@@ -180,6 +180,109 @@ function extractAgentTypeConfigLimits(typeConfigJson: string | null | undefined)
     return NormalizeLimitsInput(rawLimits);
 }
 
+const MAX_ENVELOPE_SCAN_CHARS = 65_536;
+
+function tryParseJsonObjectCandidate(candidate: string): RunawayJsonObject | null {
+    const trimmed = candidate.trim();
+    if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) {
+        return null;
+    }
+    const parsed = SafeJSONParse<RunawayJsonObject>(trimmed);
+    return IsPlainObject(parsed) ? parsed : null;
+}
+
+function skipWhitespace(text: string, start: number): number {
+    let idx = start;
+    while (idx < text.length && /\s/.test(text[idx])) {
+        idx++;
+    }
+    return idx;
+}
+
+function scanCommentEnvelope(bounded: string, lower: string): RunawayJsonObject | null {
+    let pos = 0;
+    while (pos < lower.length) {
+        const openIdx = lower.indexOf('<!--', pos);
+        if (openIdx === -1) {
+            return null;
+        }
+        const afterOpen = skipWhitespace(lower, openIdx + 4);
+        if (lower.startsWith('mj-limits:', afterOpen)) {
+            const closeIdx = lower.indexOf('-->', afterOpen + 10);
+            if (closeIdx === -1) {
+                return null;
+            }
+            const parsed = tryParseJsonObjectCandidate(bounded.slice(afterOpen + 10, closeIdx));
+            if (parsed) {
+                return parsed;
+            }
+        }
+        pos = openIdx + 4;
+    }
+    return null;
+}
+
+function scanTagEnvelope(bounded: string, lower: string): RunawayJsonObject | null {
+    let pos = 0;
+    while (pos < lower.length) {
+        const openIdx = lower.indexOf('<limits', pos);
+        if (openIdx === -1) {
+            return null;
+        }
+        let cursor = openIdx + 7;
+        let closeTag = '</limits>';
+        if (lower.startsWith('_json', cursor)) {
+            cursor += 5;
+            closeTag = '</limits_json>';
+        }
+        cursor = skipWhitespace(lower, cursor);
+        if (lower[cursor] === '>') {
+            const closeIdx = lower.indexOf(closeTag, cursor + 1);
+            if (closeIdx === -1) {
+                return null;
+            }
+            const parsed = tryParseJsonObjectCandidate(bounded.slice(cursor + 1, closeIdx));
+            if (parsed) {
+                return parsed;
+            }
+        }
+        pos = openIdx + 7;
+    }
+    return null;
+}
+
+function scanFencedEnvelope(bounded: string, lower: string): RunawayJsonObject | null {
+    let pos = 0;
+    while (pos < lower.length) {
+        const openIdx = lower.indexOf('```', pos);
+        if (openIdx === -1) {
+            return null;
+        }
+        const afterTicks = openIdx + 3;
+        let langLen = 0;
+        if (lower.startsWith('limits', afterTicks)) {
+            langLen = 6;
+        } else if (lower.startsWith('json', afterTicks)) {
+            langLen = 4;
+        }
+        if (langLen > 0) {
+            const afterLang = skipWhitespace(lower, afterTicks + langLen);
+            const closeIdx = lower.indexOf('```', afterLang);
+            if (closeIdx === -1) {
+                return null;
+            }
+            const parsed = tryParseJsonObjectCandidate(bounded.slice(afterLang, closeIdx));
+            if (parsed) {
+                return parsed;
+            }
+            pos = closeIdx + 3;
+            continue;
+        }
+        pos = afterTicks;
+    }
+    return null;
+}
+
 function parseEnvelopeObject(text: string): RunawayJsonObject | null {
     const trimmed = text.trim();
     if (!trimmed) {
@@ -191,28 +294,13 @@ function parseEnvelopeObject(text: string): RunawayJsonObject | null {
             return direct;
         }
     }
-    const commentMatch = /<!--\s*mj-limits:\s*(\{[\s\S]*?\})\s*-->/i.exec(text);
-    if (commentMatch?.[1]) {
-        const parsed = SafeJSONParse<RunawayJsonObject>(commentMatch[1]);
-        if (IsPlainObject(parsed)) {
-            return parsed;
-        }
-    }
-    const tagMatch = /<limits(?:_json)?\s*>\s*(\{[\s\S]*?\})\s*<\/limits(?:_json)?>/i.exec(text);
-    if (tagMatch?.[1]) {
-        const parsed = SafeJSONParse<RunawayJsonObject>(tagMatch[1]);
-        if (IsPlainObject(parsed)) {
-            return parsed;
-        }
-    }
-    const fencedMatch = /```(?:json|limits)\s*\n?(\{[\s\S]*?\})\s*```/i.exec(text);
-    if (fencedMatch?.[1]) {
-        const parsed = SafeJSONParse<RunawayJsonObject>(fencedMatch[1]);
-        if (IsPlainObject(parsed)) {
-            return parsed;
-        }
-    }
-    return null;
+    const bounded = text.length > MAX_ENVELOPE_SCAN_CHARS ? text.slice(0, MAX_ENVELOPE_SCAN_CHARS) : text;
+    const lower = bounded.toLowerCase();
+    return (
+        scanCommentEnvelope(bounded, lower) ??
+        scanTagEnvelope(bounded, lower) ??
+        scanFencedEnvelope(bounded, lower)
+    );
 }
 
 function extractLimitsFromFieldValue(raw: MJLimitsOverride | string | null | undefined): MJLimitsOverride {

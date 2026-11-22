@@ -254,4 +254,44 @@ describe('limitsDiagnosticsSnapshot & 5-tier AI agent resolution', () => {
         const reloadedEntity = makeAgentRunStub(runEntity.Data);
         expect(reloadedEntity.LimitsDiagnosticsSnapshot).toEqual(snapshot);
     });
+
+    it('extracts comment, tag, and fenced envelopes in bounded linear time even with repeated openers', () => {
+        const commentPolicy = makePolicyStub({
+            Notes: 'Intro <!-- mj-limits: { "AgentAbsoluteIterations": 1234 } --> trailing',
+        });
+        expect(ExtractUserPolicyLimitsOverride(commentPolicy).AgentAbsoluteIterations).toBe(1234);
+
+        const tagPolicy = makePolicyStub({
+            InstructionsOverride: '<limits_json>\n{"Budgets":{"PerRun":{"MaxCostUsd":9.5}}}\n</limits_json>',
+        });
+        expect(ExtractUserPolicyLimitsOverride(tagPolicy).Budgets?.PerRun?.MaxCostUsd).toBe(9.5);
+
+        const fencedPolicy = makePolicyStub({
+            Configuration: '```limits\n{"ForEachMaxIterations":777}\n```',
+        });
+        expect(ExtractUserPolicyLimitsOverride(fencedPolicy).ForEachMaxIterations).toBe(777);
+
+        // Adversarial repeated unclosed openers must resolve quickly without ReDoS backtracking
+        const repeatedComments = '<!-- mj-limits: '.repeat(2_000) + ' no closing tag';
+        const repeatedTags = '<limits> '.repeat(2_000) + '<limits_json> '.repeat(2_000);
+        const repeatedFences = '```json\n'.repeat(2_000);
+        const t0 = Date.now();
+        expect(
+            ExtractUserPolicyLimitsOverride(
+                makePolicyStub({
+                    Notes: repeatedComments,
+                    InstructionsOverride: repeatedTags,
+                    Configuration: repeatedFences,
+                }),
+            ),
+        ).toEqual({});
+        const elapsedMs = Date.now() - t0;
+        expect(elapsedMs).toBeLessThan(250);
+
+        // Valid envelope after earlier unclosed opener still succeeds when within scan budget
+        const mixedPolicy = makePolicyStub({
+            Notes: '<!-- mj-limits: broken\n<!-- mj-limits: { "AgentAbsoluteIterations": 321 } -->',
+        });
+        expect(ExtractUserPolicyLimitsOverride(mixedPolicy).AgentAbsoluteIterations).toBe(321);
+    });
 });

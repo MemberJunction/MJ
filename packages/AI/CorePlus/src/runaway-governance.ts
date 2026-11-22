@@ -14,7 +14,7 @@
 import { IsPlainObject, SafeJSONParse } from '@memberjunction/global';
 import type { ChatMessage } from '@memberjunction/ai';
 import type { ScratchpadSnapshot } from './agent-scratchpad';
-import type { ForEachOperation } from './foreach-operation';
+import type { ForEachOperation, LoopBodyActionStep } from './foreach-operation';
 import type { WhileOperation } from './while-operation';
 import type { AgentResponseForm } from './response-forms';
 import type { MJAIAgentRunEntityExtended } from './MJAIAgentRunEntityExtended';
@@ -97,6 +97,10 @@ export interface CumulativeBudgetLedger {
     PausedIntervals: BudgetPausedInterval[];
     DayBucketUTC: string;
     DayBoundaryTimezone: string;
+    /** Prior-day cost already reflected in historical baseline before today's UTC boundary (CR-20). */
+    PriorDayCostBaselineUsd?: number;
+    /** Prior-day active wall-clock ms already reflected before today's UTC boundary (CR-20). */
+    PriorDayWallClockBaselineMs?: number;
     AsOfISO: string;
 }
 
@@ -447,6 +451,12 @@ function parseCumulativeBudgetLedger(raw: RunawayJsonValue | undefined): Cumulat
         PausedIntervals: parsePausedIntervals(raw['PausedIntervals']),
         DayBucketUTC: typeof raw['DayBucketUTC'] === 'string' ? raw['DayBucketUTC'] : '',
         DayBoundaryTimezone: typeof raw['DayBoundaryTimezone'] === 'string' ? raw['DayBoundaryTimezone'] : 'UTC',
+        ...(typeof raw['PriorDayCostBaselineUsd'] === 'number' && Number.isFinite(raw['PriorDayCostBaselineUsd'])
+            ? { PriorDayCostBaselineUsd: raw['PriorDayCostBaselineUsd'] }
+            : {}),
+        ...(typeof raw['PriorDayWallClockBaselineMs'] === 'number' && Number.isFinite(raw['PriorDayWallClockBaselineMs'])
+            ? { PriorDayWallClockBaselineMs: raw['PriorDayWallClockBaselineMs'] }
+            : {}),
         AsOfISO: typeof raw['AsOfISO'] === 'string' ? raw['AsOfISO'] : new Date(0).toISOString(),
     };
 }
@@ -600,8 +610,25 @@ function parsePendingSubAgentDecision(raw: RunawayJsonValue | undefined): Pendin
     };
 }
 
+function parseStringTemplateParameters(raw: RunawayJsonValue | undefined): Record<string, string> | undefined {
+    if (!isRunawayObject(raw)) {
+        return undefined;
+    }
+    const out: Record<string, string> = {};
+    for (const [key, val] of Object.entries(raw)) {
+        if (typeof val === 'string') {
+            out[key] = val;
+        } else if (typeof val === 'number' || typeof val === 'boolean') {
+            out[key] = String(val);
+        } else if (val !== null && val !== undefined) {
+            out[key] = JSON.stringify(val);
+        }
+    }
+    return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function parseLoopAction(raw: RunawayJsonValue | undefined): ForEachOperation['action'] | undefined {
-    if (!isRunawayObject(raw) || typeof raw['name'] !== 'string') {
+    if (!isRunawayObject(raw) || typeof raw['name'] !== 'string' || raw['name'].trim().length === 0) {
         return undefined;
     }
     const rawParams = raw['params'];
@@ -612,11 +639,61 @@ function parseLoopAction(raw: RunawayJsonValue | undefined): ForEachOperation['a
     };
 }
 
+function parseLoopSteps(raw: RunawayJsonValue | undefined): LoopBodyActionStep[] | undefined {
+    if (!Array.isArray(raw)) {
+        return undefined;
+    }
+    const steps: LoopBodyActionStep[] = [];
+    for (const item of raw) {
+        if (!isRunawayObject(item) || typeof item['name'] !== 'string' || item['name'].trim().length === 0) {
+            continue;
+        }
+        const rawParams = item['params'];
+        steps.push({
+            ...(typeof item['id'] === 'string' && item['id'].length > 0 ? { id: item['id'] } : {}),
+            name: item['name'],
+            params: isRunawayObject(rawParams) ? rawParams : {},
+            ...(typeof item['condition'] === 'string' ? { condition: item['condition'] } : {}),
+            ...(typeof item['outputMapping'] === 'string' ? { outputMapping: item['outputMapping'] } : {}),
+        });
+    }
+    return steps.length > 0 ? steps : undefined;
+}
+
+function parseLoopSubAgent(raw: RunawayJsonValue | undefined): ForEachOperation['subAgent'] | undefined {
+    if (!isRunawayObject(raw) || typeof raw['name'] !== 'string' || raw['name'].trim().length === 0) {
+        return undefined;
+    }
+    const templateParameters = parseStringTemplateParameters(raw['templateParameters']);
+    const hasContext = Object.prototype.hasOwnProperty.call(raw, 'context') && raw['context'] !== undefined;
+    return {
+        name: raw['name'],
+        message: typeof raw['message'] === 'string' ? raw['message'] : '',
+        ...(templateParameters ? { templateParameters } : {}),
+        ...(hasContext ? { context: ToRunawayJsonValue(raw['context']) } : {}),
+    };
+}
+
+function parseLoopPrompt(raw: RunawayJsonValue | undefined): ForEachOperation['prompt'] | undefined {
+    if (!isRunawayObject(raw) || typeof raw['name'] !== 'string' || raw['name'].trim().length === 0) {
+        return undefined;
+    }
+    const templateParameters = parseStringTemplateParameters(raw['templateParameters']);
+    return {
+        name: raw['name'],
+        ...(templateParameters ? { templateParameters } : {}),
+        ...(typeof raw['outputMapping'] === 'string' ? { outputMapping: raw['outputMapping'] } : {}),
+    };
+}
+
 function parseForEachOperation(raw: RunawayJsonValue | undefined): ForEachOperation | undefined {
     if (!isRunawayObject(raw) || typeof raw['collectionPath'] !== 'string') {
         return undefined;
     }
     const action = parseLoopAction(raw['action']);
+    const steps = parseLoopSteps(raw['steps']);
+    const subAgent = parseLoopSubAgent(raw['subAgent']);
+    const prompt = parseLoopPrompt(raw['prompt']);
     return {
         collectionPath: raw['collectionPath'],
         ...(typeof raw['itemVariable'] === 'string' ? { itemVariable: raw['itemVariable'] } : {}),
@@ -627,6 +704,9 @@ function parseForEachOperation(raw: RunawayJsonValue | undefined): ForEachOperat
         ...(raw['executionMode'] === 'sequential' || raw['executionMode'] === 'parallel' ? { executionMode: raw['executionMode'] } : {}),
         ...(typeof raw['maxConcurrency'] === 'number' ? { maxConcurrency: raw['maxConcurrency'] } : {}),
         ...(action ? { action } : {}),
+        ...(steps ? { steps } : {}),
+        ...(subAgent ? { subAgent } : {}),
+        ...(prompt ? { prompt } : {}),
     };
 }
 
@@ -635,6 +715,9 @@ function parseWhileOperation(raw: RunawayJsonValue | undefined): WhileOperation 
         return undefined;
     }
     const action = parseLoopAction(raw['action']);
+    const steps = parseLoopSteps(raw['steps']);
+    const subAgent = parseLoopSubAgent(raw['subAgent']);
+    const prompt = parseLoopPrompt(raw['prompt']);
     return {
         condition: raw['condition'],
         ...(typeof raw['itemVariable'] === 'string' ? { itemVariable: raw['itemVariable'] } : {}),
@@ -642,6 +725,9 @@ function parseWhileOperation(raw: RunawayJsonValue | undefined): WhileOperation 
         ...(typeof raw['continueOnError'] === 'boolean' ? { continueOnError: raw['continueOnError'] } : {}),
         ...(typeof raw['delayBetweenIterationsMs'] === 'number' ? { delayBetweenIterationsMs: raw['delayBetweenIterationsMs'] } : {}),
         ...(action ? { action } : {}),
+        ...(steps ? { steps } : {}),
+        ...(subAgent ? { subAgent } : {}),
+        ...(prompt ? { prompt } : {}),
     };
 }
 
