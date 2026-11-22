@@ -301,7 +301,7 @@ import {
 } from './sub-agent-consult';
 import { ConversationMessageResolver } from './utils/ConversationMessageResolver';
 import { AgentTreeBudgetTracker, type AgentRunTokenStats } from './AgentTreeBudgetTracker';
-import { BudgetEnforcementGuard } from './BudgetEnforcementGuard';
+import { BudgetEnforcementGuard, ComputeDayBoundaryWindow, type BudgetEnforcementInput } from './BudgetEnforcementGuard';
 import { DeterministicProgressDetector, type IterationProgressSample } from './DeterministicProgressDetector';
 import { FastConvergenceJudge } from './FastConvergenceJudge';
 import { RunawayCheckpointManager, type PauseRunWithCheckpointResult, type RestoredCheckpointContext } from './RunawayCheckpointManager';
@@ -901,6 +901,9 @@ export class BaseAgent {
         Waiters: Array<(res: CooperativePauseResult | null) => void>;
     } | null = null;
     private _checkpointStepCostBaseline: number = 0;
+    private _priorDayCostBaselineUsd: number | undefined = undefined;
+    private _priorDayWallClockBaselineMs: number | undefined = undefined;
+    private _lastObservedDaySnapshot: { DayBucketUTC: string; CostUsd: number; WallClockMs: number } | null = null;
     private _pausedRunOutcome: {
         PauseResult: PauseRunWithCheckpointResult;
         PauseReason: RunawayPauseReason;
@@ -2955,13 +2958,15 @@ export class BaseAgent {
         return this.Execute<C, R>(params);
     }
 
-    private async resolveServerUserPolicy(params: ExecuteAgentParams): Promise<MJAIAgentUserPolicyEntity | null> {
+    private async resolveServerUserPolicy(
+        params: ExecuteAgentParams,
+    ): Promise<{ status: 'ok'; policy: MJAIAgentUserPolicyEntity | null } | { status: 'error'; policy: null; errorMessage: string }> {
         if (params.userPolicy) {
-            return params.userPolicy;
+            return { status: 'ok', policy: params.userPolicy };
         }
         const userId = params.userId || params.contextUser?.ID;
         if (!params.agent?.ID || !userId || !params.contextUser) {
-            return null;
+            return { status: 'ok', policy: null };
         }
         try {
             const lookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
@@ -2970,9 +2975,20 @@ export class BaseAgent {
                 params.contextUser,
                 { provider: params.provider ?? Metadata.Provider },
             );
-            return lookup.status === 'found' ? lookup.policy : null;
-        } catch {
-            return null;
+            if (lookup.status === 'found') {
+                return { status: 'ok', policy: lookup.policy };
+            }
+            if (lookup.status === 'none' || lookup.missingRunViewProvider) {
+                return { status: 'ok', policy: null };
+            }
+            return {
+                status: 'error',
+                policy: null,
+                errorMessage: lookup.errorMessage || 'User agent policy lookup returned error status',
+            };
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            return { status: 'error', policy: null, errorMessage: message };
         }
     }
 
@@ -2987,9 +3003,13 @@ export class BaseAgent {
         this._pendingLoopCursorToResume = null;
         this._cooperativePauseState = null;
         this._checkpointStepCostBaseline = 0;
+        this._priorDayCostBaselineUsd = undefined;
+        this._priorDayWallClockBaselineMs = undefined;
+        this._lastObservedDaySnapshot = null;
         this._progressDetector.Reset();
         this._fastConvergenceJudge.ResetCooldown();
-        this._resolvedUserPolicy = await this.resolveServerUserPolicy(params);
+        const policyResolution = await this.resolveServerUserPolicy(params);
+        this._resolvedUserPolicy = policyResolution.policy;
         this._activeLimitsResolution = this.resolveFullRunLimits(params);
         this._activeBudgets = this._activeLimitsResolution.Limits.Budgets;
         this.ensureTreeBudget(params);
@@ -3022,7 +3042,8 @@ export class BaseAgent {
             params.agent?.MaxTimePerRun != null && params.agent.MaxTimePerRun > 0
                 ? params.agent.MaxTimePerRun * 1000
                 : undefined;
-        const agentTimeoutMS = params.maxExecutionTimeMs ?? configuredMaxTimeMs ?? this.DefaultAgentTimeoutMS;
+        const resolvedMaxWallClockMs = this._activeBudgets?.PerRun.MaxWallClockMs ?? undefined;
+        const agentTimeoutMS = resolvedMaxWallClockMs ?? params.maxExecutionTimeMs ?? configuredMaxTimeMs ?? this.DefaultAgentTimeoutMS;
         const upstreamToken = params.cancellationToken;
         const timeoutController = new AbortController();
         const relayUpstreamAbort = () => {
@@ -3052,6 +3073,9 @@ export class BaseAgent {
         this._runAbortController = timeoutController;
 
         try {
+            if (policyResolution.status === 'error') {
+                throw new Error(`Fail-closed: unable to verify user agent policy (${policyResolution.errorMessage})`);
+            }
             this.logStatus(`🤖 Starting execution of agent '${params.agent.Name}'`, true, params);
 
             // A run that continues another keeps that run's bindings unless its caller gives its own.
@@ -3491,7 +3515,7 @@ export class BaseAgent {
     private async endRun(params: ExecuteAgentParams): Promise<void> {
         if (this._agentRun?.ID) {
             AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
-            ActiveRunGovernanceRegistry.Instance.UnregisterActiveRun(this._agentRun.ID);
+            ActiveRunGovernanceRegistry.Instance.UnregisterActiveRun(this._agentRun.ID, this._activeProvider);
         }
         if (this._cooperativePauseState && this._cooperativePauseState.Waiters.length > 0) {
             const summary = this._pausedRunOutcome?.PauseResult.Checkpoint.Summary ?? 'Run finished before safe-point pause';
@@ -5360,25 +5384,9 @@ export class BaseAgent {
         if (!this._agentRun) {
             return null;
         }
-        const budgets = this._activeBudgets ?? this.resolvedLimits(params).Budgets;
-        const tokenStats = this.calculateTokenStats();
-        const nonStepPriorCost = this._resumedCheckpointContext
-            ? Math.max(0, this._resumedCheckpointContext.PriorCumulativeCostUsd - this._checkpointStepCostBaseline)
-            : 0;
-        const startedAtMs = this._agentRun.StartedAt ? new Date(this._agentRun.StartedAt).getTime() : Date.now();
-        const result = await this._budgetEnforcementGuard.Evaluate({
-            Budgets: budgets,
-            AgentRunID: this._agentRun.ID,
-            UserID: this._agentRun.UserID ?? params.userId ?? params.contextUser?.ID ?? null,
-            RoutineID: params.routineId ?? null,
-            CurrentRunCostUsd: tokenStats.TotalCost,
-            CurrentRunStartedAtMs: startedAtMs,
-            CurrentRunTokens: tokenStats.TotalTokens,
-            PriorRunCostUsd: nonStepPriorCost,
-            PausedIntervals: this._resumedCheckpointContext?.PausedIntervals,
-            Provider: params.provider || this._activeProvider,
-            ContextUser: params.contextUser,
-        });
+        const evalInput = this.buildBudgetEvaluationInput(params);
+        const result = await this._budgetEnforcementGuard.Evaluate(evalInput);
+        this.recordDayBudgetSnapshot(evalInput, result.Ledger);
         if (!result.Exceeded || !result.Breach) {
             return null;
         }
@@ -5398,10 +5406,14 @@ export class BaseAgent {
         if (!this._agentRun?.ID) {
             return;
         }
-        ActiveRunGovernanceRegistry.Instance.RegisterActiveRun({
-            AgentRunID: this._agentRun.ID,
-            RequestPause: (summary?: string) => this.requestCooperativePause(summary),
-        });
+        ActiveRunGovernanceRegistry.Instance.RegisterActiveRun(
+            {
+                AgentRunID: this._agentRun.ID,
+                Provider: this._activeProvider,
+                RequestPause: (summary?: string) => this.requestCooperativePause(summary),
+            },
+            this._activeProvider,
+        );
     }
 
     private requestCooperativePause(summary?: string): Promise<CooperativePauseResult | null> {
@@ -5598,14 +5610,20 @@ export class BaseAgent {
         return parts.join('\n').slice(0, 2000);
     }
 
-    private async captureCurrentBudgetLedger(params: ExecuteAgentParams) {
+    private buildBudgetEvaluationInput(params: ExecuteAgentParams): BudgetEnforcementInput {
         const budgets = this._activeBudgets ?? this.resolvedLimits(params).Budgets;
         const tokenStats = this.calculateTokenStats();
         const nonStepPriorCost = this._resumedCheckpointContext
             ? Math.max(0, this._resumedCheckpointContext.PriorCumulativeCostUsd - this._checkpointStepCostBaseline)
             : 0;
         const startedAtMs = this._agentRun?.StartedAt ? new Date(this._agentRun.StartedAt).getTime() : Date.now();
-        const evalResult = await this._budgetEnforcementGuard.Evaluate({
+        const nowMs = Date.now();
+        const currentDay = ComputeDayBoundaryWindow(nowMs, budgets.PerUserPerDay.DayBoundaryTimezone);
+        if (this._lastObservedDaySnapshot && this._lastObservedDaySnapshot.DayBucketUTC !== currentDay.DayBucketUTC) {
+            this._priorDayCostBaselineUsd = this._lastObservedDaySnapshot.CostUsd;
+            this._priorDayWallClockBaselineMs = this._lastObservedDaySnapshot.WallClockMs;
+        }
+        return {
             Budgets: budgets,
             AgentRunID: this._agentRun?.ID ?? null,
             UserID: this._agentRun?.UserID ?? params.userId ?? params.contextUser?.ID ?? null,
@@ -5614,10 +5632,30 @@ export class BaseAgent {
             CurrentRunStartedAtMs: startedAtMs,
             CurrentRunTokens: tokenStats.TotalTokens,
             PriorRunCostUsd: nonStepPriorCost,
+            PriorDayCostBaselineUsd: this._priorDayCostBaselineUsd,
+            PriorDayWallClockBaselineMs: this._priorDayWallClockBaselineMs,
             PausedIntervals: this._resumedCheckpointContext?.PausedIntervals,
+            NowMs: nowMs,
             Provider: params.provider || this._activeProvider,
             ContextUser: params.contextUser,
-        });
+        };
+    }
+
+    private recordDayBudgetSnapshot(
+        _input: BudgetEnforcementInput,
+        ledger: { DayBucketUTC: string; RunCostUsd: number; RunWallClockMs: number },
+    ): void {
+        this._lastObservedDaySnapshot = {
+            DayBucketUTC: ledger.DayBucketUTC,
+            CostUsd: ledger.RunCostUsd,
+            WallClockMs: ledger.RunWallClockMs,
+        };
+    }
+
+    private async captureCurrentBudgetLedger(params: ExecuteAgentParams) {
+        const evalInput = this.buildBudgetEvaluationInput(params);
+        const evalResult = await this._budgetEnforcementGuard.Evaluate(evalInput);
+        this.recordDayBudgetSnapshot(evalInput, evalResult.Ledger);
         return evalResult.Ledger;
     }
 
@@ -5667,7 +5705,7 @@ export class BaseAgent {
         });
         if (pauseResult.Saved && this._agentRun.ID) {
             AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
-            ActiveRunGovernanceRegistry.Instance.UnregisterActiveRun(this._agentRun.ID);
+            ActiveRunGovernanceRegistry.Instance.UnregisterActiveRun(this._agentRun.ID, this._activeProvider);
         }
         this._pausedRunOutcome = {
             PauseResult: pauseResult,
@@ -7405,7 +7443,7 @@ export class BaseAgent {
             return false;
         }
         const perAgent = params.agent?.MaxIterationsPerRun;
-        const absolute = params.absoluteMaxIterations ?? this.resolvedLimits(params).AgentAbsoluteIterations;
+        const absolute = this.resolvedLimits(params).AgentAbsoluteIterations;
         return (typeof perAgent === 'number' && perAgent > 0 && iterations >= perAgent)
             || (absolute > 0 && iterations >= absolute);
     }
@@ -10079,7 +10117,7 @@ export class BaseAgent {
             this.applyTokenStatsToRun(agentRun, this.calculateTokenStats());
         }
 
-        const absoluteMaxIterations = params.absoluteMaxIterations ?? this.resolvedLimits(params).AgentAbsoluteIterations;
+        const absoluteMaxIterations = this.resolvedLimits(params).AgentAbsoluteIterations;
         const { Result, Budget } = this._budgetTracker.CheckRunAndTreeGuardrails({
             Params: params,
             AgentRun: agentRun,
@@ -16242,6 +16280,13 @@ The context is now within limits. Please retry your request with the recovered c
             };
         }
         this._checkpointStepCostBaseline = this.calculateTokenStats().TotalCost;
+        this._priorDayCostBaselineUsd = restored.PriorDayCostBaselineUsd;
+        this._priorDayWallClockBaselineMs = restored.PriorDayWallClockBaselineMs;
+        this._lastObservedDaySnapshot = {
+            DayBucketUTC: restored.Checkpoint.CumulativeLedger.DayBucketUTC,
+            CostUsd: restored.PriorCumulativeCostUsd,
+            WallClockMs: restored.PriorCumulativeActiveWallClockMs,
+        };
         this._promptTurnCount = restored.StartingPromptTurns;
 
         this._scratchpadManager.Clear();
@@ -23154,6 +23199,7 @@ The context is now within limits. Please retry your request with the recovered c
 
         return {
             success: false,
+            ...(!this._agentRun ? { errorMessage } : {}),
             taintedSources: this._taintedSources.length > 0 ? [...this._taintedSources] : undefined,
             agentRun: this._agentRun!
         };

@@ -55,8 +55,9 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { EscapeSQLString, IsValidUUID, RegisterClass, SafeJSONParse } from '@memberjunction/global';
 import type { ChatMessage } from '@memberjunction/ai';
-import { ActiveRunGovernanceRegistry } from '../ActiveRunGovernanceRegistry';
-import { ComputeDayBoundaryWindow } from '../BudgetEnforcementGuard';
+import { ActiveRunGovernanceRegistry, type ResumeContinuationDispatchResult } from '../ActiveRunGovernanceRegistry';
+import { InstallDefaultResumeContinuationDispatcher } from '../DefaultResumeContinuationDispatcher';
+import { ComputeActiveWallClockOverlapMs, ComputeDayBoundaryWindow } from '../BudgetEnforcementGuard';
 import { RunawayCheckpointManager } from '../RunawayCheckpointManager';
 
 const DEFAULT_INSPECTED_RUNS_LIMIT = 25; // Tuning: default page size for admin limits diagnostics inspection
@@ -337,13 +338,37 @@ function buildBudgetUtilization(
     const dayWindow = ComputeDayBoundaryWindow(nowMs, limits.Budgets.PerUserPerDay.DayBoundaryTimezone);
     const dayStartMs = Date.parse(dayWindow.DayStartISO);
     const dayEndMs = Date.parse(dayWindow.DayEndISO);
-    const todayRuns = runs.filter((r) => {
-        if (!r.StartedAtISO) return false;
+    let todayCost = 0;
+    let todayWall = 0;
+    let todayOverlapCount = 0;
+    for (const r of runs) {
+        if (!r.StartedAtISO) {
+            continue;
+        }
         const started = Date.parse(r.StartedAtISO);
-        return started >= dayStartMs && started < dayEndMs;
-    });
-    const todayCost = todayRuns.reduce((acc, r) => acc + r.TotalCostUsd, 0);
-    const todayWall = todayRuns.reduce((acc, r) => acc + r.CumulativeRunWallClockMs, 0);
+        if (!Number.isFinite(started) || started >= dayEndMs) {
+            continue;
+        }
+        const ended = r.CompletedAtISO ? Date.parse(r.CompletedAtISO) : nowMs;
+        if (!Number.isFinite(ended) || ended <= dayStartMs) {
+            continue;
+        }
+        todayOverlapCount++;
+        const overlapWall = ComputeActiveWallClockOverlapMs(
+            started,
+            ended,
+            dayStartMs,
+            Math.min(nowMs, dayEndMs),
+            undefined,
+            limits.Budgets.CountPausedTimeTowardsWallClock,
+        );
+        todayWall += overlapWall;
+        if (started >= dayStartMs) {
+            todayCost += r.TotalCostUsd;
+        } else if (ended > started) {
+            todayCost += r.TotalCostUsd * Math.min(1, overlapWall / (ended - started));
+        }
+    }
 
     const routineRuns = runs.filter((r) => Boolean(r.Snapshot?.Context.RoutineID));
     const routineCost = routineRuns.reduce((acc, r) => acc + r.TotalCostUsd, 0);
@@ -383,7 +408,7 @@ function buildBudgetUtilization(
             MaxWallClockMs: limits.Budgets.PerUserPerDay.MaxWallClockMs,
             ObservedWallClockMs: todayWall,
             WallClockUtilizationPct: pctOf(todayWall, limits.Budgets.PerUserPerDay.MaxWallClockMs),
-            Note: `${todayRuns.length} run(s) started in current ${limits.Budgets.PerUserPerDay.DayBoundaryTimezone} day bucket.`,
+            Note: `${todayOverlapCount} run(s) overlapping ${limits.Budgets.PerUserPerDay.DayBoundaryTimezone} day bucket.`,
         },
     ];
 
@@ -593,6 +618,12 @@ export class LimitsResumePausedRunServerOperation extends LimitsResumePausedRunO
 
         const checkpointManager = new RunawayCheckpointManager();
         const existingCheckpoint = ExtractRunawayCheckpointFromAgentRun(agentRun);
+        const priorStatus = agentRun.Status;
+        const priorData = agentRun.Data;
+        const priorMessage = agentRun.Message;
+        const priorCompletedAt = agentRun.CompletedAt;
+        const priorSuccess = agentRun.Success;
+        const priorErrorMessage = agentRun.ErrorMessage;
 
         // Idempotent resume: if run was already resumed & approved for the current checkpoint, dispatch idempotently
         const alreadyApprovedRunning =
@@ -624,6 +655,22 @@ export class LimitsResumePausedRunServerOperation extends LimitsResumePausedRunO
             };
         }
 
+        if (!ActiveRunGovernanceRegistry.Instance.HasContinuationDispatcher()) {
+            return {
+                Success: false,
+                AgentRunID: runId,
+                Status: priorStatus,
+                CheckpointID: existingCheckpoint?.CheckpointID ?? null,
+                ApprovalStatus: existingCheckpoint?.HumanApproval.Status ?? 'Pending',
+                ExtendedBudgets: null,
+                PriorCumulativeCostUsd: existingCheckpoint?.CumulativeLedger.RunCostUsd ?? 0,
+                PriorCumulativeActiveWallClockMs: existingCheckpoint?.CumulativeLedger.RunWallClockMs ?? 0,
+                StartingStepCount: existingCheckpoint?.CompletedStepCount ?? 0,
+                StartingPromptTurns: existingCheckpoint?.CompletedPromptTurns ?? 0,
+                Message: `Cannot resume run ${runId}: no continuation dispatcher is available; run remains ${priorStatus}.`,
+            };
+        }
+
         const baseBudgets = await this.resolvePausedRunBaseBudgets(agentRun, provider, user);
         const approvedCheckpoint = alreadyApprovedRunning
             ? existingCheckpoint!
@@ -643,19 +690,49 @@ export class LimitsResumePausedRunServerOperation extends LimitsResumePausedRunO
             ContextUser: user,
         });
 
-        const dispatchResult = await ActiveRunGovernanceRegistry.Instance.DispatchContinuation({
-            AgentRunID: runId,
-            AgentID: restored.Checkpoint.AgentID || agentRun.AgentID,
-            UserID: restored.Checkpoint.UserID ?? agentRun.UserID ?? null,
-            RoutineID: restored.Checkpoint.RoutineID,
-            CheckpointID: approvedCheckpoint.CheckpointID,
-            RestoredContext: restored,
-            Provider: provider,
-            ContextUser: user,
-        });
+        let dispatchResult: ResumeContinuationDispatchResult | null = null;
+        let dispatchError: string | null = null;
+        try {
+            dispatchResult = await ActiveRunGovernanceRegistry.Instance.DispatchContinuation({
+                AgentRunID: runId,
+                AgentID: restored.Checkpoint.AgentID || agentRun.AgentID,
+                UserID: restored.Checkpoint.UserID ?? agentRun.UserID ?? null,
+                RoutineID: restored.Checkpoint.RoutineID,
+                CheckpointID: approvedCheckpoint.CheckpointID,
+                RestoredContext: restored,
+                Provider: provider,
+                ContextUser: user,
+            });
+        } catch (err) {
+            dispatchError = err instanceof Error ? err.message : String(err);
+        }
 
-        const effectiveStatus = dispatchResult?.Status ?? restored.AgentRun.Status;
-        const dispatchSuffix = dispatchResult?.Message ? ` ${dispatchResult.Message}` : '';
+        if (dispatchError || !dispatchResult || !dispatchResult.Dispatched) {
+            agentRun.Status = priorStatus;
+            agentRun.Data = priorData;
+            agentRun.Message = priorMessage;
+            agentRun.CompletedAt = priorCompletedAt;
+            agentRun.Success = priorSuccess;
+            agentRun.ErrorMessage = priorErrorMessage;
+            await agentRun.Save();
+            const reason = dispatchError ?? dispatchResult?.Message ?? 'Continuation dispatcher declined execution.';
+            return {
+                Success: false,
+                AgentRunID: runId,
+                Status: agentRun.Status,
+                CheckpointID: approvedCheckpoint.CheckpointID,
+                ApprovalStatus: existingCheckpoint?.HumanApproval.Status ?? approvedCheckpoint.HumanApproval.Status,
+                ExtendedBudgets: null,
+                PriorCumulativeCostUsd: restored.PriorCumulativeCostUsd,
+                PriorCumulativeActiveWallClockMs: restored.PriorCumulativeActiveWallClockMs,
+                StartingStepCount: restored.StartingStepCount,
+                StartingPromptTurns: restored.StartingPromptTurns,
+                Message: `Failed to resume run ${runId}: ${reason} Run rolled back to ${agentRun.Status}.`,
+            };
+        }
+
+        const effectiveStatus = dispatchResult.Status ?? restored.AgentRun.Status;
+        const dispatchSuffix = dispatchResult.Message ? ` ${dispatchResult.Message}` : '';
         return {
             Success: true,
             AgentRunID: runId,
@@ -754,10 +831,20 @@ export class LimitsPauseRunServerOperation extends LimitsPauseRunOperation {
             throw new Error('AgentRunID is required to pause a run');
         }
 
+        const agentRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', user);
+        const loaded = await agentRun.Load(runId);
+        if (!loaded) {
+            throw new Error(`Could not load MJ: AI Agent Runs record '${runId}'`);
+        }
+        if (agentRun.Status !== 'Running') {
+            throw new Error(`Cannot pause run '${runId}': status is '${agentRun.Status}', expected 'Running'`);
+        }
+
         const requestedSummary = input.Summary?.trim() || `Manually paused by administrator ${user.Name || user.Email || user.ID}`;
         const cooperativeResult = await ActiveRunGovernanceRegistry.Instance.RequestCooperativePause(
             runId,
             requestedSummary,
+            provider,
         );
         if (cooperativeResult?.Paused) {
             return {
@@ -767,15 +854,6 @@ export class LimitsPauseRunServerOperation extends LimitsPauseRunOperation {
                 CheckpointID: cooperativeResult.CheckpointID,
                 Message: `Run ${runId} cooperatively paused at safe boundary (checkpoint ${cooperativeResult.CheckpointID ?? 'n/a'}).`,
             };
-        }
-
-        const agentRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', user);
-        const loaded = await agentRun.Load(runId);
-        if (!loaded) {
-            throw new Error(`Could not load MJ: AI Agent Runs record '${runId}'`);
-        }
-        if (agentRun.Status !== 'Running') {
-            throw new Error(`Cannot pause run '${runId}': status is '${agentRun.Status}', expected 'Running'`);
         }
 
         const nowMs = Date.now();
@@ -854,6 +932,7 @@ export class LimitsPauseRunServerOperation extends LimitsPauseRunOperation {
 
 /** Retains `Limits.*` `BaseRemotableOperation` registrations against bundler tree-shaking. */
 export function LoadLimitsOperations(): void {
+    InstallDefaultResumeContinuationDispatcher();
     void LimitsGetDiagnosticsServerOperation;
     void LimitsResumePausedRunServerOperation;
     void LimitsPauseRunServerOperation;

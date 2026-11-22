@@ -2,19 +2,26 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
     CODE_FALLBACK_LIMITS,
     LimitsConfigResolver,
+    RunView,
     type IMetadataProvider,
     type MJLimitsBudgetsConfig,
     type RunViewParams,
     type RunViewResult,
     type UserInfo,
 } from '@memberjunction/core';
-import { BuildLimitsDiagnosticsSnapshot } from '@memberjunction/ai-core-plus';
+import {
+    BuildLimitsDiagnosticsSnapshot,
+    type RunawayCheckpointState,
+} from '@memberjunction/ai-core-plus';
 import {
     BudgetEnforcementGuard,
+    ComputeActiveWallClockOverlapMs,
     ComputeDayBoundaryWindow,
+    ComputeHistoricalRowDailyAttribution,
     ComputeTotalPausedMs,
     type AgentRunBudgetLedgerRow,
 } from '../BudgetEnforcementGuard';
+import { RunawayCheckpointManager } from '../RunawayCheckpointManager';
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
@@ -580,12 +587,196 @@ describe('BudgetEnforcementGuard — all 6 scope x dimension combinations', () =
         expect(springWin.DayEndISO).toBe('2026-03-09T04:00:00.000Z');
         expect(Date.parse(springWin.DayEndISO) - Date.parse(springWin.DayStartISO)).toBe(23 * 3_600_000);
 
-        // America/New_York 2026-11-01 (Fall back: clocks repeat 01:00-02:00; 25-hour local day)
-        const fallBackNoonUtc = Date.UTC(2026, 10, 1, 17, 0, 0);
-        const fallWin = ComputeDayBoundaryWindow(fallBackNoonUtc, 'America/New_York');
+        const nowFallback = Date.UTC(2026, 10, 1, 17, 0, 0);
+        const fallWin = ComputeDayBoundaryWindow(nowFallback, 'America/New_York');
         expect(fallWin.DayBucketUTC).toBe('2026-11-01');
         expect(fallWin.DayStartISO).toBe('2026-11-01T04:00:00.000Z');
         expect(fallWin.DayEndISO).toBe('2026-11-02T05:00:00.000Z');
         expect(Date.parse(fallWin.DayEndISO) - Date.parse(fallWin.DayStartISO)).toBe(25 * 3_600_000);
+    });
+
+    it('attributes only today day-bucket cost and active wall-clock delta for concurrent overnight runs and pause/resume across midnight (CR-20)', async () => {
+        const guard = new BudgetEnforcementGuard();
+        const budgets = createBudgets({
+            PerRun: { MaxCostUsd: 50, MaxWallClockMs: 10_000_000, MaxTokens: null },
+            PerUserPerDay: { MaxCostUsd: 3.0, MaxWallClockMs: 1_800_000, DayBoundaryTimezone: 'UTC' },
+        });
+
+        const dayStartMs = Date.UTC(2026, 10, 21, 0, 0, 0);
+        const dayEndMs = Date.UTC(2026, 10, 22, 0, 0, 0);
+        const nowMs = Date.UTC(2026, 10, 21, 0, 15, 0); // 00:15 UTC today (900_000 ms into today)
+
+        // Concurrent overnight run #1 started 23:30 UTC yesterday, checkpointed $2.00 before midnight at 23:55 UTC,
+        // resumed at 00:05 UTC today, and spent $0.75 more today ($2.75 cumulative). Only $0.75 + 10 min active belongs to today!
+        const concurrentOvernightCheckpoint = {
+            SchemaVersion: 'mj-runaway-checkpoint/v1',
+            CheckpointID: 'cp-overnight-1',
+            AgentRunID: '20000000-0000-4000-8000-000000000001',
+            AgentID: 'agent-1',
+            AgentName: 'OvernightAgent',
+            UserID: USER_ID,
+            RoutineID: null,
+            PausedAtISO: new Date(Date.UTC(2026, 10, 20, 23, 55, 0)).toISOString(),
+            PausedAtMs: Date.UTC(2026, 10, 20, 23, 55, 0),
+            PauseReason: 'BudgetExceeded',
+            Summary: 'Overnight pause before midnight',
+            CompletedStepCount: 4,
+            CompletedStepIDs: [],
+            CompletedPromptTurns: 2,
+            CompletedNodeIDs: [],
+            ConversationMessages: [],
+            InFlightPayload: null,
+            Scratchpad: { notes: '', tasks: [] },
+            NextStepSummary: null,
+            Evidence: {},
+            CumulativeLedger: {
+                RunCostUsd: 2.0,
+                RunWallClockMs: 1_500_000,
+                RunTokens: 1000,
+                RoutineCostUsd: 0,
+                RoutineWallClockMs: 0,
+                UserDailyCostUsd: 2.0,
+                UserDailyWallClockMs: 1_500_000,
+                PausedWallClockMs: 600_000,
+                PausedIntervals: [
+                    {
+                        PausedAtMs: Date.UTC(2026, 10, 20, 23, 55, 0),
+                        ResumedAtMs: Date.UTC(2026, 10, 21, 0, 5, 0),
+                    },
+                ],
+                DayBucketUTC: '2026-11-20',
+                DayBoundaryTimezone: 'UTC',
+                AsOfISO: new Date(Date.UTC(2026, 10, 20, 23, 55, 0)).toISOString(),
+            },
+            HumanApproval: { Status: 'Approved' },
+        };
+
+        // Run #2 finished BEFORE midnight yesterday (must contribute 0 today even if mock returns it)
+        const yesterdayFinishedRow: AgentRunBudgetLedgerRow = {
+            ID: '20000000-0000-4000-8000-000000000002',
+            ParentRunID: null,
+            UserID: USER_ID,
+            TotalCost: 20.0,
+            TotalCostRollup: 20.0,
+            StartedAt: new Date(Date.UTC(2026, 10, 20, 12, 0, 0)),
+            CompletedAt: new Date(Date.UTC(2026, 10, 20, 13, 0, 0)),
+            __mj_UpdatedAt: new Date(Date.UTC(2026, 10, 20, 13, 0, 0)),
+            ScheduledJobRunID: null,
+            Status: 'Completed',
+            Data: null,
+        };
+
+        const concurrentOvernightRow: AgentRunBudgetLedgerRow = {
+            ID: '20000000-0000-4000-8000-000000000001',
+            ParentRunID: null,
+            UserID: USER_ID,
+            TotalCost: 2.75,
+            TotalCostRollup: 2.75,
+            StartedAt: new Date(Date.UTC(2026, 10, 20, 23, 30, 0)),
+            CompletedAt: null,
+            __mj_UpdatedAt: new Date(nowMs),
+            ScheduledJobRunID: null,
+            Status: 'Running',
+            Data: JSON.stringify({ __runawayCheckpoint: concurrentOvernightCheckpoint }),
+        };
+
+        // Also test active run pausing before midnight and resuming today via RunawayCheckpointManager
+        let capturedUserDailyFilter = '';
+        const rvMock = {
+            RunViews: vi.fn(async (queries: Array<{ ExtraFilter?: string }>) => {
+                capturedUserDailyFilter = queries[0]?.ExtraFilter ?? '';
+                return [{ Success: true, Results: [yesterdayFinishedRow, concurrentOvernightRow] }];
+            }),
+        };
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(rvMock as Partial<RunView> as RunView);
+        const provider = { Entities: [] } as Partial<IMetadataProvider> as IMetadataProvider;
+
+        // Current active run started 23:40 UTC yesterday, paused at 23:50 UTC ($4.00 spent pre-midnight), resumed 00:05 UTC today, and spent $0.50 today ($4.50 total)
+        const pausedIntervals = [
+            {
+                PausedAtMs: Date.UTC(2026, 10, 20, 23, 50, 0),
+                ResumedAtMs: Date.UTC(2026, 10, 21, 0, 5, 0),
+            },
+        ];
+        const resBeforeBreach = await guard.Evaluate({
+            Budgets: budgets,
+            AgentRunID: ACTIVE_RUN_ID,
+            UserID: USER_ID,
+            CurrentRunCostUsd: 4.5,
+            CurrentRunStartedAtMs: Date.UTC(2026, 10, 20, 23, 40, 0),
+            PriorDayCostBaselineUsd: 4.0,
+            PausedIntervals: pausedIntervals,
+            NowMs: nowMs,
+            Provider: provider,
+        });
+
+        // SQL filter queries overlapping runs (StartedAt < DayEnd AND (CompletedAt IS NULL OR CompletedAt >= DayStart OR __mj_UpdatedAt >= DayStart))
+        expect(capturedUserDailyFilter).toContain(`StartedAt < '${new Date(dayEndMs).toISOString()}'`);
+        expect(capturedUserDailyFilter).toContain('CompletedAt IS NULL');
+        expect(capturedUserDailyFilter).toContain(`CompletedAt >= '${new Date(dayStartMs).toISOString()}'`);
+
+        // Today's cost = concurrent $0.75 + active today $0.50 = $1.25 (< $3.00 daily limit, NOT $26.75!)
+        // Today's active wall-clock = concurrent 10 min (600_000 ms) + active 10 min (600_000 ms) = 1_200_000 ms (< 1_800_000 ms, pre-midnight & paused time excluded!)
+        expect(resBeforeBreach.Exceeded).toBe(false);
+        expect(resBeforeBreach.Ledger.UserDailyCostUsd).toBeCloseTo(1.25, 4);
+        expect(resBeforeBreach.Ledger.UserDailyWallClockMs).toBe(1_200_000);
+        // Meanwhile PerRun wall-clock still tracks full active time (10 min pre-midnight + 10 min today = 1_200_000 ms) and full cost ($4.50)
+        expect(resBeforeBreach.Ledger.RunCostUsd).toBeCloseTo(4.5, 4);
+        expect(resBeforeBreach.Ledger.RunWallClockMs).toBe(1_200_000);
+
+        // Now verify wall-clock daily limit breach when today's active time reaches 1_800_001ms across concurrent + active run
+        const laterMs = Date.UTC(2026, 10, 21, 0, 25, 1);
+        const resWallBreach = await guard.Evaluate({
+            Budgets: budgets,
+            AgentRunID: ACTIVE_RUN_ID,
+            UserID: USER_ID,
+            CurrentRunCostUsd: 4.5,
+            CurrentRunStartedAtMs: Date.UTC(2026, 10, 20, 23, 40, 0),
+            PriorDayCostBaselineUsd: 4.0,
+            PausedIntervals: pausedIntervals,
+            NowMs: laterMs,
+            Provider: provider,
+        });
+        expect(resWallBreach.Exceeded).toBe(true);
+        expect(resWallBreach.Breach?.Scope).toBe('PerUserPerDay');
+        expect(resWallBreach.Breach?.Dimension).toBe('WallClockMs');
+
+        // Verify ComputeActiveWallClockOverlapMs + ComputeHistoricalRowDailyAttribution directly and PrepareResumeFromCheckpoint across midnight
+        expect(
+            ComputeActiveWallClockOverlapMs(
+                Date.UTC(2026, 10, 20, 23, 40, 0),
+                nowMs,
+                dayStartMs,
+                dayEndMs,
+                pausedIntervals,
+                false,
+            ),
+        ).toBe(600_000);
+        expect(ComputeHistoricalRowDailyAttribution(yesterdayFinishedRow, 20, dayStartMs, dayEndMs, nowMs, false)).toEqual({
+            CostUsd: 0,
+            WallClockMs: 0,
+        });
+
+        const cpManager = new RunawayCheckpointManager();
+        const savedRun = {
+            ID: '30000000-0000-4000-8000-000000000003',
+            Status: 'Paused',
+            CompletedAt: null,
+            ErrorMessage: null,
+            Data: JSON.stringify({ __runawayCheckpoint: concurrentOvernightCheckpoint }),
+            get RunawayCheckpoint() {
+                return null;
+            },
+            set RunawayCheckpoint(_val: RunawayCheckpointState | null) {},
+            LatestResult: { CompleteMessage: '' },
+            Save: vi.fn(async () => true),
+        };
+        const restored = await cpManager.PrepareResumeFromCheckpoint({
+            AgentRun: savedRun as Parameters<RunawayCheckpointManager['PrepareResumeFromCheckpoint']>[0]['AgentRun'],
+            BaseBudgets: budgets,
+            NowMs: Date.UTC(2026, 10, 21, 0, 5, 0),
+        });
+        expect(restored.PriorDayCostBaselineUsd).toBe(2.0);
+        expect(restored.PriorDayWallClockBaselineMs).toBe(1_500_000);
     });
 });

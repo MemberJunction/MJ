@@ -56,7 +56,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import type { ChatMessage } from '@memberjunction/ai';
 import { IsPlainObject, IsValidUUID } from '@memberjunction/global';
-import { ApplyBudgetExtensionToBudgets, ComputeTotalPausedMs } from './BudgetEnforcementGuard';
+import { ApplyBudgetExtensionToBudgets, ComputeDayBoundaryWindow, ComputeTotalPausedMs } from './BudgetEnforcementGuard';
 
 /** Input parameters for {@link RunawayCheckpointManager.PauseRunWithCheckpoint}. */
 export interface PauseRunWithCheckpointInput {
@@ -131,6 +131,10 @@ export interface RestoredCheckpointContext {
     StartingPromptTurns: number;
     PriorCumulativeCostUsd: number;
     PriorCumulativeActiveWallClockMs: number;
+    /** Prior-day cost already spent before today's UTC/IANA day boundary when resuming across midnight (CR-20). */
+    PriorDayCostBaselineUsd?: number;
+    /** Prior-day active wall-clock already elapsed before today's UTC/IANA day boundary (CR-20). */
+    PriorDayWallClockBaselineMs?: number;
     PausedIntervals: BudgetPausedInterval[];
     ResetProgressDetectorWindow: boolean;
 }
@@ -257,11 +261,25 @@ export class RunawayCheckpointManager {
 
         const nowMs = input.NowMs ?? Date.now();
         const closedIntervals = this.closeOpenPauseInterval(checkpoint.CumulativeLedger.PausedIntervals, nowMs);
+        const resumeDay = ComputeDayBoundaryWindow(nowMs, checkpoint.CumulativeLedger.DayBoundaryTimezone || 'UTC');
+        const resumeDayStartMs = Date.parse(resumeDay.DayStartISO);
+        const crossedDayBoundary =
+            checkpoint.CumulativeLedger.DayBucketUTC !== resumeDay.DayBucketUTC &&
+            checkpoint.PausedAtMs < resumeDayStartMs;
+        const priorDayCostBaseline = crossedDayBoundary
+            ? checkpoint.CumulativeLedger.RunCostUsd
+            : checkpoint.CumulativeLedger.PriorDayCostBaselineUsd;
+        const priorDayWallBaseline = crossedDayBoundary
+            ? checkpoint.CumulativeLedger.RunWallClockMs
+            : checkpoint.CumulativeLedger.PriorDayWallClockBaselineMs;
         checkpoint.HumanApproval = { ...checkpoint.HumanApproval, ...effectiveApproval };
         checkpoint.CumulativeLedger = {
             ...checkpoint.CumulativeLedger,
             PausedIntervals: closedIntervals,
             PausedWallClockMs: ComputeTotalPausedMs(closedIntervals, nowMs),
+            DayBucketUTC: resumeDay.DayBucketUTC,
+            ...(typeof priorDayCostBaseline === 'number' ? { PriorDayCostBaselineUsd: priorDayCostBaseline } : {}),
+            ...(typeof priorDayWallBaseline === 'number' ? { PriorDayWallClockBaselineMs: priorDayWallBaseline } : {}),
             AsOfISO: new Date(nowMs).toISOString(),
         };
 
@@ -296,6 +314,8 @@ export class RunawayCheckpointManager {
             StartingPromptTurns: checkpoint.CompletedPromptTurns,
             PriorCumulativeCostUsd: checkpoint.CumulativeLedger.RunCostUsd,
             PriorCumulativeActiveWallClockMs: checkpoint.CumulativeLedger.RunWallClockMs,
+            ...(typeof priorDayCostBaseline === 'number' ? { PriorDayCostBaselineUsd: priorDayCostBaseline } : {}),
+            ...(typeof priorDayWallBaseline === 'number' ? { PriorDayWallClockBaselineMs: priorDayWallBaseline } : {}),
             PausedIntervals: closedIntervals,
             ResetProgressDetectorWindow: effectiveApproval.BudgetExtension?.ResetProgressDetectorWindow !== false,
         };

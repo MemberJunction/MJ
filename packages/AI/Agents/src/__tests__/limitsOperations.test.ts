@@ -328,6 +328,7 @@ describe('Limits.* BaseRemotableOperation implementations', () => {
         let errorMessage: string | null = null;
         let checkpointObj: RunawayCheckpointState | null = storedCheckpoint;
 
+        const statusHistory: string[] = [runStatus];
         const runEntity = {
             ID: RUN_ID_PAUSED,
             AgentID: AGENT_ID,
@@ -338,6 +339,7 @@ describe('Limits.* BaseRemotableOperation implementations', () => {
             },
             set Status(val: string) {
                 runStatus = val;
+                statusHistory.push(val);
             },
             get CompletedAt() {
                 return completedAt;
@@ -374,26 +376,74 @@ describe('Limits.* BaseRemotableOperation implementations', () => {
         } as Partial<IMetadataProvider> as IMetadataProvider;
 
         const resumeOp = new LimitsResumePausedRunServerOperation();
-        const res = await resumeOp.ExecuteServer(
-            {
-                AgentRunID: RUN_ID_PAUSED,
-                BudgetExtension: {
-                    NewPerRunMaxCostUsd: 5.0,
-                    AdditionalWallClockMs: 60_000,
-                },
-                DecisionNotes: 'Approved additional $5 budget',
-            },
-            { provider, user: OWNER_USER, emitProgress: () => undefined },
-        );
 
-        expect(res.Success).toBe(true);
-        expect(res.Output?.Status).toBe('Running');
-        expect(res.Output?.ApprovalStatus).toBe('Approved');
-        expect(res.Output?.ExtendedBudgets?.PerRun.MaxCostUsd).toBe(5.0);
-        expect(res.Output?.PriorCumulativeCostUsd).toBe(1.5);
-        expect(res.Output?.PriorCumulativeActiveWallClockMs).toBe(12_000);
-        expect(res.Output?.StartingStepCount).toBe(8);
-        expect(res.Output?.StartingPromptTurns).toBe(4);
+        // 1) Fail-closed when no continuation dispatcher is available: Status MUST NOT transition to 'Running'
+        ActiveRunGovernanceRegistry.Instance.ClearContinuationDispatchers();
+        try {
+            const noDispatcherRes = await resumeOp.ExecuteServer(
+                {
+                    AgentRunID: RUN_ID_PAUSED,
+                    BudgetExtension: { NewPerRunMaxCostUsd: 5.0 },
+                },
+                { provider, user: OWNER_USER, emitProgress: () => undefined },
+            );
+            expect(noDispatcherRes.Success).toBe(true);
+            expect(noDispatcherRes.Output?.Success).toBe(false);
+            expect(noDispatcherRes.Output?.Status).toBe('Paused');
+            expect(runEntity.Status).toBe('Paused');
+            expect(statusHistory).not.toContain('Running');
+
+            // 2) Fail-closed rollback when continuation dispatcher declines or returns null: rolls back to 'Paused'
+            ActiveRunGovernanceRegistry.Instance.RegisterContinuationDispatcher(async () => ({
+                Dispatched: false,
+                Claimed: true,
+                Status: 'Paused',
+                Message: 'Worker capacity exhausted',
+            }));
+            const declinedRes = await resumeOp.ExecuteServer(
+                {
+                    AgentRunID: RUN_ID_PAUSED,
+                    BudgetExtension: { NewPerRunMaxCostUsd: 5.0 },
+                },
+                { provider, user: OWNER_USER, emitProgress: () => undefined },
+            );
+            expect(declinedRes.Output?.Success).toBe(false);
+            expect(declinedRes.Output?.Status).toBe('Paused');
+            expect(runEntity.Status).toBe('Paused');
+
+            // 3) Accepted dispatch transitions cleanly to Running and restores cumulative ledger
+            ActiveRunGovernanceRegistry.Instance.RegisterContinuationDispatcher(async () => ({
+                Dispatched: true,
+                Claimed: true,
+                Status: 'Running',
+                Message: 'Worker claimed resumed run.',
+            }));
+            const res = await resumeOp.ExecuteServer(
+                {
+                    AgentRunID: RUN_ID_PAUSED,
+                    BudgetExtension: {
+                        NewPerRunMaxCostUsd: 5.0,
+                        AdditionalWallClockMs: 60_000,
+                    },
+                    DecisionNotes: 'Approved additional $5 budget',
+                },
+                { provider, user: OWNER_USER, emitProgress: () => undefined },
+            );
+
+            expect(res.Success).toBe(true);
+            expect(res.Output?.Success).toBe(true);
+            expect(res.Output?.Status).toBe('Running');
+            expect(res.Output?.ApprovalStatus).toBe('Approved');
+            expect(res.Output?.ExtendedBudgets?.PerRun.MaxCostUsd).toBe(5.0);
+            expect(res.Output?.PriorCumulativeCostUsd).toBe(1.5);
+            expect(res.Output?.PriorCumulativeActiveWallClockMs).toBe(12_000);
+            expect(res.Output?.StartingStepCount).toBe(8);
+            expect(res.Output?.StartingPromptTurns).toBe(4);
+        } finally {
+            ActiveRunGovernanceRegistry.Instance.RegisterContinuationDispatcher(null);
+            LoadLimitsOperations();
+            ActiveRunGovernanceRegistry.Instance.ClearDispatchedClaims();
+        }
     });
 
     it('computes budget extensions against persisted LimitsDiagnosticsSnapshot and dispatches continuation idempotently through completion (CR-2)', async () => {
@@ -536,32 +586,112 @@ describe('Limits.* BaseRemotableOperation implementations', () => {
         }
     });
 
-    it('coordinates Limits.PauseRun with in-process worker safe-point pause and preserves persisted state on detached runs (CR-3)', async () => {
-        // 1) Active in-process worker registered in ActiveRunGovernanceRegistry
-        const coopPauseSpy = vi.fn(async (summary?: string) => ({
-            Paused: true,
-            CheckpointID: 'cp-live-safe-1',
-            Status: 'Paused',
-            Summary: summary ?? 'Paused live worker',
-        }));
-        ActiveRunGovernanceRegistry.Instance.RegisterActiveRun({
-            AgentRunID: RUN_ID_ACTIVE,
-            RequestPause: coopPauseSpy,
+    it('coordinates Limits.PauseRun with in-process worker safe-point pause and enforces provider/tenant scope isolation (CR-3, CR-18)', async () => {
+        // 1) Active in-process worker registered in ActiveRunGovernanceRegistry scoped to providerA
+        const callOrder: string[] = [];
+        const coopPauseSpyA = vi.fn(async (summary?: string) => {
+            callOrder.push('signalA');
+            return {
+                Paused: true,
+                CheckpointID: 'cp-live-safe-1',
+                Status: 'Paused',
+                Summary: summary ?? 'Paused live worker A',
+            };
         });
+        const providerA = {
+            Authorizations: [],
+            GetEntityObject: vi.fn(async () => ({
+                ID: RUN_ID_ACTIVE,
+                AgentID: AGENT_ID,
+                Status: 'Running',
+                Load: vi.fn(async (id: string) => {
+                    callOrder.push('loadA');
+                    return id === RUN_ID_ACTIVE;
+                }),
+            })),
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+
+        ActiveRunGovernanceRegistry.Instance.RegisterActiveRun(
+            {
+                AgentRunID: RUN_ID_ACTIVE,
+                Provider: providerA,
+                RequestPause: coopPauseSpyA,
+            },
+            providerA,
+        );
+
+        // Second provider B with identical colliding Run ID and an unauthorized provider C that owns no run
+        const coopPauseSpyB = vi.fn(async (summary?: string) => {
+            callOrder.push('signalB');
+            return {
+                Paused: true,
+                CheckpointID: 'cp-live-safe-b',
+                Status: 'Paused',
+                Summary: summary ?? 'Paused live worker B',
+            };
+        });
+        const providerB = {
+            Authorizations: [],
+            GetEntityObject: vi.fn(async () => ({
+                ID: RUN_ID_ACTIVE,
+                AgentID: AGENT_ID,
+                Status: 'Running',
+                Load: vi.fn(async (id: string) => {
+                    callOrder.push('loadB');
+                    return id === RUN_ID_ACTIVE;
+                }),
+            })),
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+        ActiveRunGovernanceRegistry.Instance.RegisterActiveRun(
+            {
+                AgentRunID: RUN_ID_ACTIVE,
+                Provider: providerB,
+                RequestPause: coopPauseSpyB,
+            },
+            providerB,
+        );
+
+        const unauthorizedProviderC = {
+            Authorizations: [],
+            GetEntityObject: vi.fn(async () => ({
+                Load: vi.fn(async () => false),
+            })),
+        } as Partial<IMetadataProvider> as IMetadataProvider;
 
         const pauseOp = new LimitsPauseRunServerOperation();
-        const noopProvider = { Authorizations: [] } as Partial<IMetadataProvider> as IMetadataProvider;
         try {
+            // Unauthorized / missing-record provider C MUST fail Load FIRST without signaling provider A or B
+            const deniedRes = await pauseOp.ExecuteServer(
+                { AgentRunID: RUN_ID_ACTIVE, Summary: 'Cross-tenant attempt' },
+                { provider: unauthorizedProviderC, user: OWNER_USER, emitProgress: () => undefined },
+            );
+            expect(deniedRes.Success).toBe(false);
+            expect(coopPauseSpyA).not.toHaveBeenCalled();
+            expect(coopPauseSpyB).not.toHaveBeenCalled();
+
+            // Provider B pausing identical colliding UUID signals ONLY B (never A) and loads B first
+            const bPauseRes = await pauseOp.ExecuteServer(
+                { AgentRunID: RUN_ID_ACTIVE, Summary: 'Pause tenant B only' },
+                { provider: providerB, user: OWNER_USER, emitProgress: () => undefined },
+            );
+            expect(bPauseRes.Success).toBe(true);
+            expect(bPauseRes.Output?.CheckpointID).toBe('cp-live-safe-b');
+            expect(coopPauseSpyB).toHaveBeenCalledWith('Pause tenant B only');
+            expect(coopPauseSpyA).not.toHaveBeenCalled();
+
+            // Provider A pausing loads A first BEFORE signaling A
             const livePauseRes = await pauseOp.ExecuteServer(
                 { AgentRunID: RUN_ID_ACTIVE, Summary: 'Cooperate at step boundary' },
-                { provider: noopProvider, user: OWNER_USER, emitProgress: () => undefined },
+                { provider: providerA, user: OWNER_USER, emitProgress: () => undefined },
             );
             expect(livePauseRes.Success).toBe(true);
-            expect(coopPauseSpy).toHaveBeenCalledWith('Cooperate at step boundary');
+            expect(coopPauseSpyA).toHaveBeenCalledWith('Cooperate at step boundary');
             expect(livePauseRes.Output?.CheckpointID).toBe('cp-live-safe-1');
             expect(livePauseRes.Output?.Status).toBe('Paused');
+            expect(callOrder.slice(0, 4)).toEqual(['loadB', 'signalB', 'loadA', 'signalA']);
         } finally {
-            ActiveRunGovernanceRegistry.Instance.UnregisterActiveRun(RUN_ID_ACTIVE);
+            ActiveRunGovernanceRegistry.Instance.UnregisterActiveRun(RUN_ID_ACTIVE, providerA);
+            ActiveRunGovernanceRegistry.Instance.UnregisterActiveRun(RUN_ID_ACTIVE, providerB);
         }
 
         // 2) Inactive/detached run record in DB preserves existing messages, scratchpad, payload, and routine
@@ -705,5 +835,123 @@ describe('Limits.* BaseRemotableOperation implementations', () => {
         expect(res.Output?.ResolvedLimits.Budgets.PerRun.MaxCostUsd).toBe(8.0);
         expect(res.Output?.ClampedKeys).toContain('AgentAbsoluteIterations');
         expect(res.Output?.ClampedKeys).toContain('Budgets.PerRun.MaxCostUsd');
+    });
+
+    it('executes real fresh-worker continuation through DefaultResumeContinuationDispatcher when no custom dispatcher is registered (CR-14)', async () => {
+        ActiveRunGovernanceRegistry.Instance.ClearDispatchedClaims();
+        ActiveRunGovernanceRegistry.Instance.RegisterContinuationDispatcher(null);
+        LoadLimitsOperations();
+
+        const checkpoint: RunawayCheckpointState = {
+            SchemaVersion: 'mj-runaway-checkpoint/v1',
+            CheckpointID: 'cp-default-worker-1',
+            AgentRunID: RUN_ID_PAUSED,
+            AgentID: AGENT_ID,
+            AgentName: 'DefaultDispatcherAgent',
+            UserID: OWNER_USER.ID,
+            RoutineID: null,
+            PausedAtISO: '2026-11-21T10:00:00.000Z',
+            PausedAtMs: Date.UTC(2026, 10, 21, 10, 0, 0),
+            PauseReason: 'ManualPause',
+            Summary: 'Paused cleanly',
+            CompletedStepCount: 3,
+            CompletedStepIDs: ['s1', 's2', 's3'],
+            CompletedPromptTurns: 1,
+            CompletedNodeIDs: [],
+            ConversationMessages: [],
+            InFlightPayload: { count: 3 },
+            Scratchpad: { notes: '', tasks: [] },
+            NextStepSummary: 'Success',
+            PendingStepDecision: { step: 'Success', terminate: true, newPayload: { count: 4 } },
+            Evidence: {},
+            CumulativeLedger: {
+                RunCostUsd: 0.5,
+                RunWallClockMs: 5_000,
+                RunTokens: 200,
+                RoutineCostUsd: 0.5,
+                RoutineWallClockMs: 5_000,
+                UserDailyCostUsd: 0.5,
+                UserDailyWallClockMs: 5_000,
+                PausedWallClockMs: 0,
+                PausedIntervals: [],
+                DayBucketUTC: '2026-11-21',
+                DayBoundaryTimezone: 'UTC',
+                AsOfISO: '2026-11-21T10:00:00.000Z',
+            },
+            HumanApproval: { Status: 'Pending' },
+        };
+
+        let runStatus = 'Paused';
+        let dataJson = AttachRunawayCheckpointToRunData(null, checkpoint);
+        const runEntity = {
+            ID: RUN_ID_PAUSED,
+            AgentID: AGENT_ID,
+            Agent: 'DefaultDispatcherAgent',
+            UserID: OWNER_USER.ID,
+            get Status() {
+                return runStatus;
+            },
+            set Status(val: string) {
+                runStatus = val;
+            },
+            CompletedAt: null,
+            Success: null,
+            ErrorMessage: null,
+            Message: null,
+            get Data() {
+                return dataJson;
+            },
+            set Data(val: string | null) {
+                dataJson = val ?? '';
+            },
+            get RunawayCheckpoint() {
+                return null;
+            },
+            set RunawayCheckpoint(_val: RunawayCheckpointState | null) {},
+            LatestResult: { CompleteMessage: '' },
+            Load: vi.fn(async () => true),
+            Save: vi.fn(async () => true),
+        } as Partial<MJAIAgentRunEntityExtended> as MJAIAgentRunEntityExtended;
+
+        const resumeSpy = vi.spyOn(BaseAgent.prototype, 'ResumePausedRun').mockImplementation(async (execParams) => {
+            expect(execParams.resumeCheckpointRunId).toBe(RUN_ID_PAUSED);
+            runStatus = 'Completed';
+            return {
+                success: true,
+                agentRun: runEntity,
+                payload: { count: 4 },
+            };
+        });
+
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn(async (params: { EntityName: string }) => {
+                if (params.EntityName === 'MJ: AI Agents') {
+                    return {
+                        Success: true,
+                        Results: [{ ID: AGENT_ID, Name: 'DefaultDispatcherAgent', DriverClass: null }],
+                    };
+                }
+                return { Success: true, Results: [] };
+            }),
+        } as Partial<RunView> as RunView);
+
+        const provider = {
+            Authorizations: [],
+            GetEntityObject: vi.fn(async () => runEntity),
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+
+        const resumeOp = new LimitsResumePausedRunServerOperation();
+        const res = await resumeOp.ExecuteServer(
+            { AgentRunID: RUN_ID_PAUSED, DecisionNotes: 'Resume via default fresh worker' },
+            { provider, user: OWNER_USER, emitProgress: () => undefined },
+        );
+        expect(res.Success).toBe(true);
+        expect(res.Output?.Success).toBe(true);
+
+        const continuationOutcome = await ActiveRunGovernanceRegistry.Instance.WaitForContinuation(RUN_ID_PAUSED, provider);
+        expect(continuationOutcome?.Dispatched).toBe(true);
+        expect(continuationOutcome?.Completed).toBe(true);
+        expect(continuationOutcome?.Status).toBe('Completed');
+        expect(resumeSpy).toHaveBeenCalledTimes(1);
     });
 });

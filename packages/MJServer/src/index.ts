@@ -90,7 +90,7 @@ import type { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { IntegrationProgressEmitter, SweepInterruptedRuns } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
-import { ClientToolRequestManager, AgentRunWatchdog, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
+import { ClientToolRequestManager, AgentRunWatchdog, InstallDefaultResumeContinuationDispatcher, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
 import { BindBridgeEngineHostInstance, SessionJanitor, SetHostInstancePort, StartBridgeOrphanReconciliation } from './agentSessions/index.js';
 import { ApplyHandoffOfferExpirySettings } from './agentSessions/HandoffOfferExpiry.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
@@ -1855,6 +1855,8 @@ const setupComplete$ = new ReplaySubject(1);
 
   // Every role runs agents, so every role's watchdog takes the configured intervals (before any run starts).
   AgentRunWatchdog.Instance.Configure(configInfo.agentRunWatchdog);
+  // Wire default fresh-worker continuation dispatcher for checkpoint-resumed paused runs (CR-14).
+  InstallDefaultResumeContinuationDispatcher();
   // The handoff offer registry starts its own expiry sweep when it loads, on every role; apply the host's setting.
   ApplyHandoffOfferExpirySettings(configInfo.agentSessions.handoffOfferExpiry);
 

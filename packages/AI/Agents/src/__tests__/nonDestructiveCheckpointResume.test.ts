@@ -8,7 +8,9 @@ import {
 } from '@memberjunction/core';
 import {
     AgentUserPolicyEngine,
+    AttachRunawayCheckpointToRunData,
     ExtractRunawayCheckpointFromRunData,
+    ValidateLoopOperationStructure,
     type AgentConfiguration,
     type AIPromptParams,
     type AIPromptRunResult,
@@ -17,10 +19,12 @@ import {
     type MJAIAgentRunEntityExtended,
     type MJAIAgentRunStepEntityExtended,
     type OwnerPauseNotificationPayload,
+    type RunawayCheckpointState,
     type RunawayJsonValue,
 } from '@memberjunction/ai-core-plus';
 import type { MJAIAgentRequestEntity, MJAIAgentTypeEntity, MJAIPromptEntity, MJAIPromptRunEntity, MJAIAgentUserPolicyEntity, MJUserNotificationEntity } from '@memberjunction/core-entities';
 import { ActionEngineServer } from '@memberjunction/actions';
+import { AIEngine } from '@memberjunction/aiengine';
 import { ActiveRunGovernanceRegistry } from '../ActiveRunGovernanceRegistry';
 import { BaseAgent } from '../base-agent';
 import { LimitsPauseRunServerOperation } from '../operations/LimitsOperations';
@@ -1237,6 +1241,7 @@ describe('Non-destructive pause, persisted checkpoint, owner notification, and h
                     loopPausePromise = ActiveRunGovernanceRegistry.Instance.RequestCooperativePause(
                         currentRunId,
                         'Pause While loop after iteration 2',
+                        provider,
                     );
                 }
             }
@@ -1331,5 +1336,531 @@ describe('Non-destructive pause, persisted checkpoint, owner notification, and h
         expect(executedAttempts).toEqual([1, 2, 3, 4]);
         expect(freshAgent.PromptCalls).toHaveLength(1);
         expect(resumed.payload).toEqual({ loopTag: 'while-4', loopCompleted: true });
+    });
+
+    it('CR-15: enforces Tier-4 user-policy AgentAbsoluteIterations ceiling even when raw params.absoluteMaxIterations attempts to widen it', async () => {
+        const harness = new InMemoryCheckpointHarness();
+        const provider = harness.CreateProvider();
+        const contextUser = { ID: USER_ID, Name: 'Policy User', Email: 'u@example.com' } as UserInfo;
+
+        const userPolicy = {
+            ID: '99999999-1111-4111-8111-000000000015',
+            AgentID: AGENT_ID,
+            UserID: USER_ID,
+            Status: 'Active',
+            LimitsOverride: JSON.stringify({ AgentAbsoluteIterations: 2 }),
+        } as Partial<MJAIAgentUserPolicyEntity> as MJAIAgentUserPolicyEntity;
+
+        const policySpy = vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockResolvedValueOnce({
+            status: 'found',
+            policy: userPolicy,
+        });
+        try {
+            vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockResolvedValue({
+                Success: true,
+                Message: 'Step action ok',
+                Params: [],
+                Result: { ResultCode: 'SUCCESS' },
+            });
+
+            const agentEntity = {
+                ID: AGENT_ID,
+                Name: 'Cr15 Clamped Agent',
+                TypeID: AGENT_TYPE_ID,
+                Status: 'Active',
+                MaxCostPerRun: null,
+                MaxTokensPerRun: null,
+                MaxTimePerRun: null,
+                MaxIterationsPerRun: null,
+                TypeConfiguration: null,
+            } as Partial<MJAIAgentEntityExtended> as MJAIAgentEntityExtended;
+
+            // Script more Retry turns than the policy ceiling (2) so the guardrail MUST stop at iteration 2 despite params.absoluteMaxIterations=50_000
+            const agent = new TestableCheckpointAgent([
+                () => makePromptResult({ taskComplete: false, nextStep: { type: 'Actions', actions: [{ name: 'ProcessBatchItem', params: {} }] } }, 0.01, 50),
+                () => makePromptResult({ taskComplete: false, nextStep: { type: 'Actions', actions: [{ name: 'ProcessBatchItem', params: {} }] } }, 0.01, 50),
+                () => makePromptResult({ taskComplete: false, nextStep: { type: 'Actions', actions: [{ name: 'ProcessBatchItem', params: {} }] } }, 0.01, 50),
+                () => makePromptResult({ taskComplete: true, message: 'Should never reach turn 4' }, 0.01, 50),
+            ]);
+
+            const result = await agent.Execute({
+                agent: agentEntity,
+                conversationMessages: [{ role: 'user', content: 'Attempt widening absoluteMaxIterations to 50000' }],
+                contextUser,
+                provider,
+                userId: USER_ID,
+                absoluteMaxIterations: 50_000,
+            });
+
+            expect(result.success).toBe(false);
+            expect(agent.PromptCalls).toHaveLength(2);
+        } finally {
+            policySpy.mockRestore();
+        }
+    });
+
+    it('CR-16: fails closed before dispatching any prompt or action work when ResolvePolicyForAgentAndUser returns status="error" or throws', async () => {
+        const harness = new InMemoryCheckpointHarness();
+        const baseProvider = harness.CreateProvider();
+        const provider = {
+            ...baseProvider,
+            RunView: vi.fn(async () => ({ Success: true, Results: [] })),
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+        const contextUser = { ID: USER_ID, Name: 'Alice', Email: 'alice@example.com' } as UserInfo;
+
+        const agentEntity = {
+            ID: AGENT_ID,
+            Name: 'Cr16 Policy Agent',
+            TypeID: AGENT_TYPE_ID,
+            Status: 'Active',
+            MaxCostPerRun: null,
+            MaxTokensPerRun: null,
+            MaxTimePerRun: null,
+            MaxIterationsPerRun: null,
+            TypeConfiguration: null,
+        } as Partial<MJAIAgentEntityExtended> as MJAIAgentEntityExtended;
+
+        const actionSpy = vi.spyOn(ActionEngineServer.Instance, 'RunAction');
+
+        // 1) Explicit status === 'error' fails closed before any prompt dispatch
+        vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockResolvedValueOnce({
+            status: 'error',
+            policy: null,
+            errorMessage: 'Simulated policy store outage',
+        });
+
+        const agentOnErr = new TestableCheckpointAgent([
+            () => makePromptResult({ taskComplete: true, message: 'MUST NOT RUN' }, 0.01, 50),
+        ]);
+        const errRes = await agentOnErr.Execute({
+            agent: agentEntity,
+            conversationMessages: [{ role: 'user', content: 'Should fail closed on status error' }],
+            contextUser,
+            provider,
+            userId: USER_ID,
+        });
+        expect(errRes.success).toBe(false);
+        expect(errRes.errorMessage).toContain('Fail-closed');
+        expect(errRes.errorMessage).toContain('Simulated policy store outage');
+        expect(agentOnErr.PromptCalls).toHaveLength(0);
+        expect(actionSpy).not.toHaveBeenCalled();
+
+        // 2) Thrown exception during ResolvePolicyForAgentAndUser also fails closed before any prompt dispatch
+        vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockRejectedValueOnce(
+            new Error('Simulated policy query timeout'),
+        );
+
+        const agentOnThrow = new TestableCheckpointAgent([
+            () => makePromptResult({ taskComplete: true, message: 'MUST NOT RUN' }, 0.01, 50),
+        ]);
+        const throwRes = await agentOnThrow.Execute({
+            agent: agentEntity,
+            conversationMessages: [{ role: 'user', content: 'Should fail closed on thrown lookup' }],
+            contextUser,
+            provider,
+            userId: USER_ID,
+        });
+        expect(throwRes.success).toBe(false);
+        expect(throwRes.errorMessage).toContain('Simulated policy query timeout');
+        expect(agentOnThrow.PromptCalls).toHaveLength(0);
+        expect(actionSpy).not.toHaveBeenCalled();
+    });
+
+    it('CR-17: preserves steps[], prompt, and subAgent ForEach/While loop bodies across JSON-only persistence on fresh entities and fresh workers', async () => {
+        const harness = new InMemoryCheckpointHarness();
+        const provider = harness.CreateProvider();
+        const contextUser = { ID: USER_ID, Name: 'Alice', Email: 'alice@example.com' } as UserInfo;
+
+        const agentEntity = {
+            ID: AGENT_ID,
+            Name: 'Cr17 Loop Body Agent',
+            TypeID: AGENT_TYPE_ID,
+            Status: 'Active',
+            MaxCostPerRun: null,
+            MaxTokensPerRun: null,
+            MaxTimePerRun: null,
+            MaxIterationsPerRun: null,
+            TypeConfiguration: null,
+        } as Partial<MJAIAgentEntityExtended> as MJAIAgentEntityExtended;
+
+        // Part A: Live BaseAgent pause + JSON-only fresh entity reload + fresh worker continuation for ForEach with steps[]
+        const executedSteps: Array<{ item: string; stepTag: string }> = [];
+        let stepsPausePromise: ReturnType<typeof ActiveRunGovernanceRegistry.Instance.RequestCooperativePause> | null = null;
+        vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockImplementation(async (actionParams) => {
+            const valParam = (actionParams.Params ?? []).find((p) => p.Name === 'itemVal');
+            const tagParam = (actionParams.Params ?? []).find((p) => p.Name === 'stepTag');
+            const itemVal = String(valParam?.Value ?? '');
+            const stepTag = String(tagParam?.Value ?? '');
+            executedSteps.push({ item: itemVal, stepTag });
+            if (itemVal === 'item-0' && stepTag === 'step-two') {
+                const activeId = Array.from(harness.Runs.keys())[0];
+                if (activeId) {
+                    stepsPausePromise = ActiveRunGovernanceRegistry.Instance.RequestCooperativePause(
+                        activeId,
+                        'Pause multi-step ForEach after item-0',
+                        provider,
+                    );
+                }
+            }
+            return {
+                Success: true,
+                Message: `ok:${itemVal}:${stepTag}`,
+                Params: [{ Name: 'status', Value: 'ok', Type: 'Output' as const }],
+                Result: { ResultCode: 'SUCCESS' },
+            };
+        });
+
+        const worker1 = new TestableCheckpointAgent([
+            () =>
+                makePromptResult(
+                    {
+                        taskComplete: false,
+                        reasoning: 'Run 2-item multi-step ForEach loop',
+                        payloadChangeRequest: { newElements: { batch: ['item-0', 'item-1'] } },
+                        nextStep: {
+                            type: 'ForEach',
+                            forEach: {
+                                collectionPath: 'batch',
+                                itemVariable: 'entry',
+                                maxIterations: 10,
+                                steps: [
+                                    {
+                                        id: 's1',
+                                        name: 'ProcessBatchItem',
+                                        params: { itemVal: '{{entry}}', stepTag: 'step-one' },
+                                        condition: 'true',
+                                        outputMapping: '{"status":"s1Last"}',
+                                    },
+                                    {
+                                        id: 's2',
+                                        name: 'ProcessBatchItem',
+                                        params: { itemVal: '{{entry}}', stepTag: 'step-two' },
+                                        condition: 'steps.s1.status == "ok"',
+                                        outputMapping: '{"status":"s2Last"}',
+                                    },
+                                ],
+                            },
+                        },
+                    },
+                    0.02,
+                    100,
+                ),
+        ]);
+
+        const pausedStepsRes = await worker1.Execute<{ batch: string[] }, { batch: string[] }>({
+            agent: agentEntity,
+            conversationMessages: [{ role: 'user', content: 'Run multi-step ForEach' }],
+            contextUser,
+            provider,
+            userId: USER_ID,
+        });
+        expect(pausedStepsRes.agentRun?.ErrorMessage ?? null).toBeNull();
+        expect(pausedStepsRes.paused).toBe(true);
+        if (stepsPausePromise) {
+            await stepsPausePromise;
+        }
+        expect(executedSteps).toEqual([
+            { item: 'item-0', stepTag: 'step-one' },
+            { item: 'item-0', stepTag: 'step-two' },
+        ]);
+
+        // Hydrate a BRAND-NEW harness & plain persisted data row ONLY from serialized JSON string
+        const rawPersistedJson = JSON.stringify(JSON.parse(pausedStepsRes.agentRun.Data ?? '{}'));
+        const freshHarness = new InMemoryCheckpointHarness();
+        const freshProvider = freshHarness.CreateProvider();
+        const freshReloadedRun = {
+            ID: pausedStepsRes.agentRun.ID,
+            AgentID: AGENT_ID,
+            Status: 'Paused',
+            StartedAt: pausedStepsRes.agentRun.StartedAt,
+            CompletedAt: null,
+            Success: null,
+            ErrorMessage: null,
+            Message: null,
+            UserID: USER_ID,
+            TotalPromptIterations: pausedStepsRes.agentRun.TotalPromptIterations,
+            TotalCost: pausedStepsRes.agentRun.TotalCost,
+            TotalTokensUsed: pausedStepsRes.agentRun.TotalTokensUsed,
+            Steps: [],
+            Data: rawPersistedJson,
+            RunawayCheckpoint: null,
+            FinalPayloadObject: pausedStepsRes.agentRun.FinalPayloadObject,
+            FinalPayload: pausedStepsRes.agentRun.FinalPayload,
+        } as Partial<MJAIAgentRunEntityExtended> as MJAIAgentRunEntityExtended;
+        freshHarness.Runs.set(pausedStepsRes.agentRun.ID, freshReloadedRun);
+
+        const reloadedCp = ExtractRunawayCheckpointFromRunData(rawPersistedJson);
+        expect(reloadedCp?.PendingStepDecision?.forEach?.steps).toEqual([
+            {
+                id: 's1',
+                name: 'ProcessBatchItem',
+                params: { itemVal: '{{entry}}', stepTag: 'step-one' },
+                condition: 'true',
+                outputMapping: '{"status":"s1Last"}',
+            },
+            {
+                id: 's2',
+                name: 'ProcessBatchItem',
+                params: { itemVal: '{{entry}}', stepTag: 'step-two' },
+                condition: 'steps.s1.status == "ok"',
+                outputMapping: '{"status":"s2Last"}',
+            },
+        ]);
+
+        const checkpointManager = new RunawayCheckpointManager();
+        await checkpointManager.ApproveCheckpoint({
+            AgentRunID: pausedStepsRes.agentRun.ID,
+            ApprovedByUserID: APPROVER_ID,
+            Provider: freshProvider,
+            ContextUser: contextUser,
+        });
+
+        // Fresh worker resumes ONLY item-1 without replaying item-0!
+        const worker2 = new TestableCheckpointAgent([
+            () =>
+                makePromptResult(
+                    {
+                        taskComplete: true,
+                        message: 'Multi-step ForEach completed cleanly after JSON-only reload',
+                        payloadChangeRequest: { newElements: { done: true } },
+                    },
+                    0.02,
+                    100,
+                ),
+        ]);
+        const resumedStepsRes = await worker2.ResumePausedRun({
+            agent: agentEntity,
+            conversationMessages: [],
+            contextUser,
+            provider: freshProvider,
+            userId: USER_ID,
+            resumeCheckpointRunId: pausedStepsRes.agentRun.ID,
+        });
+        expect(resumedStepsRes.agentRun?.ErrorMessage ?? resumedStepsRes.errorMessage ?? null).toBeNull();
+        expect(resumedStepsRes.success).toBe(true);
+        expect(executedSteps).toEqual([
+            { item: 'item-0', stepTag: 'step-one' },
+            { item: 'item-0', stepTag: 'step-two' },
+            { item: 'item-1', stepTag: 'step-one' },
+            { item: 'item-1', stepTag: 'step-two' },
+        ]);
+
+        // Part B: JSON-only fresh-entity reload + RestoreNextStepFromDecision round-trip for prompt AND subAgent loops (ForEach & While),
+        // plus live BaseAgent subAgent ForEach continuation on a fresh worker!
+        const subAgentCheckpoint: RunawayCheckpointState = {
+            SchemaVersion: 'mj-runaway-checkpoint/v1',
+            CheckpointID: 'cp-cr17-variants',
+            AgentRunID: '44444444-1111-4111-8111-000000000017',
+            AgentID: AGENT_ID,
+            AgentName: 'Cr17Agent',
+            UserID: USER_ID,
+            RoutineID: null,
+            PausedAtISO: '2026-11-21T12:00:00.000Z',
+            PausedAtMs: Date.UTC(2026, 10, 21, 12, 0, 0),
+            PauseReason: 'ManualPause',
+            Summary: 'Paused prompt & subAgent variants',
+            CompletedStepCount: 1,
+            CompletedStepIDs: ['s-prev'],
+            CompletedPromptTurns: 1,
+            CompletedNodeIDs: [],
+            ConversationMessages: [],
+            InFlightPayload: { items: ['alpha', 'beta'] },
+            Scratchpad: { notes: '', tasks: [] },
+            NextStepSummary: 'ForEach',
+            PendingStepDecision: {
+                step: 'ForEach',
+                terminate: false,
+                newPayload: { items: ['alpha', 'beta'] },
+                forEach: {
+                    collectionPath: 'items',
+                    itemVariable: 'doc',
+                    prompt: {
+                        name: 'SummarizeDocumentPrompt',
+                        templateParameters: { docId: '{{doc}}', format: 'bullet' },
+                        outputMapping: 'summaries[]',
+                    },
+                },
+                while: {
+                    condition: 'attempts < 3',
+                    itemVariable: 'ctx',
+                    subAgent: {
+                        name: 'WorkerSubAgent',
+                        message: 'Inspect attempt {{ctx.attemptNumber}}',
+                        templateParameters: { mode: 'strict' },
+                        context: { tenant: 'acme', traceId: 42 },
+                    },
+                },
+            },
+            LoopCursor: {
+                LoopType: 'ForEach',
+                ParentStepID: null,
+                IterationIndex: 1,
+                CompletedItemResults: [{ ok: true }],
+                WorkingPayload: { items: ['alpha', 'beta'] },
+            },
+            Evidence: {},
+            CumulativeLedger: {
+                RunCostUsd: 0.1,
+                RunWallClockMs: 500,
+                RunTokens: 100,
+                RoutineCostUsd: 0.1,
+                RoutineWallClockMs: 500,
+                UserDailyCostUsd: 0.1,
+                UserDailyWallClockMs: 500,
+                PausedWallClockMs: 0,
+                PausedIntervals: [],
+                DayBucketUTC: '2026-11-21',
+                DayBoundaryTimezone: 'UTC',
+                AsOfISO: '2026-11-21T12:00:00.000Z',
+            },
+            HumanApproval: { Status: 'Approved' },
+        };
+
+        const serializedVariantsJson = AttachRunawayCheckpointToRunData(null, subAgentCheckpoint);
+        const parsedVariantsCp = ExtractRunawayCheckpointFromRunData(serializedVariantsJson);
+        expect(parsedVariantsCp).not.toBeNull();
+        expect(parsedVariantsCp?.PendingStepDecision?.forEach?.prompt).toEqual({
+            name: 'SummarizeDocumentPrompt',
+            templateParameters: { docId: '{{doc}}', format: 'bullet' },
+            outputMapping: 'summaries[]',
+        });
+        expect(parsedVariantsCp?.PendingStepDecision?.while?.subAgent).toEqual({
+            name: 'WorkerSubAgent',
+            message: 'Inspect attempt {{ctx.attemptNumber}}',
+            templateParameters: { mode: 'strict' },
+            context: { tenant: 'acme', traceId: 42 },
+        });
+        expect(ValidateLoopOperationStructure('ForEach', parsedVariantsCp!.PendingStepDecision!.forEach!)).toEqual([]);
+        expect(ValidateLoopOperationStructure('While', parsedVariantsCp!.PendingStepDecision!.while!)).toEqual([]);
+
+        const restoredDecision = checkpointManager.RestoreNextStepFromDecision(parsedVariantsCp?.PendingStepDecision);
+        expect(restoredDecision?.forEach?.prompt).toEqual({
+            name: 'SummarizeDocumentPrompt',
+            templateParameters: { docId: '{{doc}}', format: 'bullet' },
+            outputMapping: 'summaries[]',
+        });
+        expect(restoredDecision?.while?.subAgent).toEqual({
+            name: 'WorkerSubAgent',
+            message: 'Inspect attempt {{ctx.attemptNumber}}',
+            templateParameters: { mode: 'strict' },
+            context: { tenant: 'acme', traceId: 42 },
+        });
+
+        // Also test live ForEach subAgent resume on a fresh worker (reloaded purely from JSON Data)
+        const childSubAgent = {
+            ID: '11111111-2222-4333-8444-555555555555',
+            ParentID: AGENT_ID,
+            Name: 'WorkerSubAgent',
+            TypeID: AGENT_TYPE_ID,
+            Status: 'Active',
+        } as Partial<MJAIAgentEntityExtended> as MJAIAgentEntityExtended;
+        const baseAiInstance = AIEngine.Instance;
+        const aiInstanceSpy = vi.spyOn(AIEngine, 'Instance', 'get').mockReturnValue({
+            ...baseAiInstance,
+            Agents: [childSubAgent],
+        });
+        try {
+            const subAgentInvocations: Array<{ name: string; message: string; context: unknown; tpl: Record<string, string> | undefined }> = [];
+            const subAgentCp: RunawayCheckpointState = {
+                ...subAgentCheckpoint,
+                AgentRunID: '44444444-2222-4222-8222-000000000017',
+                PendingStepDecision: {
+                    step: 'ForEach',
+                    terminate: false,
+                    newPayload: { items: ['alpha', 'beta'] },
+                    forEach: {
+                        collectionPath: 'items',
+                        itemVariable: 'doc',
+                        subAgent: {
+                            name: 'WorkerSubAgent',
+                            message: 'Inspect {{doc}}',
+                            templateParameters: { mode: 'strict' },
+                            context: { tenant: 'acme', traceId: 77 },
+                        },
+                    },
+                },
+            };
+            const subAgentRunId = subAgentCp.AgentRunID;
+            const jsonOnlyRunData = AttachRunawayCheckpointToRunData(null, subAgentCp);
+            const jsonOnlyRun = {
+                ID: subAgentRunId,
+                AgentID: AGENT_ID,
+                Status: 'Paused',
+                StartedAt: new Date(Date.now() - 2_000),
+                CompletedAt: null,
+                Success: null,
+                ErrorMessage: null,
+                Message: null,
+                UserID: USER_ID,
+                TotalPromptIterations: 1,
+                TotalCost: 0.1,
+                TotalTokensUsed: 100,
+                Steps: [],
+                Data: jsonOnlyRunData,
+                get RunawayCheckpoint() {
+                    return ExtractRunawayCheckpointFromRunData(this.Data);
+                },
+                set RunawayCheckpoint(_val: RunawayCheckpointState | null) {},
+                FinalPayloadObject: { items: ['alpha', 'beta'] },
+                FinalPayload: JSON.stringify({ items: ['alpha', 'beta'] }),
+                LatestResult: { CompleteMessage: '' },
+                Load: vi.fn(async (id: string) => id === subAgentRunId),
+                Save: vi.fn(async () => true),
+            } as Partial<MJAIAgentRunEntityExtended> as MJAIAgentRunEntityExtended;
+            harness.Runs.set(subAgentRunId, jsonOnlyRun);
+
+            const freshSubAgentWorker = new TestableCheckpointAgent([
+                () =>
+                    makePromptResult(
+                        {
+                            taskComplete: true,
+                            message: 'SubAgent ForEach resumed cleanly',
+                            payloadChangeRequest: { newElements: { subAgentDone: true } },
+                        },
+                        0.02,
+                        100,
+                    ),
+            ]);
+            Object.defineProperty(freshSubAgentWorker, 'processSubAgentStep', {
+                value: vi.fn(
+                    async (
+                        _p: ExecuteAgentParams,
+                        step: { subAgent: { name: string; message: string; templateParameters?: Record<string, string>; context?: unknown } },
+                        _parentStepId: string,
+                        item: RunawayJsonValue,
+                    ) => {
+                        subAgentInvocations.push({
+                            name: step.subAgent.name,
+                            message: step.subAgent.message,
+                            context: step.subAgent.context,
+                            tpl: step.subAgent.templateParameters,
+                        });
+                        return { step: 'Retry' as const, terminate: false, newPayload: { items: ['alpha', 'beta'], processed: item } };
+                    },
+                ),
+                configurable: true,
+            });
+
+            const resumedSub = await freshSubAgentWorker.ResumePausedRun({
+                agent: agentEntity,
+                conversationMessages: [],
+                contextUser,
+                provider,
+                userId: USER_ID,
+                resumeCheckpointRunId: subAgentRunId,
+            });
+            expect(resumedSub.success).toBe(true);
+            // Resumed at IterationIndex=1 -> invoked ONLY once for item 'beta', preserving subAgent name/message/templateParameters/context
+            expect(subAgentInvocations).toEqual([
+                {
+                    name: 'WorkerSubAgent',
+                    message: 'Inspect {{doc}}',
+                    tpl: { mode: 'strict' },
+                    context: { tenant: 'acme', traceId: 77 },
+                },
+            ]);
+        } finally {
+            aiInstanceSpy.mockRestore();
+        }
     });
 });

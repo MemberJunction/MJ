@@ -43,6 +43,7 @@ export * from './ConversationToolManager';
 export * from './AgentDecisionService';
 export * from './AgentTreeBudgetTracker';
 export * from './ActiveRunGovernanceRegistry';
+export * from './DefaultResumeContinuationDispatcher';
 export * from './BudgetEnforcementGuard';
 export * from './DeterministicProgressDetector';
 export * from './FastConvergenceJudge';
