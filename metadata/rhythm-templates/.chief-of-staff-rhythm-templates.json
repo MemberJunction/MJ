@@ -1,0 +1,65 @@
+[
+  {
+    "fields": {
+      "AgentID": "@lookup:MJ: AI Agents.Name=Chief of Staff",
+      "SkillID": null,
+      "Name": "Monthly Capability & Rhythm Review",
+      "WorkstreamKey": "capability-review",
+      "Description": "Monthly review of newly installed skills, unused offered rhythms, approval guardrails, and standing instructions so your Chief of Staff stays aligned with how you work.",
+      "DefaultCronExpression": "0 9 1 * *",
+      "DefaultWakeGate": null,
+      "WakeReason": "Review active skills, newly available offered rhythms, and standing policy posture with the user.",
+      "OfferAt": "Both",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "BAC7A9EA-958B-42CB-A988-6764785D389F"
+    },
+    "sync": {
+      "lastModified": "2026-11-20T22:01:59.911Z",
+      "checksum": "8a86d9f02059b42e56d2a68ff578bda8ef60732a8771d04848a14ce324fb6e41"
+    }
+  },
+  {
+    "fields": {
+      "AgentID": "@lookup:MJ: AI Agents.Name=Chief of Staff",
+      "SkillID": null,
+      "Name": "Daily Calendar Guard & Conflict Check",
+      "WorkstreamKey": "calendar-daily-review",
+      "Description": "Weekday morning scan of today's and tomorrow's calendar for double-bookings, missing prep, and focus-time erosion.",
+      "DefaultCronExpression": "15 7 * * 1-5",
+      "DefaultWakeGate": null,
+      "WakeReason": "Check today's and tomorrow's calendar for conflicts, overbooking, and unprotected focus time.",
+      "OfferAt": "Onboarding",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "F0294D16-F2B7-4DA2-897F-B9FB27FD5BF5"
+    },
+    "sync": {
+      "lastModified": "2026-11-21T15:59:22.853Z",
+      "checksum": "b0638c767ba863635b69697c1a1d40d4efa000b0fe2156bb3f700617c1f84819"
+    }
+  },
+  {
+    "fields": {
+      "AgentID": "@lookup:MJ: AI Agents.Name=Chief of Staff",
+      "SkillID": null,
+      "Name": "Weekly Calendar Lookahead & Focus Protection",
+      "WorkstreamKey": "calendar-weekly-review",
+      "Description": "Friday afternoon lookahead at next week's meetings to protect deep-work blocks, spot travel/timezone conflicts, and flag meetings that need agendas or declines.",
+      "DefaultCronExpression": "0 15 * * 5",
+      "DefaultWakeGate": null,
+      "WakeReason": "Review next week's calendar to protect focus blocks and flag meetings needing prep or rescheduling.",
+      "OfferAt": "Onboarding",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "01532AD0-302D-4C70-A054-608866F86670"
+    },
+    "sync": {
+      "lastModified": "2026-11-20T22:01:59.944Z",
+      "checksum": "8c072dd90e80a6170e11f60182e072e28b577ddef77ef910572192564af39e99"
+    }
+  }
+]

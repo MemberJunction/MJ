@@ -119,8 +119,9 @@ function installStubs(): void {
     // The autotag pipeline embeds through AIEmbeddingRunner (AIModelRunner delegates to it too), so
     // the stub goes on its prototype. It matches RunEmbedding's signature, so no cast is needed.
     AIEmbeddingRunner.prototype.RunEmbedding = async (params: EmbeddingRunParams): Promise<EmbeddingRunResult> => {
-        S.EmbedCalls.push({ count: params.Texts.length, dimensions: params.Dimensions });
-        return { Success: true, Vectors: params.Texts.map(() => [0.01, 0.02, 0.03]), PromptRunID: null, TokensUsed: 0, Cost: 0, ErrorMessage: null, ExecutionTimeMs: 0 };
+        const count = params.Texts?.length ?? params.Contents?.length ?? 0;
+        S.EmbedCalls.push({ count, dimensions: params.Dimensions });
+        return { Success: true, Vectors: Array.from({ length: count }, () => [0.01, 0.02, 0.03]), PromptRunID: null, TokensUsed: 0, Cost: 0, ErrorMessage: null, ExecutionTimeMs: 0 };
     };
     S.Installed = true;
 }

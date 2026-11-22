@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef, SecurityContext, injec
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { RegisterClass } from '@memberjunction/global';
 import { DataSnapshot } from '@memberjunction/core';
-import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
+import { BaseArtifactViewerPluginComponent, FILE_EXPORT_KEY, type ArtifactExportOption } from '../base-artifact-viewer.component';
 import { ArtifactFileService } from '../../services/artifact-file.service';
 import { FetchArrayBuffer } from '../previews/office-preview.logic';
 import { PrintHtmlInSandboxedIframe } from '../../utils/html-sandbox.util';
@@ -232,6 +232,15 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   public ShowError(message: string): void {
     this.errorMessage = message;
     this.cdr.markForCheck();
+  }
+
+  /** The original file, once it has loaded. */
+  public override GetExportOptions(): ArtifactExportOption[] {
+    return this.downloadUrl ? [this.FileExportOption('Word (.docx)', 'fa-solid fa-file-word', 'The original file')] : [];
+  }
+
+  public override async RunExport(key: string): Promise<void> {
+    return key === FILE_EXPORT_KEY ? this.OnDownload() : super.RunExport(key);
   }
 
   public override GetCurrentStateSnapshot(): DataSnapshot | null {

@@ -126,6 +126,11 @@ export interface GraphEdgeRequest {
     Nodes: GraphNodeRef[];
     Direction: 'Out' | 'In' | 'Both';
     EdgeTypes?: string[];
+    /**
+     * Whether the caller accepts `Proposed` content. A provider that derives edges from stored edges
+     * or concepts uses only `Approved` ones unless this is `true`, and never `Rejected` ones.
+     */
+    IncludeProposed?: boolean;
 }
 
 /**
@@ -184,14 +189,31 @@ export function FormatGraphNodeKey(entityIdOrName: string, recordId: string): st
 }
 
 /**
- * Check whether an edge type name passes an optional `EdgeTypes` filter (case-insensitive).
+ * Edge type a provider or stored edge falls back to when nothing names one: the seeded
+ * `MJ: Graph Edge Types` row `RelatedTo`.
+ */
+export const GRAPH_DEFAULT_EDGE_TYPE = 'RelatedTo';
+
+/**
+ * The comparison key for an edge type name: case and whitespace are ignored, so `'Related To'`,
+ * `'related to'` and `'RelatedTo'` are one edge type. The content pipeline resolves names to
+ * `MJ: Graph Edge Types` rows the same way when it writes edges, so a name may be written with or
+ * without spaces and reads back the same.
+ */
+export function NormalizeGraphEdgeTypeName(typeName: string | null | undefined): string {
+    return (typeName ?? '').replace(/\s+/g, '').toLowerCase();
+}
+
+/**
+ * Check whether an edge type name passes an optional `EdgeTypes` filter, ignoring case and whitespace
+ * ({@link NormalizeGraphEdgeTypeName}).
  */
 export function MatchesEdgeTypeFilter(typeName: string, allowedTypes?: readonly string[]): boolean {
     if (!allowedTypes || allowedTypes.length === 0) {
         return true;
     }
-    const target = typeName.trim().toLowerCase();
-    return allowedTypes.some((t) => t.trim().toLowerCase() === target);
+    const target = NormalizeGraphEdgeTypeName(typeName);
+    return allowedTypes.some((t) => NormalizeGraphEdgeTypeName(t) === target);
 }
 
 /**

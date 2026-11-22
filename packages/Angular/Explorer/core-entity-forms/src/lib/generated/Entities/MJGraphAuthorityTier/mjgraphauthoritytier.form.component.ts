@@ -17,7 +17,8 @@ export class MJGraphAuthorityTierFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
-            { sectionKey: 'mJGraphConcepts', sectionName: 'Graph Concepts', isExpanded: false }
+            { sectionKey: 'mJGraphConcepts', sectionName: 'Graph Concepts', isExpanded: false },
+            { sectionKey: 'mJGraphTypes', sectionName: 'Graph Types', isExpanded: false }
         ]);
     }
 }

@@ -147,6 +147,9 @@ export * from './custom/ai/trigger-agent-wake.action';
 export * from './custom/ai/prepare-outbound-call-brief.action';
 export * from './custom/ai/user-scoped-communication.action';
 export * from './custom/ai/communication-oauth-service';
+export * from './custom/ai/chief-of-staff-core-reads.action';
+export * from './custom/ai/chief-of-staff-rhythms-suggestions.action';
+export * from './custom/ai/agent-channel.action';
 
 // User Management Actions
 export * from './custom/user-management/check-user-permission.action';

@@ -50,12 +50,38 @@ describe('SuggestSegmenterKey', () => {
         expect(key).toBe('Transcript');
     });
 
+    it('prefers the transcript segmenter when Text looks like WebVTT or SRT captions', () => {
+        expect(SuggestSegmenterKey({ Text: 'WEBVTT\n\n00:00.000 --> 00:02.000\nHello.' })).toBe('Transcript');
+        expect(SuggestSegmenterKey({ Text: '1\n00:00:01,000 --> 00:00:02,500\nHello.' })).toBe('Transcript');
+    });
+
     it('prefers paged segmentation when pages are supplied', () => {
         expect(SuggestSegmenterKey({ Pages: [{ PageNumber: 1, Text: 'p1' }], Text: 'also text' })).toBe('PagedContent');
     });
 
     it('prefers structural segmentation for text', () => {
         expect(SuggestSegmenterKey({ Text: 'some document text' })).toBe('StructuralText');
+    });
+
+    it('prefers the transcript segmenter for VTT/SRT MIME types and never treats HTML as captions', () => {
+        expect(
+            SuggestSegmenterKey({
+                MimeType: 'text/vtt',
+                Text: '00:00.000 --> 00:01.000\nSpoken line without WEBVTT header.',
+            }),
+        ).toBe('Transcript');
+        expect(
+            SuggestSegmenterKey({
+                MimeType: 'application/x-subrip',
+                Text: '00:00:01,000 --> 00:00:02,000\nSpoken line without index.',
+            }),
+        ).toBe('Transcript');
+        expect(
+            SuggestSegmenterKey({
+                MimeType: 'text/html',
+                Text: 'WEBVTT\n\n00:00.000 --> 00:01.000\nInside HTML pre',
+            }),
+        ).toBe('StructuralText');
     });
 
     it('falls back to fixed windows for bare media', () => {

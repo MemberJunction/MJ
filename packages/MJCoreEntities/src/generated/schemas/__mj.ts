@@ -2112,6 +2112,16 @@ export const MJAIAgentRequestSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)
         * * Description: The workflow step (MJ: Tasks row) waiting on this request, when it came from a task graph rather than from a running agent. Distinct from OriginatingAgentRunStepID: a task graph outlives the agent run that submitted it, so the task — not the run — is what resumes when a person answers. NULL for requests raised by a run directly.`),
+    HumanTaskProvider: z.string().nullable().describe(`
+        * * Field Name: HumanTaskProvider
+        * * Display Name: Human Task Provider
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The registration key of the human-task provider that also put this request in front of a person, when the install routes agent requests to one (humanTasks.defaultProvider). NULL when only the built-in inbox holds the request. Only that provider may answer the request through the provider path, and an answer given elsewhere asks it to withdraw its own ask.`),
+    HumanTaskExternalReference: z.string().nullable().describe(`
+        * * Field Name: HumanTaskExternalReference
+        * * Display Name: Human Task External Reference
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The reference the human-task provider returned for its own record of this request (for example a task ID in another app), handed back to the provider when it is asked to withdraw. NULL when no provider took the request or it returned none.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent Name
@@ -2147,6 +2157,100 @@ export const MJAIAgentRequestSchema = z.object({
 });
 
 export type MJAIAgentRequestEntityType = z.infer<typeof MJAIAgentRequestSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Agent Rhythm Templates
+ */
+export const MJAIAgentRhythmTemplateSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AgentID: z.string().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+        * * Description: The always-on AI agent (for example Chief of Staff) to which this rhythm template applies.`),
+    SkillID: z.string().nullable().describe(`
+        * * Field Name: SkillID
+        * * Display Name: Skill ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)
+        * * Description: Optional AI Skill that contributes this rhythm template; NULL for core agent rhythms.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-readable title of the offered rhythm shown to the user during onboarding or capability reviews.`),
+    WorkstreamKey: z.string().describe(`
+        * * Field Name: WorkstreamKey
+        * * Display Name: Workstream Key
+        * * SQL Data Type: nvarchar(150)
+        * * Description: Stable programmatic workstream key (for example tasks-daily-triage, calendar-daily-review) used to upsert the user routine cleanly.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Plain-language explanation of what this rhythm checks and delivers to the user.`),
+    DefaultCronExpression: z.string().describe(`
+        * * Field Name: DefaultCronExpression
+        * * Display Name: Default Cron Expression
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Default 5-field cron expression evaluated in the user's local timezone when enabled.`),
+    DefaultWakeGate: z.string().nullable().describe(`
+        * * Field Name: DefaultWakeGate
+        * * Display Name: Default Wake Gate
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional default 3-Tier Wake Gate JSON (watchedEntities, skipIfUnchanged, tier1Expression, tier2Decision) copied onto the created AgentWake routine.`),
+    WakeReason: z.string().describe(`
+        * * Field Name: WakeReason
+        * * Display Name: Wake Reason
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Concise wake reason stored on the created AgentWake routine and passed to the agent when the rhythm fires.`),
+    OfferAt: z.union([z.literal('Both'), z.literal('Install'), z.literal('Onboarding')]).describe(`
+        * * Field Name: OfferAt
+        * * Display Name: Offer At
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Onboarding
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Both
+    *   * Install
+    *   * Onboarding
+        * * Description: Lifecycle moment when this rhythm should be suggested to the user: Onboarding, Install, or Both.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+        * * Description: Whether this rhythm template is currently Active or Inactive.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+    Skill: z.string().nullable().describe(`
+        * * Field Name: Skill
+        * * Display Name: Skill
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJAIAgentRhythmTemplateEntityType = z.infer<typeof MJAIAgentRhythmTemplateSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Rubrics
@@ -3670,6 +3774,12 @@ export const MJAIAgentSkillSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    AllowMetadataSyncUpdate: z.boolean().describe(`
+        * * Field Name: AllowMetadataSyncUpdate
+        * * Display Name: Allow Metadata Sync Update
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1 (default), metadata sync and app upgrades may update this agent-skill grant. Set to 0 when an administrator locally overrides or disables an app-shipped skill grant.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent Name
@@ -3764,7 +3874,7 @@ export const MJAIAgentStepSchema = z.object({
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    StepType: z.union([z.literal('Action'), z.literal('Decision'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('Sub-Agent'), z.literal('While')]).describe(`
+    StepType: z.union([z.literal('Action'), z.literal('Decision'), z.literal('External'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('Sub-Agent'), z.literal('Wait'), z.literal('While')]).describe(`
         * * Field Name: StepType
         * * Display Name: Step Type
         * * SQL Data Type: nvarchar(20)
@@ -3772,10 +3882,12 @@ export const MJAIAgentStepSchema = z.object({
     * * Possible Values 
     *   * Action
     *   * Decision
+    *   * External
     *   * ForEach
     *   * Human
     *   * Prompt
     *   * Sub-Agent
+    *   * Wait
     *   * While
         * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), Prompt (run an AI prompt), Decision (one typed decision call whose answers the outgoing paths route on), Human (ask a person), or ForEach / While (a loop).`),
     StartingStep: z.boolean().describe(`
@@ -3904,6 +4016,94 @@ export const MJAIAgentStepSchema = z.object({
 });
 
 export type MJAIAgentStepEntityType = z.infer<typeof MJAIAgentStepSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Agent Suggestions
+ */
+export const MJAIAgentSuggestionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AgentID: z.string().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+        * * Description: The AI agent that made the suggestion.`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The user to whom the suggestion was offered.`),
+    Kind: z.union([z.literal('Behavior'), z.literal('Integration'), z.literal('Rhythm'), z.literal('Skill')]).describe(`
+        * * Field Name: Kind
+        * * Display Name: Kind
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: Rhythm
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Behavior
+    *   * Integration
+    *   * Rhythm
+    *   * Skill
+        * * Description: Category of suggestion: Rhythm, Skill, Behavior, or Integration.`),
+    TargetKey: z.string().describe(`
+        * * Field Name: TargetKey
+        * * Display Name: Target Key
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Stable deduplication key (such as a rhythm WorkstreamKey or skill name) preventing repeated offers of the same declined suggestion.`),
+    Summary: z.string().describe(`
+        * * Field Name: Summary
+        * * Display Name: Summary
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Concise description of the proposed capability or rhythm shown to the user.`),
+    Status: z.union([z.literal('Accepted'), z.literal('Declined'), z.literal('Expired'), z.literal('Offered')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Offered
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Accepted
+    *   * Declined
+    *   * Expired
+    *   * Offered
+        * * Description: Outcome of the suggestion: Offered, Accepted, Declined, or Expired.`),
+    OfferedAt: z.date().describe(`
+        * * Field Name: OfferedAt
+        * * Display Name: Offered At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        * * Description: UTC timestamp when the suggestion was first presented to the user.`),
+    RespondedAt: z.date().nullable().describe(`
+        * * Field Name: RespondedAt
+        * * Display Name: Responded At
+        * * SQL Data Type: datetimeoffset
+        * * Description: UTC timestamp when the user accepted, declined, or let the suggestion expire.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJAIAgentSuggestionEntityType = z.infer<typeof MJAIAgentSuggestionSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Types
@@ -8103,6 +8303,17 @@ export const MJAISkillActionSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether activating the skill puts this action into the agent's run. 1 (default): the action is described to the model and callable during the run, today's behaviour. 0: the action stays bundled with the skill (SKILL.md export, tooling) but is left out of the run entirely: not described to the model and not executable by the agent; only application code invokes it, through the Actions API. Use 0 for actions a person triggers through the UI on a later turn, such as a menu button in the skill's reply.`),
+    Role: z.union([z.literal('Both'), z.literal('Briefing'), z.literal('Tool')]).describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Tool
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Both
+    *   * Briefing
+    *   * Tool
+        * * Description: Role this action plays within the skill: Tool (normal tool invoked by the model), Briefing (deterministic briefing contributor invoked by Assemble My Briefing), or Both.`),
     Skill: z.string().nullable().describe(`
         * * Field Name: Skill
         * * Display Name: Skill
@@ -9980,6 +10191,288 @@ export const MJActionSchema = z.object({
 });
 
 export type MJActionEntityType = z.infer<typeof MJActionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Agent Channel Participants
+ */
+export const MJAgentChannelParticipantSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AgentChannelID: z.string().describe(`
+        * * Field Name: AgentChannelID
+        * * Display Name: Agent Channel ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Agent Channels (vwAgentChannels.ID)
+        * * Description: The Agent Channel (and Conversation ID) to which this participant belongs.`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The human user represented by this participant entry.`),
+    AgentID: z.string().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+        * * Description: The AI agent acting on behalf of UserID in this channel.`),
+    Role: z.union([z.literal('Initiator'), z.literal('Participant')]).describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Participant
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Initiator
+    *   * Participant
+        * * Description: Participant role in the channel: Initiator or Participant.`),
+    LastSeenDetailID: z.string().nullable().describe(`
+        * * Field Name: LastSeenDetailID
+        * * Display Name: Last Seen Detail ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversation Details (vwConversationDetails.ID)
+        * * Description: Optional ConversationDetail ID of the last message read by this participant.`),
+    JoinedAt: z.date().describe(`
+        * * Field Name: JoinedAt
+        * * Display Name: Joined At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        * * Description: UTC timestamp when this participant joined the channel.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    AgentChannel: z.string().nullable().describe(`
+        * * Field Name: AgentChannel
+        * * Display Name: Agent Channel
+        * * SQL Data Type: nvarchar(255)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+    LastSeenDetail: z.string().nullable().describe(`
+        * * Field Name: LastSeenDetail
+        * * Display Name: Last Seen Detail
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJAgentChannelParticipantEntityType = z.infer<typeof MJAgentChannelParticipantSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Agent Channels
+ */
+export const MJAgentChannelSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+        * * Description: Shared primary key referencing MJ: Conversations(ID) for this IS-A Agent Channel conversation.`),
+    Topic: z.string().describe(`
+        * * Field Name: Topic
+        * * Display Name: Topic
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Short executive topic describing what the participating agents are coordinating on.`),
+    ChannelStatus: z.union([z.literal('Open'), z.literal('Paused For Human'), z.literal('Resolved')]).describe(`
+        * * Field Name: ChannelStatus
+        * * Display Name: Channel Status
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: Open
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Open
+    *   * Paused For Human
+    *   * Resolved
+        * * Description: Operational state of the channel: Open, Paused For Human (loop or wake limit reached), or Resolved.`),
+    ReplyBy: z.date().nullable().describe(`
+        * * Field Name: ReplyBy
+        * * Display Name: Reply By
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional deadline by which participants should respond or resolve the coordination topic.`),
+    ConsecutiveAgentTurns: z.number().describe(`
+        * * Field Name: ConsecutiveAgentTurns
+        * * Display Name: Consecutive Agent Turns
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of consecutive agent messages posted since the last human message; resets to 0 when any human posts.`),
+    MaxConsecutiveAgentTurns: z.number().describe(`
+        * * Field Name: MaxConsecutiveAgentTurns
+        * * Display Name: Max Consecutive Agent Turns
+        * * SQL Data Type: int
+        * * Default Value: 10
+        * * Description: Maximum consecutive agent turns permitted without human intervention before the channel automatically pauses (default 10).`),
+    LastHumanMessageAt: z.date().nullable().describe(`
+        * * Field Name: LastHumanMessageAt
+        * * Display Name: Last Human Message At
+        * * SQL Data Type: datetimeoffset
+        * * Description: UTC timestamp of the most recent message posted directly by a human participant.`),
+    HourlyWakeCount: z.number().describe(`
+        * * Field Name: HourlyWakeCount
+        * * Display Name: Hourly Wake Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Count of peer agent wakes dispatched for this channel within the current rolling 1-hour window.`),
+    HourlyWakeWindowStart: z.date().nullable().describe(`
+        * * Field Name: HourlyWakeWindowStart
+        * * Display Name: Hourly Wake Window Start
+        * * SQL Data Type: datetimeoffset
+        * * Description: UTC start timestamp of the current 1-hour wake rate-limit window.`),
+    MaxHourlyWakes: z.number().describe(`
+        * * Field Name: MaxHourlyWakes
+        * * Display Name: Max Hourly Wakes
+        * * SQL Data Type: int
+        * * Default Value: 6
+        * * Description: Maximum peer wakes allowed per hour for this channel before pausing for human review (default 6).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
+    ExternalID: z.string().nullable().describe(`
+        * * Field Name: ExternalID
+        * * Display Name: External ID
+        * * SQL Data Type: nvarchar(500)`),
+    Name: z.string().nullable().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    IsArchived: z.boolean().describe(`
+        * * Field Name: IsArchived
+        * * Display Name: Is Archived
+        * * SQL Data Type: bit`),
+    LinkedEntityID: z.string().nullable().describe(`
+        * * Field Name: LinkedEntityID
+        * * Display Name: Linked Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
+    LinkedRecordID: z.string().nullable().describe(`
+        * * Field Name: LinkedRecordID
+        * * Display Name: Linked Record ID
+        * * SQL Data Type: nvarchar(500)`),
+    DataContextID: z.string().nullable().describe(`
+        * * Field Name: DataContextID
+        * * Display Name: Data Context ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Data Contexts (vwDataContexts.ID)`),
+    Status: z.string().describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)`),
+    EnvironmentID: z.string().describe(`
+        * * Field Name: EnvironmentID
+        * * Display Name: Environment ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)`),
+    ProjectID: z.string().nullable().describe(`
+        * * Field Name: ProjectID
+        * * Display Name: Project ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)`),
+    IsPinned: z.boolean().describe(`
+        * * Field Name: IsPinned
+        * * Display Name: Is Pinned
+        * * SQL Data Type: bit`),
+    TestRunID: z.string().nullable().describe(`
+        * * Field Name: TestRunID
+        * * Display Name: Test Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)`),
+    ApplicationScope: z.string().describe(`
+        * * Field Name: ApplicationScope
+        * * Display Name: Application Scope
+        * * SQL Data Type: nvarchar(20)`),
+    ApplicationID: z.string().nullable().describe(`
+        * * Field Name: ApplicationID
+        * * Display Name: Application ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)`),
+    DefaultAgentID: z.string().nullable().describe(`
+        * * Field Name: DefaultAgentID
+        * * Display Name: Default Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)`),
+    AdditionalData: z.string().nullable().describe(`
+        * * Field Name: AdditionalData
+        * * Display Name: Additional Data
+        * * SQL Data Type: nvarchar(MAX)`),
+    RecordingFileID: z.string().nullable().describe(`
+        * * Field Name: RecordingFileID
+        * * Display Name: Recording File ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)`),
+    EgressID: z.string().nullable().describe(`
+        * * Field Name: EgressID
+        * * Display Name: Egress ID
+        * * SQL Data Type: nvarchar(255)`),
+    VisitorKey: z.string().nullable().describe(`
+        * * Field Name: VisitorKey
+        * * Display Name: Visitor Key
+        * * SQL Data Type: nvarchar(255)`),
+    LastConversationID: z.string().nullable().describe(`
+        * * Field Name: LastConversationID
+        * * Display Name: Last Conversation ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)`),
+    AnchorType: z.string().nullable().describe(`
+        * * Field Name: AnchorType
+        * * Display Name: Anchor Type
+        * * SQL Data Type: nvarchar(30)`),
+    AnchorKey: z.string().nullable().describe(`
+        * * Field Name: AnchorKey
+        * * Display Name: Anchor Key
+        * * SQL Data Type: nvarchar(255)`),
+    AnchorMetadata: z.string().nullable().describe(`
+        * * Field Name: AnchorMetadata
+        * * Display Name: Anchor Metadata
+        * * SQL Data Type: nvarchar(MAX)`),
+    IsResolved: z.boolean().describe(`
+        * * Field Name: IsResolved
+        * * Display Name: Is Resolved
+        * * SQL Data Type: bit`),
+    ResolvedByUserID: z.string().nullable().describe(`
+        * * Field Name: ResolvedByUserID
+        * * Display Name: Resolved By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
+    ResolvedAt: z.date().nullable().describe(`
+        * * Field Name: ResolvedAt
+        * * Display Name: Resolved At
+        * * SQL Data Type: datetimeoffset`),
+    TypeID: z.string().describe(`
+        * * Field Name: TypeID
+        * * Display Name: Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversation Types (vwConversationTypes.ID)`),
+});
+
+export type MJAgentChannelEntityType = z.infer<typeof MJAgentChannelSchema>;
 
 /**
  * zod schema definition for the entity MJ: Application Entities
@@ -25402,6 +25895,16 @@ export const MJGraphConceptSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Origin: z.union([z.literal('Declared'), z.literal('Inferred')]).describe(`
+        * * Field Name: Origin
+        * * Display Name: Origin
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Declared
+    *   * Inferred
+        * * Description: How the concept came to exist. Declared: authored by a person or seeded; visible to anyone who can read concepts. Inferred: synthesized by the Content Pipeline from document chunks; visible only to someone who can read its sources (SourcedFrom edges), unless it is Approved in a Canon graph.`),
     Graph: z.string().nullable().describe(`
         * * Field Name: Graph
         * * Display Name: Graph
@@ -25768,6 +26271,38 @@ export const MJGraphTypeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    DefaultAuthorityTierID: z.string().nullable().describe(`
+        * * Field Name: DefaultAuthorityTierID
+        * * Display Name: Default Authority Tier ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graph Authority Tiers (vwGraphAuthorityTiers.ID)
+        * * Description: Authority tier given to content sources that feed graphs of this type and name no tier of their own. NULL leaves such sources unranked, below every configured tier.`),
+    DefaultConceptTaxonomyMode: z.union([z.literal('Auto Grow'), z.literal('Constrained'), z.literal('Propose Only')]).describe(`
+        * * Field Name: DefaultConceptTaxonomyMode
+        * * Display Name: Default Concept Taxonomy Mode
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: Auto Grow
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Auto Grow
+    *   * Constrained
+    *   * Propose Only
+        * * Description: Concept taxonomy mode used when a content source feeding a graph of this type names none: Constrained links only to existing concepts, Propose Only creates new concepts and edges as Proposed for steward review, Auto Grow creates them as Approved.`),
+    DefaultGroundingMode: z.union([z.literal('Full Canon'), z.literal('None'), z.literal('Schema and Queries')]).describe(`
+        * * Field Name: DefaultGroundingMode
+        * * Display Name: Default Grounding Mode
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Full Canon
+    *   * None
+    *   * Schema and Queries
+        * * Description: Grounding depth used when a content source feeding a graph of this type names none: None extracts document concepts only, Schema and Queries also links concepts to entities, alternate base views and queries, Full Canon additionally links actions, skills and workflows.`),
+    DefaultAuthorityTier: z.string().nullable().describe(`
+        * * Field Name: DefaultAuthorityTier
+        * * Display Name: Default Authority Tier
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJGraphTypeEntityType = z.infer<typeof MJGraphTypeSchema>;
@@ -34634,6 +35169,11 @@ export const MJRowLevelSecurityFilterSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    PlatformVariants: z.string().nullable().describe(`
+        * * Field Name: PlatformVariants
+        * * Display Name: Platform Variants
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional JSON object mapping SQL field names (FilterText) to database-platform overrides (for example {"FilterText":{"postgresql":"..."}}) resolved by RowLevelSecurityFilterInfo.GetPlatformFilterText.`),
 });
 
 export type MJRowLevelSecurityFilterEntityType = z.infer<typeof MJRowLevelSecurityFilterSchema>;
@@ -38734,7 +39274,7 @@ export const MJTaskSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)
         * * Description: The Action this task executes, when the node is action-assigned rather than agent-assigned or awaiting a person. Mutually exclusive with UserID and AgentID (CK_Task_Assignment). Set by durable entity-action dispatch, where a single-node graph carries one action to run with restart recovery.`),
-    StepType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('Decision'), z.literal('External'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('While')]).nullable().describe(`
+    StepType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('Decision'), z.literal('External'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('Wait'), z.literal('While')]).nullable().describe(`
         * * Field Name: StepType
         * * Display Name: Step Type
         * * SQL Data Type: nvarchar(20)
@@ -38747,6 +39287,7 @@ export const MJTaskSchema = z.object({
     *   * ForEach
     *   * Human
     *   * Prompt
+    *   * Wait
     *   * While
         * * Description: Which kind of workflow step this task represents. NULL for a task that is not part of a workflow, such as a hand-authored to-do. Determines which of AgentID/ActionID/PromptID/UserID is meaningful and how Configuration is read. This is the executable vocabulary and is deliberately not the same value list as AIAgentStep.StepType, which describes a step at design time.`),
     PromptID: z.string().nullable().describe(`
@@ -38771,6 +39312,22 @@ export const MJTaskSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)
         * * Description: For a saga compensation task, the forward task it undoes. Unique, so a forward task is compensated at most once.`),
+    CorrelationKey: z.string().nullable().describe(`
+        * * Field Name: CorrelationKey
+        * * Display Name: Correlation Key
+        * * SQL Data Type: nvarchar(400)
+        * * Description: For an External workflow step: the key an outside caller signals it by when it does not hold the task ID, resolved from the step's configuration when the step is reached. Not unique: one signal completes every reached step waiting on the same key, which is how a single event (a sprint closing, a payment settling) releases many workflows at once. NULL for every other step.`),
+    AttemptCount: z.number().describe(`
+        * * Field Name: AttemptCount
+        * * Display Name: Attempt Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: For a workflow step: how many of its runs ended in a scheduled retry. 0 for a step that has not been retried. The dispatcher compares it with the step's retry policy to decide whether a failure is retried or final; a person retrying the step resets it.`),
+    NextAttemptAt: z.date().nullable().describe(`
+        * * Field Name: NextAttemptAt
+        * * Display Name: Next Attempt At
+        * * SQL Data Type: datetimeoffset
+        * * Description: For a workflow step waiting to be retried: the earliest moment it may be claimed again, on the database clock. NULL when no retry is scheduled. Claiming skips the step until this moment has passed, so a retry survives a restart and runs on whichever instance is free.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent

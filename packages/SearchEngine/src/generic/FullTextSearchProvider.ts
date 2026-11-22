@@ -120,14 +120,11 @@ export class FullTextSearchProvider extends BaseSearchProvider {
                 MatchedAt: new Date()
             }));
 
-            // Batch-load tags for FTS results
-            if (this.enricher) {
+            // Batch-load tags only when a tag filter is active. Skipping tag hydration
+            // when no tag filter is requested avoids two extra RunView queries per FTS call.
+            if (this.enricher && filters?.Tags?.length) {
                 await this.enricher.EnrichWithTags(results, contextUser);
-
-                // Apply tag filter if specified
-                if (filters?.Tags?.length) {
-                    return this.enricher.FilterByTags(results, filters.Tags);
-                }
+                return this.enricher.FilterByTags(results, filters.Tags);
             }
 
             return results;

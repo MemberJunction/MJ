@@ -182,4 +182,40 @@ describe('TranscriptSegmenter', () => {
             expect(result.Segments).toHaveLength(1);
         });
     });
+
+    describe('caption text fallback', () => {
+        it('parses WebVTT from Text when Cues are omitted and emits timed chapters', async () => {
+            const vtt = [
+                'WEBVTT',
+                '',
+                '00:00:01.000 --> 00:00:03.000',
+                '<v Host>Welcome back.',
+                '',
+                '00:00:10.000 --> 00:00:12.500',
+                '<v Guest>Thanks for having me.',
+            ].join('\n');
+
+            const result = await segmenter.Segment({
+                Text: vtt,
+                MimeType: 'video/mp4',
+            });
+
+            expect(result.Success).toBe(true);
+            expect(result.Segments).toHaveLength(2);
+            expect(result.Segments[0]).toMatchObject({
+                Modality: 'video',
+                StartMs: 1000,
+                EndMs: 3000,
+                Text: 'Host: Welcome back.',
+                Title: 'Chapter 1',
+            });
+            expect(result.Segments[1]).toMatchObject({
+                Modality: 'video',
+                StartMs: 10000,
+                EndMs: 12500,
+                Text: 'Guest: Thanks for having me.',
+                Title: 'Chapter 2',
+            });
+        });
+    });
 });

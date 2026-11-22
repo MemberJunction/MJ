@@ -297,7 +297,8 @@ inputs above.
 
 | Token | Value | Purpose |
 |---|---|---|
-| `--mj-font-family` | Inter, system stack | Primary font |
+| `--mj-font-family` | Montserrat, system stack | Primary font |
+| `--mj-font-family-display` | Heading font (defaults to `--mj-font-family`) | Display / heading font |
 | `--mj-font-family-mono` | JetBrains Mono, system mono | Monospace font |
 | `--mj-text-xs` … `--mj-text-6xl` | 0.75rem – 3.75rem | Font size scale |
 | `--mj-text-display` | 5rem (80px) | Hero/display headings |

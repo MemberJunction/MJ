@@ -27,6 +27,8 @@ import {
   MJConversationDetailEntity,
   MJConversationEntity,
   ParseArtifactVersionConfiguration,
+  GraphEngine,
+  RelationGraphNames,
   ResolveArtifactTypeThumbnailPolicy,
   RevokeGuestShareLinkOperation,
   UpsertGuestShareLinkInConfig,
@@ -37,11 +39,12 @@ import {
   type GuestShareLinkRecord,
 } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import type { PdfOrientation } from '@memberjunction/ng-react';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ArtifactTypePluginViewerComponent } from './artifact-type-plugin-viewer.component';
+import { type ArtifactRelatedSelection } from './artifact-related-panel.component';
 import {
+  ArtifactExportOption,
   ArtifactNavigationAnchor,
   ArtifactSelectionAnchor,
   ArtifactViewerTab,
@@ -455,6 +458,11 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    */
   @Output() maximizeToggled = this.MaximizeToggled; // Emits when user clicks maximize/restore button
   @Output() OpenEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  /**
+   * The person picked a related artifact in the Related tab. When nothing subscribes, the viewer
+   * switches to that artifact in place.
+   */
+  @Output() OpenArtifactRequested = new EventEmitter<string>();
 
   /**
    * @deprecated Use {@link OpenEntityRecord}.
@@ -779,6 +787,11 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       tabs.push('Links');
     }
 
+    // Related tab: shown when some active graph projects document links or shared concepts
+    if (!removalsLower.includes('related') && this.HasRelationGraphs) {
+      tabs.push('Related');
+    }
+
     return tabs;
   }
 
@@ -889,6 +902,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
 
   async ngOnInit() {
     this.initialized = true;
+    void this.detectRelationGraphs();
     // Subscribe to refresh trigger for dynamic version changes
     if (this.RefreshTrigger) {
       this.RefreshTrigger.pipe(takeUntil(this.destroy$)).subscribe(async (data) => {
@@ -2841,49 +2855,44 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     this.ShareRequested.emit(this.artifactId);
   }
 
-  /** True while a PDF export is being prepared: the header button shows progress and ignores clicks. */
-  IsExportingPDF = false;
+  /** True while an export is being prepared: the header button shows progress and ignores clicks. */
+  IsExporting = false;
 
-  /** Whether the header's PDF menu (portrait / landscape) is open. */
-  ShowPDFMenu = false;
-
-  TogglePDFMenu(): void {
-    this.ShowPDFMenu = !this.ShowPDFMenu;
+  /** The export formats the loaded viewer offers. The header shows no Export button when empty. */
+  get ExportOptions(): ArtifactExportOption[] {
+    return this.pluginViewer?.GetExportOptions() ?? [];
   }
 
-  /** Closes header dropdown menus on any click outside them (menus stop their own clicks) or on Escape. */
+  /** True when the option at `index` starts a new group, so the menu shows the group's heading above it. */
+  StartsExportGroup(options: ArtifactExportOption[], index: number): boolean {
+    const group = options[index]?.Group;
+    return !!group && group !== options[index - 1]?.Group;
+  }
+
+  /** Closes the version dropdown on any click outside it (it stops its own clicks) or on Escape. */
   @HostListener('document:click')
   @HostListener('document:keydown.escape')
-  ClosePDFMenu(): void {
-    let changed = false;
-    if (this.ShowPDFMenu) {
-      this.ShowPDFMenu = false;
-      changed = true;
-    }
+  CloseHeaderMenus(): void {
     if (this.ShowVersionDropdown) {
       this.ShowVersionDropdown = false;
-      changed = true;
-    }
-    if (changed) {
       this.cdr.detectChanges();
     }
   }
 
-  /** Downloads what the viewer shows as an A4 PDF in the chosen orientation, from the header menu. */
-  async OnExportPDF(orientation: PdfOrientation): Promise<void> {
-    this.ShowPDFMenu = false;
-    if (this.IsExportingPDF) {
+  /** Runs the chosen Export menu option through the viewer and tells the user if it fails. */
+  async OnExport(option: ArtifactExportOption): Promise<void> {
+    if (option.DisabledReason || this.IsExporting) {
       return;
     }
-    this.IsExportingPDF = true;
+    this.IsExporting = true;
     this.cdr.detectChanges();
     try {
-      await this.pluginViewer?.ExportPDF(orientation);
+      await this.pluginViewer?.RunExport(option.Key);
     } catch (error) {
-      console.error('[ArtifactViewerPanel] PDF export failed:', error);
-      this.notificationService.CreateSimpleNotification('Could not create the PDF. See the browser console for details.', 'error', 5000);
+      console.error(`[ArtifactViewerPanel] Export "${option.Key}" failed:`, error);
+      this.notificationService.CreateSimpleNotification(`Could not export ${option.Label}. See the browser console for details.`, 'error', 5000);
     } finally {
-      this.IsExportingPDF = false;
+      this.IsExporting = false;
       this.cdr.detectChanges();
     }
   }
@@ -2908,6 +2917,44 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    */
   OnOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     this.OpenEntityRecord.emit(event);
+  }
+
+  /** True once the graph engine reports a graph that projects document relations. */
+  public HasRelationGraphs = false;
+
+  /** A related artifact was picked in the Related tab. */
+  OnRelatedArtifactOpen(artifactId: string): void {
+    if (this.OpenArtifactRequested.observed) {
+      this.OpenArtifactRequested.emit(artifactId);
+    } else {
+      this.artifactId = artifactId;
+    }
+  }
+
+  /** A related record that is not an artifact was picked in the Related tab. */
+  OnRelatedRecordOpen(selection: ArtifactRelatedSelection): void {
+    const entity = this.ProviderToUse.EntityByName(selection.EntityName);
+    if (!entity) {
+      LogError(`Artifact viewer: related record entity "${selection.EntityName}" is not in metadata`);
+      return;
+    }
+    this.OpenEntityRecord.emit({ entityName: selection.EntityName, compositeKey: CompositeKey.FromURLSegment(entity, selection.RecordID) });
+  }
+
+  /** Load the graph engine in the background and show the Related tab when a relation graph exists. */
+  private async detectRelationGraphs(): Promise<void> {
+    try {
+      const provider = this.ProviderToUse;
+      const engine = GraphEngine.GetProviderInstance<GraphEngine>(provider, GraphEngine) as GraphEngine;
+      await engine.Config(false, provider.CurrentUser, provider);
+      const has = RelationGraphNames(engine).length > 0;
+      if (has !== this.HasRelationGraphs) {
+        this.HasRelationGraphs = has;
+        this.cdr.markForCheck();
+      }
+    } catch (error) {
+      LogError(`Artifact viewer: could not check for relation graphs: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   /** @deprecated Use {@link OnOpenEntityRecord}. */
@@ -3012,7 +3059,8 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       'Code': 'fa-solid fa-code',
       'JSON': 'fa-solid fa-file-code',
       'Details': 'fa-solid fa-info-circle',
-      'Links': 'fa-solid fa-link'
+      'Links': 'fa-solid fa-link',
+      'Related': 'fa-solid fa-diagram-project'
     };
 
     if (baseIcons[tabName]) {

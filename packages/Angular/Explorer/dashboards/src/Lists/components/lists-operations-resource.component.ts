@@ -500,6 +500,7 @@ interface EntityOption {
 
       <!-- Compose-into-existing-list delta-confirm -->
       <mj-list-delta-confirm
+        [Provider]="Provider"
         [Visible]="composeConfirmVisible && !!composeDelta"
         [Delta]="composeDelta"
         [TargetListName]="composeTargetDisplayName()"

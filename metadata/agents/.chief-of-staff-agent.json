@@ -6,7 +6,7 @@
       "Description": "Personal, always-on Chief of Staff agent (one per user) that coordinates across organizational workstreams, keeps the user's stated priorities, sets reminders as one-shot wakes, writes executive briefings, manages approvals under narrowed per-user policies (MJ: AI Agent User Policies), schedules its own wake cycles via the 3-Tier Wake Gate on MJ: User Routines, and follows up across chat, email, and voice/telephony. Installed apps extend it with skills (for example business priorities and tasks).",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
-      "AcceptsSkills": "All",
+      "AcceptsSkills": "Limited",
       "SkillActivationMode": "Auto",
       "ExecutionOrder": 0,
       "ModelSelectionMode": "Agent",
@@ -41,7 +41,19 @@
             "enabled": true,
             "timeoutMs": 10000,
             "actionNames": [
-              "Get Record",
+              "Get My Agent Context",
+              "Assemble My Briefing",
+              "List My Agent Routines",
+              "Get Routine Run Results",
+              "List My Pending Approvals",
+              "Cancel Agent Wake",
+              "Find Colleague",
+              "List Available Rhythms",
+              "Enable Agent Rhythm",
+              "Manage Agent Suggestions",
+              "Open Agent Channel",
+              "Reply In Agent Channel",
+              "Get Agent Channel",
               "Scoped Search",
               "Schedule Next Agent Wake",
               "Configure Agent User Policy",
@@ -51,7 +63,6 @@
               "Manage My Email Inbox and Drafts",
               "Send Inter-Agent Request",
               "Prepare Outbound Call Brief",
-              "Query Scheduled Jobs",
               "Web Search"
             ]
           }
@@ -234,9 +245,9 @@
           "primaryKey": {
             "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E25"
           },
-          "sync": {
-            "lastModified": "2026-10-20T23:19:38.197Z",
-            "checksum": "d621ad2bc5b1f007109b35d60afe54d21b4f3cfedf42b242ca44d15785e6e6a5"
+          "deleteRecord": {
+            "delete": true,
+            "deletedAt": "2026-11-20T22:04:56.376Z"
           }
         },
         {
@@ -248,9 +259,9 @@
           "primaryKey": {
             "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E26"
           },
-          "sync": {
-            "lastModified": "2026-10-20T23:19:38.207Z",
-            "checksum": "f677b284d019d5cf93ba0125433e3f29cb520831c238683cf1303d6ca4ae1cf4"
+          "deleteRecord": {
+            "delete": true,
+            "deletedAt": "2026-11-20T22:04:56.393Z"
           }
         },
         {
@@ -262,9 +273,9 @@
           "primaryKey": {
             "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E27"
           },
-          "sync": {
-            "lastModified": "2026-10-20T23:19:38.216Z",
-            "checksum": "ba214e4880b2c5272046116869798e9c65b9d2e3c16d9576af8d264ebfe09095"
+          "deleteRecord": {
+            "delete": true,
+            "deletedAt": "2026-11-20T22:04:56.411Z"
           }
         },
         {
@@ -276,9 +287,205 @@
           "primaryKey": {
             "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E28"
           },
+          "deleteRecord": {
+            "delete": true,
+            "deletedAt": "2026-11-20T22:04:56.428Z"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Run Ad-hoc Query",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E31"
+          },
+          "deleteRecord": {
+            "delete": true,
+            "deletedAt": "2026-11-20T22:04:56.445Z"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Get My Agent Context",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6332DF11-2422-4913-8FAE-F19524B002AB"
+          },
           "sync": {
-            "lastModified": "2026-10-20T23:19:38.227Z",
-            "checksum": "fc423499e947b2a6cdb335f873d0c898506bee7a78682128e76398ff9cc6e622"
+            "lastModified": "2026-11-20T22:01:51.635Z",
+            "checksum": "8a6c44c798de1eae9ab9423df8ede7c0e14185663e6b7cc715690c9b9e3ab5a4"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Assemble My Briefing",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "AF867160-E5AA-410D-9C36-1463D061DB9A"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:51.656Z",
+            "checksum": "18a4fe20aba393f40707dd6b781b54346d0b2df411e32f216f870fabc95b2381"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=List My Agent Routines",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "11757A14-C032-4CA0-B2F5-EB8805450273"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:51.676Z",
+            "checksum": "eaf511d1038f700624dceb958b7679e6057d23c2914d3fd2d89482e2d4f68159"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Routine Run Results",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E02FF1CC-8E57-4C3A-95EF-DE4976274D6A"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:51.696Z",
+            "checksum": "b6edc2bd0bba2308d81bd232905612e85d616b43ff4a97df918b911d9c5e0408"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=List My Pending Approvals",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3905A0E7-D8B0-4DE5-AB07-4CBEA97FA390"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:51.715Z",
+            "checksum": "b6fdde87e901732c93aaa0d5c3fcf47df9583c49135715645b14f708c1ca4677"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Cancel Agent Wake",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "FF73BA59-E40E-451C-85C4-DBF4D6B6EE47"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:51.738Z",
+            "checksum": "3c65beb4396676b2d9ada5cc79743552a6b48867718031b0563ee0572f20db74"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Find Colleague",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BCEA7BE8-BBC4-4AA5-9F29-7D8F073EB0BA"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:51.758Z",
+            "checksum": "bbe72952860dc7e9b72cfe2f07ffe9b41b9167dd1c90606abd1f171b5eb7b9d7"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=List Available Rhythms",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "82756B0C-E99C-418D-80BF-C50415AEC028"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:51.778Z",
+            "checksum": "8d69b1f4dbff31c24f1058af5d6b5f654a69a2a3804c3faf4ee33375b67c1a05"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Enable Agent Rhythm",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "333FBF5D-161D-4BDB-8B3A-99A3917514F8"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:51.798Z",
+            "checksum": "dff2ad98795d9151f4ea746206c60a83bea884c4ef972f49aa0d53be9283c6b1"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Manage Agent Suggestions",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "2DC1EACB-592B-4AAC-86A7-439CFB647529"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:51.818Z",
+            "checksum": "824b6d7b938feb8a737bcff1fb628726688fbe6dd46475dbb7af5727ee55f655"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Open Agent Channel",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0BE8E7F0-8728-401B-914B-E584CBBCB685"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:51.838Z",
+            "checksum": "fcde03f70fe454e7799c325f573f6ba9ba70d2181b4b91fa72cc2062ec5194e4"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Reply In Agent Channel",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "DE6147EB-31D4-43CA-994F-25C27610D1B6"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:51.859Z",
+            "checksum": "1d8cf47dbfd1213874aed38779767b61913ca217414404aa5bc1eeb0442d5065"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Agent Channel",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "4EFC40BF-8337-4378-9216-0E2A2AC06BA1"
+          },
+          "sync": {
+            "lastModified": "2026-11-20T22:01:51.878Z",
+            "checksum": "c556c2dc4d8c8d0dd2aea45dbed0d95b1e54b58a480dbde04080de3b26060923"
           }
         },
         {
@@ -307,20 +514,6 @@
           "sync": {
             "lastModified": "2026-10-20T23:19:38.247Z",
             "checksum": "a3551e0d0bd09cc54d7b74086cc6945b3ef1761f9e3e071ba38c01489bf24c4d"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Run Ad-hoc Query",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E31"
-          },
-          "sync": {
-            "lastModified": "2026-10-20T23:19:38.257Z",
-            "checksum": "15c488e2b587f29fff4949a94d39b316e9ced0ab9b95f2ccb2a7aab442dae8cd"
           }
         },
         {
@@ -498,14 +691,80 @@
             "checksum": "42d4921794b1ec9be3caefe697bfd7646b1032d4c39011739df9051e4d02f9d7"
           }
         }
+      ],
+      "MJ: AI Agent Relationships": [
+        {
+          "_comments": [
+            "Read-only analytical and aggregate SQL specialist sub-agent. Chief of Staff uses AcceptsSkills='Limited' and holds zero raw SQL actions directly; complex cross-entity analytical or aggregate questions are delegated to Query Builder, which executes strictly under Chief of Staff's active per-user policy ceiling (policyCeilingAgentIDs)."
+          ],
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:MJ: AI Agents.Name=Query Builder",
+            "Status": "Active",
+            "SubAgentContextPaths": [
+              "*"
+            ]
+          },
+          "primaryKey": {
+            "ID": "49832CB5-B67C-40B5-852B-060AB0BF9E48"
+          },
+          "sync": {
+            "lastModified": "2026-11-21T15:59:22.003Z",
+            "checksum": "884a3a4759d0257d5be6ce7572f1a179469b145a19a72f4aae05171544a1f7ed"
+          }
+        }
+      ],
+      "MJ: AI Agent Skills": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SkillID": "@lookup:MJ: AI Skills.Name=Web Research",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "646D6039-44ED-4502-92B1-E89D3238F806"
+          },
+          "sync": {
+            "lastModified": "2026-11-21T15:59:22.109Z",
+            "checksum": "2400e588214881f3514b15c734f6882adaf2301b57574108beb2f7bfc997defe"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SkillID": "@lookup:MJ: AI Skills.Name=Data Visualization",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "19A86BDF-546B-46CA-A075-2285D4D39A67"
+          },
+          "sync": {
+            "lastModified": "2026-11-21T15:59:22.152Z",
+            "checksum": "fbd16eb23e33b3af556d72ad8d5f32451927f718681374633ba41ae68a33b79e"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SkillID": "@lookup:MJ: AI Skills.Name=Document Builder",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "A39B6274-A106-457B-A96A-521D8A804D84"
+          },
+          "sync": {
+            "lastModified": "2026-11-21T15:59:22.185Z",
+            "checksum": "353396d6834e89904a13209288acfca2663fdae5b8758557e4cbb835b149a881"
+          }
+        }
       ]
     },
     "primaryKey": {
       "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E00"
     },
     "sync": {
-      "lastModified": "2026-11-01T22:54:14.788Z",
-      "checksum": "9fb4af04007dac98fafab11ba0760c58b5ba83d71489c0f9cbbb1e1b5e852b92"
+      "lastModified": "2026-11-21T15:59:21.797Z",
+      "checksum": "0f983648bbf4787d71492e7a38631f251e4bb9606ec6923e00aed9752df4b48b"
     }
   }
 ]

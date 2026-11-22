@@ -27,6 +27,10 @@ Why: the delivery row is claimed, leased and purged on a retention schedule, and
 through the transport (256 KB cap, 10 attributes). `Progress` is a small operator hint (a percentage, a short message,
 a resume checkpoint), not a log.
 
+**`this.Provider` is yours alone for the delivery.** Every host mints a provider per delivery and releases it when
+your handler settles, so a provider-level transaction around your domain write and a follow-on publish never
+interleaves with another handler's, whatever the host's concurrency. Do not keep the provider past `Handle`.
+
 ## 2. Handlers must be idempotent
 
 At-least-once delivery plus lease takeover means your handler can run twice for one message — after a crash, a network
@@ -192,8 +196,8 @@ Pending-only count starves the queue. Give the scaler a SELECT-only login. The r
 ### The provider a handler gets
 
 `this.Provider` is the handler's own for the delivery: it must not be shared with a delivery running in parallel,
-because a provider carries transaction state and two handlers' transactions would interleave. MJAPI mints one per
-delivery; `mj queue work --concurrency N` does the same for N > 1 (`IndependentProviderSource`). A host that supplies
+because a provider carries transaction state and two handlers' transactions would interleave. MJAPI and `mj queue work`
+mint one per delivery at any concurrency (`IndependentProviderSource`). A host that supplies
 its own `WorkQueueProviderSource` and mints providers implements `ReleaseProvider`, which the host calls once the
 delivery settles, including when the handler throws. Do not keep the provider past `Handle`.
 

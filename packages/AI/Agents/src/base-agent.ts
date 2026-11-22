@@ -2836,9 +2836,11 @@ export class BaseAgent {
         // abort condition — whether it came from the caller, the timeout, or
         // both.
         //
-        // Actions invoked from this agent carry their own AbortSignal on
-        // `RunActionParams.AbortSignal` (see ActionEngine.RunAction) and are
-        // unaffected by this wrapper — their timeout budget is independent.
+        // Actions invoked from this agent retain their own per-action timeout
+        // budget inside `ActionEngine.RunAction`, while `ExecuteSingleAction`
+        // forwards `params.cancellationToken` as `RunActionParams.AbortSignal`
+        // so cancelling or timing out the agent run immediately aborts
+        // in-flight actions.
         // =====================================================================================
         const configuredMaxTimeMs =
             params.agent?.MaxTimePerRun != null && params.agent.MaxTimePerRun > 0
@@ -8211,6 +8213,9 @@ export class BaseAgent {
 
         const resolvedByAction = new Map<AgentAction, MJActionEntityExtended>();
         const missingActions = nextStep.actions?.filter(action => {
+            if (!action || typeof action.name !== 'string' || action.name.trim().length === 0) {
+                return true;
+            }
             const matched = this.resolveActionEntityForAgent(action.name, effectiveActions, params, true);
             if (matched) {
                 resolvedByAction.set(action, matched);
@@ -8221,7 +8226,9 @@ export class BaseAgent {
 
         // we should have zero missing actions, if we do, we need to log an error and return a retry step
         if (missingActions && missingActions.length > 0) {
-            const missingActionNames = missingActions.map(a => a.name).join(', ');
+            const missingActionNames = missingActions
+                .map(a => (a && typeof a.name === 'string' && a.name.trim().length > 0 ? a.name.trim() : '<missing action name>'))
+                .join(', ');
             const availableActionNames = effectiveActions.map(a => a.Name).join(', ');
             this.logError(`Actions '${missingActionNames}' not found or not active for agent '${params.agent.Name}'. Available actions: ${availableActionNames}`, {
                 agent: params.agent,
@@ -8243,9 +8250,12 @@ export class BaseAgent {
             const violatedActions: string[] = [];
 
             for (const action of nextStep.actions) {
+                const normalizedActionName = typeof action?.name === 'string' ? action.name.trim().toLowerCase() : '';
                 const actionEntity =
                     resolvedByAction.get(action)
-                    ?? effectiveActions.find(a => a.Name.trim().toLowerCase() === action.name.trim().toLowerCase());
+                    ?? (normalizedActionName
+                        ? effectiveActions.find(a => typeof a.Name === 'string' && a.Name.trim().toLowerCase() === normalizedActionName)
+                        : undefined);
 
                 if (!actionEntity) continue;
 
@@ -8414,46 +8424,47 @@ export class BaseAgent {
      * 3) unambiguous CONTAINS partial match.
      */
     private resolveActionEntityForAgent(
-        rawName: string,
+        rawName: string | null | undefined,
         pool: readonly MJActionEntityExtended[],
         params?: ExecuteAgentParams,
         logMatches = false
     ): MJActionEntityExtended | undefined {
-        const trimmedLower = rawName.trim().toLowerCase();
+        const normalizedName = typeof rawName === 'string' ? rawName.trim() : '';
+        const trimmedLower = normalizedName.toLowerCase();
         if (!trimmedLower) {
             return undefined;
         }
-        const exact = pool.find((a) => a.Name.trim().toLowerCase() === trimmedLower);
+        const exact = pool.find((a) => typeof a.Name === 'string' && a.Name.trim().toLowerCase() === trimmedLower);
         if (exact) {
             return exact;
         }
-        const sanitizedMatch = this.matchNamedBySanitizedToolName(rawName, pool);
+        const sanitizedMatch = this.matchNamedBySanitizedToolName(normalizedName, pool);
         if (sanitizedMatch.match) {
             if (logMatches && params) {
-                this.logStatus(`Action native tool name matched: '${rawName}' → '${sanitizedMatch.match.Name}'`, true, params);
+                this.logStatus(`Action native tool name matched: '${normalizedName}' → '${sanitizedMatch.match.Name}'`, true, params);
             }
             return sanitizedMatch.match;
         }
         if (sanitizedMatch.ambiguous) {
             if (logMatches && params) {
                 this.logStatus(
-                    `Ambiguous action tool name '${rawName}' matches ${sanitizedMatch.ambiguous.length} actions: ${sanitizedMatch.ambiguous.map((a) => a.Name).join(', ')}`,
+                    `Ambiguous action tool name '${normalizedName}' matches ${sanitizedMatch.ambiguous.length} actions: ${sanitizedMatch.ambiguous.map((a) => a.Name).join(', ')}`,
                     true,
                     params
                 );
             }
             return undefined;
         }
-        const containsMatches = pool.filter((a) => a.Name.trim().toLowerCase().includes(trimmedLower));
+        const containsMatches = pool.filter((a) => typeof a.Name === 'string' && a.Name.trim().toLowerCase().includes(trimmedLower));
         if (containsMatches.length === 1) {
             if (logMatches && params) {
-                this.logStatus(`Action name fuzzy matched: '${rawName}' → '${containsMatches[0].Name}'`, true, params);
+                this.logStatus(`Action name fuzzy matched: '${normalizedName}' → '${containsMatches[0].Name}'`, true, params);
             }
             return containsMatches[0];
         }
         if (containsMatches.length > 1 && logMatches && params) {
             this.logStatus(
-                `Ambiguous action name '${rawName}' matches ${containsMatches.length} actions: ${containsMatches.map((a) => a.Name).join(', ')}`,
+                `Ambiguous action name '${normalizedName}' matches ${containsMatches.length} actions: ${containsMatches.map((a) => a.Name).join(', ')}`,
                 true,
                 params
             );
@@ -14205,8 +14216,10 @@ The context is now within limits. Please retry your request with the recovered c
                         Filters: [],
                         SkipActionLog: false,
                         Context: this.stampActionContext(params),
+                        AbortSignal: params.cancellationToken,
                         ...this.runBoundDispatchParams(params, actionEntity, audience.Readers, contextUser),
-                    })
+                    }),
+                params.policyCeilingAgentIDs
             );
             this.recordDispatchOutcome(params, action, actionEntity, result, normalizedParams, skipBreaker);
             return result;
@@ -14273,37 +14286,7 @@ The context is now within limits. Please retry your request with the recovered c
         if (!contextUser?.ID || !params?.agent?.ID) {
             return null;
         }
-        let policy = AgentUserPolicyEngine.Instance.GetCachedPolicy(
-            params.agent.ID,
-            contextUser.ID,
-            params.provider
-        );
-        if (!policy) {
-            const lookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
-                params.agent.ID,
-                contextUser.ID,
-                contextUser,
-                { provider: params.provider }
-            );
-            if (lookup.status === 'error') {
-                return {
-                    Success: false,
-                    ResultCode: POLICY_DENIED_RESULT_CODE,
-                    Message: `Action "${actionEntity.Name || action.name}" blocked (fail-closed): user policy lookup failed (${lookup.errorMessage}).`,
-                    Params: [],
-                    RunParams: {
-                        Action: actionEntity,
-                        Params: this.toActionParams({ Params: action.params ?? {}, Bound: [] }, actionEntity),
-                        ContextUser: contextUser,
-                        Filters: [],
-                    },
-                };
-            }
-            policy = lookup.policy;
-        }
-        if (!policy) {
-            return null;
-        }
+        const policyAgentIDs = this.collectPolicyAgentChain(params);
         const actionParamsRecord: Record<string, string | number | boolean | null | undefined> = {};
         if (action.params) {
             for (const [key, val] of Object.entries(action.params)) {
@@ -14314,25 +14297,73 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
         }
-        const evaluation = AgentUserPolicyEngine.Instance.EvaluateActionExecution({
-            actionName: actionEntity.Name || action.name,
-            params: actionParamsRecord,
-            contextUser,
-            policy,
-        });
-        if (evaluation.verdict === 'Allow') {
+
+        const verdictRank: Record<'Allow' | 'RequireApproval' | 'DeferUntilNextWindow' | 'Deny', number> = {
+            Allow: 0,
+            RequireApproval: 1,
+            DeferUntilNextWindow: 2,
+            Deny: 3,
+        };
+        let strictestVerdict: 'Allow' | 'RequireApproval' | 'DeferUntilNextWindow' | 'Deny' = 'Allow';
+        let strictestReason = '';
+
+        for (const agentId of policyAgentIDs) {
+            let policy = AgentUserPolicyEngine.Instance.GetCachedPolicy(
+                agentId,
+                contextUser.ID,
+                params.provider
+            );
+            if (!policy) {
+                const lookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
+                    agentId,
+                    contextUser.ID,
+                    contextUser,
+                    { provider: params.provider }
+                );
+                if (lookup.status === 'error') {
+                    return {
+                        Success: false,
+                        ResultCode: POLICY_DENIED_RESULT_CODE,
+                        Message: `Action "${actionEntity.Name || action.name}" blocked (fail-closed): user policy lookup failed (${lookup.errorMessage}).`,
+                        Params: [],
+                        RunParams: {
+                            Action: actionEntity,
+                            Params: this.toActionParams({ Params: action.params ?? {}, Bound: [] }, actionEntity),
+                            ContextUser: contextUser,
+                            Filters: [],
+                        },
+                    };
+                }
+                policy = lookup.policy;
+            }
+            if (!policy) {
+                continue;
+            }
+            const evaluation = AgentUserPolicyEngine.Instance.EvaluateActionExecution({
+                actionName: actionEntity.Name || action.name,
+                params: actionParamsRecord,
+                contextUser,
+                policy,
+            });
+            if (verdictRank[evaluation.verdict] > verdictRank[strictestVerdict]) {
+                strictestVerdict = evaluation.verdict;
+                strictestReason = evaluation.reason;
+            }
+        }
+
+        if (strictestVerdict === 'Allow') {
             return null;
         }
         const resultCode =
-            evaluation.verdict === 'Deny'
+            strictestVerdict === 'Deny'
                 ? POLICY_DENIED_RESULT_CODE
-                : evaluation.verdict === 'DeferUntilNextWindow'
+                : strictestVerdict === 'DeferUntilNextWindow'
                 ? POLICY_DEFERRED_RESULT_CODE
                 : POLICY_APPROVAL_REQUIRED_RESULT_CODE;
         return {
             Success: false,
             ResultCode: resultCode,
-            Message: evaluation.reason,
+            Message: strictestReason,
             Params: [],
             RunParams: {
                 Action: actionEntity,
@@ -14341,6 +14372,31 @@ The context is now within limits. Please retry your request with the recovered c
                 Filters: [],
             },
         };
+    }
+
+    /**
+     * Collects the deduplicated chain of agent IDs whose user policies govern this run:
+     * the executing agent plus any ancestor `policyCeilingAgentIDs` inherited from a parent run.
+     */
+    private collectPolicyAgentChain(params: ExecuteAgentParams): string[] {
+        const seen = new Set<string>();
+        const result: string[] = [];
+        const add = (id: string | null | undefined): void => {
+            const clean = id?.trim();
+            if (!clean) {
+                return;
+            }
+            const lower = clean.toLowerCase();
+            if (!seen.has(lower)) {
+                seen.add(lower);
+                result.push(clean);
+            }
+        };
+        add(params.agent?.ID);
+        for (const ceilingId of params.policyCeilingAgentIDs ?? []) {
+            add(ceilingId);
+        }
+        return result;
     }
 
     /**
@@ -14646,6 +14702,7 @@ The context is now within limits. Please retry your request with the recovered c
                 parentStepCounts: parentStepCountsToPass,
                 parentRun: this._agentRun,
                 parentActivatedSkillIDs: this.activeSkillIDsForRun(params), // the root's active skills reach the sub-agent's actions
+                policyCeilingAgentIDs: this.collectPolicyAgentChain(params), // parent agent's narrowed user policy binds sub-agent actions too
                 payload: verifiedResumeRunId ? undefined : payload, // on resume, ignore computed/mapped payload so autoPopulateLastRunPayload loads the child's prior FinalPayload
                 ...(verifiedResumeRunId ? { lastRunId: verifiedResumeRunId, autoPopulateLastRunPayload: true } : {}),
                 configurationId: resolvedConfig.configurationId, // resolved preset configuration ID or inherited parent configurationId
@@ -14653,7 +14710,10 @@ The context is now within limits. Please retry your request with the recovered c
                 apiKeys: params.apiKeys, // propagate API keys to sub-agent
                 CredentialScope: params.CredentialScope, // a sub-agent may not spend keys its parent could not
                 Audience: params.Audience, // a sub-agent's output reaches the same room; it re-hydrates the IDs itself
-                inputArtifacts: this._artifactToolManager.ExportInputArtifacts(params.inputArtifacts), // propagate input + workspace-created artifacts so sub-agents inherit the parent's manifest + tools
+                // Propagate input + workspace-created artifacts (or explicit `[]` when none exist)
+                // so sub-agents inherit the parent's manifest + tools without re-scanning conversation
+                // artifact tables inside AgentRunner.hydrateConversationArtifacts.
+                inputArtifacts: this._artifactToolManager.ExportInputArtifacts(params.inputArtifacts) ?? [],
                 data: {
                         ...params.data,
                         ...templateParameters,
@@ -19208,7 +19268,7 @@ The context is now within limits. Please retry your request with the recovered c
             const currentPayload = previousDecision?.newPayload || previousDecision?.previousPayload || params.payload;
             const availableForExecution = this.getAvailableActionsForAgent(params.agent.ID);
             const actions: AgentAction[] = (previousDecision.actions || []).map((a) => {
-                const matched = this.resolveActionEntityForAgent(a.name, availableForExecution, params, false);
+                const matched = this.resolveActionEntityForAgent(a?.name, availableForExecution, params, false);
                 return matched && matched.Name !== a.name ? { ...a, name: matched.Name } : { ...a };
             });
             // Check for cancellation before starting
@@ -19334,9 +19394,9 @@ The context is now within limits. Please retry your request with the recovered c
             const actionPromises = actions.map(async (aa) => {
                 // Find action entity from the effective actions (which includes runtime changes),
                 // or from actions referenced directly by this agent's Flow steps (AIAgentStep.ActionID / Configuration.steps[])
-                let actionEntity = this.resolveActionEntityForAgent(aa.name, effectiveActions, params, false);
+                let actionEntity = this.resolveActionEntityForAgent(aa?.name, effectiveActions, params, false);
                 if (!actionEntity && flowStepActions.length > 0) {
-                    actionEntity = this.resolveActionEntityForAgent(aa.name, flowStepActions, params, false);
+                    actionEntity = this.resolveActionEntityForAgent(aa?.name, flowStepActions, params, false);
                 }
                 if (actionEntity && aa.name !== actionEntity.Name) {
                     aa.name = actionEntity.Name;
@@ -22072,6 +22132,12 @@ The context is now within limits. Please retry your request with the recovered c
             // Calculate total tokens even for cancelled runs
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
+            // Mark as a trusted server-initiated cancellation so finalizing a timeout, system
+            // abort, or attributed-user run (where params.userId !== contextUser.ID) is never
+            // blocked by the user-level stop-ownership gate.
+            if (typeof this._agentRun.MarkServerCancellation === 'function') {
+                this._agentRun.MarkServerCancellation();
+            }
             const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
             this.releaseFinishedRun(ok);
         }
