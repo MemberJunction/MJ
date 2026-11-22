@@ -1033,33 +1033,36 @@ END`;
   });
 });
 
-// Regression: V202611140845 — the same rowcount block written by hand, without CodeGen's
+// Regression: V202611140845 — the single-write spUpdate written by hand, without CodeGen's
 // `-- Check if the update was successful` marker, reached PG as `IF _v_row_count = 0` with no THEN,
-// a bare SELECT and a stray `LIMIT 0`.
+// a bare SELECT and a stray `LIMIT 0`. (The view-returning shape of the unmarked block is covered by
+// the `body conversion` test that expects IF NOT FOUND THEN.)
 describe('ProcedureToFunctionRule — hand-written rowcount IF/ELSE', () => {
-  it('converts an unmarked view-returning IF @@ROWCOUNT = 0 ... ELSE ... block', () => {
-    const input = `CREATE PROCEDURE [__mj].[spUpdateUser]
+  it('converts an unmarked base-table IF @@ROWCOUNT = 0 ... ELSE ... block', () => {
+    const input = `CREATE PROCEDURE [__mj].[spUpdateWidget]
     @ID uniqueidentifier,
     @Name nvarchar(100) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE
-        [__mj].[User]
+        [__mj].[Widget]
     SET
         [Name] = ISNULL(@Name, [Name])
     WHERE
         [ID] = @ID
 
     IF @@ROWCOUNT = 0
-        SELECT TOP 0 * FROM [__mj].[vwUsers] WHERE 1=0
+        SELECT TOP 0 [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM [__mj].[Widget] WHERE 1=0
     ELSE
-        SELECT * FROM [__mj].[vwUsers] WHERE [ID] = @ID
+        SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM [__mj].[Widget] WHERE [ID] = @ID
 END`;
     const result = convert(input);
     expect(result).toContain('GET DIAGNOSTICS _v_row_count = ROW_COUNT;');
     expect(result).toContain('IF _v_row_count = 0 THEN\n        RETURN;\n    END IF;');
-    expect(result).toContain('RETURN QUERY SELECT * FROM __mj."vwUsers" WHERE "ID" = p_ID;');
+    expect(result).toContain('RETURN QUERY SELECT "ID", "__mj_CreatedAt", "__mj_UpdatedAt" FROM __mj."Widget" WHERE "ID" = p_ID;');
+    expect(result).toContain('RETURNS TABLE("ID" UUID, "__mj_CreatedAt" TIMESTAMPTZ, "__mj_UpdatedAt" TIMESTAMPTZ) AS');
     expect(result).not.toContain('LIMIT 0');
+    expect(result).not.toContain('WHERE 1=0');
   });
 });

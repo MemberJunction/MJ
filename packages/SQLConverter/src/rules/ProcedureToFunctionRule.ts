@@ -1459,16 +1459,6 @@ function findBaseTableReturnSelect(blockLines: string[]): { Select: string; Inde
 }
 
 /**
- * Find the row-returning `SELECT * FROM __mj."vwX" WHERE …` of a rowcount block (the view-returning
- * CRUD shape), skipping the `WHERE 1=0` branch.
- */
-function findViewReturnSelect(blockLines: string[]): { Select: string; Index: number } | null {
-  const pattern = /^\s*(SELECT\s+\*\s+FROM\s+__mj\."vw\w+"\s+WHERE\s+(?!1\s*=\s*0\b)[^;]+?)\s*;?\s*$/i;
-  const index = blockLines.findIndex((l) => pattern.test(l));
-  return index < 0 ? null : { Select: blockLines[index].match(pattern)![1], Index: index };
-}
-
-/**
  * True when the lines before `returnIndex` are exactly an unbraced `IF`'s empty-result branch and its
  * `ELSE`: one `SELECT … WHERE 1=0` line, then `ELSE`, with only comments and blank lines between.
  * Anything else (a `BEGIN`, a second statement) means the block is not the CRUD shape.
@@ -1485,7 +1475,7 @@ function isUnbracedEmptyResultIfElse(lines: string[], returnIndex: number): bool
  * The plpgsql for a CRUD rowcount block, matching what native PostgreSQL CodeGen emits: return nothing
  * when no row changed, otherwise the changed row.
  *
- * @param select - The row-returning SELECT from {@link findBaseTableReturnSelect} or {@link findViewReturnSelect}.
+ * @param select - The row-returning SELECT from {@link findBaseTableReturnSelect}.
  * @returns The replacement lines.
  */
 export function BuildRowcountReturnBlock(select: string): string[] {
@@ -1518,12 +1508,12 @@ function convertRowcountIfBlock(sql: string): string {
       /^--\s*Check if the (update|delete|insert|create) was successful/i
     );
 
-    // The same CRUD block written by hand, WITHOUT CodeGen's marker comment (V202611140845 restored
-    // an spUpdate that way). Left alone it reached convertIfBlocks, whose single-line IF rule can't
-    // see past the comment lines, and PG got `IF _v_row_count = 0` with no THEN and bare SELECTs.
+    // The single-write spUpdate written by hand, WITHOUT CodeGen's marker comment (V202611140845
+    // restored one that way): its SELECTs name base-table columns. The view-returning and delete
+    // shapes of the uncommented block are tryConvertUncommentedRowcountIf's, below.
     if (!checkMatch && /^IF\s+_v_row_count\s*=\s*0$/i.test(stripped)) {
       const rest = lines.slice(i + 1);
-      const found = findBaseTableReturnSelect(rest) ?? findViewReturnSelect(rest);
+      const found = findBaseTableReturnSelect(rest);
       if (found && isUnbracedEmptyResultIfElse(rest, found.Index)) {
         result.push(...BuildRowcountReturnBlock(found.Select));
         i = i + 1 + found.Index + 1;
