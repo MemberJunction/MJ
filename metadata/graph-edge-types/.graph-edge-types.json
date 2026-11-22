@@ -57,11 +57,11 @@
     "fields": {
       "GraphID": null,
       "Name": "NarrowerThan",
-      "Description": "Connects a specific concept to its broader parent concept.",
+      "Description": "Retired: the inverse label of BroaderThan, not a type of its own. Store a BroaderThan edge from the broader concept to the narrower one instead. The row stays so edges stored under it before it was retired still read; the \"Graph Edges: Retype NarrowerThan as BroaderThan\" Record Process converts them.",
       "IsDirected": true,
       "InverseName": "BroaderThan",
       "DefaultWeight": 0.85,
-      "AllowStored": true
+      "AllowStored": false
     },
     "primaryKey": {
       "ID": "2AC4EAD6-1FF7-44FB-9C6C-BE13451FE40D"
@@ -75,7 +75,7 @@
     "fields": {
       "GraphID": null,
       "Name": "Defines",
-      "Description": "Connects a canonical Term or Policy concept to the Entity, Alternate Base View, or Concept it formally defines.",
+      "Description": "Connects an Alternate Base View or Query to the Graph Concept it formally defines. Direction is artifact to concept: the source is the view or query, the target is the concept.",
       "IsDirected": true,
       "InverseName": "DefinedBy",
       "DefaultWeight": 1,
@@ -93,7 +93,7 @@
     "fields": {
       "GraphID": null,
       "Name": "Describes",
-      "Description": "Connects a Domain or Policy concept to the Entity or resource it describes.",
+      "Description": "Connects an Entity or Entity Field to the Graph Concept whose data it holds. Direction is artifact to concept: the source is the entity or field, the target is the concept.",
       "IsDirected": true,
       "InverseName": "DescribedBy",
       "DefaultWeight": 0.9,
@@ -111,7 +111,7 @@
     "fields": {
       "GraphID": null,
       "Name": "Measures",
-      "Description": "Connects a Metric concept to the Golden Query, Entity, or Alternate Base View that computes it.",
+      "Description": "Connects a Query or Alternate Base View to the metric Graph Concept it computes. Direction is artifact to concept: the source is the query or view, the target is the concept.",
       "IsDirected": true,
       "InverseName": "MeasuredBy",
       "DefaultWeight": 0.95,
@@ -129,7 +129,7 @@
     "fields": {
       "GraphID": null,
       "Name": "Implements",
-      "Description": "Connects a Process concept to the Action, AI Agent, or Workflow that implements it.",
+      "Description": "Connects an Action, AI Skill or AI Agent to the process or policy Graph Concept it implements. Direction is artifact to concept: the source is the action, skill or agent, the target is the concept.",
       "IsDirected": true,
       "InverseName": "ImplementedBy",
       "DefaultWeight": 0.95,
@@ -259,6 +259,118 @@
     },
     "primaryKey": {
       "ID": "B0590F00-B92D-4298-9F54-89DEF6C5CE37"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Subsets",
+      "Description": "Connects an Alternate Base View to the entity whose rows it is a subset of. Derived on read by the Alternate Base View edge provider; never stored.",
+      "IsDirected": true,
+      "InverseName": "Has Subset",
+      "DefaultWeight": 1.0,
+      "AllowStored": false
+    },
+    "primaryKey": {
+      "ID": "C5B691F3-F864-472A-9384-2380DC9D4356"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Is A",
+      "Description": "Connects an IS-A child entity to its parent entity. Derived on read by the Entity Metadata edge provider; never stored.",
+      "IsDirected": true,
+      "InverseName": "Has Subtype",
+      "DefaultWeight": 1.0,
+      "AllowStored": false
+    },
+    "primaryKey": {
+      "ID": "E7797155-44F0-4BF3-8EC7-0148C8CF214E"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "References",
+      "Description": "Connects an entity to an entity it holds a foreign key to (the description names the field). Derived on read by the Entity Metadata and Foreign Key edge providers; never stored.",
+      "IsDirected": true,
+      "InverseName": "Referenced By",
+      "DefaultWeight": 0.6,
+      "AllowStored": false
+    },
+    "primaryKey": {
+      "ID": "C619A425-DD03-472E-925B-B89B8BEAEEF5"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Reads",
+      "Description": "Connects a Query to an entity or Alternate Base View it selects from. Derived on read by the Query Metadata edge provider; never stored.",
+      "IsDirected": true,
+      "InverseName": "Read By",
+      "DefaultWeight": 0.8,
+      "AllowStored": false
+    },
+    "primaryKey": {
+      "ID": "703D544A-AB13-4D60-B89C-47DCED47134D"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Composes",
+      "Description": "Connects a Query to a query it composes through {{query:\"...\"}}. Derived on read by the Query Metadata edge provider; never stored.",
+      "IsDirected": true,
+      "InverseName": "Composed Into",
+      "DefaultWeight": 0.9,
+      "AllowStored": false
+    },
+    "primaryKey": {
+      "ID": "765AD658-B298-4155-897D-C323388622A5"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Field Of",
+      "Description": "Connects an Entity Field to the entity it belongs to. Derived on read by the Entity Metadata edge provider; never stored.",
+      "IsDirected": true,
+      "InverseName": "Has Field",
+      "DefaultWeight": 1.0,
+      "AllowStored": false
+    },
+    "primaryKey": {
+      "ID": "4640EF91-195D-4B10-8B0C-92C42FBD75E2"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Preferred Over",
+      "Description": "Says to use the source instead of the target: the target is a deprecated or lower-authority equivalent of the source.",
+      "IsDirected": true,
+      "InverseName": "Superseded By",
+      "DefaultWeight": 0.9,
+      "AllowStored": true
+    },
+    "primaryKey": {
+      "ID": "3C2ACF78-2E10-4E36-ABC1-E3CCC59CD7A5"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Same As",
+      "Description": "General symmetric equivalence between two nodes that name the same thing.",
+      "IsDirected": false,
+      "InverseName": "Same As",
+      "DefaultWeight": 1.0,
+      "AllowStored": true
+    },
+    "primaryKey": {
+      "ID": "F8C2FFC8-B633-4CE2-B3DF-3620D25EE710"
     }
   }
 ]

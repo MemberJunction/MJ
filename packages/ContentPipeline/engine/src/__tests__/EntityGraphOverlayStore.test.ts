@@ -56,25 +56,67 @@ class RecordingEdge {
     }
 }
 
-function makeProvider(saves: SaveRecord[]): IMetadataProvider {
+const ENTITY_IDS = {
+    Concepts: '9C1E2F00-0000-4000-8000-0000000000E1',
+    Items: '9C1E2F00-0000-4000-8000-0000000000E2',
+    Queries: '9C1E2F00-0000-4000-8000-0000000000E3',
+} as const;
+const EDGE_TYPE_IDS = {
+    SourcedFrom: '9C1E2F00-0000-4000-8000-0000000000F1',
+    Measures: '9C1E2F00-0000-4000-8000-0000000000F2',
+} as const;
+const QUERY_ID = '9C1E2F00-0000-4000-8000-000000000004';
+
+/** `MJ: Graph Edge Type Endpoints` rows: Measures runs from a query to a concept. */
+const MEASURES_ENDPOINTS = [
+    { EdgeTypeID: EDGE_TYPE_IDS.Measures, Side: 'Source', EntityID: ENTITY_IDS.Queries },
+    { EdgeTypeID: EDGE_TYPE_IDS.Measures, Side: 'Target', EntityID: ENTITY_IDS.Concepts },
+];
+
+function viewResult(rows: unknown[]): RunViewResult {
+    return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
+}
+
+function makeProvider(saves: SaveRecord[], endpoints: unknown[] = MEASURES_ENDPOINTS): IMetadataProvider {
+    const entities = [
+        { ID: ENTITY_IDS.Concepts, Name: 'MJ: Graph Concepts' },
+        { ID: ENTITY_IDS.Items, Name: 'MJ: Content Items' },
+        { ID: ENTITY_IDS.Queries, Name: 'MJ: Queries' },
+    ];
+    const rowsFor = (params: RunViewParams): unknown[] => {
+        if (params.EntityName === 'MJ: Graph Edge Types') {
+            return [
+                { ID: EDGE_TYPE_IDS.SourcedFrom, Name: 'Sourced From', GraphID: null },
+                { ID: EDGE_TYPE_IDS.Measures, Name: 'Measures', GraphID: null },
+            ];
+        }
+        return params.EntityName === 'MJ: Graph Edge Type Endpoints' ? endpoints : [];
+    };
     const provider = {
-        Entities: [
-            { ID: '9C1E2F00-0000-4000-8000-0000000000E1', Name: 'MJ: Graph Concepts' },
-            { ID: '9C1E2F00-0000-4000-8000-0000000000E2', Name: 'MJ: Content Items' },
-        ],
-        RunView: async (params: RunViewParams): Promise<RunViewResult> => ({
-            Success: true,
-            Results: params.EntityName === 'MJ: Graph Edge Types' ? [{ ID: '9C1E2F00-0000-4000-8000-0000000000F1', Name: 'Sourced From', GraphID: null }] : [],
-            RowCount: 1,
-            TotalRowCount: 1,
-            ExecutionTime: 0,
-            ErrorMessage: '',
-            UserViewRunID: '',
-        }),
+        Entities: entities,
+        EntityByName: (name: string) => entities.find((e) => e.Name.toLowerCase() === name.trim().toLowerCase()),
+        RunView: async (params: RunViewParams): Promise<RunViewResult> => viewResult(rowsFor(params)),
+        RunViews: async (params: RunViewParams[]): Promise<RunViewResult[]> => params.map((p) => viewResult(rowsFor(p))),
         GetEntityObject: async (_entityName: string, user: UserInfo): Promise<MJGraphEdgeEntity> =>
             new RecordingEdge(user, saves) as unknown as MJGraphEdgeEntity,
     };
     return provider as unknown as IMetadataProvider;
+}
+
+function measures(sourceIsConcept: boolean): SynthesizedGraphEdge {
+    const concept = { Entity: 'MJ: Graph Concepts', ID: CONCEPT_ID };
+    const query = { Entity: 'MJ: Queries', ID: QUERY_ID };
+    const [source, target] = sourceIsConcept ? [concept, query] : [query, concept];
+    return {
+        EdgeTypeName: 'Measures',
+        SourceEntityName: source.Entity,
+        SourceRecordID: source.ID,
+        TargetEntityName: target.Entity,
+        TargetRecordID: target.ID,
+        Weight: 0.9,
+        Confidence: 0.8,
+        Description: 'query measures concept',
+    };
 }
 
 function sourcedFrom(): SynthesizedGraphEdge {
@@ -101,6 +143,41 @@ describe('EntityGraphOverlayStore.UpsertEdges', () => {
     it('leaves no scope behind once the save is done', async () => {
         await new EntityGraphOverlayStore().UpsertEdges(GRAPH_ID, CONCEPT_ID, [sourcedFrom()], 'Approved', runUser, makeProvider([]));
         expect(ServerOperationScopeManager.Instance.IsOperationActive([GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION], 'MJ: Graph Edges', runUser)).toBe(false);
+    });
+});
+
+describe('EntityGraphOverlayStore.UpsertEdges — the edge-type contract is checked before writing', () => {
+    it('writes an edge whose endpoints the type allows (query -> concept for Measures)', async () => {
+        const saves: SaveRecord[] = [];
+        const store = new EntityGraphOverlayStore();
+        expect(await store.UpsertEdges(GRAPH_ID, CONCEPT_ID, [measures(false)], 'Proposed', runUser, makeProvider(saves))).toBe(1);
+        expect(saves).toHaveLength(1);
+        expect(store.RejectedEdgeCount).toBe(0);
+    });
+
+    it('refuses an edge that breaks its endpoint rows and never calls Save() for it', async () => {
+        const saves: SaveRecord[] = [];
+        const store = new EntityGraphOverlayStore();
+        const written = await store.UpsertEdges(GRAPH_ID, CONCEPT_ID, [measures(true), sourcedFrom()], 'Proposed', runUser, makeProvider(saves));
+        expect(written).toBe(1); // only the SourcedFrom edge, which has no endpoint rows
+        expect(saves).toHaveLength(1);
+        expect(store.RejectedEdgeCount).toBe(1);
+    });
+
+    it('refuses an edge type with no seeded row instead of skipping it silently', async () => {
+        const saves: SaveRecord[] = [];
+        const store = new EntityGraphOverlayStore();
+        const unknown: SynthesizedGraphEdge = { ...sourcedFrom(), EdgeTypeName: 'Related To Something Else' };
+        expect(await store.UpsertEdges(GRAPH_ID, CONCEPT_ID, [unknown], 'Proposed', runUser, makeProvider(saves))).toBe(0);
+        expect(saves).toEqual([]);
+        expect(store.RejectedEdgeCount).toBe(1);
+    });
+
+    it('lets any endpoint through when the type has no endpoint rows', async () => {
+        const saves: SaveRecord[] = [];
+        const store = new EntityGraphOverlayStore();
+        expect(await store.UpsertEdges(GRAPH_ID, CONCEPT_ID, [measures(true)], 'Proposed', runUser, makeProvider(saves, []))).toBe(1);
+        expect(store.RejectedEdgeCount).toBe(0);
     });
 });
 
