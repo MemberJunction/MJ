@@ -167,12 +167,19 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
    /**
     * Ensures the single ActionEngineBase metadata cache is loaded. Delegates entirely to the base —
     * ActionEngineServer holds no metadata of its own.
+    *
+    * Delegates to `this.base.Config()` first so `BaseEngine.ResolveContextUser()` resolves and locks
+    * the server's system user on database providers; a subsequent per-request `Config(false, uiUser)`
+    * (for example from `BaseAgent` running an action for a non-Owner UI caller) must never downgrade
+    * `this._contextUser` and break `StartActionLog` writes to `MJ: Action Execution Logs`.
     */
    public async Config(forceRefresh: boolean = false, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
-      if (contextUser) {
+      await this.base.Config(forceRefresh, contextUser, provider);
+      if (this.base.ContextUser) {
+         this._contextUser = this.base.ContextUser;
+      } else if (contextUser && !this._contextUser) {
          this._contextUser = contextUser;
       }
-      await this.base.Config(forceRefresh, contextUser, provider);
    }
 
    /** True once the underlying ActionEngineBase cache has loaded. */

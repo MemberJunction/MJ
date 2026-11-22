@@ -22,6 +22,7 @@ import { AIEngine } from '@memberjunction/aiengine';
  */
 @RegisterClass(BaseAction, 'Configure Agent User Policy')
 export class ConfigureAgentUserPolicyAction extends BaseAction {
+    public static override readonly AuthorizesCaller = true;
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             const contextUser = params.ContextUser;

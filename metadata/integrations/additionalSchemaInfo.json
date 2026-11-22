@@ -11,6 +11,11 @@
       "_comment": "FieldSuggestion IS-A Comment (Table-Per-Type, 2-level IS-A chain under Conversation): FieldSuggestion.ID PK is also an FK to Comment.ID.",
       "ChildEntity": "MJ: Field Suggestions",
       "ParentEntity": "MJ: Comments"
+    },
+    {
+      "_comment": "AgentChannel IS-A Conversation (Table-Per-Type): AgentChannel.ID PK is also an FK to Conversation.ID.",
+      "ChildEntity": "MJ: Agent Channels",
+      "ParentEntity": "MJ: Conversations"
     }
   ],
   "Entities": [
