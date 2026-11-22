@@ -330,8 +330,12 @@ export class AdminLimitsResourceComponent
                 },
                 this.ProviderToUse,
             );
-            this.ActionFeedback = result.Message;
-            this.ResumeModalRun = null;
+            if (result.Success) {
+                this.ActionFeedback = result.Message;
+                this.ResumeModalRun = null;
+            } else {
+                this.LoadError = result.Message;
+            }
             await this.RefreshDiagnostics();
         } catch (err) {
             this.LoadError = err instanceof Error ? err.message : String(err);
@@ -357,7 +361,11 @@ export class AdminLimitsResourceComponent
                 },
                 this.ProviderToUse,
             );
-            this.ActionFeedback = result.Message;
+            if (result.Success) {
+                this.ActionFeedback = result.Message;
+            } else {
+                this.LoadError = result.Message;
+            }
             await this.RefreshDiagnostics();
         } catch (err) {
             this.LoadError = err instanceof Error ? err.message : String(err);
