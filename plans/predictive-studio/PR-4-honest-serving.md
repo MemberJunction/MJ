@@ -11376,7 +11376,7 @@ are monitored on real outcomes.
 - Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, PS_SEED_LIMIT, PS_SIGN_IN_URL, PS_STORAGE_PROVIDER, PW_BASE_URL, STORAGE_LOCAL_ROOT, TZ<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->29<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->29<!-- /gen:checks -->
-- Head: <!-- gen:head -->e4c7d7ad21<!-- /gen:head -->
+- Head: <!-- gen:head -->1ced84f945<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,
@@ -13618,6 +13618,8 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   updated; next's migrations applied to both (4 applied each); metadata pushed to both (0 errors).
 - **Verified:** root install + build (322/322); integration-test-suite 1132/1132; Engine 1887/1887; TruthSuite 189/189;
   Core 593/593; the four bootstrap packages build 0.
+- **Second merge** (next moved 4 commits while CI started; graph/content-pipeline only, no migration, no conflict):
+  root build 352/352 + 322/322, integration-test-suite 1132/1132.
 
 ### 2026-11-22 — Claude (Opus 5.5) — R3 (MJExplorer user walk: chat + Predictive Studio, real data)
 

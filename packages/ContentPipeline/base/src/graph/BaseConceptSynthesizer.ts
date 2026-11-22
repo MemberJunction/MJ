@@ -52,7 +52,14 @@ export interface SynthesizedGraphConcept {
     readonly Citations: readonly ConceptChunkCitation[];
 }
 
-/** Synthesized edge ready to be persisted into `MJ: Graph Edges`. */
+/**
+ * Synthesized edge ready to be persisted into `MJ: Graph Edges`.
+ *
+ * Direction follows the edge type's `MJ: Graph Edge Type Endpoints` rows. In particular `Describes`,
+ * `Defines`, `Measures` and `Implements` run artifact -> concept: the entity, view, query, action or
+ * skill is the source and the `MJ: Graph Concepts` record the target. A store validates an edge
+ * against those rows before writing it and drops one that breaks them.
+ */
 export interface SynthesizedGraphEdge {
     readonly EdgeTypeName:
         | 'SourcedFrom'
@@ -71,6 +78,7 @@ export interface SynthesizedGraphEdge {
     /** Record ID (or concept name placeholder when referencing the newly synthesized concept). */
     readonly SourceRecordID: string;
     readonly TargetEntityName: string;
+    /** Record ID (or concept name placeholder when referencing the newly synthesized concept). */
     readonly TargetRecordID: string;
     readonly Weight: number;
     readonly Confidence: number;
