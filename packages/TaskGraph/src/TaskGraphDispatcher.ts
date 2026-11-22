@@ -5405,6 +5405,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 return this.governance.EvaluateLoopIterationGovernance({
                     Provider: executionProvider,
                     ContextUser: this.contextUser,
+                    SubmittingUser: graphContext.ExecutionUser,
                     Parent: parentTask ?? null,
                     Task: task,
                     LoopType: info.LoopType,

@@ -210,7 +210,6 @@ export async function RunWhileLoop(
                 NextIterationIndex: index,
                 CompletedIterations: completedIndices.length,
                 ResultsSoFar: results,
-                CompletedIndices: [...completedIndices],
             });
             if (gov.ShouldPause) {
                 return buildPausedLoopResult('While', index, completedIndices, results, succeeded, failed, gov.Reason);
@@ -251,7 +250,6 @@ export async function RunWhileLoop(
                 NextIterationIndex: index,
                 CompletedIterations: completedIndices.length,
                 ResultsSoFar: results,
-                CompletedIndices: [...completedIndices],
                 LastOutcome: outcome,
             });
             if (postGov.ShouldPause) {
@@ -291,22 +289,19 @@ async function runSequential(
     let succeeded = resumed?.SucceededCount ?? results.length;
     let failed = resumed?.FailedCount ?? 0;
 
-    for (let pos = 0; pos < plan.length; pos++) {
-        const iteration = plan[pos];
-        if (completedSet.has(iteration.Index) || iteration.Index < startIndex) {
-            continue;
-        }
+    const pendingPlan = plan.filter((p) => !completedSet.has(p.Index) && p.Index >= startIndex);
+
+    for (let pos = 0; pos < pendingPlan.length; pos++) {
+        const iteration = pendingPlan[pos];
         if (options?.OnIterationGovernance) {
-            const completedSorted = sortedIndices(completedSet);
             const gov = await options.OnIterationGovernance({
                 LoopType: 'ForEach',
                 NextIterationIndex: iteration.Index,
-                CompletedIterations: completedSorted.length,
+                CompletedIterations: completedSet.size,
                 ResultsSoFar: results,
-                CompletedIndices: completedSorted,
             });
             if (gov.ShouldPause) {
-                return buildPausedLoopResult('ForEach', iteration.Index, completedSorted, results, succeeded, failed, gov.Reason);
+                return buildPausedLoopResult('ForEach', iteration.Index, sortedIndices(completedSet), results, succeeded, failed, gov.Reason);
             }
         }
 
@@ -332,19 +327,17 @@ async function runSequential(
             }
         }
 
-        const hasMoreIterations = plan.slice(pos + 1).some((p) => !completedSet.has(p.Index) && p.Index >= startIndex);
+        const hasMoreIterations = pos + 1 < pendingPlan.length;
         if (options?.OnIterationGovernance) {
-            const completedSorted = sortedIndices(completedSet);
             const postGov = await options.OnIterationGovernance({
                 LoopType: 'ForEach',
                 NextIterationIndex: iteration.Index + 1,
-                CompletedIterations: completedSorted.length,
+                CompletedIterations: completedSet.size,
                 ResultsSoFar: results,
-                CompletedIndices: completedSorted,
                 LastOutcome: outcome,
             });
             if (postGov.ShouldPause && hasMoreIterations) {
-                return buildPausedLoopResult('ForEach', iteration.Index + 1, completedSorted, results, succeeded, failed, postGov.Reason);
+                return buildPausedLoopResult('ForEach', iteration.Index + 1, sortedIndices(completedSet), results, succeeded, failed, postGov.Reason);
             }
         }
         if (delayMs && hasMoreIterations) await delay(delayMs);
@@ -385,16 +378,14 @@ async function executeForEachParallel(
     for (let start = 0; start < pendingPlan.length; start += size) {
         const batch = pendingPlan.slice(start, start + size);
         if (options?.OnIterationGovernance) {
-            const completedSorted = sortedIndices(completedSet);
             const gov = await options.OnIterationGovernance({
                 LoopType: 'ForEach',
                 NextIterationIndex: batch[0].Index,
-                CompletedIterations: completedSorted.length,
+                CompletedIterations: completedSet.size,
                 ResultsSoFar: results,
-                CompletedIndices: completedSorted,
             });
             if (gov.ShouldPause) {
-                return buildPausedLoopResult('ForEach', batch[0].Index, completedSorted, results, succeeded, failed, gov.Reason);
+                return buildPausedLoopResult('ForEach', batch[0].Index, sortedIndices(completedSet), results, succeeded, failed, gov.Reason);
             }
         }
 
@@ -423,18 +414,16 @@ async function executeForEachParallel(
         const hasMoreBatches = start + size < pendingPlan.length;
         const nextIndex = hasMoreBatches ? pendingPlan[start + size].Index : plan.length;
         if (options?.OnIterationGovernance) {
-            const completedSorted = sortedIndices(completedSet);
             const postGov = await options.OnIterationGovernance({
                 LoopType: 'ForEach',
                 NextIterationIndex: nextIndex,
-                CompletedIterations: completedSorted.length,
+                CompletedIterations: completedSet.size,
                 ResultsSoFar: results,
-                CompletedIndices: completedSorted,
                 LastOutcome: outcomes[outcomes.length - 1],
                 BatchOutcomes: batchOutcomes,
             });
             if (postGov.ShouldPause && hasMoreBatches) {
-                return buildPausedLoopResult('ForEach', nextIndex, completedSorted, results, succeeded, failed, postGov.Reason);
+                return buildPausedLoopResult('ForEach', nextIndex, sortedIndices(completedSet), results, succeeded, failed, postGov.Reason);
             }
         }
     }

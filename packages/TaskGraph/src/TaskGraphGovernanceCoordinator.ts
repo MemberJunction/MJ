@@ -13,13 +13,14 @@
  */
 import { randomUUID } from 'node:crypto';
 import {
-    AuthorizationEvaluator,
+    CanUserRaiseEnforcedLimitsCeilings,
     IMetadataProvider,
     IRunViewProvider,
     LimitsConfigResolver,
     LogError,
     LogStatus,
     RunView,
+    type RunViewParams,
     UserInfo,
     type MJLimitsBudgetsConfig,
     type MJLimitsConfig,
@@ -30,7 +31,7 @@ import type {
     MJAIAgentUserPolicyEntity,
     MJTaskEntity,
 } from '@memberjunction/core-entities';
-import { EscapeSQLString, IsPlainObject, IsValidUUID, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, GetGlobalObjectStore, IsPlainObject, IsValidUUID, SafeJSONParse, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
     AgentUserPolicyEngine,
     AttachRunawayCheckpointToAgentRun,
@@ -55,14 +56,18 @@ import {
 import {
     ApplyBudgetExtensionToBudgets,
     BudgetEnforcementGuard,
+    ComputeActiveWallClockOverlapMs,
+    ComputeCostEventsInWindow,
     ComputeDayBoundaryWindow,
     ComputeTotalPausedMs,
     DeterministicProgressDetector,
     RunawayCheckpointManager,
+    type BudgetLedgerReader,
     type PauseRunWithCheckpointInput,
     type PendingRunawayCheckpointPersistence,
+    type ScopeHistoricalUsage,
 } from '@memberjunction/ai-agents';
-import { TaskClaimStore } from './TaskClaimStore';
+import { TERMINAL_PARENT_STATUSES, TaskClaimStore } from './TaskClaimStore';
 import { ParseTaskGraphParentMetadata, type TaskGraphParentMetadata } from './TaskGraphService';
 import { KickTaskGraphDispatchers } from './task-graph-kick';
 import {
@@ -81,8 +86,36 @@ interface SettledNodeMetrics {
 
 interface ProjectedTaskSettlementRow {
     ID: string;
+    ParentID?: string | null;
     Status: string;
+    AgentRunID?: string | null;
+    StartedAt?: Date | string | null;
+    CompletedAt?: Date | string | null;
+    __mj_UpdatedAt?: Date | string | null;
     Configuration: string | null;
+}
+
+interface ProjectedStandaloneParentRow {
+    ID: string;
+    ParentID: string | null;
+    TypeID: string;
+    AgentRunID: string | null;
+    UserID: string | null;
+    Status: string;
+    StartedAt: Date | string | null;
+    CompletedAt: Date | string | null;
+    __mj_UpdatedAt: Date | string | null;
+    InputPayload: string | null;
+    Configuration: string | null;
+}
+
+interface GovernanceUserCacheLookup {
+    Users?: readonly UserInfo[];
+    FindUser?: (criteria: { ID?: string; Email?: string }) => Promise<UserInfo | undefined>;
+}
+
+interface GovernanceGlobalStore {
+    ___SINGLETON__UserCache?: GovernanceUserCacheLookup;
 }
 
 interface PendingGraphPauseContext {
@@ -104,6 +137,10 @@ interface GraphGovernanceState {
     SubmittingAgentRunID: string | null;
     AgentID: string;
     UserID: string | null;
+    SubmittingUser: UserInfo | null;
+    SubmittingUserHydrated: boolean;
+    ParentMetadataHydrated: boolean;
+    LastProvider: IMetadataProvider | null;
     RoutineID: string | null;
     AgentEntity: MJAIAgentEntity | null;
     UserPolicyEntity: MJAIAgentUserPolicyEntity | null;
@@ -431,6 +468,10 @@ export class TaskGraphGovernanceCoordinator {
         }
 
         const state = this.getOrCreateState(graphID, resolvedParent);
+        state.LastProvider = provider;
+        if (resolvedParent) {
+            state.ParentMetadataHydrated = true;
+        }
         if (graphNodes) {
             state.KnownChildCount = graphNodes.length;
             this.ingestNodeRows(state, graphNodes);
@@ -563,6 +604,7 @@ export class TaskGraphGovernanceCoordinator {
     public async RecordNodeSettlementAndEvaluate(args: {
         Provider: IMetadataProvider;
         ContextUser: UserInfo;
+        SubmittingUser?: UserInfo | null;
         Parent: MJTaskEntity | null;
         Task: MJTaskEntity;
         Success: boolean;
@@ -573,15 +615,22 @@ export class TaskGraphGovernanceCoordinator {
     }): Promise<BudgetEnforcementResult | null> {
         const graphID = args.Task.ParentID ?? args.Task.ID;
         const state = this.getOrCreateState(graphID, args.Parent);
+        state.LastProvider = args.Provider;
         if (!state.GovernanceEnabled) {
             return null;
+        }
+        if (args.Task.StartedAt) {
+            const taskStartMs = new Date(args.Task.StartedAt).getTime();
+            if (Number.isFinite(taskStartMs) && taskStartMs < state.StartedAtMs) {
+                state.StartedAtMs = taskStartMs;
+            }
         }
 
         const shouldSyncNodes =
             !state.HydratedFromCheckpoint ||
             state.KnownChildCount <= TaskGraphGovernanceCoordinator.FULL_SYNC_SMALL_GRAPH_THRESHOLD ||
             Date.now() - state.LastNodeSyncAtMs >= TaskGraphGovernanceCoordinator.CONCURRENT_SYNC_MIN_INTERVAL_MS;
-        await this.ensureHydratedFromDurableState(args.Provider, state, args.ContextUser, shouldSyncNodes);
+        await this.ensureHydratedFromDurableState(args.Provider, state, args.ContextUser, shouldSyncNodes, args.SubmittingUser);
 
         const metrics = this.ResolveNodeSettlementMetrics(graphID, args.Parent, args.CostUsd, args.TokensUsed) ?? {
             CostUsd: 0,
@@ -601,7 +650,7 @@ export class TaskGraphGovernanceCoordinator {
         state.IncrementalCostUsd = totals.SettledCostUsd;
         state.TokensUsed = totals.TotalTokens;
 
-        const resolvedLimits = this.resolveStateLimits(state);
+        const resolvedLimits = this.resolveStateLimits(state, args.Provider);
         state.LastResolvedLimits = resolvedLimits;
         const effectiveBudgets = state.ExtendedBudgets ?? resolvedLimits.Budgets;
 
@@ -633,6 +682,7 @@ export class TaskGraphGovernanceCoordinator {
             NowMs: Date.now(),
             Provider: args.Provider,
             ContextUser: args.ContextUser,
+            LedgerReader: this.createSharedLedgerReader(args.Provider, args.ContextUser, state),
         });
         state.EvaluationCount++;
         state.LastBudgetResult = evalResult;
@@ -688,6 +738,7 @@ export class TaskGraphGovernanceCoordinator {
     public async EvaluateLoopIterationGovernance(args: {
         Provider: IMetadataProvider;
         ContextUser: UserInfo;
+        SubmittingUser?: UserInfo | null;
         Parent: MJTaskEntity | null;
         Task: MJTaskEntity;
         LoopType: 'ForEach' | 'While';
@@ -703,15 +754,22 @@ export class TaskGraphGovernanceCoordinator {
     }): Promise<LoopIterationGovernanceVerdict> {
         const graphID = args.Task.ParentID ?? args.Task.ID;
         const state = this.getOrCreateState(graphID, args.Parent);
+        state.LastProvider = args.Provider;
         if (!state.GovernanceEnabled) {
             return { ShouldPause: false };
+        }
+        if (args.Task.StartedAt) {
+            const taskStartMs = new Date(args.Task.StartedAt).getTime();
+            if (Number.isFinite(taskStartMs) && taskStartMs < state.StartedAtMs) {
+                state.StartedAtMs = taskStartMs;
+            }
         }
 
         const shouldSyncNodes =
             !state.HydratedFromCheckpoint ||
             state.KnownChildCount <= TaskGraphGovernanceCoordinator.FULL_SYNC_SMALL_GRAPH_THRESHOLD ||
             Date.now() - state.LastNodeSyncAtMs >= TaskGraphGovernanceCoordinator.CONCURRENT_SYNC_MIN_INTERVAL_MS;
-        await this.ensureHydratedFromDurableState(args.Provider, state, args.ContextUser, shouldSyncNodes);
+        await this.ensureHydratedFromDurableState(args.Provider, state, args.ContextUser, shouldSyncNodes, args.SubmittingUser);
 
         const nodeKey = this.normId(args.Task.ID);
         if (nodeKey) {
@@ -747,7 +805,7 @@ export class TaskGraphGovernanceCoordinator {
         state.IncrementalCostUsd = totals.SettledCostUsd;
         state.TokensUsed = totals.TotalTokens;
 
-        const resolvedLimits = this.resolveStateLimits(state);
+        const resolvedLimits = this.resolveStateLimits(state, args.Provider);
         state.LastResolvedLimits = resolvedLimits;
         const effectiveBudgets = state.ExtendedBudgets ?? resolvedLimits.Budgets;
 
@@ -765,6 +823,7 @@ export class TaskGraphGovernanceCoordinator {
             NowMs: Date.now(),
             Provider: args.Provider,
             ContextUser: args.ContextUser,
+            LedgerReader: this.createSharedLedgerReader(args.Provider, args.ContextUser, state),
         });
         state.EvaluationCount++;
         state.LastBudgetResult = evalResult;
@@ -1013,13 +1072,26 @@ export class TaskGraphGovernanceCoordinator {
             effectiveUserId,
             input.ContextUser,
         );
+        const submittingPrincipal = await this.resolveSubmittingPrincipal(
+            input.Provider,
+            effectiveUserId,
+            input.ContextUser,
+        );
         const baseBudgets = ResolveAgentRunLimits({
             Agent: agentEntity,
             WorkflowMetadata: meta.workflowMetadata ?? null,
             UserPolicy: userPolicyEntity,
             UserPolicyLimitsOverride: meta.userPolicyLimitsOverride ?? null,
             RunOverride: meta.limitsOverride ?? this.config?.LimitsOverride ?? null,
-            Options: { EnforceUserPolicyAsCeiling: true },
+            ContextUser: submittingPrincipal,
+            Provider: input.Provider,
+            Options: {
+                EnforceUserPolicyAsCeiling: true,
+                EnforceConfiguredCeilings: true,
+                AllowAuthorizedCeilingOverride: true,
+                ContextUser: submittingPrincipal,
+                Provider: input.Provider,
+            },
         }).Limits.Budgets;
 
         let checkpointId: string | null = null;
@@ -1205,6 +1277,9 @@ export class TaskGraphGovernanceCoordinator {
             existingState.AgentEntity = agentEntity;
             existingState.UserPolicyEntity = userPolicyEntity;
             existingState.PolicyScopeHydrated = true;
+            existingState.SubmittingUser = submittingPrincipal;
+            existingState.SubmittingUserHydrated = true;
+            existingState.LastProvider = input.Provider;
             if (shouldResetProgressWindow) {
                 existingState.ProgressDetector.Reset();
             }
@@ -1230,17 +1305,58 @@ export class TaskGraphGovernanceCoordinator {
         return this.config?.EvaluateProgress === true || resolvedLimits.ProgressDetector.Enabled;
     }
 
-    private resolveStateLimits(state: GraphGovernanceState): MJLimitsConfig {
+    private resolveStateLimits(state: GraphGovernanceState, provider?: IMetadataProvider): MJLimitsConfig {
+        const scopedProvider = provider ?? state.LastProvider ?? null;
         return ResolveAgentRunLimits({
             Agent: state.AgentEntity,
             WorkflowMetadata: state.WorkflowMetadata,
             UserPolicy: state.UserPolicyEntity,
             UserPolicyLimitsOverride: state.UserPolicyLimitsOverride,
             RunOverride: state.LimitsOverride ?? this.config?.LimitsOverride ?? null,
+            ContextUser: state.SubmittingUser,
+            Provider: scopedProvider,
             Options: {
                 EnforceUserPolicyAsCeiling: true,
+                EnforceConfiguredCeilings: true,
+                AllowAuthorizedCeilingOverride: true,
+                ContextUser: state.SubmittingUser,
+                Provider: scopedProvider,
             },
         }).Limits;
+    }
+
+    private async resolveSubmittingPrincipal(
+        provider: IMetadataProvider,
+        userId: string | null,
+        callerContextUser: UserInfo | undefined,
+        explicitSubmittingUser?: UserInfo | null,
+    ): Promise<UserInfo | null> {
+        if (explicitSubmittingUser?.ID && (!userId || UUIDsEqual(explicitSubmittingUser.ID, userId))) {
+            return explicitSubmittingUser.IsActive === false ? null : explicitSubmittingUser;
+        }
+        if (!userId) {
+            return null;
+        }
+        if (callerContextUser?.ID && UUIDsEqual(callerContextUser.ID, userId)) {
+            return callerContextUser.IsActive === false ? null : callerContextUser;
+        }
+        if (provider.CurrentUser?.ID && UUIDsEqual(provider.CurrentUser.ID, userId)) {
+            return provider.CurrentUser.IsActive === false ? null : provider.CurrentUser;
+        }
+        const store = GetGlobalObjectStore() as GovernanceGlobalStore | null;
+        const userCache = store?.___SINGLETON__UserCache;
+        if (userCache) {
+            if (typeof userCache.FindUser === 'function') {
+                const found = await userCache.FindUser({ ID: userId });
+                return found && found.IsActive !== false ? found : null;
+            }
+            if (Array.isArray(userCache.Users)) {
+                const found = userCache.Users.find((u) => UUIDsEqual(u.ID, userId));
+                return found && found.IsActive !== false ? found : null;
+            }
+        }
+        // Fail-closed when the submitting user cannot be verified: never inherit privileged caller identity.
+        return null;
     }
 
     private computeSettlementTotals(state: GraphGovernanceState): {
@@ -1298,6 +1414,10 @@ export class TaskGraphGovernanceCoordinator {
             SubmittingAgentRunID: parent?.AgentRunID ?? meta?.submittedByAgentRunID ?? null,
             AgentID: meta?.submittedByAgentID || parent?.AgentID || '',
             UserID: meta?.submittedByUserID ?? parent?.UserID ?? null,
+            SubmittingUser: null,
+            SubmittingUserHydrated: false,
+            ParentMetadataHydrated: Boolean(parent),
+            LastProvider: null,
             RoutineID: meta?.routineID ?? null,
             AgentEntity: null,
             UserPolicyEntity: null,
@@ -1366,10 +1486,25 @@ export class TaskGraphGovernanceCoordinator {
             if (meta.submittedByUserID && !existing.UserID) {
                 existing.UserID = meta.submittedByUserID;
                 existing.PolicyScopeHydrated = false;
+                existing.SubmittingUserHydrated = false;
             }
             if (meta.submittedByAgentRunID && !existing.SubmittingAgentRunID) {
                 existing.SubmittingAgentRunID = meta.submittedByAgentRunID;
                 existing.HydratedFromCheckpoint = false;
+            }
+        }
+        if (parent) {
+            existing.ParentMetadataHydrated = true;
+            if (parent.StartedAt) {
+                const pStart = new Date(parent.StartedAt).getTime();
+                if (Number.isFinite(pStart) && pStart < existing.StartedAtMs) {
+                    existing.StartedAtMs = pStart;
+                }
+            }
+            if (parent.UserID && !existing.UserID) {
+                existing.UserID = parent.UserID;
+                existing.PolicyScopeHydrated = false;
+                existing.SubmittingUserHydrated = false;
             }
         }
         if (parent?.AgentRunID && !existing.SubmittingAgentRunID) {
@@ -1394,16 +1529,7 @@ export class TaskGraphGovernanceCoordinator {
         if (!contextUser) {
             return 'ContextUser is required to approve and resume a governance-paused graph.';
         }
-        const userType = typeof contextUser.Type === 'string' ? contextUser.Type.trim().toLowerCase() : '';
-        if (userType === 'owner') {
-            return null;
-        }
-        const authorizations = provider.Authorizations ?? [];
-        const matched = authorizations.find((auth) => {
-            const name = auth.Name?.trim().toLowerCase();
-            return name === 'system administrator' || name === 'ai: manage agents';
-        });
-        if (matched && new AuthorizationEvaluator().UserCanExecuteWithAncestors(matched, contextUser, authorizations)) {
+        if (CanUserRaiseEnforcedLimitsCeilings(contextUser, provider)) {
             return null;
         }
         if (ownerUserId && UUIDsEqual(ownerUserId, contextUser.ID)) {
@@ -1416,16 +1542,27 @@ export class TaskGraphGovernanceCoordinator {
         provider: IMetadataProvider,
         graphID: string,
         contextUser: UserInfo,
-    ): Promise<{ InputPayload: string | null; Configuration: string | null } | null> {
+    ): Promise<{
+        AgentRunID: string | null;
+        AgentID: string | null;
+        UserID: string | null;
+        StartedAt: Date | string | null;
+        InputPayload: string | null;
+        Configuration: string | null;
+    } | null> {
         if (typeof (provider as Partial<IRunViewProvider>).RunView === 'function') {
             const res = await RunView.FromMetadataProvider(provider).RunView<{
+                AgentRunID: string | null;
+                AgentID: string | null;
+                UserID: string | null;
+                StartedAt: Date | string | null;
                 InputPayload: string | null;
                 Configuration: string | null;
             }>(
                 {
                     EntityName: 'MJ: Tasks',
                     ExtraFilter: `ID='${EscapeSQLString(graphID)}'`,
-                    Fields: ['ID', 'InputPayload', 'Configuration'],
+                    Fields: ['ID', 'AgentRunID', 'AgentID', 'UserID', 'StartedAt', 'InputPayload', 'Configuration'],
                     ResultType: 'simple',
                     MaxRows: 1,
                     BypassCache: true,
@@ -1441,7 +1578,14 @@ export class TaskGraphGovernanceCoordinator {
         if (!(await task.Load(graphID))) {
             return null;
         }
-        return { InputPayload: task.InputPayload, Configuration: task.Configuration };
+        return {
+            AgentRunID: task.AgentRunID,
+            AgentID: task.AgentID,
+            UserID: task.UserID,
+            StartedAt: task.StartedAt,
+            InputPayload: task.InputPayload,
+            Configuration: task.Configuration,
+        };
     }
 
     private async reconcileClearedDurablePause(
@@ -1472,7 +1616,7 @@ export class TaskGraphGovernanceCoordinator {
                 state.DebugFieldsPersisted = false;
                 state.CheckpointStatusSyncedInDebug = false;
                 if (standaloneCp && standaloneCp.Status === 'Approved') {
-                    const baseBudgets = this.resolveStateLimits(state).Budgets;
+                    const baseBudgets = this.resolveStateLimits(state, provider).Budgets;
                     state.ExtendedBudgets = ApplyBudgetExtensionToBudgets(baseBudgets, standaloneCp.BudgetExtension);
                 }
                 return;
@@ -1493,7 +1637,7 @@ export class TaskGraphGovernanceCoordinator {
             state.DebugFieldsPersisted = false;
             state.CheckpointStatusSyncedInDebug = false;
             if (cp && cp.HumanApproval.Status === 'Approved') {
-                const baseBudgets = this.resolveStateLimits(state).Budgets;
+                const baseBudgets = this.resolveStateLimits(state, provider).Budgets;
                 state.ExtendedBudgets = ApplyBudgetExtensionToBudgets(baseBudgets, cp.HumanApproval.BudgetExtension);
             }
         } catch {
@@ -1506,7 +1650,41 @@ export class TaskGraphGovernanceCoordinator {
         state: GraphGovernanceState,
         contextUser: UserInfo,
         syncNodesFromStore: boolean,
+        explicitSubmittingUser?: UserInfo | null,
     ): Promise<void> {
+        state.LastProvider = provider;
+        if (!state.ParentMetadataHydrated) {
+            state.ParentMetadataHydrated = true;
+            try {
+                const rootRow = await this.loadRootTaskDurableRow(provider, state.GraphID, contextUser);
+                if (rootRow) {
+                    const meta = ParseTaskGraphParentMetadata(rootRow.InputPayload);
+                    this.mergeParentMetadataIntoState(state, meta, null);
+                    if (rootRow.AgentRunID && !state.SubmittingAgentRunID) {
+                        state.SubmittingAgentRunID = rootRow.AgentRunID;
+                        state.HydratedFromCheckpoint = false;
+                    }
+                    if (rootRow.AgentID && !state.AgentID) {
+                        state.AgentID = rootRow.AgentID;
+                        state.PolicyScopeHydrated = false;
+                    }
+                    if (rootRow.UserID && !state.UserID) {
+                        state.UserID = rootRow.UserID;
+                        state.PolicyScopeHydrated = false;
+                        state.SubmittingUserHydrated = false;
+                    }
+                    if (rootRow.StartedAt) {
+                        const rStart = new Date(rootRow.StartedAt).getTime();
+                        if (Number.isFinite(rStart) && rStart < state.StartedAtMs) {
+                            state.StartedAtMs = rStart;
+                        }
+                    }
+                }
+            } catch {
+                // Best-effort root metadata hydration in offline harnesses
+            }
+        }
+
         const isInitialHydration = !state.HydratedFromCheckpoint;
         let standaloneCp: StandaloneGraphGovernanceCheckpointState | null = null;
         if (isInitialHydration) {
@@ -1529,15 +1707,25 @@ export class TaskGraphGovernanceCoordinator {
             }
         }
 
+        if (!state.SubmittingUserHydrated || explicitSubmittingUser) {
+            state.SubmittingUserHydrated = true;
+            state.SubmittingUser = await this.resolveSubmittingPrincipal(
+                provider,
+                state.UserID,
+                contextUser,
+                explicitSubmittingUser,
+            );
+        }
+
         if (isInitialHydration && state.ExtendedBudgets === null) {
             if (state.SubmittingAgentRunID) {
                 const approvedCp = await this.tryLoadApprovedCheckpoint(provider, state.SubmittingAgentRunID, contextUser);
                 if (approvedCp) {
-                    const baseBudgets = this.resolveStateLimits(state).Budgets;
+                    const baseBudgets = this.resolveStateLimits(state, provider).Budgets;
                     state.ExtendedBudgets = ApplyBudgetExtensionToBudgets(baseBudgets, approvedCp.HumanApproval.BudgetExtension);
                 }
             } else if (standaloneCp?.Status === 'Approved') {
-                const baseBudgets = this.resolveStateLimits(state).Budgets;
+                const baseBudgets = this.resolveStateLimits(state, provider).Budgets;
                 state.ExtendedBudgets = ApplyBudgetExtensionToBudgets(baseBudgets, standaloneCp.BudgetExtension);
             }
         }
@@ -1792,7 +1980,7 @@ export class TaskGraphGovernanceCoordinator {
                 {
                     EntityName: 'MJ: Tasks',
                     ExtraFilter: `ParentID='${EscapeSQLString(state.GraphID)}'`,
-                    Fields: ['ID', 'Status', 'Configuration'],
+                    Fields: ['ID', 'Status', 'StartedAt', 'Configuration'],
                     ResultType: 'simple',
                     BypassCache: true,
                     IgnoreMaxRows: true,
@@ -1811,11 +1999,17 @@ export class TaskGraphGovernanceCoordinator {
 
     private ingestNodeRows(
         state: GraphGovernanceState,
-        rows: readonly Pick<ProjectedTaskSettlementRow, 'ID' | 'Status' | 'Configuration'>[],
+        rows: readonly Pick<ProjectedTaskSettlementRow, 'ID' | 'Status' | 'StartedAt' | 'Configuration'>[],
     ): void {
         for (const row of rows) {
             if (!row?.ID) {
                 continue;
+            }
+            if (row.StartedAt) {
+                const startMs = new Date(row.StartedAt).getTime();
+                if (Number.isFinite(startMs) && startMs < state.StartedAtMs) {
+                    state.StartedAtMs = startMs;
+                }
             }
             const nodeKey = this.normId(row.ID);
             if (!nodeKey) {
@@ -2708,6 +2902,578 @@ export class TaskGraphGovernanceCoordinator {
             }
             return msg;
         }
+    }
+
+    private createSharedLedgerReader(
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+        state: GraphGovernanceState,
+    ): BudgetLedgerReader {
+        return {
+            ReadScopedUsage: (req) => this.readSharedLedgerUsage(provider, contextUser, state, req),
+        };
+    }
+
+    private async readSharedLedgerUsage(
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+        state: GraphGovernanceState,
+        req: Parameters<BudgetLedgerReader['ReadScopedUsage']>[0],
+    ): Promise<Awaited<ReturnType<BudgetLedgerReader['ReadScopedUsage']>>> {
+        if (!req.NeedRoutine && !req.NeedUserDaily) {
+            return {
+                Routine: { CostUsd: 0, WallClockMs: 0 },
+                UserDaily: { CostUsd: 0, WallClockMs: 0 },
+            };
+        }
+
+        const standaloneQueryResult = await this.queryStandaloneParentRows(provider, contextUser, state, req);
+        if (standaloneQueryResult.LedgerUnavailable) {
+            return {
+                Routine: { CostUsd: 0, WallClockMs: 0 },
+                UserDaily: { CostUsd: 0, WallClockMs: 0 },
+                LedgerUnavailable: true,
+                LedgerError: standaloneQueryResult.LedgerError,
+            };
+        }
+
+        const parentIdsForChildren = new Set<string>();
+        for (const p of standaloneQueryResult.RoutineParents) {
+            parentIdsForChildren.add(p.ID);
+        }
+        for (const p of standaloneQueryResult.UserDailyParents) {
+            parentIdsForChildren.add(p.ID);
+        }
+        if (!state.SubmittingAgentRunID && state.GraphID) {
+            parentIdsForChildren.add(state.GraphID);
+        }
+
+        const childQueryResult = await this.queryStandaloneChildRows(
+            provider,
+            contextUser,
+            Array.from(parentIdsForChildren),
+        );
+        if (childQueryResult.LedgerUnavailable) {
+            return {
+                Routine: { CostUsd: 0, WallClockMs: 0 },
+                UserDaily: { CostUsd: 0, WallClockMs: 0 },
+                LedgerUnavailable: true,
+                LedgerError: childQueryResult.LedgerError,
+            };
+        }
+
+        const standaloneOwnedAgentRunIds = this.collectStandaloneOwnedAgentRunIds(childQueryResult.ChildrenByParent);
+        const agentUsage = await this.budgetGuard.ReadAgentRunScopedUsage({
+            Provider: provider,
+            ContextUser: contextUser,
+            RoutineID: req.RoutineID,
+            UserID: req.UserID,
+            ExcludeRunID: req.ExcludeRunID,
+            AdditionalExcludedRunIDs: standaloneOwnedAgentRunIds,
+            DayStartISO: req.DayStartISO,
+            DayEndISO: req.DayEndISO,
+            DayBoundaryTimezone: state.LastResolvedLimits?.Budgets.PerUserPerDay.DayBoundaryTimezone,
+            NeedRoutine: req.NeedRoutine,
+            NeedUserDaily: req.NeedUserDaily,
+            CountPausedTimeTowardsWallClock: req.CountPausedTimeTowardsWallClock,
+            NowMs: req.NowMs,
+        });
+        if (agentUsage.LedgerUnavailable) {
+            return agentUsage;
+        }
+
+        const standaloneRoutine = req.NeedRoutine
+            ? this.aggregateStandaloneGraphs(
+                standaloneQueryResult.RoutineParents,
+                childQueryResult.ChildrenByParent,
+                req,
+                false,
+            )
+            : { CostUsd: 0, WallClockMs: 0 };
+        const standaloneUserDaily = req.NeedUserDaily
+            ? this.aggregateStandaloneGraphs(
+                standaloneQueryResult.UserDailyParents,
+                childQueryResult.ChildrenByParent,
+                req,
+                true,
+            )
+            : { CostUsd: 0, WallClockMs: 0 };
+
+        return {
+            Routine: {
+                CostUsd: agentUsage.Routine.CostUsd + standaloneRoutine.CostUsd,
+                WallClockMs: agentUsage.Routine.WallClockMs + standaloneRoutine.WallClockMs,
+            },
+            UserDaily: {
+                CostUsd: agentUsage.UserDaily.CostUsd + standaloneUserDaily.CostUsd,
+                WallClockMs: agentUsage.UserDaily.WallClockMs + standaloneUserDaily.WallClockMs,
+            },
+        };
+    }
+
+    private async queryStandaloneParentRows(
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+        state: GraphGovernanceState,
+        req: Parameters<BudgetLedgerReader['ReadScopedUsage']>[0],
+    ): Promise<{
+        RoutineParents: ProjectedStandaloneParentRow[];
+        UserDailyParents: ProjectedStandaloneParentRow[];
+        LedgerUnavailable?: boolean;
+        LedgerError?: string;
+    }> {
+        const workflowTypeID = await this.resolveWorkflowTypeID(provider, contextUser);
+        const typeClause = workflowTypeID ? `TypeID='${EscapeSQLString(workflowTypeID)}' AND ` : '';
+        const fields = [
+            'ID',
+            'ParentID',
+            'TypeID',
+            'AgentRunID',
+            'UserID',
+            'Status',
+            'StartedAt',
+            'CompletedAt',
+            '__mj_UpdatedAt',
+            'InputPayload',
+            'Configuration',
+        ];
+        const queries: RunViewParams[] = [];
+        const kinds: Array<'routine' | 'userDaily'> = [];
+
+        if (req.NeedRoutine && req.RoutineID) {
+            const escapedRoutine = EscapeSQLString(req.RoutineID);
+            const likeRoutine = this.escapeLikeLiteral(escapedRoutine);
+            queries.push({
+                EntityName: 'MJ: Tasks',
+                ExtraFilter: `${typeClause}ParentID IS NULL AND AgentRunID IS NULL AND InputPayload LIKE '%${likeRoutine}%' ESCAPE '\\'`,
+                Fields: fields,
+                ResultType: 'simple',
+                BypassCache: true,
+                IgnoreMaxRows: true,
+            });
+            kinds.push('routine');
+        }
+        if (req.NeedUserDaily && req.UserID) {
+            const safeUserId = EscapeSQLString(req.UserID);
+            const likeUser = this.escapeLikeLiteral(safeUserId);
+            const safeDayStart = EscapeSQLString(req.DayStartISO);
+            const safeDayEnd = EscapeSQLString(req.DayEndISO);
+            queries.push({
+                EntityName: 'MJ: Tasks',
+                ExtraFilter:
+                    `${typeClause}ParentID IS NULL AND AgentRunID IS NULL AND ` +
+                    `(UserID='${safeUserId}' OR InputPayload LIKE '%${likeUser}%' ESCAPE '\\') AND ` +
+                    `(StartedAt IS NULL OR StartedAt < '${safeDayEnd}') AND ` +
+                    `(CompletedAt IS NULL OR CompletedAt >= '${safeDayStart}' OR __mj_UpdatedAt >= '${safeDayStart}')`,
+                Fields: fields,
+                ResultType: 'simple',
+                BypassCache: true,
+                IgnoreMaxRows: true,
+            });
+            kinds.push('userDaily');
+        }
+
+        if (queries.length === 0) {
+            return { RoutineParents: [], UserDailyParents: [] };
+        }
+
+        const batch = await this.runBatchedViews<ProjectedStandaloneParentRow>(provider, queries, contextUser);
+        if (batch.Error) {
+            LogError(`[TaskGraphGovernanceCoordinator] Standalone parent ledger query failed closed: ${batch.Error}`);
+            return {
+                RoutineParents: [],
+                UserDailyParents: [],
+                LedgerUnavailable: true,
+                LedgerError: batch.Error,
+            };
+        }
+
+        const currentGraphSet = new UUIDSet([state.GraphID]);
+        const routineSet = req.RoutineID ? new UUIDSet([req.RoutineID]) : null;
+        const userSet = req.UserID ? new UUIDSet([req.UserID]) : null;
+        let routineParents: ProjectedStandaloneParentRow[] = [];
+        let userDailyParents: ProjectedStandaloneParentRow[] = [];
+        for (let i = 0; i < kinds.length; i++) {
+            const rows = batch.Results[i] ?? [];
+            const filtered = rows.filter((row) => this.isEligibleOtherStandaloneParent(row, currentGraphSet));
+            if (kinds[i] === 'routine' && routineSet) {
+                routineParents = filtered.filter((row) => {
+                    const meta = ParseTaskGraphParentMetadata(row.InputPayload);
+                    return Boolean(meta.routineID && routineSet.Has(meta.routineID));
+                });
+            } else if (kinds[i] === 'userDaily' && userSet) {
+                userDailyParents = filtered.filter((row) => {
+                    const meta = ParseTaskGraphParentMetadata(row.InputPayload);
+                    const ownerId = meta.submittedByUserID ?? row.UserID;
+                    return Boolean(ownerId && userSet.Has(ownerId));
+                });
+            }
+        }
+        return { RoutineParents: routineParents, UserDailyParents: userDailyParents };
+    }
+
+    private isEligibleOtherStandaloneParent(row: ProjectedStandaloneParentRow, currentGraphSet: UUIDSet): boolean {
+        if (!row?.ID || currentGraphSet.Has(row.ID)) {
+            return false;
+        }
+        if (row.ParentID || row.AgentRunID) {
+            return false;
+        }
+        const meta = ParseTaskGraphParentMetadata(row.InputPayload);
+        return !meta.submittedByAgentRunID;
+    }
+
+    private async queryStandaloneChildRows(
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+        parentIds: readonly string[],
+    ): Promise<{
+        ChildrenByParent: Map<string, ProjectedTaskSettlementRow[]>;
+        LedgerUnavailable?: boolean;
+        LedgerError?: string;
+    }> {
+        const childrenByParent = new Map<string, ProjectedTaskSettlementRow[]>();
+        if (parentIds.length === 0) {
+            return { ChildrenByParent: childrenByParent };
+        }
+        const chunkSize = Math.max(1, LimitsConfigResolver.Resolve().Limits.Tuning.MaxDirectInIds);
+        const queries: RunViewParams[] = [];
+        for (let i = 0; i < parentIds.length; i += chunkSize) {
+            const chunk = parentIds.slice(i, i + chunkSize);
+            const inList = chunk.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+            queries.push({
+                EntityName: 'MJ: Tasks',
+                ExtraFilter: `ParentID IN (${inList})`,
+                Fields: ['ID', 'ParentID', 'Status', 'AgentRunID', 'StartedAt', 'CompletedAt', '__mj_UpdatedAt', 'Configuration'],
+                ResultType: 'simple',
+                BypassCache: true,
+                IgnoreMaxRows: true,
+            });
+        }
+        const batch = await this.runBatchedViews<ProjectedTaskSettlementRow>(provider, queries, contextUser);
+        if (batch.Error) {
+            LogError(`[TaskGraphGovernanceCoordinator] Standalone child ledger query failed closed: ${batch.Error}`);
+            return {
+                ChildrenByParent: childrenByParent,
+                LedgerUnavailable: true,
+                LedgerError: batch.Error,
+            };
+        }
+        for (const rows of batch.Results) {
+            for (const row of rows) {
+                const parentKey = this.normId(row.ParentID);
+                if (!parentKey) {
+                    continue;
+                }
+                const list = childrenByParent.get(parentKey) ?? [];
+                list.push(row);
+                childrenByParent.set(parentKey, list);
+            }
+        }
+        return { ChildrenByParent: childrenByParent };
+    }
+
+    private collectStandaloneOwnedAgentRunIds(
+        childrenByParent: ReadonlyMap<string, readonly ProjectedTaskSettlementRow[]>,
+    ): Set<string> {
+        const runIds = new Set<string>();
+        for (const children of childrenByParent.values()) {
+            for (const child of children) {
+                if (child.AgentRunID && child.AgentRunID.trim().length > 0) {
+                    runIds.add(child.AgentRunID.trim().toLowerCase());
+                }
+                for (const iterRunId of this.extractLoopIterationAgentRunIds(child.Configuration)) {
+                    runIds.add(iterRunId);
+                }
+            }
+        }
+        return runIds;
+    }
+
+    private extractLoopIterationAgentRunIds(configurationJson: string | null | undefined): string[] {
+        if (typeof configurationJson !== 'string' || configurationJson.trim().length === 0) {
+            return [];
+        }
+        const parsed = SafeJSONParse<Record<string, RunawayJsonValue>>(configurationJson);
+        if (!IsPlainObject(parsed)) {
+            return [];
+        }
+        const runtime = parsed['runtime'];
+        if (!IsPlainObject(runtime) || !Array.isArray(runtime['iterations'])) {
+            return [];
+        }
+        const ids: string[] = [];
+        for (const iter of runtime['iterations']) {
+            if (IsPlainObject(iter) && typeof iter['agentRunID'] === 'string' && iter['agentRunID'].trim().length > 0) {
+                ids.push(iter['agentRunID'].trim().toLowerCase());
+            }
+        }
+        return ids;
+    }
+
+    private aggregateStandaloneGraphs(
+        parents: readonly ProjectedStandaloneParentRow[],
+        childrenByParent: ReadonlyMap<string, readonly ProjectedTaskSettlementRow[]>,
+        req: Parameters<BudgetLedgerReader['ReadScopedUsage']>[0],
+        isDaily: boolean,
+    ): ScopeHistoricalUsage {
+        const dayStartMs = Date.parse(req.DayStartISO);
+        const dayEndMs = Date.parse(req.DayEndISO);
+        let costUsd = 0;
+        let wallClockMs = 0;
+        const seen = new Set<string>();
+
+        for (const parent of parents) {
+            const key = this.normId(parent.ID);
+            if (!key || seen.has(key)) {
+                continue;
+            }
+            seen.add(key);
+            const children = childrenByParent.get(key) ?? [];
+            const usage = this.computeSingleStandaloneGraphUsage(
+                parent,
+                children,
+                req.NowMs,
+                dayStartMs,
+                dayEndMs,
+                req.CountPausedTimeTowardsWallClock,
+                isDaily,
+            );
+            costUsd += usage.CostUsd;
+            wallClockMs += usage.WallClockMs;
+        }
+        return { CostUsd: costUsd, WallClockMs: wallClockMs };
+    }
+
+    private computeSingleStandaloneGraphUsage(
+        parent: ProjectedStandaloneParentRow,
+        children: readonly ProjectedTaskSettlementRow[],
+        nowMs: number,
+        dayStartMs: number,
+        dayEndMs: number,
+        countPausedTime: boolean,
+        isDaily: boolean,
+    ): ScopeHistoricalUsage {
+        const cp = this.extractStandaloneCheckpointFromConfiguration(parent.Configuration);
+        const debug = ParseTaskGraphDebugState(parent.InputPayload);
+        const settledCostUsd = this.sumStandaloneChildSettlementCost(children);
+        const totalCostUsd = Math.max(settledCostUsd, cp?.CumulativeLedger.RunCostUsd ?? 0);
+
+        const startMs = this.resolveStandaloneGraphStartMs(parent, children, cp, totalCostUsd);
+        if (startMs === null) {
+            return { CostUsd: totalCostUsd, WallClockMs: 0 };
+        }
+
+        const isTerminal = (TERMINAL_PARENT_STATUSES as readonly string[]).includes(parent.Status);
+        const rawEndMs = this.resolveStandaloneGraphEndMs(parent, children, isTerminal, nowMs);
+        const pausedIntervals = this.resolveStandalonePausedIntervals(parent, cp, debug, isTerminal);
+
+        if (!isDaily) {
+            const wallMs = rawEndMs > startMs
+                ? ComputeActiveWallClockOverlapMs(startMs, rawEndMs, startMs, rawEndMs, pausedIntervals, countPausedTime)
+                : 0;
+            return { CostUsd: totalCostUsd, WallClockMs: wallMs };
+        }
+
+        if (startMs >= dayEndMs || rawEndMs <= dayStartMs) {
+            return { CostUsd: 0, WallClockMs: 0 };
+        }
+        const dailyWallMs = ComputeActiveWallClockOverlapMs(
+            startMs,
+            rawEndMs,
+            dayStartMs,
+            Math.min(nowMs, dayEndMs),
+            pausedIntervals,
+            countPausedTime,
+        );
+        const dailyCostUsd = this.computeStandaloneDailyCostUsd(
+            children,
+            cp,
+            totalCostUsd,
+            startMs,
+            dayStartMs,
+            dayEndMs,
+        );
+        return { CostUsd: dailyCostUsd, WallClockMs: dailyWallMs };
+    }
+
+    private sumStandaloneChildSettlementCost(children: readonly ProjectedTaskSettlementRow[]): number {
+        let total = 0;
+        for (const child of children) {
+            if (child.Status === 'Complete' || child.Status === 'Failed') {
+                const persisted = this.extractPersistedNodeMetrics(child.Configuration);
+                total += persisted ? persisted.CostUsd : (this.config?.DefaultNodeCostUsd ?? 0);
+            } else if (child.Status === 'Pending') {
+                const pausedLoop = this.extractPausedLoopMetrics(child.Configuration);
+                if (pausedLoop) {
+                    total += pausedLoop.CostUsd;
+                }
+            }
+        }
+        return total;
+    }
+
+    private resolveStandaloneGraphStartMs(
+        parent: ProjectedStandaloneParentRow,
+        children: readonly ProjectedTaskSettlementRow[],
+        cp: StandaloneGraphGovernanceCheckpointState | null,
+        totalCostUsd: number,
+    ): number | null {
+        let earliest: number | null = this.parseEpochMs(parent.StartedAt);
+        for (const child of children) {
+            const cStart = this.parseEpochMs(child.StartedAt);
+            if (cStart !== null && (earliest === null || cStart < earliest)) {
+                earliest = cStart;
+            }
+        }
+        if (earliest !== null) {
+            return earliest;
+        }
+        if (cp?.PausedAtISO) {
+            const pMs = Date.parse(cp.PausedAtISO);
+            if (Number.isFinite(pMs)) {
+                return pMs;
+            }
+        }
+        if (totalCostUsd > 0) {
+            return this.parseEpochMs(parent.__mj_UpdatedAt);
+        }
+        return null;
+    }
+
+    private resolveStandaloneGraphEndMs(
+        parent: ProjectedStandaloneParentRow,
+        children: readonly ProjectedTaskSettlementRow[],
+        isTerminal: boolean,
+        nowMs: number,
+    ): number {
+        if (!isTerminal) {
+            return nowMs;
+        }
+        const parentEnd = this.parseEpochMs(parent.CompletedAt);
+        if (parentEnd !== null) {
+            return parentEnd;
+        }
+        let latestChildEnd: number | null = null;
+        for (const child of children) {
+            const cEnd = this.parseEpochMs(child.CompletedAt);
+            if (cEnd !== null && (latestChildEnd === null || cEnd > latestChildEnd)) {
+                latestChildEnd = cEnd;
+            }
+        }
+        return latestChildEnd ?? this.parseEpochMs(parent.__mj_UpdatedAt) ?? nowMs;
+    }
+
+    private resolveStandalonePausedIntervals(
+        parent: ProjectedStandaloneParentRow,
+        cp: StandaloneGraphGovernanceCheckpointState | null,
+        debug: TaskGraphDebugState,
+        isTerminal: boolean,
+    ): BudgetPausedInterval[] {
+        const intervals = cp?.CumulativeLedger.PausedIntervals
+            ? cp.CumulativeLedger.PausedIntervals.map((p) => ({ ...p }))
+            : [];
+        const isPaused = !isTerminal && (cp?.Status === 'Paused' || this.isGovernanceDebugPause(debug) || debug.paused === true);
+        if (isPaused && !intervals.some((i) => i.ResumedAtMs == null)) {
+            const pausedAtMs = (cp?.PausedAtISO ? Date.parse(cp.PausedAtISO) : Number.NaN);
+            const fallbackMs = Number.isFinite(pausedAtMs)
+                ? pausedAtMs
+                : (this.parseEpochMs(parent.__mj_UpdatedAt) ?? Date.now());
+            intervals.push({ PausedAtMs: fallbackMs, ResumedAtMs: null });
+        }
+        return intervals;
+    }
+
+    private computeStandaloneDailyCostUsd(
+        children: readonly ProjectedTaskSettlementRow[],
+        cp: StandaloneGraphGovernanceCheckpointState | null,
+        totalCostUsd: number,
+        startMs: number,
+        dayStartMs: number,
+        dayEndMs: number,
+    ): number {
+        if (startMs >= dayStartMs) {
+            return totalCostUsd;
+        }
+        if (cp?.CumulativeLedger.CostEvents && cp.CumulativeLedger.CostEvents.length > 0) {
+            return ComputeCostEventsInWindow(cp.CumulativeLedger.CostEvents, dayStartMs, dayEndMs);
+        }
+        let hasChildTimestamps = false;
+        let todayChildCost = 0;
+        for (const child of children) {
+            if (child.Status !== 'Complete' && child.Status !== 'Failed') {
+                continue;
+            }
+            const completedMs = this.parseEpochMs(child.CompletedAt);
+            if (completedMs !== null) {
+                hasChildTimestamps = true;
+                if (completedMs >= dayStartMs && completedMs < dayEndMs) {
+                    const persisted = this.extractPersistedNodeMetrics(child.Configuration);
+                    todayChildCost += persisted ? persisted.CostUsd : (this.config?.DefaultNodeCostUsd ?? 0);
+                }
+            }
+        }
+        if (hasChildTimestamps) {
+            return todayChildCost;
+        }
+        if (cp?.PausedAtISO) {
+            const cpMs = Date.parse(cp.PausedAtISO);
+            if (Number.isFinite(cpMs) && cpMs < dayStartMs) {
+                return Math.max(0, totalCostUsd - Math.max(0, cp.CumulativeLedger.RunCostUsd));
+            }
+        }
+        return totalCostUsd;
+    }
+
+    private async runBatchedViews<T>(
+        provider: IMetadataProvider,
+        queries: RunViewParams[],
+        contextUser: UserInfo,
+    ): Promise<{ Results: T[][]; Error?: string }> {
+        if (queries.length === 0) {
+            return { Results: [] };
+        }
+        try {
+            const rv = RunView.FromMetadataProvider(provider);
+            const rawResults = typeof (rv as Partial<RunView>).RunViews === 'function'
+                ? await rv.RunViews<T>(queries, contextUser)
+                : await Promise.all(queries.map((q) => rv.RunView<T>(q, contextUser)));
+            if (!Array.isArray(rawResults) || rawResults.length < queries.length) {
+                return {
+                    Results: [],
+                    Error: `RunViews returned incomplete batch (${Array.isArray(rawResults) ? rawResults.length : 0}/${queries.length})`,
+                };
+            }
+            const out: T[][] = [];
+            for (let i = 0; i < queries.length; i++) {
+                const res = rawResults[i];
+                if (!res || !res.Success) {
+                    return {
+                        Results: [],
+                        Error: res?.ErrorMessage ?? `RunViews item ${i} failed`,
+                    };
+                }
+                out.push(Array.isArray(res.Results) ? res.Results : []);
+            }
+            return { Results: out };
+        } catch (err) {
+            return {
+                Results: [],
+                Error: err instanceof Error ? err.message : String(err),
+            };
+        }
+    }
+
+    private escapeLikeLiteral(escapedSql: string): string {
+        return escapedSql.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_').replace(/\[/g, '\\[');
+    }
+
+    private parseEpochMs(raw: Date | string | null | undefined): number | null {
+        if (!raw) {
+            return null;
+        }
+        const ms = raw instanceof Date ? raw.getTime() : Date.parse(raw);
+        return Number.isFinite(ms) ? ms : null;
     }
 
     private async resolveWorkflowTypeID(provider: IMetadataProvider, contextUser: UserInfo): Promise<string | null> {

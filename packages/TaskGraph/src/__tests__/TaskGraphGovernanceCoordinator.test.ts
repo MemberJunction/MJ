@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     LimitsConfigResolver,
     RunView,
+    type AuthorizationInfo,
     type ExecuteSQLOptions,
     type IMetadataProvider,
     type RunViewParams,
@@ -54,7 +55,30 @@ type GovernanceRunViewRow =
     | { ID: string; Name: string; Status?: string }
     | { ParentID: string }
     | { ID: string }
-    | { ID: string; Status: MJTaskEntity['Status']; Configuration: string | null }
+    | { ID: string; Status: MJTaskEntity['Status']; StartedAt?: Date | null; Configuration: string | null }
+    | {
+          ID: string;
+          ParentID: string | null;
+          Status: MJTaskEntity['Status'];
+          AgentRunID: string | null;
+          StartedAt: Date | null;
+          CompletedAt: Date | null;
+          __mj_UpdatedAt: Date;
+          Configuration: string | null;
+      }
+    | {
+          ID: string;
+          ParentID: string | null;
+          TypeID: string;
+          AgentRunID: string | null;
+          UserID: string | null;
+          Status: MJTaskEntity['Status'];
+          StartedAt: Date | null;
+          CompletedAt: Date | null;
+          __mj_UpdatedAt: Date;
+          InputPayload: string | null;
+          Configuration: string | null;
+      }
     | {
           ID: string;
           TypeID: string;
@@ -62,6 +86,7 @@ type GovernanceRunViewRow =
           AgentID: string | null;
           UserID: string | null;
           Status: MJTaskEntity['Status'];
+          StartedAt: Date | null;
           InputPayload: string | null;
           Configuration: string | null;
       }
@@ -155,6 +180,13 @@ interface StoredAgentRunRow {
     Steps: MJAIAgentRunEntityExtended['Steps'];
 }
 
+interface GovernanceTestGlobalStore {
+    ___SINGLETON__UserCache?: {
+        Users: UserInfo[];
+        FindUser(criteria: { ID?: string; Email?: string }): Promise<UserInfo | undefined>;
+    };
+}
+
 class GovernanceInMemoryDb {
     public readonly Tasks = new Map<string, StoredTaskRow>();
     public readonly TasksByParent = new Map<string, StoredTaskRow[]>();
@@ -162,10 +194,15 @@ class GovernanceInMemoryDb {
     public readonly AgentRuns = new Map<string, StoredAgentRunRow>();
     public Agents: Array<Partial<MJAIAgentEntity>> = [];
     public UserPolicies: Array<Partial<MJAIAgentUserPolicyEntity>> = [];
+    public Authorizations: AuthorizationInfo[] = [];
     public AgentRunSaveMode: 'ok' | 'false' | 'throw' = 'ok';
     public DebugWriteMode: 'ok' | 'false' | 'throw' = 'ok';
     public TaskSaveMode: 'ok' | 'false' | 'throw' = 'ok';
     private readonly dialect = new SQLServerDialect();
+
+    public wrapTaskPublic(initial: StoredTaskRow): MJTaskEntity {
+        return this.wrapTask(initial);
+    }
 
     private wrapTask(initial?: StoredTaskRow): MJTaskEntity {
         const backing: StoredTaskRow = initial
@@ -430,6 +467,7 @@ class GovernanceInMemoryDb {
             QuoteIdentifier: (id: string) => `[${id}]`,
             BuildParameterPlaceholder: (i: number) => `@p${i}`,
             Entities: [],
+            Authorizations: db.Authorizations,
             EntityByName: () => undefined,
             GetEntityObject: async (entityName: string) => {
                 if (entityName === 'MJ: Tasks') return db.wrapTask();
@@ -527,6 +565,13 @@ class GovernanceInMemoryDb {
                     row.InputPayload = JSON.stringify(payload);
                     return [{ AffectedRows: 1 }];
                 }
+                if (sql.includes('spTaskGraphStampParentStart')) {
+                    const [parentId, startedAt] = args as [string, Date];
+                    const row = db.Tasks.get(parentId.toLowerCase());
+                    if (!row || row.StartedAt != null) return [{ AffectedRows: 0 }];
+                    row.StartedAt = startedAt instanceof Date ? startedAt : new Date(startedAt);
+                    return [{ AffectedRows: 1 }];
+                }
                 if (sql.includes('spTaskGraphSettleParent')) {
                     const [parentId, status, pct] = args as [string, MJTaskEntity['Status'], number];
                     const row = db.Tasks.get(parentId.toLowerCase());
@@ -614,6 +659,86 @@ class GovernanceInMemoryDb {
                     .map((t) => ({ ID: t.ID }));
                 return { Success: true, Results: rows };
             }
+            if (filter.includes('ParentID IS NULL') && filter.includes('AgentRunID IS NULL')) {
+                let rows = Array.from(this.Tasks.values()).filter((t) => !t.ParentID && !t.AgentRunID);
+                if (filter.includes('InputPayload LIKE')) {
+                    const routineLike = /InputPayload LIKE '%([^%']+)%'/.exec(filter);
+                    if (routineLike?.[1] && !filter.includes('UserID=')) {
+                        const needle = routineLike[1].replace(/\\(.)/g, '$1').toLowerCase();
+                        rows = rows.filter((t) => (t.InputPayload ?? '').toLowerCase().includes(needle));
+                    }
+                }
+                const userMatch = /UserID='([^']+)'/.exec(filter);
+                if (userMatch?.[1]) {
+                    const targetUser = userMatch[1].toLowerCase();
+                    rows = rows.filter(
+                        (t) =>
+                            (t.UserID ?? '').toLowerCase() === targetUser ||
+                            (t.InputPayload ?? '').toLowerCase().includes(targetUser),
+                    );
+                }
+                const dayEndMatch = /StartedAt < '([^']+)'/.exec(filter);
+                if (dayEndMatch?.[1]) {
+                    const dayEndMs = Date.parse(dayEndMatch[1]);
+                    rows = rows.filter((t) => !t.StartedAt || new Date(t.StartedAt).getTime() < dayEndMs);
+                }
+                const dayStartMatch = /CompletedAt >= '([^']+)'/.exec(filter);
+                if (dayStartMatch?.[1]) {
+                    const dayStartMs = Date.parse(dayStartMatch[1]);
+                    rows = rows.filter(
+                        (t) =>
+                            !t.CompletedAt ||
+                            new Date(t.CompletedAt).getTime() >= dayStartMs ||
+                            new Date(t.__mj_UpdatedAt).getTime() >= dayStartMs,
+                    );
+                }
+                return {
+                    Success: true,
+                    Results: params.ResultType === 'simple'
+                        ? rows.map((t) => ({
+                            ID: t.ID,
+                            ParentID: t.ParentID,
+                            TypeID: t.TypeID,
+                            AgentRunID: t.AgentRunID,
+                            UserID: t.UserID,
+                            Status: t.Status,
+                            StartedAt: t.StartedAt,
+                            CompletedAt: t.CompletedAt,
+                            __mj_UpdatedAt: t.__mj_UpdatedAt,
+                            InputPayload: t.InputPayload,
+                            Configuration: t.Configuration,
+                        }))
+                        : rows.map((t) => this.wrapTask(t)),
+                };
+            }
+            const parentInMatch = /ParentID IN \(([^)]+)\)/.exec(filter);
+            if (parentInMatch?.[1]) {
+                const parentIds = new Set(
+                    parentInMatch[1]
+                        .split(',')
+                        .map((s) => s.trim().replace(/^'|'$/g, '').toLowerCase()),
+                );
+                const children: StoredTaskRow[] = [];
+                for (const pid of parentIds) {
+                    const list = this.TasksByParent.get(pid);
+                    if (list) children.push(...list);
+                }
+                return {
+                    Success: true,
+                    Results: params.ResultType === 'simple'
+                        ? children.map((c) => ({
+                            ID: c.ID,
+                            ParentID: c.ParentID,
+                            Status: c.Status,
+                            AgentRunID: c.AgentRunID,
+                            StartedAt: c.StartedAt,
+                            CompletedAt: c.CompletedAt,
+                            __mj_UpdatedAt: c.__mj_UpdatedAt,
+                            Configuration: c.Configuration,
+                        }))
+                        : children.map((c) => this.wrapTask(c)),
+                };
+            }
             const parentMatch = /ParentID='([^']+)'/.exec(filter);
             if (parentMatch?.[1]) {
                 const children = this.TasksByParent.get(parentMatch[1].toLowerCase()) ?? [];
@@ -623,6 +748,7 @@ class GovernanceInMemoryDb {
                         ? children.map((c) => ({
                             ID: c.ID,
                             Status: c.Status,
+                            StartedAt: c.StartedAt,
                             Configuration: c.Configuration,
                         }))
                         : children.map((c) => this.wrapTask(c)),
@@ -643,6 +769,7 @@ class GovernanceInMemoryDb {
                                     AgentID: single.AgentID,
                                     UserID: single.UserID,
                                     Status: single.Status,
+                                    StartedAt: single.StartedAt,
                                     InputPayload: single.InputPayload,
                                     Configuration: single.Configuration,
                                 }
@@ -2705,5 +2832,762 @@ describe('TaskGraphGovernanceCoordinator — default opt-in, 5-tier policy scope
         } finally {
             dateNowSpy.mockRestore();
         }
+    });
+
+    it('CR-CONFIGURED-CEILING-CONTEXT: clamps larger and null graph overrides to mj.config.cjs and agent/workflow metadata ceilings for standard users across dispatcher restarts and approval, while allowing authorized increases', async () => {
+        const db = new GovernanceInMemoryDb();
+        const provider = db.CreateProvider();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation((p) => p as Partial<RunView> as RunView);
+
+        const daemonOwnerUser: UserInfo = {
+            ID: '10000000-0000-4000-8000-000000000099',
+            Name: 'Daemon Owner',
+            Email: 'daemon@example.com',
+            Type: 'Owner',
+            IsActive: true,
+        } as UserInfo;
+
+        const store = globalThis as GovernanceTestGlobalStore;
+        const previousCache = store.___SINGLETON__UserCache;
+        store.___SINGLETON__UserCache = {
+            Users: [TEST_USER, daemonOwnerUser],
+            FindUser: async ({ ID }) => {
+                if (ID?.toLowerCase() === TEST_USER.ID.toLowerCase()) return TEST_USER;
+                if (ID?.toLowerCase() === daemonOwnerUser.ID.toLowerCase()) return daemonOwnerUser;
+                return undefined;
+            },
+        };
+
+        try {
+            // 1) Finite mj.config.cjs budget ($0.25) with NO UserAgentPolicy; standard user submits larger ($50) and null overrides.
+            // Dispatcher runs under a privileged Owner daemon user — ceiling check MUST evaluate the submitting principal (TEST_USER), not daemonOwnerUser!
+            LimitsConfigResolver.Instance.RegisterMjConfigLimits({
+                Budgets: { PerRun: { MaxCostUsd: 0.25 } },
+            });
+
+            const service = new TaskGraphService();
+            const largerDisp = new TaskGraphDispatcher(
+                { CreateProvider: async () => provider },
+                { RunAgentForTask: async () => ({ Success: true }) },
+                daemonOwnerUser,
+                {
+                    InstanceID: 'ceiling-disp-1',
+                    MaxConcurrentTasks: 1,
+                    PollIntervalSeconds: 0.01,
+                    HeartbeatIntervalSeconds: 60,
+                    ReconciliationIntervalSeconds: 60,
+                },
+                undefined,
+                undefined,
+                {
+                    RunActionForTask: async () => ({ Success: true, Output: { ok: true }, CostUsd: 0.15, TokensUsed: 50 }),
+                },
+            );
+
+            await largerDisp.Start();
+            let largerParentId = '';
+            let nullParentId = '';
+            try {
+                const subLarger = await service.Submit(buildLinearSpec(4, 'MJConfig Larger Override Graph'), {
+                    EnvironmentID: 'env-1',
+                    Provider: provider,
+                    ContextUser: TEST_USER,
+                    LimitsOverride: { Budgets: { PerRun: { MaxCostUsd: 50 } } },
+                });
+                expect(subLarger.Success).toBe(true);
+                largerParentId = subLarger.ParentTaskID!;
+
+                await waitUntil(
+                    () => largerDisp.Governance.GetGraphDiagnostics(largerParentId)?.PausedByGovernance === true,
+                    5_000,
+                    () => largerDisp.Kick(),
+                );
+                const largerDiag = largerDisp.Governance.GetGraphDiagnostics(largerParentId)!;
+                expect(largerDiag.LastResolvedLimits?.Budgets.PerRun.MaxCostUsd).toBe(0.25);
+                expect(largerDiag.LastBudgetResult?.Breach?.Limit).toBe(0.25);
+
+                const subNull = await service.Submit(buildLinearSpec(4, 'MJConfig Null Override Graph'), {
+                    EnvironmentID: 'env-1',
+                    Provider: provider,
+                    ContextUser: TEST_USER,
+                    LimitsOverride: { Budgets: { PerRun: { MaxCostUsd: null } } },
+                });
+                expect(subNull.Success).toBe(true);
+                nullParentId = subNull.ParentTaskID!;
+
+                await waitUntil(
+                    () => largerDisp.Governance.GetGraphDiagnostics(nullParentId)?.PausedByGovernance === true,
+                    5_000,
+                    () => largerDisp.Kick(),
+                );
+                const nullDiag = largerDisp.Governance.GetGraphDiagnostics(nullParentId)!;
+                expect(nullDiag.LastResolvedLimits?.Budgets.PerRun.MaxCostUsd).toBe(0.25);
+                expect(nullDiag.LastBudgetResult?.Breach?.Limit).toBe(0.25);
+            } finally {
+                await largerDisp.Stop();
+            }
+
+            // 2) Agent & workflow metadata ceiling ($0.20) across a dispatcher restart + approval baseBudgets reconstruction
+            LimitsConfigResolver.Instance.ClearMjConfigLimits();
+            db.Agents = [
+                {
+                    ID: AGENT_ID,
+                    Name: 'MetadataCeilingAgent',
+                    MaxCostPerRun: 0.20,
+                },
+            ];
+
+            let disp1Count = 0;
+            let disp1Ref: TaskGraphDispatcher | null = null;
+            const disp1 = new TaskGraphDispatcher(
+                { CreateProvider: async () => provider },
+                { RunAgentForTask: async () => ({ Success: true }) },
+                daemonOwnerUser,
+                {
+                    InstanceID: 'ceiling-restart-disp-1',
+                    MaxConcurrentTasks: 1,
+                    PollIntervalSeconds: 0.01,
+                    HeartbeatIntervalSeconds: 60,
+                    ReconciliationIntervalSeconds: 60,
+                },
+                undefined,
+                undefined,
+                {
+                    RunActionForTask: async () => {
+                        disp1Count++;
+                        if (disp1Count === 1 && disp1Ref) {
+                            // Stop dispatcher after step 1 settles so step 2 runs cold on disp2 after restart
+                            void disp1Ref.Stop();
+                        }
+                        return { Success: true, Output: { step: disp1Count }, CostUsd: 0.12, TokensUsed: 40 };
+                    },
+                },
+            );
+            disp1Ref = disp1;
+            const subMeta = await service.Submit(buildLinearSpec(4, 'Agent Metadata Ceiling Graph'), {
+                EnvironmentID: 'env-1',
+                Provider: provider,
+                ContextUser: TEST_USER,
+                AgentID: AGENT_ID,
+                WorkflowMetadata: { Budgets: { PerRun: { MaxCostUsd: 0.20 } } },
+                LimitsOverride: { Budgets: { PerRun: { MaxCostUsd: 25, MaxWallClockMs: null } } },
+            });
+            expect(subMeta.Success).toBe(true);
+            const metaParentId = subMeta.ParentTaskID!;
+
+            await disp1.Start();
+            await waitUntil(
+                () => Array.from(db.TasksByParent.get(metaParentId.toLowerCase()) ?? []).some((t) => t.Status === 'Complete'),
+                5_000,
+                () => disp1.Kick(),
+            );
+            await disp1.Stop();
+            // Ensure step 1 settled below $0.20 and disp2 handles step 2 & the pause cold after restart
+            expect(disp1.Governance.GetGraphDiagnostics(metaParentId)?.PausedByGovernance).not.toBe(true);
+
+            const disp2 = new TaskGraphDispatcher(
+                { CreateProvider: async () => provider },
+                { RunAgentForTask: async () => ({ Success: true }) },
+                daemonOwnerUser,
+                {
+                    InstanceID: 'ceiling-restart-disp-2',
+                    MaxConcurrentTasks: 1,
+                    PollIntervalSeconds: 0.01,
+                    HeartbeatIntervalSeconds: 60,
+                    ReconciliationIntervalSeconds: 60,
+                },
+                undefined,
+                undefined,
+                {
+                    RunActionForTask: async () => ({ Success: true, Output: { step: 2 }, CostUsd: 0.12, TokensUsed: 40 }),
+                },
+            );
+            await disp2.Start();
+            try {
+                await waitUntil(
+                    () => disp2.Governance.GetGraphDiagnostics(metaParentId)?.PausedByGovernance === true,
+                    5_000,
+                    () => disp2.Kick(),
+                );
+                const metaDiag = disp2.Governance.GetGraphDiagnostics(metaParentId)!;
+                expect(metaDiag.LastResolvedLimits?.Budgets.PerRun.MaxCostUsd).toBe(0.20);
+                expect(metaDiag.LastBudgetResult?.Breach?.Limit).toBe(0.20);
+
+                // Approving as Owner WITHOUT BudgetExtension must still reconstruct clamped baseBudgets ($0.20),
+                // NOT silently widen baseBudgets to the user's clamped $25 LimitsOverride!
+                const approveRes = await disp2.Governance.ApproveAndResumePausedGraph({
+                    ParentTaskID: metaParentId,
+                    Provider: provider,
+                    ContextUser: daemonOwnerUser,
+                });
+                expect(approveRes.Success).toBe(true);
+                expect(approveRes.ExtendedBudgets?.PerRun.MaxCostUsd).toBe(0.20);
+            } finally {
+                await disp2.Stop();
+            }
+
+            // 3) Authorized increase: Owner submits graph with LimitsOverride > mj.config.cjs ($0.25 -> $1.00) and completes all 3 steps ($0.45) cleanly
+            const authDb = new GovernanceInMemoryDb();
+            const authProvider = authDb.CreateProvider();
+            LimitsConfigResolver.Instance.RegisterMjConfigLimits({
+                Budgets: { PerRun: { MaxCostUsd: 0.25 } },
+            });
+            let authExecutedSteps = 0;
+            const authDisp = new TaskGraphDispatcher(
+                { CreateProvider: async () => authProvider },
+                { RunAgentForTask: async () => ({ Success: true }) },
+                daemonOwnerUser,
+                {
+                    InstanceID: 'ceiling-auth-disp',
+                    MaxConcurrentTasks: 1,
+                    PollIntervalSeconds: 0.01,
+                    HeartbeatIntervalSeconds: 60,
+                    ReconciliationIntervalSeconds: 60,
+                },
+                undefined,
+                undefined,
+                {
+                    RunActionForTask: async () => {
+                        authExecutedSteps++;
+                        return { Success: true, Output: { ok: true }, CostUsd: 0.15, TokensUsed: 50 };
+                    },
+                },
+            );
+            let capturedAuthorizedLimit: number | null | undefined;
+            const origRecord = authDisp.Governance.RecordNodeSettlementAndEvaluate.bind(authDisp.Governance);
+            vi.spyOn(authDisp.Governance, 'RecordNodeSettlementAndEvaluate').mockImplementation(async (callArgs) => {
+                const res = await origRecord(callArgs);
+                const parentId = callArgs.Task.ParentID ?? callArgs.Task.ID;
+                capturedAuthorizedLimit =
+                    authDisp.Governance.GetGraphDiagnostics(parentId)?.LastResolvedLimits?.Budgets.PerRun.MaxCostUsd;
+                return res;
+            });
+            await authDisp.Start();
+            try {
+                const subAuthorized = await service.Submit(buildLinearSpec(3, 'Authorized Override Graph'), {
+                    EnvironmentID: 'env-1',
+                    Provider: authProvider,
+                    ContextUser: daemonOwnerUser,
+                    LimitsOverride: { Budgets: { PerRun: { MaxCostUsd: 1.0 } } },
+                });
+                expect(subAuthorized.Success).toBe(true);
+                const authParentId = subAuthorized.ParentTaskID!;
+
+                await waitUntil(
+                    () => authDb.Tasks.get(authParentId.toLowerCase())?.Status === 'Complete',
+                    5_000,
+                    () => authDisp.Kick(),
+                );
+                expect(authExecutedSteps).toBe(3);
+                expect(capturedAuthorizedLimit).toBe(1.0);
+
+                // 4) Loop governance path also enforces mj.config.cjs ceiling when standard user supplies null/larger override
+                const loopSpec: TaskGraphSpec = {
+                    workflowName: 'Loop Ceiling Clamp Graph',
+                    tasks: [
+                        {
+                            tempId: 'loop-1',
+                            name: 'Loop Step',
+                            description: 'ForEach loop clamped to mj.config.cjs',
+                            kind: 'ForEach',
+                            configuration: {
+                                collectionPath: 'static:["a","b","c","d"]',
+                                executionMode: 'sequential',
+                                itemVariable: 'val',
+                                action: { name: 'StepAction', params: { val: 'val' } },
+                            },
+                        },
+                    ],
+                };
+                const subLoop = await service.Submit(loopSpec, {
+                    EnvironmentID: 'env-1',
+                    Provider: authProvider,
+                    ContextUser: TEST_USER,
+                    LimitsOverride: { Budgets: { PerRun: { MaxCostUsd: null } } },
+                });
+                expect(subLoop.Success).toBe(true);
+                const loopParentId = subLoop.ParentTaskID!;
+
+                await waitUntil(
+                    () => authDisp.Governance.GetGraphDiagnostics(loopParentId)?.PausedByGovernance === true,
+                    5_000,
+                    () => authDisp.Kick(),
+                );
+                const loopDiag = authDisp.Governance.GetGraphDiagnostics(loopParentId)!;
+                expect(loopDiag.LastResolvedLimits?.Budgets.PerRun.MaxCostUsd).toBe(0.25);
+                expect(loopDiag.LastBudgetResult?.Breach?.Limit).toBe(0.25);
+            } finally {
+                await authDisp.Stop();
+            }
+        } finally {
+            store.___SINGLETON__UserCache = previousCache;
+        }
+    });
+
+    it('CR-STANDALONE-SHARED-LEDGER: shares PerRoutine and PerUserPerDay dollar and wall-clock budgets across standalone workflows (completed, restarted, concurrent) without double-counting agent-submitted workflows', async () => {
+        const db = new GovernanceInMemoryDb();
+        const provider = db.CreateProvider();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation((p) => p as Partial<RunView> as RunView);
+
+        const sharedRoutineId = '60000000-0000-4000-8000-000000000077';
+        const service = new TaskGraphService();
+
+        // Scenario A (Dollar dimension across restart): Graph 1 (standalone) completes at $0.20;
+        // dispatcher restarts cold; Graph 2 (standalone) spends $0.10 + $0.10 -> shared $0.40 >= $0.35 -> pause!
+        LimitsConfigResolver.Instance.RegisterMjConfigLimits({
+            Budgets: {
+                PerRun: { MaxCostUsd: 1.0 },
+                PerRoutine: { MaxCostUsd: 0.35 },
+                PerUserPerDay: { MaxCostUsd: 0.35, DayBoundaryTimezone: 'UTC' },
+            },
+        });
+
+        const disp1 = new TaskGraphDispatcher(
+            { CreateProvider: async () => provider },
+            { RunAgentForTask: async () => ({ Success: true }) },
+            TEST_USER,
+            {
+                InstanceID: 'standalone-shared-disp-1',
+                MaxConcurrentTasks: 1,
+                PollIntervalSeconds: 0.01,
+                HeartbeatIntervalSeconds: 60,
+                ReconciliationIntervalSeconds: 60,
+            },
+            undefined,
+            undefined,
+            {
+                RunActionForTask: async () => ({ Success: true, Output: { ok: true }, CostUsd: 0.10, TokensUsed: 25 }),
+            },
+        );
+
+        await disp1.Start();
+        let g1ParentId = '';
+        try {
+            const sub1 = await service.Submit(buildLinearSpec(2, 'Standalone Routine Graph 1', sharedRoutineId), {
+                EnvironmentID: 'env-1',
+                Provider: provider,
+                ContextUser: TEST_USER,
+                RoutineID: sharedRoutineId,
+            });
+            expect(sub1.Success).toBe(true);
+            g1ParentId = sub1.ParentTaskID!;
+            await waitUntil(
+                () => db.Tasks.get(g1ParentId.toLowerCase())?.Status === 'Complete',
+                5_000,
+                () => disp1.Kick(),
+            );
+        } finally {
+            await disp1.Stop();
+        }
+
+        const disp2 = new TaskGraphDispatcher(
+            { CreateProvider: async () => provider },
+            { RunAgentForTask: async () => ({ Success: true }) },
+            TEST_USER,
+            {
+                InstanceID: 'standalone-shared-disp-2',
+                MaxConcurrentTasks: 1,
+                PollIntervalSeconds: 0.01,
+                HeartbeatIntervalSeconds: 60,
+                ReconciliationIntervalSeconds: 60,
+            },
+            undefined,
+            undefined,
+            {
+                RunActionForTask: async () => ({ Success: true, Output: { ok: true }, CostUsd: 0.10, TokensUsed: 25 }),
+            },
+        );
+
+        await disp2.Start();
+        let g2ParentId = '';
+        try {
+            const sub2 = await service.Submit(buildLinearSpec(4, 'Standalone Routine Graph 2', sharedRoutineId), {
+                EnvironmentID: 'env-1',
+                Provider: provider,
+                ContextUser: TEST_USER,
+                RoutineID: sharedRoutineId,
+            });
+            expect(sub2.Success).toBe(true);
+            g2ParentId = sub2.ParentTaskID!;
+
+            await waitUntil(
+                () => disp2.Governance.GetGraphDiagnostics(g2ParentId)?.PausedByGovernance === true,
+                5_000,
+                () => disp2.Kick(),
+            );
+            const g2Diag = disp2.Governance.GetGraphDiagnostics(g2ParentId)!;
+            expect(g2Diag.LastBudgetResult?.Exceeded).toBe(true);
+            expect(g2Diag.LastBudgetResult?.Breach?.Scope).toBe('PerRoutine');
+            expect(g2Diag.LastBudgetResult?.Breach?.Dimension).toBe('CostUsd');
+            expect(g2Diag.LastBudgetResult?.Ledger.RunCostUsd).toBeCloseTo(0.20, 5);
+            expect(g2Diag.LastBudgetResult?.Ledger.RoutineCostUsd).toBeCloseTo(0.40, 5);
+            expect(g2Diag.LastBudgetResult?.Ledger.UserDailyCostUsd).toBeCloseTo(0.40, 5);
+        } finally {
+            await disp2.Stop();
+        }
+
+        // Scenario B (Wall-clock dimension + concurrent standalone graphs + paused interval exclusion + no agent-run double count):
+        const wallUser: UserInfo = {
+            ...TEST_USER,
+            ID: '10000000-0000-4000-8000-000000000088',
+        } as UserInfo;
+        const wallRoutineId = '60000000-0000-4000-8000-000000000088';
+        const nowMs = Date.UTC(2026, 10, 22, 12, 0, 0);
+        const dateNowSpy = vi.spyOn(Date, 'now').mockImplementation(() => nowMs);
+        try {
+            LimitsConfigResolver.Instance.RegisterMjConfigLimits({
+                Budgets: {
+                    PerRun: { MaxCostUsd: null, MaxWallClockMs: 50_000 },
+                    PerRoutine: { MaxCostUsd: null, MaxWallClockMs: 30_000 },
+                    PerUserPerDay: { MaxCostUsd: null, MaxWallClockMs: 30_000, DayBoundaryTimezone: 'UTC' },
+                    CountPausedTimeTowardsWallClock: false,
+                },
+            });
+
+            // Concurrent standalone Graph A started 45s ago, paused for 25s -> 20s active wall-clock today
+            const concurrentParentId = randomUUID();
+            const concurrentChildId = randomUUID();
+            db.Tasks.set(concurrentParentId.toLowerCase(), {
+                ID: concurrentParentId,
+                ParentID: null,
+                TypeID: WORKFLOW_TYPE_ID,
+                Name: 'Concurrent Standalone A',
+                Description: null,
+                Status: 'In Progress',
+                StepType: 'Action',
+                ActionID: null,
+                AgentID: null,
+                PromptID: null,
+                UserID: null,
+                AgentRunID: null,
+                ConversationDetailID: null,
+                ClaimedBy: null,
+                ClaimExpiresAt: null,
+                StartedAt: new Date(nowMs - 45_000),
+                CompletedAt: null,
+                PercentComplete: 50,
+                ErrorMessage: null,
+                InputPayload: JSON.stringify({
+                    continuation: 'message',
+                    reinvokeDepth: 0,
+                    failureSemantics: 'block',
+                    submittedByAgentRunID: null,
+                    submittedByUserID: wallUser.ID,
+                    routineID: wallRoutineId,
+                }),
+                Configuration: JSON.stringify({
+                    governanceCheckpoint: {
+                        CheckpointID: randomUUID(),
+                        Status: 'Approved',
+                        PauseReason: 'BudgetExceeded',
+                        Summary: 'Prior pause',
+                        PausedAtISO: new Date(nowMs - 35_000).toISOString(),
+                        CompletedNodeCount: 1,
+                        CompletedNodeIDs: [concurrentChildId],
+                        CumulativeLedger: {
+                            RunCostUsd: 0.05,
+                            RunWallClockMs: 10_000,
+                            RunTokens: 10,
+                            RoutineCostUsd: 0.05,
+                            RoutineWallClockMs: 10_000,
+                            UserDailyCostUsd: 0.05,
+                            UserDailyWallClockMs: 10_000,
+                            PausedWallClockMs: 25_000,
+                            PausedIntervals: [{ PausedAtMs: nowMs - 35_000, ResumedAtMs: nowMs - 10_000 }],
+                            DayBucketUTC: '2026-11-22',
+                            DayBoundaryTimezone: 'UTC',
+                            AsOfISO: new Date(nowMs - 10_000).toISOString(),
+                        },
+                    },
+                }),
+                __mj_UpdatedAt: new Date(nowMs),
+            });
+            const concurrentChildRow: StoredTaskRow = {
+                ID: concurrentChildId,
+                ParentID: concurrentParentId,
+                TypeID: WORKFLOW_TYPE_ID,
+                Name: 'Concurrent Child 1',
+                Description: null,
+                Status: 'Complete',
+                StepType: 'Action',
+                ActionID: ACTION_ID,
+                AgentID: null,
+                PromptID: null,
+                UserID: null,
+                AgentRunID: null,
+                ConversationDetailID: null,
+                ClaimedBy: null,
+                ClaimExpiresAt: null,
+                StartedAt: new Date(nowMs - 45_000),
+                CompletedAt: new Date(nowMs - 35_000),
+                PercentComplete: 100,
+                ErrorMessage: null,
+                InputPayload: null,
+                OutputPayload: null,
+                Configuration: JSON.stringify({ runtime: { governanceCostUsd: 0.05, governanceTokensUsed: 10 } }),
+                __mj_UpdatedAt: new Date(nowMs - 35_000),
+            };
+            db.Tasks.set(concurrentChildId.toLowerCase(), concurrentChildRow);
+            db.TasksByParent.set(concurrentParentId.toLowerCase(), [concurrentChildRow]);
+
+            // Agent-submitted graph sharing same routine/user with an AgentRun row ($0.01, 2s) — MUST NOT be double-counted!
+            const agentSubmittedRunId = randomUUID();
+            db.AgentRuns.set(agentSubmittedRunId.toLowerCase(), {
+                ID: agentSubmittedRunId,
+                AgentID: AGENT_ID,
+                UserID: wallUser.ID,
+                ParentRunID: null,
+                ScheduledJobRunID: wallRoutineId,
+                Status: 'Completed',
+                StartedAt: new Date(nowMs - 5_000),
+                CompletedAt: new Date(nowMs - 3_000), // 2,000ms
+                Success: true,
+                ErrorMessage: null,
+                Message: null,
+                TotalCost: 0.01,
+                TotalCostRollup: 0.01,
+                Data: null,
+                Steps: [],
+            });
+            const agentSubmittedParentId = randomUUID();
+            const agentSubmittedChildId = randomUUID();
+            db.Tasks.set(agentSubmittedParentId.toLowerCase(), {
+                ID: agentSubmittedParentId,
+                ParentID: null,
+                TypeID: WORKFLOW_TYPE_ID,
+                Name: 'Agent-Submitted Graph',
+                Description: null,
+                Status: 'Complete',
+                StepType: 'Action',
+                ActionID: null,
+                AgentID: null,
+                PromptID: null,
+                UserID: null,
+                AgentRunID: agentSubmittedRunId,
+                ConversationDetailID: null,
+                ClaimedBy: null,
+                ClaimExpiresAt: null,
+                StartedAt: new Date(nowMs - 5_000),
+                CompletedAt: new Date(nowMs - 3_000),
+                PercentComplete: 100,
+                ErrorMessage: null,
+                InputPayload: JSON.stringify({
+                    continuation: 'message',
+                    reinvokeDepth: 0,
+                    failureSemantics: 'block',
+                    submittedByAgentRunID: agentSubmittedRunId,
+                    submittedByUserID: wallUser.ID,
+                    routineID: wallRoutineId,
+                }),
+                Configuration: null,
+                __mj_UpdatedAt: new Date(nowMs - 3_000),
+            });
+            const agentSubmittedChildRow: StoredTaskRow = {
+                ID: agentSubmittedChildId,
+                ParentID: agentSubmittedParentId,
+                TypeID: WORKFLOW_TYPE_ID,
+                Name: 'Agent-Submitted Child',
+                Description: null,
+                Status: 'Complete',
+                StepType: 'Action',
+                ActionID: ACTION_ID,
+                AgentID: null,
+                PromptID: null,
+                UserID: null,
+                AgentRunID: null,
+                ConversationDetailID: null,
+                ClaimedBy: null,
+                ClaimExpiresAt: null,
+                StartedAt: new Date(nowMs - 5_000),
+                CompletedAt: new Date(nowMs - 3_000),
+                PercentComplete: 100,
+                ErrorMessage: null,
+                InputPayload: null,
+                OutputPayload: null,
+                Configuration: JSON.stringify({ runtime: { governanceCostUsd: 0.99, governanceTokensUsed: 500 } }),
+                __mj_UpdatedAt: new Date(nowMs - 3_000),
+            };
+            db.Tasks.set(agentSubmittedChildId.toLowerCase(), agentSubmittedChildRow);
+            db.TasksByParent.set(agentSubmittedParentId.toLowerCase(), [agentSubmittedChildRow]);
+
+            // Current standalone Graph B ran for 12s (20s + 2s + 12s = 34s >= 30s -> PerRoutine WallClockMs breach!)
+            const graphBParentId = randomUUID();
+            const graphBParentRow: StoredTaskRow = {
+                ID: graphBParentId,
+                ParentID: null,
+                TypeID: WORKFLOW_TYPE_ID,
+                Name: 'Standalone Wall Graph B',
+                Description: null,
+                Status: 'In Progress',
+                StepType: 'Action',
+                ActionID: null,
+                AgentID: null,
+                PromptID: null,
+                UserID: null,
+                AgentRunID: null,
+                ConversationDetailID: null,
+                ClaimedBy: null,
+                ClaimExpiresAt: null,
+                StartedAt: new Date(nowMs - 12_000),
+                CompletedAt: null,
+                PercentComplete: 0,
+                ErrorMessage: null,
+                InputPayload: JSON.stringify({
+                    continuation: 'message',
+                    reinvokeDepth: 0,
+                    failureSemantics: 'block',
+                    submittedByAgentRunID: null,
+                    submittedByUserID: wallUser.ID,
+                    routineID: wallRoutineId,
+                }),
+                Configuration: null,
+                __mj_UpdatedAt: new Date(nowMs),
+            };
+            db.Tasks.set(graphBParentId.toLowerCase(), graphBParentRow);
+            const graphBChildId = randomUUID();
+            const graphBChildRow: StoredTaskRow = {
+                ID: graphBChildId,
+                ParentID: graphBParentId,
+                TypeID: WORKFLOW_TYPE_ID,
+                Name: 'Graph B Step 1',
+                Description: null,
+                Status: 'Complete',
+                StepType: 'Action',
+                ActionID: ACTION_ID,
+                AgentID: null,
+                PromptID: null,
+                UserID: null,
+                AgentRunID: null,
+                ConversationDetailID: null,
+                ClaimedBy: null,
+                ClaimExpiresAt: null,
+                StartedAt: new Date(nowMs - 12_000),
+                CompletedAt: new Date(nowMs),
+                PercentComplete: 100,
+                ErrorMessage: null,
+                InputPayload: null,
+                OutputPayload: null,
+                Configuration: JSON.stringify({ runtime: { governanceCostUsd: 0.02, governanceTokensUsed: 10 } }),
+                __mj_UpdatedAt: new Date(nowMs),
+            };
+            db.Tasks.set(graphBChildId.toLowerCase(), graphBChildRow);
+            db.TasksByParent.set(graphBParentId.toLowerCase(), [graphBChildRow]);
+
+            const coord = new TaskGraphGovernanceCoordinator(new TaskClaimStore('wall-coord', 60));
+            const wallEval = await coord.RecordNodeSettlementAndEvaluate({
+                Provider: provider,
+                ContextUser: wallUser,
+                Parent: db.wrapTaskPublic(graphBParentRow),
+                Task: db.wrapTaskPublic(graphBChildRow),
+                Success: true,
+                CostUsd: 0.02,
+                TokensUsed: 10,
+            });
+            expect(wallEval?.Exceeded).toBe(true);
+            expect(wallEval?.Breach?.Scope).toBe('PerRoutine');
+            expect(wallEval?.Breach?.Dimension).toBe('WallClockMs');
+            // 20,000ms (standalone A excluding 25s pause) + 2,000ms (agent-submitted run) + 12,000ms (graph B) = 34,000ms
+            expect(wallEval?.Ledger.RoutineWallClockMs).toBe(34_000);
+            expect(wallEval?.Ledger.UserDailyWallClockMs).toBe(34_000);
+            // Cost: $0.05 (standalone A) + $0.01 (agent-submitted run, NOT $0.99 child!) + $0.02 (graph B) = $0.08
+            expect(wallEval?.Ledger.RoutineCostUsd).toBeCloseTo(0.08, 5);
+            expect(coord.GetGraphDiagnostics(graphBParentId)?.PausedByGovernance).toBe(true);
+        } finally {
+            dateNowSpy.mockRestore();
+        }
+    });
+
+    it('CR-DIAGNOSTICS-AUTH-FIRST-MATCH (graph approval): evaluates all matching authorizations rather than stopping at an ungranted System Administrator entry', async () => {
+        const db = new GovernanceInMemoryDb();
+        const makeAuth = (id: string, name: string, allowedRoleId: string): AuthorizationInfo =>
+            ({
+                ID: id,
+                Name: name,
+                ParentID: null,
+                UserCanExecute: (u: UserInfo) => (u.UserRoles ?? []).some((r) => r.RoleID === allowedRoleId),
+            }) as Partial<AuthorizationInfo> as AuthorizationInfo;
+
+        const sysAdminAuth = makeAuth('auth-sys', 'System Administrator', 'role-sys');
+        const aiAdminAuth = makeAuth('auth-ai', 'AI: Manage Agents', 'role-ai');
+        db.Authorizations = [sysAdminAuth, aiAdminAuth];
+
+        const provider = db.CreateProvider();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation((p) => p as Partial<RunView> as RunView);
+
+        const aiAdminApprover: UserInfo = {
+            ID: '10000000-0000-4000-8000-000000000055',
+            Name: 'AI Admin Approver',
+            Email: 'aiadmin@example.com',
+            Type: 'User',
+            IsActive: true,
+            UserRoles: [{ RoleID: 'role-ai', Role: 'AI Admin' }],
+        } as Partial<UserInfo> as UserInfo;
+
+        const otherStandardUser: UserInfo = {
+            ID: '10000000-0000-4000-8000-000000000056',
+            Name: 'Other User',
+            Email: 'other@example.com',
+            Type: 'User',
+            IsActive: true,
+            UserRoles: [],
+        } as Partial<UserInfo> as UserInfo;
+
+        const disp = new TaskGraphDispatcher(
+            { CreateProvider: async () => provider },
+            { RunAgentForTask: async () => ({ Success: true }) },
+            TEST_USER,
+            {
+                InstanceID: 'auth-approve-disp',
+                MaxConcurrentTasks: 1,
+                PollIntervalSeconds: 0.01,
+                HeartbeatIntervalSeconds: 60,
+                ReconciliationIntervalSeconds: 60,
+            },
+            undefined,
+            undefined,
+            {
+                RunActionForTask: async () => ({ Success: true, Output: { ok: true }, CostUsd: 0.15, TokensUsed: 20 }),
+            },
+        );
+
+        await disp.Start();
+        let parentId = '';
+        try {
+            const service = new TaskGraphService();
+            const subRes = await service.Submit(buildLinearSpec(3, 'Approval Multi-Auth Graph'), {
+                EnvironmentID: 'env-1',
+                Provider: provider,
+                ContextUser: TEST_USER,
+                LimitsOverride: { Budgets: { PerRun: { MaxCostUsd: 0.20 } } },
+            });
+            expect(subRes.Success).toBe(true);
+            parentId = subRes.ParentTaskID!;
+
+            await waitUntil(
+                () => disp.Governance.GetGraphDiagnostics(parentId)?.PausedByGovernance === true,
+                5_000,
+                () => disp.Kick(),
+            );
+        } finally {
+            await disp.Stop();
+        }
+
+        // Unprivileged non-owner must be denied
+        const deniedRes = await disp.Governance.ApproveAndResumePausedGraph({
+            ParentTaskID: parentId,
+            Provider: provider,
+            ContextUser: otherStandardUser,
+        });
+        expect(deniedRes.Success).toBe(false);
+        expect(deniedRes.Message).toContain('authorized administrator');
+
+        // User holding AI: Manage Agents succeeds even when ungranted System Administrator comes first
+        const allowedRes = await disp.Governance.ApproveAndResumePausedGraph({
+            ParentTaskID: parentId,
+            Provider: provider,
+            ContextUser: aiAdminApprover,
+            BudgetExtension: { NewPerRunMaxCostUsd: 1.0 },
+        });
+        expect(allowedRes.Success).toBe(true);
     });
 });

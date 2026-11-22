@@ -4,6 +4,7 @@ import {
     CODE_FALLBACK_LIMITS,
     LimitsConfigResolver,
     RunView,
+    type AuthorizationInfo,
     type IMetadataProvider,
     type UserInfo,
 } from '@memberjunction/core';
@@ -1477,5 +1478,97 @@ describe('Limits.* BaseRemotableOperation implementations', () => {
             LoadLimitsOperations();
             ActiveRunGovernanceRegistry.Instance.ClearDispatchedClaims();
         }
+    });
+
+    it('CR-DIAGNOSTICS-AUTH-FIRST-MATCH: evaluates all matching authorization definitions instead of stopping at the first ungranted match', async () => {
+        const makeAuth = (id: string, name: string, allowedRoleId: string): AuthorizationInfo =>
+            ({
+                ID: id,
+                Name: name,
+                ParentID: null,
+                UserCanExecute: (u: UserInfo) => u.UserRoles.some((r) => r.RoleID === allowedRoleId),
+            }) as Partial<AuthorizationInfo> as AuthorizationInfo;
+
+        const sysAdminAuth = makeAuth('auth-sysadmin', 'System Administrator', 'role-sysadmin');
+        const diagAuth = makeAuth('auth-diag', 'Diagnostics: Run Sessions', 'role-diag');
+        const aiManageAuth = makeAuth('auth-ai', 'AI: Manage Agents', 'role-ai-admin');
+
+        const aiAdminUser: UserInfo = {
+            ...STANDARD_USER,
+            ID: '22222222-2222-4222-8222-222222222223',
+            UserRoles: [{ RoleID: 'role-ai-admin', Role: 'AI Admin' }],
+        } as Partial<UserInfo> as UserInfo;
+
+        const diagReaderUser: UserInfo = {
+            ...STANDARD_USER,
+            ID: '22222222-2222-4222-8222-222222222224',
+            UserRoles: [{ RoleID: 'role-diag', Role: 'Diagnostics Reader' }],
+        } as Partial<UserInfo> as UserInfo;
+
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn(async () => ({ Success: true, Results: [] })),
+            RunViews: vi.fn(async () => []),
+        } as Partial<RunView> as RunView);
+
+        const forwardProvider = {
+            Authorizations: [sysAdminAuth, diagAuth, aiManageAuth],
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+
+        const reversedProvider = {
+            Authorizations: [aiManageAuth, diagAuth, sysAdminAuth],
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+
+        const diagOp = new LimitsGetDiagnosticsServerOperation();
+        const pauseOp = new LimitsPauseRunServerOperation();
+
+        // System Administrator listed first (ungranted), AI: Manage Agents listed later (granted)
+        const aiReadForward = await diagOp.ExecuteServer(
+            {},
+            { provider: forwardProvider, user: aiAdminUser, emitProgress: () => undefined },
+        );
+        expect(aiReadForward.Success).toBe(true);
+
+        // System Administrator listed first (ungranted), Diagnostics: Run Sessions listed second (granted)
+        const diagReadForward = await diagOp.ExecuteServer(
+            {},
+            { provider: forwardProvider, user: diagReaderUser, emitProgress: () => undefined },
+        );
+        expect(diagReadForward.Success).toBe(true);
+
+        // Diagnostics: Run Sessions is read-only and must NOT authorize write/pause operations
+        const diagPauseAttempt = await pauseOp.ExecuteServer(
+            { AgentRunID: RUN_ID_ACTIVE },
+            { provider: forwardProvider, user: diagReaderUser, emitProgress: () => undefined },
+        );
+        expect(diagPauseAttempt.Success).toBe(false);
+        expect(diagPauseAttempt.ResultCode).toBe('FORBIDDEN');
+
+        // Reversed metadata order works identically
+        const aiReadReversed = await diagOp.ExecuteServer(
+            {},
+            { provider: reversedProvider, user: aiAdminUser, emitProgress: () => undefined },
+        );
+        expect(aiReadReversed.Success).toBe(true);
+
+        const diagReadReversed = await diagOp.ExecuteServer(
+            {},
+            { provider: reversedProvider, user: diagReaderUser, emitProgress: () => undefined },
+        );
+        expect(diagReadReversed.Success).toBe(true);
+
+        // Unprivileged user remains denied regardless of authorization ordering
+        const unprivilegedForward = await diagOp.ExecuteServer(
+            {},
+            { provider: forwardProvider, user: STANDARD_USER, emitProgress: () => undefined },
+        );
+        expect(unprivilegedForward.Success).toBe(false);
+        expect(unprivilegedForward.ResultCode).toBe('FORBIDDEN');
+
+        const unprivilegedReversed = await diagOp.ExecuteServer(
+            {},
+            { provider: reversedProvider, user: STANDARD_USER, emitProgress: () => undefined },
+        );
+        expect(unprivilegedReversed.Success).toBe(false);
+        expect(unprivilegedReversed.ResultCode).toBe('FORBIDDEN');
     });
 });

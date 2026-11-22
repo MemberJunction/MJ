@@ -372,4 +372,90 @@ describe('a While loop must be able to reach its exit condition', () => {
         expect(executed).toEqual([0, 1, 2, 3, 4]);
         expect(secondPass.Output.results).toEqual(['while-0', 'while-1', 'while-2', 'while-3', 'while-4']);
     });
+
+    it('CR-SEQUENTIAL-LOOP-QUADRATIC: scales near-linearly over large sequential ForEach collections with OnIterationGovernance and preserves sparse resume-cursor semantics', async () => {
+        // 1) Scaling regression: 10x input growth (500 -> 5,000) with OnIterationGovernance active must stay near-linear (never quadratic)
+        const measureSequentialRun = async (count: number): Promise<number> => {
+            const items = Array.from({ length: count }, (_, i) => i);
+            const op: ForEachOperation = { collectionPath: 'payload.items', maxIterations: count };
+            let govChecks = 0;
+            const startNs = process.hrtime.bigint();
+            const res = await RunForEachLoop(
+                op,
+                { payload: { items } },
+                async ({ Index }) => ({ Success: true, Output: Index }),
+                {
+                    OnIterationGovernance: async () => {
+                        govChecks++;
+                        return { ShouldPause: false };
+                    },
+                },
+            );
+            const elapsedMs = Number(process.hrtime.bigint() - startNs) / 1_000_000;
+            expect(res.Success).toBe(true);
+            expect(res.Output.iterations).toBe(count);
+            expect(govChecks).toBe(count * 2);
+            return elapsedMs;
+        };
+
+        // Warm up JIT once
+        await measureSequentialRun(200);
+        const smallMs = await measureSequentialRun(500);
+        const largeMs = await measureSequentialRun(5_000);
+        const ratio = largeMs / Math.max(smallMs, 0.5);
+        // Quadratic scaling on 10x N would be ~100x; linear bookkeeping stays well under 30x even under noisy CI load.
+        expect(ratio).toBeLessThan(30);
+
+        // 2) Sparse ResumeFromCursor without replaying already-completed indices
+        const executedSparse: number[] = [];
+        const sparseOp: ForEachOperation = { collectionPath: 'static:["s0","s1","s2","s3","s4"]' };
+        const pausedAgain = await RunForEachLoop(
+            sparseOp,
+            {},
+            async ({ Index }) => {
+                executedSparse.push(Index);
+                return { Success: true, Output: `sparse-${Index}` };
+            },
+            {
+                ResumeFromCursor: {
+                    LoopType: 'ForEach',
+                    NextIterationIndex: 1,
+                    CompletedIndices: [0, 2],
+                    PartialResults: ['sparse-0', null, 'sparse-2'],
+                    SucceededCount: 2,
+                    FailedCount: 0,
+                },
+                OnIterationGovernance: async ({ CompletedIterations }) =>
+                    CompletedIterations >= 4
+                        ? { ShouldPause: true, Reason: 'Pause after index 3' }
+                        : { ShouldPause: false },
+            },
+        );
+
+        expect(pausedAgain.Paused).toBe(true);
+        expect(executedSparse).toEqual([1, 3]);
+        expect(pausedAgain.LoopCursorSnapshot).toEqual({
+            LoopType: 'ForEach',
+            NextIterationIndex: 4,
+            CompletedIndices: [0, 1, 2, 3],
+            PartialResults: ['sparse-0', 'sparse-1', 'sparse-2', 'sparse-3'],
+            SucceededCount: 4,
+            FailedCount: 0,
+        });
+
+        const finishedSparse = await RunForEachLoop(
+            sparseOp,
+            {},
+            async ({ Index }) => {
+                executedSparse.push(Index);
+                return { Success: true, Output: `sparse-${Index}` };
+            },
+            {
+                ResumeFromCursor: pausedAgain.LoopCursorSnapshot,
+            },
+        );
+        expect(finishedSparse.Success).toBe(true);
+        expect(executedSparse).toEqual([1, 3, 4]);
+        expect(finishedSparse.Output.results).toEqual(['sparse-0', 'sparse-1', 'sparse-2', 'sparse-3', 'sparse-4']);
+    });
 });

@@ -91,6 +91,12 @@ const TIER_DESCRIPTIONS: Record<LimitsSourceTier, string> = {
     RunOverride: 'Per-execution overrides passed via ExecuteAgentParams or limitsOverride',
 };
 
+const LIMITS_READ_AUTHORIZATIONS: ReadonlySet<string> = new Set([
+    'system administrator',
+    'diagnostics: run sessions',
+    'ai: manage agents',
+]);
+
 function authorizeLimitsRead(user?: UserInfo, provider?: IMetadataProvider): boolean {
     if (!user) {
         return false;
@@ -100,18 +106,14 @@ function authorizeLimitsRead(user?: UserInfo, provider?: IMetadataProvider): boo
         return true;
     }
     const authorizations = provider?.Authorizations ?? [];
-    const matched = authorizations.find((a) => {
-        const name = a.Name?.trim().toLowerCase();
-        return (
-            name === 'system administrator' ||
-            name === 'diagnostics: run sessions' ||
-            name === 'ai: manage agents'
-        );
-    });
-    if (!matched) {
-        return false;
+    const evaluator = new AuthorizationEvaluator();
+    for (const auth of authorizations) {
+        const name = auth.Name?.trim().toLowerCase();
+        if (name && LIMITS_READ_AUTHORIZATIONS.has(name) && evaluator.UserCanExecuteWithAncestors(auth, user, authorizations)) {
+            return true;
+        }
     }
-    return new AuthorizationEvaluator().UserCanExecuteWithAncestors(matched, user, authorizations);
+    return false;
 }
 
 function authorizeLimitsWrite(user?: UserInfo, provider?: IMetadataProvider): boolean {

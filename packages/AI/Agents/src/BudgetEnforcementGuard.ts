@@ -698,7 +698,7 @@ export class BudgetEnforcementGuard {
             }
         }
 
-        return this.queryLedgerViaBatchedRunViews({
+        return this.ReadAgentRunScopedUsage({
             Provider: input.Provider,
             ContextUser: input.ContextUser,
             RoutineID: input.RoutineID ?? null,
@@ -714,12 +714,17 @@ export class BudgetEnforcementGuard {
         });
     }
 
-    private async queryLedgerViaBatchedRunViews(args: {
+    /**
+     * Queries and aggregates historical/concurrent `MJ: AI Agent Runs` usage for `PerRoutine` and
+     * `PerUserPerDay` scopes with tree deduplication and day-boundary attribution.
+     */
+    public async ReadAgentRunScopedUsage(args: {
         Provider?: IMetadataProvider;
         ContextUser?: UserInfo;
         RoutineID: string | null;
         UserID: string | null;
         ExcludeRunID: string | null;
+        AdditionalExcludedRunIDs?: ReadonlySet<string>;
         DayStartISO: string;
         DayEndISO: string;
         DayBoundaryTimezone?: string;
@@ -775,6 +780,13 @@ export class BudgetEnforcementGuard {
             queryKinds.push('userDaily');
         }
 
+        if (queries.length === 0) {
+            return {
+                Routine: { CostUsd: 0, WallClockMs: 0 },
+                UserDaily: { CostUsd: 0, WallClockMs: 0 },
+            };
+        }
+
         let routineRows: AgentRunBudgetLedgerRow[] = [];
         let userDailyRows: AgentRunBudgetLedgerRow[] = [];
         let ledgerError: string | undefined;
@@ -819,12 +831,26 @@ export class BudgetEnforcementGuard {
 
         const dayWindow = ComputeDayBoundaryWindow(args.NowMs, args.DayBoundaryTimezone);
         return {
-            Routine: this.aggregateLedgerRows(routineRows, args.ExcludeRunID, args.CountPausedTimeTowardsWallClock, args.NowMs),
-            UserDaily: this.aggregateLedgerRows(userDailyRows, args.ExcludeRunID, args.CountPausedTimeTowardsWallClock, args.NowMs, {
-                DayStartMs: Date.parse(args.DayStartISO),
-                DayEndMs: Date.parse(args.DayEndISO),
-                DayBucketUTC: dayWindow.DayBucketUTC,
-            }),
+            Routine: this.aggregateLedgerRows(
+                routineRows,
+                args.ExcludeRunID,
+                args.CountPausedTimeTowardsWallClock,
+                args.NowMs,
+                undefined,
+                args.AdditionalExcludedRunIDs,
+            ),
+            UserDaily: this.aggregateLedgerRows(
+                userDailyRows,
+                args.ExcludeRunID,
+                args.CountPausedTimeTowardsWallClock,
+                args.NowMs,
+                {
+                    DayStartMs: Date.parse(args.DayStartISO),
+                    DayEndMs: Date.parse(args.DayEndISO),
+                    DayBucketUTC: dayWindow.DayBucketUTC,
+                },
+                args.AdditionalExcludedRunIDs,
+            ),
         };
     }
 
@@ -865,6 +891,7 @@ export class BudgetEnforcementGuard {
         countPausedTime: boolean,
         nowMs: number,
         dailyWindow?: { DayStartMs: number; DayEndMs: number; DayBucketUTC?: string },
+        additionalExcludedRunIds?: ReadonlySet<string>,
     ): ScopeHistoricalUsage {
         const rowById = new Map<string, AgentRunBudgetLedgerRow>();
         const childrenByParentId = new Map<string, string[]>();
@@ -887,7 +914,7 @@ export class BudgetEnforcementGuard {
         }
 
         // Exclude active run, its descendants, and its ancestors so live in-flight tree costs are never double-counted.
-        const excludedIds = this.collectExcludedRunTreeIds(excludeRunId, rowById, childrenByParentId);
+        const excludedIds = this.collectExcludedRunTreeIds(excludeRunId, rowById, childrenByParentId, additionalExcludedRunIds);
 
         const eligibleById = new Map<string, AgentRunBudgetLedgerRow>();
         for (const [normId, row] of rowById.entries()) {
@@ -966,15 +993,33 @@ export class BudgetEnforcementGuard {
         excludeRunId: string | null,
         rowById: ReadonlyMap<string, AgentRunBudgetLedgerRow>,
         childrenByParentId: ReadonlyMap<string, string[]>,
+        additionalExcludedRunIds?: ReadonlySet<string>,
     ): Set<string> {
         const excluded = new Set<string>();
-        if (!excludeRunId || excludeRunId.trim().length === 0) {
+        const seeds: string[] = [];
+        if (excludeRunId && excludeRunId.trim().length > 0) {
+            seeds.push(excludeRunId.trim().toLowerCase());
+        }
+        if (additionalExcludedRunIds) {
+            for (const rawId of additionalExcludedRunIds) {
+                const norm = rawId.trim().toLowerCase();
+                if (norm) {
+                    seeds.push(norm);
+                }
+            }
+        }
+        if (seeds.length === 0) {
             return excluded;
         }
-        const seedNorm = excludeRunId.trim().toLowerCase();
-        excluded.add(seedNorm);
 
-        const queue: string[] = [seedNorm];
+        const queue: string[] = [];
+        for (const seedNorm of seeds) {
+            if (!excluded.has(seedNorm)) {
+                excluded.add(seedNorm);
+                queue.push(seedNorm);
+            }
+        }
+
         while (queue.length > 0) {
             const cur = queue.shift()!;
             const children = childrenByParentId.get(cur) ?? [];
@@ -986,19 +1031,21 @@ export class BudgetEnforcementGuard {
             }
         }
 
-        let cursorId: string | null = seedNorm;
-        const visitedAncestors = new Set<string>([seedNorm]);
-        while (cursorId) {
-            const row = rowById.get(cursorId);
-            const parentId = row && typeof row.ParentRunID === 'string' && row.ParentRunID.trim().length > 0
-                ? row.ParentRunID.trim().toLowerCase()
-                : null;
-            if (!parentId || visitedAncestors.has(parentId)) {
-                break;
+        for (const seedNorm of seeds) {
+            let cursorId: string | null = seedNorm;
+            const visitedAncestors = new Set<string>([seedNorm]);
+            while (cursorId) {
+                const row = rowById.get(cursorId);
+                const parentId = row && typeof row.ParentRunID === 'string' && row.ParentRunID.trim().length > 0
+                    ? row.ParentRunID.trim().toLowerCase()
+                    : null;
+                if (!parentId || visitedAncestors.has(parentId)) {
+                    break;
+                }
+                visitedAncestors.add(parentId);
+                excluded.add(parentId);
+                cursorId = parentId;
             }
-            visitedAncestors.add(parentId);
-            excluded.add(parentId);
-            cursorId = parentId;
         }
 
         return excluded;
