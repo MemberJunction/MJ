@@ -17,8 +17,8 @@ export class MJCommunicationComplianceRegimeFormComponent extends BaseFormCompon
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
-            { sectionKey: 'mJCommunicationComplianceRegimeRules', sectionName: 'Communication Compliance Regime Rules', isExpanded: false },
-            { sectionKey: 'mJCommunicationComplianceRegimeJurisdictions', sectionName: 'Communication Compliance Regime Jurisdictions', isExpanded: false }
+            { sectionKey: 'mJCommunicationComplianceRegimeJurisdictions', sectionName: 'Communication Compliance Regime Jurisdictions', isExpanded: false },
+            { sectionKey: 'mJCommunicationComplianceRegimeRules', sectionName: 'Communication Compliance Regime Rules', isExpanded: false }
         ]);
     }
 }

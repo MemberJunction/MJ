@@ -152,25 +152,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Communication Preferences Section -->
+    <!-- Communication Compliance Regime Rules Section -->
     <mj-collapsible-panel
-        SectionKey="mJCommunicationPreferences"
-        SectionName="Communication Preferences"
+        SectionKey="mJCommunicationComplianceRegimeRules"
+        SectionName="Communication Compliance Regime Rules"
         Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJCommunicationPreferences')"
+        [BadgeCount]="GetSectionRowCount('mJCommunicationComplianceRegimeRules')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Preferences','BaseMessageTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Communication Preferences','BaseMessageTypeID')"
-                [AllowLoad]="IsSectionExpanded('mJCommunicationPreferences')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Compliance Regime Rules','BaseMessageTypeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Communication Compliance Regime Rules','BaseMessageTypeID')"
+                [AllowLoad]="IsSectionExpanded('mJCommunicationComplianceRegimeRules')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJCommunicationPreferences', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJCommunicationComplianceRegimeRules', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -202,25 +202,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Communication Compliance Regime Rules Section -->
+    <!-- Communication Preferences Section -->
     <mj-collapsible-panel
-        SectionKey="mJCommunicationComplianceRegimeRules"
-        SectionName="Communication Compliance Regime Rules"
+        SectionKey="mJCommunicationPreferences"
+        SectionName="Communication Preferences"
         Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJCommunicationComplianceRegimeRules')"
+        [BadgeCount]="GetSectionRowCount('mJCommunicationPreferences')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Compliance Regime Rules','BaseMessageTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Communication Compliance Regime Rules','BaseMessageTypeID')"
-                [AllowLoad]="IsSectionExpanded('mJCommunicationComplianceRegimeRules')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Preferences','BaseMessageTypeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Communication Preferences','BaseMessageTypeID')"
+                [AllowLoad]="IsSectionExpanded('mJCommunicationPreferences')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJCommunicationComplianceRegimeRules', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJCommunicationPreferences', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

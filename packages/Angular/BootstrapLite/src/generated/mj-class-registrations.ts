@@ -36,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (520 classes)
+// @memberjunction/core-entities (524 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -79,6 +79,7 @@ import {
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
     MJAIAgentRequestTypeEntity,
+    MJAIAgentRhythmTemplateEntity,
     MJAIAgentRubricEntity,
     MJAIAgentRunEntity,
     MJAIAgentRunMediaEntity,
@@ -92,6 +93,7 @@ import {
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
+    MJAIAgentSuggestionEntity,
     MJAIAgentTypeEntity,
     MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
@@ -151,6 +153,8 @@ import {
     MJActionLibraryEntity,
     MJActionParamEntity,
     MJActionResultCodeEntity,
+    MJAgentChannelEntity,
+    MJAgentChannelParticipantEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
@@ -853,6 +857,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
     MJAIAgentRequestTypeEntity,
+    MJAIAgentRhythmTemplateEntity,
     MJAIAgentRubricEntity,
     MJAIAgentRunEntity,
     MJAIAgentRunMediaEntity,
@@ -866,6 +871,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
+    MJAIAgentSuggestionEntity,
     MJAIAgentTypeEntity,
     MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
@@ -925,6 +931,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJActionLibraryEntity,
     MJActionParamEntity,
     MJActionResultCodeEntity,
+    MJAgentChannelEntity,
+    MJAgentChannelParticipantEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
@@ -995,14 +1003,14 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyIntegrationSyncWatermarkEntity,
     MJComponentDependencyEntity,
     MJComponentEntity,
-    MJComponentEntityExtended,
-    MJComponentLibraryEntity,
-    MJComponentLibraryLinkEntity,
-    MJComponentRegistryEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJComponentEntityExtended,
+    MJComponentLibraryEntity,
+    MJComponentLibraryLinkEntity,
+    MJComponentRegistryEntity,
     MJContentFileTypeEntity,
     MJContentItemAttributeEntity,
     MJContentItemChunkEntity,
@@ -1199,14 +1207,14 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueryDependencyEntity,
     MJQueryEntity,
     MJQueryEntityEntity,
-    MJQueryEntityExtended,
-    MJQueryFieldEntity,
-    MJQueryParameterEntity,
-    MJQueryPermissionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJQueryEntityExtended,
+    MJQueryFieldEntity,
+    MJQueryParameterEntity,
+    MJQueryPermissionEntity,
     MJQuerySQLEntity,
     MJQueueEntity,
     MJQueueTaskEntity,
@@ -1403,14 +1411,14 @@ const CLASS_REGISTRATIONS_2: any[] = [
     SkillCommandProvider,
     WhiteboardArtifactViewerComponent,
     ArtifactConfigPanelComponent,
-    ArtifactPartComponent,
-    ComponentConfigPanelComponent,
-    ComponentPartComponent,
-    QueryConfigPanelComponent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    ArtifactPartComponent,
+    ComponentConfigPanelComponent,
+    ComponentPartComponent,
+    QueryConfigPanelComponent,
     QueryPartComponent,
     ViewConfigPanelComponent,
     ViewPartComponent,
@@ -1520,7 +1528,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 695;
+export const CLASS_REGISTRATIONS_COUNT = 699;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

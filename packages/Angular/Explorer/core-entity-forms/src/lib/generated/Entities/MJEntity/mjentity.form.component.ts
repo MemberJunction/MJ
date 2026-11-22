@@ -119,11 +119,11 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJGraphEdgesTargetEntityID', sectionName: 'Graph Edges (Target Entity ID)', isExpanded: false },
             { sectionKey: 'mJArtifacts', sectionName: 'Artifacts', isExpanded: false },
             { sectionKey: 'mJCommunicationLogs', sectionName: 'Communication Logs', isExpanded: false },
-            { sectionKey: 'mJCommunicationEndpointPrincipals', sectionName: 'Communication Endpoint Principals', isExpanded: false },
-            { sectionKey: 'mJCommunicationPrincipals', sectionName: 'Communication Principals', isExpanded: false },
-            { sectionKey: 'mJCommunicationPrincipalPreferences', sectionName: 'Communication Principal Preferences', isExpanded: false },
             { sectionKey: 'mJCommunicationSuppressions', sectionName: 'Communication Suppressions', isExpanded: false },
             { sectionKey: 'mJCommunicationSenderTypes', sectionName: 'Communication Sender Types', isExpanded: false },
+            { sectionKey: 'mJCommunicationPrincipals', sectionName: 'Communication Principals', isExpanded: false },
+            { sectionKey: 'mJCommunicationEndpointPrincipals', sectionName: 'Communication Endpoint Principals', isExpanded: false },
+            { sectionKey: 'mJCommunicationPrincipalPreferences', sectionName: 'Communication Principal Preferences', isExpanded: false },
             { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false }
         ]);
     }

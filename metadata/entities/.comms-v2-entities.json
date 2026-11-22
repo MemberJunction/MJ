@@ -12,6 +12,10 @@
       "AllowCreateAPI": true,
       "AllowUpdateAPI": false,
       "AllowDeleteAPI": false
+    },
+    "sync": {
+      "lastModified": "2026-11-22T00:00:46.919Z",
+      "checksum": "47dc7bc1c22b722ebdeb2e7959408c7f812fbb9e47c2bf21346e040003862d52"
     }
   },
   {
@@ -24,6 +28,10 @@
     "fields": {
       "Name": "MJ: Communication Activities",
       "TrackRecordChanges": false
+    },
+    "sync": {
+      "lastModified": "2026-11-22T00:00:46.945Z",
+      "checksum": "36b0d68e31ef86d76734018488b69eb5c0c8e049441ee29f102b38e1e9450463"
     }
   },
   {
@@ -36,6 +44,10 @@
     "fields": {
       "Name": "MJ: Communication Provider Events",
       "TrackRecordChanges": false
+    },
+    "sync": {
+      "lastModified": "2026-11-22T00:00:46.958Z",
+      "checksum": "011384003ff12c851e9fcee6f540858216728002da1f543031557cce5b32c6f2"
     }
   },
   {
@@ -48,6 +60,10 @@
     "fields": {
       "Name": "MJ: Communication Endpoints",
       "TrackRecordChanges": false
+    },
+    "sync": {
+      "lastModified": "2026-11-22T00:00:46.979Z",
+      "checksum": "ecad19847768f55f13296b1a0984920e335b543f342ba7af1f58abac90691e09"
     }
   }
 ]

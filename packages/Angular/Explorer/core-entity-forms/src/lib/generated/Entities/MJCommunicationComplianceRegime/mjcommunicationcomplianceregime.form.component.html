@@ -90,31 +90,6 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Communication Compliance Regime Rules Section -->
-    <mj-collapsible-panel
-        SectionKey="mJCommunicationComplianceRegimeRules"
-        SectionName="Communication Compliance Regime Rules"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJCommunicationComplianceRegimeRules')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Compliance Regime Rules','CommunicationComplianceRegimeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Communication Compliance Regime Rules','CommunicationComplianceRegimeID')"
-                [AllowLoad]="IsSectionExpanded('mJCommunicationComplianceRegimeRules')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJCommunicationComplianceRegimeRules', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Communication Compliance Regime Jurisdictions Section -->
     <mj-collapsible-panel
         SectionKey="mJCommunicationComplianceRegimeJurisdictions"
@@ -134,6 +109,31 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJCommunicationComplianceRegimeJurisdictions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Communication Compliance Regime Rules Section -->
+    <mj-collapsible-panel
+        SectionKey="mJCommunicationComplianceRegimeRules"
+        SectionName="Communication Compliance Regime Rules"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJCommunicationComplianceRegimeRules')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Compliance Regime Rules','CommunicationComplianceRegimeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Communication Compliance Regime Rules','CommunicationComplianceRegimeID')"
+                [AllowLoad]="IsSectionExpanded('mJCommunicationComplianceRegimeRules')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJCommunicationComplianceRegimeRules', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

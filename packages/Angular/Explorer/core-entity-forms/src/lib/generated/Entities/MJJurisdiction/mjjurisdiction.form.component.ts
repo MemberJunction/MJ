@@ -17,10 +17,10 @@ export class MJJurisdictionFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+            { sectionKey: 'mJCommunicationComplianceRegimeJurisdictions', sectionName: 'Communication Compliance Regime Jurisdictions', isExpanded: false },
             { sectionKey: 'mJJurisdictionMembersGroupJurisdictionID', sectionName: 'Jurisdiction Members (Group Jurisdiction ID)', isExpanded: false },
             { sectionKey: 'mJJurisdictionMembersMemberJurisdictionID', sectionName: 'Jurisdiction Members (Member Jurisdiction ID)', isExpanded: false },
-            { sectionKey: 'mJCommunicationSenders', sectionName: 'Communication Senders', isExpanded: false },
-            { sectionKey: 'mJCommunicationComplianceRegimeJurisdictions', sectionName: 'Communication Compliance Regime Jurisdictions', isExpanded: false }
+            { sectionKey: 'mJCommunicationSenders', sectionName: 'Communication Senders', isExpanded: false }
         ]);
     }
 }

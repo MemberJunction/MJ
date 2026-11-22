@@ -224,7 +224,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (520 classes)
+// @memberjunction/core-entities (524 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -267,6 +267,7 @@ import {
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
     MJAIAgentRequestTypeEntity,
+    MJAIAgentRhythmTemplateEntity,
     MJAIAgentRubricEntity,
     MJAIAgentRunEntity,
     MJAIAgentRunMediaEntity,
@@ -280,6 +281,7 @@ import {
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
+    MJAIAgentSuggestionEntity,
     MJAIAgentTypeEntity,
     MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
@@ -339,6 +341,8 @@ import {
     MJActionLibraryEntity,
     MJActionParamEntity,
     MJActionResultCodeEntity,
+    MJAgentChannelEntity,
+    MJAgentChannelParticipantEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
@@ -1241,8 +1245,9 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (91 classes)
+// @memberjunction/core-entities-server (92 classes)
 import {
+    AgentChannelConversationDriver,
     FieldSuggestionCommentDriver,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1336,7 +1341,7 @@ import {
     QueryRefreshExtractionServerOperation,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (193 classes)
+// @memberjunction/core-actions (206 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1346,12 +1351,14 @@ import {
     AddRecordsToListAction,
     AddViewResultsToListAction,
     AggregateDataAction,
+    AssembleMyBriefingAction,
     AssignUserRolesAction,
     BraveSearchAction,
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
     CSVParserAction,
     CalculateExpressionAction,
+    CancelAgentWakeAction,
     CensusDataLookupAction,
     CheckUserPermissionAction,
     CloneRecordAction,
@@ -1387,6 +1394,7 @@ import {
     DeleteRecordAction,
     DirectoryExistsAction,
     DownloadSignedDocumentAction,
+    EnableAgentRhythmAction,
     ExcelReaderAction,
     ExecuteAIPromptAction,
     ExecuteAgentAction,
@@ -1402,12 +1410,14 @@ import {
     FindCandidateActionsAction,
     FindCandidateAgentsAction,
     FindCandidateSkillsAction,
+    FindColleagueAction,
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
     GenerateVideoAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
+    GetAgentChannelAction,
     GetArchitectureDiagramReferenceAction,
     GetDefaultFormScaffoldForEntityAction,
     GetDownloadUrlAction,
@@ -1420,11 +1430,13 @@ import {
     GetGraphContextAction,
     GetListRecordsAction,
     GetMetadataAction,
+    GetMyAgentContextAction,
     GetMyCalendarAndAvailabilityAction,
     GetObjectAction,
     GetRecordAction,
     GetRecordListMembershipAction,
     GetRecordsAction,
+    GetRoutineRunResultsAction,
     GetSignatureStatusAction,
     GetSkillDetailsAction,
     GetStockPriceAction,
@@ -1453,13 +1465,17 @@ import {
     IntegrationActionExecutor,
     InviteToListAction,
     JSONTransformAction,
+    ListAvailableRhythmsAction,
     ListMCPToolsAction,
+    ListMyAgentRoutinesAction,
+    ListMyPendingApprovalsAction,
     ListObjectsAction,
     ListStorageAccountsAction,
     ListWorkspaceArtifactsAction,
     LoadAgentSpecAction,
     LoopAction,
     MCPToolAction,
+    ManageAgentSuggestionsAction,
     ManageMyCalendarEventAction,
     ManageMyEmailInboxAction,
     MaterializeListFromViewAction,
@@ -1471,6 +1487,7 @@ import {
     MutateGovernedArtifactAction,
     OAuthFlowAction,
     ObjectExistsAction,
+    OpenAgentChannelAction,
     PDFExtractorAction,
     ParallelExecuteAction,
     PasswordStrengthAction,
@@ -1485,6 +1502,7 @@ import {
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
     RenderArchitectureDiagramAction,
+    ReplyInAgentChannelAction,
     ResolveAudienceAction,
     RetryAction,
     ReverseGeocodeAction,
@@ -1712,6 +1730,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
     MJAIAgentRequestTypeEntity,
+    MJAIAgentRhythmTemplateEntity,
     MJAIAgentRubricEntity,
     MJAIAgentRunEntity,
     MJAIAgentRunMediaEntity,
@@ -1725,6 +1744,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
+    MJAIAgentSuggestionEntity,
     MJAIAgentTypeEntity,
     MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
@@ -1784,6 +1804,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJActionLibraryEntity,
     MJActionParamEntity,
     MJActionResultCodeEntity,
+    MJAgentChannelEntity,
+    MJAgentChannelParticipantEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
@@ -1802,14 +1824,14 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJArtifactVersionEntity,
     MJArtifactWorkingStateEntity,
     MJAuditLogEntity,
-    MJAuditLogTypeEntity,
-    MJAuthenticationProviderEntity,
-    MJAuthorizationEntity,
-    MJAuthorizationRoleEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJAuditLogTypeEntity,
+    MJAuthenticationProviderEntity,
+    MJAuthorizationEntity,
+    MJAuthorizationRoleEntity,
     MJBrandKitAssetEntity,
     MJBrandKitEntity,
     MJCalendarEventLinkEntity,
@@ -2006,14 +2028,14 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJListCategoryEntity,
     MJListDetailEntity,
     MJListDetailEntityExtended,
-    MJListEntity,
-    MJListEntityExtended,
-    MJListInvitationEntity,
-    MJListShareEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJListEntity,
+    MJListEntityExtended,
+    MJListInvitationEntity,
+    MJListShareEntity,
     MJMCPServerConnectionEntity,
     MJMCPServerConnectionPermissionEntity,
     MJMCPServerConnectionToolEntity,
@@ -2210,14 +2232,14 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJAIPromptRunEntityExtended,
     MJEntityDocumentEntityExtended,
     LinearPriceUnitType,
-    MJAICredentialBindingEntityExtended,
-    PerHundredThousandTokensPriceUnitType,
-    PerImagePriceUnitType,
-    PerMillionTokensPriceUnitType,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    MJAICredentialBindingEntityExtended,
+    PerHundredThousandTokensPriceUnitType,
+    PerImagePriceUnitType,
+    PerMillionTokensPriceUnitType,
     PerThousandTokensPriceUnitType,
     TimePerHourPriceUnitType,
     TimePerMinutePriceUnitType,
@@ -2414,14 +2436,14 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AgentRubricEvaluator,
     CreateRubricDraftAction,
     DecisionRubricEvaluator,
-    DecisionThenLLMRubricEvaluator,
-    DeterministicRubricEvaluator,
-    EvaluateRecordAgainstRubricAction,
-    GetRubricAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    DecisionThenLLMRubricEvaluator,
+    DeterministicRubricEvaluator,
+    EvaluateRecordAgainstRubricAction,
+    GetRubricAction,
     GetRubricConsensusAction,
     GetRubricSubjectAction,
     HumanRubricEvaluator,
@@ -2544,6 +2566,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     RecordProcessScheduledJobDriver,
     RunUserRoutineNowAction,
     UserRoutineDispatcherDriver,
+    AgentChannelConversationDriver,
     FieldSuggestionCommentDriver,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -2617,15 +2640,15 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJRubricCriterionLevelEntityServer,
     MJRubricEvaluationEntityServer,
     MJRubricEvaluationScoreEntityServer,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     MJRubricScaleEntityServer,
     MJRubricScaleLevelEntityServer,
     MJRubricVersionEntityServer,
     MJScheduledJobEntityServer,
     MJScopedNotificationConfigEntityServer,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
@@ -2647,12 +2670,14 @@ const CLASS_REGISTRATIONS_5: any[] = [
     AddRecordsToListAction,
     AddViewResultsToListAction,
     AggregateDataAction,
+    AssembleMyBriefingAction,
     AssignUserRolesAction,
     BraveSearchAction,
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
     CSVParserAction,
     CalculateExpressionAction,
+    CancelAgentWakeAction,
     CensusDataLookupAction,
     CheckUserPermissionAction,
     CloneRecordAction,
@@ -2688,6 +2713,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     DeleteRecordAction,
     DirectoryExistsAction,
     DownloadSignedDocumentAction,
+    EnableAgentRhythmAction,
     ExcelReaderAction,
     ExecuteAIPromptAction,
     ExecuteAgentAction,
@@ -2703,12 +2729,14 @@ const CLASS_REGISTRATIONS_5: any[] = [
     FindCandidateActionsAction,
     FindCandidateAgentsAction,
     FindCandidateSkillsAction,
+    FindColleagueAction,
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
     GenerateVideoAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
+    GetAgentChannelAction,
     GetArchitectureDiagramReferenceAction,
     GetDefaultFormScaffoldForEntityAction,
     GetDownloadUrlAction,
@@ -2721,11 +2749,13 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GetGraphContextAction,
     GetListRecordsAction,
     GetMetadataAction,
+    GetMyAgentContextAction,
     GetMyCalendarAndAvailabilityAction,
     GetObjectAction,
     GetRecordAction,
     GetRecordListMembershipAction,
     GetRecordsAction,
+    GetRoutineRunResultsAction,
     GetSignatureStatusAction,
     GetSkillDetailsAction,
     GetStockPriceAction,
@@ -2754,13 +2784,17 @@ const CLASS_REGISTRATIONS_5: any[] = [
     IntegrationActionExecutor,
     InviteToListAction,
     JSONTransformAction,
+    ListAvailableRhythmsAction,
     ListMCPToolsAction,
+    ListMyAgentRoutinesAction,
+    ListMyPendingApprovalsAction,
     ListObjectsAction,
     ListStorageAccountsAction,
     ListWorkspaceArtifactsAction,
     LoadAgentSpecAction,
     LoopAction,
     MCPToolAction,
+    ManageAgentSuggestionsAction,
     ManageMyCalendarEventAction,
     ManageMyEmailInboxAction,
     MaterializeListFromViewAction,
@@ -2772,6 +2806,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MutateGovernedArtifactAction,
     OAuthFlowAction,
     ObjectExistsAction,
+    OpenAgentChannelAction,
     PDFExtractorAction,
     ParallelExecuteAction,
     PasswordStrengthAction,
@@ -2786,6 +2821,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
     RenderArchitectureDiagramAction,
+    ReplyInAgentChannelAction,
     ResolveAudienceAction,
     RetryAction,
     ReverseGeocodeAction,
@@ -2808,6 +2844,10 @@ const CLASS_REGISTRATIONS_5: any[] = [
     SendSingleMessageAction,
     SendToAudienceAction,
     ShareListAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_6: any[] = [
     SlackWebhookAction,
     SummarizeContentAction,
     SyncMCPToolsAction,
@@ -2826,10 +2866,6 @@ const CLASS_REGISTRATIONS_5: any[] = [
     ValidateAddressAction,
     ValidateEmailUniqueAction,
     VectorizeEntityAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_6: any[] = [
     VerifyMyCommunicationCapabilitiesAction,
     VoidSignatureRequestAction,
     WebPageContentAction,
@@ -2893,7 +2929,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1246;
+export const CLASS_REGISTRATIONS_COUNT = 1264;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

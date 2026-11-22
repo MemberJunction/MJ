@@ -247,31 +247,6 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Communication Principal Preferences Section -->
-    <mj-collapsible-panel
-        SectionKey="mJCommunicationPrincipalPreferences"
-        SectionName="Communication Principal Preferences"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJCommunicationPrincipalPreferences')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Principal Preferences','CommunicationLogID')"
-                [NewRecordValues]="NewRecordValues('MJ: Communication Principal Preferences','CommunicationLogID')"
-                [AllowLoad]="IsSectionExpanded('mJCommunicationPrincipalPreferences')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJCommunicationPrincipalPreferences', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Communication Consent Audit Logs Section -->
     <mj-collapsible-panel
         SectionKey="mJCommunicationConsentAuditLogs"
@@ -341,6 +316,31 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJCommunicationActivities', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Communication Principal Preferences Section -->
+    <mj-collapsible-panel
+        SectionKey="mJCommunicationPrincipalPreferences"
+        SectionName="Communication Principal Preferences"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJCommunicationPrincipalPreferences')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Principal Preferences','CommunicationLogID')"
+                [NewRecordValues]="NewRecordValues('MJ: Communication Principal Preferences','CommunicationLogID')"
+                [AllowLoad]="IsSectionExpanded('mJCommunicationPrincipalPreferences')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJCommunicationPrincipalPreferences', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
