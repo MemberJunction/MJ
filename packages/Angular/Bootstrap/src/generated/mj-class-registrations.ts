@@ -775,7 +775,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (123 classes)
+// @memberjunction/ng-dashboards (124 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -787,6 +787,7 @@ import {
     AdminDataSchemaComponent,
     AdminDevToolsResourceComponent,
     AdminIdentityAccessComponent,
+    AdminLimitsResourceComponent,
     AdminMonitoringComponent,
     AgentConfigurationComponent,
     AgentRequestsResourceComponent,
@@ -1624,6 +1625,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AdminDataSchemaComponent,
     AdminDevToolsResourceComponent,
     AdminIdentityAccessComponent,
+    AdminLimitsResourceComponent,
     AdminMonitoringComponent,
     AgentConfigurationComponent,
     AgentRequestsResourceComponent,
@@ -1741,11 +1743,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ChatCollectionsResource,
     ChatConversationsResource,
     ConversationFeedbackResource,
-    DashboardResource,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    DashboardResource,
     EntityRecordResource,
     LibraryResource,
     ListDetailResource,
@@ -1771,7 +1773,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 810;
+export const CLASS_REGISTRATIONS_COUNT = 811;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

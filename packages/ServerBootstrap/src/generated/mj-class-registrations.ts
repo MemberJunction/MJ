@@ -1321,7 +1321,7 @@ import {
     VoyageReRanker,
 } from '@memberjunction/search-engine';
 
-// @memberjunction/ai-agents (30 classes)
+// @memberjunction/ai-agents (33 classes)
 import {
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
@@ -1339,6 +1339,9 @@ import {
     IdentityVerificationChannelServer,
     InteractiveComponentChannelServer,
     JSONToolLibrary,
+    LimitsGetDiagnosticsServerOperation,
+    LimitsPauseRunServerOperation,
+    LimitsResumePausedRunServerOperation,
     LoopAgentType,
     MJAIAgentRequestEntityServer,
     MediaChannelServer,
@@ -2889,6 +2892,9 @@ const CLASS_REGISTRATIONS_4: any[] = [
     IdentityVerificationChannelServer,
     InteractiveComponentChannelServer,
     JSONToolLibrary,
+    LimitsGetDiagnosticsServerOperation,
+    LimitsPauseRunServerOperation,
+    LimitsResumePausedRunServerOperation,
     LoopAgentType,
     MJAIAgentRequestEntityServer,
     MediaChannelServer,
@@ -2976,13 +2982,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     PredictiveStudioScoreRecordSetAction,
     PredictiveStudioScoreRecordSetServerOperation,
     PredictiveStudioStartExperimentSessionServerOperation,
-    PredictiveStudioTrainModelAction,
-    PredictiveStudioTrainModelServerOperation,
-    DurableTaskGraphSubmitter,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    PredictiveStudioTrainModelAction,
+    PredictiveStudioTrainModelServerOperation,
+    DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
     TaskGraphCompleteWaitingStepServerOperation,
     TaskGraphForceCompleteTaskServerOperation,
@@ -3180,13 +3186,13 @@ const CLASS_REGISTRATIONS_5: any[] = [
     CreateMermaidDiagramAction,
     CreateRecordAction,
     CreateRuntimeActionAction,
-    CreateSVGChartAction,
-    CreateSVGDiagramAction,
-    CreateSVGInfographicAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    CreateSVGChartAction,
+    CreateSVGDiagramAction,
+    CreateSVGInfographicAction,
     CreateSVGNetworkAction,
     CreateSVGSketchDiagramAction,
     CreateSVGWordCloudAction,
@@ -3384,13 +3390,13 @@ const CLASS_REGISTRATIONS_6: any[] = [
     SynthesizeArtifactFromSourcesServerOperation,
     DiagnosticRetentionScheduledJobDriver,
     DiagnosticsBuildBundleServerOperation,
-    DiagnosticsEnrolSenderServerOperation,
-    DiagnosticsGetBundlePreviewServerOperation,
-    DiagnosticsGetMySessionStatusServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_7: any[] = [
+    DiagnosticsEnrolSenderServerOperation,
+    DiagnosticsGetBundlePreviewServerOperation,
+    DiagnosticsGetMySessionStatusServerOperation,
     DiagnosticsIssueSenderRegistrationCodeServerOperation,
     DiagnosticsReactivateSenderServerOperation,
     DiagnosticsRevokeSenderServerOperation,
@@ -3420,7 +3426,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1411;
+export const CLASS_REGISTRATIONS_COUNT = 1414;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
