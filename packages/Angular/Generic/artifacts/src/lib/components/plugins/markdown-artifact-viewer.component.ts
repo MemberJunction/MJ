@@ -1321,6 +1321,7 @@ interface DocsInlineToken {
                                             (focus)="OnTableCellFocus(seg, 0, cIdx, true)"
                                             (input)="OnEditableBlockDomDirty(seg)"
                                             (blur)="UpdateTableHeaderCell(seg, cIdx, $event)"
+                                            (click)="OnDocRecordLinkClick($event)"
                                             (contextmenu)="OnDocsTableCellContextMenu($event, seg, 0, cIdx, true)"
                                           ></th>
                                         }
@@ -1338,6 +1339,7 @@ interface DocsInlineToken {
                                               (focus)="OnTableCellFocus(seg, rIdx, cIdx, false)"
                                               (input)="OnEditableBlockDomDirty(seg)"
                                               (blur)="UpdateTableBodyCell(seg, rIdx, cIdx, $event)"
+                                              (click)="OnDocRecordLinkClick($event)"
                                               (contextmenu)="OnDocsTableCellContextMenu($event, seg, rIdx, cIdx, false)"
                                             ></td>
                                           }
@@ -5912,6 +5914,9 @@ export class MarkdownArtifactViewerComponent
   public ngOnDestroy(): void {
     this.isComponentDestroyed = true;
     this.sessionInitGeneration++;
+    this.docLinkSearchSeq++;
+    this.docLinkAccessCache.clear();
+    this.docLinkAccessPending.clear();
     this.clearPendingSocketSaveTimeout();
     this.detachTouchPointerListeners();
     this.touchMenuMonitor.Destroy();
@@ -9484,37 +9489,39 @@ export class MarkdownArtifactViewerComponent
   /**
    * Returns the cached access state for a durable record link (`'readable'`, `'unreadable'`, or
    * `'checking'`), kicking off a background permission check on first sight. Fails closed until
-   * proven readable.
+   * proven readable. Cache entries are scoped to the current viewer ID.
    */
   public GetDocRecordLinkAccessState(link: ParsedDocRecordLink): DocRecordLinkAccessState {
-    const cached = this.docLinkAccessCache.get(link.KeySignature);
+    const user = this.getSafeCurrentUser();
+    const cacheKey = `${(user?.ID ?? '').trim().toLowerCase()}|${link.KeySignature}`;
+    const cached = this.docLinkAccessCache.get(cacheKey);
     if (cached) {
       return cached;
     }
-    this.scheduleDocRecordLinkAccessCheck(link);
+    this.scheduleDocRecordLinkAccessCheck(link, cacheKey);
     return 'checking';
   }
 
-  private scheduleDocRecordLinkAccessCheck(link: ParsedDocRecordLink): void {
-    if (this.docLinkAccessPending.has(link.KeySignature)) {
+  private scheduleDocRecordLinkAccessCheck(link: ParsedDocRecordLink, cacheKey: string): void {
+    if (this.docLinkAccessPending.has(cacheKey)) {
       return;
     }
     const provider = this.getSafeProvider();
     const user = this.getSafeCurrentUser();
     if (!provider || !user) {
-      this.docLinkAccessCache.set(link.KeySignature, 'unreadable');
+      this.docLinkAccessCache.set(cacheKey, 'unreadable');
       return;
     }
-    this.docLinkAccessPending.add(link.KeySignature);
+    this.docLinkAccessPending.add(cacheKey);
     void CheckDocRecordLinkAccess(link, provider, user)
       .then((state) => {
-        this.docLinkAccessCache.set(link.KeySignature, state);
+        this.docLinkAccessCache.set(cacheKey, state);
       })
       .catch(() => {
-        this.docLinkAccessCache.set(link.KeySignature, 'unreadable');
+        this.docLinkAccessCache.set(cacheKey, 'unreadable');
       })
       .finally(() => {
-        this.docLinkAccessPending.delete(link.KeySignature);
+        this.docLinkAccessPending.delete(cacheKey);
         if (!this.isComponentDestroyed) {
           this.cdr.markForCheck();
         }
@@ -14806,6 +14813,13 @@ export class MarkdownArtifactViewerComponent
     this.embeddedArtifactVersions.clear();
     this.inFlightEmbeddedVersionKeys.clear();
     this.failedEmbeddedVersionMessages.clear();
+    this.docLinkAccessCache.clear();
+    this.docLinkAccessPending.clear();
+    this.ShowDocLinkMenu = false;
+    this.DocLinkSuggestions = [];
+    this.activeDocLinkSegmentID = null;
+    this.activeDocLinkQuery = '';
+    this.activeDocLinkElement = null;
     this.AnchoredThreads = [];
 
     const hasPersistedArtifact = Boolean(this.artifactVersion?.ArtifactID);

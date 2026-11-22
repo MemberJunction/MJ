@@ -1,6 +1,6 @@
 /**
  * @fileoverview `<mj-artifact-related-panel>` — what a document is connected to in the semantic graph:
- * the records it links to (`[[Name]]`), the records that link to it, and the records related to it
+ * the records it links to (durable record-mention tokens), the records that link to it, and the records related to it
  * through concepts they share.
  *
  * An L2 composite widget: it reads through the bound provider as the current user and emits what the
