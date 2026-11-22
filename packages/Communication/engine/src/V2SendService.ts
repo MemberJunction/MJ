@@ -37,7 +37,7 @@ import type {
   MJCommunicationSendingDomainEntity,
   MJCommunicationSuppressionEntity,
 } from '@memberjunction/core-entities';
-import { EscapeSQLString, MJGlobal, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID, MJGlobal, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { CredentialEngine } from '@memberjunction/credentials';
 import { ProcessedMessageServer } from './BaseProvider';
 import { ComplianceGate } from './compliance/ComplianceGate';
@@ -308,9 +308,11 @@ export class V2SendService {
     const jurMap = await this.resolveAllJurisdictions(principalRefs, contextUser);
 
     const endpointIds = this.collectEndpointIds(resolvedMap, params.Recipients);
+    const endpointIdSet = new UUIDSet(endpointIds);
     const adHocEndpointMap = await this.batchLoadAdHocEndpoints(params.Recipients, params.Envelope.ChannelID, contextUser);
     for (const ep of adHocEndpointMap.values()) {
-      if (!endpointIds.includes(ep.ID)) {
+      if (!endpointIdSet.Has(ep.ID)) {
+        endpointIdSet.Add(ep.ID);
         endpointIds.push(ep.ID);
       }
     }
@@ -1847,6 +1849,11 @@ export class V2SendService {
     let sent = 0;
     let failed = 0;
     let redeferred = 0;
+    const providersById = IndexByUUID(CommunicationEngineBase.Instance.Providers, (p) => p.ID);
+    const pmtsById = IndexByUUID(
+      CommunicationEngineBase.Instance.Providers.flatMap((p) => p.MessageTypes),
+      (m) => m.ID,
+    );
 
     for (const log of dueRes.Results) {
       const { payload, userCorrelationData } = parseDeferredCorrelationData(log.CorrelationData);
@@ -1859,9 +1866,9 @@ export class V2SendService {
       }
 
       const sender = await this.resolveSender(log.CommunicationSenderID, bookkeepingUser);
-      const providerEntity = CommunicationEngineBase.Instance.Providers.find((p) =>
-        UUIDsEqual(p.ID, log.CommunicationProviderID),
-      );
+      const providerEntity = log.CommunicationProviderID
+        ? providersById.Get(log.CommunicationProviderID)
+        : undefined;
       if (!sender || !providerEntity) {
         log.Status = 'Failed';
         log.ErrorMessage = 'Deferred log sender or provider no longer exists';
@@ -1870,9 +1877,9 @@ export class V2SendService {
         continue;
       }
 
-      const pmt = providerEntity.MessageTypes.find((m) =>
-        UUIDsEqual(m.ID, log.CommunicationProviderMessageTypeID),
-      ) ?? providerEntity.MessageTypes[0];
+      const pmt = (log.CommunicationProviderMessageTypeID
+        ? pmtsById.Get(log.CommunicationProviderMessageTypeID)
+        : undefined) ?? providerEntity.MessageTypes[0];
       const channelID = pmt?.CommunicationBaseMessageTypeID ?? '';
       if (!channelID) {
         log.Status = 'Failed';

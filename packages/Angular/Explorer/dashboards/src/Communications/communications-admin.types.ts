@@ -141,7 +141,7 @@ export function CommsGridTheme() {
 }
 
 export function OpenCommsEntityRecord(entityName: string, id: string): void {
-  SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromID(id));
+  SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromID(id)); // first-pk-ok: all MJ: Communication* entities use single-column ID primary keys
 }
 
 export async function ExecuteCommsRemoteOp<TInput, TOutput>(
