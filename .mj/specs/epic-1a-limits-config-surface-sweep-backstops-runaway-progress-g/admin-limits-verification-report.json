@@ -1,5 +1,5 @@
 {
-  "verifiedAtISO": "2026-11-22T06:20:05.140Z",
+  "verifiedAtISO": "2026-11-22T08:32:38.458Z",
   "revisionIdentity": {
     "branch": "factory/bac5fc6c-8417-4c82-a5d0-28742cbeff8f-epic-1a-limits-config",
     "compiledComponentJsSha256": {
@@ -24,12 +24,12 @@
     },
     "limitsOperationsTsSha256": {
       "path": "packages/AI/Agents/src/operations/LimitsOperations.ts",
-      "sha256": "ab9035d93758304f203f6216fc26265fc05992171396ce3c5739817054c93290"
+      "sha256": "abf0383c304573a55aadfbbf25015352a91f39c2dc116633c77f46f4c059e7a7"
     }
   },
   "renderedMode": "Real Angular AdminLimitsResourceComponent + ExplorerAdminShell via Vite",
   "chromiumVersion": "145.0.7632.6",
-  "baseUrl": "http://127.0.0.1:55892/",
+  "baseUrl": "http://127.0.0.1:60095/",
   "pageErrorsCount": 0,
   "consoleErrorsCount": 0,
   "brokenImagesCount": 0,
@@ -50,7 +50,7 @@
     "budgetScopeCardsRendered": 3,
     "drawerContainsFastJudgeVerdict": true,
     "resumeSuccessBanner": "Run 33333333-3333-4333-8333-333333333333 approved and transitioned back to Running preserving 0 completed step(s). Fresh worker (ResearchPlanner) dispatched for run 33333333-3333-4333-8333-333333333333.",
-    "pauseSuccessBanner": "Run 44444444-4444-4444-8444-444444444444 cooperatively paused at safe boundary (checkpoint 9a459a5a-5a14-43f7-ade2-8cd4349a9785)."
+    "pauseSuccessBanner": "Run 44444444-4444-4444-8444-444444444444 cooperatively paused at safe boundary (checkpoint 2f4a0c91-0565-478c-8ae2-44f13b225f35)."
   },
   "screenshots": [
     "admin-limits-overview.png",
