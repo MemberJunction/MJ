@@ -41,6 +41,7 @@ import {
     BuildPolicyPairKey,
     CheckActivePoliciesForBatch,
     CheckActivePolicyForAgentAndUser,
+    CoalescedWakeResumeState,
     EventWakeCoalescer,
     PolicyPairLookupKey,
     ResolveWakeAgentConfigurationID,
@@ -121,8 +122,25 @@ const DEFAULT_MAX_CONCURRENT_ROUTINES = 3;
  * for a real `MJUserRoutineRunEntity` (`Status` is a column); it keeps this total rather than
  * throwing inside an error handler.
  */
+interface RoutineJsonObject {
+    [key: string]:
+        | string
+        | number
+        | boolean
+        | null
+        | undefined
+        | RoutineJsonObject
+        | Array<string | number | boolean | null | RoutineJsonObject>;
+}
+
+type EntityMetadataAccessor = Pick<IMetadataProvider, 'GetEntityObject' | 'EntityByName'>;
+
+function getEntityMetadataAccessor(provider?: IMetadataProvider): EntityMetadataAccessor {
+    return provider ?? new Metadata(); // global-provider-ok: server-global scheduled task
+}
+
 function persistedRunStatus(run: MJUserRoutineRunEntity): MJUserRoutineRunEntity['Status'] {
-    const persisted: unknown = run.GetFieldByName?.('Status')?.OldValue;
+    const persisted = run.GetFieldByName?.('Status')?.OldValue;
     // `OldValue` is untyped on EntityField, so this is the one narrowing boundary. The column is
     // CHECK-constrained to the same value list as the property, so a string read from it IS that
     // union — asserting anything wider here would just push the cast to every caller.
@@ -240,8 +258,6 @@ export interface RoutineRunContext {
     heartbeat?: ScheduledJobExecutionContext['heartbeat'];
     /** True for a run the user asked for by hand: the wake gate is not consulted. */
     BypassWakeGate?: boolean;
-    /** True when `Execute()` already verified active policy via batched `RunView` for this sweep. */
-    PreVerifiedActivePolicy?: boolean;
 }
 
 /**
@@ -345,7 +361,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         // miss never burns a OneShot routine's NextRunAt=null without executing it. Cap consecutive
         // failures at MAX_OWNER_RESOLVE_RETRIES so a permanently missing/inactive owner does not
         // retry on every sweep forever.
-        const claimed: Array<{ routine: MJUserRoutineEntity; ownerUser: UserInfo; preVerifiedPolicy: boolean }> = [];
+        const claimed: Array<{ routine: MJUserRoutineEntity; ownerUser: UserInfo }> = [];
         for (const routine of due) {
             const routineKey = NormalizeUUID(routine.ID);
             let ownerUser: UserInfo;
@@ -382,7 +398,6 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
                 continue;
             }
 
-            let preVerifiedPolicy = false;
             if (this.requiresAgentCoordinationPolicy(routine)) {
                 if (!routine.TargetID || !routine.UserID) {
                     this.log(
@@ -399,28 +414,24 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
                     );
                     continue;
                 }
-                preVerifiedPolicy = true;
             }
 
             if (await this.claimRoutine(routine, now)) {
-                claimed.push({ routine, ownerUser, preVerifiedPolicy });
+                claimed.push({ routine, ownerUser });
             }
         }
 
-        const summaries = await RunWithBoundedConcurrency(claimed, maxConcurrent, async ({ routine, ownerUser, preVerifiedPolicy }) => {
+        const summaries = await RunWithBoundedConcurrency(claimed, maxConcurrent, async ({ routine, ownerUser }) => {
             // Per-routine error isolation: one routine failing must never kill the sweep.
             try {
-                return await this.executeRoutine(
-                    routine,
-                    { ...context, PreVerifiedActivePolicy: preVerifiedPolicy },
-                    ownerUser
-                );
+                return await this.executeRoutine(routine, context, ownerUser);
             } catch (error) {
                 this.logError(`Routine "${routine.Name}" (${routine.ID}) failed outside run tracking`, error);
                 return { RoutineID: routine.ID, RunStatus: 'Failed', Notified: false } satisfies RoutineExecutionSummary;
             }
         });
 
+        const routinesRun = summaries.filter(s => s.RunStatus !== 'Skipped').length;
         const succeeded = summaries.filter(s => s.RunStatus === 'Success').length;
         const failed = summaries.filter(s => s.RunStatus === 'Failed').length;
         const notified = summaries.filter(s => s.Notified).length;
@@ -430,7 +441,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             Details: {
                 RoutinesEvaluated: candidates.length,
                 RoutinesSeeded: seedable.length,
-                RoutinesRun: claimed.length,
+                RoutinesRun: routinesRun,
                 Succeeded: succeeded,
                 Failed: failed,
                 Notified: notified,
@@ -708,8 +719,8 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             (routine.WakeConfiguration
                 ? SafeJSONParse<MJUserRoutineEntity_IRoutineWakeConfiguration>(routine.WakeConfiguration)
                 : null);
-        const resumeState = parsedConfig?.resumeState as Record<string, unknown> | undefined;
-        const appID = resumeState?.['applicationID'];
+        const resumeState = parsedConfig?.resumeState as CoalescedWakeResumeState | undefined;
+        const appID = resumeState?.applicationID;
         return typeof appID === 'string' && appID.trim().length > 0 ? appID.trim() : null;
     }
 
@@ -719,7 +730,10 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         preResolvedOwnerUser?: UserInfo
     ): Promise<RoutineExecutionSummary> {
         const contextUser = context.ContextUser;
-        if (!context.PreVerifiedActivePolicy && this.requiresAgentCoordinationPolicy(routine)) {
+        // Always revalidate live active policy right when this execution slot starts (even if
+        // sweep-level batch verification passed earlier), so a policy paused/disabled while the
+        // routine waited in the concurrency queue yields zero runs.
+        if (this.requiresAgentCoordinationPolicy(routine)) {
             if (!routine.TargetID || !routine.UserID) {
                 this.log(`Routine "${routine.Name}" (${routine.ID}) skipped: TargetID or UserID missing for policy gate.`, true);
                 return { RoutineID: routine.ID, RunStatus: 'Skipped', Notified: false };
@@ -857,7 +871,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         contextUser: UserInfo,
         provider?: IMetadataProvider
     ): Promise<MJUserRoutineRunEntity> {
-        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider; // global-provider-ok: server-global scheduled task
+        const md = getEntityMetadataAccessor(provider);
         const run = await md.GetEntityObject<MJUserRoutineRunEntity>('MJ: User Routine Runs', contextUser);
         run.NewRecord();
         run.RoutineID = routine.ID;
@@ -961,6 +975,26 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         routine.LastCheckedAt = run.CompletedAt ?? new Date();
         routine.LastRunStatus = run.Status;
         routine.LastResultHash = run.ResultHash;
+        if (routine.RoutineType === 'AgentWake' && routine.NextRunAt == null) {
+            const wakeConfig =
+                routine.WakeConfigurationObject ??
+                (routine.WakeConfiguration
+                    ? SafeJSONParse<MJUserRoutineEntity_IRoutineWakeConfiguration>(routine.WakeConfiguration)
+                    : null);
+            const currentResume = (wakeConfig?.resumeState as CoalescedWakeResumeState | undefined) ?? {};
+            const consumedResume: CoalescedWakeResumeState = {
+                ...currentResume,
+                batchConsumed: true,
+                lastDispatchedAt: run.StartedAt.toISOString(),
+                coalescedEventCount: 0,
+                overflowEventCount: 0,
+                pendingEvents: [],
+            };
+            routine.WakeConfigurationObject = {
+                ...(wakeConfig ?? {}),
+                resumeState: consumedResume,
+            };
+        }
         if ((routine.ScheduleMode === 'OneShot') && routine.NextRunAt == null && (!routine.CronExpression || routine.CronExpression.trim().length === 0)) {
             routine.Status = 'Disabled';
         }
@@ -1023,7 +1057,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         heartbeat?: () => Promise<void>,
         gateResult?: WakeGateEvaluationResult
     ): Promise<RoutineTargetOutcome> {
-        const md = new Metadata() as unknown as IMetadataProvider; // global-provider-ok: server-global scheduled task
+        const md = getEntityMetadataAccessor();
         const agent = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', contextUser);
         if (!await agent.Load(routine.TargetID)) {
             throw new Error(`Agent ${routine.TargetID} not found for routine "${routine.Name}"`);
@@ -1033,7 +1067,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             (routine.WakeConfiguration ? SafeJSONParse<MJUserRoutineEntity_IRoutineWakeConfiguration>(routine.WakeConfiguration) : null);
         const userMessage = routine.InitialMessage ??
             (wakeConfig?.wakeReason ? `Scheduled wake: ${wakeConfig.wakeReason}` : `Run routine "${routine.Name}"`);
-        const basePayload = routine.StartingPayload ? SafeJSONParse<Record<string, unknown>>(routine.StartingPayload) ?? undefined : undefined;
+        const basePayload = routine.StartingPayload ? SafeJSONParse<RoutineJsonObject>(routine.StartingPayload) ?? undefined : undefined;
         const payload = (routine.RoutineType === 'AgentWake' || wakeConfig || gateResult)
             ? {
                 ...(basePayload ?? {}),
@@ -1053,7 +1087,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             routine,
             wakeConfig,
             contextUser,
-            metadataProvider: md,
+            metadataProvider: Metadata.Provider, // global-provider-ok: server-global scheduled task
         });
 
         const runner = new AgentRunner();
@@ -1110,7 +1144,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             return routine.ConversationID;
         }
         try {
-            const md = new Metadata() as unknown as IMetadataProvider; // global-provider-ok: server-global scheduled task
+            const md = getEntityMetadataAccessor();
             const app = await this.findRoutinesApplication(owner);
             if (!app) {
                 this.log(`Routines application not found — running "${routine.Name}" standalone (no conversation)`);
@@ -1166,7 +1200,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         if (!routine.RequestedSkillIDs) {
             return undefined;
         }
-        const parsed = SafeJSONParse<unknown>(routine.RequestedSkillIDs);
+        const parsed = SafeJSONParse<string[]>(routine.RequestedSkillIDs);
         if (Array.isArray(parsed) && parsed.every((v): v is string => typeof v === 'string')) {
             return parsed.length > 0 ? parsed : undefined;
         }
@@ -1176,7 +1210,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
 
     /** Run a Prompt target via AIPromptRunner, passing StartingPayload as the data context. */
     private async executePromptTarget(routine: MJUserRoutineEntity, contextUser: UserInfo): Promise<RoutineTargetOutcome> {
-        const md = new Metadata() as unknown as IMetadataProvider; // global-provider-ok: server-global scheduled task
+        const md = getEntityMetadataAccessor();
         const prompt = await md.GetEntityObject<MJAIPromptEntityExtended>('AI Prompts', contextUser);
         if (!await prompt.Load(routine.TargetID)) {
             throw new Error(`Prompt ${routine.TargetID} not found for routine "${routine.Name}"`);
@@ -1235,7 +1269,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         if (!routine.StartingPayload) {
             return [];
         }
-        const parsed = SafeJSONParse<Record<string, unknown>>(routine.StartingPayload);
+        const parsed = SafeJSONParse<RoutineJsonObject>(routine.StartingPayload);
         if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
             this.logError(`Routine "${routine.Name}": StartingPayload for an Action target must be a JSON object of param values — ignoring`);
             return [];
@@ -1454,7 +1488,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         provider?: IMetadataProvider
     ): Promise<boolean> {
         try {
-            const md = (provider ?? new Metadata()) as unknown as IMetadataProvider; // global-provider-ok: server-global scheduled task
+            const md = getEntityMetadataAccessor(provider);
             const notification = await md.GetEntityObject<MJUserNotificationEntity>('MJ: User Notifications', contextUser);
             notification.NewRecord();
             notification.UserID = userId;

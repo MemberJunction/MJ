@@ -18,9 +18,70 @@ import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
 import { MJUserRoutineEntity_IRoutineWakeConfiguration } from '@memberjunction/core-entities';
 
 /**
- * Type of `resumeState` derived directly from `MJUserRoutineEntity_IRoutineWakeConfiguration`.
+ * Strongly-typed event item stored inside `resumeState.pendingEvents` and top-level wake resume payloads.
  */
-export type CoalescedWakeResumeState = NonNullable<MJUserRoutineEntity_IRoutineWakeConfiguration['resumeState']>;
+export interface CoalescedWakeEventPayload {
+    triggerType?: string;
+    workstreamKey?: string;
+    sourceWorkstreamKey?: string;
+    applicationID?: string;
+    coalesceKey?: string;
+    wakeReason?: string;
+    triggeredAt?: string;
+    requestID?: string;
+    messageID?: string;
+    conversationDetailID?: string | null;
+    emailMessageID?: string;
+    taskID?: string;
+    eventID?: string;
+    recordID?: string;
+    status?: string;
+    subject?: string | null;
+    request?: string | null;
+    response?: string | null;
+    senderUserID?: string | null;
+    senderUserName?: string | null;
+    senderAgentID?: string | null;
+    targetUserID?: string | null;
+    targetUserName?: string | null;
+    identityID?: string;
+    utilityMailboxAddress?: string;
+    senderEmail?: string;
+    bodyPreview?: string;
+    receivedAt?: string;
+    channelID?: string;
+    topic?: string;
+    messagePreview?: string;
+    consecutiveAgentTurns?: number;
+    responseData?: CoalescedWakeResumeState | null;
+    commentsData?: CoalescedWakeResumeState | null;
+    respondedByUserID?: string | null;
+    respondedAt?: string;
+    messageBody?: string;
+    rhythmTemplateID?: string;
+    operation?: string;
+    batchConsumed?: boolean;
+    lastDispatchedAt?: string;
+    coalesceWindowExpiresAt?: string;
+    coalescedEventCount?: number;
+    overflowEventCount?: number;
+    coalescedSummary?: string;
+    pendingEvents?: CoalescedWakeEventPayload[];
+}
+
+/**
+ * Strongly-typed `resumeState` payload compatible with `MJUserRoutineEntity_IRoutineWakeConfiguration['resumeState']`.
+ */
+export interface CoalescedWakeResumeState extends CoalescedWakeEventPayload {
+    [key: string]:
+        | string
+        | number
+        | boolean
+        | null
+        | undefined
+        | CoalescedWakeResumeState
+        | CoalescedWakeEventPayload[];
+}
 
 /**
  * Default event coalescing window (60 seconds).
@@ -89,6 +150,8 @@ export interface EvaluateWindowScheduleInput {
     ExistingRoutineNextRunAt?: Date | null;
     ExistingRoutineLastRunAt?: Date | null;
     HasExistingRoutineID?: boolean;
+    /** False when the existing routine's prior batch has already been dispatched/consumed. */
+    HasPendingUnconsumedBatch?: boolean;
 }
 
 /**
@@ -252,7 +315,8 @@ export class EventWakeCoalescer extends BaseSingleton<EventWakeCoalescer> {
         const hasUnclaimedActiveRoutine =
             input.HasExistingRoutineID === true &&
             input.ExistingRoutineStatus === 'Active' &&
-            input.ExistingRoutineNextRunAt != null;
+            input.ExistingRoutineNextRunAt != null &&
+            input.HasPendingUnconsumedBatch !== false;
 
         // Clean stale in-memory window if both window and cooldown elapsed
         if (existingEntry && !hasUnclaimedActiveRoutine && lastDispatchedAtMs != null && nowMs - lastDispatchedAtMs >= windowMs) {
@@ -261,13 +325,14 @@ export class EventWakeCoalescer extends BaseSingleton<EventWakeCoalescer> {
 
         if (hasUnclaimedActiveRoutine && input.ExistingRoutineNextRunAt) {
             const existingNextMs = input.ExistingRoutineNextRunAt.getTime();
-            const windowExpiresAt = new Date(Math.max(existingNextMs, nowMs) + windowMs);
+            const effectiveNextRunAt = existingNextMs >= nowMs ? input.ExistingRoutineNextRunAt : input.Now;
+            const windowExpiresAt = existingNextMs >= nowMs ? new Date(existingNextMs) : new Date(nowMs);
             return {
                 CoalesceKey: coalesceKey,
                 ApplicationKey: applicationKey,
                 ShouldDeferUntilWindowExpiry: existingNextMs > nowMs,
                 IsCoalescedIntoActiveWindow: true,
-                EffectiveNextRunAt: existingNextMs >= nowMs ? input.ExistingRoutineNextRunAt : input.Now,
+                EffectiveNextRunAt: effectiveNextRunAt,
                 WindowExpiresAt: windowExpiresAt,
             };
         }
@@ -287,13 +352,15 @@ export class EventWakeCoalescer extends BaseSingleton<EventWakeCoalescer> {
             }
         }
 
+        const windowExpiresAt = new Date(nowMs + windowMs);
+        const shouldDeferInitialBurst = windowMs > 0;
         return {
             CoalesceKey: coalesceKey,
             ApplicationKey: applicationKey,
-            ShouldDeferUntilWindowExpiry: false,
+            ShouldDeferUntilWindowExpiry: shouldDeferInitialBurst,
             IsCoalescedIntoActiveWindow: false,
-            EffectiveNextRunAt: input.Now,
-            WindowExpiresAt: new Date(nowMs + windowMs),
+            EffectiveNextRunAt: shouldDeferInitialBurst ? windowExpiresAt : input.Now,
+            WindowExpiresAt: windowExpiresAt,
         };
     }
 

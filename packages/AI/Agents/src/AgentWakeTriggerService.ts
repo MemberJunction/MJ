@@ -43,6 +43,7 @@ import {
 import {
     BuildAppWorkstreamKey,
     BuildUserAppWakeKey,
+    CoalescedWakeResumeState,
     DEFAULT_MAX_RETAINED_COALESCED_EVENTS,
     EventWakeCoalescer,
     NormalizeApplicationKey,
@@ -50,9 +51,9 @@ import {
 } from './wake-coalescer';
 
 /**
- * Type of `resumeState` derived directly from `MJUserRoutineEntity_IRoutineWakeConfiguration`.
+ * Strongly-typed `resumeState` payload carried on `AgentWake` routines.
  */
-export type AgentWakeResumeState = NonNullable<MJUserRoutineEntity_IRoutineWakeConfiguration['resumeState']>;
+export type AgentWakeResumeState = CoalescedWakeResumeState;
 
 /**
  * Envelope shape stored in `MJAIAgentRequestEntity.Comments` by `Send Inter-Agent Request`.
@@ -1233,16 +1234,25 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
         return systemUser;
     }
 
-    private readPendingEvents(resumeState: Record<string, unknown> | undefined): AgentWakeResumeState[] {
+    private asResumeState(
+        raw: MJUserRoutineEntity_IRoutineWakeConfiguration['resumeState'] | AgentWakeResumeState | undefined
+    ): AgentWakeResumeState | undefined {
+        if (!raw || typeof raw !== 'object') {
+            return undefined;
+        }
+        return raw as AgentWakeResumeState;
+    }
+
+    private readPendingEvents(resumeState: AgentWakeResumeState | undefined): AgentWakeResumeState[] {
         if (!resumeState) {
             return [];
         }
-        const queued = resumeState['pendingEvents'];
+        const queued = resumeState.pendingEvents;
         if (Array.isArray(queued)) {
             return queued.filter((e): e is AgentWakeResumeState => typeof e === 'object' && e !== null);
         }
         // A row written before the queue existed holds a single event at the top level.
-        return typeof resumeState['triggerType'] === 'string' ? [resumeState] : [];
+        return typeof resumeState.triggerType === 'string' ? [resumeState] : [];
     }
 
     private wakeEventKey(event: AgentWakeResumeState): string {
@@ -1350,6 +1360,7 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
                     }) ?? null;
             }
 
+            const isExistingPersistedRoutine = routine !== null;
             if (!routine) {
                 routine = await md.GetEntityObject<MJUserRoutineEntity>(
                     'MJ: User Routines',
@@ -1381,29 +1392,42 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
 
             const existingConfig: Partial<MJUserRoutineEntity_IRoutineWakeConfiguration> =
                 routine.WakeConfigurationObject ?? {};
+            const existingResumeState = this.asResumeState(existingConfig.resumeState);
+            const isBatchConsumed = existingResumeState?.batchConsumed === true;
+            const isUnclaimedPending =
+                isExistingPersistedRoutine &&
+                routine.Status === 'Active' &&
+                routine.NextRunAt != null &&
+                !isBatchConsumed;
+
+            const hasApplicationBucket = Boolean(params.applicationID && params.applicationID.trim().length > 0);
+            const effectiveWindowMs =
+                params.coalescingWindowMs !== undefined
+                    ? params.coalescingWindowMs
+                    : hasApplicationBucket
+                      ? EventWakeCoalescer.Instance.GetDefaultWindowMs()
+                      : 0;
+
             const scheduleEval = EventWakeCoalescer.Instance.EvaluateWindowSchedule({
                 UserID: params.targetUserID,
                 ApplicationID: params.applicationID,
                 Now: params.now,
-                WindowMs: params.coalescingWindowMs,
+                WindowMs: effectiveWindowMs,
                 ExistingRoutineStatus: routine.Status,
                 ExistingRoutineNextRunAt: routine.NextRunAt,
                 ExistingRoutineLastRunAt: routine.LastRunAt,
-                HasExistingRoutineID: Boolean(routine.ID),
+                HasExistingRoutineID: isExistingPersistedRoutine,
+                HasPendingUnconsumedBatch: isUnclaimedPending,
             });
 
-            const isUnclaimedPending =
-                (routine.Status === 'Active' && routine.NextRunAt != null && Boolean(routine.ID)) ||
-                scheduleEval.ShouldDeferUntilWindowExpiry;
-            const existingResumeState = existingConfig.resumeState as Record<string, unknown> | undefined;
             const priorEvents = isUnclaimedPending ? this.readPendingEvents(existingResumeState) : [];
             const existingCoalescedCount =
-                isUnclaimedPending && typeof existingResumeState?.['coalescedEventCount'] === 'number'
-                    ? (existingResumeState['coalescedEventCount'] as number)
+                isUnclaimedPending && typeof existingResumeState?.coalescedEventCount === 'number'
+                    ? existingResumeState.coalescedEventCount
                     : priorEvents.length;
             const existingOverflowCount =
-                isUnclaimedPending && typeof existingResumeState?.['overflowEventCount'] === 'number'
-                    ? (existingResumeState['overflowEventCount'] as number)
+                isUnclaimedPending && typeof existingResumeState?.overflowEventCount === 'number'
+                    ? existingResumeState.overflowEventCount
                     : 0;
 
             const mergeResult = EventWakeCoalescer.Instance.MergeCoalescedEvents({
@@ -1430,6 +1454,8 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
                 coalesceKey: scheduleEval.CoalesceKey,
                 coalescedEventCount: mergeResult.TotalCoalescedCount,
                 overflowEventCount: mergeResult.OverflowCount,
+                coalesceWindowExpiresAt: scheduleEval.WindowExpiresAt.toISOString(),
+                batchConsumed: false,
                 ...(mergeResult.SummaryText ? { coalescedSummary: mergeResult.SummaryText } : {}),
                 pendingEvents: mergeResult.PendingEvents,
             };
