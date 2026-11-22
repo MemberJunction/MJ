@@ -1301,7 +1301,7 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
      * `CredentialEngine.enqueueCredentialWrite`. Cross-process races are not covered here; the
      * dispatcher coalesces on claim.
      */
-    private static readonly MAX_CAS_ATTEMPTS = 8;
+    private static readonly MAX_CAS_ATTEMPTS = 16;
     private static readonly MAX_TRACKED_WRITE_TOKENS = 64;
 
     private _wakeWriteChains: Map<string, Promise<void>> = new Map();
