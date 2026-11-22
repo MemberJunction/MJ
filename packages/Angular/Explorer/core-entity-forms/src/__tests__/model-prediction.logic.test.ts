@@ -117,6 +117,19 @@ describe('ModelPredictionLogic.BuildCard', () => {
         expect(card?.Lineage.AsOf).toContain('2026');
         expect(card?.Provenance).toBe('Renewal v4');
     });
+    it('the as-of date is the stored calendar date in any time zone (Nov 3, not Nov 2 in New York)', () => {
+        const zone = process.env.TZ;
+        process.env.TZ = 'America/New_York';
+        try {
+            const history = [value({ ID: 'H3', EffectiveAsOf: DAY3, ValueNumeric: 0.72 })];
+            const card = ModelPredictionLogic.BuildCard(binding(), value({}), history, null, run());
+            expect(card?.Lineage.AsOf).toContain('Nov 3');
+            expect(card?.History.map((h) => h.AsOf)).toEqual([expect.stringContaining('Nov 3')]);
+        } finally {
+            if (zone === undefined) delete process.env.TZ;
+            else process.env.TZ = zone;
+        }
+    });
     it('a person\'s value of the binding\'s feature has no model lineage', () => {
         const card = ModelPredictionLogic.BuildCard(binding(), value({ Source: 'Human', MLModelID: null, MLScoringRunID: null }), [], null, null);
         expect(card?.Lineage).toMatchObject({ Source: 'Human', ModelVersion: null, ScoringRunID: null });

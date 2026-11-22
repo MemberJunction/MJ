@@ -145,12 +145,24 @@ export class ModelPredictionLogic {
         return Math.round(Math.max(0, Math.min(1, value)) * 100);
     }
 
-    /** A short date ("Nov 3, 2026"), or null for a missing or invalid date. */
+    /** A short date ("Nov 3, 2026") of a moment in the viewer's time zone, or null for a missing or invalid date. */
     public static FormatDate(value: Date | string | null | undefined): string | null {
+        return ModelPredictionLogic.formatShortDate(value, undefined);
+    }
+
+    /**
+     * A short date ("Nov 3, 2026") of a calendar date stored as midnight UTC (an as-of date), read in UTC so the viewer's
+     * time zone never moves it to the day before; null for a missing or invalid date.
+     */
+    public static FormatCalendarDate(value: Date | string | null | undefined): string | null {
+        return ModelPredictionLogic.formatShortDate(value, 'UTC');
+    }
+
+    private static formatShortDate(value: Date | string | null | undefined, timeZone: string | undefined): string | null {
         if (!value) return null;
         const d = value instanceof Date ? value : new Date(value);
         if (isNaN(d.getTime())) return null;
-        return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+        return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', timeZone });
     }
 
     /**
@@ -221,7 +233,7 @@ export class ModelPredictionLogic {
                 Source: latest.Source,
                 ModelVersion: modelVersion,
                 ScoringRunID: latest.MLScoringRunID,
-                AsOf: ModelPredictionLogic.FormatDate(latest.EffectiveAsOf),
+                AsOf: ModelPredictionLogic.FormatCalendarDate(latest.EffectiveAsOf),
                 InTraining: latest.InTraining === true,
             },
         };
@@ -247,7 +259,7 @@ export class ModelPredictionLogic {
             const y = span > 0 ? (1 - (v - min) / span) * 100 : 50;
             return {
                 ID: r.ID,
-                AsOf: ModelPredictionLogic.FormatDate(r.EffectiveAsOf) || ModelPredictionLogic.FormatDate(r.ComputedAt) || '—',
+                AsOf: ModelPredictionLogic.FormatCalendarDate(r.EffectiveAsOf) || ModelPredictionLogic.FormatDate(r.ComputedAt) || '—',
                 Display: ModelPredictionLogic.formatValue(v, kind),
                 X: rows.length > 1 ? Math.round((i / (rows.length - 1)) * 100) : 50,
                 Y: Math.round(Math.max(0, Math.min(100, y))),
