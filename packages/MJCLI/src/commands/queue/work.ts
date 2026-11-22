@@ -3,9 +3,10 @@ import { IndependentProviderSource, MJWorkLogger, WorkQueueEngine, WorkQueueHost
 import type { RunOnceResult } from '@memberjunction/work-queue-engine';
 import { OpenWorkQueueSession } from '../../lib/work-queue/queue-session.js';
 import { BuildWorkerHostConfig, RunUntilStopped, WorkerStartFailure } from '../../lib/work-queue/queue-worker.js';
-// Registers the 'AWS' and 'Azure' transport driver factories and manifest enrichers for this command only (work-queue 03 §0).
+// Registers the 'AWS', 'Azure', and 'GCP' transport driver factories and manifest enrichers for this command only (work-queue 03 §0).
 import '@memberjunction/work-queue-engine/aws';
 import '@memberjunction/work-queue-engine/azure';
+import '@memberjunction/work-queue-engine/gcp';
 
 const DEFAULT_IDLE_EXIT_MS = 5000;
 const DEFAULT_SHUTDOWN_DRAIN_MS = 30000;

@@ -13,6 +13,10 @@
     "./azure": {
       "types": "./dist/azure/index.d.ts",
       "default": "./dist/azure/index.js"
+    },
+    "./gcp": {
+      "types": "./dist/gcp/index.d.ts",
+      "default": "./dist/gcp/index.js"
     }
   },
   "files": [
@@ -29,7 +33,8 @@
     "@memberjunction/global": "6.3.0-edge.1",
     "@memberjunction/work-queue-azure": "6.3.0-edge.1",
     "@memberjunction/work-queue-core": "6.3.0-edge.1",
-    "@memberjunction/work-queue-engine": "6.3.0-edge.1"
+    "@memberjunction/work-queue-engine": "6.3.0-edge.1",
+    "@memberjunction/work-queue-gcp": "6.3.0-edge.1"
   },
   "devDependencies": {
     "@memberjunction/core": "6.3.0-edge.1",

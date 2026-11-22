@@ -2,7 +2,7 @@
 
 A unified, high-performance messaging and durable work queue substrate for MemberJunction. Engineered to handle high-throughput event fan-out, strict FIFO partitioned workflows, and long-running distributed batch processing.
 
-The framework supports both a **zero-dependency Database transport** (built natively into Microsoft SQL Server and PostgreSQL) and **cloud-native transports** (AWS SNS/SQS FIFO with thin Lambda handlers, and Azure Service Bus with thin Azure Functions handlers).
+The framework supports both a **zero-dependency Database transport** (built natively into Microsoft SQL Server and PostgreSQL) and **cloud-native transports** (AWS SNS/SQS FIFO with thin Lambda handlers, Azure Service Bus with thin Azure Functions handlers, and Google Cloud Pub/Sub with thin Cloud Run HTTP push handlers).
 
 ---
 
@@ -16,7 +16,8 @@ The framework supports both a **zero-dependency Database transport** (built nati
 | **[server](./server/README.md)** | `@memberjunction/work-queue-server` | MJServer REST publish endpoint extension (`POST /work-queue/topics/{topic}/messages`) with API-key and scope authentication. |
 | **[aws](./aws/README.md)** | `@memberjunction/work-queue-aws` | AWS SNS/SQS transport driver, SQS consumer, and `@memberjunction/work-queue-aws/lambda` adapter for thin serverless workers. |
 | **[azure](./azure/README.md)** | `@memberjunction/work-queue-azure` | Azure Service Bus transport driver, Service Bus consumer & pump, and `@memberjunction/work-queue-azure/functions` adapter for Azure Functions workers. |
-| **[samples](./samples/README.md)** | `@memberjunction/work-queue-samples` | `HelloWorldHandler`, walkthrough topologies, and Azure Service Bus producer/consumer/Functions samples. |
+| **[gcp](./gcp/README.md)** | `@memberjunction/work-queue-gcp` | Google Cloud Pub/Sub transport driver, Pub/Sub consumer & pump, and `@memberjunction/work-queue-gcp/cloudrun` adapter for Cloud Run HTTP Push workers. |
+| **[samples](./samples/README.md)** | `@memberjunction/work-queue-samples` | `HelloWorldHandler`, walkthrough topologies, and AWS/Azure/GCP cloud producer, consumer, and serverless worker samples. |
 
 ---
 
@@ -415,6 +416,54 @@ See [packages/WorkQueue/azure/README.md](./azure/README.md) and [packages/WorkQu
 
 ---
 
+## 4c. Google Cloud Pub/Sub Transport
+
+The Google Cloud Pub/Sub transport (`@memberjunction/work-queue-gcp`, loaded by MJ servers via `@memberjunction/work-queue-engine/gcp`) routes topic publishes to **Google Cloud Pub/Sub Topics** and subscription deliveries to **Google Cloud Pub/Sub Subscriptions** with optional dead-letter topics (`deadLetterPolicy`). Topics with `IsFifo = true` use ordering-enabled subscriptions (`EnableMessageOrdering = true`, mapped from `PartitionKey` -> `orderingKey`) for `Exclusive` per-key isolation. `Ordered` requires the Database transport.
+
+### 4c.1 Define the transport in MJ
+
+An `MJ: Work Queue Transports` row with `DriverClass = 'GCP'`:
+
+```json
+{
+  "fields": {
+    "Name": "GCP-prod",
+    "DriverClass": "GCP",
+    "Configuration": { "ProjectId": "my-gcp-project", "ApiEndpoint": null, "UseEmulator": false },
+    "CredentialID": null,
+    "Status": "Active"
+  },
+  "primaryKey": { "ID": "<uuidgen>" }
+}
+```
+
+- When `CredentialID` is `null`, the driver uses Google Application Default Credentials (Workload Identity / GCE metadata / `gcloud auth application-default login`).
+- When `CredentialID` points to an `MJ: Credentials` row, decrypted values may hold `{ "CredentialsJson": "..." }`, `{ "ClientEmail": "...", "PrivateKey": "..." }`, or `{ "KeyFilename": "..." }`.
+
+### 4c.2 Writing a Cloud Run HTTP Push Consumer
+
+Use `@memberjunction/work-queue-gcp/cloudrun` for thin Cloud Run HTTP Push workers without loading `@memberjunction/work-queue-engine` or `SdkPubSubAdminGateway`:
+
+```typescript
+import { Outcome, type WorkHandler, type WorkMessage, type WorkContext, type WorkOutcome } from '@memberjunction/work-queue-core';
+import { CreateCloudRunPushHandler } from '@memberjunction/work-queue-gcp/cloudrun';
+
+class CloudRunDocumentHandler implements WorkHandler {
+  public async Handle(message: WorkMessage, context: WorkContext): Promise<WorkOutcome> {
+    await processDocument(message.Payload, context.Signal);
+    return Outcome.Complete();
+  }
+}
+
+export const handlePush = CreateCloudRunPushHandler(() => new CloudRunDocumentHandler(), {
+  RequireBearerToken: true,
+});
+```
+
+See [packages/WorkQueue/gcp/README.md](./gcp/README.md) and [packages/WorkQueue/samples/src/gcp/README.md](./samples/src/gcp/README.md) for standalone `PubSubMessagePump` usage, Pub/Sub filter syntax, emulator setup, and `MJ_TEST_LIVE_GCP_PUBSUB=1` live-cloud testing.
+
+---
+
 ## 5. Horizontally Scaled Container Workers
 
 A worker is any process that loads your handler classes and runs `mj queue work`. Run it in a container and scale the
@@ -655,4 +704,13 @@ mj queue validate-bindings --transport AWS-prod
   # Opt-in live Azure Service Bus / Emulator integration suite (auto-provisions and cleans up ephemeral resources)
   MJ_TEST_LIVE_AZURE_SERVICE_BUS=1 AZURE_SERVICE_BUS_CONNECTION_STRING="..." \
     pnpm --filter @memberjunction/work-queue-azure run test:live
+  ```
+- **Google Cloud Pub/Sub Deterministic & Opt-In Live Tests**:
+  ```bash
+  # Deterministic unit + full WorkQueue transport conformance suite (FakePubSubGateway)
+  pnpm --filter @memberjunction/work-queue-gcp test
+
+  # Opt-in live Google Cloud Pub/Sub / Emulator integration suite (auto-provisions and cleans up ephemeral resources)
+  MJ_TEST_LIVE_GCP_PUBSUB=1 GCP_PUBSUB_PROJECT_ID="..." \
+    pnpm --filter @memberjunction/work-queue-gcp run test:live
   ```
