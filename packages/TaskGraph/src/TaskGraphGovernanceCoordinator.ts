@@ -159,7 +159,9 @@ interface GraphGovernanceState {
     CheckpointBaselineWallClockMs: number;
     CheckpointBaselineTokens: number;
     CheckpointBaselineNodeIDs: string[];
+    CheckpointBaselineNodeSet: Set<string>;
     CheckpointBaselineLoopCosts: Map<string, number>;
+    CheckpointAttributedCostUsd: number;
     CheckpointBaselinePausedAtMs: number | null;
     CheckpointBaselineCostEvents: BudgetCostEvent[];
     NodeCostEvents: Map<string, BudgetCostEvent[]>;
@@ -170,6 +172,8 @@ interface GraphGovernanceState {
     CompletedNodeIDs: string[];
     CompletedNodeSet: Set<string>;
     SettledNodeAccounting: Map<string, SettledNodeMetrics>;
+    SettledCostSumUsd: number;
+    SettledTokensSum: number;
     KnownChildCount: number;
     LastNodeSyncAtMs: number;
     ExtendedBudgets: MJLimitsBudgetsConfig | null;
@@ -653,7 +657,7 @@ export class TaskGraphGovernanceCoordinator {
         const settledAtMs = this.parseEpochMs(args.Task.CompletedAt) ?? Date.now();
         const nodeKey = this.normId(args.Task.ID);
         if (nodeKey) {
-            state.SettledNodeAccounting.set(nodeKey, metrics);
+            this.setSettledNodeAccounting(state, nodeKey, metrics);
             this.recordSettledNodeCostEvents(state, nodeKey, metrics.CostUsd, args.CostEvents, settledAtMs);
             if (!state.CompletedNodeSet.has(nodeKey)) {
                 state.CompletedNodeSet.add(nodeKey);
@@ -684,7 +688,10 @@ export class TaskGraphGovernanceCoordinator {
             return state.LastBudgetResult;
         }
 
-        const stateCostEvents = this.buildStateCostEvents(state, totals);
+        const nowMs = Date.now();
+        const stateCostEvents = this.needsCostEventsForEvaluation(state, effectiveBudgets, nowMs)
+            ? this.buildStateCostEvents(state, totals)
+            : undefined;
         const evalResult = await this.budgetGuard.Evaluate({
             Budgets: effectiveBudgets,
             AgentRunID: state.SubmittingAgentRunID,
@@ -697,7 +704,7 @@ export class TaskGraphGovernanceCoordinator {
             PausedIntervals: state.PausedIntervals,
             CurrentRunTokens: totals.TotalTokens,
             ...(stateCostEvents ? { CostEvents: stateCostEvents } : {}),
-            NowMs: Date.now(),
+            NowMs: nowMs,
             Provider: args.Provider,
             ContextUser: args.ContextUser,
             LedgerReader: this.createSharedLedgerReader(args.Provider, args.ContextUser, state),
@@ -793,7 +800,7 @@ export class TaskGraphGovernanceCoordinator {
         const nodeKey = this.normId(args.Task.ID);
         if (nodeKey) {
             const loopCostUsd = Math.max(0, args.AccumulatedLoopCostUsd);
-            state.SettledNodeAccounting.set(nodeKey, {
+            this.setSettledNodeAccounting(state, nodeKey, {
                 CostUsd: loopCostUsd,
                 TokensUsed: Math.max(0, args.AccumulatedLoopTokensUsed),
             });
@@ -830,7 +837,10 @@ export class TaskGraphGovernanceCoordinator {
         state.LastResolvedLimits = resolvedLimits;
         const effectiveBudgets = state.ExtendedBudgets ?? resolvedLimits.Budgets;
 
-        const stateCostEvents = this.buildStateCostEvents(state, totals);
+        const nowMs = Date.now();
+        const stateCostEvents = this.needsCostEventsForEvaluation(state, effectiveBudgets, nowMs)
+            ? this.buildStateCostEvents(state, totals)
+            : undefined;
         const evalResult = await this.budgetGuard.Evaluate({
             Budgets: effectiveBudgets,
             AgentRunID: state.SubmittingAgentRunID,
@@ -843,7 +853,7 @@ export class TaskGraphGovernanceCoordinator {
             PausedIntervals: state.PausedIntervals,
             CurrentRunTokens: totals.TotalTokens,
             ...(stateCostEvents ? { CostEvents: stateCostEvents } : {}),
-            NowMs: Date.now(),
+            NowMs: nowMs,
             Provider: args.Provider,
             ContextUser: args.ContextUser,
             LedgerReader: this.createSharedLedgerReader(args.Provider, args.ContextUser, state),
@@ -1382,30 +1392,91 @@ export class TaskGraphGovernanceCoordinator {
         return null;
     }
 
+    private needsCostEventsForEvaluation(
+        state: GraphGovernanceState,
+        effectiveBudgets: MJLimitsBudgetsConfig,
+        nowMs: number,
+    ): boolean {
+        if (state.CheckpointBaselineCostEvents.length > 0 || state.CheckpointBaselinePausedAtMs !== null) {
+            return true;
+        }
+        const dayWin = ComputeDayBoundaryWindow(nowMs, effectiveBudgets.PerUserPerDay.DayBoundaryTimezone);
+        const dayStartMs = Date.parse(dayWin.DayStartISO);
+        return Number.isFinite(dayStartMs) && state.StartedAtMs < dayStartMs;
+    }
+
+    private setSettledNodeAccounting(
+        state: GraphGovernanceState,
+        nodeKey: string,
+        metrics: SettledNodeMetrics,
+    ): void {
+        const prev = state.SettledNodeAccounting.get(nodeKey);
+        if (prev) {
+            state.SettledCostSumUsd -= prev.CostUsd;
+            state.SettledTokensSum -= prev.TokensUsed;
+        }
+        state.SettledNodeAccounting.set(nodeKey, metrics);
+        state.SettledCostSumUsd += metrics.CostUsd;
+        state.SettledTokensSum += metrics.TokensUsed;
+
+        const inBaselineNodes = state.CheckpointBaselineNodeSet.has(nodeKey);
+        const prePauseCost = state.CheckpointBaselineLoopCosts.get(nodeKey);
+        if (inBaselineNodes || prePauseCost !== undefined) {
+            const prevContrib =
+                (inBaselineNodes ? (prev?.CostUsd ?? 0) : 0) +
+                (prePauseCost !== undefined ? (prev ? Math.min(prev.CostUsd, prePauseCost) : prePauseCost) : 0);
+            const nextContrib =
+                (inBaselineNodes ? metrics.CostUsd : 0) +
+                (prePauseCost !== undefined ? Math.min(metrics.CostUsd, prePauseCost) : 0);
+            state.CheckpointAttributedCostUsd += nextContrib - prevContrib;
+        }
+    }
+
+    private setCheckpointBaselineNodes(state: GraphGovernanceState, nodeIds: readonly string[]): void {
+        state.CheckpointBaselineNodeIDs = [...nodeIds];
+        state.CheckpointBaselineNodeSet.clear();
+        for (const nodeId of nodeIds) {
+            const norm = this.normId(nodeId);
+            if (norm) {
+                state.CheckpointBaselineNodeSet.add(norm);
+            }
+        }
+        this.recomputeCheckpointAttributedCost(state);
+    }
+
+    private addCheckpointBaselineLoopCost(state: GraphGovernanceState, nodeKey: string, prePauseCost: number): void {
+        if (state.CheckpointBaselineLoopCosts.has(nodeKey)) {
+            return;
+        }
+        state.CheckpointBaselineLoopCosts.set(nodeKey, prePauseCost);
+        const entry = state.SettledNodeAccounting.get(nodeKey);
+        state.CheckpointAttributedCostUsd += entry ? Math.min(entry.CostUsd, prePauseCost) : prePauseCost;
+    }
+
+    private recomputeCheckpointAttributedCost(state: GraphGovernanceState): void {
+        let attributed = 0;
+        for (const nodeKey of state.CheckpointBaselineNodeSet) {
+            const entry = state.SettledNodeAccounting.get(nodeKey);
+            if (entry) {
+                attributed += entry.CostUsd;
+            }
+        }
+        for (const [loopNodeKey, prePauseCost] of state.CheckpointBaselineLoopCosts.entries()) {
+            const entry = state.SettledNodeAccounting.get(loopNodeKey);
+            attributed += entry ? Math.min(entry.CostUsd, prePauseCost) : prePauseCost;
+        }
+        state.CheckpointAttributedCostUsd = attributed;
+    }
+
     private computeSettlementTotals(state: GraphGovernanceState): {
         SettledCostUsd: number;
         UnattributedPriorCostUsd: number;
         TotalCostUsd: number;
         TotalTokens: number;
     } {
-        let settledCostUsd = 0;
-        let settledTokens = 0;
-        for (const entry of state.SettledNodeAccounting.values()) {
-            settledCostUsd += entry.CostUsd;
-            settledTokens += entry.TokensUsed;
-        }
-        let checkpointedNodesCost = 0;
-        for (const nodeId of state.CheckpointBaselineNodeIDs) {
-            const entry = state.SettledNodeAccounting.get(this.normId(nodeId));
-            if (entry) {
-                checkpointedNodesCost += entry.CostUsd;
-            }
-        }
-        for (const [loopNodeKey, prePauseCost] of state.CheckpointBaselineLoopCosts.entries()) {
-            const entry = state.SettledNodeAccounting.get(loopNodeKey);
-            checkpointedNodesCost += entry ? Math.min(entry.CostUsd, prePauseCost) : prePauseCost;
-        }
-        const unattributedPriorCostUsd = Math.max(0, state.CheckpointBaselineCostUsd - checkpointedNodesCost);
+        const settledCostUsd = state.SettledNodeAccounting.size === 0 ? 0 : Math.max(0, state.SettledCostSumUsd);
+        const settledTokens = state.SettledNodeAccounting.size === 0 ? 0 : Math.max(0, state.SettledTokensSum);
+        const unattributedPriorCostUsd = Math.max(0, state.CheckpointBaselineCostUsd - state.CheckpointAttributedCostUsd);
         return {
             SettledCostUsd: settledCostUsd,
             UnattributedPriorCostUsd: unattributedPriorCostUsd,
@@ -1451,7 +1522,9 @@ export class TaskGraphGovernanceCoordinator {
             CheckpointBaselineWallClockMs: 0,
             CheckpointBaselineTokens: 0,
             CheckpointBaselineNodeIDs: [],
+            CheckpointBaselineNodeSet: new Set<string>(),
             CheckpointBaselineLoopCosts: new Map<string, number>(),
+            CheckpointAttributedCostUsd: 0,
             CheckpointBaselinePausedAtMs: null,
             CheckpointBaselineCostEvents: [],
             NodeCostEvents: new Map<string, BudgetCostEvent[]>(),
@@ -1462,6 +1535,8 @@ export class TaskGraphGovernanceCoordinator {
             CompletedNodeIDs: [],
             CompletedNodeSet: new Set<string>(),
             SettledNodeAccounting: new Map<string, SettledNodeMetrics>(),
+            SettledCostSumUsd: 0,
+            SettledTokensSum: 0,
             KnownChildCount: 0,
             LastNodeSyncAtMs: 0,
             ExtendedBudgets: null,
@@ -1782,7 +1857,7 @@ export class TaskGraphGovernanceCoordinator {
                     }
                 }
                 state.CompletedNodeCount = Math.max(state.CompletedNodeCount, state.CompletedNodeSet.size);
-                state.CheckpointBaselineNodeIDs = [...cp.CompletedNodeIDs];
+                this.setCheckpointBaselineNodes(state, cp.CompletedNodeIDs);
                 state.CheckpointBaselineCostUsd = Math.max(state.CheckpointBaselineCostUsd, cp.CumulativeLedger.RunCostUsd);
                 state.CheckpointBaselineWallClockMs = Math.max(
                     state.CheckpointBaselineWallClockMs,
@@ -1802,8 +1877,8 @@ export class TaskGraphGovernanceCoordinator {
                 if (cp.PausedLoopNodeCosts) {
                     for (const [nodeKey, costUsd] of Object.entries(cp.PausedLoopNodeCosts)) {
                         const norm = this.normId(nodeKey);
-                        if (norm && !state.CheckpointBaselineLoopCosts.has(norm)) {
-                            state.CheckpointBaselineLoopCosts.set(norm, costUsd);
+                        if (norm) {
+                            this.addCheckpointBaselineLoopCost(state, norm, costUsd);
                         }
                     }
                 }
@@ -1871,7 +1946,7 @@ export class TaskGraphGovernanceCoordinator {
                 }
             }
             state.CompletedNodeCount = Math.max(state.CompletedNodeCount, state.CompletedNodeSet.size);
-            state.CheckpointBaselineNodeIDs = [...cp.CompletedNodeIDs];
+            this.setCheckpointBaselineNodes(state, cp.CompletedNodeIDs);
             state.CheckpointBaselineCostUsd = Math.max(state.CheckpointBaselineCostUsd, cp.CumulativeLedger.RunCostUsd);
             state.CheckpointBaselineWallClockMs = Math.max(
                 state.CheckpointBaselineWallClockMs,
@@ -2072,14 +2147,12 @@ export class TaskGraphGovernanceCoordinator {
                 const pausedLoop = this.extractPausedLoopDetails(row.Configuration);
                 if (pausedLoop) {
                     if (!state.SettledNodeAccounting.has(nodeKey)) {
-                        state.SettledNodeAccounting.set(nodeKey, {
+                        this.setSettledNodeAccounting(state, nodeKey, {
                             CostUsd: pausedLoop.CostUsd,
                             TokensUsed: pausedLoop.TokensUsed,
                         });
                     }
-                    if (!state.CheckpointBaselineLoopCosts.has(nodeKey)) {
-                        state.CheckpointBaselineLoopCosts.set(nodeKey, pausedLoop.CostUsd);
-                    }
+                    this.addCheckpointBaselineLoopCost(state, nodeKey, pausedLoop.CostUsd);
                     if (!state.NodeCostEvents.has(nodeKey) && pausedLoop.CostUsd > 0) {
                         const fallbackMs = pausedLoop.UpdatedAtMs ?? this.parseEpochMs(row.__mj_UpdatedAt);
                         const events = this.buildAttributedEventsForCost(pausedLoop.CostUsd, pausedLoop.CostEvents, fallbackMs);
@@ -2093,6 +2166,9 @@ export class TaskGraphGovernanceCoordinator {
             if (row.Status !== 'Complete' && row.Status !== 'Failed') {
                 continue;
             }
+            if (state.CompletedNodeSet.has(nodeKey) && state.SettledNodeAccounting.has(nodeKey)) {
+                continue;
+            }
             if (!state.CompletedNodeSet.has(nodeKey)) {
                 state.CompletedNodeSet.add(nodeKey);
                 state.CompletedNodeIDs.push(row.ID);
@@ -2103,9 +2179,9 @@ export class TaskGraphGovernanceCoordinator {
                 TokensUsed: this.config?.DefaultNodeTokens ?? 0,
             };
             if (persisted) {
-                state.SettledNodeAccounting.set(nodeKey, persisted);
+                this.setSettledNodeAccounting(state, nodeKey, persisted);
             } else if (!state.SettledNodeAccounting.has(nodeKey)) {
-                state.SettledNodeAccounting.set(nodeKey, resolvedMetrics);
+                this.setSettledNodeAccounting(state, nodeKey, resolvedMetrics);
             }
             if (!state.NodeCostEvents.has(nodeKey) && resolvedMetrics.CostUsd > 0) {
                 const nodeEvents = this.extractNodeCostEvents(row.Configuration);
@@ -2364,11 +2440,24 @@ export class TaskGraphGovernanceCoordinator {
         // Fail-closed claim barrier immediately: IsLocallyPaused / IsGraphBlockedByGovernance block new claims
         // while PausedByGovernance remains false until BOTH debug fields and checkpoint persistence succeed.
         State.PausePersistencePending = true;
+        let budgetResultForPause = args.BudgetResult;
+        if (!budgetResultForPause.Ledger.CostEvents || budgetResultForPause.Ledger.CostEvents.length === 0) {
+            const pauseCostEvents = this.buildStateCostEvents(State, this.computeSettlementTotals(State));
+            if (pauseCostEvents && pauseCostEvents.length > 0) {
+                budgetResultForPause = {
+                    ...budgetResultForPause,
+                    Ledger: {
+                        ...budgetResultForPause.Ledger,
+                        CostEvents: pauseCostEvents,
+                    },
+                };
+            }
+        }
         if (!State.PendingPauseContext) {
             State.PendingPauseContext = {
                 PauseReason: args.PauseReason,
                 Summary: args.Summary,
-                BudgetResult: args.BudgetResult,
+                BudgetResult: budgetResultForPause,
                 RetainedPendingCheckpoint: null,
                 Observer: args.Observer,
                 DebugStateCache: args.DebugStateCache,

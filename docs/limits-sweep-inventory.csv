@@ -2759,7 +2759,7 @@ packages/TaskGraph/src/TaskGraphDispatcher.ts,184,SAGA_ROW_WRITE_ATTEMPTS,3,<mod
 packages/TaskGraph/src/TaskGraphDispatcher.ts,696,NODE_PROGRESS_MIN_INTERVAL_MS,1000,TaskGraphDispatcher,Tuning,local-tuning-default
 packages/TaskGraph/src/TaskGraphDispatcher.ts,2694,MaxRows,2,TaskGraphDispatcher.workflowTaskTypeID,ResourceGuard,local-resource-guard
 packages/TaskGraph/src/TaskGraphDispatcher.ts,5019,MaxRows,50,TaskGraphDispatcher.loadCorrelatedRecordChanges,ResourceGuard,local-resource-guard
-packages/TaskGraph/src/TaskGraphGovernanceCoordinator.ts,267,CONCURRENT_SYNC_MIN_INTERVAL_MS,150,TaskGraphGovernanceCoordinator,Tuning,local-tuning-default
+packages/TaskGraph/src/TaskGraphGovernanceCoordinator.ts,271,CONCURRENT_SYNC_MIN_INTERVAL_MS,150,TaskGraphGovernanceCoordinator,Tuning,local-tuning-default
 packages/TaskGraph/src/TaskGraphService.ts,2058,MaxRows,2,TaskGraphService.findTaskTypeID,ResourceGuard,local-resource-guard
 packages/TaskGraph/src/types.ts,618,RetryBackoffBaseMs,1000,<module>,ResourceGuard,local-resource-guard
 packages/TaskGraph/src/types.ts,621,MaxConcurrentTasks,5,<module>,Tuning,local-tuning-default
