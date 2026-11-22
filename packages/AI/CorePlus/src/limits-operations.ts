@@ -189,6 +189,8 @@ export interface LimitsPauseRunInput {
 /** Output payload for `Limits.PauseRun`. */
 export interface LimitsPauseRunOutput {
     Success: boolean;
+    /** True when the run is owned by a remote worker and a durable cooperative pause signal was persisted awaiting safe-point acknowledgment. */
+    Pending?: boolean;
     AgentRunID: string;
     Status: string;
     CheckpointID: string | null;

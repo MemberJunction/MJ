@@ -26,7 +26,7 @@
  *
  * @module @memberjunction/ai-core-plus
  */
-import { CODE_FALLBACK_LIMITS, LimitsConfigResolver } from '@memberjunction/core';
+import { CODE_FALLBACK_LIMITS, LimitsConfigResolver, type MJLimitsOverride } from '@memberjunction/core';
 import type { AgentDecisionAnswerSummary, AgentDecisionQuestion } from '../agent-decisions';
 import type { ForEachOperation } from '../foreach-operation';
 import type { WhileOperation } from '../while-operation';
@@ -461,6 +461,12 @@ export type TaskGraphSpec = {
      *   completed compensatable `Action` steps.
      */
     failurePolicy?: TaskGraphFailurePolicy;
+
+    /** Optional routine or scheduled workstream identifier used for `PerRoutine` budget enforcement. */
+    routineId?: string | null;
+
+    /** Optional Tier-5 limits override carried on the workflow spec. */
+    limitsOverride?: MJLimitsOverride;
 };
 
 /**

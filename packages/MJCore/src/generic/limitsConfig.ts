@@ -651,7 +651,27 @@ const NUMERIC_CEILING_KEYS: ReadonlySet<LimitsKeyPath> = new Set<LimitsKeyPath>(
     ...RESOURCE_GUARD_KEYS.map((k): ResourceGuardKeyPath => `ResourceGuards.${k}`),
 ]);
 
-function readObjectProperty(obj: Record<string, unknown>, keys: readonly string[]): unknown {
+/** Scalar input value accepted by {@link NormalizeLimitsInput}. */
+export type LimitsInputScalar = string | number | boolean | null | undefined;
+
+/** Object input shape accepted by {@link NormalizeLimitsInput}. */
+export interface LimitsInputObject {
+    [key: string]: LimitsInputValue;
+}
+
+/** Strongly-typed recursive input value accepted by {@link NormalizeLimitsInput} without `unknown` or `any`. */
+export type LimitsInputValue =
+    | LimitsInputScalar
+    | LimitsInputObject
+    | readonly LimitsInputValue[]
+    | MJLimitsOverride
+    | object;
+
+function isLimitsInputObject(raw: LimitsInputValue): raw is LimitsInputObject {
+    return IsPlainObject(raw);
+}
+
+function readObjectProperty(obj: LimitsInputObject, keys: readonly string[]): LimitsInputValue {
     for (const key of keys) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
             return obj[key];
@@ -660,46 +680,46 @@ function readObjectProperty(obj: Record<string, unknown>, keys: readonly string[
     return undefined;
 }
 
-function readFiniteNonNegativeNumber(raw: unknown): number | undefined {
+function readFiniteNonNegativeNumber(raw: LimitsInputValue): number | undefined {
     if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0) {
         return undefined;
     }
     return raw;
 }
 
-function readPositiveInteger(raw: unknown): number | undefined {
+function readPositiveInteger(raw: LimitsInputValue): number | undefined {
     if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 1) {
         return undefined;
     }
     return Math.trunc(raw);
 }
 
-function readNullableNonNegativeNumber(raw: unknown): number | null | undefined {
+function readNullableNonNegativeNumber(raw: LimitsInputValue): number | null | undefined {
     if (raw === null) {
         return null;
     }
     return readFiniteNonNegativeNumber(raw);
 }
 
-function readNullablePositiveInteger(raw: unknown): number | null | undefined {
+function readNullablePositiveInteger(raw: LimitsInputValue): number | null | undefined {
     if (raw === null) {
         return null;
     }
     return readPositiveInteger(raw);
 }
 
-function readUnitIntervalNumber(raw: unknown): number | undefined {
+function readUnitIntervalNumber(raw: LimitsInputValue): number | undefined {
     if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0 || raw > 1) {
         return undefined;
     }
     return raw;
 }
 
-function readBoolean(raw: unknown): boolean | undefined {
+function readBoolean(raw: LimitsInputValue): boolean | undefined {
     return typeof raw === 'boolean' ? raw : undefined;
 }
 
-function readNonEmptyString(raw: unknown): string | undefined {
+function readNonEmptyString(raw: LimitsInputValue): string | undefined {
     if (typeof raw !== 'string') {
         return undefined;
     }
@@ -707,15 +727,15 @@ function readNonEmptyString(raw: unknown): string | undefined {
     return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function readFastJudgeFallback(raw: unknown): FastJudgeFailureFallbackMode | undefined {
+function readFastJudgeFallback(raw: LimitsInputValue): FastJudgeFailureFallbackMode | undefined {
     if (raw === 'ContinueWithWarning' || raw === 'PauseForHuman') {
         return raw;
     }
     return undefined;
 }
 
-function normalizeScopeBudgetOverride(raw: unknown): MJLimitsScopeBudgetOverride | undefined {
-    if (!IsPlainObject(raw)) {
+function normalizeScopeBudgetOverride(raw: LimitsInputValue): MJLimitsScopeBudgetOverride | undefined {
+    if (!isLimitsInputObject(raw)) {
         return undefined;
     }
     const out: MJLimitsScopeBudgetOverride = {};
@@ -730,8 +750,8 @@ function normalizeScopeBudgetOverride(raw: unknown): MJLimitsScopeBudgetOverride
     return Object.keys(out).length > 0 ? out : undefined;
 }
 
-function normalizeRunScopeBudgetOverride(raw: unknown): MJLimitsRunScopeBudgetOverride | undefined {
-    if (!IsPlainObject(raw)) {
+function normalizeRunScopeBudgetOverride(raw: LimitsInputValue): MJLimitsRunScopeBudgetOverride | undefined {
+    if (!isLimitsInputObject(raw)) {
         return undefined;
     }
     const base = normalizeScopeBudgetOverride(raw) ?? {};
@@ -743,8 +763,8 @@ function normalizeRunScopeBudgetOverride(raw: unknown): MJLimitsRunScopeBudgetOv
     return Object.keys(out).length > 0 ? out : undefined;
 }
 
-function normalizeUserDailyScopeBudgetOverride(raw: unknown): MJLimitsUserDailyScopeBudgetOverride | undefined {
-    if (!IsPlainObject(raw)) {
+function normalizeUserDailyScopeBudgetOverride(raw: LimitsInputValue): MJLimitsUserDailyScopeBudgetOverride | undefined {
+    if (!isLimitsInputObject(raw)) {
         return undefined;
     }
     const base = normalizeScopeBudgetOverride(raw) ?? {};
@@ -756,8 +776,8 @@ function normalizeUserDailyScopeBudgetOverride(raw: unknown): MJLimitsUserDailyS
     return Object.keys(out).length > 0 ? out : undefined;
 }
 
-function normalizeBudgetsOverride(raw: unknown): MJLimitsBudgetsOverride | undefined {
-    if (!IsPlainObject(raw)) {
+function normalizeBudgetsOverride(raw: LimitsInputValue): MJLimitsBudgetsOverride | undefined {
+    if (!isLimitsInputObject(raw)) {
         return undefined;
     }
     const out: MJLimitsBudgetsOverride = {};
@@ -788,8 +808,8 @@ function normalizeBudgetsOverride(raw: unknown): MJLimitsBudgetsOverride | undef
     return Object.keys(out).length > 0 ? out : undefined;
 }
 
-function normalizeProgressDetectorOverride(raw: unknown): MJLimitsProgressDetectorOverride | undefined {
-    if (!IsPlainObject(raw)) {
+function normalizeProgressDetectorOverride(raw: LimitsInputValue): MJLimitsProgressDetectorOverride | undefined {
+    if (!isLimitsInputObject(raw)) {
         return undefined;
     }
     const out: MJLimitsProgressDetectorOverride = {};
@@ -823,10 +843,10 @@ function normalizeProgressDetectorOverride(raw: unknown): MJLimitsProgressDetect
 }
 
 function normalizePositiveIntSection<K extends string>(
-    raw: unknown,
+    raw: LimitsInputValue,
     keys: readonly K[],
 ): Partial<Record<K, number>> | undefined {
-    if (!IsPlainObject(raw)) {
+    if (!isLimitsInputObject(raw)) {
         return undefined;
     }
     const out: Partial<Record<K, number>> = {};
@@ -847,11 +867,11 @@ function normalizePositiveIntSection<K extends string>(
  * `MaxConsecutiveAgentTurns`, `MaxHourlyWakes`, `MAX_TASKS_PER_AGENT_GRAPH`, `MAX_TASKS_PER_GRAPH`,
  * `absoluteMaxIterations`). Invalid or out-of-range values are omitted rather than throwing.
  *
- * @param raw - Raw untyped input object (typically from `mj.config.cjs` `limits` or parsed JSON).
+ * @param raw - Raw input object (typically from `mj.config.cjs` `limits` or parsed JSON).
  * @returns Normalized {@link MJLimitsOverride} containing only valid fields.
  */
-export function NormalizeLimitsInput(raw: unknown): MJLimitsOverride {
-    if (!IsPlainObject(raw)) {
+export function NormalizeLimitsInput(raw: LimitsInputValue): MJLimitsOverride {
+    if (!isLimitsInputObject(raw)) {
         return {};
     }
     const out: MJLimitsOverride = {};
@@ -1134,7 +1154,7 @@ export class LimitsConfigResolver extends BaseSingleton<LimitsConfigResolver> {
      * Registers Tier 2 (`MjConfig`) limits loaded from `mj.config.cjs` by a host bootstrapper.
      * Pass `null` to clear any registered config.
      */
-    public RegisterMjConfigLimits(limits: MJLimitsOverride | Record<string, unknown> | null): void {
+    public RegisterMjConfigLimits(limits: MJLimitsOverride | LimitsInputObject | null): void {
         if (limits === null) {
             this.registeredMjConfigLimits = null;
             return;

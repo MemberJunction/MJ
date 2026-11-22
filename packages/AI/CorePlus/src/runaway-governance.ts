@@ -34,6 +34,17 @@ export const BUDGET_COST_EVENTS_DATA_KEY = '__budgetCostEvents' as const;
 /** Reserved property key under `AIAgentRun.Data` JSON where per-day cost baselines live (CR-20). */
 export const BUDGET_DAY_BASELINES_DATA_KEY = '__budgetDayBaselines' as const;
 
+/** Reserved property key under `AIAgentRun.Data` JSON where a pending remote cooperative pause request lives. */
+export const COOPERATIVE_PAUSE_REQUEST_DATA_KEY = '__cooperativePauseRequest' as const;
+
+/** Durable cooperative pause signal persisted onto `AIAgentRun.Data` for cross-worker acknowledgment. */
+export interface CooperativePauseRequestSignal {
+    RequestID: string;
+    RequestedAtISO: string;
+    RequestedByUserID: string | null;
+    Summary: string;
+}
+
 /** JSON-compatible scalar value used for strongly-typed checkpoint payloads. */
 export type RunawayJsonScalar = string | number | boolean | null;
 
@@ -1167,4 +1178,74 @@ export function ExtractProgressDiagnosticsFromRunData(
         UpdatedAtISO: typeof raw['UpdatedAtISO'] === 'string' ? raw['UpdatedAtISO'] : new Date(0).toISOString(),
         FastJudgeEntries: parseFastJudgeDiagnosticEntries(raw['FastJudgeEntries']),
     };
+}
+
+/**
+ * Persists a durable cross-worker cooperative pause signal under {@link COOPERATIVE_PAUSE_REQUEST_DATA_KEY}
+ * in `AIAgentRun.Data` JSON without clobbering existing keys.
+ */
+export function AttachCooperativePauseRequestToRunData(
+    existingDataJson: string | null | undefined,
+    signal: CooperativePauseRequestSignal,
+): string {
+    let baseData: Record<string, RunawayJsonValue> = {};
+    if (typeof existingDataJson === 'string' && existingDataJson.trim().length > 0) {
+        const parsed = SafeJSONParse<Record<string, RunawayJsonValue>>(existingDataJson);
+        if (IsPlainObject(parsed)) {
+            baseData = { ...parsed };
+        }
+    }
+    baseData[COOPERATIVE_PAUSE_REQUEST_DATA_KEY] = {
+        RequestID: signal.RequestID,
+        RequestedAtISO: signal.RequestedAtISO,
+        RequestedByUserID: signal.RequestedByUserID,
+        Summary: signal.Summary,
+    };
+    return JSON.stringify(baseData);
+}
+
+/**
+ * Extracts a pending {@link CooperativePauseRequestSignal} from `AIAgentRun.Data` JSON, or `null` when absent.
+ */
+export function ExtractCooperativePauseRequestFromRunData(
+    dataJson: string | null | undefined,
+): CooperativePauseRequestSignal | null {
+    if (typeof dataJson !== 'string' || dataJson.trim().length === 0) {
+        return null;
+    }
+    const parsed = SafeJSONParse<Record<string, RunawayJsonValue>>(dataJson);
+    if (!IsPlainObject(parsed)) {
+        return null;
+    }
+    const raw = parsed[COOPERATIVE_PAUSE_REQUEST_DATA_KEY];
+    if (!IsPlainObject(raw) || typeof raw['RequestID'] !== 'string' || typeof raw['RequestedAtISO'] !== 'string') {
+        return null;
+    }
+    return {
+        RequestID: raw['RequestID'],
+        RequestedAtISO: raw['RequestedAtISO'],
+        RequestedByUserID: typeof raw['RequestedByUserID'] === 'string' ? raw['RequestedByUserID'] : null,
+        Summary: typeof raw['Summary'] === 'string' ? raw['Summary'] : 'Paused cooperatively at safe step boundary',
+    };
+}
+
+/**
+ * Clears any pending {@link COOPERATIVE_PAUSE_REQUEST_DATA_KEY} signal from `AIAgentRun.Data` JSON.
+ */
+export function ClearCooperativePauseRequestFromRunData(
+    existingDataJson: string | null | undefined,
+): string | null {
+    if (typeof existingDataJson !== 'string' || existingDataJson.trim().length === 0) {
+        return existingDataJson ?? null;
+    }
+    const parsed = SafeJSONParse<Record<string, RunawayJsonValue>>(existingDataJson);
+    if (!IsPlainObject(parsed)) {
+        return existingDataJson;
+    }
+    if (!Object.prototype.hasOwnProperty.call(parsed, COOPERATIVE_PAUSE_REQUEST_DATA_KEY)) {
+        return existingDataJson;
+    }
+    const nextData: Record<string, RunawayJsonValue> = { ...parsed };
+    delete nextData[COOPERATIVE_PAUSE_REQUEST_DATA_KEY];
+    return JSON.stringify(nextData);
 }
