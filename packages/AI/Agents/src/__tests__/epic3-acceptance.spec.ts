@@ -1,0 +1,712 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { EntityInfo, RunView, UserInfo } from '@memberjunction/core';
+import type { IMetadataProvider } from '@memberjunction/core';
+import {
+    MJAIAgentRhythmTemplateEntity,
+    MJAIAgentUserPolicyEntity,
+    MJAIBridgeAgentIdentityEntity,
+    MJAgentChannelEntity,
+    MJAgentChannelParticipantEntity,
+    MJUserRoutineEntity,
+    MJUserRoutineEntity_IRoutineWakeConfiguration,
+} from '@memberjunction/core-entities';
+import {
+    AgentUserPolicyEngine,
+    ApplyDefaultAgentUserPolicyValues,
+    MJAIAgentEntityExtended,
+} from '@memberjunction/ai-core-plus';
+import {
+    AgentRunner,
+    AgentWakeTriggerService,
+    BuildUserAppWakeKey,
+    CheckActivePoliciesForBatch,
+    EventWakeCoalescer,
+    ResolveAgentConfigurationIDInput,
+    ResolveSeededRoutineAgentConfigurationID,
+    ResolveWakeAgentConfigurationID,
+    WakeStartupGuard,
+} from '../index';
+
+const COS_AGENT_ID = '00000000-0000-0000-0000-00000000C051';
+const USER_ALICE_ID = '00000000-0000-0000-0000-00000000A11C';
+const USER_BOB_ID = '00000000-0000-0000-0000-00000000B0B2';
+const USER_CAROL_ID = '00000000-0000-0000-0000-00000000CA03';
+const USER_DAVE_ID = '00000000-0000-0000-0000-00000000DA04';
+const SYSTEM_USER_ID = '00000000-0000-0000-0000-0000000005E5';
+const APP_TASKS_ID = '11111111-1111-1111-1111-111111111111';
+const APP_PLANNING_ID = '22222222-2222-2222-2222-222222222222';
+const FAST_CONFIG_ID = '3A1C5A15-8DAA-44E5-A098-F20085E6C93F';
+const STANDARD_CONFIG_ID = 'A76B1550-A6D8-4491-9EF6-A38A8F660FBC';
+const HIGH_POWER_CONFIG_ID = 'B6B9D780-52B2-431B-93AB-AC83FEF78553';
+const DAILY_CAL_TEMPLATE_ID = 'F0294D16-F2B7-4DA2-897F-B9FB27FD5BF5';
+const FIXED_NOW = new Date('2026-11-22T15:00:00.000Z');
+
+const { runViewMock, findUserMock } = vi.hoisted(() => ({
+    runViewMock: vi.fn(),
+    findUserMock: vi.fn(),
+}));
+
+const systemUser = new UserInfo(null, {
+    ID: SYSTEM_USER_ID,
+    Name: 'System',
+    Email: 'system@mj.local',
+    Type: 'Owner',
+    IsActive: true,
+});
+
+const aliceUser = new UserInfo(null, {
+    ID: USER_ALICE_ID,
+    Name: 'Alice Executive',
+    Email: 'alice@example.com',
+    Type: 'User',
+    IsActive: true,
+});
+
+const bobUser = new UserInfo(null, {
+    ID: USER_BOB_ID,
+    Name: 'Bob Executive',
+    Email: 'bob@example.com',
+    Type: 'User',
+    IsActive: true,
+});
+
+const carolUser = new UserInfo(null, {
+    ID: USER_CAROL_ID,
+    Name: 'Carol Paused',
+    Email: 'carol@example.com',
+    Type: 'User',
+    IsActive: true,
+});
+
+const daveUser = new UserInfo(null, {
+    ID: USER_DAVE_ID,
+    Name: 'Dave Unonboarded',
+    Email: 'dave@example.com',
+    Type: 'User',
+    IsActive: true,
+});
+
+vi.mock('@memberjunction/generic-database-provider', () => ({
+    UserCache: {
+        Instance: {
+            GetSystemUser: () => systemUser,
+            FindUser: (criteria: { ID?: string; Email?: string }) => findUserMock(criteria),
+        },
+    },
+}));
+
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    return {
+        ...actual,
+        RunView: class MockRunView extends actual.RunView {
+            public static override FromMetadataProvider(): RunView {
+                return new MockRunView();
+            }
+            public override async RunView(params: Parameters<RunView['RunView']>[0], user?: UserInfo) {
+                return runViewMock(params, user);
+            }
+        },
+    };
+});
+
+interface PolicyFields {
+    ID: string;
+    AgentID: string;
+    UserID: string;
+    Status: MJAIAgentUserPolicyEntity['Status'] | undefined;
+    OnboardingStatus: MJAIAgentUserPolicyEntity['OnboardingStatus'] | undefined;
+    CoordinationMode: MJAIAgentUserPolicyEntity['CoordinationMode'] | undefined;
+    DefaultDataAccessMode: MJAIAgentUserPolicyEntity['DefaultDataAccessMode'] | undefined;
+    EmailChannelMode: MJAIAgentUserPolicyEntity['EmailChannelMode'] | undefined;
+    CalendarChannelMode: MJAIAgentUserPolicyEntity['CalendarChannelMode'] | undefined;
+    PhoneChannelMode: MJAIAgentUserPolicyEntity['PhoneChannelMode'] | undefined;
+    MessagingChannelMode: MJAIAgentUserPolicyEntity['MessagingChannelMode'] | undefined;
+    AllowInterAgentCoordination: boolean | undefined;
+    RequireApprovalForExternalComms: boolean | undefined;
+    RequireApprovalForFinancials: boolean | undefined;
+    RequireApprovalForDestructiveActions: boolean | undefined;
+    AutoApproveAmountThreshold: number | null;
+    Agent: string | null;
+}
+
+class InMemoryPolicyEntity extends MJAIAgentUserPolicyEntity {
+    private readonly backing: PolicyFields;
+    public constructor(initial: Partial<PolicyFields> = {}) {
+        super(new EntityInfo({ Name: 'MJ: AI Agent User Policies', Status: 'Active', Fields: [] }));
+        this.backing = {
+            ID: initial.ID ?? 'policy-id',
+            AgentID: initial.AgentID ?? COS_AGENT_ID,
+            UserID: initial.UserID ?? USER_ALICE_ID,
+            Status: initial.Status,
+            OnboardingStatus: initial.OnboardingStatus,
+            CoordinationMode: initial.CoordinationMode,
+            DefaultDataAccessMode: initial.DefaultDataAccessMode,
+            EmailChannelMode: initial.EmailChannelMode,
+            CalendarChannelMode: initial.CalendarChannelMode,
+            PhoneChannelMode: initial.PhoneChannelMode,
+            MessagingChannelMode: initial.MessagingChannelMode,
+            AllowInterAgentCoordination: initial.AllowInterAgentCoordination,
+            RequireApprovalForExternalComms: initial.RequireApprovalForExternalComms,
+            RequireApprovalForFinancials: initial.RequireApprovalForFinancials,
+            RequireApprovalForDestructiveActions: initial.RequireApprovalForDestructiveActions,
+            AutoApproveAmountThreshold: initial.AutoApproveAmountThreshold ?? null,
+            Agent: initial.Agent ?? 'Chief of Staff',
+        };
+    }
+    public override get ID() { return this.backing.ID; }
+    public override set ID(v: string) { this.backing.ID = v; }
+    public override get AgentID() { return this.backing.AgentID; }
+    public override set AgentID(v: string) { this.backing.AgentID = v; }
+    public override get UserID() { return this.backing.UserID; }
+    public override set UserID(v: string) { this.backing.UserID = v; }
+    public override get Status() { return this.backing.Status as MJAIAgentUserPolicyEntity['Status']; }
+    public override set Status(v: MJAIAgentUserPolicyEntity['Status']) { this.backing.Status = v; }
+    public override get OnboardingStatus() { return this.backing.OnboardingStatus as MJAIAgentUserPolicyEntity['OnboardingStatus']; }
+    public override set OnboardingStatus(v: MJAIAgentUserPolicyEntity['OnboardingStatus']) { this.backing.OnboardingStatus = v; }
+    public override get CoordinationMode() { return this.backing.CoordinationMode as MJAIAgentUserPolicyEntity['CoordinationMode']; }
+    public override set CoordinationMode(v: MJAIAgentUserPolicyEntity['CoordinationMode']) { this.backing.CoordinationMode = v; }
+    public override get DefaultDataAccessMode() { return this.backing.DefaultDataAccessMode as MJAIAgentUserPolicyEntity['DefaultDataAccessMode']; }
+    public override set DefaultDataAccessMode(v: MJAIAgentUserPolicyEntity['DefaultDataAccessMode']) { this.backing.DefaultDataAccessMode = v; }
+    public override get EmailChannelMode() { return this.backing.EmailChannelMode as MJAIAgentUserPolicyEntity['EmailChannelMode']; }
+    public override set EmailChannelMode(v: MJAIAgentUserPolicyEntity['EmailChannelMode']) { this.backing.EmailChannelMode = v; }
+    public override get CalendarChannelMode() { return this.backing.CalendarChannelMode as MJAIAgentUserPolicyEntity['CalendarChannelMode']; }
+    public override set CalendarChannelMode(v: MJAIAgentUserPolicyEntity['CalendarChannelMode']) { this.backing.CalendarChannelMode = v; }
+    public override get PhoneChannelMode() { return this.backing.PhoneChannelMode as MJAIAgentUserPolicyEntity['PhoneChannelMode']; }
+    public override set PhoneChannelMode(v: MJAIAgentUserPolicyEntity['PhoneChannelMode']) { this.backing.PhoneChannelMode = v; }
+    public override get MessagingChannelMode() { return this.backing.MessagingChannelMode as MJAIAgentUserPolicyEntity['MessagingChannelMode']; }
+    public override set MessagingChannelMode(v: MJAIAgentUserPolicyEntity['MessagingChannelMode']) { this.backing.MessagingChannelMode = v; }
+    public override get AllowInterAgentCoordination() { return this.backing.AllowInterAgentCoordination as boolean; }
+    public override set AllowInterAgentCoordination(v: boolean) { this.backing.AllowInterAgentCoordination = v; }
+    public override get RequireApprovalForExternalComms() { return this.backing.RequireApprovalForExternalComms as boolean; }
+    public override set RequireApprovalForExternalComms(v: boolean) { this.backing.RequireApprovalForExternalComms = v; }
+    public override get RequireApprovalForFinancials() { return this.backing.RequireApprovalForFinancials as boolean; }
+    public override set RequireApprovalForFinancials(v: boolean) { this.backing.RequireApprovalForFinancials = v; }
+    public override get RequireApprovalForDestructiveActions() { return this.backing.RequireApprovalForDestructiveActions as boolean; }
+    public override set RequireApprovalForDestructiveActions(v: boolean) { this.backing.RequireApprovalForDestructiveActions = v; }
+    public override get AutoApproveAmountThreshold() { return this.backing.AutoApproveAmountThreshold; }
+    public override set AutoApproveAmountThreshold(v: number | null) { this.backing.AutoApproveAmountThreshold = v; }
+    public override get Agent() { return this.backing.Agent; }
+    public override set Agent(v: string | null) { this.backing.Agent = v; }
+}
+
+class InMemoryRoutineEntity extends MJUserRoutineEntity {
+    private backingID: string;
+    private backingUserID = '';
+    private backingName = '';
+    private backingDescription: string | null = null;
+    private backingStatus: MJUserRoutineEntity['Status'] = 'Active';
+    private backingRoutineType: MJUserRoutineEntity['RoutineType'] = 'AgentWake';
+    private backingScheduleMode: MJUserRoutineEntity['ScheduleMode'] = 'OneShot';
+    private backingTargetType: MJUserRoutineEntity['TargetType'] = 'Agent';
+    private backingTargetID = '';
+    private backingCronExpression: string | null = null;
+    private backingTimezone: string | null = 'UTC';
+    private backingInitialMessage: string | null = null;
+    private backingStartingPayload: string | null = null;
+    private backingNextRunAt: Date | null = null;
+    private backingLastRunAt: Date | null = null;
+    private backingWakeConfig: string | null = null;
+    private backingWakeConfigObj: MJUserRoutineEntity_IRoutineWakeConfiguration | null = null;
+    private backingAgentConfigID: string | null = null;
+    private readonly onSave: (entity: InMemoryRoutineEntity) => void;
+
+    public constructor(id: string, onSave: (entity: InMemoryRoutineEntity) => void) {
+        super(new EntityInfo({ Name: 'MJ: User Routines', Status: 'Active', Fields: [] }));
+        this.backingID = id;
+        this.onSave = onSave;
+    }
+
+    public override get ID() { return this.backingID; }
+    public override set ID(v: string) { this.backingID = v; }
+    public override get UserID() { return this.backingUserID; }
+    public override set UserID(v: string) { this.backingUserID = v; }
+    public override get Name() { return this.backingName; }
+    public override set Name(v: string) { this.backingName = v; }
+    public override get Description() { return this.backingDescription; }
+    public override set Description(v: string | null) { this.backingDescription = v; }
+    public override get Status() { return this.backingStatus; }
+    public override set Status(v: MJUserRoutineEntity['Status']) { this.backingStatus = v; }
+    public override get RoutineType() { return this.backingRoutineType; }
+    public override set RoutineType(v: MJUserRoutineEntity['RoutineType']) { this.backingRoutineType = v; }
+    public override get ScheduleMode() { return this.backingScheduleMode; }
+    public override set ScheduleMode(v: MJUserRoutineEntity['ScheduleMode']) { this.backingScheduleMode = v; }
+    public override get TargetType() { return this.backingTargetType; }
+    public override set TargetType(v: MJUserRoutineEntity['TargetType']) { this.backingTargetType = v; }
+    public override get TargetID() { return this.backingTargetID; }
+    public override set TargetID(v: string) { this.backingTargetID = v; }
+    public override get CronExpression() { return this.backingCronExpression; }
+    public override set CronExpression(v: string | null) { this.backingCronExpression = v; }
+    public override get Timezone() { return this.backingTimezone; }
+    public override set Timezone(v: string | null) { this.backingTimezone = v; }
+    public override get InitialMessage() { return this.backingInitialMessage; }
+    public override set InitialMessage(v: string | null) { this.backingInitialMessage = v; }
+    public override get StartingPayload() { return this.backingStartingPayload; }
+    public override set StartingPayload(v: string | null) { this.backingStartingPayload = v; }
+    public override get NextRunAt() { return this.backingNextRunAt; }
+    public override set NextRunAt(v: Date | null) { this.backingNextRunAt = v; }
+    public override get LastRunAt() { return this.backingLastRunAt; }
+    public override set LastRunAt(v: Date | null) { this.backingLastRunAt = v; }
+    public override get WakeConfiguration() { return this.backingWakeConfig; }
+    public override set WakeConfiguration(v: string | null) { this.backingWakeConfig = v; }
+    public override get WakeConfigurationObject() { return this.backingWakeConfigObj; }
+    public override set WakeConfigurationObject(v: MJUserRoutineEntity_IRoutineWakeConfiguration | null) {
+        this.backingWakeConfigObj = v;
+        this.backingWakeConfig = v ? JSON.stringify(v) : null;
+    }
+    public override get AgentConfigurationID() { return this.backingAgentConfigID; }
+    public override set AgentConfigurationID(v: string | null) { this.backingAgentConfigID = v; }
+
+    public override NewRecord(): boolean {
+        return true;
+    }
+
+    public override async Save(): Promise<boolean> {
+        this.onSave(this);
+        return true;
+    }
+}
+
+class InMemoryAgentChannelEntity extends MJAgentChannelEntity {
+    private backingID = 'channel-epic3-1';
+    private backingTopic = 'Epic 3 Acceptance Channel';
+    private backingStatus: MJAgentChannelEntity['ChannelStatus'] = 'Open';
+    private backingTurns = 0;
+    private backingMaxTurns = 10;
+    private backingHourly = 0;
+    private backingMaxHourly = 10;
+    private backingHourlyStart: Date | null = null;
+    private backingLastHuman: Date | null = null;
+
+    public constructor() {
+        super(new EntityInfo({ Name: 'MJ: Agent Channels', Status: 'Active', Fields: [] }));
+    }
+
+    public override get ID() { return this.backingID; }
+    public override set ID(v: string) { this.backingID = v; }
+    public override get Topic() { return this.backingTopic; }
+    public override set Topic(v: string) { this.backingTopic = v; }
+    public override get ChannelStatus() { return this.backingStatus; }
+    public override set ChannelStatus(v: MJAgentChannelEntity['ChannelStatus']) { this.backingStatus = v; }
+    public override get ConsecutiveAgentTurns() { return this.backingTurns; }
+    public override set ConsecutiveAgentTurns(v: number) { this.backingTurns = v; }
+    public override get MaxConsecutiveAgentTurns() { return this.backingMaxTurns; }
+    public override set MaxConsecutiveAgentTurns(v: number) { this.backingMaxTurns = v; }
+    public override get HourlyWakeCount() { return this.backingHourly; }
+    public override set HourlyWakeCount(v: number) { this.backingHourly = v; }
+    public override get MaxHourlyWakes() { return this.backingMaxHourly; }
+    public override set MaxHourlyWakes(v: number) { this.backingMaxHourly = v; }
+    public override get HourlyWakeWindowStart() { return this.backingHourlyStart; }
+    public override set HourlyWakeWindowStart(v: Date | null) { this.backingHourlyStart = v; }
+    public override get LastHumanMessageAt() { return this.backingLastHuman; }
+    public override set LastHumanMessageAt(v: Date | null) { this.backingLastHuman = v; }
+
+    public override async Load(id: string): Promise<boolean> {
+        this.backingID = id;
+        return true;
+    }
+    public override async Save(): Promise<boolean> {
+        return true;
+    }
+}
+
+function createProviderWithStore() {
+    const routinesByID = new Map<string, InMemoryRoutineEntity>();
+    let seq = 0;
+
+    const provider = {
+        GetEntityObject: vi.fn(async (entityName: string) => {
+            if (entityName === 'MJ: Agent Channels') {
+                return new InMemoryAgentChannelEntity();
+            }
+            const routine = new InMemoryRoutineEntity(`routine-${++seq}`, (saved) => {
+                routinesByID.set(saved.ID, saved);
+            });
+            return routine;
+        }),
+    } as Partial<IMetadataProvider> as IMetadataProvider;
+
+    return { provider, routinesByID };
+}
+
+describe('Epic 3 Acceptance Suite (Rhythms Model Tiers, Policy Gating, Burst Coalescing, Autonomous Defaults)', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        AgentUserPolicyEngine.Instance.ClearCache();
+        EventWakeCoalescer.Instance.Reset();
+        WakeStartupGuard.Instance.Reset();
+        delete process.env.AIDP_DEPLOYMENT_IN_PROGRESS;
+        delete process.env.MJ_SKIP_STARTUP_WAKES;
+
+        const users = [aliceUser, bobUser, carolUser, daveUser, systemUser];
+        findUserMock.mockImplementation((criteria: { ID?: string; Email?: string }) => {
+            if (criteria.ID) {
+                return users.find((u) => u.ID.toLowerCase() === criteria.ID?.toLowerCase());
+            }
+            if (criteria.Email) {
+                return users.find((u) => u.Email.toLowerCase() === criteria.Email?.toLowerCase());
+            }
+            return undefined;
+        });
+    });
+
+    afterEach(() => {
+        WakeStartupGuard.Instance.Reset();
+        EventWakeCoalescer.Instance.Reset();
+        vi.restoreAllMocks();
+    });
+
+    it('AT-1: Two users executing the same rhythm configured on different tiers (Draft vs High) execute agent runs on their respective tier models', async () => {
+        runViewMock.mockImplementation(async (params: { EntityName: string; ExtraFilter?: string }) => {
+            if (params.EntityName === 'MJ: AI Configurations') {
+                if (params.ExtraFilter?.includes("Name='Fast'")) {
+                    return { Success: true, Results: [{ ID: FAST_CONFIG_ID, Name: 'Fast', Status: 'Active' }] };
+                }
+                if (params.ExtraFilter?.includes("Name='High Power'")) {
+                    return { Success: true, Results: [{ ID: HIGH_POWER_CONFIG_ID, Name: 'High Power', Status: 'Active' }] };
+                }
+                if (params.ExtraFilter?.includes("Name='Standard'")) {
+                    return { Success: true, Results: [{ ID: STANDARD_CONFIG_ID, Name: 'Standard', Status: 'Active' }] };
+                }
+            }
+            if (params.EntityName === 'MJ: AI Agent Rhythm Templates') {
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: DAILY_CAL_TEMPLATE_ID,
+                            AgentID: COS_AGENT_ID,
+                            WorkstreamKey: 'calendar-daily-review',
+                            DefaultAgentConfigurationID: FAST_CONFIG_ID,
+                        },
+                    ],
+                };
+            }
+            return { Success: true, Results: [] };
+        });
+
+        const draftTierInput = await ResolveAgentConfigurationIDInput({
+            modelTier: 'Draft',
+            contextUser: aliceUser,
+        });
+        const highTierInput = await ResolveAgentConfigurationIDInput({
+            modelTier: 'High',
+            contextUser: bobUser,
+        });
+        expect(draftTierInput).toEqual({ Provided: true, ConfigurationID: FAST_CONFIG_ID });
+        expect(highTierInput).toEqual({ Provided: true, ConfigurationID: HIGH_POWER_CONFIG_ID });
+
+        // User Alice uses template default (Draft -> Fast)
+        const aliceRoutine = new InMemoryRoutineEntity('routine-alice-cal', () => undefined);
+        aliceRoutine.UserID = USER_ALICE_ID;
+        aliceRoutine.TargetID = COS_AGENT_ID;
+        aliceRoutine.AgentConfigurationID = ResolveSeededRoutineAgentConfigurationID({
+            templateDefaultAgentConfigurationID: FAST_CONFIG_ID,
+        });
+        aliceRoutine.WakeConfigurationObject = {
+            workstreamKey: 'calendar-daily-review',
+            resumeState: { rhythmTemplateID: DAILY_CAL_TEMPLATE_ID },
+        };
+
+        // User Bob customizes the same rhythm to High (High Power)
+        const bobRoutine = new InMemoryRoutineEntity('routine-bob-cal', () => undefined);
+        bobRoutine.UserID = USER_BOB_ID;
+        bobRoutine.TargetID = COS_AGENT_ID;
+        bobRoutine.AgentConfigurationID = ResolveSeededRoutineAgentConfigurationID({
+            explicitAgentConfigurationID: highTierInput.ConfigurationID,
+            templateDefaultAgentConfigurationID: FAST_CONFIG_ID,
+        });
+        bobRoutine.WakeConfigurationObject = {
+            workstreamKey: 'calendar-daily-review',
+            resumeState: { rhythmTemplateID: DAILY_CAL_TEMPLATE_ID },
+        };
+
+        const aliceConfigId = await ResolveWakeAgentConfigurationID({
+            routine: aliceRoutine,
+            contextUser: aliceUser,
+        });
+        const bobConfigId = await ResolveWakeAgentConfigurationID({
+            routine: bobRoutine,
+            contextUser: bobUser,
+        });
+
+        expect(aliceConfigId).toBe(FAST_CONFIG_ID);
+        expect(bobConfigId).toBe(HIGH_POWER_CONFIG_ID);
+
+        // Verify AgentRunner forwards each user's resolved tier configurationId
+        const capturedConfigs: Array<{ userId: string; configurationId?: string }> = [];
+        const runner = new AgentRunner();
+        vi.spyOn(runner, 'RunAgent').mockImplementation(async (params) => {
+            capturedConfigs.push({
+                userId: params.contextUser.ID,
+                configurationId: params.configurationId,
+            });
+            return { success: true, payload: { ok: true } } as Awaited<ReturnType<AgentRunner['RunAgent']>>;
+        });
+
+        const cosAgent = { ID: COS_AGENT_ID, Name: 'Chief of Staff' } as MJAIAgentEntityExtended;
+        await runner.RunAgent({
+            agent: cosAgent,
+            conversationMessages: [{ role: 'user', content: 'Daily calendar guard' }],
+            contextUser: aliceUser,
+            configurationId: aliceConfigId,
+        });
+        await runner.RunAgent({
+            agent: cosAgent,
+            conversationMessages: [{ role: 'user', content: 'Daily calendar guard' }],
+            contextUser: bobUser,
+            configurationId: bobConfigId,
+        });
+
+        expect(capturedConfigs).toEqual([
+            { userId: USER_ALICE_ID, configurationId: FAST_CONFIG_ID },
+            { userId: USER_BOB_ID, configurationId: HIGH_POWER_CONFIG_ID },
+        ]);
+    });
+
+    it('AT-2: Assigning 20 tasks to one onboarded user within one minute coalesces into a single wake', async () => {
+        const { provider, routinesByID } = createProviderWithStore();
+        const alicePolicy = ApplyDefaultAgentUserPolicyValues(
+            new InMemoryPolicyEntity({ ID: 'pol-alice', UserID: USER_ALICE_ID, OnboardingStatus: 'Completed' })
+        );
+
+        runViewMock.mockImplementation(async (params: { EntityName: string }) => {
+            if (params.EntityName === 'MJ: AI Agent User Policies') {
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: alicePolicy.ID,
+                            AgentID: COS_AGENT_ID,
+                            UserID: USER_ALICE_ID,
+                            Status: alicePolicy.Status,
+                            AllowInterAgentCoordination: alicePolicy.AllowInterAgentCoordination,
+                            EmailChannelMode: alicePolicy.EmailChannelMode,
+                            Agent: 'Chief of Staff',
+                        },
+                    ],
+                };
+            }
+            if (params.EntityName === 'MJ: Users') {
+                return { Success: true, Results: [{ ID: USER_ALICE_ID, IsActive: true }] };
+            }
+            if (params.EntityName === 'MJ: AI Agents') {
+                return { Success: true, Results: [{ ID: COS_AGENT_ID, Name: 'Chief of Staff', Status: 'Active' }] };
+            }
+            if (params.EntityName === 'MJ: User Routines') {
+                return { Success: true, Results: Array.from(routinesByID.values()) };
+            }
+            return { Success: true, Results: [] };
+        });
+
+        const results = [];
+        for (let i = 1; i <= 20; i++) {
+            const eventAt = new Date(FIXED_NOW.getTime() + (i - 1) * 2_500); // 0s .. 47.5s (< 60s window)
+            results.push(
+                await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+                    targetUserID: USER_ALICE_ID,
+                    targetAgentID: COS_AGENT_ID,
+                    workstreamKey: `task:epic3-${i}`,
+                    applicationID: APP_TASKS_ID,
+                    wakeReason: `Assigned task #${i}`,
+                    resumeState: {
+                        triggerType: 'TaskAssigned',
+                        taskID: `epic3-${i}`,
+                        subject: `Task #${i}`,
+                    },
+                    contextUser: systemUser,
+                    metadataProvider: provider,
+                    now: eventAt,
+                })
+            );
+        }
+
+        expect(results.every((r) => r.triggered && r.resultCode === 'WAKE_SCHEDULED')).toBe(true);
+        expect(routinesByID.size).toBe(1);
+
+        const singleRoutine = Array.from(routinesByID.values())[0];
+        const resumeState = singleRoutine.WakeConfigurationObject?.resumeState;
+        const pendingEvents = resumeState?.['pendingEvents'] as Array<Record<string, unknown>>;
+        expect(pendingEvents).toHaveLength(20);
+        expect(resumeState?.['coalescedEventCount']).toBe(20);
+        expect(resumeState?.['coalesceKey']).toBe(BuildUserAppWakeKey(USER_ALICE_ID, APP_TASKS_ID));
+        expect(results[19].coalesced).toBe(true);
+        expect(results[19].coalescedCount).toBe(20);
+
+        // Separate application bucket produces a distinct wake key and routine
+        const planningWake = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+            targetUserID: USER_ALICE_ID,
+            targetAgentID: COS_AGENT_ID,
+            workstreamKey: 'okr:check-in-1',
+            applicationID: APP_PLANNING_ID,
+            wakeReason: 'OKR updated',
+            resumeState: { triggerType: 'OKRUpdated', eventID: 'okr-1' },
+            contextUser: systemUser,
+            metadataProvider: provider,
+            now: FIXED_NOW,
+        });
+        expect(planningWake.triggered).toBe(true);
+        expect(routinesByID.size).toBe(2);
+    });
+
+    it('AT-3: A user with no policy or inactive (Paused/Disabled) policy receives zero runs across all triggers', async () => {
+        const { provider, routinesByID } = createProviderWithStore();
+        const carolPaused = ApplyDefaultAgentUserPolicyValues(
+            new InMemoryPolicyEntity({ ID: 'pol-carol', UserID: USER_CAROL_ID, Status: 'Paused' })
+        );
+        const bobDisabled = ApplyDefaultAgentUserPolicyValues(
+            new InMemoryPolicyEntity({ ID: 'pol-bob', UserID: USER_BOB_ID, Status: 'Disabled' })
+        );
+
+        runViewMock.mockImplementation(async (params: { EntityName: string; ExtraFilter?: string }) => {
+            if (params.EntityName === 'MJ: AI Agent User Policies') {
+                const filter = params.ExtraFilter ?? '';
+                const matched: Array<Record<string, unknown>> = [];
+                if (filter.includes(USER_CAROL_ID)) {
+                    matched.push({
+                        ID: carolPaused.ID,
+                        AgentID: COS_AGENT_ID,
+                        UserID: USER_CAROL_ID,
+                        Status: 'Paused',
+                        AllowInterAgentCoordination: true,
+                        EmailChannelMode: 'DraftOnly',
+                        Agent: 'Chief of Staff',
+                    });
+                }
+                if (filter.includes(USER_BOB_ID)) {
+                    matched.push({
+                        ID: bobDisabled.ID,
+                        AgentID: COS_AGENT_ID,
+                        UserID: USER_BOB_ID,
+                        Status: 'Disabled',
+                        AllowInterAgentCoordination: true,
+                        EmailChannelMode: 'DraftOnly',
+                        Agent: 'Chief of Staff',
+                    });
+                }
+                return { Success: true, Results: matched };
+            }
+            if (params.EntityName === 'MJ: Users') {
+                return {
+                    Success: true,
+                    Results: [
+                        { ID: USER_CAROL_ID, IsActive: true },
+                        { ID: USER_BOB_ID, IsActive: true },
+                        { ID: USER_DAVE_ID, IsActive: true },
+                    ],
+                };
+            }
+            if (params.EntityName === 'MJ: AI Agents') {
+                return { Success: true, Results: [{ ID: COS_AGENT_ID, Name: 'Chief of Staff', Status: 'Active' }] };
+            }
+            if (params.EntityName === 'MJ: Agent Channel Participants') {
+                return {
+                    Success: true,
+                    Results: [
+                        { AgentID: COS_AGENT_ID, UserID: USER_ALICE_ID } as MJAgentChannelParticipantEntity,
+                        { AgentID: COS_AGENT_ID, UserID: USER_CAROL_ID } as MJAgentChannelParticipantEntity,
+                        { AgentID: COS_AGENT_ID, UserID: USER_DAVE_ID } as MJAgentChannelParticipantEntity,
+                    ],
+                };
+            }
+            return { Success: true, Results: [] };
+        });
+
+        // 1. Batched scheduled policy check rejects no-policy (Dave), Paused (Carol), Disabled (Bob)
+        const batchResult = await CheckActivePoliciesForBatch(
+            [
+                { AgentID: COS_AGENT_ID, UserID: USER_DAVE_ID },
+                { AgentID: COS_AGENT_ID, UserID: USER_CAROL_ID },
+                { AgentID: COS_AGENT_ID, UserID: USER_BOB_ID },
+            ],
+            systemUser,
+            { provider, bypassCache: true }
+        );
+        for (const evalOutcome of batchResult.values()) {
+            expect(evalOutcome.Allowed).toBe(false);
+        }
+
+        // 2. Workstream trigger denied for no policy & Paused
+        const daveWorkstream = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+            targetUserID: USER_DAVE_ID,
+            targetAgentID: COS_AGENT_ID,
+            workstreamKey: 'task:dave-1',
+            applicationID: APP_TASKS_ID,
+            wakeReason: 'Task assigned to un-onboarded user',
+            contextUser: systemUser,
+            metadataProvider: provider,
+            now: FIXED_NOW,
+        });
+        expect(daveWorkstream.triggered).toBe(false);
+        expect(daveWorkstream.resultCode).toBe('POLICY_DENIED');
+
+        const carolWorkstream = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+            targetUserID: USER_CAROL_ID,
+            targetAgentID: COS_AGENT_ID,
+            workstreamKey: 'task:carol-1',
+            applicationID: APP_TASKS_ID,
+            wakeReason: 'Task assigned to paused user',
+            contextUser: systemUser,
+            metadataProvider: provider,
+            now: FIXED_NOW,
+        });
+        expect(carolWorkstream.triggered).toBe(false);
+        expect(carolWorkstream.resultCode).toBe('POLICY_DENIED');
+
+        // 3. Inbound utility mailbox denied for un-onboarded user (Dave)
+        const utilityIdentity = {
+            ID: 'ident-cos-shared',
+            AgentID: COS_AGENT_ID,
+            UserID: null,
+            IdentityType: 'Email',
+            IdentityValue: 'cos@company.com',
+            IsActive: true,
+            Configuration: null,
+        } as MJAIBridgeAgentIdentityEntity;
+
+        const daveEmail = await AgentWakeTriggerService.Instance.RouteInboundUtilityMailboxWake({
+            toAddress: 'cos@company.com',
+            fromAddress: 'dave@example.com',
+            subject: 'Wake up please',
+            systemContextUser: systemUser,
+            metadataProvider: provider,
+            identities: [utilityIdentity],
+            users: [daveUser],
+            now: FIXED_NOW,
+        });
+        expect(daveEmail.triggered).toBe(false);
+        expect(daveEmail.resultCode).toBe('POLICY_DENIED');
+
+        // 4. Agent Channel peer wakes denied for Carol (Paused) and Dave (none)
+        const channelOutcome = await AgentWakeTriggerService.Instance.TriggerWakeOnAgentChannelMessage({
+            channelID: 'channel-epic3-1',
+            senderUserID: USER_ALICE_ID,
+            senderAgentID: COS_AGENT_ID,
+            messagePreview: 'Status update',
+            contextUser: systemUser,
+            metadataProvider: provider,
+            now: FIXED_NOW,
+        });
+        expect(channelOutcome.results.every((r) => !r.triggered && r.resultCode === 'POLICY_DENIED')).toBe(true);
+        expect(routinesByID.size).toBe(0);
+    });
+
+    it('AT-4: Newly created user agent policy defaults to Autonomous mode, Email DraftOnly, Calendar approval required, and Phone Off (Disabled)', () => {
+        const engine = AgentUserPolicyEngine.Instance;
+        const freshPolicy = ApplyDefaultAgentUserPolicyValues(
+            new InMemoryPolicyEntity({ ID: 'pol-fresh', UserID: USER_ALICE_ID })
+        );
+
+        expect(freshPolicy.Status).toBe('Active');
+        expect(freshPolicy.CoordinationMode).toBe('Autonomous');
+        expect(freshPolicy.EmailChannelMode).toBe('DraftOnly');
+        expect(freshPolicy.CalendarChannelMode).toBe('ProposeWithApproval');
+        expect(freshPolicy.PhoneChannelMode).toBe('Disabled');
+
+        expect(engine.EvaluateEmailOperation(freshPolicy, 'Draft').verdict).toBe('Allow');
+        expect(engine.EvaluateEmailOperation(freshPolicy, 'Send').verdict).toBe('Deny');
+        expect(engine.EvaluateCalendarOperation(freshPolicy, true).verdict).toBe('RequireApproval');
+        expect(engine.EvaluatePhoneOperation(freshPolicy, 'Outbound').verdict).toBe('Deny');
+        expect(engine.EvaluatePhoneOperation(freshPolicy, 'Inbound').verdict).toBe('Deny');
+    });
+});

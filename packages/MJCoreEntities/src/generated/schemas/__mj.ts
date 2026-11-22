@@ -4331,7 +4331,7 @@ export const MJAIAgentUserPolicySchema = z.object({
         * * Field Name: CoordinationMode
         * * Display Name: Coordination Mode
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: Observer
+        * * Default Value: Autonomous
     * * Value List Type: List
     * * Possible Values 
     *   * Autonomous
@@ -4366,7 +4366,7 @@ export const MJAIAgentUserPolicySchema = z.object({
         * * Field Name: PhoneChannelMode
         * * Display Name: Phone Channel Mode
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: InboundOnly
+        * * Default Value: Disabled
     * * Value List Type: List
     * * Possible Values 
     *   * Disabled
@@ -4388,7 +4388,7 @@ export const MJAIAgentUserPolicySchema = z.object({
         * * Field Name: CalendarChannelMode
         * * Display Name: Calendar Channel Mode
         * * SQL Data Type: nvarchar(30)
-        * * Default Value: ReadOnly
+        * * Default Value: ProposeWithApproval
     * * Value List Type: List
     * * Possible Values 
     *   * Autonomous

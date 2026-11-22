@@ -599,6 +599,55 @@ describe('Chief of Staff Actions Suite', () => {
             expect(policyStub.EmailChannelMode).toBe('SendAsAgent');
             expect(setCachedPolicyMock).toHaveBeenCalledWith(policyStub);
         });
+
+        it('applies Autonomous Slice 3 defaults for omitted coordination and channel modes on a new policy', async () => {
+            const newPolicyStub = {
+                ID: 'policy-new-default',
+                AgentID: '',
+                UserID: '',
+                DisplayNameOverride: null as string | null,
+                OnboardingStatus: undefined as MJAIAgentUserPolicyEntity['OnboardingStatus'] | undefined,
+                OnboardedAt: null as Date | null,
+                CoordinationMode: undefined as MJAIAgentUserPolicyEntity['CoordinationMode'] | undefined,
+                AllowInterAgentCoordination: undefined as boolean | undefined,
+                DefaultDataAccessMode: undefined as MJAIAgentUserPolicyEntity['DefaultDataAccessMode'] | undefined,
+                EmailChannelMode: undefined as MJAIAgentUserPolicyEntity['EmailChannelMode'] | undefined,
+                CalendarChannelMode: undefined as MJAIAgentUserPolicyEntity['CalendarChannelMode'] | undefined,
+                PhoneChannelMode: undefined as MJAIAgentUserPolicyEntity['PhoneChannelMode'] | undefined,
+                MessagingChannelMode: undefined as MJAIAgentUserPolicyEntity['MessagingChannelMode'] | undefined,
+                InstructionsOverride: null as string | null,
+                RequireApprovalForExternalComms: undefined as boolean | undefined,
+                RequireApprovalForFinancials: undefined as boolean | undefined,
+                RequireApprovalForDestructiveActions: undefined as boolean | undefined,
+                AutoApproveAmountThreshold: null as number | null,
+                Status: undefined as MJAIAgentUserPolicyEntity['Status'] | undefined,
+                Save: vi.fn().mockResolvedValue(true),
+            };
+            runViewMock.mockResolvedValueOnce({ Success: true, Results: [] });
+            getEntityObjectMock.mockResolvedValueOnce(newPolicyStub);
+
+            const params: RunActionParams = {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('user-default-1'),
+                Filters: [],
+                Params: [
+                    { Name: 'AgentID', Type: 'Input', Value: 'cos-agent-id' },
+                ],
+            };
+
+            const res = await invokeAction(new ConfigureAgentUserPolicyAction(), params);
+            expect(res.Success).toBe(true);
+            expect(newPolicyStub.Status).toBe('Active');
+            expect(newPolicyStub.CoordinationMode).toBe('Autonomous');
+            expect(newPolicyStub.EmailChannelMode).toBe('DraftOnly');
+            expect(newPolicyStub.CalendarChannelMode).toBe('ProposeWithApproval');
+            expect(newPolicyStub.PhoneChannelMode).toBe('Disabled');
+            expect(newPolicyStub.MessagingChannelMode).toBe('Enabled');
+            expect(newPolicyStub.RequireApprovalForExternalComms).toBe(true);
+            expect(newPolicyStub.RequireApprovalForFinancials).toBe(true);
+            expect(newPolicyStub.RequireApprovalForDestructiveActions).toBe(true);
+            expect(newPolicyStub.AutoApproveAmountThreshold).toBeNull();
+        });
     });
 
     describe('SendInterAgentRequestAction', () => {
@@ -707,6 +756,28 @@ describe('Chief of Staff Actions Suite', () => {
             getPolicyMock.mockResolvedValueOnce({
                 Status: 'Active',
                 PhoneChannelMode: 'InboundOnly',
+            });
+
+            const params: RunActionParams = {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser(),
+                Filters: [],
+                Params: [
+                    { Name: 'TargetPhoneNumber', Type: 'Input', Value: '+15551234567' },
+                    { Name: 'TargetRecipientName', Type: 'Input', Value: 'Bistro Luma' },
+                    { Name: 'Objective', Type: 'Input', Value: 'Book dinner for 4 at 7:00 PM on Friday' },
+                ],
+            };
+
+            const res = await invokeAction(new PrepareOutboundCallBriefAction(), params);
+            expect(res.Success).toBe(false);
+            expect(res.ResultCode).toBe('POLICY_DENIED');
+        });
+
+        it('defaults missing PhoneChannelMode to Disabled (Off) and denies outbound call preparation', async () => {
+            getPolicyMock.mockResolvedValueOnce({
+                Status: 'Active',
+                PhoneChannelMode: null as unknown as MJAIAgentUserPolicyEntity['PhoneChannelMode'],
             });
 
             const params: RunActionParams = {

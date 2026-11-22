@@ -357,7 +357,7 @@ export function CreateDefaultPolicyDraft(agentName: string = CHIEF_OF_STAFF_AGEN
         DisplayNameOverride: agentName,
         Status: 'Active',
         OnboardingStatus: 'Completed',
-        CoordinationMode: 'Coordinator',
+        CoordinationMode: 'Autonomous',
         DefaultDataAccessMode: 'UserCeiling',
         EmailChannelMode: 'DraftOnly',
         CalendarChannelMode: 'ProposeWithApproval',

@@ -324,8 +324,13 @@ describe('Chief of Staff pages', () => {
 });
 
 describe('Policy drafts', () => {
-    it('starts from the default draft when the user has no policy record', () => {
-        expect(BuildPolicyDraftFromEntity(null)).toEqual(CreateDefaultPolicyDraft());
+    it('starts from the default draft in Autonomous coordination mode with conservative channel defaults when no policy record exists', () => {
+        const draft = CreateDefaultPolicyDraft();
+        expect(BuildPolicyDraftFromEntity(null)).toEqual(draft);
+        expect(draft.CoordinationMode).toBe('Autonomous');
+        expect(draft.EmailChannelMode).toBe('DraftOnly');
+        expect(draft.CalendarChannelMode).toBe('ProposeWithApproval');
+        expect(draft.PhoneChannelMode).toBe('Disabled');
     });
 
     it('copies a policy record, turning null text fields into empty strings', () => {
