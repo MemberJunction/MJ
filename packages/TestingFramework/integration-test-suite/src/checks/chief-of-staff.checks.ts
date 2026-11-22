@@ -26,14 +26,15 @@ import {
     MJAgentChannelEntity,
     MJConversationDetailEntity,
     MJUserRoutineEntity,
+    MJUserRoutineEntity_IRoutineWakeConfiguration,
 } from '@memberjunction/core-entities';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionParam, ActionResult, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RunUserRoutineNowAction } from '@memberjunction/scheduling-engine';
 import { AIEngine } from '@memberjunction/aiengine';
-import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
+import { AgentUserPolicyEngine, TypedActionPolicyGuard } from '@memberjunction/ai-core-plus';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { IndexByUUID, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
     Assert,
     AssertEqual,
@@ -318,11 +319,33 @@ export const ChiefOfStaffChecks: NamedCheck[] = [
             AssertEqual((await requestsWithSubjectTag(ctx.User)).length, before, 'no approval may be queued under DraftOnly');
         }
     },
-    // ── Extensible Skills Core Layer (COS9–COS12) ───────────────────────────────────────
+    // ── Extensible Skills Core Layer (COS9–COS14) ───────────────────────────────────────
     {
         Id: 'chief-of-staff.COS9',
-        Name: 'COS9: Chief of Staff has zero raw SQL / generic CRUD actions and Get My Agent Context + Assemble My Briefing run cleanly',
+        Name: 'COS9: Chief of Staff uses AcceptsSkills=Limited, excludes Data Analysis & Queries, delegates to Query Builder, holds zero SQL/CRUD actions, and runs Context + Briefing cleanly',
         Fn: async (ctx) => {
+            const cosAgent = AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, fx().AgentID));
+            Assert(!!cosAgent, 'Chief of Staff agent must exist in AIEngine');
+            AssertEqual(cosAgent!.AcceptsSkills, 'Limited', 'Chief of Staff must set AcceptsSkills = Limited so SQL skills cannot be silently auto-activated');
+
+            const autoSkills = AIEngine.Instance.GetAutoActivatableSkillsForAgent(cosAgent!, ctx.User);
+            const hasSqlSkill = autoSkills.some(
+                (s) => (s.Name ?? '').trim().toLowerCase() === 'data analysis & queries'
+            );
+            Assert(!hasSqlSkill, 'Data Analysis & Queries must NOT be auto-activatable by Chief of Staff');
+
+            const queryBuilder = AIEngine.Instance.Agents.find(
+                (a) => (a.Name ?? '').trim().toLowerCase() === 'query builder'
+            );
+            Assert(!!queryBuilder, 'Query Builder specialist agent must exist in AIEngine');
+            const hasQueryBuilderRel = AIEngine.Instance.AgentRelationships.some(
+                (r) =>
+                    UUIDsEqual(r.AgentID, fx().AgentID) &&
+                    UUIDsEqual(r.SubAgentID, queryBuilder!.ID) &&
+                    r.Status === 'Active'
+            );
+            Assert(hasQueryBuilderRel, 'Chief of Staff must have an Active MJ: AI Agent Relationships grant to Query Builder');
+
             const banned = new Set([
                 'run ad-hoc query',
                 'create record',
@@ -480,7 +503,7 @@ export const ChiefOfStaffChecks: NamedCheck[] = [
     },
     {
         Id: 'chief-of-staff.COS12',
-        Name: 'COS12: Schedule Next Agent Wake blocks autonomous creation of new Recurring routines without user confirmation',
+        Name: 'COS12: Schedule Next Agent Wake blocks autonomous creation of new Recurring routines even with self-attested ConfirmedByUser=true',
         Fn: async (ctx) => {
             const action = ActionEngineServer.Instance.Actions.find((a) => a.Name === 'Schedule Next Agent Wake');
             Assert(!!action, 'need Schedule Next Agent Wake action');
@@ -494,7 +517,8 @@ export const ChiefOfStaffChecks: NamedCheck[] = [
                 input('ScheduleMode', 'Recurring'),
                 input('CronExpression', '0 9 * * 1-5'),
                 input('WorkstreamKey', `cos12-unconfirmed-${Date.now()}`),
-                input('WakeReason', 'Should require confirmation'),
+                input('WakeReason', 'Should require server-verified approval'),
+                input('ConfirmedByUser', true),
             ];
             const result = await ActionEngineServer.Instance.RunAction(run);
             if (result.LogEntry?.ID) fx().CreatedLogIds.push(result.LogEntry.ID);
@@ -502,7 +526,231 @@ export const ChiefOfStaffChecks: NamedCheck[] = [
             AssertEqual(code, 'APPROVAL_REQUIRED', `expected APPROVAL_REQUIRED, got ${code} (${result.Message})`);
         }
     },
+    {
+        Id: 'chief-of-staff.COS13',
+        Name: 'COS13: Two-user inter-agent request round-trip (User A CoS -> Send Inter-Agent Request -> User B CoS wake & reply -> User A wake)',
+        Fn: async (ctx) => {
+            const other = otherUser('COS13');
+            if (!other || !ownsPolicy('COS13')) return;
+
+            const polA = await loadPolicy(ctx);
+            polA.CoordinationMode = 'Autonomous';
+            polA.AllowInterAgentCoordination = true;
+            polA.Status = 'Active';
+            Assert(await polA.Save(), `updating User A policy to Autonomous failed: ${polA.LatestResult?.CompleteMessage}`);
+
+            // Ensure User B has an Active CoS policy allowing inter-agent coordination (cleaned up in finally)
+            const existingPolB = await new RunView().RunView<{ ID: string }>({
+                EntityName: 'MJ: AI Agent User Policies',
+                ExtraFilter: `AgentID='${EscapeSQLString(fx().AgentID)}' AND UserID='${EscapeSQLString(other.ID)}'`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+                BypassCache: true,
+            }, ctx.User);
+
+            let createdPolBId: string | null = null;
+            if (!(existingPolB.Success && existingPolB.Results.length > 0)) {
+                const polB = await prov(ctx).GetEntityObject<MJAIAgentUserPolicyEntity>('MJ: AI Agent User Policies', ctx.User);
+                polB.NewRecord();
+                polB.AgentID = fx().AgentID;
+                polB.UserID = other.ID;
+                polB.Status = 'Active';
+                polB.CoordinationMode = 'Autonomous';
+                polB.AllowInterAgentCoordination = true;
+                Assert(await polB.Save(), `creating temporary User B policy failed: ${polB.LatestResult?.CompleteMessage}`);
+                createdPolBId = polB.ID;
+            }
+
+            const workstreamKey = `cos13-roundtrip-${Date.now()}`;
+            try {
+                // Step 1: User A sends inter-agent coordination request to User B
+                const sendRes = await runAction(ctx, 'Send Inter-Agent Request', ctx.User, [
+                    input('TargetUserID', other.ID),
+                    input('Subject', `COS13 Sync ${SUBJECT_TAG}`),
+                    input('Message', 'Please confirm Q4 launch milestone status.'),
+                    input('WorkstreamKey', workstreamKey),
+                ]);
+                Assert(sendRes.Success, `Send Inter-Agent Request failed: ${sendRes.Message}`);
+
+                const agentRequestId = String(
+                    sendRes.Params?.find((p) => p.Name === 'AgentRequestID')?.Value ?? ''
+                );
+                const deliveryMode = String(
+                    sendRes.Params?.find((p) => p.Name === 'DeliveryMode')?.Value ?? ''
+                );
+                Assert(agentRequestId.length > 0, 'Send Inter-Agent Request must output AgentRequestID');
+                AssertEqual(deliveryMode, 'InterAgent', 'DeliveryMode must be InterAgent when target user has an active policy');
+                fx().CreatedRequestIds.push(agentRequestId);
+
+                // Step 2: Observe User B's incoming AgentWake routine scheduled asynchronously by MJAIAgentRequestEntityServer
+                const bobWake = await waitForWakeRoutine(other.ID, fx().AgentID, workstreamKey, ctx.User);
+                Assert(!!bobWake, `expected immediate AgentWake routine for User B on workstream "${workstreamKey}"`);
+                fx().CreatedRoutineIds.push(bobWake!.ID);
+                const bobResume = parseWakeResumeState(bobWake!);
+                AssertEqual(bobResume['triggerType'], 'InterAgentRequestReceived', 'User B wake triggerType must be InterAgentRequestReceived');
+                Assert(
+                    UUIDsEqual(String(bobResume['requestID'] ?? ''), agentRequestId),
+                    'User B wake resumeState.requestID must match the sent AgentRequestID'
+                );
+
+                // Step 3: User B's CoS resolves the request with a reply
+                const reqEntity = await prov(ctx).GetEntityObject<MJAIAgentRequestEntity>('MJ: AI Agent Requests', ctx.User);
+                Assert(await reqEntity.Load(agentRequestId), 'could not load inter-agent request for reply');
+                reqEntity.Status = 'Responded';
+                reqEntity.Response = 'Confirmed: Q4 launch milestone is green.';
+                reqEntity.RespondedAt = new Date();
+                Assert(await reqEntity.Save(), `saving inter-agent reply failed: ${reqEntity.LatestResult?.CompleteMessage}`);
+
+                // Step 4: Observe User A's resolution AgentWake routine carrying User B's reply
+                const aliceWake = await waitForWakeRoutine(ctx.User.ID, fx().AgentID, workstreamKey, ctx.User);
+                Assert(!!aliceWake, `expected resolution AgentWake routine for User A on workstream "${workstreamKey}"`);
+                fx().CreatedRoutineIds.push(aliceWake!.ID);
+                const aliceResume = parseWakeResumeState(aliceWake!);
+                AssertEqual(aliceResume['triggerType'], 'InterAgentRequestResolved', 'User A wake triggerType must be InterAgentRequestResolved');
+                AssertEqual(aliceResume['status'], 'Responded', 'User A wake status must reflect Responded');
+                Assert(
+                    String(aliceResume['response'] ?? '').includes('Q4 launch milestone is green'),
+                    'User A wake resumeState.response must carry User B reply'
+                );
+            } finally {
+                if (createdPolBId) {
+                    try {
+                        const e = await prov(ctx).GetEntityObject<BaseEntity>('MJ: AI Agent User Policies', ctx.User);
+                        if (await e.InnerLoad(CompositeKey.FromID(createdPolBId))) {
+                            await e.Delete();
+                        }
+                    } catch { /* best-effort cleanup */ }
+                    AgentUserPolicyEngine.Instance.ClearCache(fx().AgentID, other.ID);
+                }
+            }
+        }
+    },
+    {
+        Id: 'chief-of-staff.COS14',
+        Name: 'COS14: Sub-agent policy ceiling propagates Chief of Staff ReadOnly + EntityAccessRules to child Query Builder via policyCeilingAgentIDs',
+        Fn: async (ctx) => {
+            if (!ownsPolicy('COS14')) return;
+
+            const queryBuilder = AIEngine.Instance.Agents.find(
+                (a) => (a.Name ?? '').trim().toLowerCase() === 'query builder'
+            );
+            Assert(!!queryBuilder, 'Query Builder agent must exist for COS14 policy ceiling test');
+
+            const pol = await loadPolicy(ctx);
+            const priorDefaultMode = pol.DefaultDataAccessMode;
+            const priorRules = pol.EntityAccessRulesObject;
+
+            pol.Status = 'Active';
+            pol.DefaultDataAccessMode = 'ReadOnly';
+            pol.EntityAccessRulesObject = [
+                {
+                    entityPattern: 'MJ: User Routines',
+                    access: 'Deny',
+                },
+            ];
+            Assert(await pol.Save(), `saving narrowed COS14 parent policy failed: ${pol.LatestResult?.CompleteMessage}`);
+            await AgentUserPolicyEngine.Instance.GetPolicyForAgentAndUser(fx().AgentID, ctx.User.ID, ctx.User, true);
+
+            try {
+                await AgentUserPolicyEngine.Instance.RunWithExecutingAgentContext(
+                    queryBuilder!.ID,
+                    async () => {
+                        const chain = AgentUserPolicyEngine.Instance.GetEffectivePolicyAgentChain();
+                        Assert(
+                            chain.some((id) => UUIDsEqual(id, queryBuilder!.ID)) &&
+                                chain.some((id) => UUIDsEqual(id, fx().AgentID)),
+                            `Effective policy ceiling chain must include both Query Builder and parent Chief of Staff, got [${chain.join(', ')}]`
+                        );
+
+                        // 1. Parent DefaultDataAccessMode='ReadOnly' blocks child writes on MJ: Tasks
+                        const writeCheck = await TypedActionPolicyGuard.CheckEntityAccess({
+                            entityName: 'MJ: Tasks',
+                            operation: 'Create',
+                            contextUser: ctx.User,
+                            provider: ctx.Provider,
+                        });
+                        Assert(!writeCheck.Allowed, 'Child Query Builder Create must be blocked by parent Chief of Staff ReadOnly policy');
+                        AssertEqual(writeCheck.ResultCode, 'POLICY_DENIED', 'Expected POLICY_DENIED for child write under parent ReadOnly ceiling');
+
+                        // 2. Parent EntityAccessRules Deny on MJ: User Routines blocks child reads too
+                        const deniedEntityRead = await TypedActionPolicyGuard.CheckEntityAccess({
+                            entityName: 'MJ: User Routines',
+                            operation: 'Read',
+                            contextUser: ctx.User,
+                            provider: ctx.Provider,
+                        });
+                        Assert(!deniedEntityRead.Allowed, 'Child Query Builder Read on MJ: User Routines must be denied by parent EntityAccessRules');
+                        AssertEqual(deniedEntityRead.ResultCode, 'POLICY_DENIED', 'Expected POLICY_DENIED for denied entity under parent ceiling');
+
+                        // 3. Read on non-denied entity remains permitted under ReadOnly ceiling
+                        const allowedRead = await TypedActionPolicyGuard.CheckEntityAccess({
+                            entityName: 'MJ: Tasks',
+                            operation: 'Read',
+                            contextUser: ctx.User,
+                            provider: ctx.Provider,
+                        });
+                        Assert(allowedRead.Allowed, `Child Query Builder Read on MJ: Tasks should be allowed under ReadOnly ceiling (${allowedRead.Message ?? 'ok'})`);
+                    },
+                    [fx().AgentID]
+                );
+            } finally {
+                const restore = await loadPolicy(ctx);
+                restore.DefaultDataAccessMode = priorDefaultMode;
+                restore.EntityAccessRulesObject = priorRules;
+                await restore.Save();
+                await AgentUserPolicyEngine.Instance.GetPolicyForAgentAndUser(fx().AgentID, ctx.User.ID, ctx.User, true);
+            }
+        }
+    },
 ];
+
+async function waitForWakeRoutine(
+    userId: string,
+    agentId: string,
+    workstreamKey: string,
+    contextUser: UserInfo,
+    timeoutMs: number = 10_000
+): Promise<MJUserRoutineEntity | null> {
+    const deadline = Date.now() + timeoutMs;
+    const targetKey = workstreamKey.trim().toLowerCase();
+    while (Date.now() < deadline) {
+        const res = await new RunView().RunView<MJUserRoutineEntity>(
+            {
+                EntityName: 'MJ: User Routines',
+                ExtraFilter: `UserID='${EscapeSQLString(userId)}' AND TargetID='${EscapeSQLString(agentId)}' AND RoutineType='AgentWake'`,
+                OrderBy: '__mj_UpdatedAt DESC',
+                MaxRows: 25,
+                ResultType: 'entity_object',
+                BypassCache: true,
+            },
+            contextUser
+        );
+        if (res.Success && Array.isArray(res.Results)) {
+            const found = res.Results.find((r) => {
+                const cfg =
+                    r.WakeConfigurationObject ??
+                    (r.WakeConfiguration
+                        ? SafeJSONParse<MJUserRoutineEntity_IRoutineWakeConfiguration>(r.WakeConfiguration)
+                        : null);
+                return (cfg?.workstreamKey ?? '').trim().toLowerCase() === targetKey;
+            });
+            if (found) {
+                return found;
+            }
+        }
+        await settle(250);
+    }
+    return null;
+}
+
+function parseWakeResumeState(routine: MJUserRoutineEntity): Record<string, unknown> {
+    const cfg =
+        routine.WakeConfigurationObject ??
+        (routine.WakeConfiguration
+            ? SafeJSONParse<MJUserRoutineEntity_IRoutineWakeConfiguration>(routine.WakeConfiguration)
+            : null);
+    return (cfg?.resumeState ?? {}) as Record<string, unknown>;
+}
 
 async function makeOneShot(ctx: IntegrationCheckContext, name: string): Promise<MJUserRoutineEntity> {
     const r = await prov(ctx).GetEntityObject<MJUserRoutineEntity>('MJ: User Routines', ctx.User);

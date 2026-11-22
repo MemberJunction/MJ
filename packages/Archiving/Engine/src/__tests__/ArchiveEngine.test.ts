@@ -207,9 +207,31 @@ vi.mock('@memberjunction/global', () => {
     };
 });
 
+interface MockCounts {
+    Archived: number;
+    Failed: number;
+    Skipped: number;
+    Bytes: number;
+}
+
+/**
+ * Honors the processor's contract: the counts it returns are also added to the run totals
+ * passed as the sixth argument. A mock that throws adds nothing unless it adds partial counts
+ * to that argument itself.
+ */
 vi.mock('../ArchiveProcessor', () => ({
     ArchiveProcessor: class MockArchiveProcessor {
-        ProcessEntity = mockProcessEntity;
+        ProcessEntity = async (...args: unknown[]): Promise<MockCounts> => {
+            const result = (await mockProcessEntity(...args)) as MockCounts;
+            const runTotals = args[5] as MockCounts | undefined;
+            if (runTotals && result) {
+                runTotals.Archived += result.Archived;
+                runTotals.Failed += result.Failed;
+                runTotals.Skipped += result.Skipped;
+                runTotals.Bytes += result.Bytes;
+            }
+            return result;
+        };
     },
 }));
 
@@ -652,6 +674,27 @@ describe('ArchiveEngine', () => {
                 expect(failed.SkippedRecords).toBe(2);
                 expect(failed.TotalRecords).toBe(10);
                 expect(failed.TotalBytesArchived).toBe(512);
+            });
+
+            it('should keep the counts an entity reached before it threw on the Failed run', async () => {
+                const { archiveRunRecord } = setupPurgeRun();
+                const snapshots = captureSaves(archiveRunRecord);
+                mockProcessEntity.mockImplementationOnce((...args: unknown[]) => {
+                    // Two pages were purged before the third page failed to load.
+                    const runTotals = args[5] as MockCounts | undefined;
+                    if (runTotals) {
+                        runTotals.Archived += 200;
+                    }
+                    return Promise.reject(new Error('Failed to load records for entity "MJ: AI Prompt Runs": timeout'));
+                });
+
+                const result = await ArchiveEngine.Instance.RunArchive('config-1', contextUser);
+
+                expect(result.ErrorMessage).toContain('timeout');
+                expect(result.ArchivedRecords).toBe(200);
+                const failed = expectRunFailed(snapshots, 'timeout');
+                expect(failed.ArchivedRecords).toBe(200);
+                expect(failed.TotalRecords).toBe(200);
             });
 
             it('should return the original error when the Failed status cannot be saved', async () => {

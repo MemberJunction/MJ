@@ -12,7 +12,11 @@ import {
     MJAgentChannelEntity,
     MJConversationEntity,
 } from '@memberjunction/core-entities';
-import { AgentChannelConversationDriver } from '../custom/AgentChannelConversationDriver.server';
+import {
+    AgentChannelConversationDriver,
+    AgentChannelHumanPostWakeEvent,
+    RegisterAgentChannelHumanPostWakeHandler,
+} from '../custom/AgentChannelConversationDriver.server';
 
 const alice = { ID: 'user-alice', Name: 'Alice', Email: 'alice@example.com', Type: 'User', UserRoles: [] } as unknown as UserInfo;
 const systemUser = { ID: 'user-sys', Name: 'System', Email: 'sys@example.com', Type: 'Owner', UserRoles: [] } as unknown as UserInfo;
@@ -20,6 +24,7 @@ const systemUser = { ID: 'user-sys', Name: 'System', Email: 'sys@example.com', T
 describe('AgentChannelConversationDriver', () => {
     beforeEach(() => {
         vi.restoreAllMocks();
+        RegisterAgentChannelHumanPostWakeHandler(null);
         vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue(systemUser);
         vi.spyOn(WellKnownUserSource.Instance, 'IsSystemUser').mockImplementation(
             (u) => u?.ID === systemUser.ID
@@ -106,5 +111,62 @@ describe('AgentChannelConversationDriver', () => {
         expect(chanStub.ConsecutiveAgentTurns).toBe(0);
         expect(chanStub.LastHumanMessageAt).toEqual(now);
         expect(chanStub.Save).toHaveBeenCalledTimes(1);
+    });
+
+    it('HandleHumanMessagePosted invokes the registered peer-agent wake hook with message context', async () => {
+        const now = new Date('2026-11-20T18:15:00Z');
+        const convStub = {
+            ID: 'chan-wake-1',
+            TypeID: BUILT_IN_CONVERSATION_TYPE_IDS.AGENT_CHANNEL,
+            Load: vi.fn().mockResolvedValue(true),
+        } as unknown as MJConversationEntity;
+        const chanStub = {
+            ID: 'chan-wake-1',
+            ChannelStatus: 'Paused For Human' as MJAgentChannelEntity['ChannelStatus'],
+            ConsecutiveAgentTurns: 6,
+            LastHumanMessageAt: null as Date | null,
+            Load: vi.fn().mockResolvedValue(true),
+            Save: vi.fn().mockResolvedValue(true),
+            LatestResult: null,
+        } as unknown as MJAgentChannelEntity;
+
+        const provider = {
+            ProviderType: 'Database',
+            GetEntityObject: vi.fn(async (name: string) =>
+                name === 'MJ: Conversations' ? convStub : chanStub
+            ),
+        } as unknown as IMetadataProvider;
+
+        const capturedEvents: AgentChannelHumanPostWakeEvent[] = [];
+        RegisterAgentChannelHumanPostWakeHandler(async (evt) => {
+            capturedEvents.push(evt);
+            return 2;
+        });
+
+        const res = await AgentChannelConversationDriver.HandleHumanMessagePosted(
+            provider,
+            'chan-wake-1',
+            alice,
+            now,
+            {
+                conversationDetailID: 'detail-42',
+                senderUserID: alice.ID,
+                messagePreview: 'Proceed with option B and notify Bob.',
+            }
+        );
+
+        expect(res.isAgentChannel).toBe(true);
+        expect(res.updated).toBe(true);
+        expect(res.reopenedFromPause).toBe(true);
+        expect(res.wakeHandlerInvoked).toBe(true);
+        expect(res.peerWakesTriggered).toBe(2);
+        expect(capturedEvents).toHaveLength(1);
+        expect(capturedEvents[0]).toMatchObject({
+            channelID: 'chan-wake-1',
+            conversationDetailID: 'detail-42',
+            senderUserID: alice.ID,
+            messagePreview: 'Proceed with option B and notify Bob.',
+            reopenedFromPause: true,
+        });
     });
 });

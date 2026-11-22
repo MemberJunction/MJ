@@ -22,6 +22,8 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { UserCache } from '@memberjunction/generic-database-provider';
 
 const DEFAULT_AGENT_NAME = 'Chief of Staff';
+const DEFAULT_BRIEFING_CONTRIBUTOR_TIMEOUT_MS = 10_000;
+const DEFAULT_BRIEFING_MAX_CONTRIBUTOR_CHARS = 32_768;
 
 function readStringParam(params: RunActionParams, name: string): string | undefined {
     const found = params.Params.find((p) => p.Name.trim().toLowerCase() === name.toLowerCase());
@@ -284,6 +286,20 @@ export class AssembleMyBriefingAction extends BaseAction {
             }
 
             const horizonDays = readNumberParam(params, 'HorizonDays', 7, 1, 30);
+            const contributorTimeoutMs = readNumberParam(
+                params,
+                'ContributorTimeoutMs',
+                DEFAULT_BRIEFING_CONTRIBUTOR_TIMEOUT_MS,
+                20,
+                60_000
+            );
+            const maxContributorChars = readNumberParam(
+                params,
+                'MaxContributorChars',
+                DEFAULT_BRIEFING_MAX_CONTRIBUTOR_CHARS,
+                100,
+                524_288
+            );
             const includeSkillNamesRaw = readStringParam(params, 'IncludeSkillNames');
             const includeSkillSet = includeSkillNamesRaw
                 ? new Set(
@@ -318,7 +334,15 @@ export class AssembleMyBriefingAction extends BaseAction {
                 this.loadCoreBriefingState(agent.ID, contextUser, params.Context, md),
                 Promise.all(
                     briefingEntries.map((entry) =>
-                        this.runBriefingContributor(entry.skill.Name, entry.actionID, agent.ID, horizonDays, params)
+                        this.runBriefingContributor(
+                            entry.skill.Name,
+                            entry.actionID,
+                            agent.ID,
+                            horizonDays,
+                            contributorTimeoutMs,
+                            maxContributorChars,
+                            params
+                        )
                     )
                 ),
             ]);
@@ -527,6 +551,8 @@ export class AssembleMyBriefingAction extends BaseAction {
         actionId: string,
         agentId: string,
         horizonDays: number,
+        contributorTimeoutMs: number,
+        maxContributorChars: number,
         parentParams: RunActionParams
     ): Promise<Record<string, unknown>> {
         const action = ActionEngineServer.Instance.Actions.find((a) => UUIDsEqual(a.ID, actionId));
@@ -542,8 +568,10 @@ export class AssembleMyBriefingAction extends BaseAction {
             };
         }
 
+        const timeoutSentinel = Symbol('BRIEFING_CONTRIBUTOR_TIMEOUT');
+        let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
         try {
-            const result = await ActionEngineServer.Instance.RunAction({
+            const runPromise = ActionEngineServer.Instance.RunAction({
                 Action: action,
                 Params: [
                     { Name: 'HorizonDays', Type: 'Input', Value: horizonDays },
@@ -555,7 +583,27 @@ export class AssembleMyBriefingAction extends BaseAction {
                 Provider: parentParams.Provider,
                 SkipActionLog: false,
             });
+            // Prevent unhandled rejection if the action rejects after the timeout has already won the race.
+            runPromise.catch(() => undefined);
 
+            const timeoutPromise = new Promise<typeof timeoutSentinel>((resolve) => {
+                timeoutHandle = setTimeout(() => resolve(timeoutSentinel), contributorTimeoutMs);
+            });
+
+            const raced = await Promise.race([runPromise, timeoutPromise]);
+            if (raced === timeoutSentinel) {
+                return {
+                    SkillName: skillName,
+                    ActionID: action.ID,
+                    ActionName: action.Name,
+                    Success: false,
+                    ResultCode: 'TIMEOUT',
+                    Data: null,
+                    Error: `Briefing contributor "${action.Name}" timed out after ${contributorTimeoutMs}ms.`,
+                };
+            }
+
+            const result = raced;
             const parsedData =
                 result.Message && (result.Message.trim().startsWith('{') || result.Message.trim().startsWith('['))
                     ? SafeJSONParse<Record<string, unknown>>(result.Message)
@@ -576,13 +624,15 @@ export class AssembleMyBriefingAction extends BaseAction {
                 }
             }
             const hasOutputs = Object.keys(outputParams).length > 0;
-            const contributorData: unknown = parsedData
+            const rawContributorData: unknown = parsedData
                 ? hasOutputs
                     ? { ...parsedData, Outputs: outputParams }
                     : parsedData
                 : hasOutputs
                   ? { Summary: result.Message ?? null, ...outputParams }
                   : result.Message ?? null;
+
+            const contributorData = this.capContributorPayload(rawContributorData, maxContributorChars);
 
             return {
                 SkillName: skillName,
@@ -605,7 +655,26 @@ export class AssembleMyBriefingAction extends BaseAction {
                 Data: null,
                 Error: msg,
             };
+        } finally {
+            if (timeoutHandle !== null) {
+                clearTimeout(timeoutHandle);
+            }
         }
+    }
+
+    private capContributorPayload(data: unknown, maxChars: number): unknown {
+        if (data === null || data === undefined) {
+            return data;
+        }
+        const serialized = typeof data === 'string' ? data : JSON.stringify(data);
+        if (typeof serialized !== 'string' || serialized.length <= maxChars) {
+            return data;
+        }
+        return {
+            Truncated: true,
+            OriginalChars: serialized.length,
+            Preview: serialized.slice(0, maxChars),
+        };
     }
 }
 

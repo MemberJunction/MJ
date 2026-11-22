@@ -217,7 +217,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['open-app-local-source', OpenAppLocalSourceChecks, 11], // OLS1-OLS11 install, upgrade and remove from a local folder (IT178)
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 18],
-        ['chief-of-staff', ChiefOfStaffChecks, 12], // COS1-COS12 ownership guards, run-now, policy cache, email approval-before-transport, extensible skills, rhythms, agent channels (IT157)
+        ['chief-of-staff', ChiefOfStaffChecks, 14], // COS1-COS14 ownership guards, run-now, policy cache, email approval-before-transport, extensible skills, rhythms, agent channels, two-user inter-agent round-trip, sub-agent policy ceiling (IT157)
         ['chief-of-staff-world', ChiefOfStaffWorldChecks, 3], // COSW1-COSW3 idempotent persistent Chief of Staff world seed: Jordan & Elena personas, active Coordinator policies, routines, suggestions, notes, Agent Channel (IT183)
         ['chief-of-staff-live', ChiefOfStaffLiveChecks, 4], // COSL1-COSL4 live-model heuristic verification of shipped Chief of Staff via AgentRunner: typed actions, DraftOnly refusal, Agent Channel reply, zero raw SQL/CRUD (IT184)
         ['work-queue-runtime', WorkQueueRuntimeChecks, 19], // WR1-WR19 host, RunOnce, partitions, cancel, operators, sweeper, REST (IT105)
@@ -411,7 +411,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'cache-gauntlet': 8,
         'cache-immutability': 15,
         'calendar-event-links': 2,
-        'chief-of-staff': 12,
+        'chief-of-staff': 14,
         'chief-of-staff-live': 4,
         'chief-of-staff-world': 3,
         'ciphertext-cache': 7,

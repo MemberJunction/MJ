@@ -127,4 +127,116 @@ describe('agent-skill-governance standard', () => {
         expect(res.Violations).toHaveLength(1);
         expect(res.Violations[0].Message).toContain('zero MJ: Action Params');
     });
+
+    it('flags non-allow-listed agents setting AcceptsSkills="All" when an active skill bundles Run Ad-hoc Query', () => {
+        const repo = createTempRepo({
+            'metadata/ai-skills/.core-skills.json': JSON.stringify([
+                {
+                    fields: { Name: 'Data Analysis & Queries', Status: 'Active' },
+                    relatedEntities: {
+                        'MJ: AI Skill Actions': [
+                            { fields: { ActionID: '@lookup:MJ: Actions.Name=Run Ad-hoc Query' } },
+                        ],
+                    },
+                },
+            ]),
+            'metadata/agents/.chief-of-staff-agent.json': JSON.stringify([
+                {
+                    fields: { Name: 'Chief of Staff', AcceptsSkills: 'All' },
+                },
+            ]),
+        });
+
+        const res = AgentSkillGovernanceCheck.Run({
+            RepoRoot: repo,
+            Roots: ['metadata'],
+            Options: AgentSkillGovernanceCheck.DefaultOptions ?? {},
+        });
+
+        expect(res.Violations).toHaveLength(1);
+        expect(res.Violations[0].Message).toContain('Chief of Staff');
+        expect(res.Violations[0].Message).toContain('AcceptsSkills="All"');
+        expect(res.Violations[0].Message).toContain('Data Analysis & Queries');
+    });
+
+    it('allows AcceptsSkills="Limited" on non-SQL agents and AcceptsSkills="All" on allow-listed SQL specialists or AllowedAllSkillsAgents', () => {
+        const repo = createTempRepo({
+            'metadata/ai-skills/.core-skills.json': JSON.stringify([
+                {
+                    fields: { Name: 'Data Analysis & Queries', Status: 'Active' },
+                    relatedEntities: {
+                        'MJ: AI Skill Actions': [
+                            { fields: { ActionID: '@lookup:MJ: Actions.Name=Run Ad-hoc Query' } },
+                        ],
+                    },
+                },
+            ]),
+            'metadata/agents/.chief-of-staff-agent.json': JSON.stringify([
+                {
+                    fields: { Name: 'Chief of Staff', AcceptsSkills: 'Limited' },
+                    relatedEntities: {
+                        'MJ: AI Agent Skills': [
+                            { fields: { SkillID: '@lookup:MJ: AI Skills.Name=Web Research', Status: 'Active' } },
+                        ],
+                    },
+                },
+            ]),
+            'metadata/agents/.query-builder-agent.json': JSON.stringify([
+                {
+                    fields: { Name: 'Query Builder', AcceptsSkills: 'All' },
+                },
+            ]),
+            'metadata/agents/.sage-agent.json': JSON.stringify([
+                {
+                    fields: { Name: 'Sage', AcceptsSkills: 'All' },
+                },
+            ]),
+        });
+
+        const res = AgentSkillGovernanceCheck.Run({
+            RepoRoot: repo,
+            Roots: ['metadata'],
+            Options: {
+                ...(AgentSkillGovernanceCheck.DefaultOptions ?? {}),
+                AllowedAllSkillsAgents: ['Sage'],
+            },
+        });
+
+        expect(res.Violations).toHaveLength(0);
+    });
+
+    it('flags non-allow-listed agents that explicitly grant an SQL-bundling skill via MJ: AI Agent Skills', () => {
+        const repo = createTempRepo({
+            'metadata/ai-skills/.core-skills.json': JSON.stringify([
+                {
+                    fields: { Name: 'Data Analysis & Queries', Status: 'Active' },
+                    relatedEntities: {
+                        'MJ: AI Skill Actions': [
+                            { fields: { ActionID: '@lookup:MJ: Actions.Name=Run Ad-hoc Query' } },
+                        ],
+                    },
+                },
+            ]),
+            'metadata/agents/.chief-of-staff-agent.json': JSON.stringify([
+                {
+                    fields: { Name: 'Chief of Staff', AcceptsSkills: 'Limited' },
+                    relatedEntities: {
+                        'MJ: AI Agent Skills': [
+                            { fields: { SkillID: '@lookup:MJ: AI Skills.Name=Data Analysis & Queries', Status: 'Active' } },
+                        ],
+                    },
+                },
+            ]),
+        });
+
+        const res = AgentSkillGovernanceCheck.Run({
+            RepoRoot: repo,
+            Roots: ['metadata'],
+            Options: AgentSkillGovernanceCheck.DefaultOptions ?? {},
+        });
+
+        expect(res.Violations).toHaveLength(1);
+        expect(res.Violations[0].Message).toContain('Chief of Staff');
+        expect(res.Violations[0].Message).toContain('Data Analysis & Queries');
+    });
 });
