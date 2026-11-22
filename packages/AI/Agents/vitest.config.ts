@@ -6,6 +6,11 @@ export default mergeConfig(
   defineProject({
     test: {
       environment: 'node',
+      include: [
+        'src/**/__tests__/**/*.test.ts',
+        'src/**/*.test.ts',
+        'src/**/__tests__/**/*.spec.ts',
+      ],
     },
   })
 );

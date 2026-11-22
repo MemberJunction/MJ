@@ -744,4 +744,102 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
         });
         expect(colleagueRes.Success).toBe(true);
     });
+
+    it('EnableAgentRhythmAction seeds AgentConfigurationID from template default and supports ModelTier override', async () => {
+        const fastCfgID = '3A1C5A15-8DAA-44E5-A098-F20085E6C93F';
+        const highPowerCfgID = 'B6B9D780-52B2-431B-93AB-AC83FEF78553';
+
+        const template = {
+            ID: 'tpl-tier-1',
+            AgentID: cosAgent.ID,
+            SkillID: null,
+            Name: 'Daily Calendar Guard & Conflict Check',
+            WorkstreamKey: 'calendar-daily-review',
+            Description: 'Daily conflict check',
+            DefaultCronExpression: '15 7 * * 1-5',
+            DefaultWakeGate: null,
+            WakeReason: 'Check calendar',
+            OfferAt: 'Onboarding',
+            Status: 'Active',
+            DefaultAgentConfigurationID: fastCfgID,
+            DefaultAgentConfiguration: 'Fast',
+            Skill: null,
+        } as unknown as MJAIAgentRhythmTemplateEntity;
+
+        const savedRoutines: Array<Record<string, unknown>> = [];
+        const routineStub = {
+            ID: 'routine-tier-1',
+            UserID: alice.ID,
+            TargetID: cosAgent.ID,
+            RoutineType: 'AgentWake',
+            AgentConfigurationID: null as string | null,
+            NewRecord: vi.fn(),
+            Save: vi.fn(async () => {
+                savedRoutines.push({
+                    AgentConfigurationID: routineStub.AgentConfigurationID,
+                });
+                return true;
+            }),
+            WakeConfigurationObject: null as Record<string, unknown> | null,
+        };
+
+        let routineExists = false;
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn(async (p: { EntityName: string; ExtraFilter?: string }) => {
+                if (p.EntityName === 'MJ: AI Agent Rhythm Templates') {
+                    return { Success: true, Results: [template] };
+                }
+                if (p.EntityName === 'MJ: User Routines') {
+                    return { Success: true, Results: routineExists ? [routineStub] : [] };
+                }
+                if (p.EntityName === 'MJ: AI Configurations') {
+                    if (p.ExtraFilter?.includes("Name='High Power'")) {
+                        return {
+                            Success: true,
+                            Results: [{ ID: highPowerCfgID, Name: 'High Power', Status: 'Active' }],
+                        };
+                    }
+                    return {
+                        Success: true,
+                        Results: [{ ID: fastCfgID, Name: 'Fast', Status: 'Active' }],
+                    };
+                }
+                return { Success: true, Results: [] };
+            }),
+        } as unknown as RunView);
+
+        const md = {
+            GetEntityObject: vi.fn().mockResolvedValue(routineStub),
+        } as unknown as IMetadataProvider;
+
+        // First call: creation seeds AgentConfigurationID from template.DefaultAgentConfigurationID
+        const seededRes = await callAction(new EnableAgentRhythmAction() as never, {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: alice,
+            Provider: md,
+            Filters: [],
+            Params: [{ Name: 'WorkstreamKey', Type: 'Input', Value: 'calendar-daily-review' }],
+        });
+        expect(seededRes.Success).toBe(true);
+        expect(routineStub.AgentConfigurationID).toBe(fastCfgID);
+        expect(JSON.parse(seededRes.Message!).AgentConfigurationID).toBe(fastCfgID);
+
+        // Second call: user overrides existing routine to High tier ('High Power')
+        routineExists = true;
+        routineStub.WakeConfigurationObject = { workstreamKey: 'calendar-daily-review' };
+        const overrideRes = await callAction(new EnableAgentRhythmAction() as never, {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: alice,
+            Provider: md,
+            Filters: [],
+            Params: [
+                { Name: 'WorkstreamKey', Type: 'Input', Value: 'calendar-daily-review' },
+                { Name: 'ModelTier', Type: 'Input', Value: 'High' },
+            ],
+        });
+        expect(overrideRes.Success).toBe(true);
+        expect(routineStub.AgentConfigurationID).toBe(highPowerCfgID);
+        expect(JSON.parse(overrideRes.Message!).AgentConfigurationID).toBe(highPowerCfgID);
+        expect(savedRoutines).toHaveLength(2);
+    });
 });

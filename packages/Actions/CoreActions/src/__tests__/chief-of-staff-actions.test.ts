@@ -114,6 +114,22 @@ vi.mock('@memberjunction/ai-agents', () => ({
             TriggerWakeForWorkstream: (...args: unknown[]) => triggerWakeForWorkstreamMock(...args),
         },
     },
+    LookupActiveRhythmTemplateForWorkstream: vi.fn(async () => null),
+    ResolveSeededRoutineAgentConfigurationID: (p: {
+        explicitAgentConfigurationID?: string | null;
+        templateDefaultAgentConfigurationID?: string | null;
+    }) =>
+        p.explicitAgentConfigurationID !== undefined
+            ? (p.explicitAgentConfigurationID ?? null)
+            : (p.templateDefaultAgentConfigurationID ?? null),
+    ResolveAgentConfigurationIDInput: vi.fn(
+        async (p: { agentConfigurationID?: string | null; modelTier?: string | null }) => {
+            if (p.agentConfigurationID === undefined && (!p.modelTier || !p.modelTier.trim())) {
+                return { Provided: false, ConfigurationID: null };
+            }
+            return { Provided: true, ConfigurationID: p.agentConfigurationID ?? p.modelTier ?? null };
+        }
+    ),
 }));
 
 import { ScheduleNextAgentWakeAction } from '../custom/ai/schedule-next-agent-wake.action';

@@ -9,6 +9,11 @@ import {
     MJUserRoutineEntity_IRoutineWakeConfiguration,
 } from '@memberjunction/core-entities';
 import { AgentUserPolicyEngine, MJAIAgentEntityExtended, TypedActionPolicyGuard } from '@memberjunction/ai-core-plus';
+import {
+    ResolveAgentConfigurationIDInput,
+    ResolveDefaultTierForWorkstreamKey,
+    ResolveSeededRoutineAgentConfigurationID,
+} from '@memberjunction/ai-agents';
 import { AIEngine } from '@memberjunction/aiengine';
 import {
     VerifyActiveRhythmTemplate,
@@ -218,6 +223,7 @@ export class ListAvailableRhythmsAction extends BaseAction {
                 const key = t.WorkstreamKey.trim().toLowerCase();
                 const routine = routineByWorkstream.get(key);
                 const suggestion = suggestionByKey.get(key);
+                const tierSpec = ResolveDefaultTierForWorkstreamKey(t.WorkstreamKey);
                 return {
                     RhythmTemplateID: t.ID,
                     Name: t.Name,
@@ -228,9 +234,13 @@ export class ListAvailableRhythmsAction extends BaseAction {
                     OfferAt: t.OfferAt,
                     SkillID: t.SkillID,
                     SkillName: t.Skill,
+                    DefaultAgentConfigurationID: t.DefaultAgentConfigurationID ?? null,
+                    DefaultAgentConfiguration: t.DefaultAgentConfiguration ?? tierSpec?.DefaultConfigurationName ?? null,
+                    DefaultModelTier: tierSpec?.Tier ?? null,
                     EnabledForUser: routine?.Status === 'Active',
                     UserRoutineID: routine?.ID ?? null,
                     UserRoutineStatus: routine?.Status ?? null,
+                    AgentConfigurationID: routine?.AgentConfigurationID ?? null,
                     PriorSuggestionStatus: suggestion?.Status ?? null,
                 };
             });
@@ -375,6 +385,28 @@ export class EnableAgentRhythmAction extends BaseAction {
                 ? SafeJSONParse<Partial<MJUserRoutineEntity_IRoutineWakeConfiguration>>(template.DefaultWakeGate) ?? {}
                 : {};
 
+            const hasExplicitConfigParam = params.Params.some(
+                (p) => p.Name.trim().toLowerCase() === 'agentconfigurationid'
+            );
+            const rawAgentConfigID = hasExplicitConfigParam
+                ? (readStringParam(params, 'AgentConfigurationID') ?? null)
+                : undefined;
+            const rawModelTier = readStringParam(params, 'ModelTier');
+            const configResolution = await ResolveAgentConfigurationIDInput({
+                agentConfigurationID: rawAgentConfigID,
+                modelTier: rawModelTier,
+                contextUser,
+                metadataProvider: md,
+            });
+            if (configResolution.ErrorMessage) {
+                return {
+                    Success: false,
+                    ResultCode: 'VALIDATION_ERROR',
+                    Message: configResolution.ErrorMessage,
+                    Params: params.Params,
+                };
+            }
+
             // Upsert user's routine for (UserID, AgentID, WorkstreamKey)
             const existingRes = await rv.RunView<MJUserRoutineEntity>(
                 {
@@ -394,6 +426,7 @@ export class EnableAgentRhythmAction extends BaseAction {
                         template.WorkstreamKey.toLowerCase()
                 ) ?? null;
 
+            const isNewRoutine = !routine;
             if (!routine) {
                 routine = await md.GetEntityObject<MJUserRoutineEntity>('MJ: User Routines', contextUser);
                 routine.NewRecord();
@@ -401,6 +434,17 @@ export class EnableAgentRhythmAction extends BaseAction {
                 routine.RoutineType = 'AgentWake';
                 routine.TargetType = 'Agent';
                 routine.TargetID = template.AgentID;
+            }
+
+            if (isNewRoutine) {
+                routine.AgentConfigurationID = ResolveSeededRoutineAgentConfigurationID({
+                    explicitAgentConfigurationID: configResolution.Provided
+                        ? configResolution.ConfigurationID
+                        : undefined,
+                    templateDefaultAgentConfigurationID: template.DefaultAgentConfigurationID ?? null,
+                });
+            } else if (configResolution.Provided) {
+                routine.AgentConfigurationID = configResolution.ConfigurationID;
             }
 
             const wakeConfig: MJUserRoutineEntity_IRoutineWakeConfiguration = {
@@ -462,6 +506,7 @@ export class EnableAgentRhythmAction extends BaseAction {
                 CronExpression: routine.CronExpression,
                 Timezone: routine.Timezone,
                 Status: routine.Status,
+                AgentConfigurationID: routine.AgentConfigurationID ?? null,
             };
             return {
                 Success: true,

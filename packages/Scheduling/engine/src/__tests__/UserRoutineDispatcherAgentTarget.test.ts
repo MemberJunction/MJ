@@ -15,9 +15,10 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
     RegisterClass: () => (target: unknown) => target,
 }));
 
-const { runInConversation, agentLoad } = vi.hoisted(() => ({
+const { runInConversation, agentLoad, resolveWakeConfig } = vi.hoisted(() => ({
     runInConversation: vi.fn(),
     agentLoad: vi.fn(async () => true),
+    resolveWakeConfig: vi.fn<() => Promise<string | undefined>>(async () => undefined),
 }));
 
 vi.mock('@memberjunction/core', async (importOriginal) => ({
@@ -31,6 +32,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => ({
 }));
 vi.mock('@memberjunction/ai-agents', () => ({
     AgentRunner: class { RunAgentInConversation = runInConversation; RunAgent = vi.fn(); },
+    ResolveWakeAgentConfigurationID: resolveWakeConfig,
 }));
 vi.mock('@memberjunction/ai-prompts', () => ({ AIPromptRunner: class {} }));
 vi.mock('@memberjunction/actions', () => ({ ActionEngineServer: { Instance: { Config: vi.fn(), RunAction: vi.fn() } } }));
@@ -63,6 +65,8 @@ function driver(): Driver {
 
 beforeEach(() => {
     runInConversation.mockReset();
+    resolveWakeConfig.mockReset();
+    resolveWakeConfig.mockResolvedValue(undefined);
     runInConversation.mockResolvedValue({
         agentResult: {
             success: true,
@@ -105,5 +109,24 @@ describe('UserRoutineDispatcherDriver — an Agent target run', () => {
 
         const options = runInConversation.mock.calls[0][1] as { createArtifacts?: boolean };
         expect(options.createArtifacts).toBeUndefined();
+    });
+
+    it('passes resolved configurationId from ResolveWakeAgentConfigurationID into agent execution', async () => {
+        resolveWakeConfig.mockResolvedValueOnce('B6B9D780-52B2-431B-93AB-AC83FEF78553');
+        await driver().executeAgentTarget(
+            routine({ AgentConfigurationID: 'B6B9D780-52B2-431B-93AB-AC83FEF78553' }),
+            { ID: 'OWNER' }
+        );
+
+        const baseParams = runInConversation.mock.calls[0][0] as { configurationId?: string };
+        expect(baseParams.configurationId).toBe('B6B9D780-52B2-431B-93AB-AC83FEF78553');
+    });
+
+    it('omits configurationId when ResolveWakeAgentConfigurationID returns undefined', async () => {
+        resolveWakeConfig.mockResolvedValueOnce(undefined);
+        await driver().executeAgentTarget(routine(), { ID: 'OWNER' });
+
+        const baseParams = runInConversation.mock.calls[0][0] as { configurationId?: string };
+        expect('configurationId' in baseParams).toBe(false);
     });
 });

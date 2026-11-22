@@ -36,7 +36,7 @@ import {
     MentionContent,
     SpecialContentToken,
 } from '@memberjunction/ai-core-plus';
-import { AgentRunner } from '@memberjunction/ai-agents';
+import { AgentRunner, ResolveWakeAgentConfigurationID } from '@memberjunction/ai-agents';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionParam } from '@memberjunction/actions-base';
@@ -942,6 +942,13 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             }
             : basePayload;
 
+        const configurationId = await ResolveWakeAgentConfigurationID({
+            routine,
+            wakeConfig,
+            contextUser,
+            metadataProvider: md,
+        });
+
         const runner = new AgentRunner();
         const baseParams = {
             agent,
@@ -950,6 +957,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             requestedSkillIDs: this.parseRequestedSkillIDs(routine),
             contextUser,
             compactAfterRun: routine.RoutineType === 'AgentWake' ? true : undefined,
+            ...(configurationId ? { configurationId } : {}),
             // Keep the dispatcher job's lease alive while a long agent run makes progress.
             onProgress: () => { void heartbeat?.(); },
         };

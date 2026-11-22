@@ -33,6 +33,10 @@ import {
 } from '@memberjunction/core-entities';
 import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { UserCache } from '@memberjunction/generic-database-provider';
+import {
+    LookupActiveRhythmTemplateForWorkstream,
+    ResolveSeededRoutineAgentConfigurationID,
+} from './rhythm-model-tiers';
 
 /**
  * Type of `resumeState` derived directly from `MJUserRoutineEntity_IRoutineWakeConfiguration`.
@@ -1325,6 +1329,16 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
                 routine.TargetID = params.targetAgentID;
                 routine.CronExpression = null;
                 routine.Timezone = 'UTC';
+
+                const matchingTemplate = await LookupActiveRhythmTemplateForWorkstream({
+                    agentID: params.targetAgentID,
+                    workstreamKey: params.workstreamKey,
+                    contextUser: saveUser,
+                    metadataProvider: md,
+                });
+                routine.AgentConfigurationID = ResolveSeededRoutineAgentConfigurationID({
+                    templateDefaultAgentConfigurationID: matchingTemplate?.DefaultAgentConfigurationID ?? null,
+                });
             }
 
             const existingConfig: Partial<MJUserRoutineEntity_IRoutineWakeConfiguration> =
