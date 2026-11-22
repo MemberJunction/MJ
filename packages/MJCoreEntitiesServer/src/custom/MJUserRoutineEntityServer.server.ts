@@ -7,6 +7,7 @@ import {
     EntitySaveOptions,
     EntityTransactionScope,
     ExecuteSQLOptions,
+    LogError,
     RunInEntityTransaction,
     RunView,
     UserInfo,
@@ -14,24 +15,28 @@ import {
     ValidationErrorType,
     ValidationResult,
 } from '@memberjunction/core';
-import { EscapeSQLString, GetGlobalObjectStore, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { MJUserRoutineEntity, MJUserRoutineEntity_IRoutineWakeConfiguration, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity } from '@memberjunction/core-entities';
 import { CronExpressionHelper, ComputeRoutineNextRunAt } from '@memberjunction/scheduling-engine';
 
-interface SqlCapableProvider {
+interface TransactionalSqlProvider {
     ExecuteSQL<T>(
         query: string,
         parameters?: unknown[],
         options?: ExecuteSQLOptions,
         contextUser?: UserInfo
     ): Promise<Array<T>>;
+    SupportsEntityTransactions: true;
+    BeginEntityTransaction: () => Promise<EntityTransactionScope>;
     PlatformKey?: DatabasePlatform;
-    SupportsEntityTransactions?: boolean;
-    BeginEntityTransaction?: () => Promise<EntityTransactionScope>;
     QuoteIdentifier?: (name: string) => string;
     QuoteSchemaAndView?: (schemaName: string, objectName: string) => string;
     BuildParameterPlaceholder?: (index: number) => string;
     ConfigData?: { MJCoreSchemaName?: string };
+}
+
+interface AtomicConditionalWriteProvider {
+    SupportsAtomicConditionalWrite: true;
 }
 
 interface PersistedRoutineCasRow {
@@ -46,8 +51,6 @@ interface LockResultRow {
     LockResult?: number | string | null;
 }
 
-type WakeCoalesceEventEntry = Record<string, string | number | boolean | null | undefined | object>;
-
 interface AgentWakeCoalesceContext {
     newConfig: MJUserRoutineEntity_IRoutineWakeConfiguration;
     oldRevision: number;
@@ -55,15 +58,10 @@ interface AgentWakeCoalesceContext {
     oldWriteToken: string | null;
     newWriteToken: string | null;
     expectedUpdatedAtMs: number | null;
-    bucketKey: string;
     lockResource: string;
     workstreamKey: string;
     applicationID: string | null;
-    pendingEvents: WakeCoalesceEventEntry[];
 }
-
-const USER_ROUTINE_COALESCE_LOCK_STORE_KEY = '___MJ_USER_ROUTINE_COALESCE_BUCKET_LOCKS__';
-const MAX_RETAINED_CONVERGENCE_EVENTS = 25;
 
 /**
  * Server-side UserRoutine entity enforcing the scheduling + ownership invariants of the
@@ -89,8 +87,9 @@ const MAX_RETAINED_CONVERGENCE_EVENTS = 25;
  *    (Create Record action, Remote Operations, scripts) attribute ownership correctly.
  * 5. **Atomic AgentWake Coalesce CAS** — enforces atomic compare-and-swap at the persistence
  *    boundary using transaction-scoped bucket locks (`sp_getapplock` / `pg_advisory_xact_lock`)
- *    + locked row reads + `ConcurrencyCheck: 'enforce'` on SQL providers, and serialized
- *    bucket CAS + post-save re-read convergence on non-SQL providers.
+ *    + locked row reads + `ConcurrencyCheck: 'enforce'` on transactional SQL providers, or an
+ *    explicit provider-enforced atomic conditional write capability. Providers lacking both
+ *    fail closed (`Save()` logs an error and returns `false`) rather than risking lost wake events.
  */
 @RegisterClass(BaseEntity, 'MJ: User Routines')
 export class MJUserRoutineEntityServer extends MJUserRoutineEntity {
@@ -106,11 +105,14 @@ export class MJUserRoutineEntityServer extends MJUserRoutineEntity {
         if (!coalesceContext) {
             return super.Save(options);
         }
-        const sqlProvider = this.resolveSqlCapableProvider();
+        const sqlProvider = this.resolveTransactionalSqlProvider();
         if (sqlProvider) {
             return this.saveAgentWakeWithSqlLockAndCAS(sqlProvider, coalesceContext, options);
         }
-        return this.saveAgentWakeWithSerializedNonSqlCAS(coalesceContext, options);
+        if (this.canExecuteAtomicConditionalWrite(this.ProviderToUse)) {
+            return this.saveAgentWakeWithAtomicConditionalWrite(options);
+        }
+        return this.failClosedMissingAtomicCapability(coalesceContext);
     }
 
     private extractAgentWakeCoalesceContext(): AgentWakeCoalesceContext | null {
@@ -125,6 +127,9 @@ export class MJUserRoutineEntityServer extends MJUserRoutineEntity {
             ? SafeJSONParse<MJUserRoutineEntity_IRoutineWakeConfiguration>(this.WakeConfiguration)
             : null;
         if (!newConfig) {
+            return null;
+        }
+        if (newConfig.resumeState?.['batchConsumed'] === true) {
             return null;
         }
         const newRevision = newConfig.resumeState?.['coalesceRevision'];
@@ -172,45 +177,76 @@ export class MJUserRoutineEntityServer extends MJUserRoutineEntity {
             oldWriteToken,
             newWriteToken,
             expectedUpdatedAtMs,
-            bucketKey,
             lockResource: `mj_wake_${lockHash}`,
             workstreamKey,
             applicationID,
-            pendingEvents: this.readPendingEventsFromConfig(newConfig),
         };
     }
 
-    private resolveSqlCapableProvider(): SqlCapableProvider | null {
-        if (this.isSqlCapableProvider(this.ProviderToUse)) {
+    private resolveTransactionalSqlProvider(): TransactionalSqlProvider | null {
+        if (this.canExecuteTransactionalSql(this.ProviderToUse)) {
             return this.ProviderToUse;
         }
-        if (this.isSqlCapableProvider(this.RunViewProviderToUse)) {
+        if (!this.ProviderToUse && this.canExecuteTransactionalSql(this.RunViewProviderToUse)) {
             return this.RunViewProviderToUse;
         }
         return null;
     }
 
-    private isSqlCapableProvider(candidate: object | null | undefined): candidate is SqlCapableProvider {
+    private canExecuteTransactionalSql(candidate: object | null | undefined): candidate is TransactionalSqlProvider {
         if (!candidate) {
             return false;
         }
-        return typeof Reflect.get(candidate, 'ExecuteSQL') === 'function';
+        return (
+            typeof Reflect.get(candidate, 'ExecuteSQL') === 'function' &&
+            Reflect.get(candidate, 'SupportsEntityTransactions') === true &&
+            typeof Reflect.get(candidate, 'BeginEntityTransaction') === 'function'
+        );
+    }
+
+    private canExecuteAtomicConditionalWrite(candidate: object | null | undefined): candidate is AtomicConditionalWriteProvider {
+        if (!candidate) {
+            return false;
+        }
+        return Reflect.get(candidate, 'SupportsAtomicConditionalWrite') === true;
+    }
+
+    private failClosedMissingAtomicCapability(_ctx: AgentWakeCoalesceContext): boolean {
+        const message =
+            `Cannot perform atomic AgentWake coalesced save on routine ${this.ID || '(new)'}: ` +
+            `provider lacks transactional SQL bucket locking (ExecuteSQL + SupportsEntityTransactions + BeginEntityTransaction) ` +
+            `and atomic conditional write capability.`;
+        LogError(`[MJUserRoutineEntityServer] ${message}`);
+        this.registerCoalesceConflict(message);
+        return false;
+    }
+
+    private async saveAgentWakeWithAtomicConditionalWrite(options?: EntitySaveOptions): Promise<boolean> {
+        try {
+            const saveOptions = this.buildAtomicSaveOptions(options);
+            return await super.Save(saveOptions);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            LogError(`[MJUserRoutineEntityServer] Atomic conditional write error on routine ${this.ID || '(new)'}: ${msg}`);
+            this.registerCoalesceConflict(
+                `Atomic AgentWake coalescing conditional write error on routine ${this.ID || '(new)'}: ${msg}`
+            );
+            return false;
+        }
     }
 
     private async saveAgentWakeWithSqlLockAndCAS(
-        sqlProvider: SqlCapableProvider,
+        sqlProvider: TransactionalSqlProvider,
         ctx: AgentWakeCoalesceContext,
         options?: EntitySaveOptions
     ): Promise<boolean> {
         let rejected = false;
         try {
             const saved = await RunInEntityTransaction(sqlProvider, async () => {
-                if (sqlProvider.SupportsEntityTransactions === true) {
-                    const locked = await this.acquireSqlBucketLock(sqlProvider, ctx.lockResource);
-                    if (!locked) {
-                        rejected = true;
-                        return false;
-                    }
+                const locked = await this.acquireSqlBucketLock(sqlProvider, ctx.lockResource);
+                if (!locked) {
+                    rejected = true;
+                    return false;
                 }
                 const casPassed = await this.verifySqlCoalescePrecondition(sqlProvider, ctx);
                 if (!casPassed) {
@@ -223,6 +259,7 @@ export class MJUserRoutineEntityServer extends MJUserRoutineEntity {
             return rejected ? false : saved;
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
+            LogError(`[MJUserRoutineEntityServer] Atomic AgentWake coalescing SQL lock/CAS error on routine ${this.ID || '(new)'}: ${msg}`);
             this.registerCoalesceConflict(
                 `Atomic AgentWake coalescing SQL lock/CAS error on routine ${this.ID || '(new)'}: ${msg}`
             );
@@ -230,10 +267,7 @@ export class MJUserRoutineEntityServer extends MJUserRoutineEntity {
         }
     }
 
-    private buildAtomicSaveOptions(options?: EntitySaveOptions): EntitySaveOptions | undefined {
-        if (!this.IsSaved) {
-            return options;
-        }
+    private buildAtomicSaveOptions(options?: EntitySaveOptions): EntitySaveOptions {
         const effective = options ? { ...options } : new EntitySaveOptions();
         if (!effective.ConcurrencyCheck) {
             effective.ConcurrencyCheck = 'enforce';
@@ -242,7 +276,7 @@ export class MJUserRoutineEntityServer extends MJUserRoutineEntity {
     }
 
     private async acquireSqlBucketLock(
-        sqlProvider: SqlCapableProvider,
+        sqlProvider: TransactionalSqlProvider,
         lockResource: string
     ): Promise<boolean> {
         const p0 = this.paramPlaceholder(sqlProvider, 0);
@@ -265,20 +299,24 @@ export class MJUserRoutineEntityServer extends MJUserRoutineEntity {
             { isMutation: false, ignoreLogging: true },
             this.ContextCurrentUser
         );
-        if (Array.isArray(rows) && rows.length > 0 && rows[0]?.LockResult != null) {
-            const code = Number(rows[0].LockResult);
-            if (Number.isFinite(code) && code < 0) {
-                this.registerCoalesceConflict(
-                    `Failed to acquire AgentWake bucket lock '${lockResource}' (sp_getapplock returned ${code}).`
-                );
-                return false;
-            }
+        if (!Array.isArray(rows) || rows.length === 0 || rows[0]?.LockResult == null) {
+            this.registerCoalesceConflict(
+                `Failed to acquire AgentWake bucket lock '${lockResource}' (sp_getapplock returned no LockResult).`
+            );
+            return false;
+        }
+        const code = Number(rows[0].LockResult);
+        if (!Number.isFinite(code) || code < 0) {
+            this.registerCoalesceConflict(
+                `Failed to acquire AgentWake bucket lock '${lockResource}' (sp_getapplock returned ${code}).`
+            );
+            return false;
         }
         return true;
     }
 
     private async verifySqlCoalescePrecondition(
-        sqlProvider: SqlCapableProvider,
+        sqlProvider: TransactionalSqlProvider,
         ctx: AgentWakeCoalesceContext
     ): Promise<boolean> {
         const schema = sqlProvider.ConfigData?.MJCoreSchemaName || this.EntityInfo?.SchemaName || '__mj';
@@ -301,7 +339,10 @@ export class MJUserRoutineEntityServer extends MJUserRoutineEntity {
                 this.ContextCurrentUser
             );
             if (!Array.isArray(rows) || rows.length === 0) {
-                return true;
+                this.registerCoalesceConflict(
+                    `Concurrent AgentWake coalescing conflict on routine ${this.ID}: target row no longer exists or locked verification read returned empty.`
+                );
+                return false;
             }
             return this.checkPersistedRowCasMatch(rows[0], ctx);
         }
@@ -322,263 +363,13 @@ export class MJUserRoutineEntityServer extends MJUserRoutineEntity {
             { isMutation: false, ignoreLogging: true },
             this.ContextCurrentUser
         );
-        return this.verifyNoExistingUnclaimedBucketRow(rows ?? [], ctx);
-    }
-
-    private async saveAgentWakeWithSerializedNonSqlCAS(
-        ctx: AgentWakeCoalesceContext,
-        options?: EntitySaveOptions
-    ): Promise<boolean> {
-        return MJUserRoutineEntityServer.enqueueBucketOperation(ctx.bucketKey, async () => {
-            const preCheckOk = await this.verifyNonSqlCoalescePrecondition(ctx);
-            if (!preCheckOk) {
-                return false;
-            }
-            const saved = await super.Save(options);
-            if (!saved) {
-                return false;
-            }
-            await this.reconcileNonSqlPostSaveConvergence(ctx, options);
-            return true;
-        });
-    }
-
-    private async verifyNonSqlCoalescePrecondition(ctx: AgentWakeCoalesceContext): Promise<boolean> {
-        if (!this.RunViewProviderToUse) {
-            return true;
-        }
-        try {
-            const rv = new RunView(this.RunViewProviderToUse);
-            if (this.IsSaved) {
-                const res = await rv.RunView<PersistedRoutineCasRow>(
-                    {
-                        EntityName: 'MJ: User Routines',
-                        ExtraFilter: `ID='${EscapeSQLString(this.ID)}'`,
-                        Fields: ['ID', 'WakeConfiguration', '__mj_UpdatedAt'],
-                        MaxRows: 1,
-                        BypassCache: true,
-                        ResultType: 'simple',
-                    },
-                    this.ContextCurrentUser
-                );
-                if (!res?.Success || !Array.isArray(res.Results) || res.Results.length === 0) {
-                    return true;
-                }
-                return this.checkPersistedRowCasMatch(res.Results[0], ctx);
-            }
-
-            if (!this.UserID || !this.TargetID) {
-                return true;
-            }
-            const res = await rv.RunView<PersistedRoutineCasRow>(
-                {
-                    EntityName: 'MJ: User Routines',
-                    ExtraFilter: `UserID='${EscapeSQLString(this.UserID)}' AND RoutineType='AgentWake' AND TargetType='Agent' AND TargetID='${EscapeSQLString(this.TargetID)}' AND Status='Active'`,
-                    Fields: ['ID', 'WakeConfiguration', 'Status', 'NextRunAt'],
-                    MaxRows: 50,
-                    BypassCache: true,
-                    ResultType: 'simple',
-                },
-                this.ContextCurrentUser
+        if (!Array.isArray(rows)) {
+            this.registerCoalesceConflict(
+                `AgentWake coalescing SQL bucket verification read failed for routine ${this.ID || '(new)'}.`
             );
-            if (!res?.Success || !Array.isArray(res.Results) || res.Results.length === 0) {
-                return true;
-            }
-            const activePending = res.Results.filter((r) => r.NextRunAt != null && r.Status === 'Active');
-            return this.verifyNoExistingUnclaimedBucketRow(activePending, ctx);
-        } catch {
-            // Isolated unit-test stubs without a RunView implementation fall through cleanly.
-            return true;
+            return false;
         }
-    }
-
-    private async reconcileNonSqlPostSaveConvergence(
-        ctx: AgentWakeCoalesceContext,
-        options?: EntitySaveOptions
-    ): Promise<void> {
-        if (!this.RunViewProviderToUse || !ctx.newWriteToken || !this.UserID || !this.TargetID) {
-            return;
-        }
-        try {
-            const rv = new RunView(this.RunViewProviderToUse);
-            const res = await rv.RunView<MJUserRoutineEntity>(
-                {
-                    EntityName: 'MJ: User Routines',
-                    ExtraFilter: `UserID='${EscapeSQLString(this.UserID)}' AND RoutineType='AgentWake' AND TargetType='Agent' AND TargetID='${EscapeSQLString(this.TargetID)}'`,
-                    OrderBy: '__mj_CreatedAt ASC, ID ASC',
-                    MaxRows: 50,
-                    BypassCache: true,
-                    ResultType: 'entity_object',
-                },
-                this.ContextCurrentUser
-            );
-            if (!res?.Success || !Array.isArray(res.Results) || res.Results.length === 0) {
-                return;
-            }
-            const activeBucket = res.Results.filter((r) => this.isUnclaimedRoutineInBucket(r, ctx));
-            if (activeBucket.length === 0) {
-                return;
-            }
-            const canonical = activeBucket[0];
-            const duplicates = activeBucket.slice(1);
-            const canonicalCfg = this.parseEntityWakeConfig(canonical);
-            const hasOurToken = this.configHasWriteToken(canonicalCfg, ctx.newWriteToken);
-            const missingEvents = this.findMissingEvents(canonicalCfg, ctx.pendingEvents);
-
-            if (duplicates.length === 0 && hasOurToken && missingEvents.length === 0) {
-                return;
-            }
-
-            await this.mergeAndConvergeBucketRoutines(canonical, duplicates, missingEvents, ctx, options);
-        } catch {
-            // Non-SQL stub without full entity_object RunView support — keep primary save result.
-        }
-    }
-
-    private async mergeAndConvergeBucketRoutines(
-        canonical: MJUserRoutineEntity,
-        duplicates: MJUserRoutineEntity[],
-        missingEvents: WakeCoalesceEventEntry[],
-        ctx: AgentWakeCoalesceContext,
-        options?: EntitySaveOptions
-    ): Promise<void> {
-        const canonicalCfg = this.parseEntityWakeConfig(canonical);
-        const canonicalResume = this.asResumeRecord(canonicalCfg.resumeState);
-        const merged = this.collectMergedBucketEvents(canonicalCfg, canonicalResume, duplicates, missingEvents, ctx);
-
-        const nextConfig: MJUserRoutineEntity_IRoutineWakeConfiguration = {
-            ...canonicalCfg,
-            resumeState: {
-                ...canonicalResume,
-                coalesceRevision: merged.maxRevision + 1,
-                coalesceWriteToken: ctx.newWriteToken ?? canonicalResume['coalesceWriteToken'],
-                committedWriteTokens: merged.tokens,
-                coalescedEventCount: merged.totalCount,
-                overflowEventCount: merged.overflowCount,
-                batchConsumed: false,
-                pendingEvents: merged.retained,
-            },
-        };
-        canonical.WakeConfiguration = JSON.stringify(nextConfig);
-        if (UUIDsEqual(canonical.ID, this.ID)) {
-            this.WakeConfiguration = canonical.WakeConfiguration;
-            await super.Save(options);
-        } else {
-            await BaseEntity.prototype.Save.call(canonical, options);
-        }
-        await this.deactivateSupersededDuplicates(duplicates, canonical.ID, options);
-    }
-
-    private collectMergedBucketEvents(
-        canonicalCfg: Partial<MJUserRoutineEntity_IRoutineWakeConfiguration>,
-        canonicalResume: Record<string, unknown>,
-        duplicates: MJUserRoutineEntity[],
-        missingEvents: WakeCoalesceEventEntry[],
-        ctx: AgentWakeCoalesceContext
-    ): {
-        retained: WakeCoalesceEventEntry[];
-        maxRevision: number;
-        totalCount: number;
-        overflowCount: number;
-        tokens: string[];
-    } {
-        const existingEvents = this.readPendingEventsFromConfig(canonicalCfg);
-        const tokenSet = new Set<string>(this.readStringArray(canonicalResume['committedWriteTokens']));
-        if (typeof canonicalResume['coalesceWriteToken'] === 'string') {
-            tokenSet.add(canonicalResume['coalesceWriteToken']);
-        }
-        if (ctx.newWriteToken) {
-            tokenSet.add(ctx.newWriteToken);
-        }
-
-        let maxRevision = typeof canonicalResume['coalesceRevision'] === 'number'
-            ? canonicalResume['coalesceRevision']
-            : ctx.newRevision;
-        let overflowCount = typeof canonicalResume['overflowEventCount'] === 'number'
-            ? canonicalResume['overflowEventCount']
-            : 0;
-        let totalCount = typeof canonicalResume['coalescedEventCount'] === 'number'
-            ? canonicalResume['coalescedEventCount']
-            : existingEvents.length;
-
-        const mergedByKey = new Map<string, WakeCoalesceEventEntry>();
-        const appendEvent = (ev: WakeCoalesceEventEntry, countIncrement: boolean): void => {
-            const key = this.wakeEventIdentityKey(ev);
-            if (!mergedByKey.has(key)) {
-                mergedByKey.set(key, ev);
-                if (countIncrement) {
-                    totalCount++;
-                }
-            }
-        };
-
-        for (const ev of existingEvents) {
-            appendEvent(ev, false);
-        }
-        for (const dup of duplicates) {
-            const dupCfg = this.parseEntityWakeConfig(dup);
-            const dupResume = this.asResumeRecord(dupCfg.resumeState);
-            if (typeof dupResume['coalesceRevision'] === 'number') {
-                maxRevision = Math.max(maxRevision, dupResume['coalesceRevision']);
-            }
-            for (const tok of this.readStringArray(dupResume['committedWriteTokens'])) {
-                tokenSet.add(tok);
-            }
-            const dupEvents = this.readPendingEventsFromConfig(dupCfg);
-            const dupTotal = typeof dupResume['coalescedEventCount'] === 'number'
-                ? dupResume['coalescedEventCount']
-                : dupEvents.length;
-            const dupOverflow = Math.max(0, dupTotal - dupEvents.length);
-            overflowCount += dupOverflow;
-            totalCount += dupOverflow;
-            for (const ev of dupEvents) {
-                appendEvent(ev, true);
-            }
-        }
-        for (const ev of missingEvents) {
-            appendEvent(ev, true);
-        }
-
-        const allMerged = Array.from(mergedByKey.values());
-        const retained = allMerged.slice(-MAX_RETAINED_CONVERGENCE_EVENTS);
-        overflowCount += Math.max(0, allMerged.length - retained.length);
-        totalCount = Math.max(totalCount, retained.length + overflowCount);
-
-        return {
-            retained,
-            maxRevision,
-            totalCount,
-            overflowCount,
-            tokens: Array.from(tokenSet).slice(-64),
-        };
-    }
-
-    private async deactivateSupersededDuplicates(
-        duplicates: MJUserRoutineEntity[],
-        canonicalID: string,
-        options?: EntitySaveOptions
-    ): Promise<void> {
-        for (const dup of duplicates) {
-            if (UUIDsEqual(dup.ID, canonicalID)) {
-                continue;
-            }
-            const dupCfg = this.parseEntityWakeConfig(dup);
-            const dupResume = this.asResumeRecord(dupCfg.resumeState);
-            dup.Status = 'Disabled';
-            dup.NextRunAt = null;
-            dup.WakeConfiguration = JSON.stringify({
-                ...dupCfg,
-                resumeState: {
-                    ...dupResume,
-                    batchConsumed: true,
-                    coalescedIntoRoutineID: canonicalID,
-                    coalescedEventCount: 0,
-                    overflowEventCount: 0,
-                    pendingEvents: [],
-                },
-            });
-            await BaseEntity.prototype.Save.call(dup, options);
-        }
+        return this.verifyNoExistingUnclaimedBucketRow(rows, ctx);
     }
 
     private checkPersistedRowCasMatch(
@@ -657,21 +448,21 @@ export class MJUserRoutineEntityServer extends MJUserRoutineEntity {
         }
     }
 
-    private quoteCol(sqlProvider: SqlCapableProvider, name: string): string {
+    private quoteCol(sqlProvider: TransactionalSqlProvider, name: string): string {
         if (typeof sqlProvider.QuoteIdentifier === 'function') {
             return sqlProvider.QuoteIdentifier(name);
         }
         return sqlProvider.PlatformKey === 'postgresql' ? `"${name}"` : `[${name}]`;
     }
 
-    private quoteSchemaAndObject(sqlProvider: SqlCapableProvider, schema: string, obj: string): string {
+    private quoteSchemaAndObject(sqlProvider: TransactionalSqlProvider, schema: string, obj: string): string {
         if (typeof sqlProvider.QuoteSchemaAndView === 'function') {
             return sqlProvider.QuoteSchemaAndView(schema, obj);
         }
         return `${this.quoteCol(sqlProvider, schema)}.${this.quoteCol(sqlProvider, obj)}`;
     }
 
-    private paramPlaceholder(sqlProvider: SqlCapableProvider, index: number): string {
+    private paramPlaceholder(sqlProvider: TransactionalSqlProvider, index: number): string {
         if (typeof sqlProvider.BuildParameterPlaceholder === 'function') {
             return sqlProvider.BuildParameterPlaceholder(index);
         }
@@ -690,27 +481,6 @@ export class MJUserRoutineEntityServer extends MJUserRoutineEntity {
         return null;
     }
 
-    private parseEntityWakeConfig(entity: MJUserRoutineEntity): Partial<MJUserRoutineEntity_IRoutineWakeConfiguration> {
-        if (typeof entity.WakeConfiguration === 'string' && entity.WakeConfiguration.trim().length > 0) {
-            return SafeJSONParse<MJUserRoutineEntity_IRoutineWakeConfiguration>(entity.WakeConfiguration) ?? {};
-        }
-        if (entity.WakeConfigurationObject && typeof entity.WakeConfigurationObject === 'object') {
-            return entity.WakeConfigurationObject;
-        }
-        return {};
-    }
-
-    private isUnclaimedRoutineInBucket(routine: MJUserRoutineEntity, ctx: AgentWakeCoalesceContext): boolean {
-        if (routine.Status !== 'Active' || routine.NextRunAt == null) {
-            return false;
-        }
-        const cfg = this.parseEntityWakeConfig(routine);
-        if (cfg.resumeState?.['batchConsumed'] === true) {
-            return false;
-        }
-        return this.configMatchesBucket(cfg, ctx);
-    }
-
     private configMatchesBucket(
         cfg: Partial<MJUserRoutineEntity_IRoutineWakeConfiguration>,
         ctx: AgentWakeCoalesceContext
@@ -726,96 +496,6 @@ export class MJUserRoutineEntityServer extends MJUserRoutineEntity {
             }
         }
         return false;
-    }
-
-    private configHasWriteToken(
-        cfg: Partial<MJUserRoutineEntity_IRoutineWakeConfiguration>,
-        token: string
-    ): boolean {
-        const resume = this.asResumeRecord(cfg.resumeState);
-        if (resume['coalesceWriteToken'] === token) {
-            return true;
-        }
-        return this.readStringArray(resume['committedWriteTokens']).includes(token);
-    }
-
-    private findMissingEvents(
-        cfg: Partial<MJUserRoutineEntity_IRoutineWakeConfiguration>,
-        intendedEvents: WakeCoalesceEventEntry[]
-    ): WakeCoalesceEventEntry[] {
-        const persistedKeys = new Set(
-            this.readPendingEventsFromConfig(cfg).map((e) => this.wakeEventIdentityKey(e))
-        );
-        return intendedEvents.filter((e) => !persistedKeys.has(this.wakeEventIdentityKey(e)));
-    }
-
-    private readPendingEventsFromConfig(
-        cfg: Partial<MJUserRoutineEntity_IRoutineWakeConfiguration>
-    ): WakeCoalesceEventEntry[] {
-        const resume = this.asResumeRecord(cfg.resumeState);
-        const queued = resume['pendingEvents'];
-        if (Array.isArray(queued)) {
-            return queued.filter((item): item is WakeCoalesceEventEntry => typeof item === 'object' && item !== null);
-        }
-        return [];
-    }
-
-    private asResumeRecord(raw: unknown): Record<string, unknown> {
-        return raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-    }
-
-    private readStringArray(raw: unknown): string[] {
-        if (!Array.isArray(raw)) {
-            return [];
-        }
-        return raw.filter((v): v is string => typeof v === 'string');
-    }
-
-    private wakeEventIdentityKey(event: WakeCoalesceEventEntry): string {
-        const id =
-            event['requestID'] ??
-            event['messageID'] ??
-            event['conversationDetailID'] ??
-            event['taskID'] ??
-            event['eventID'] ??
-            event['recordID'] ??
-            '';
-        const qualifier = event['status'] ?? event['wakeReason'] ?? '';
-        return `${String(event['triggerType'] ?? '')}:${String(id)}:${String(qualifier)}`.toLowerCase();
-    }
-
-    private static getBucketLockMap(): Map<string, Promise<void>> {
-        const store = GetGlobalObjectStore();
-        if (store) {
-            const existing = store[USER_ROUTINE_COALESCE_LOCK_STORE_KEY];
-            if (existing instanceof Map) {
-                return existing as Map<string, Promise<void>>;
-            }
-            const created = new Map<string, Promise<void>>();
-            store[USER_ROUTINE_COALESCE_LOCK_STORE_KEY] = created;
-            return created;
-        }
-        return MJUserRoutineEntityServer.fallbackBucketLocks;
-    }
-
-    private static readonly fallbackBucketLocks = new Map<string, Promise<void>>();
-
-    private static enqueueBucketOperation<T>(bucketKey: string, operation: () => Promise<T>): Promise<T> {
-        const locks = MJUserRoutineEntityServer.getBucketLockMap();
-        const prev = locks.get(bucketKey) ?? Promise.resolve();
-        const next = prev.then(operation, operation);
-        const link: Promise<void> = next
-            .then(
-                () => undefined,
-                () => undefined
-            )
-            .finally(() => {
-                if (locks.get(bucketKey) === link) {
-                    locks.delete(bucketKey);
-                }
-            });
-        locks.set(bucketKey, link);
-        return next;
     }
 
     public override Validate(): ValidationResult {

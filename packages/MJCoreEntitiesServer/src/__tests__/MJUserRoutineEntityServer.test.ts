@@ -303,42 +303,69 @@ describe('MJUserRoutineEntityServer.Save', () => {
         expect(e.SuperSaveCalled).toBe(true);
     });
 
-    it('rejects stale AgentWake coalescing writes when DB coalesceRevision has already advanced (CAS conflict)', async () => {
-        const e = makeEntity() as MJUserRoutineEntityServer & MockHooks & {
-            RoutineType: string | null;
-            WakeConfiguration: string | null;
-            LastRegisteredResult: { Message?: string } | null;
-        };
-        e.IsSaved = true;
-        e.RoutineType = 'AgentWake';
-        e.CronExpression = null as unknown as string;
-        e.WakeConfiguration = JSON.stringify({
-            workstreamKey: 'app:tasks',
-            resumeState: { coalesceRevision: 2 },
-        });
-        e.SetFieldState('WakeConfiguration', {
-            Dirty: true,
-            OldValue: JSON.stringify({ workstreamKey: 'app:tasks', resumeState: { coalesceRevision: 1 } }),
-        });
+    it('rejects stale AgentWake coalescing writes on transactional SQL providers (SQL Server & PostgreSQL) when DB coalesceRevision has already advanced', async () => {
+        for (const platform of ['sqlserver', 'postgresql'] as const) {
+            const e = makeEntity() as MJUserRoutineEntityServer & MockHooks & {
+                RoutineType: string | null;
+                WakeConfiguration: string | null;
+                ProviderToUse: unknown;
+                RunViewProviderToUse: unknown;
+                LastRegisteredResult: { Message?: string; ConcurrencyConflict?: { ConflictingFields?: string[] } } | null;
+            };
+            e.IsSaved = true;
+            e.RoutineType = 'AgentWake';
+            e.CronExpression = null as unknown as string;
+            e.WakeConfiguration = JSON.stringify({
+                workstreamKey: 'app:tasks',
+                resumeState: { coalesceRevision: 2, coalesceWriteToken: 'tok-stale' },
+            });
+            e.SetFieldState('WakeConfiguration', {
+                Dirty: true,
+                OldValue: JSON.stringify({ workstreamKey: 'app:tasks', resumeState: { coalesceRevision: 1, coalesceWriteToken: 'tok-1' } }),
+            });
 
-        vi.spyOn(RunView.prototype, 'RunView').mockResolvedValueOnce({
-            Success: true,
-            Results: [
-                {
-                    ID: e.ID,
-                    WakeConfiguration: JSON.stringify({
-                        workstreamKey: 'app:tasks',
-                        resumeState: { coalesceRevision: 2 },
-                    }),
+            const provider = {
+                PlatformKey: platform,
+                SupportsEntityTransactions: true,
+                ConfigData: { MJCoreSchemaName: '__mj' },
+                QuoteIdentifier: (n: string) => (platform === 'postgresql' ? `"${n}"` : `[${n}]`),
+                QuoteSchemaAndView: (s: string, o: string) => (platform === 'postgresql' ? `"${s}"."${o}"` : `[${s}].[${o}]`),
+                BuildParameterPlaceholder: (i: number) => (platform === 'postgresql' ? `$${i + 1}` : `@p${i}`),
+                BeginEntityTransaction: async () => ({
+                    IsNested: false,
+                    Commit: async () => undefined,
+                    Rollback: async () => undefined,
+                }),
+                ExecuteSQL: async <T>(sql: string): Promise<Array<T>> => {
+                    if (sql.includes('sp_getapplock')) {
+                        return [{ LockResult: 0 }] as Array<T>;
+                    }
+                    if (sql.includes('pg_advisory_xact_lock')) {
+                        return [] as Array<T>;
+                    }
+                    if (sql.includes('WITH (UPDLOCK, ROWLOCK)') || sql.includes('FOR UPDATE')) {
+                        return [
+                            {
+                                ID: e.ID,
+                                WakeConfiguration: JSON.stringify({
+                                    workstreamKey: 'app:tasks',
+                                    resumeState: { coalesceRevision: 2, coalesceWriteToken: 'tok-newer' },
+                                }),
+                            } as unknown as T,
+                        ];
+                    }
+                    return [] as Array<T>;
                 },
-            ],
-        } as unknown as Awaited<ReturnType<RunView['RunView']>>);
+            };
+            e.ProviderToUse = provider;
+            e.RunViewProviderToUse = provider;
 
-        const ok = await e.Save();
-        expect(ok).toBe(false);
-        expect(e.SuperSaveCalled).toBe(false);
-        expect(e.LastRegisteredResult?.Message).toContain('Concurrent AgentWake coalescing conflict');
-        vi.restoreAllMocks();
+            const ok = await e.Save();
+            expect(ok).toBe(false);
+            expect(e.SuperSaveCalled).toBe(false);
+            expect(e.LastRegisteredResult?.Message).toContain('Concurrent AgentWake coalescing conflict');
+            expect(e.LastRegisteredResult?.ConcurrencyConflict?.ConflictingFields).toEqual(['WakeConfiguration']);
+        }
     });
 
     it('enforces atomic SQL bucket lock (sp_getapplock) + UPDLOCK read + ConcurrencyCheck:enforce across barrier-synchronized writers (SQL Server)', async () => {
@@ -525,114 +552,274 @@ describe('MJUserRoutineEntityServer.Save', () => {
         expect(creator2.LastRegisteredResult?.Message).toContain('active bucket routine');
     });
 
-    it('enforces __mj_UpdatedAt & coalesceWriteToken CAS on non-SQL providers and merges concurrent events during post-save re-read', async () => {
-        const t0 = new Date('2026-11-22T12:00:00.000Z');
-        const t1 = new Date('2026-11-22T12:00:05.000Z');
-        const initialCfg = JSON.stringify({
-            workstreamKey: 'app:tasks',
-            resumeState: { applicationID: 'app-tasks', coalesceRevision: 1, coalesceWriteToken: 'tok-1', pendingEvents: [{ triggerType: 'TaskAssigned', taskID: 't-1' }] },
-        });
+    it('fails closed (returns false) for coalesced AgentWake saves on non-transactional or non-SQL providers', async () => {
+        const nonAtomicProviders: Array<{ label: string; provider: Record<string, unknown> }> = [
+            { label: 'plain non-SQL stub', provider: {} },
+            { label: 'client provider with SupportsEntityTransactions=false', provider: { SupportsEntityTransactions: false } },
+            {
+                label: 'SQL provider without SupportsEntityTransactions=true',
+                provider: {
+                    PlatformKey: 'sqlserver',
+                    SupportsEntityTransactions: false,
+                    ExecuteSQL: async () => [{ LockResult: 0 }],
+                },
+            },
+            {
+                label: 'SQL provider missing BeginEntityTransaction',
+                provider: {
+                    PlatformKey: 'postgresql',
+                    SupportsEntityTransactions: true,
+                    ExecuteSQL: async () => [],
+                },
+            },
+        ];
+
+        for (const { label, provider } of nonAtomicProviders) {
+            const e = makeEntity() as MJUserRoutineEntityServer & MockHooks & {
+                RoutineType: string | null;
+                WakeConfiguration: string | null;
+                ProviderToUse: unknown;
+                RunViewProviderToUse: unknown;
+                LastRegisteredResult: { Message?: string; ConcurrencyConflict?: { ConflictingFields?: string[] } } | null;
+            };
+            e.IsSaved = true;
+            e.UserID = 'UUUUUUUU-0000-0000-0000-000000000001';
+            e.TargetID = 'CCCCCCCC-0000-0000-0000-000000000001';
+            e.RoutineType = 'AgentWake';
+            e.CronExpression = null as unknown as string;
+            e.ProviderToUse = provider;
+            e.RunViewProviderToUse = provider;
+            e.WakeConfiguration = JSON.stringify({
+                workstreamKey: 'app:tasks',
+                resumeState: { applicationID: 'app-tasks', coalesceRevision: 2, coalesceWriteToken: 'tok-2', pendingEvents: [{ taskID: 't-2' }] },
+            });
+            e.SetFieldState('WakeConfiguration', {
+                Dirty: true,
+                OldValue: JSON.stringify({
+                    workstreamKey: 'app:tasks',
+                    resumeState: { applicationID: 'app-tasks', coalesceRevision: 1, coalesceWriteToken: 'tok-1', pendingEvents: [{ taskID: 't-1' }] },
+                }),
+            });
+
+            const ok = await e.Save();
+            expect(ok, `Expected fail-closed false for ${label}`).toBe(false);
+            expect(e.SuperSaveCalled, `Expected SuperSave not called for ${label}`).toBe(false);
+            expect(e.LastRegisteredResult?.Message).toContain('lacks transactional SQL bucket locking');
+        }
+    });
+
+    it('fails closed when SQL CAS verification read returns empty for a saved routine or invalid lock result', async () => {
+        const emptyReadProvider = {
+            PlatformKey: 'sqlserver',
+            SupportsEntityTransactions: true,
+            ConfigData: { MJCoreSchemaName: '__mj' },
+            BeginEntityTransaction: async () => ({
+                IsNested: false,
+                Commit: async () => undefined,
+                Rollback: async () => undefined,
+            }),
+            ExecuteSQL: async <T>(sql: string): Promise<Array<T>> => {
+                if (sql.includes('sp_getapplock')) {
+                    return [{ LockResult: 0 }] as Array<T>;
+                }
+                // Simulate target row missing / verification read returning empty
+                return [] as Array<T>;
+            },
+        };
 
         const e = makeEntity() as MJUserRoutineEntityServer & MockHooks & {
             RoutineType: string | null;
             WakeConfiguration: string | null;
-            __mj_UpdatedAt: Date | null;
+            ProviderToUse: unknown;
+            RunViewProviderToUse: unknown;
             LastRegisteredResult: { Message?: string } | null;
         };
         e.IsSaved = true;
-        e.UserID = 'UUUUUUUU-0000-0000-0000-000000000001';
-        e.TargetID = 'CCCCCCCC-0000-0000-0000-000000000001';
         e.RoutineType = 'AgentWake';
         e.CronExpression = null as unknown as string;
-        e.__mj_UpdatedAt = t0;
+        e.ProviderToUse = emptyReadProvider;
+        e.RunViewProviderToUse = emptyReadProvider;
         e.WakeConfiguration = JSON.stringify({
             workstreamKey: 'app:tasks',
-            resumeState: { applicationID: 'app-tasks', coalesceRevision: 2, coalesceWriteToken: 'tok-2', pendingEvents: [{ triggerType: 'TaskAssigned', taskID: 't-1' }, { triggerType: 'TaskAssigned', taskID: 't-2' }] },
+            resumeState: { coalesceRevision: 2, coalesceWriteToken: 'tok-2' },
         });
-        e.SetFieldState('WakeConfiguration', { Dirty: true, OldValue: initialCfg });
-        e.SetFieldState('__mj_UpdatedAt', { Dirty: false, OldValue: t0 });
+        e.SetFieldState('WakeConfiguration', {
+            Dirty: true,
+            OldValue: JSON.stringify({ workstreamKey: 'app:tasks', resumeState: { coalesceRevision: 1, coalesceWriteToken: 'tok-1' } }),
+        });
 
-        // Same revision 1 in DB, but __mj_UpdatedAt moved to t1 -> CAS must reject
-        vi.spyOn(RunView.prototype, 'RunView').mockResolvedValueOnce({
-            Success: true,
-            Results: [{ ID: e.ID, WakeConfiguration: initialCfg, __mj_UpdatedAt: t1 }],
-        } as unknown as Awaited<ReturnType<RunView['RunView']>>);
-
-        const ok = await e.Save();
-        expect(ok).toBe(false);
+        expect(await e.Save()).toBe(false);
         expect(e.SuperSaveCalled).toBe(false);
-        expect(e.LastRegisteredResult?.Message).toContain('__mj_UpdatedAt timestamp mismatch');
+        expect(e.LastRegisteredResult?.Message).toContain('locked verification read returned empty');
 
-        // Also verify post-save re-read + atomic merge/convergence when an external non-SQL overwrite occurs
-        const eMerge = makeEntity() as MJUserRoutineEntityServer & MockHooks & {
-            RoutineType: string | null;
-            Status: string;
-            WakeConfiguration: string | null;
-            NextRunAt: Date | null;
+        // Also fail closed if sp_getapplock returns negative/empty LockResult
+        const lockFailProvider = {
+            ...emptyReadProvider,
+            ExecuteSQL: async <T>(): Promise<Array<T>> => [{ LockResult: -1 }] as Array<T>,
         };
-        eMerge.ID = 'RRRRRRRR-0000-0000-0000-00000000000A';
-        eMerge.IsSaved = true;
-        eMerge.UserID = 'UUUUUUUU-0000-0000-0000-000000000001';
-        eMerge.TargetID = 'CCCCCCCC-0000-0000-0000-000000000001';
-        eMerge.RoutineType = 'AgentWake';
-        eMerge.Status = 'Active';
-        eMerge.NextRunAt = new Date('2026-11-22T12:01:00.000Z');
-        eMerge.CronExpression = null as unknown as string;
-        eMerge.WakeConfiguration = JSON.stringify({
-            workstreamKey: 'app:tasks',
-            resumeState: {
-                applicationID: 'app-tasks',
-                coalesceRevision: 2,
-                coalesceWriteToken: 'tok-ours',
-                pendingEvents: [{ triggerType: 'TaskAssigned', taskID: 't-1' }, { triggerType: 'TaskAssigned', taskID: 't-ours' }],
-            },
-        });
-        eMerge.SetFieldState('WakeConfiguration', { Dirty: true, OldValue: initialCfg });
+        e.ProviderToUse = lockFailProvider;
+        e.RunViewProviderToUse = lockFailProvider;
+        expect(await e.Save()).toBe(false);
+        expect(e.SuperSaveCalled).toBe(false);
+        expect(e.LastRegisteredResult?.Message).toContain('sp_getapplock returned -1');
+    });
 
-        const canonicalExternal = makeEntity() as MJUserRoutineEntityServer & MockHooks & {
-            Status: string;
-            NextRunAt: Date | null;
-            WakeConfiguration: string | null;
+    it('proves two independent process contexts passing preflight at revision 1 serialize via transactional SQL CAS and preserve 100% of events', async () => {
+        interface DbRow {
+            ID: string;
+            WakeConfiguration: string;
+            __mj_UpdatedAt: Date;
+        }
+        interface EventItem {
+            taskID: string;
+        }
+        const t0 = new Date('2026-11-22T12:00:00.000Z');
+        const routineId = 'RRRRRRRR-0000-0000-0000-00000000000A';
+        const sharedDatabaseRow: DbRow = {
+            ID: routineId,
+            WakeConfiguration: JSON.stringify({
+                workstreamKey: 'app:tasks',
+                resumeState: {
+                    applicationID: 'app-tasks',
+                    coalesceRevision: 1,
+                    coalesceWriteToken: 'tok-0',
+                    pendingEvents: [{ taskID: 'ev-0' }],
+                },
+            }),
+            __mj_UpdatedAt: t0,
         };
-        canonicalExternal.ID = eMerge.ID;
-        canonicalExternal.Status = 'Active';
-        canonicalExternal.NextRunAt = new Date('2026-11-22T12:01:00.000Z');
-        canonicalExternal.WakeConfiguration = JSON.stringify({
-            workstreamKey: 'app:tasks',
-            resumeState: {
-                applicationID: 'app-tasks',
-                coalesceRevision: 3,
-                coalesceWriteToken: 'tok-ext',
-                committedWriteTokens: ['tok-1', 'tok-ext'],
-                coalescedEventCount: 2,
-                pendingEvents: [{ triggerType: 'TaskAssigned', taskID: 't-1' }, { triggerType: 'TaskAssigned', taskID: 't-ext' }],
-            },
-        });
 
-        vi.spyOn(RunView.prototype, 'RunView')
-            .mockResolvedValueOnce({
-                Success: true,
-                Results: [{ ID: eMerge.ID, WakeConfiguration: initialCfg }],
-            } as unknown as Awaited<ReturnType<RunView['RunView']>>)
-            .mockResolvedValueOnce({
-                Success: true,
-                Results: [canonicalExternal],
-            } as unknown as Awaited<ReturnType<RunView['RunView']>>);
-
-        const mergedOk = await eMerge.Save();
-        expect(mergedOk).toBe(true);
-        const convergedCfg = JSON.parse(eMerge.WakeConfiguration ?? '{}') as {
-            resumeState: {
-                coalesceRevision: number;
-                committedWriteTokens: string[];
-                pendingEvents: Array<{ taskID?: string }>;
+        // Shared database lock queue simulating database-level transaction/advisory lock across two separate OS processes
+        let dbTxChain: Promise<void> = Promise.resolve();
+        const createIndependentProcessSqlProvider = (processName: string) => {
+            const sqlLog: string[] = [];
+            return {
+                processName,
+                sqlLog,
+                PlatformKey: 'postgresql' as const,
+                SupportsEntityTransactions: true,
+                ConfigData: { MJCoreSchemaName: '__mj' },
+                QuoteIdentifier: (n: string) => `"${n}"`,
+                QuoteSchemaAndView: (s: string, o: string) => `"${s}"."${o}"`,
+                BuildParameterPlaceholder: (i: number) => `$${i + 1}`,
+                BeginEntityTransaction: async () => {
+                    let release!: () => void;
+                    const next = new Promise<void>((res) => { release = res; });
+                    const prev = dbTxChain;
+                    dbTxChain = dbTxChain.then(() => next, () => next);
+                    await prev;
+                    return {
+                        IsNested: false,
+                        Commit: async () => { release(); },
+                        Rollback: async () => { release(); },
+                    };
+                },
+                ExecuteSQL: async <T>(sql: string): Promise<Array<T>> => {
+                    sqlLog.push(sql);
+                    if (sql.includes('FOR UPDATE')) {
+                        return [{ ...sharedDatabaseRow }] as Array<T>;
+                    }
+                    return [] as Array<T>;
+                },
             };
         };
-        expect(convergedCfg.resumeState.coalesceRevision).toBe(4);
-        expect(convergedCfg.resumeState.committedWriteTokens).toContain('tok-ours');
-        expect(convergedCfg.resumeState.committedWriteTokens).toContain('tok-ext');
-        expect(convergedCfg.resumeState.pendingEvents.map((ev) => ev.taskID)).toEqual(['t-1', 't-ext', 't-ours']);
-        vi.restoreAllMocks();
+
+        const providerProcessA = createIndependentProcessSqlProvider('process-A');
+        const providerProcessB = createIndependentProcessSqlProvider('process-B');
+        expect(providerProcessA).not.toBe(providerProcessB);
+
+        // Both processes perform independent preflight reads BEFORE either write commits
+        const preflightA = { ...sharedDatabaseRow };
+        const preflightB = { ...sharedDatabaseRow };
+
+        // Synchronization barrier ensuring both processes hold revision-1 preflight state before calling Save()
+        let barrierCount = 0;
+        let openBarrier!: () => void;
+        const preflightBarrier = new Promise<void>((res) => { openBarrier = res; });
+        const waitForBothPreflights = async (): Promise<void> => {
+            barrierCount++;
+            if (barrierCount === 2) {
+                openBarrier();
+            }
+            await preflightBarrier;
+        };
+
+        const makeProcessWriter = (
+            provider: ReturnType<typeof createIndependentProcessSqlProvider>,
+            preflight: DbRow,
+            token: string,
+            newEventId: string
+        ) => {
+            const preflightCfg = JSON.parse(preflight.WakeConfiguration) as {
+                workstreamKey: string;
+                resumeState: { applicationID: string; coalesceRevision: number; coalesceWriteToken: string; pendingEvents: EventItem[] };
+            };
+            const entity = makeEntity() as MJUserRoutineEntityServer & MockHooks & {
+                RoutineType: string | null;
+                WakeConfiguration: string | null;
+                __mj_UpdatedAt: Date | null;
+                ProviderToUse: unknown;
+                RunViewProviderToUse: unknown;
+                SuperSaveOptions: { ConcurrencyCheck?: string } | null;
+                OnSuperSave?: () => Promise<boolean>;
+                LastRegisteredResult: { Message?: string; ConcurrencyConflict?: { ConflictingFields?: string[] } } | null;
+            };
+            entity.ID = preflight.ID;
+            entity.IsSaved = true;
+            entity.UserID = 'UUUUUUUU-0000-0000-0000-000000000001';
+            entity.TargetID = 'CCCCCCCC-0000-0000-0000-000000000001';
+            entity.RoutineType = 'AgentWake';
+            entity.CronExpression = null as unknown as string;
+            entity.__mj_UpdatedAt = preflight.__mj_UpdatedAt;
+            entity.ProviderToUse = provider;
+            entity.RunViewProviderToUse = provider;
+            entity.WakeConfiguration = JSON.stringify({
+                workstreamKey: preflightCfg.workstreamKey,
+                resumeState: {
+                    applicationID: preflightCfg.resumeState.applicationID,
+                    coalesceRevision: preflightCfg.resumeState.coalesceRevision + 1,
+                    coalesceWriteToken: token,
+                    pendingEvents: [...preflightCfg.resumeState.pendingEvents, { taskID: newEventId }],
+                },
+            });
+            entity.SetFieldState('WakeConfiguration', { Dirty: true, OldValue: preflight.WakeConfiguration });
+            entity.SetFieldState('__mj_UpdatedAt', { Dirty: false, OldValue: preflight.__mj_UpdatedAt });
+            entity.OnSuperSave = async () => {
+                sharedDatabaseRow.WakeConfiguration = entity.WakeConfiguration ?? '';
+                sharedDatabaseRow.__mj_UpdatedAt = new Date(sharedDatabaseRow.__mj_UpdatedAt.getTime() + 1000);
+                return true;
+            };
+            return entity;
+        };
+
+        const writerA = makeProcessWriter(providerProcessA, preflightA, 'proc-a', 'ev-A');
+        const writerB = makeProcessWriter(providerProcessB, preflightB, 'proc-b', 'ev-B');
+
+        const [okA, okB] = await Promise.all([
+            (async () => { await waitForBothPreflights(); return writerA.Save(); })(),
+            (async () => { await waitForBothPreflights(); return writerB.Save(); })(),
+        ]);
+
+        // Exactly one process wins at revision 2; the second is rejected by SQL CAS (never overwrites!)
+        expect([okA, okB].filter(Boolean)).toHaveLength(1);
+        expect([okA, okB].filter((v) => !v)).toHaveLength(1);
+        const loser = okA ? writerB : writerA;
+        const loserEventId = okA ? 'ev-B' : 'ev-A';
+        const loserProvider = okA ? providerProcessB : providerProcessA;
+        expect(loser.SuperSaveCalled).toBe(false);
+        expect(loser.LastRegisteredResult?.Message).toContain('Concurrent AgentWake coalescing conflict');
+
+        // Loser retries from latest committed DB state (revision 2) and persists revision 3 with 100% of events
+        const retryWriter = makeProcessWriter(loserProvider, { ...sharedDatabaseRow }, 'proc-retry', loserEventId);
+        expect(await retryWriter.Save()).toBe(true);
+
+        const finalState = JSON.parse(sharedDatabaseRow.WakeConfiguration) as {
+            resumeState: { coalesceRevision: number; pendingEvents: EventItem[] };
+        };
+        expect(finalState.resumeState.coalesceRevision).toBe(3);
+        expect(finalState.resumeState.pendingEvents.map((ev) => ev.taskID)).toEqual(['ev-0', okA ? 'ev-A' : 'ev-B', loserEventId]);
+        expect(providerProcessA.sqlLog.some((s) => s.includes('pg_advisory_xact_lock'))).toBe(true);
+        expect(providerProcessB.sqlLog.some((s) => s.includes('FOR UPDATE'))).toBe(true);
     });
 });
 
