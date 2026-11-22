@@ -28,9 +28,11 @@ import {
     ValidateTaskGraphSpec,
     type MJAIAgentRunEntityExtended,
     type RunawayCheckpointState,
+    type RunawayJsonObject,
     type TaskGraphSpec,
     type TaskGraphSpecNode,
 } from '@memberjunction/ai-core-plus';
+import type { TaskGraphDebugState } from '../debug-state';
 import {
     BudgetEnforcementGuard,
     DeterministicProgressDetector,
@@ -43,15 +45,28 @@ import type { TaskActionRunner, TaskAgentRunner } from '../types';
 
 const capturedLogErrors: string[] = [];
 
+type LogArg = string | number | boolean | object | null | undefined;
+type SqlValue = string | number | boolean | Date | null | undefined;
+type MockRunViewRow =
+    | { ID: string; Name: string; Status?: string }
+    | { ParentID: string }
+    | { ID: string }
+    | { ID: string; Status: MJTaskEntity['Status']; Configuration: string | null }
+    | { ID: string; TypeID: string; AgentRunID: string | null; AgentID: string | null; UserID: string | null; Status: MJTaskEntity['Status']; InputPayload: string | null; Configuration: string | null }
+    | StoredTaskRow
+    | StoredDependencyRow
+    | MJAIAgentRunEntityExtended
+    | MJTaskEntity;
+
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
     return {
         ...actual,
-        LogError: vi.fn((...args: unknown[]) => {
+        LogError: vi.fn((...args: LogArg[]) => {
             capturedLogErrors.push(args.map((a) => String(a)).join(' '));
         }),
         LogStatus: vi.fn(),
-        LogErrorEx: vi.fn((...args: unknown[]) => {
+        LogErrorEx: vi.fn((...args: LogArg[]) => {
             capturedLogErrors.push(args.map((a) => String(a)).join(' '));
         }),
         LogStatusEx: vi.fn(),
@@ -157,7 +172,7 @@ class InMemoryTaskGraphDatabase {
               };
 
         const store = this;
-        const wrapper: Record<string, unknown> = {
+        const wrapper = {
             get ID() {
                 return backing.ID;
             },
@@ -290,12 +305,12 @@ class InMemoryTaskGraphDatabase {
             set Configuration(v: string | null) {
                 backing.Configuration = v;
             },
-            get ConfigurationObject(): Record<string, unknown> | null {
+            get ConfigurationObject(): RunawayJsonObject | null {
                 if (!backing.Configuration) {
                     return null;
                 }
                 try {
-                    return JSON.parse(backing.Configuration) as Record<string, unknown>;
+                    return JSON.parse(backing.Configuration) as RunawayJsonObject;
                 } catch {
                     return null;
                 }
@@ -503,7 +518,7 @@ class InMemoryTaskGraphDatabase {
                     Load: async () => false,
                 };
             },
-            ExecuteSQL: async (sql: string, values?: unknown[], _opts?: ExecuteSQLOptions) => {
+            ExecuteSQL: async (sql: string, values?: SqlValue[], _opts?: ExecuteSQLOptions) => {
                 const args = Array.isArray(values) ? values : [];
                 if (sql.includes('spTaskGraphClaimTask')) {
                     const [taskId, claimedBy, ttlSec] = args as [string, string, number];
@@ -578,22 +593,22 @@ class InMemoryTaskGraphDatabase {
                     if (!row) {
                         return [{ AffectedRows: 0 }];
                     }
-                    const payload = row.InputPayload ? (JSON.parse(row.InputPayload) as Record<string, unknown>) : {};
-                    const debugBag = (payload['debug'] && typeof payload['debug'] === 'object'
-                        ? { ...(payload['debug'] as Record<string, unknown>) }
-                        : {}) as Record<string, unknown>;
-                    const fields = JSON.parse(fieldsJson) as Array<{ Path: string; Kind: string; Value: unknown }>;
+                    const payload = row.InputPayload ? (JSON.parse(row.InputPayload) as { debug?: TaskGraphDebugState }) : {};
+                    const debugBag: TaskGraphDebugState = payload.debug && typeof payload.debug === 'object'
+                        ? { ...payload.debug }
+                        : {};
+                    const fields = JSON.parse(fieldsJson) as Array<{ Path: string; Kind: string; Value?: string | boolean | null }>;
                     for (const field of fields) {
                         const prefix = '$.debug.';
                         if (!field.Path.startsWith(prefix)) continue;
-                        const prop = field.Path.slice(prefix.length);
+                        const prop = field.Path.slice(prefix.length) as keyof TaskGraphDebugState;
                         if (field.Kind === 'null') {
                             delete debugBag[prop];
                         } else {
-                            debugBag[prop] = field.Value;
+                            (debugBag as Record<string, string | boolean | null | undefined>)[prop] = field.Value;
                         }
                     }
-                    payload['debug'] = debugBag;
+                    payload.debug = debugBag;
                     row.InputPayload = JSON.stringify(payload);
                     row.__mj_UpdatedAt = new Date();
                     return [{ AffectedRows: 1 }];
@@ -649,7 +664,7 @@ class InMemoryTaskGraphDatabase {
         return provider as Partial<IMetadataProvider> as IMetadataProvider;
     }
 
-    private handleRunView(params: RunViewParams): { Success: boolean; Results: unknown[] } {
+    private handleRunView(params: RunViewParams): { Success: boolean; Results: MockRunViewRow[] } {
         const filter = params.ExtraFilter ?? '';
         if (params.EntityName === 'MJ: Task Types') {
             return { Success: true, Results: [{ ID: WORKFLOW_TYPE_ID, Name: 'Workflow' }] };
@@ -805,8 +820,8 @@ async function waitForCondition(
 }
 
 interface MockRunViewCapableProvider {
-    RunView: (params: RunViewParams) => Promise<{ Success: boolean; Results: unknown[] }>;
-    RunViews: (items: RunViewParams[]) => Promise<Array<{ Success: boolean; Results: unknown[] }>>;
+    RunView: (params: RunViewParams) => Promise<{ Success: boolean; Results: MockRunViewRow[] }>;
+    RunViews: (items: RunViewParams[]) => Promise<Array<{ Success: boolean; Results: MockRunViewRow[] }>>;
 }
 
 function isMockRunViewCapableProvider(val: object): val is MockRunViewCapableProvider {
@@ -841,7 +856,7 @@ describe('CR-19: 5,000-node workflow acceptance through real TaskGraphService an
             const actionRunner: TaskActionRunner = {
                 RunActionForTask: async (ctx) => {
                     const inputObj = ctx.InputPayload && typeof ctx.InputPayload === 'object'
-                        ? (ctx.InputPayload as Record<string, unknown>)
+                        ? (ctx.InputPayload as RunawayJsonObject)
                         : {};
                     const sliceId = String(inputObj['sliceId'] ?? ctx.TaskID);
                     executedSliceIds.push(sliceId);
@@ -958,7 +973,7 @@ describe('CR-19: 5,000-node workflow acceptance through real TaskGraphService an
             const actionRunner: TaskActionRunner = {
                 RunActionForTask: async (ctx) => {
                     const inputObj = ctx.InputPayload && typeof ctx.InputPayload === 'object'
-                        ? (ctx.InputPayload as Record<string, unknown>)
+                        ? (ctx.InputPayload as RunawayJsonObject)
                         : {};
                     const sliceId = String(inputObj['sliceId'] ?? ctx.TaskID);
                     executedOrder.push(sliceId);

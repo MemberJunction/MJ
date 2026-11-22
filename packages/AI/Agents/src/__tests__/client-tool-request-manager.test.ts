@@ -6,12 +6,13 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     return {
         ...actual,
         BaseSingleton: class MockBaseSingleton<T> {
-            private static _instances = new Map<unknown, unknown>();
+            private static _instances = new Map<object, object>();
             protected constructor() {}
-            static getInstance<U>(): U {
+            static getInstance<U extends object>(): U {
                 let instance = MockBaseSingleton._instances.get(this);
                 if (!instance) {
-                    instance = new (this as unknown as new () => U)();
+                    const ctor = this as { prototype: U } & (new () => U);
+                    instance = new ctor();
                     MockBaseSingleton._instances.set(this, instance);
                 }
                 return instance as U;

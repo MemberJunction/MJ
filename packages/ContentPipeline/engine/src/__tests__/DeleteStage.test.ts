@@ -12,6 +12,8 @@ import { ContentVectorInfrastructure } from '@memberjunction/content-autotagging
 import { FileStorageEngine } from '@memberjunction/storage';
 import { StageContext, WorkingRecord, WorkingRecordIdentity } from '@memberjunction/content-pipeline-base';
 import { DeleteContentItemStage, DeleteStage } from '../stages/DeleteStage.js';
+import { GraphEvidenceRetractor } from '../GraphEvidenceRetractor.js';
+import { ContentPipelineDeleteMarker } from '../ContentPipelineDeleteMarker.js';
 import { ContentUploadIngestor, UploadItemURL } from '../ContentUploadIngestor.js';
 import { PipelineProcessor } from '../PipelineProcessor.js';
 import type { WorkingRecordCommitter } from '../WorkingRecordCommitter.js';
@@ -47,6 +49,36 @@ describe('nothing to remove', () => {
 
     it('marks Deleted, because absent really is absent', () => {
         expect(new DeleteStage().CompleteStatus).toBe('Deleted');
+    });
+});
+
+describe('graph evidence', () => {
+    it('retracts what the Graph stage inferred from the chunk and reports it', async () => {
+        const retract = vi.spyOn(GraphEvidenceRetractor.prototype, 'RetractChunks').mockResolvedValue({ EdgesRemoved: 3, ConceptsRemoved: 1 });
+        const outcome = await new DeleteStage().Run(chunk(), contextWith());
+        expect(retract).toHaveBeenCalledWith(['C1']);
+        expect(outcome.Status).toBe('Complete');
+        expect(outcome.Message).toContain('3 graph edge(s) and 1 orphaned concept(s)');
+    });
+
+    it('leaves the chunk pending when retraction fails, so the next run tries again', async () => {
+        vi.spyOn(GraphEvidenceRetractor.prototype, 'RetractChunks').mockRejectedValue(new Error('edge delete refused'));
+        await expect(new DeleteStage().Run(chunk(), contextWith())).rejects.toThrow(/Retracting graph evidence for 'C1' failed: edge delete refused/);
+    });
+
+    it("retracts a Content Item's own edges (its Mentions), and nothing in a dry run", async () => {
+        const chunks = vi.spyOn(GraphEvidenceRetractor.prototype, 'RetractChunks');
+        const items = vi.spyOn(GraphEvidenceRetractor.prototype, 'RetractContentItems').mockResolvedValue({ EdgesRemoved: 1, ConceptsRemoved: 0 });
+        const item = () => new WorkingRecord(new WorkingRecordIdentity('Content Item', 'u/I1', 'I1'));
+        await new DeleteContentItemStage().Run(item(), { ...contextWith(), IsTest: true });
+        await new DeleteStage().Run(chunk(), { ...contextWith(), IsTest: true });
+        expect(chunks).not.toHaveBeenCalled();
+        expect(items).not.toHaveBeenCalled();
+        vi.spyOn(ContentPipelineDeleteMarker.prototype, 'MarkDependentsOf').mockResolvedValue(0);
+        const outcome = await new DeleteContentItemStage().Run(item(), contextWith());
+        expect(items).toHaveBeenCalledWith(['I1']);
+        expect(chunks).not.toHaveBeenCalled();
+        expect(outcome.Message).toContain('1 graph edge(s)');
     });
 });
 

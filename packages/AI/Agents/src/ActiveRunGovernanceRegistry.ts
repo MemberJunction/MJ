@@ -7,11 +7,18 @@
 
 import { BaseSingleton } from '@memberjunction/global';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import type { RestoredCheckpointContext } from './RunawayCheckpointManager';
+import { AgentRunWatchdog } from './agent-run-watchdog';
+import {
+    RunawayCheckpointManager,
+    type PauseRunWithCheckpointResult,
+    type PendingRunawayCheckpointPersistence,
+    type RestoredCheckpointContext,
+} from './RunawayCheckpointManager';
 
 /** Result returned after an active in-process agent flushes and checkpoints a cooperative pause. */
 export interface CooperativePauseResult {
     Paused: boolean;
+    Pending?: boolean;
     CheckpointID: string | null;
     Status: string;
     Summary: string;
@@ -24,6 +31,8 @@ export interface CooperativePauseHandle {
     Provider?: IMetadataProvider | null;
     /** Optional explicit tenant scope key when multiple tenants share a provider instance. */
     TenantScopeKey?: string | null;
+    /** Lifecycle state of the live run handle (`Active` vs `PausePersistencePending`). */
+    State?: 'Active' | 'PausePersistencePending';
     RequestPause: (summary?: string) => Promise<CooperativePauseResult | null>;
 }
 
@@ -59,6 +68,8 @@ export type ResumeContinuationDispatcher = (
  */
 export class ActiveRunGovernanceRegistry extends BaseSingleton<ActiveRunGovernanceRegistry> {
     private readonly activeRuns = new Map<string, CooperativePauseHandle>();
+    private readonly pendingCheckpoints = new Map<string, PendingRunawayCheckpointPersistence>();
+    private readonly flushingCheckpoints = new Map<string, Promise<PauseRunWithCheckpointResult>>();
     private readonly providerIds = new WeakMap<IMetadataProvider, number>();
     private nextProviderSeq = 1;
     private customDispatcher: ResumeContinuationDispatcher | null = null;
@@ -134,6 +145,144 @@ export class ActiveRunGovernanceRegistry extends BaseSingleton<ActiveRunGovernan
             return null;
         }
         return handle.RequestPause(summary);
+    }
+
+    /**
+     * Retains a safe-point checkpoint in memory when entity persistence fails and keeps the run
+     * registered in `PausePersistencePending` state so further billable work is blocked fail-closed.
+     */
+    public MarkPausePersistencePending(pending: PendingRunawayCheckpointPersistence): void {
+        const key = this.buildScopedRunKey(pending.AgentRunID, pending.Provider, pending.TenantScopeKey);
+        if (!key) {
+            return;
+        }
+        this.pendingCheckpoints.set(key, pending);
+        const existingHandle = this.activeRuns.get(key);
+        const pendingHandle: CooperativePauseHandle = existingHandle
+            ? {
+                ...existingHandle,
+                State: 'PausePersistencePending',
+            }
+            : {
+                AgentRunID: pending.AgentRunID,
+                Provider: pending.Provider,
+                TenantScopeKey: pending.TenantScopeKey ?? null,
+                State: 'PausePersistencePending',
+                RequestPause: async () => ({
+                    Paused: false,
+                    Pending: true,
+                    CheckpointID: pending.Checkpoint.CheckpointID,
+                    Status: 'PausePersistencePending',
+                    Summary: pending.Checkpoint.Summary,
+                }),
+            };
+        this.activeRuns.set(key, pendingHandle);
+    }
+
+    /** Returns true when `(agentRunId, provider, tenantScopeKey)` has an unpersisted safe-point checkpoint. */
+    public IsPausePersistencePending(
+        agentRunId: string | null | undefined,
+        provider?: IMetadataProvider | null,
+        tenantScopeKey?: string | null,
+    ): boolean {
+        const key = this.buildScopedRunKey(agentRunId, provider, tenantScopeKey);
+        return key ? this.pendingCheckpoints.has(key) : false;
+    }
+
+    /** Returns the retained in-memory pending checkpoint record for `(agentRunId, provider, tenantScopeKey)`, if any. */
+    public GetPendingCheckpointPersistence(
+        agentRunId: string | null | undefined,
+        provider?: IMetadataProvider | null,
+        tenantScopeKey?: string | null,
+    ): PendingRunawayCheckpointPersistence | undefined {
+        const key = this.buildScopedRunKey(agentRunId, provider, tenantScopeKey);
+        return key ? this.pendingCheckpoints.get(key) : undefined;
+    }
+
+    /** Lists all retained pending checkpoint records matching `(provider, tenantScopeKey)`. */
+    public ListPendingCheckpointPersistenceForScope(
+        provider?: IMetadataProvider | null,
+        tenantScopeKey?: string | null,
+    ): PendingRunawayCheckpointPersistence[] {
+        const prefix = `${this.buildScopeKey(provider, tenantScopeKey)}::`;
+        const matches: PendingRunawayCheckpointPersistence[] = [];
+        for (const [key, entry] of this.pendingCheckpoints.entries()) {
+            if (key.startsWith(prefix)) {
+                matches.push(entry);
+            }
+        }
+        return matches;
+    }
+
+    /**
+     * Retries persisting a retained in-memory safe-point checkpoint for `(agentRunId, provider, tenantScopeKey)`
+     * when storage recovers, transitioning the run cleanly to `Paused` and releasing ownership.
+     * Returns `null` if no pending checkpoint is held for that scoped run.
+     */
+    public async FlushPendingCheckpointPersistence(
+        agentRunId: string | null | undefined,
+        provider?: IMetadataProvider | null,
+        tenantScopeKey?: string | null,
+        checkpointManager?: RunawayCheckpointManager,
+    ): Promise<PauseRunWithCheckpointResult | null> {
+        const key = this.buildScopedRunKey(agentRunId, provider, tenantScopeKey);
+        if (!key) {
+            return null;
+        }
+        const pending = this.pendingCheckpoints.get(key);
+        if (!pending) {
+            return null;
+        }
+        const existingFlush = this.flushingCheckpoints.get(key);
+        if (existingFlush) {
+            return existingFlush;
+        }
+        const manager = checkpointManager ?? new RunawayCheckpointManager();
+        const flushPromise = (async (): Promise<PauseRunWithCheckpointResult> => {
+            const result = await manager.FlushPendingCheckpointPersistence(pending);
+            if (result.Saved) {
+                this.pendingCheckpoints.delete(key);
+                AgentRunWatchdog.Instance.Untrack(pending.AgentRunID);
+                this.activeRuns.delete(key);
+            }
+            return result;
+        })();
+        this.flushingCheckpoints.set(key, flushPromise);
+        try {
+            return await flushPromise;
+        } finally {
+            if (this.flushingCheckpoints.get(key) === flushPromise) {
+                this.flushingCheckpoints.delete(key);
+            }
+        }
+    }
+
+    /** Flushes every pending safe-point checkpoint belonging to `(provider, tenantScopeKey)`. */
+    public async FlushAllPendingCheckpointsForScope(
+        provider?: IMetadataProvider | null,
+        tenantScopeKey?: string | null,
+        checkpointManager?: RunawayCheckpointManager,
+    ): Promise<PauseRunWithCheckpointResult[]> {
+        const entries = this.ListPendingCheckpointPersistenceForScope(provider, tenantScopeKey);
+        const results: PauseRunWithCheckpointResult[] = [];
+        for (const entry of entries) {
+            const res = await this.FlushPendingCheckpointPersistence(
+                entry.AgentRunID,
+                entry.Provider,
+                entry.TenantScopeKey,
+                checkpointManager,
+            );
+            if (res) {
+                results.push(res);
+            }
+        }
+        return results;
+    }
+
+    /** Clears all pending checkpoint persistence entries (primarily for unit test isolation). */
+    public ClearPendingCheckpointPersistence(): void {
+        this.pendingCheckpoints.clear();
+        this.flushingCheckpoints.clear();
     }
 
     /** Registers (or clears with `null`) a custom override continuation dispatcher hook. */

@@ -366,8 +366,8 @@ class DiscoveryHarness {
 
     public readonly provider = {
         Entities: [],
-        RunView: async (): Promise<{ Success: boolean; Results: unknown[] }> => ({ Success: true, Results: [] }),
-        RunViews: async (): Promise<Array<{ Success: boolean; Results: unknown[] }>> => [],
+        RunView: async (): Promise<{ Success: boolean; Results: never[] }> => ({ Success: true, Results: [] }),
+        RunViews: async (): Promise<Array<{ Success: boolean; Results: never[] }>> => [],
         GetEntityObject: async (entityName: string): Promise<unknown> => {
             if (entityName === 'MJ: AI Agent Runs') {
                 const run = new FakeAgentRun();

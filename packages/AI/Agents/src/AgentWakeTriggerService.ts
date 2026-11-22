@@ -469,9 +469,13 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
      * 1. Recipient address (`toAddress`) must match an active `Email` bridge identity.
      * 2. Sender address (`fromAddress`) must match an active internal MJ User (`Email === fromAddress`
      *    case-insensitively). External/unverified senders are rejected.
-     * 3. If the bridge identity's `Configuration` pins `allowedUserID`, `senderUser.ID` must match it.
-     * 4. If the sender has an `MJ: AI Agent User Policies` row for the agent, it must not be
-     *    `Disabled` or `Paused`, and `EmailChannelMode` must not be `'Disabled'`.
+     * 3. If the bridge identity's `UserID` is populated (a dedicated per-user mailbox identity),
+     *    `senderUser.ID` must match `identity.UserID`; otherwise `SENDER_NOT_AUTHORIZED_FOR_IDENTITY`
+     *    is returned. If the bridge identity's `Configuration` pins `allowedUserID`, `senderUser.ID`
+     *    must also match it, and `allowedEmailDomains` (if configured) must include the sender's domain.
+     * 4. The sender must have an existing `Active` `MJ: AI Agent User Policies` onboarding row for the
+     *    agent (`!policy || policy.Status !== 'Active'` returns `POLICY_DENIED`), and `EmailChannelMode`
+     *    must not be `'Disabled'`.
      * 5. The resulting `AgentWake` routine is saved in the verified `senderUser`'s `contextUser` scope.
      */
     public async RouteInboundUtilityMailboxWake(
@@ -517,7 +521,13 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             );
         }
 
-        // 3. Enforce optional identity-level Configuration constraints (e.g., allowedUserID / allowedEmailDomains)
+        // 3. Enforce per-user bridge identity ownership and optional Configuration constraints
+        if (identity.UserID && !UUIDsEqual(identity.UserID, senderUser.ID)) {
+            return this.notTriggered(
+                'SENDER_NOT_AUTHORIZED_FOR_IDENTITY',
+                `Sender user ${senderUser.ID} is not authorized for user-owned bridge identity ${identity.ID}.`
+            );
+        }
         const identityConfig = identity.Configuration
             ? SafeJSONParse<UtilityMailboxIdentityConfiguration>(identity.Configuration)
             : null;
@@ -554,19 +564,17 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             );
         }
         const policy: MJAIAgentUserPolicyEntity | null = policyLookup.policy;
-        if (policy) {
-            if (policy.Status === 'Disabled' || policy.Status === 'Paused') {
-                return this.notTriggered(
-                    'POLICY_DENIED',
-                    `User ${senderUser.Email} has ${policy.Status} policy for agent ${identity.AgentID}.`
-                );
-            }
-            if (policy.EmailChannelMode === 'Disabled') {
-                return this.notTriggered(
-                    'POLICY_DENIED',
-                    `User ${senderUser.Email} has EmailChannelMode="Disabled" for agent ${identity.AgentID}.`
-                );
-            }
+        if (!policy || policy.Status !== 'Active') {
+            const reason = !policy
+                ? `User ${senderUser.Email} has no active policy for agent ${identity.AgentID}; wake suppressed until the user onboards.`
+                : `User ${senderUser.Email} has ${policy.Status} policy for agent ${identity.AgentID}; wake suppressed.`;
+            return this.notTriggered('POLICY_DENIED', reason);
+        }
+        if (policy.EmailChannelMode === 'Disabled') {
+            return this.notTriggered(
+                'POLICY_DENIED',
+                `User ${senderUser.Email} has EmailChannelMode="Disabled" for agent ${identity.AgentID}.`
+            );
         }
 
         // 5. Schedule immediate AgentWake routine in senderUser's contextUser scope

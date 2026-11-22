@@ -1090,6 +1090,17 @@ export class SQLServerDataProvider
   }
 
   /**
+   * Staleness checks and shared-storage snapshot adoption stay enabled while saves are in flight:
+   * `GetDatasetStatusByName('MJ_Metadata')` runs on the connection pool (`ignoreAmbientTransaction`),
+   * and adopting a peer's snapshot atomically swaps `_localMetadata` without mutating any
+   * `EntityInfo` held by an in-flight save. If a full DB reload is still required, `Refresh()`
+   * waits for in-flight saves via {@link waitForSavesToFinish}.
+   */
+  protected override get AllowRefreshCheck(): boolean {
+    return true;
+  }
+
+  /**
    * Gets the MemberJunction core schema name (defaults to __mj if not configured)
    */
   public get MJCoreSchemaName(): string {
@@ -3813,13 +3824,16 @@ IF ${varName} IS NOT NULL
    * @returns Promise<boolean> - true if refresh was performed, false if skipped or no refresh needed
    */
   public async RefreshIfNeeded(providerToUse?: IMetadataProvider, bypassMinCheckInterval?: boolean): Promise<boolean> {
-    // Skip refresh if a transaction is active
-    if (this.IsTransactionActive) {
+    // Only skip for an active transaction when metadata reads would join it. Since #4514,
+    // `datasetReadsOnPool('MJ_Metadata')` routes status and metadata reads onto the connection
+    // pool (`ignoreAmbientTransaction: true`) whenever `!this.MetadataReadsJoinTransaction`, so an
+    // unrelated ambient transaction on the global provider (e.g. a scheduled job writing rows)
+    // must not drop a peer metadata notice or scheduled check.
+    if (this.IsTransactionActive && this.MetadataReadsJoinTransaction) {
       LogStatus('Skipping metadata refresh - transaction is active');
       return false;
     }
 
-    // Call parent implementation if no transaction
     return super.RefreshIfNeeded(providerToUse, bypassMinCheckInterval);
   }
 

@@ -49,6 +49,8 @@ import {
     ComputeDayBoundaryWindow,
     DeterministicProgressDetector,
     RunawayCheckpointManager,
+    type PauseRunWithCheckpointInput,
+    type PendingRunawayCheckpointPersistence,
 } from '@memberjunction/ai-agents';
 import { TaskClaimStore } from './TaskClaimStore';
 import { ParseTaskGraphParentMetadata, type TaskGraphParentMetadata } from './TaskGraphService';
@@ -65,6 +67,16 @@ interface ProjectedTaskSettlementRow {
     ID: string;
     Status: string;
     Configuration: string | null;
+}
+
+interface PendingGraphPauseContext {
+    PauseReason: RunawayPauseReason;
+    Summary: string;
+    BudgetResult: BudgetEnforcementResult;
+    RetainedPendingCheckpoint: PendingRunawayCheckpointPersistence | null;
+    Observer?: TaskGraphObserver;
+    DebugStateCache?: Map<string, TaskGraphDebugState>;
+    LastPersistenceError: string | null;
 }
 
 interface GraphGovernanceState {
@@ -96,6 +108,10 @@ interface GraphGovernanceState {
     LastNodeSyncAtMs: number;
     ExtendedBudgets: MJLimitsBudgetsConfig | null;
     PausedByGovernance: boolean;
+    PausePersistencePending: boolean;
+    CheckpointPersisted: boolean;
+    DebugFieldsPersisted: boolean;
+    PendingPauseContext: PendingGraphPauseContext | null;
     HydratedFromCheckpoint: boolean;
     EvaluationCount: number;
     LastBudgetResult: BudgetEnforcementResult | null;
@@ -116,9 +132,22 @@ export interface TaskGraphGovernanceDiagnostics {
     CumulativeCostUsd: number;
     TokensUsed: number;
     PausedByGovernance: boolean;
+    PausePersistencePending: boolean;
+    CheckpointPersisted: boolean;
+    DebugFieldsPersisted: boolean;
     LastBudgetResult: BudgetEnforcementResult | null;
     LastProgressResult: ProgressEvaluationResult | null;
     LastResolvedLimits: MJLimitsConfig | null;
+}
+
+/** Outcome returned by {@link TaskGraphGovernanceCoordinator.FlushPendingPausePersistence}. */
+export interface FlushPendingGraphPauseResult {
+    Flushed: boolean;
+    PausedByGovernance: boolean;
+    PausePersistencePending: boolean;
+    CheckpointPersisted: boolean;
+    DebugFieldsPersisted: boolean;
+    Error: string | null;
 }
 
 /** Input for approving and resuming a governance-paused task graph. */
@@ -159,10 +188,17 @@ export class TaskGraphGovernanceCoordinator {
         private readonly config?: TaskGraphGovernanceConfig,
     ) {}
 
-    /** Fast synchronous check used inside wave claim loops once a node in the graph trips governance. */
+    /** Fast synchronous check used inside wave claim loops once a node in the graph trips governance or enters pending pause persistence. */
     public IsLocallyPaused(graphID: string): boolean {
         const key = this.normId(graphID);
-        return key ? this.states.get(key)?.PausedByGovernance === true : false;
+        const state = key ? this.states.get(key) : undefined;
+        return Boolean(state && (state.PausedByGovernance || state.PausePersistencePending));
+    }
+
+    /** Returns true when a graph is holding an unpersisted governance pause awaiting storage recovery. */
+    public HasPendingPausePersistence(graphID: string): boolean {
+        const key = this.normId(graphID);
+        return key ? this.states.get(key)?.PausePersistencePending === true : false;
     }
 
     /** Returns true when governance is enabled for the given graph under dispatcher & graph settings. */
@@ -213,6 +249,9 @@ export class TaskGraphGovernanceCoordinator {
             CumulativeCostUsd: totals.TotalCostUsd,
             TokensUsed: totals.TotalTokens,
             PausedByGovernance: state.PausedByGovernance,
+            PausePersistencePending: state.PausePersistencePending,
+            CheckpointPersisted: state.CheckpointPersisted,
+            DebugFieldsPersisted: state.DebugFieldsPersisted,
             LastBudgetResult: state.LastBudgetResult,
             LastProgressResult: state.LastProgressResult,
             LastResolvedLimits: state.LastResolvedLimits,
@@ -228,10 +267,72 @@ export class TaskGraphGovernanceCoordinator {
     }
 
     /**
-     * Returns true when `graphID` must not claim any new nodes (either `$.debug.paused` is set,
-     * policy lookup failed closed, or the submitting agent run carries an unapproved governance pause checkpoint).
-     * When a fresh dispatcher starts after approval, hydrates `ExtendedBudgets`, settled nodes, and
-     * 5-tier policy scope automatically.
+     * Inverse of {@link IsGraphBlockedByGovernance}: returns `true` only when claims are permitted
+     * (i.e. neither confirmed paused nor holding a fail-closed `PausePersistencePending` barrier).
+     */
+    public async CanClaimTasks(
+        provider: IMetadataProvider,
+        graphID: string,
+        debug: TaskGraphDebugState,
+        parent: MJTaskEntity | null,
+        contextUser: UserInfo,
+        graphNodes?: readonly MJTaskEntity[],
+    ): Promise<boolean> {
+        return !(await this.IsGraphBlockedByGovernance(provider, graphID, debug, parent, contextUser, graphNodes));
+    }
+
+    /**
+     * Retries persisting any missing `$.debug.paused` fields and/or retained `RunawayCheckpointState`
+     * for a graph in `PausePersistencePending` state until both succeed, then confirms
+     * `PausedByGovernance = true` and emits `GraphPaused`.
+     */
+    public async FlushPendingPausePersistence(
+        provider: IMetadataProvider,
+        graphID: string,
+        contextUser: UserInfo,
+        observer?: TaskGraphObserver,
+        debugStateCache?: Map<string, TaskGraphDebugState>,
+    ): Promise<FlushPendingGraphPauseResult> {
+        const key = this.normId(graphID);
+        const state = key ? this.states.get(key) : undefined;
+        if (!state || !state.PausePersistencePending || !state.PendingPauseContext) {
+            return {
+                Flushed: false,
+                PausedByGovernance: state?.PausedByGovernance ?? false,
+                PausePersistencePending: state?.PausePersistencePending ?? false,
+                CheckpointPersisted: state?.CheckpointPersisted ?? false,
+                DebugFieldsPersisted: state?.DebugFieldsPersisted ?? false,
+                Error: null,
+            };
+        }
+        if (observer && !state.PendingPauseContext.Observer) {
+            state.PendingPauseContext.Observer = observer;
+        }
+        if (debugStateCache && !state.PendingPauseContext.DebugStateCache) {
+            state.PendingPauseContext.DebugStateCache = debugStateCache;
+        }
+        await this.attemptPersistGraphPause({
+            Provider: provider,
+            ContextUser: contextUser,
+            State: state,
+            Pending: state.PendingPauseContext,
+        });
+        return {
+            Flushed: state.PausedByGovernance && !state.PausePersistencePending,
+            PausedByGovernance: state.PausedByGovernance,
+            PausePersistencePending: state.PausePersistencePending,
+            CheckpointPersisted: state.CheckpointPersisted,
+            DebugFieldsPersisted: state.DebugFieldsPersisted,
+            Error: state.PendingPauseContext?.LastPersistenceError ?? null,
+        };
+    }
+
+    /**
+     * Returns true when `graphID` must not claim any new nodes (either `PausePersistencePending` is
+     * active, `$.debug.paused` is set, policy lookup failed closed, or the submitting agent run carries
+     * an unapproved governance pause checkpoint).
+     * While `PausePersistencePending` is active, automatically retries persisting the missing pause
+     * checkpoint / debug fields while continuing to block claims fail-closed.
      */
     public async IsGraphBlockedByGovernance(
         provider: IMetadataProvider,
@@ -241,12 +342,16 @@ export class TaskGraphGovernanceCoordinator {
         contextUser: UserInfo,
         graphNodes?: readonly MJTaskEntity[],
     ): Promise<boolean> {
-        if (debug.paused) {
-            const state = this.getOrCreateState(graphID, parent);
-            state.PausedByGovernance = true;
+        const state = this.getOrCreateState(graphID, parent);
+        if (state.PausePersistencePending) {
+            await this.FlushPendingPausePersistence(provider, graphID, contextUser);
             return true;
         }
-        const state = this.getOrCreateState(graphID, parent);
+        if (debug.paused) {
+            state.PausedByGovernance = true;
+            state.DebugFieldsPersisted = true;
+            return true;
+        }
         if (!state.GovernanceEnabled) {
             return false;
         }
@@ -255,7 +360,7 @@ export class TaskGraphGovernanceCoordinator {
             this.ingestNodeRows(state, graphNodes);
         }
         await this.ensureHydratedFromDurableState(provider, state, contextUser, false);
-        return state.PausedByGovernance;
+        return state.PausedByGovernance || state.PausePersistencePending;
     }
 
     /**
@@ -309,6 +414,16 @@ export class TaskGraphGovernanceCoordinator {
         state.LastResolvedLimits = resolvedLimits;
         const effectiveBudgets = state.ExtendedBudgets ?? resolvedLimits.Budgets;
 
+        if (state.PausePersistencePending) {
+            await this.FlushPendingPausePersistence(
+                args.Provider,
+                graphID,
+                args.ContextUser,
+                args.Observer,
+                args.DebugStateCache,
+            );
+            return state.LastBudgetResult;
+        }
         if (state.PausedByGovernance) {
             return state.LastBudgetResult;
         }
@@ -380,6 +495,30 @@ export class TaskGraphGovernanceCoordinator {
     public async ApproveAndResumePausedGraph(
         input: ApproveAndResumePausedGraphInput,
     ): Promise<ApproveAndResumePausedGraphResult> {
+        const stateKey = this.normId(input.ParentTaskID);
+        const existingPendingState = stateKey ? this.states.get(stateKey) : undefined;
+        if (existingPendingState?.PausePersistencePending) {
+            const flushRes = await this.FlushPendingPausePersistence(
+                input.Provider,
+                input.ParentTaskID,
+                input.ContextUser,
+            );
+            if (!flushRes.PausedByGovernance) {
+                return {
+                    Success: false,
+                    ParentTaskID: input.ParentTaskID,
+                    AgentRunID: existingPendingState.SubmittingAgentRunID,
+                    CheckpointID:
+                        existingPendingState.PendingPauseContext?.RetainedPendingCheckpoint?.Checkpoint.CheckpointID ?? null,
+                    ExtendedBudgets: null,
+                    PriorCumulativeCostUsd: 0,
+                    Message:
+                        `Cannot approve and resume graph '${input.ParentTaskID}': pause persistence is still pending ` +
+                        `(${flushRes.Error ?? 'storage unavailable'}).`,
+                };
+            }
+        }
+
         const parentRows = await RunView.FromMetadataProvider(input.Provider).RunView<{
             ID: string;
             TypeID: string;
@@ -501,6 +640,10 @@ export class TaskGraphGovernanceCoordinator {
         const existingState = this.states.get(key);
         if (existingState) {
             existingState.PausedByGovernance = false;
+            existingState.PausePersistencePending = false;
+            existingState.CheckpointPersisted = false;
+            existingState.DebugFieldsPersisted = false;
+            existingState.PendingPauseContext = null;
             existingState.ExtendedBudgets = extendedBudgets;
             existingState.HydratedFromCheckpoint = true;
             existingState.AgentEntity = agentEntity;
@@ -612,6 +755,10 @@ export class TaskGraphGovernanceCoordinator {
             LastNodeSyncAtMs: 0,
             ExtendedBudgets: null,
             PausedByGovernance: false,
+            PausePersistencePending: false,
+            CheckpointPersisted: false,
+            DebugFieldsPersisted: false,
+            PendingPauseContext: null,
             HydratedFromCheckpoint: false,
             EvaluationCount: 0,
             LastBudgetResult: null,
@@ -745,6 +892,7 @@ export class TaskGraphGovernanceCoordinator {
             if (run.Status === 'Paused' && cp.HumanApproval.Status !== 'Approved') {
                 // Fail closed across restarts: an unapproved paused checkpoint blocks dispatch even if debug flag cleared.
                 state.PausedByGovernance = true;
+                state.CheckpointPersisted = true;
                 return;
             }
             if (cp.HumanApproval.Status === 'Approved') {
@@ -961,97 +1109,231 @@ export class TaskGraphGovernanceCoordinator {
         DebugStateCache?: Map<string, TaskGraphDebugState>;
     }): Promise<void> {
         const { State } = args;
-        if (State.PausedByGovernance) {
+        if (State.PausedByGovernance && State.CheckpointPersisted && State.DebugFieldsPersisted) {
             return;
         }
-        State.PausedByGovernance = true;
+        // Fail-closed claim barrier immediately: IsLocallyPaused / IsGraphBlockedByGovernance block new claims
+        // while PausedByGovernance remains false until BOTH debug fields and checkpoint persistence succeed.
+        State.PausePersistencePending = true;
+        if (!State.PendingPauseContext) {
+            State.PendingPauseContext = {
+                PauseReason: args.PauseReason,
+                Summary: args.Summary,
+                BudgetResult: args.BudgetResult,
+                RetainedPendingCheckpoint: null,
+                Observer: args.Observer,
+                DebugStateCache: args.DebugStateCache,
+                LastPersistenceError: null,
+            };
+        } else {
+            if (args.Observer && !State.PendingPauseContext.Observer) {
+                State.PendingPauseContext.Observer = args.Observer;
+            }
+            if (args.DebugStateCache && !State.PendingPauseContext.DebugStateCache) {
+                State.PendingPauseContext.DebugStateCache = args.DebugStateCache;
+            }
+        }
+        await this.attemptPersistGraphPause({
+            Provider: args.Provider,
+            ContextUser: args.ContextUser,
+            State,
+            Pending: State.PendingPauseContext,
+        });
+    }
 
-        const typeID = await this.resolveWorkflowTypeID(args.Provider, args.ContextUser);
-        if (typeID) {
-            await this.claims.TryWriteDebugFields(
-                args.Provider,
-                State.GraphID,
+    private async attemptPersistGraphPause(args: {
+        Provider: IMetadataProvider;
+        ContextUser: UserInfo;
+        State: GraphGovernanceState;
+        Pending: PendingGraphPauseContext;
+    }): Promise<void> {
+        const { State, Pending } = args;
+        const debugError = await this.persistPauseDebugFieldsIfNeeded(args.Provider, args.ContextUser, State, Pending);
+        const checkpointError = await this.persistPauseCheckpointIfNeeded(args.Provider, args.ContextUser, State, Pending);
+
+        if (State.DebugFieldsPersisted && State.CheckpointPersisted) {
+            State.PausedByGovernance = true;
+            State.PausePersistencePending = false;
+            State.PendingPauseContext = null;
+            LogStatus(`[TaskGraphGovernanceCoordinator] Paused graph ${State.GraphID} (${Pending.PauseReason}): ${Pending.Summary}`);
+            if (Pending.Observer) {
+                try {
+                    Pending.Observer.OnFrame({
+                        Kind: 'GraphPaused',
+                        ParentTaskID: State.GraphID,
+                        OwnerUserID: State.UserID,
+                        Reason: Pending.Summary,
+                    });
+                } catch {
+                    // Observer errors never block governance pause
+                }
+            }
+            return;
+        }
+
+        State.PausedByGovernance = false;
+        State.PausePersistencePending = true;
+        const errors = [debugError, checkpointError].filter((e): e is string => Boolean(e));
+        Pending.LastPersistenceError = errors.join(' | ') || 'Pause persistence incomplete';
+        LogError(
+            `[TaskGraphGovernanceCoordinator] Pause persistence incomplete for graph ${State.GraphID} ` +
+            `(debugSaved=${State.DebugFieldsPersisted}, checkpointSaved=${State.CheckpointPersisted}); ` +
+            `claim barrier remains active: ${Pending.LastPersistenceError}`,
+        );
+    }
+
+    private async persistPauseDebugFieldsIfNeeded(
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+        state: GraphGovernanceState,
+        pending: PendingGraphPauseContext,
+    ): Promise<string | null> {
+        if (state.DebugFieldsPersisted) {
+            return null;
+        }
+        try {
+            const typeID = await this.resolveWorkflowTypeID(provider, contextUser);
+            if (!typeID) {
+                return `Could not resolve Workflow task type ID for graph ${state.GraphID}`;
+            }
+            const debugSaved = await this.claims.TryWriteDebugFields(
+                provider,
+                state.GraphID,
                 [
                     TaskClaimStore.DebugField('$.debug.paused', { Kind: 'bool', Value: true }),
                     TaskClaimStore.DebugField('$.debug.pausedReason', { Kind: 'string', Value: 'governance' }),
-                    TaskClaimStore.DebugField('$.debug.pausedBy', State.UserID ? { Kind: 'string', Value: State.UserID } : { Kind: 'null' }),
+                    TaskClaimStore.DebugField('$.debug.pausedBy', state.UserID ? { Kind: 'string', Value: state.UserID } : { Kind: 'null' }),
                     TaskClaimStore.DebugField('$.debug.pausedAtTaskID', { Kind: 'null' }),
                     TaskClaimStore.DebugField('$.debug.step', { Kind: 'null' }),
                 ],
                 typeID,
-                args.ContextUser,
+                contextUser,
             );
-        }
-
-        if (args.DebugStateCache) {
-            const prev = args.DebugStateCache.get(State.GraphID) ?? {};
-            args.DebugStateCache.set(State.GraphID, {
-                ...prev,
-                paused: true,
-                pausedReason: 'governance',
-                pausedBy: State.UserID,
-            });
-        }
-
-        if (State.SubmittingAgentRunID) {
-            try {
-                const submitRun = await args.Provider.GetEntityObject<MJAIAgentRunEntityExtended>(
-                    'MJ: AI Agent Runs',
-                    args.ContextUser,
-                );
-                if (await submitRun.Load(State.SubmittingAgentRunID)) {
-                    const dayWin = ComputeDayBoundaryWindow(Date.now(), args.BudgetResult.Ledger.DayBoundaryTimezone || 'UTC');
-                    const payload: Record<string, RunawayJsonValue> = {
-                        parentTaskId: State.GraphID,
-                        completedNodes: State.CompletedNodeCount,
-                    };
-                    await this.checkpointManager.PauseRunWithCheckpoint({
-                        AgentRun: submitRun,
-                        AgentID: submitRun.AgentID || State.AgentID,
-                        AgentName: submitRun.Agent || 'WorkflowOrchestrator',
-                        UserID: submitRun.UserID ?? State.UserID,
-                        RoutineID: State.RoutineID,
-                        PauseReason: args.PauseReason,
-                        Summary: `TaskGraph ${State.GraphID} paused after ${State.CompletedNodeCount} node(s): ${args.Summary}`,
-                        CompletedPromptTurns: 1,
-                        CompletedNodeIDs: State.CompletedNodeIDs,
-                        ConversationMessages: [],
-                        InFlightPayload: payload,
-                        Scratchpad: {
-                            notes: `Paused at ${State.CompletedNodeCount} completed nodes (${args.PauseReason})`,
-                            tasks: [],
-                        },
-                        BudgetBreach: args.BudgetResult.Breach,
-                        CumulativeLedger: {
-                            ...args.BudgetResult.Ledger,
-                            DayBucketUTC: dayWin.DayBucketUTC,
-                        },
-                        Provider: args.Provider,
-                        ContextUser: args.ContextUser,
-                        OnOwnerNotification: this.config?.OnOwnerNotification,
-                    });
-                }
-            } catch (err) {
-                LogError(
-                    `[TaskGraphGovernanceCoordinator] Failed persisting checkpoint for run ${State.SubmittingAgentRunID}: ${
-                        err instanceof Error ? err.message : String(err)
-                    }`,
-                );
+            if (!debugSaved) {
+                return `TryWriteDebugFields returned false for graph ${state.GraphID}`;
             }
-        }
-
-        LogStatus(`[TaskGraphGovernanceCoordinator] Paused graph ${State.GraphID} (${args.PauseReason}): ${args.Summary}`);
-        if (args.Observer) {
-            try {
-                args.Observer.OnFrame({
-                    Kind: 'GraphPaused',
-                    ParentTaskID: State.GraphID,
-                    OwnerUserID: State.UserID,
-                    Reason: args.Summary,
+            state.DebugFieldsPersisted = true;
+            if (pending.DebugStateCache) {
+                const prev = pending.DebugStateCache.get(state.GraphID) ?? {};
+                pending.DebugStateCache.set(state.GraphID, {
+                    ...prev,
+                    paused: true,
+                    pausedReason: 'governance',
+                    pausedBy: state.UserID,
                 });
-            } catch {
-                // Observer errors never block governance pause
             }
+            return null;
+        } catch (err) {
+            return err instanceof Error ? err.message : String(err);
+        }
+    }
+
+    private async persistPauseCheckpointIfNeeded(
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+        state: GraphGovernanceState,
+        pending: PendingGraphPauseContext,
+    ): Promise<string | null> {
+        if (state.CheckpointPersisted) {
+            return null;
+        }
+        if (!state.SubmittingAgentRunID) {
+            state.CheckpointPersisted = true;
+            return null;
+        }
+        if (pending.RetainedPendingCheckpoint) {
+            try {
+                const flushRes = await this.checkpointManager.FlushPendingCheckpointPersistence(
+                    pending.RetainedPendingCheckpoint,
+                );
+                if (flushRes.Saved) {
+                    state.CheckpointPersisted = true;
+                    return null;
+                }
+                return flushRes.SaveError ?? 'FlushPendingCheckpointPersistence returned Saved=false';
+            } catch (err) {
+                return err instanceof Error ? err.message : String(err);
+            }
+        }
+
+        let submitRun: MJAIAgentRunEntityExtended | null = null;
+        let pauseInput: PauseRunWithCheckpointInput | null = null;
+        try {
+            submitRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>(
+                'MJ: AI Agent Runs',
+                contextUser,
+            );
+            if (!(await submitRun.Load(state.SubmittingAgentRunID))) {
+                return `Submitting agent run '${state.SubmittingAgentRunID}' could not be loaded`;
+            }
+            const dayWin = ComputeDayBoundaryWindow(Date.now(), pending.BudgetResult.Ledger.DayBoundaryTimezone || 'UTC');
+            const payload: Record<string, RunawayJsonValue> = {
+                parentTaskId: state.GraphID,
+                completedNodes: state.CompletedNodeCount,
+            };
+            pauseInput = {
+                AgentRun: submitRun,
+                AgentID: submitRun.AgentID || state.AgentID,
+                AgentName: submitRun.Agent || 'WorkflowOrchestrator',
+                UserID: submitRun.UserID ?? state.UserID,
+                RoutineID: state.RoutineID,
+                PauseReason: pending.PauseReason,
+                Summary: `TaskGraph ${state.GraphID} paused after ${state.CompletedNodeCount} node(s): ${pending.Summary}`,
+                CompletedPromptTurns: 1,
+                CompletedNodeIDs: state.CompletedNodeIDs,
+                ConversationMessages: [],
+                InFlightPayload: payload,
+                Scratchpad: {
+                    notes: `Paused at ${state.CompletedNodeCount} completed nodes (${pending.PauseReason})`,
+                    tasks: [],
+                },
+                BudgetBreach: pending.BudgetResult.Breach,
+                CumulativeLedger: {
+                    ...pending.BudgetResult.Ledger,
+                    DayBucketUTC: dayWin.DayBucketUTC,
+                },
+                Provider: provider,
+                ContextUser: contextUser,
+                OnOwnerNotification: this.config?.OnOwnerNotification,
+            };
+            const checkpointOutcome = await this.checkpointManager.PauseRunWithCheckpoint(pauseInput);
+            if (checkpointOutcome.Saved) {
+                state.CheckpointPersisted = true;
+                return null;
+            }
+            pending.RetainedPendingCheckpoint = {
+                AgentRunID: submitRun.ID,
+                AgentRun: submitRun,
+                Checkpoint: checkpointOutcome.Checkpoint,
+                InFlightPayload: payload,
+                NotificationPayload: checkpointOutcome.NotificationPayload,
+                OwnerNotificationID: checkpointOutcome.OwnerNotificationID,
+                ApprovalRequestID: checkpointOutcome.ApprovalRequestID,
+                Provider: provider,
+                ContextUser: contextUser,
+                LastSaveError: checkpointOutcome.SaveError ?? null,
+                OnOwnerNotification: this.config?.OnOwnerNotification,
+            };
+            return checkpointOutcome.SaveError ?? `PauseRunWithCheckpoint returned Saved=false for run ${submitRun.ID}`;
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (submitRun && pauseInput && !pending.RetainedPendingCheckpoint) {
+                const fallback = this.checkpointManager.BuildFallbackCheckpointResult(pauseInput, msg);
+                pending.RetainedPendingCheckpoint = {
+                    AgentRunID: submitRun.ID,
+                    AgentRun: submitRun,
+                    Checkpoint: fallback.Checkpoint,
+                    InFlightPayload: pauseInput.InFlightPayload,
+                    NotificationPayload: fallback.NotificationPayload,
+                    OwnerNotificationID: fallback.OwnerNotificationID,
+                    ApprovalRequestID: fallback.ApprovalRequestID,
+                    Provider: provider,
+                    ContextUser: contextUser,
+                    LastSaveError: msg,
+                    OnOwnerNotification: this.config?.OnOwnerNotification,
+                };
+            }
+            return msg;
         }
     }
 

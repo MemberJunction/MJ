@@ -168,7 +168,7 @@ export async function RunWhileLoop(
     const limit = iterationLimit(op.maxIterations, LimitsConfigResolver.Resolve().Limits.WhileLoopMaxIterations);
     const attemptVar = op.itemVariable || 'attempt';
     const startIndex = Math.max(0, options?.StartIndex ?? 0);
-    const results: unknown[] = options?.InitialResults ? [...options.InitialResults] : [];
+    const results: LoopIterationOutcome['Output'][] = options?.InitialResults ? [...options.InitialResults] : [];
     let succeeded = results.length;
     let failed = 0;
     let index = startIndex;
@@ -260,7 +260,7 @@ async function runSequential(
     options?: LoopExecutionOptions,
 ): Promise<LoopExecutionResult> {
     const startIndex = Math.max(0, options?.StartIndex ?? 0);
-    const results: unknown[] = options?.InitialResults ? [...options.InitialResults] : [];
+    const results: LoopIterationOutcome['Output'][] = options?.InitialResults ? [...options.InitialResults] : [];
     let succeeded = results.length;
     let failed = 0;
 

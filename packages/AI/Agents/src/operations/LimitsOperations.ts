@@ -449,6 +449,7 @@ export class LimitsGetDiagnosticsServerOperation extends LimitsGetDiagnosticsOpe
         user: UserInfo,
     ): Promise<LimitsGetDiagnosticsOutput> {
         const rv = RunView.FromMetadataProvider(provider);
+        await ActiveRunGovernanceRegistry.Instance.FlushAllPendingCheckpointsForScope(provider);
         const maxRuns = Math.min(
             MAX_INSPECTED_RUNS_LIMIT,
             Math.max(1, Math.trunc(input?.MaxRuns ?? DEFAULT_INSPECTED_RUNS_LIMIT)),
@@ -569,6 +570,55 @@ export class LimitsGetDiagnosticsServerOperation extends LimitsGetDiagnosticsOpe
         }
 
         const runSummaries = combinedRows.map(toRunSummary);
+        const pendingEntries = ActiveRunGovernanceRegistry.Instance.ListPendingCheckpointPersistenceForScope(provider);
+        for (const pending of pendingEntries) {
+            const normPendingId = pending.AgentRunID.trim().toLowerCase();
+            const existingSummary = runSummaries.find((r) => r.AgentRunID.trim().toLowerCase() === normPendingId);
+            if (existingSummary) {
+                existingSummary.Status = 'PausePersistencePending';
+                existingSummary.CheckpointID = pending.Checkpoint.CheckpointID;
+                existingSummary.PauseReason = pending.Checkpoint.PauseReason;
+                existingSummary.PausedAtISO = pending.Checkpoint.PausedAtISO;
+                existingSummary.PauseSummary = pending.Checkpoint.Summary;
+                existingSummary.CompletedStepCount = pending.Checkpoint.CompletedStepCount;
+                existingSummary.CompletedPromptTurns = pending.Checkpoint.CompletedPromptTurns;
+                existingSummary.HumanApprovalStatus = pending.Checkpoint.HumanApproval.Status;
+                existingSummary.CumulativeRunCostUsd = pending.Checkpoint.CumulativeLedger.RunCostUsd;
+                existingSummary.CumulativeRunWallClockMs = pending.Checkpoint.CumulativeLedger.RunWallClockMs;
+            } else {
+                runSummaries.unshift({
+                    AgentRunID: pending.AgentRunID,
+                    AgentID: pending.Checkpoint.AgentID,
+                    AgentName: pending.Checkpoint.AgentName,
+                    UserID: pending.Checkpoint.UserID,
+                    UserName: 'Unknown User',
+                    Status: 'PausePersistencePending',
+                    StartedAtISO: null,
+                    CompletedAtISO: null,
+                    TotalCostUsd: pending.Checkpoint.CumulativeLedger.RunCostUsd,
+                    TotalTokensUsed: pending.Checkpoint.CumulativeLedger.RunTokens,
+                    TotalPromptIterations: pending.Checkpoint.CompletedPromptTurns,
+                    HasLimitsSnapshot: false,
+                    OverriddenKeyCount: 0,
+                    ClampedKeyCount: 0,
+                    Snapshot: null,
+                    ProgressClassification: pending.Checkpoint.Evidence.ProgressEvaluation?.Classification ?? null,
+                    ProgressScore: pending.Checkpoint.Evidence.ProgressEvaluation?.ProgressScore ?? null,
+                    ProgressReason: pending.Checkpoint.Evidence.ProgressEvaluation?.Reason ?? null,
+                    FastJudgeEntries: [],
+                    IsPausedWithCheckpoint: false,
+                    CheckpointID: pending.Checkpoint.CheckpointID,
+                    PauseReason: pending.Checkpoint.PauseReason,
+                    PausedAtISO: pending.Checkpoint.PausedAtISO,
+                    PauseSummary: pending.Checkpoint.Summary,
+                    CompletedStepCount: pending.Checkpoint.CompletedStepCount,
+                    CompletedPromptTurns: pending.Checkpoint.CompletedPromptTurns,
+                    HumanApprovalStatus: pending.Checkpoint.HumanApproval.Status,
+                    CumulativeRunCostUsd: pending.Checkpoint.CumulativeLedger.RunCostUsd,
+                    CumulativeRunWallClockMs: pending.Checkpoint.CumulativeLedger.RunWallClockMs,
+                });
+            }
+        }
         const pausedRuns = runSummaries.filter((r) => r.Status === 'Paused');
 
         return {
@@ -610,6 +660,28 @@ export class LimitsResumePausedRunServerOperation extends LimitsResumePausedRunO
         const runId = input?.AgentRunID?.trim();
         if (!runId) {
             throw new Error('AgentRunID is required to resume a paused run');
+        }
+
+        const pendingFlush = await ActiveRunGovernanceRegistry.Instance.FlushPendingCheckpointPersistence(
+            runId,
+            provider,
+        );
+        if (pendingFlush && !pendingFlush.Saved) {
+            return {
+                Success: false,
+                AgentRunID: runId,
+                Status: 'PausePersistencePending',
+                CheckpointID: pendingFlush.Checkpoint.CheckpointID,
+                ApprovalStatus: pendingFlush.Checkpoint.HumanApproval.Status,
+                ExtendedBudgets: null,
+                PriorCumulativeCostUsd: pendingFlush.Checkpoint.CumulativeLedger.RunCostUsd,
+                PriorCumulativeActiveWallClockMs: pendingFlush.Checkpoint.CumulativeLedger.RunWallClockMs,
+                StartingStepCount: pendingFlush.Checkpoint.CompletedStepCount,
+                StartingPromptTurns: pendingFlush.Checkpoint.CompletedPromptTurns,
+                Message:
+                    `Cannot resume run ${runId}: safe-point checkpoint persistence is still pending ` +
+                    `(${pendingFlush.SaveError ?? 'storage unavailable'}).`,
+            };
         }
 
         const agentRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', user);
@@ -929,6 +1001,33 @@ export class LimitsPauseRunServerOperation extends LimitsPauseRunOperation {
         const runId = input?.AgentRunID?.trim();
         if (!runId) {
             throw new Error('AgentRunID is required to pause a run');
+        }
+
+        const pendingFlush = await ActiveRunGovernanceRegistry.Instance.FlushPendingCheckpointPersistence(
+            runId,
+            provider,
+        );
+        if (pendingFlush) {
+            if (pendingFlush.Saved) {
+                return {
+                    Success: true,
+                    Pending: false,
+                    AgentRunID: runId,
+                    Status: 'Paused',
+                    CheckpointID: pendingFlush.Checkpoint.CheckpointID,
+                    Message: `Flushed pending safe-point checkpoint ${pendingFlush.Checkpoint.CheckpointID} for run ${runId}; run is now Paused.`,
+                };
+            }
+            return {
+                Success: false,
+                Pending: true,
+                AgentRunID: runId,
+                Status: 'PausePersistencePending',
+                CheckpointID: pendingFlush.Checkpoint.CheckpointID,
+                Message:
+                    `Safe-point checkpoint ${pendingFlush.Checkpoint.CheckpointID} for run ${runId} remains in memory ` +
+                    `awaiting storage recovery (${pendingFlush.SaveError ?? 'Save() failed'}).`,
+            };
         }
 
         const agentRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', user);

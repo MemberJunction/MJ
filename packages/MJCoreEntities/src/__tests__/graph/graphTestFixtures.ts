@@ -231,6 +231,9 @@ export class FakeGraphProvider {
         const hidden = new Set((user ? this.HiddenFor[user.ID] ?? [] : []).map((k) => k.toLowerCase()));
         let rows = (this.Rows[entityName] ?? []).filter((r) => !hidden.has(`${entityName}|${String(r['ID'])}`.toLowerCase()));
         rows = ApplyKnownFilters(rows, filter);
+        if (POLICY_READ_ENTITIES.has(entityName) || filter.includes('[EdgeType]')) {
+            rows = ApplyConjunctiveFilters(rows, filter);
+        }
         const denied = entity && user ? entity.GetDeniedReadFields(user) : new Set<string>();
         if (denied.size > 0) {
             // The provider drops a denied column but still returns the row.
@@ -261,9 +264,19 @@ export class FakeGraphProvider {
         } as RunQueryResult;
     }
 
-    /** Reads of `entityName`, optionally only those run as `userId`. */
+    /**
+     * Traversal reads of `entityName`, optionally only those run as `userId`. Provenance reads made by
+     * graph access policies are excluded; {@link PolicyReadsOf} returns those.
+     */
     public ReadsOf(entityName: string, userId?: string): ReadLogEntry[] {
-        return this.ReadLog.filter((r) => r.EntityName === entityName && (userId === undefined || r.UserID === userId));
+        return this.ReadLog.filter(
+            (r) => r.EntityName === entityName && !IsAccessPolicyRead(r) && (userId === undefined || r.UserID === userId),
+        );
+    }
+
+    /** Reads of `entityName` made by graph access policies. */
+    public PolicyReadsOf(entityName: string): ReadLogEntry[] {
+        return this.ReadLog.filter((r) => r.EntityName === entityName && IsAccessPolicyRead(r));
     }
 }
 
@@ -309,6 +322,46 @@ function ApplyKnownFilters(rows: FakeRow[], filter: string): FakeRow[] {
     const pkEq = /^\[ID\] = '([^']+)'$/.exec(filter.trim());
     if (pkEq) {
         result = result.filter((r) => String(r['ID']).toLowerCase() === pkEq[1].toLowerCase());
+    }
+    return result;
+}
+
+/** Entities read only by graph access policies, whose filters the conjunctive pass applies in full. */
+const POLICY_READ_ENTITIES = new Set(['MJ: Content Items', 'MJ: Content Item Chunks', 'MJ: Entity Record Documents']);
+
+/** A provenance read made by a graph access policy (a concept's SourcedFrom edges). */
+function IsAccessPolicyRead(entry: ReadLogEntry): boolean {
+    return entry.Filter.includes("[EdgeType] = 'SourcedFrom'");
+}
+
+/** Fields the shapes above already handle; the conjunctive pass leaves them alone. */
+const HANDLED_FIELDS = new Set(['graphid', 'status']);
+
+/**
+ * Applies `[Field] = 'v'` and `[Field] IN ('a', ...)` clauses of a filter that is a plain AND of such
+ * clauses (the shape access policies emit). A filter containing OR is left to the shapes above. A
+ * `1 = 0` clause matches nothing.
+ */
+function ApplyConjunctiveFilters(rows: FakeRow[], filter: string): FakeRow[] {
+    if (/\bOR\b/i.test(filter)) {
+        return rows;
+    }
+    if (/\b1 = 0\b/.test(filter)) {
+        return [];
+    }
+    let result = rows;
+    for (const m of filter.matchAll(/\[(\w+)\] = '([^']*)'/g)) {
+        const [field, value] = [m[1], m[2]];
+        if (!HANDLED_FIELDS.has(field.toLowerCase()) && field !== 'ID') {
+            result = result.filter((r) => String(r[field] ?? '').toLowerCase() === value.toLowerCase());
+        }
+    }
+    for (const m of filter.matchAll(/\[(\w+)\] IN \(([^)]*)\)/g)) {
+        const field = m[1];
+        if (!HANDLED_FIELDS.has(field.toLowerCase()) && filter.trim() !== m[0]) {
+            const values = ListValues(m[2]).map((v) => v.toLowerCase());
+            result = result.filter((r) => values.includes(String(r[field] ?? '').toLowerCase()));
+        }
     }
     return result;
 }

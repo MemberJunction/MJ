@@ -224,7 +224,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (504 classes)
+// @memberjunction/core-entities (508 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -235,12 +235,15 @@ import {
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
+    ContentChunkProvenancePolicy,
+    ContentItemProvenancePolicy,
     DashboardPartDocumentBlock,
     DashboardPermissionProvider,
     EntityMetadataEdgeProvider,
     EntityPermissionProvider,
     EntityViewDocumentBlock,
     ForeignKeyEdgeProvider,
+    GraphConceptProvenancePolicy,
     InteractiveComponentDocumentBlock,
     JoinEntityEdgeProvider,
     MJAIActionEntity,
@@ -730,6 +733,7 @@ import {
     RecordLinkEdgeProvider,
     ResourcePermissionProvider,
     SavedQueryDocumentBlock,
+    SharedConceptEdgeProvider,
 } from '@memberjunction/core-entities';
 
 // @memberjunction/actions-base (2 classes)
@@ -1681,12 +1685,15 @@ const CLASS_REGISTRATIONS_0: any[] = [
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
+    ContentChunkProvenancePolicy,
+    ContentItemProvenancePolicy,
     DashboardPartDocumentBlock,
     DashboardPermissionProvider,
     EntityMetadataEdgeProvider,
     EntityPermissionProvider,
     EntityViewDocumentBlock,
     ForeignKeyEdgeProvider,
+    GraphConceptProvenancePolicy,
     InteractiveComponentDocumentBlock,
     JoinEntityEdgeProvider,
     MJAIActionEntity,
@@ -1804,13 +1811,13 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJArtifactTypeEntity,
     MJArtifactUseEntity,
     MJArtifactVersionAttributeEntity,
-    MJArtifactVersionEntity,
-    MJArtifactWorkingStateEntity,
-    MJAuditLogEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJArtifactVersionEntity,
+    MJArtifactWorkingStateEntity,
+    MJAuditLogEntity,
     MJAuditLogTypeEntity,
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
@@ -2008,13 +2015,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
     MJMLModelScoringBindingEntity,
-    MJMLPredictionUnitEntity,
-    MJMLTrainingPipelineEntity,
-    MJMLTrainingRunEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJMLPredictionUnitEntity,
+    MJMLTrainingPipelineEntity,
+    MJMLTrainingRunEntity,
     MJMLTrainingSnapshotEntity,
     MJMagicLinkInviteAllowedDomainEntity,
     MJMagicLinkInviteAllowedPathEntity,
@@ -2184,6 +2191,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RecordLinkEdgeProvider,
     ResourcePermissionProvider,
     SavedQueryDocumentBlock,
+    SharedConceptEdgeProvider,
     MJActionEntityExtended,
     MJEntityActionEntityExtended,
     MJAIAgentEntityExtended,
@@ -2211,14 +2219,14 @@ const CLASS_REGISTRATIONS_2: any[] = [
     EntityActionInvocationValidate,
     ApolloCreateListAction,
     ApolloEnrichmentAccountsAction,
-    ApolloEnrichmentContactsAction,
-    ApolloGetListAccountsAction,
-    ApolloGetListContactsAction,
-    ApolloGetListsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    ApolloEnrichmentContactsAction,
+    ApolloGetListAccountsAction,
+    ApolloGetListContactsAction,
+    ApolloGetListsAction,
     ApolloMoveListAccountsAction,
     ApolloMoveListContactsAction,
     ApolloSearchPeopleAction,
@@ -2415,14 +2423,14 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ElasticsearchSearchProvider,
     EntitySearchProvider,
     FullTextSearchProvider,
-    GraphSearchProvider,
-    NoopReRanker,
-    OpenAIReRanker,
-    OpenSearchSearchProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    GraphSearchProvider,
+    NoopReRanker,
+    OpenAIReRanker,
+    OpenSearchSearchProvider,
     SearchScopePermissionResolver,
     StorageSearchProvider,
     TagSearchProvider,
@@ -2619,14 +2627,14 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJTemplateContentEntityServer,
     MJUserEntityServer,
     MJUserRoleEntityServer,
-    MJUserRoutineEntityServer,
-    MJUserRoutineRecipientEntityServer,
-    MJUserViewEntityServer,
-    MJVectorIndexEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJUserRoutineEntityServer,
+    MJUserRoutineRecipientEntityServer,
+    MJUserViewEntityServer,
+    MJVectorIndexEntityServer,
     QueryRefreshExtractionServerOperation,
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -2823,14 +2831,14 @@ const CLASS_REGISTRATIONS_5: any[] = [
     URLMetadataExtractorAction,
     UnitConverterAction,
     UnshareListAction,
-    UpdateListItemStatusAction,
-    UpdateRecordAction,
-    ValidateAddressAction,
-    ValidateEmailUniqueAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    UpdateListItemStatusAction,
+    UpdateRecordAction,
+    ValidateAddressAction,
+    ValidateEmailUniqueAction,
     VectorizeEntityAction,
     VerifyMyCommunicationCapabilitiesAction,
     VoidSignatureRequestAction,
@@ -2895,7 +2903,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1247;
+export const CLASS_REGISTRATIONS_COUNT = 1251;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

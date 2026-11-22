@@ -148,6 +148,37 @@ export interface RestoredCheckpointContext {
 /** Alias representing a non-mutating checkpoint resume preparation built prior to continuation acceptance (CR-14). */
 export type RunawayResumePreparation = RestoredCheckpointContext;
 
+/** Retained safe-point checkpoint bundle held in memory while storage persistence recovers. */
+export interface PendingRunawayCheckpointPersistence {
+    AgentRunID: string;
+    AgentRun: MJAIAgentRunEntityExtended;
+    Checkpoint: RunawayCheckpointState;
+    InFlightPayload: RunawaySerializable;
+    NotificationPayload: OwnerPauseNotificationPayload;
+    OwnerNotificationID: string | null;
+    ApprovalRequestID: string | null;
+    Provider: IMetadataProvider;
+    ContextUser?: UserInfo;
+    TenantScopeKey?: string | null;
+    LastSaveError: string | null;
+    CreateApprovalRequest?: boolean;
+    OwnerNotificationDelivered?: boolean;
+    OnOwnerNotification?: (payload: OwnerPauseNotificationPayload) => Promise<void> | void;
+}
+
+/** Snapshot of mutable AgentRun fields captured before applying paused state so failed saves roll back cleanly. */
+interface AgentRunPriorSnapshot {
+    Status: MJAIAgentRunEntityExtended['Status'];
+    CompletedAt: MJAIAgentRunEntityExtended['CompletedAt'];
+    Success: MJAIAgentRunEntityExtended['Success'];
+    ErrorMessage: MJAIAgentRunEntityExtended['ErrorMessage'];
+    Message: MJAIAgentRunEntityExtended['Message'];
+    FinalPayload: MJAIAgentRunEntityExtended['FinalPayload'];
+    FinalPayloadObject: MJAIAgentRunEntityExtended['FinalPayloadObject'];
+    Data: MJAIAgentRunEntityExtended['Data'];
+    RunawayCheckpoint: MJAIAgentRunEntityExtended['RunawayCheckpoint'];
+}
+
 /**
  * Coordinates non-destructive runaway pause, checkpoint persistence, owner notification,
  * human approval, and stateful resume.
@@ -168,17 +199,7 @@ export class RunawayCheckpointManager {
         };
 
         const checkpoint = this.buildCheckpointState(input, updatedLedger, nowMs, pausedAtISO);
-        const priorRunSnapshot = {
-            Status: input.AgentRun.Status,
-            CompletedAt: input.AgentRun.CompletedAt,
-            Success: input.AgentRun.Success,
-            ErrorMessage: input.AgentRun.ErrorMessage,
-            Message: input.AgentRun.Message,
-            FinalPayload: input.AgentRun.FinalPayload,
-            FinalPayloadObject: input.AgentRun.FinalPayloadObject,
-            Data: input.AgentRun.Data,
-            RunawayCheckpoint: input.AgentRun.RunawayCheckpoint,
-        };
+        const priorRunSnapshot = this.capturePriorSnapshot(input.AgentRun);
         this.applyPausedStateToRun(input.AgentRun, checkpoint, input.InFlightPayload);
 
         const notificationPayload = this.buildOwnerNotificationPayload(checkpoint);
@@ -188,47 +209,23 @@ export class RunawayCheckpointManager {
             notificationPayload,
         );
         const approvalRequestId = input.CreateApprovalRequest !== false
-            ? await this.persistApprovalRequest(input, checkpoint, notificationPayload)
+            ? await this.persistApprovalRequest(input.Provider, input.ContextUser, input.AgentID, input.AgentRun.ID, input.UserID, checkpoint, notificationPayload)
             : null;
 
         checkpoint.HumanApproval.OwnerNotificationID = ownerNotificationId;
         checkpoint.HumanApproval.ApprovalRequestID = approvalRequestId;
         AttachRunawayCheckpointToAgentRun(input.AgentRun, checkpoint);
 
-        const maxAttempts = Math.max(1, Math.trunc(input.MaxSaveAttempts ?? 3));
-        const baseDelayMs = Math.max(0, Math.trunc(input.SaveRetryDelayMs ?? 25));
-        let saved = false;
-        let lastSaveError: string | null = null;
+        const saveOutcome = await this.trySavePausedAgentRun(
+            input.AgentRun,
+            priorRunSnapshot,
+            input.MaxSaveAttempts ?? 3,
+            input.SaveRetryDelayMs ?? 25,
+        );
 
-        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            try {
-                saved = await input.AgentRun.Save({ SaveReturnMode: 'datestamps_only' });
-                if (saved) {
-                    lastSaveError = null;
-                    break;
-                }
-                lastSaveError = input.AgentRun.LatestResult?.CompleteMessage || 'Save() returned false';
-            } catch (err) {
-                saved = false;
-                lastSaveError = err instanceof Error ? err.message : String(err);
-            }
-            if (attempt < maxAttempts && baseDelayMs > 0) {
-                await new Promise((resolve) => setTimeout(resolve, baseDelayMs * attempt));
-            }
-        }
-
-        if (!saved) {
-            input.AgentRun.Status = priorRunSnapshot.Status;
-            input.AgentRun.CompletedAt = priorRunSnapshot.CompletedAt;
-            input.AgentRun.Success = priorRunSnapshot.Success;
-            input.AgentRun.ErrorMessage = priorRunSnapshot.ErrorMessage;
-            input.AgentRun.Message = priorRunSnapshot.Message;
-            input.AgentRun.FinalPayloadObject = priorRunSnapshot.FinalPayloadObject;
-            input.AgentRun.FinalPayload = priorRunSnapshot.FinalPayload;
-            input.AgentRun.Data = priorRunSnapshot.Data;
-            input.AgentRun.RunawayCheckpoint = priorRunSnapshot.RunawayCheckpoint;
+        if (!saveOutcome.Saved) {
             LogError(
-                `RunawayCheckpointManager: failed to save paused run ${input.AgentRun.ID} after ${maxAttempts} attempt(s): ${lastSaveError ?? 'unspecified error'}`,
+                `RunawayCheckpointManager: failed to save paused run ${input.AgentRun.ID} after ${saveOutcome.Attempts} attempt(s): ${saveOutcome.Error ?? 'unspecified error'}`,
             );
             return {
                 Checkpoint: checkpoint,
@@ -236,7 +233,7 @@ export class RunawayCheckpointManager {
                 OwnerNotificationID: ownerNotificationId,
                 ApprovalRequestID: approvalRequestId,
                 Saved: false,
-                SaveError: lastSaveError,
+                SaveError: saveOutcome.Error,
             };
         }
 
@@ -256,6 +253,169 @@ export class RunawayCheckpointManager {
             Saved: true,
             SaveError: null,
         };
+    }
+
+    /**
+     * Builds a safe-point {@link PauseRunWithCheckpointResult} without writing to storage,
+     * used as a fail-closed fallback if `PauseRunWithCheckpoint` throws before returning.
+     */
+    public BuildFallbackCheckpointResult(
+        input: PauseRunWithCheckpointInput,
+        saveError: string,
+    ): PauseRunWithCheckpointResult {
+        const nowMs = input.NowMs ?? Date.now();
+        const pausedAtISO = new Date(nowMs).toISOString();
+        const pausedIntervals = this.openPauseInterval(input.CumulativeLedger.PausedIntervals, nowMs);
+        const updatedLedger: CumulativeBudgetLedger = {
+            ...input.CumulativeLedger,
+            PausedIntervals: pausedIntervals,
+            AsOfISO: pausedAtISO,
+        };
+        const checkpoint = this.buildCheckpointState(input, updatedLedger, nowMs, pausedAtISO);
+        const notificationPayload = this.buildOwnerNotificationPayload(checkpoint);
+        return {
+            Checkpoint: checkpoint,
+            NotificationPayload: notificationPayload,
+            OwnerNotificationID: null,
+            ApprovalRequestID: null,
+            Saved: false,
+            SaveError: saveError,
+        };
+    }
+
+    /**
+     * Retries persisting a retained in-memory {@link PendingRunawayCheckpointPersistence} safe-point
+     * once storage recovers, transitioning the run entity cleanly to `Status = 'Paused'`.
+     */
+    public async FlushPendingCheckpointPersistence(
+        pending: PendingRunawayCheckpointPersistence,
+        options?: { MaxSaveAttempts?: number; SaveRetryDelayMs?: number },
+    ): Promise<PauseRunWithCheckpointResult> {
+        const checkpoint = pending.Checkpoint;
+        const priorRunSnapshot = this.capturePriorSnapshot(pending.AgentRun);
+
+        if (!pending.OwnerNotificationID) {
+            pending.OwnerNotificationID = await this.persistOwnerNotification(
+                pending.Provider,
+                pending.ContextUser,
+                pending.NotificationPayload,
+            );
+            checkpoint.HumanApproval.OwnerNotificationID = pending.OwnerNotificationID;
+        }
+        if (!pending.ApprovalRequestID && pending.CreateApprovalRequest !== false) {
+            pending.ApprovalRequestID = await this.persistApprovalRequest(
+                pending.Provider,
+                pending.ContextUser,
+                checkpoint.AgentID,
+                pending.AgentRun.ID,
+                checkpoint.UserID,
+                checkpoint,
+                pending.NotificationPayload,
+            );
+            checkpoint.HumanApproval.ApprovalRequestID = pending.ApprovalRequestID;
+        }
+
+        this.applyPausedStateToRun(pending.AgentRun, checkpoint, pending.InFlightPayload);
+        const saveOutcome = await this.trySavePausedAgentRun(
+            pending.AgentRun,
+            priorRunSnapshot,
+            options?.MaxSaveAttempts ?? 2,
+            options?.SaveRetryDelayMs ?? 10,
+        );
+
+        if (!saveOutcome.Saved) {
+            pending.LastSaveError = saveOutcome.Error;
+            LogError(
+                `RunawayCheckpointManager: flush pending checkpoint failed for run ${pending.AgentRun.ID}: ${saveOutcome.Error ?? 'unspecified error'}`,
+            );
+            return {
+                Checkpoint: checkpoint,
+                NotificationPayload: pending.NotificationPayload,
+                OwnerNotificationID: pending.OwnerNotificationID,
+                ApprovalRequestID: pending.ApprovalRequestID,
+                Saved: false,
+                SaveError: saveOutcome.Error,
+            };
+        }
+
+        pending.LastSaveError = null;
+        if (pending.OnOwnerNotification && !pending.OwnerNotificationDelivered) {
+            pending.OwnerNotificationDelivered = true;
+            await pending.OnOwnerNotification(pending.NotificationPayload);
+        }
+
+        LogStatus(
+            `[RunawayCheckpointManager] Flushed pending checkpoint ${checkpoint.CheckpointID} for run ${pending.AgentRun.ID} (${checkpoint.PauseReason}).`,
+        );
+
+        return {
+            Checkpoint: checkpoint,
+            NotificationPayload: pending.NotificationPayload,
+            OwnerNotificationID: pending.OwnerNotificationID,
+            ApprovalRequestID: pending.ApprovalRequestID,
+            Saved: true,
+            SaveError: null,
+        };
+    }
+
+    private capturePriorSnapshot(agentRun: MJAIAgentRunEntityExtended): AgentRunPriorSnapshot {
+        return {
+            Status: agentRun.Status,
+            CompletedAt: agentRun.CompletedAt,
+            Success: agentRun.Success,
+            ErrorMessage: agentRun.ErrorMessage,
+            Message: agentRun.Message,
+            FinalPayload: agentRun.FinalPayload,
+            FinalPayloadObject: agentRun.FinalPayloadObject,
+            Data: agentRun.Data,
+            RunawayCheckpoint: agentRun.RunawayCheckpoint,
+        };
+    }
+
+    private restorePriorSnapshot(agentRun: MJAIAgentRunEntityExtended, prior: AgentRunPriorSnapshot): void {
+        agentRun.Status = prior.Status;
+        agentRun.CompletedAt = prior.CompletedAt;
+        agentRun.Success = prior.Success;
+        agentRun.ErrorMessage = prior.ErrorMessage;
+        agentRun.Message = prior.Message;
+        agentRun.FinalPayloadObject = prior.FinalPayloadObject;
+        agentRun.FinalPayload = prior.FinalPayload;
+        agentRun.Data = prior.Data;
+        agentRun.RunawayCheckpoint = prior.RunawayCheckpoint;
+    }
+
+    private async trySavePausedAgentRun(
+        agentRun: MJAIAgentRunEntityExtended,
+        priorSnapshot: AgentRunPriorSnapshot,
+        rawMaxAttempts: number,
+        rawBaseDelayMs: number,
+    ): Promise<{ Saved: boolean; Attempts: number; Error: string | null }> {
+        const maxAttempts = Math.max(1, Math.trunc(rawMaxAttempts));
+        const baseDelayMs = Math.max(0, Math.trunc(rawBaseDelayMs));
+        let saved = false;
+        let lastSaveError: string | null = null;
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                saved = await agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+                if (saved) {
+                    lastSaveError = null;
+                    break;
+                }
+                lastSaveError = agentRun.LatestResult?.CompleteMessage || 'Save() returned false';
+            } catch (err) {
+                saved = false;
+                lastSaveError = err instanceof Error ? err.message : String(err);
+            }
+            if (attempt < maxAttempts && baseDelayMs > 0) {
+                await new Promise((resolve) => setTimeout(resolve, baseDelayMs * attempt));
+            }
+        }
+
+        if (!saved) {
+            this.restorePriorSnapshot(agentRun, priorSnapshot);
+        }
+        return { Saved: saved, Attempts: maxAttempts, Error: lastSaveError };
     }
 
     /**
@@ -783,21 +943,25 @@ export class RunawayCheckpointManager {
     }
 
     private async persistApprovalRequest(
-        input: PauseRunWithCheckpointInput,
+        provider: IMetadataProvider,
+        contextUser: UserInfo | undefined,
+        agentId: string,
+        agentRunId: string,
+        userId: string | null,
         checkpoint: RunawayCheckpointState,
         notificationPayload: OwnerPauseNotificationPayload,
     ): Promise<string | null> {
         try {
-            const request = await input.Provider.GetEntityObject<MJAIAgentRequestEntity>(
+            const request = await provider.GetEntityObject<MJAIAgentRequestEntity>(
                 'MJ: AI Agent Requests',
-                input.ContextUser,
+                contextUser,
             );
-            request.AgentID = input.AgentID;
-            if (IsValidUUID(input.AgentRun.ID)) {
-                request.OriginatingAgentRunID = input.AgentRun.ID;
+            request.AgentID = agentId;
+            if (IsValidUUID(agentRunId)) {
+                request.OriginatingAgentRunID = agentRunId;
             }
-            if (input.UserID && IsValidUUID(input.UserID)) {
-                request.RequestForUserID = input.UserID;
+            if (userId && IsValidUUID(userId)) {
+                request.RequestForUserID = userId;
             }
             request.Status = 'Requested';
             request.Request = notificationPayload.Message;

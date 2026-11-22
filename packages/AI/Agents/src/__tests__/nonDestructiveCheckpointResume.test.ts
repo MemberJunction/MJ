@@ -26,8 +26,14 @@ import type { MJAIAgentRequestEntity, MJAIAgentTypeEntity, MJAIPromptEntity, MJA
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActiveRunGovernanceRegistry } from '../ActiveRunGovernanceRegistry';
+import { AgentRunWatchdog } from '../agent-run-watchdog';
 import { BaseAgent } from '../base-agent';
-import { LimitsPauseRunServerOperation } from '../operations/LimitsOperations';
+import {
+    LimitsGetDiagnosticsServerOperation,
+    LimitsPauseRunServerOperation,
+    LimitsResumePausedRunServerOperation,
+    LoadLimitsOperations,
+} from '../operations/LimitsOperations';
 import { RunawayCheckpointManager } from '../RunawayCheckpointManager';
 import '../agent-types/loop-agent-type';
 import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS } from '../agent-types/loop-agent-prompt-params';
@@ -1806,7 +1812,12 @@ describe('Non-destructive pause, persisted checkpoint, owner notification, and h
             Agents: [childSubAgent],
         });
         try {
-            const subAgentInvocations: Array<{ name: string; message: string; context: unknown; tpl: Record<string, string> | undefined }> = [];
+            const subAgentInvocations: Array<{
+                name: string;
+                message: string;
+                context: RunawayJsonValue | object | undefined;
+                tpl: Record<string, string> | undefined;
+            }> = [];
             const subAgentCp: RunawayCheckpointState = {
                 ...subAgentCheckpoint,
                 AgentRunID: '44444444-2222-4222-8222-000000000017',
@@ -1871,7 +1882,7 @@ describe('Non-destructive pause, persisted checkpoint, owner notification, and h
                 value: vi.fn(
                     async (
                         _p: ExecuteAgentParams,
-                        step: { subAgent: { name: string; message: string; templateParameters?: Record<string, string>; context?: unknown } },
+                        step: { subAgent: { name: string; message: string; templateParameters?: Record<string, string>; context?: RunawayJsonValue | object } },
                         _parentStepId: string,
                         item: RunawayJsonValue,
                     ) => {
@@ -2027,17 +2038,23 @@ describe('Non-destructive pause, persisted checkpoint, owner notification, and h
         expect(throwRes.SaveError).toContain('SQL connection dropped');
         expect(throwRun.Status).toBe('Running');
 
-        // 4) BaseAgent.pauseNonDestructively fails closed when Save() returns false or throws (resolves cooperative waiters Paused=false and throws)
+        // 4) BaseAgent.pauseNonDestructively retains safe-point checkpoint in PausePersistencePending without throwing when Save() fails
         const testAgent = new TestableCheckpointAgent([]);
         const failAgentRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
         failAgentRun.ID = '77777777-0000-4000-8000-000000000004';
         failAgentRun.Status = 'Running';
-        failAgentRun.Save = vi.fn(async () => false);
+        let unitSaveEnabled = false;
+        failAgentRun.Save = vi.fn(async () => {
+            if (!unitSaveEnabled) return false;
+            harness.Runs.set(failAgentRun.ID, failAgentRun);
+            return true;
+        });
         Reflect.set(testAgent, '_agentRun', failAgentRun);
         Reflect.set(testAgent, '_activeProvider', provider);
 
         const reqCoopFn = Reflect.get(testAgent, 'requestCooperativePause') as (summary?: string) => Promise<{
             Paused: boolean;
+            Pending?: boolean;
             CheckpointID: string | null;
             Status: string;
             Summary: string;
@@ -2053,30 +2070,292 @@ describe('Non-destructive pause, persisted checkpoint, owner notification, and h
                 NextStepToResume: null;
                 Ledger: typeof transientRes.Checkpoint.CumulativeLedger;
             },
-        ) => Promise<unknown>;
+        ) => Promise<{
+            PauseResult: { Saved: boolean; Checkpoint: RunawayCheckpointState };
+            PausePersistencePending?: boolean;
+        } | null>;
 
-        await expect(
-            pauseNonDestructivelyFn.call(
-                testAgent,
-                {
-                    agent: { ID: AGENT_ID, Name: 'FailCloseAgent' } as MJAIAgentEntityExtended,
-                    conversationMessages: [],
-                    contextUser,
-                    provider,
-                },
-                {
-                    PauseReason: 'BudgetExceeded',
-                    Summary: 'Budget hit',
-                    InFlightPayload: { x: 1 },
-                    NextStepToResume: null,
-                    Ledger: transientRes.Checkpoint.CumulativeLedger,
-                },
-            ),
-        ).rejects.toThrow('Failed to persist runaway pause checkpoint');
+        const pendingOutcome = await pauseNonDestructivelyFn.call(
+            testAgent,
+            {
+                agent: { ID: AGENT_ID, Name: 'FailCloseAgent' } as MJAIAgentEntityExtended,
+                conversationMessages: [],
+                contextUser,
+                provider,
+            },
+            {
+                PauseReason: 'BudgetExceeded',
+                Summary: 'Budget hit',
+                InFlightPayload: { x: 1 },
+                NextStepToResume: null,
+                Ledger: transientRes.Checkpoint.CumulativeLedger,
+            },
+        );
+
+        expect(pendingOutcome?.PauseResult.Saved).toBe(false);
+        expect(pendingOutcome?.PausePersistencePending).toBe(true);
+        expect(ActiveRunGovernanceRegistry.Instance.IsPausePersistencePending(failAgentRun.ID, provider)).toBe(true);
+        expect(ActiveRunGovernanceRegistry.Instance.GetActiveRun(failAgentRun.ID, provider)?.State).toBe('PausePersistencePending');
 
         const waiterOutcome = await waiterPromise;
         expect(waiterOutcome?.Paused).toBe(false);
-        expect(waiterOutcome?.CheckpointID).toBeNull();
-        expect(Reflect.get(testAgent, '_pausedRunOutcome')).toBeNull();
+        expect(waiterOutcome?.Pending).toBe(true);
+        expect(waiterOutcome?.Status).toBe('PausePersistencePending');
+        expect(waiterOutcome?.CheckpointID).toBe(pendingOutcome?.PauseResult.Checkpoint.CheckpointID);
+
+        // Storage recovers -> FlushPendingCheckpointPersistence transitions run to Paused cleanly
+        unitSaveEnabled = true;
+        const unitFlush = await testAgent.FlushPendingCheckpointPersistence(failAgentRun.ID, provider);
+        expect(unitFlush?.Saved).toBe(true);
+        expect(failAgentRun.Status).toBe('Paused');
+        expect(ActiveRunGovernanceRegistry.Instance.IsPausePersistencePending(failAgentRun.ID, provider)).toBe(false);
+        expect(ActiveRunGovernanceRegistry.Instance.GetActiveRun(failAgentRun.ID, provider)).toBeUndefined();
+    });
+
+    it('CR-CHECKPOINT-SAVE-FAILURE: Execute() retains safe-point checkpoint in PausePersistencePending on storage outage, blocks further billable steps, flushes on recovery, and resumes to completion without replay', async () => {
+        LoadLimitsOperations();
+        const provider = harness.CreateProvider();
+        const contextUser = { ID: USER_ID, Name: 'Alice Owner', Email: 'alice@example.com', Type: 'Owner', UserRoles: [] } as Partial<UserInfo> as UserInfo;
+        const agentEntity = {
+            ID: AGENT_ID,
+            Name: 'OutageResilientLoopAgent',
+            TypeID: AGENT_TYPE_ID,
+            Status: 'Active',
+            MaxCostPerRun: null,
+            MaxTokensPerRun: null,
+            MaxTimePerRun: null,
+            MaxIterationsPerRun: null,
+            TypeConfiguration: null,
+        } as Partial<MJAIAgentEntityExtended> as MJAIAgentEntityExtended;
+
+        // Intercept GetEntityObject so initial run creation Save() succeeds, then storage fails for all checkpoint Save() attempts until recovered
+        let storageAvailable = true;
+        const origGetEntity = provider.GetEntityObject.bind(provider);
+        provider.GetEntityObject = vi.fn(async (entityName: string, user?: UserInfo) => {
+            const entity = await origGetEntity(entityName, user);
+            if (entityName === 'MJ: AI Agent Runs') {
+                const runEntity = entity as MJAIAgentRunEntityExtended;
+                const origSave = runEntity.Save.bind(runEntity);
+                let saveCallCount = 0;
+                runEntity.Save = vi.fn(async (opts?: Parameters<MJAIAgentRunEntityExtended['Save']>[0]) => {
+                    saveCallCount++;
+                    if (saveCallCount > 1 && !storageAvailable) {
+                        throw new Error('Simulated SQL storage outage during checkpoint save');
+                    }
+                    return origSave(opts);
+                });
+            }
+            return entity;
+        }) as IMetadataProvider['GetEntityObject'];
+
+        const notifications: OwnerPauseNotificationPayload[] = [];
+        const executedBatches: string[] = [];
+        vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockImplementation(async (actionParams) => {
+            const batchParam = actionParams.Params.find((p) => p.Name === 'batch');
+            executedBatches.push(String(batchParam?.Value ?? 'unknown'));
+            return {
+                Success: true,
+                Message: 'Batch processed',
+                Params: [],
+                Result: { ResultCode: 'SUCCESS' },
+            };
+        });
+
+        // Turn 1 ($0.10): processes batch A
+        // Turn 2 ($0.25 -> cumulative $0.35 >= $0.30): sets payload step=2, schedules ProcessBatchItem(batch='C') -> triggers pause while storageAvailable=false!
+        // Turn 3 (if improperly executed during outage, would fail assertion; must ONLY execute after storage recovers & ResumePausedRun!)
+        const agent = new TestableCheckpointAgent([
+            () => {
+                // Simulate storage outage starting right before Turn 2 triggers budget pause
+                return makePromptResult(
+                    {
+                        taskComplete: false,
+                        reasoning: 'Step 1 batch A',
+                        payloadChangeRequest: { newElements: { step: 1, completedItems: ['A'] } },
+                        nextStep: { type: 'Actions', actions: [{ name: 'ProcessBatchItem', params: { batch: 'A' } }] },
+                    },
+                    0.10,
+                    100,
+                );
+            },
+            () => {
+                storageAvailable = false;
+                return makePromptResult(
+                    {
+                        taskComplete: false,
+                        reasoning: 'Step 2 batch B ready for batch C',
+                        payloadChangeRequest: { updateElements: { step: 2, completedItems: ['A', 'B'] } },
+                        nextStep: { type: 'Actions', actions: [{ name: 'ProcessBatchItem', params: { batch: 'C' } }] },
+                    },
+                    0.25,
+                    200,
+                );
+            },
+            () =>
+                makePromptResult(
+                    {
+                        taskComplete: false,
+                        reasoning: 'Unexpected Turn 3 called before resume!',
+                    },
+                    0.50,
+                    500,
+                ),
+        ]);
+
+        const firstResult = await agent.Execute({
+            agent: agentEntity,
+            conversationMessages: [{ role: 'user', content: 'Run multi-batch job' }],
+            contextUser,
+            provider,
+            userId: USER_ID,
+            limitsOverride: { Budgets: { PerRun: { MaxCostUsd: 0.30 } } },
+            onOwnerPauseNotification: (p) => {
+                notifications.push(p);
+            },
+        });
+
+        // 1) Must NOT convert checkpoint persistence failure into terminal failure or discard safe-point checkpoint/payload!
+        expect(firstResult.paused).toBe(true);
+        expect(firstResult.pausePersistencePending).toBe(true);
+        expect(firstResult.success).toBe(false);
+        expect(firstResult.runawayCheckpoint).toBeDefined();
+        expect(firstResult.runawayCheckpoint?.InFlightPayload).toEqual({ step: 2, completedItems: ['A', 'B'] });
+        expect(firstResult.payload).toEqual({ step: 2, completedItems: ['A', 'B'] });
+        // Turn 3 was blocked and batch 'C' was NOT dispatched!
+        expect(agent.PromptCalls).toHaveLength(2);
+        expect(executedBatches).toEqual(['A']);
+
+        const runId = firstResult.agentRun!.ID;
+        expect(ActiveRunGovernanceRegistry.Instance.IsPausePersistencePending(runId, provider)).toBe(true);
+        expect(ActiveRunGovernanceRegistry.Instance.GetActiveRun(runId, provider)?.State).toBe('PausePersistencePending');
+        expect(notifications).toHaveLength(0);
+
+        // 2) While storage is still down, Limits.ResumePausedRun and BaseAgent.ResumePausedRun MUST fail closed without running Turn 3
+        const resumeOp = new LimitsResumePausedRunServerOperation();
+        const blockedResumeOpRes = await resumeOp.ExecuteServer(
+            { AgentRunID: runId, BudgetExtension: { NewPerRunMaxCostUsd: 2.0 } },
+            { provider, user: contextUser, emitProgress: () => undefined },
+        );
+        expect(blockedResumeOpRes.Success).toBe(true);
+        expect(blockedResumeOpRes.Output?.Success).toBe(false);
+        expect(blockedResumeOpRes.Output?.Status).toBe('PausePersistencePending');
+
+        const blockedWorker = new TestableCheckpointAgent([
+            () => makePromptResult({ taskComplete: true, message: 'Should never run while pending' }, 0.05, 50),
+        ]);
+        const blockedWorkerRes = await blockedWorker.ResumePausedRun({
+            agent: agentEntity,
+            conversationMessages: [],
+            contextUser,
+            provider,
+            userId: USER_ID,
+            resumeCheckpointRunId: runId,
+            humanResumeApproval: {
+                Status: 'Approved',
+                ApprovedByUserID: APPROVER_ID,
+                BudgetExtension: { NewPerRunMaxCostUsd: 2.0 },
+            },
+        });
+        expect(blockedWorkerRes.success).toBe(false);
+        expect(blockedWorker.PromptCalls).toHaveLength(0);
+
+        // 3) Storage recovers -> LimitsGetDiagnosticsServerOperation automatically flushes pending checkpoint & transitions run to Paused
+        storageAvailable = true;
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunViews: vi.fn(async () => [
+                {
+                    Success: true,
+                    Results: Array.from(harness.Runs.values()).map((r) => ({
+                        ID: r.ID,
+                        AgentID: r.AgentID,
+                        Agent: agentEntity.Name,
+                        UserID: r.UserID,
+                        User: 'Alice Owner',
+                        Status: r.Status,
+                        StartedAt: r.StartedAt,
+                        CompletedAt: r.CompletedAt,
+                        TotalCost: r.TotalCost,
+                        TotalCostRollup: r.TotalCost,
+                        TotalTokensUsed: r.TotalTokensUsed,
+                        TotalPromptIterations: r.TotalPromptIterations,
+                        Data: r.Data,
+                        Message: r.Message,
+                    })),
+                },
+                {
+                    Success: true,
+                    Results: Array.from(harness.Runs.values())
+                        .filter((r) => r.Status === 'Paused')
+                        .map((r) => ({
+                            ID: r.ID,
+                            AgentID: r.AgentID,
+                            Agent: agentEntity.Name,
+                            UserID: r.UserID,
+                            User: 'Alice Owner',
+                            Status: r.Status,
+                            StartedAt: r.StartedAt,
+                            CompletedAt: r.CompletedAt,
+                            TotalCost: r.TotalCost,
+                            TotalCostRollup: r.TotalCost,
+                            TotalTokensUsed: r.TotalTokensUsed,
+                            TotalPromptIterations: r.TotalPromptIterations,
+                            Data: r.Data,
+                            Message: r.Message,
+                        })),
+                },
+            ]),
+            RunView: vi.fn(async () => ({ Success: true, Results: [] })),
+        } as Partial<RunView> as RunView);
+
+        const diagOp = new LimitsGetDiagnosticsServerOperation();
+        const diagRes = await diagOp.ExecuteServer(
+            { AgentID: AGENT_ID, UserID: USER_ID },
+            { provider, user: contextUser, emitProgress: () => undefined },
+        );
+        expect(diagRes.Success).toBe(true);
+        expect(diagRes.Output?.PausedRuns).toHaveLength(1);
+        expect(diagRes.Output?.PausedRuns[0].AgentRunID).toBe(runId);
+        expect(diagRes.Output?.PausedRuns[0].CheckpointID).toBe(firstResult.runawayCheckpoint?.CheckpointID);
+        expect(harness.Runs.get(runId)?.Status).toBe('Paused');
+        expect(ActiveRunGovernanceRegistry.Instance.IsPausePersistencePending(runId, provider)).toBe(false);
+        expect(ActiveRunGovernanceRegistry.Instance.GetActiveRun(runId, provider)).toBeUndefined();
+        expect(notifications).toHaveLength(1);
+        expect(AgentRunWatchdog.Instance.TrackedCount).toBe(0);
+
+        // 4) ResumePausedRun resumes from that exact safe-point checkpoint to completion without replaying Turns 1-2 or losing payload
+        const resumedWorker = new TestableCheckpointAgent([
+            () =>
+                makePromptResult(
+                    {
+                        taskComplete: true,
+                        message: 'Completed batch C after recovery',
+                        payloadChangeRequest: { newElements: { finalBatch: 'C', step: 3 } },
+                    },
+                    0.05,
+                    80,
+                ),
+        ]);
+        const resumedResult = await resumedWorker.ResumePausedRun({
+            agent: agentEntity,
+            conversationMessages: [],
+            contextUser,
+            provider,
+            userId: USER_ID,
+            resumeCheckpointRunId: runId,
+            humanResumeApproval: {
+                Status: 'Approved',
+                ApprovedByUserID: APPROVER_ID,
+                BudgetExtension: { NewPerRunMaxCostUsd: 2.0 },
+            },
+        });
+
+        expect(resumedResult.success).toBe(true);
+        expect(resumedWorker.PromptCalls).toHaveLength(1);
+        expect(executedBatches).toEqual(['A', 'C']);
+        expect(resumedResult.payload).toEqual({
+            step: 3,
+            completedItems: ['A', 'B'],
+            finalBatch: 'C',
+        });
     });
 });

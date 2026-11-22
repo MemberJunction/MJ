@@ -2819,8 +2819,22 @@ export class TaskGraphDispatcher implements IShutdownable {
         for (const source of graphSources) {
             if (claimable.length >= limit) break;
             const { parentID } = source;
+            if (this.governance.HasPendingPausePersistence(parentID)) {
+                await this.governance.FlushPendingPausePersistence(
+                    provider,
+                    parentID,
+                    this.contextUser,
+                    this.observer,
+                    this.debugStateByGraph,
+                );
+            }
             const debug = await this.readDebugState(provider, parentID);
-            await this.announcePauseTransition(provider, parentID, debug);
+            if (!this.governance.HasPendingPausePersistence(parentID)) {
+                if (this.governance.IsLocallyPaused(parentID)) {
+                    this.announcedPaused.set(parentID, true);
+                }
+                await this.announcePauseTransition(provider, parentID, debug);
+            }
             const graph = source.preloaded ?? await this.loadGraphState(provider, parentID, debug);
             // HOLD is what makes "a broken condition stalls visibly" true rather than merely stated.
             // An undecided exclusive group keeps all its edges, and a kept edge on a Complete origin

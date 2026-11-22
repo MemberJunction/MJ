@@ -27,21 +27,47 @@ import {
     ExtractRunawayCheckpointFromRunData,
     type MJAIAgentRunEntityExtended,
     type RunawayCheckpointState,
+    type RunawayJsonObject,
     type TaskGraphSpec,
     type TaskGraphSpecNode,
 } from '@memberjunction/ai-core-plus';
 import { SQLServerDialect } from '@memberjunction/sql-dialect';
+import type { TaskGraphDebugState } from '../debug-state';
 import { TaskGraphDispatcher } from '../TaskGraphDispatcher';
 import { TaskGraphService } from '../TaskGraphService';
-import type { TaskActionRunner, TaskAgentRunner } from '../types';
+import type { TaskActionRunner, TaskAgentRunner, TaskGraphFrame } from '../types';
 
 const capturedErrors: string[] = [];
+
+type GovernanceLogArg = string | number | boolean | object | null | undefined;
+type GovernanceSqlArg = string | number | boolean | Date | null | undefined;
+type GovernanceRunViewRow =
+    | { ID: string; Name: string; Status?: string }
+    | { ParentID: string }
+    | { ID: string }
+    | { ID: string; Status: MJTaskEntity['Status']; Configuration: string | null }
+    | {
+          ID: string;
+          TypeID: string;
+          AgentRunID: string | null;
+          AgentID: string | null;
+          UserID: string | null;
+          Status: MJTaskEntity['Status'];
+          InputPayload: string | null;
+          Configuration: string | null;
+      }
+    | StoredTaskRow
+    | StoredDepRow
+    | StoredAgentRunRow
+    | Partial<MJAIAgentEntity>
+    | Partial<MJAIAgentUserPolicyEntity>
+    | MJTaskEntity;
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
     return {
         ...actual,
-        LogError: vi.fn((...args: unknown[]) => {
+        LogError: vi.fn((...args: GovernanceLogArg[]) => {
             capturedErrors.push(args.map((a) => String(a)).join(' '));
         }),
         LogStatus: vi.fn(),
@@ -126,6 +152,8 @@ class GovernanceInMemoryDb {
     public readonly AgentRuns = new Map<string, StoredAgentRunRow>();
     public Agents: Array<Partial<MJAIAgentEntity>> = [];
     public UserPolicies: Array<Partial<MJAIAgentUserPolicyEntity>> = [];
+    public AgentRunSaveMode: 'ok' | 'false' | 'throw' = 'ok';
+    public DebugWriteMode: 'ok' | 'false' | 'throw' = 'ok';
     private readonly dialect = new SQLServerDialect();
 
     private wrapTask(initial?: StoredTaskRow): MJTaskEntity {
@@ -342,6 +370,13 @@ class GovernanceInMemoryDb {
                 return true;
             },
             Save: async () => {
+                if (db.AgentRunSaveMode === 'false') {
+                    wrapper.LatestResult = { CompleteMessage: 'Simulated agent run Save() false' } as MJAIAgentRunEntityExtended['LatestResult'];
+                    return false;
+                }
+                if (db.AgentRunSaveMode === 'throw') {
+                    throw new Error('Simulated agent run Save() network drop');
+                }
                 db.AgentRuns.set(backing.ID.toLowerCase(), { ...backing });
                 return true;
             },
@@ -369,7 +404,7 @@ class GovernanceInMemoryDb {
                     Load: async () => false,
                 };
             },
-            ExecuteSQL: async (sql: string, values?: unknown[], _opts?: ExecuteSQLOptions) => {
+            ExecuteSQL: async (sql: string, values?: GovernanceSqlArg[], _opts?: ExecuteSQLOptions) => {
                 const args = Array.isArray(values) ? values : [];
                 if (sql.includes('spTaskGraphClaimTask')) {
                     const [taskId, claimedBy, ttlSec] = args as [string, string, number];
@@ -398,21 +433,27 @@ class GovernanceInMemoryDb {
                     return [{ AffectedRows: 1 }];
                 }
                 if (sql.includes('spTaskGraphWriteDebugFields')) {
+                    if (db.DebugWriteMode === 'false') {
+                        return [{ AffectedRows: 0 }];
+                    }
+                    if (db.DebugWriteMode === 'throw') {
+                        throw new Error('Simulated spTaskGraphWriteDebugFields outage');
+                    }
                     const [parentId, _typeId, _containersJson, fieldsJson] = args as [string, string, string, string];
                     const row = db.Tasks.get(parentId.toLowerCase());
                     if (!row) return [{ AffectedRows: 0 }];
-                    const payload = row.InputPayload ? (JSON.parse(row.InputPayload) as Record<string, unknown>) : {};
-                    const debugBag = (payload['debug'] && typeof payload['debug'] === 'object'
-                        ? { ...(payload['debug'] as Record<string, unknown>) }
-                        : {}) as Record<string, unknown>;
-                    const fields = JSON.parse(fieldsJson) as Array<{ Path: string; Kind: string; Value: unknown }>;
+                    const payload = row.InputPayload ? (JSON.parse(row.InputPayload) as { debug?: TaskGraphDebugState }) : {};
+                    const debugBag: TaskGraphDebugState = payload.debug && typeof payload.debug === 'object'
+                        ? { ...payload.debug }
+                        : {};
+                    const fields = JSON.parse(fieldsJson) as Array<{ Path: string; Kind: string; Value?: string | boolean | null }>;
                     for (const field of fields) {
                         if (!field.Path.startsWith('$.debug.')) continue;
-                        const prop = field.Path.slice('$.debug.'.length);
+                        const prop = field.Path.slice('$.debug.'.length) as keyof TaskGraphDebugState;
                         if (field.Kind === 'null') delete debugBag[prop];
-                        else debugBag[prop] = field.Value;
+                        else (debugBag as Record<string, string | boolean | null | undefined>)[prop] = field.Value;
                     }
-                    payload['debug'] = debugBag;
+                    payload.debug = debugBag;
                     row.InputPayload = JSON.stringify(payload);
                     return [{ AffectedRows: 1 }];
                 }
@@ -443,7 +484,7 @@ class GovernanceInMemoryDb {
         return provider as Partial<IMetadataProvider> as IMetadataProvider;
     }
 
-    private handleRunView(params: RunViewParams): { Success: boolean; Results: unknown[] } {
+    private handleRunView(params: RunViewParams): { Success: boolean; Results: GovernanceRunViewRow[] } {
         const filter = params.ExtraFilter ?? '';
         if (params.EntityName === 'MJ: Task Types') {
             return { Success: true, Results: [{ ID: WORKFLOW_TYPE_ID, Name: 'Workflow' }] };
@@ -996,6 +1037,213 @@ describe('TaskGraphGovernanceCoordinator — default opt-in, 5-tier policy scope
             expect(concurrentExecuted.length).toBeLessThan(8);
         } finally {
             await Promise.all([dispA.Stop(), dispB.Stop()]);
+        }
+    });
+
+    it('CR-GRAPH-CHECKPOINT-SAVE-FAILURE: keeps claim barrier active without emitting GraphPaused when Save() returns false or throws, then completes pause and resumes after recovery', async () => {
+        const db = new GovernanceInMemoryDb();
+        const provider = db.CreateProvider();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation((p) => p as Partial<RunView> as RunView);
+
+        const submitRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', TEST_USER);
+        submitRun.ID = SUBMIT_RUN_ID;
+        submitRun.Status = 'Running';
+        await submitRun.Save();
+
+        // Phase A: Save() returns false when breach hits at node 3 ($0.30 >= $0.25)
+        db.AgentRunSaveMode = 'false';
+        const executedA: string[] = [];
+        const framesA: TaskGraphFrame[] = [];
+        const actionRunnerA: TaskActionRunner = {
+            RunActionForTask: async (ctx) => {
+                executedA.push(ctx.TaskID);
+                return { Success: true, Output: { step: executedA.length }, CostUsd: 0.10, TokensUsed: 100 };
+            },
+        };
+        const agentRunner: TaskAgentRunner = { RunAgentForTask: async () => ({ Success: true }) };
+        const dispA = new TaskGraphDispatcher(
+            { CreateProvider: async () => provider },
+            agentRunner,
+            TEST_USER,
+            {
+                InstanceID: 'gov-save-false',
+                MaxConcurrentTasks: 1,
+                PollIntervalSeconds: 0.01,
+                HeartbeatIntervalSeconds: 60,
+                ReconciliationIntervalSeconds: 60,
+            },
+            undefined,
+            { OnFrame: (frame) => framesA.push(frame) },
+            actionRunnerA,
+        );
+        await dispA.Start();
+        try {
+            const service = new TaskGraphService();
+            const subRes = await service.Submit(buildLinearSpec(5, 'Save False Fail-Closed Graph'), {
+                EnvironmentID: 'env-1',
+                Provider: provider,
+                ContextUser: TEST_USER,
+                AgentRunID: SUBMIT_RUN_ID,
+                LimitsOverride: { Budgets: { PerRun: { MaxCostUsd: 0.25 } } },
+            });
+            expect(subRes.Success).toBe(true);
+            const parentId = subRes.ParentTaskID!;
+
+            await waitUntil(
+                () => dispA.Governance.HasPendingPausePersistence(parentId),
+                5_000,
+                () => dispA.Kick(),
+            );
+
+            // Let extra poll cycles run while Save() still returns false
+            for (let i = 0; i < 4; i++) {
+                dispA.Kick();
+                await new Promise((r) => setTimeout(r, 25));
+            }
+
+            // Claims MUST remain blocked fail-closed, PausedByGovernance stays false, GraphPaused NOT emitted!
+            expect(executedA).toHaveLength(3);
+            expect(dispA.Governance.IsLocallyPaused(parentId)).toBe(true);
+            expect(await dispA.Governance.CanClaimTasks(provider, parentId, { paused: true }, null, TEST_USER)).toBe(false);
+            const diagBeforeRecovery = dispA.Governance.GetGraphDiagnostics(parentId);
+            expect(diagBeforeRecovery?.PausedByGovernance).toBe(false);
+            expect(diagBeforeRecovery?.PausePersistencePending).toBe(true);
+            expect(diagBeforeRecovery?.DebugFieldsPersisted).toBe(true);
+            expect(diagBeforeRecovery?.CheckpointPersisted).toBe(false);
+            expect(framesA.filter((f) => f.Kind === 'GraphPaused')).toHaveLength(0);
+            expect(db.AgentRuns.get(SUBMIT_RUN_ID.toLowerCase())?.Status).toBe('Running');
+
+            // ApproveAndResumePausedGraph must fail closed while checkpoint persistence is still pending
+            const prematureApprove = await dispA.Governance.ApproveAndResumePausedGraph({
+                ParentTaskID: parentId,
+                Provider: provider,
+                ContextUser: TEST_USER,
+                BudgetExtension: { NewPerRunMaxCostUsd: 1.0 },
+            });
+            expect(prematureApprove.Success).toBe(false);
+            expect(prematureApprove.Message).toContain('pause persistence is still pending');
+
+            // Storage recovers -> Flush / poll persists retained checkpoint, transitions Status='Paused', and emits GraphPaused ONCE
+            db.AgentRunSaveMode = 'ok';
+            await waitUntil(
+                () =>
+                    db.AgentRuns.get(SUBMIT_RUN_ID.toLowerCase())?.Status === 'Paused' &&
+                    framesA.some((f) => f.Kind === 'GraphPaused'),
+                5_000,
+                () => dispA.Kick(),
+            );
+            expect(framesA.filter((f) => f.Kind === 'GraphPaused')).toHaveLength(1);
+            const diagAfterRecovery = dispA.Governance.GetGraphDiagnostics(parentId);
+            expect(diagAfterRecovery?.PausedByGovernance).toBe(true);
+            expect(diagAfterRecovery?.PausePersistencePending).toBe(false);
+            expect(diagAfterRecovery?.CheckpointPersisted).toBe(true);
+            expect(diagAfterRecovery?.DebugFieldsPersisted).toBe(true);
+
+            // Approve and resume remaining 2 nodes without replaying first 3
+            const approveRes = await dispA.Governance.ApproveAndResumePausedGraph({
+                ParentTaskID: parentId,
+                Provider: provider,
+                ContextUser: TEST_USER,
+                BudgetExtension: { NewPerRunMaxCostUsd: 1.0 },
+            });
+            expect(approveRes.Success).toBe(true);
+            await waitUntil(
+                () => db.Tasks.get(parentId.toLowerCase())?.Status === 'Complete',
+                5_000,
+                () => dispA.Kick(),
+            );
+            expect(executedA).toHaveLength(5);
+        } finally {
+            await dispA.Stop();
+        }
+
+        // Phase B: Both Save() throwing and DebugFields throwing during execution, followed by recovery
+        const runIdB = '50000000-0000-4000-8000-000000000022';
+        const submitRunB = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', TEST_USER);
+        submitRunB.ID = runIdB;
+        submitRunB.Status = 'Running';
+        await submitRunB.Save();
+
+        db.AgentRunSaveMode = 'throw';
+        db.DebugWriteMode = 'throw';
+        const executedB: string[] = [];
+        const framesB: TaskGraphFrame[] = [];
+        const actionRunnerB: TaskActionRunner = {
+            RunActionForTask: async (ctx) => {
+                executedB.push(ctx.TaskID);
+                return { Success: true, Output: { step: executedB.length }, CostUsd: 0.15, TokensUsed: 50 };
+            },
+        };
+        const dispB = new TaskGraphDispatcher(
+            { CreateProvider: async () => provider },
+            agentRunner,
+            TEST_USER,
+            {
+                InstanceID: 'gov-save-throw',
+                MaxConcurrentTasks: 1,
+                PollIntervalSeconds: 0.01,
+                HeartbeatIntervalSeconds: 60,
+                ReconciliationIntervalSeconds: 60,
+            },
+            undefined,
+            { OnFrame: (frame) => framesB.push(frame) },
+            actionRunnerB,
+        );
+        await dispB.Start();
+        try {
+            const service = new TaskGraphService();
+            const subResB = await service.Submit(buildLinearSpec(4, 'Save Throw Fail-Closed Graph'), {
+                EnvironmentID: 'env-1',
+                Provider: provider,
+                ContextUser: TEST_USER,
+                AgentRunID: runIdB,
+                LimitsOverride: { Budgets: { PerRun: { MaxCostUsd: 0.25 } } },
+            });
+            expect(subResB.Success).toBe(true);
+            const parentIdB = subResB.ParentTaskID!;
+
+            await waitUntil(
+                () => dispB.Governance.HasPendingPausePersistence(parentIdB),
+                5_000,
+                () => dispB.Kick(),
+            );
+
+            // Neither debug fields nor checkpoint saved yet; claims remain blocked fail-closed
+            expect(executedB).toHaveLength(2);
+            expect(await dispB.Governance.CanClaimTasks(provider, parentIdB, {}, null, TEST_USER)).toBe(false);
+            expect(framesB.filter((f) => f.Kind === 'GraphPaused')).toHaveLength(0);
+            const diagB = dispB.Governance.GetGraphDiagnostics(parentIdB);
+            expect(diagB?.PausedByGovernance).toBe(false);
+            expect(diagB?.DebugFieldsPersisted).toBe(false);
+            expect(diagB?.CheckpointPersisted).toBe(false);
+
+            // Recover debug write first while checkpoint still throws -> still NOT PausedByGovernance or GraphPaused
+            db.DebugWriteMode = 'ok';
+            const partialFlush = await dispB.Governance.FlushPendingPausePersistence(provider, parentIdB, TEST_USER);
+            expect(partialFlush.DebugFieldsPersisted).toBe(true);
+            expect(partialFlush.CheckpointPersisted).toBe(false);
+            expect(partialFlush.PausedByGovernance).toBe(false);
+            expect(framesB.filter((f) => f.Kind === 'GraphPaused')).toHaveLength(0);
+
+            // Now recover AgentRun.Save() and approve/resume via ApproveAndResumePausedGraph (which flushes pending checkpoint automatically)
+            db.AgentRunSaveMode = 'ok';
+            const approveB = await dispB.Governance.ApproveAndResumePausedGraph({
+                ParentTaskID: parentIdB,
+                Provider: provider,
+                ContextUser: TEST_USER,
+                BudgetExtension: { NewPerRunMaxCostUsd: 1.0 },
+            });
+            expect(approveB.Success).toBe(true);
+            expect(framesB.filter((f) => f.Kind === 'GraphPaused')).toHaveLength(1);
+
+            await waitUntil(
+                () => db.Tasks.get(parentIdB.toLowerCase())?.Status === 'Complete',
+                5_000,
+                () => dispB.Kick(),
+            );
+            expect(executedB).toHaveLength(4);
+        } finally {
+            await dispB.Stop();
         }
     });
 });

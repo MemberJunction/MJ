@@ -1110,6 +1110,12 @@ export type ExecuteAgentResult<P = any> = {
     paused?: boolean;
 
     /**
+     * True when a non-destructive pause was triggered and its safe-point checkpoint is retained
+     * in memory awaiting storage recovery to persist `Status = 'Paused'`.
+     */
+    pausePersistencePending?: boolean;
+
+    /**
      * Categorized reason the run paused non-destructively.
      */
     pausedReason?: RunawayPauseReason;

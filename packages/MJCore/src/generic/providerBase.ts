@@ -1362,12 +1362,29 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
+     * True while a peer metadata notice check must wait rather than run immediately.
+     * Defaults to {@link MetadataMemberRefreshMustWait} for providers whose metadata reads
+     * cannot bypass an open transaction. Database providers whose `MJ_Metadata` reads run on
+     * the connection pool regardless of unrelated ambient transactions (#4514) override this
+     * to `false` unless {@link MetadataReadsJoinTransaction} is set, so unrelated background
+     * writes on the global provider (such as scheduled jobs) do not defer peer metadata sync.
+     */
+    protected get PeerMetadataNoticeMustWait(): boolean {
+        return this.MetadataMemberRefreshMustWait;
+    }
+
+    /**
      * Reacts to another server saving its metadata snapshot: after a short debounce, runs the
      * normal staleness check ({@link RefreshIfNeeded}, bypassing the check throttle). The check
      * compares this process's timestamps with the database and adopts the shared snapshot, so a
      * metadata change made on one server reaches the others in seconds instead of at the next
      * poll. A server that is already current does no refresh and saves nothing, so notices do not
      * echo around the fleet.
+     *
+     * Random thundering-herd jitter ({@link PeerMetadataNoticeJitterMs}) applies only to `removed`
+     * notices (e.g. `mj migrate` clearing the shared snapshot so every server would otherwise query
+     * the database together). On a `set` notice the peer's updated snapshot is already in shared
+     * storage, so only {@link MetadataDatasetRefreshDebounceMs} is waited.
      *
      * @returns true when the event was a metadata notice (and a check was scheduled)
      */
@@ -1385,21 +1402,24 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (this._peerMetadataNoticeTimer) {
             clearTimeout(this._peerMetadataNoticeTimer);
         }
+        const jitterMs = event.Action === 'removed'
+            ? Math.floor(Math.random() * ProviderBase.PeerMetadataNoticeJitterMs)
+            : 0;
         const timer = setTimeout(() => {
             this._peerMetadataNoticeTimer = null;
-            // A provider inside a transaction cannot run the check now (its reads would see the
-            // transaction's own uncommitted world, and SQL Server's RefreshIfNeeded refuses
-            // outright). Re-arm instead of dropping the notice, which used to lose it entirely.
+            // A provider whose metadata reads would join an open transaction cannot run the check
+            // now (its reads would see the transaction's own uncommitted world). Re-arm instead of
+            // dropping the notice, which used to lose it entirely.
             // The deferral budget is deliberately NOT cleared here: it bounds how long one check
             // may be put off, and the check has not run yet. Clearing it as the timer fires ended
             // the budget exactly when deferral began, leaving the retry count as the only real
             // bound.
-            if (this.MetadataMemberRefreshMustWait) {
+            if (this.PeerMetadataNoticeMustWait) {
                 this.handlePeerMetadataNoticeRetry();
                 return;
             }
             this.runPeerMetadataCheck();
-        }, ProviderBase.MetadataDatasetRefreshDebounceMs + Math.floor(Math.random() * ProviderBase.PeerMetadataNoticeJitterMs));
+        }, ProviderBase.MetadataDatasetRefreshDebounceMs + jitterMs);
         if (typeof timer === 'object' && timer !== null && 'unref' in timer) {
             (timer as { unref(): void }).unref();
         }
@@ -1440,7 +1460,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
         const timer = setTimeout(() => {
             this._peerMetadataNoticeTimer = null;
-            if (this.MetadataMemberRefreshMustWait) {
+            if (this.PeerMetadataNoticeMustWait) {
                 this.handlePeerMetadataNoticeRetry();
                 return;
             }
@@ -1533,8 +1553,23 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return this.ReloadMetadata(true, undefined, true, true);
         }
         LogStatus(`[Metadata] Full reload needed: ${scope.Reason}`);
-        return this.Refresh();
+        // RefreshRemoteMetadataTimestamps() just succeeded above, so let the first ReloadMetadata
+        // pass triggered by Refresh() reuse those timestamps instead of issuing a second full
+        // metadata-status SQL batch back-to-back.
+        this._metadataRefreshStampsFresh = true;
+        try {
+            return await this.Refresh();
+        } finally {
+            this._metadataRefreshStampsFresh = false;
+        }
     }
+
+    /**
+     * One-shot handoff from {@link RefreshAfterMetadataMemberChange} to {@link ReloadMetadata}
+     * (via {@link Refresh}) indicating that `_latestRemoteMetadataTimestamps` was just read from
+     * the authoritative status query and need not be re-queried on the first pass.
+     */
+    private _metadataRefreshStampsFresh = false;
 
     /**
      * Set by a write-event refresh that found a reload in flight and queued a follow-up pass; that
@@ -1663,6 +1698,21 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * This helps avoid metadata refreshes during critical operations.
      */
     protected abstract get AllowRefresh(): boolean;
+
+    /**
+     * Whether {@link CheckToSeeIfRefreshNeeded} may inspect remote timestamps and adopt a newer
+     * snapshot from shared storage. Defaults to {@link AllowRefresh}.
+     *
+     * Providers that transiently suspend {@link AllowRefresh} while a save is running SQL
+     * (such as `SQLServerDataProvider`) can override this to `true`: metadata status queries run
+     * on the connection pool (`ignoreAmbientTransaction`), and adopting a peer's snapshot from
+     * shared storage atomically replaces `_localMetadata` without mutating any `EntityInfo` held
+     * by an in-flight save. Suspending checks on in-flight saves caused peer metadata notices
+     * arriving during background writes (e.g. scheduled jobs) to be silently dropped.
+     */
+    protected get AllowRefreshCheck(): boolean {
+        return this.AllowRefresh;
+    }
 
     /**
      * Returns the provider type for the instance.
@@ -6420,10 +6470,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             await this._metadataReloadInFlight;
             return true;
         }
+        const initialStampsFresh = stampsFresh || this._metadataRefreshStampsFresh;
+        this._metadataRefreshStampsFresh = false;
         this._metadataReloadInFlight = (async () => {
             let effectiveHardRefresh = hardRefresh;
             let tryScoped = scopedFirst;
-            let timestampsFresh = stampsFresh;
+            let timestampsFresh = initialStampsFresh;
             do {
                 this._metadataReloadQueued = false;
 
@@ -7735,7 +7787,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * {@link preValidateAndRefresh}) already caught it; {@link Config} did not.
      */
     public async CheckToSeeIfRefreshNeeded(providerToUse?: IMetadataProvider, bypassMinCheckInterval?: boolean): Promise<boolean> {
-        if (!this.AllowRefresh) return false;
+        if (!this.AllowRefreshCheck) return false;
 
         if (!bypassMinCheckInterval && this._refreshCheckInFlight) {
             LogStatusEx({ message: `[RefreshCheck] Skipped — a check is already in flight; its caller acts on the answer`, verboseOnly: true });

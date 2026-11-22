@@ -1,0 +1,28 @@
+{
+  "verifiedAtISO": "2026-11-22T04:38:08.651Z",
+  "chromiumVersion": "145.0.7632.6",
+  "baseUrl": "http://127.0.0.1:52729/",
+  "pageErrorsCount": 0,
+  "consoleErrorsCount": 0,
+  "brokenImagesCount": 0,
+  "rawMarkdownLeaks": false,
+  "computedTokens": {
+    "bodyBg": "rgb(248, 250, 252)",
+    "brandPrimary": "#264faf"
+  },
+  "assertions": {
+    "tierCardsRendered": 5,
+    "backstopCardsRendered": 9,
+    "clampedBudgetRowsFiltered": 1,
+    "clampedRowContainsBadge": true,
+    "budgetScopeCardsRendered": 3,
+    "drawerContainsFastJudgeVerdict": true,
+    "resumeSuccessBanner": "Run 33333333-3333-4333-8333-333333333333 approved and transitioned back to Running preserving 6 completed step(s). Continuation dispatched for 33333333-3333-4333-8333-333333333333.",
+    "pauseSuccessBanner": "Run 44444444-4444-4444-8444-444444444444 cooperatively paused at safe boundary (checkpoint cp-browser-paused-active-2)."
+  },
+  "screenshots": [
+    "admin-limits-overview.png",
+    "admin-limits-runs-drawer.png",
+    "admin-limits-resume-modal.png"
+  ]
+}
