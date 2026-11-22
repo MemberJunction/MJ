@@ -2,7 +2,7 @@
 
 ## Status
 
-- **Status**: Proposal. Plan only, no code.
+- **Status**: Proposal. Plan only, no code, except phase U0, which the sponsor approved as a bug-fix exception and which shipped on 2026-11-22 in [MJ 6842](https://github.com/MemberJunction/MJ/pull/6842).
 - **Created**: 2026-11-19
 - **Sponsor**: Amith Nagarajan (`AN-BC`)
 - **Checked against**: `next` at `8d445db1` (2026-11-18). Paths are relative to the repo root. Line numbers move, so search by name.
@@ -56,6 +56,8 @@ Each is right for its own table. Changing them is not proposed (MJ 6675 decision
 
 ### F3. Edge type names drift between code and seed metadata
 
+**Fixed in [MJ 6842](https://github.com/MemberJunction/MJ/pull/6842) (2026-11-22).** Every emitted name is seeded, the `Related To` spelling was already fixed on `next`, `NarrowerThan` is retired in favour of `BroaderThan` (row kept with `AllowStored = 0`), and endpoint rows are seeded for the four concept edges. A unit test (`GraphEdgeTypeRegistry.test.ts`) fails on an unseeded name, a mismatched inverse label, a pair of stored types that invert each other, or an endpoint row that is not artifact → concept. The finding as written on 2026-11-19 follows.
+
 `metadata/graph-edge-types/.graph-edge-types.json` seeds 13 types. Against the code:
 
 - Providers emit `Subsets`, `Is A`, `References`, `Reads`, `Composes` and `Field Of`, none of which is seeded, so their direction, inverse and default weight live only in provider code.
@@ -67,6 +69,8 @@ Each is right for its own table. Changing them is not proposed (MJ 6675 decision
 MJ 6762 also edits this file; the review should check these against its version.
 
 ### F4. The content pipeline and the Canon engine read edges in opposite directions
+
+**Fixed in [MJ 6842](https://github.com/MemberJunction/MJ/pull/6842) (2026-11-22)**, with the proposed direction, **artifact → concept**. The synthesizer and the seed descriptions now match `CanonGraphEngine`. `EntityGraphOverlayStore.UpsertEdges` refuses an edge whose type or endpoints break the contract before writing it, and counts it. Two on-demand Record Processes with a dry run flip stored edges: the four concept edges written concept → artifact, and `NarrowerThan` edges retyped as `BroaderThan`. Each host runs them once after upgrading; until then the read path hides old-direction edges, and flipping `Approved` edges needs `Graph: Approve Edges`. The finding as written on 2026-11-19 follows.
 
 `ManagedPromptConceptSynthesizer` writes `Describes`, `Defines`, `Measures` and `Implements` edges with the **concept as source** and the entity, view or query as target, and the seeded descriptions say the same. `CanonGraphEngine.classifyEntityNeighborhood` (behind `ExplainEntity`) looks for `Describes` with the **entity as source** and `Measures` with the **query as source**, as `plans/canon-semantic-graph.md` specifies. Traversal is `Both`, so the pipeline's edges are reached, but they are never classified: a metric concept the pipeline linked to its query never shows up in `MeasuringQueries`, and a concept it linked to an entity never shows up in `DescribedConcepts`.
 
@@ -101,6 +105,8 @@ Components carry `ApprovalStatus` and a fingerprint, and their spec names the en
 A content source with `GraphID` trains a graph, and its chunks are embedded into a vector index. A search scope reaches the chunks through its `External Indexes` rows. Nothing connects the two: a scope that reads the *Board Policies* index does not know a graph was built from the same documents, and the graph's `SourcedFrom` edges are not used to cite evidence for a concept found by search.
 
 ### F11. Deleting content leaves its edges behind
+
+**Fixed (2026-11-22).** MJ 6762's `GraphEvidenceRetractor` already retracts `Inferred` edges from both delete stages. [MJ 6842](https://github.com/MemberJunction/MJ/pull/6842) closed the remaining gap: `DeleteStage.Purge` no longer hard-deletes a chunk that a kept `Declared` edge still points at. Concepts the retractor can leave without edges are [MJ 6837](https://github.com/MemberJunction/MJ/issues/6837), awaiting a ruling from `rkihm-BC`. The finding as written on 2026-11-19 follows.
 
 `DeleteStage` and `DeleteContentItemStage` remove vectors and rows but do not touch `MJ: Graph Edges`. Because graph edges are polymorphic, there is no foreign key to cascade. Edges whose chunk is gone are hidden at read time (the label fetch returns no row), so this is not a leak, but they accumulate.
 
@@ -216,7 +222,7 @@ Each phase is small enough to be one or two `canon` issues. Phases U0 to U2 have
 
 | Phase | What | Fixes | Depends on | Done when |
 |---|---|---|---|---|
-| **U0** | Edge type registry: seed the provider-only types, fix spellings and inverses, seed endpoint rows, add the name-resolution unit test. Pick one direction for the four concept edges, fix the synthesizer and the seed descriptions, and ship the flip Record Process. Graph edge cleanup in the two delete stages. | F3, F4, F11 | MJ 6762 merged (it edits the same seed file) | Test green; a pipeline-trained metric concept appears in `ExplainEntity`'s `MeasuringQueries`; the pipeline rejects an edge that breaks its endpoint rows before writing it |
+| **U0** ✅ shipped 2026-11-22 in [MJ 6842](https://github.com/MemberJunction/MJ/pull/6842) | Edge type registry: seed the provider-only types, fix spellings and inverses, seed endpoint rows, add the name-resolution unit test. Pick one direction for the four concept edges, fix the synthesizer and the seed descriptions, and ship the flip Record Process. Graph edge cleanup in the two delete stages. | F3, F4, F11 | MJ 6762 merged (it edits the same seed file) | Test green; a pipeline-trained metric concept appears in `ExplainEntity`'s `MeasuringQueries`; the pipeline rejects an edge that breaks its endpoint rows before writing it |
 | **U1** | `BaseCanonMemberAdapter` and adapters for every kind in F1; `GraphEngine` reads `CanonState` in its label step; `ApprovalStateOf` wired for fingerprinted kinds. | F1, F2 | U0 | A query edited after approval disappears from `CanonContext` and reappears when re-approved, in an integration bundle |
 | **U2** | New derived providers: components, dashboards, approved action code, active skills, saved flow agents. | F9 | U1 | Each kind is reachable from a concept in `MJ Canon` with no stored edge |
 | **U3** | `ResolveVisibility` in core; search's origin gate and the graph's provenance policies call it; `Graph Permissions` and `Search Scope Permissions` as `PermissionEngine` domains. | F7, F8 | MJ 6675 5b and 5c designs agreed | One test suite exercises the same fixtures through search and through the graph and gets the same answers, for one reader and for an audience, and both write the same visibility audit events |
@@ -227,11 +233,11 @@ Each phase is small enough to be one or two `canon` issues. Phases U0 to U2 have
 ## Decisions for the December 3 review
 
 1. **Adopt "Canon is a property" as the model**, with `CanonState` as a read-model over native columns rather than a new column.
-2. **Edge direction for `Defines`, `Measures`, `Describes`, `Implements`**: artifact → concept (proposed), or concept → artifact. One of them, everywhere.
+2. **Edge direction for `Defines`, `Measures`, `Describes`, `Implements`**: settled by the sponsor on 2026-11-22 as artifact → concept, shipped in MJ 6842. The review confirms it or orders a reversal.
 3. **Graph and search-scope permissions as `PermissionEngine` domains**, instead of a second bespoke resolver for graphs.
 4. **A `Graph` lane kind with a governed child table on search scopes**, retiring `ScopeConfig.graphNames`.
 5. **One `CanonContextResolver`** that the five existing routes call, with MJ 6213's precedence enforced there.
-6. **U0 as a bug-fix exception**: F4 and F11 are defects in shipped code. Should U0 go ahead in the first week of December rather than wait for the next monthly cycle?
+6. **U0 as a bug-fix exception**: decided by the sponsor on 2026-11-22: U0 went ahead at once and shipped in MJ 6842.
 
 ## Open questions
 
@@ -283,3 +289,4 @@ Indicative only; each issue names its own.
 | 2026-11-19 | Plan created. |
 | 2026-11-20 | Recorded `topherHunnewell`'s input on open questions 1, 3, 5 and 6 and proposed answers. Rule 1 gains the stale policy, the adapter boundary and the Open App guard. Questions 2 and 4 remain open. |
 | 2026-11-20 | Folded in four ideas from a review of TrustGraph (an open-source RDF/OWL "ontology runtime for agents"): proposers validate against the edge-type contract (Rule 2); three visibility outcomes and a visibility audit event (Rule 3); retrieval traces and seeded walks (Rule 4); taxonomy import as a proposer (Rule 5). Export bundles go to MJ 6675's backlog. |
+| 2026-11-22 | The sponsor approved U0 as a bug-fix exception. It shipped in MJ 6842 (merge `454ef7d0f`): F3, F4 (artifact → concept, with flip Record Processes) and F11's remaining gap are fixed, and decisions 2 and 6 are recorded as settled. The same pull request repaired the integration checks `fls-closeout-client.CW7`/`CW8` and `work-bus-core.WBC10`, broken on `next` since MJ 6817 and 6825. |
