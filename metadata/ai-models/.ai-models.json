@@ -31452,8 +31452,8 @@
             "ID": "C6A04E13-93B6-4D05-BF34-0E5C6A718222"
           },
           "sync": {
-            "lastModified": "2026-11-18T00:23:27.097Z",
-            "checksum": "a1361d5e23098307a51472008c4cf925ea7d5c716875de66af2f4f2ef113993f"
+            "lastModified": "2026-11-22T16:47:39.643Z",
+            "checksum": "10943fd7bc90b96c97c4f59534e1094b6efb447f84fc2ca745f1d55721fd0755"
           }
         }
       ],
@@ -31488,8 +31488,8 @@
       "ID": "B5F93D02-82A5-4C94-AE23-9D4B5F607111"
     },
     "sync": {
-      "lastModified": "2026-11-18T00:23:26.571Z",
-      "checksum": "908c5e08a71a8bcabf83f6ea0725a8a3ce6b0c3526caa1fae5c09dc867143279"
+      "lastModified": "2026-11-22T16:47:38.688Z",
+      "checksum": "69514e172d8343c7544f902aa3cf503e6f85a4058f6fd5fbb0b6ecf71c53ca28"
     }
   },
   {
@@ -31551,8 +31551,8 @@
             "ID": "C6A04E13-93B6-4D05-BF34-0E5C6A718333"
           },
           "sync": {
-            "lastModified": "2026-11-18T00:23:27.208Z",
-            "checksum": "2b1ee04f29cda4409ff5e8871bb1317d727f4f005f52fd2b64814120be5521b7"
+            "lastModified": "2026-11-22T16:47:39.658Z",
+            "checksum": "10943fd7bc90b96c97c4f59534e1094b6efb447f84fc2ca745f1d55721fd0755"
           }
         }
       ],
@@ -31587,8 +31587,8 @@
       "ID": "B5F93D02-82A5-4C94-AE23-9D4B5F607222"
     },
     "sync": {
-      "lastModified": "2026-11-18T00:23:26.593Z",
-      "checksum": "2d11593b86f4f58f54e0d84624cbf452325cac48776480673d18a6c2c0921366"
+      "lastModified": "2026-11-22T16:47:38.701Z",
+      "checksum": "1096749016a99b194110b10bef8aa94d00adbfa2a18b46bc7d77de466a851e7c"
     }
   },
   {
@@ -32169,7 +32169,11 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "D075FCAF-B978-4CDF-BB09-4F6DA2E52E7D"
+            "ID": "50615869-CB6A-4BC8-BB93-382B86702C8E"
+          },
+          "sync": {
+            "lastModified": "2026-11-22T16:47:40.298Z",
+            "checksum": "ef6d226602de06d06d965a5292f2f0ba86cb37545982834713369adf4bcee8d7"
           }
         },
         {
@@ -32188,7 +32192,11 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "CBA50F33-2500-41EE-883C-6EE139DD1634"
+            "ID": "18BB85BE-8351-44F0-9184-5BA2B3A6BD16"
+          },
+          "sync": {
+            "lastModified": "2026-11-22T16:47:40.339Z",
+            "checksum": "b8f96a5acc37360d5216ec3bfbea4978a8de6bb0c297e1658f491b4ab0dbf509"
           }
         },
         {
@@ -32203,7 +32211,11 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "7AB644D2-38EE-4288-9C83-4D4481838207"
+            "ID": "0EBF6966-C409-4CA7-87AE-F6B535BCF2E6"
+          },
+          "sync": {
+            "lastModified": "2026-11-22T16:47:40.358Z",
+            "checksum": "3fcf98609ecf65358ac420d771c2812f3292c8752fd039f404e5b38056fb5187"
           }
         },
         {
@@ -32222,7 +32234,11 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "0A913D3D-5706-4A1B-B85D-FF78B9D62145"
+            "ID": "882BF864-1ECA-4EEC-B430-B454E47B8C24"
+          },
+          "sync": {
+            "lastModified": "2026-11-22T16:47:40.398Z",
+            "checksum": "79bf4aef4b830eb246dcaee37b02b3bfe1bd3acf9a0aa5e497a2dc6974fe55cc"
           }
         },
         {
@@ -32241,7 +32257,11 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "8E1B8761-8321-43DB-B195-1E42E8FC5D32"
+            "ID": "67BF9C64-584C-4628-B57A-EC2F6937E8F7"
+          },
+          "sync": {
+            "lastModified": "2026-11-22T16:47:40.427Z",
+            "checksum": "1d144422916edeb14c68d74745db25af2ee1ef9d1980f970d4b4c83076b3c768"
           }
         }
       ],
@@ -32263,7 +32283,11 @@
             "CacheWritePricePerUnit": null
           },
           "primaryKey": {
-            "ID": "0B9956CD-F0C9-4491-AD09-0027FE6A6C37"
+            "ID": "0AB2F8FB-3683-4491-8AE2-05CD9211B648"
+          },
+          "sync": {
+            "lastModified": "2026-11-22T16:47:40.447Z",
+            "checksum": "6b949ef667471dda035b26b67744359887c989209679032d4278b18892785987"
           }
         },
         {
@@ -32283,13 +32307,21 @@
             "CacheWritePricePerUnit": null
           },
           "primaryKey": {
-            "ID": "304A529C-0949-4C35-9142-3AF06435DAB2"
+            "ID": "DE181968-00F5-45E7-8091-937DF529F6EB"
+          },
+          "sync": {
+            "lastModified": "2026-11-22T16:47:40.464Z",
+            "checksum": "d6be20f00cc1995444203001c0e4ab6e7b3db682d4b3c9dece608026abc08d60"
           }
         }
       ]
     },
     "primaryKey": {
-      "ID": "6931BA2A-343A-4476-8B55-0416349C65CC"
+      "ID": "17F36568-D4EC-4060-A860-1DCFF8EAA166"
+    },
+    "sync": {
+      "lastModified": "2026-11-22T16:47:38.838Z",
+      "checksum": "09e825aa92771b696d842657d5bccc6bf0a45560cc06ecf6356e975b96f24c51"
     }
   },
   {
@@ -32325,7 +32357,11 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "70F0F764-A0A4-45A4-8D65-25AA3ECFDB98"
+            "ID": "972C165E-AF05-4497-856B-60B1051C75CD"
+          },
+          "sync": {
+            "lastModified": "2026-11-22T16:47:40.487Z",
+            "checksum": "ef6d226602de06d06d965a5292f2f0ba86cb37545982834713369adf4bcee8d7"
           }
         },
         {
@@ -32344,7 +32380,11 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "60432E4F-A301-4749-8919-A87A0B71E7D0"
+            "ID": "7ABDF68E-DE47-46AB-8FFE-64ADA5D5D378"
+          },
+          "sync": {
+            "lastModified": "2026-11-22T16:47:40.506Z",
+            "checksum": "10943fd7bc90b96c97c4f59534e1094b6efb447f84fc2ca745f1d55721fd0755"
           }
         },
         {
@@ -32359,7 +32399,11 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "CEF49D59-39E1-4AC4-98BF-F1AE60F2FB80"
+            "ID": "2F83FB18-844C-4986-950C-1F759CED938B"
+          },
+          "sync": {
+            "lastModified": "2026-11-22T16:47:40.526Z",
+            "checksum": "3fcf98609ecf65358ac420d771c2812f3292c8752fd039f404e5b38056fb5187"
           }
         },
         {
@@ -32378,7 +32422,11 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "E1C4C308-BA6E-48EE-A642-E0FB76BEB856"
+            "ID": "F3CDC05E-AF80-4140-8EE1-F26748CE67C9"
+          },
+          "sync": {
+            "lastModified": "2026-11-22T16:47:40.544Z",
+            "checksum": "9c30208a939234acb9a3598e0331de5fcf8bfeb41236e17ba9d3797656939df5"
           }
         },
         {
@@ -32397,7 +32445,11 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "CCD79E15-F3A1-4ABA-B03D-E012DCD76560"
+            "ID": "1FEADEB6-844E-4EA8-A8A5-D15D91BE5413"
+          },
+          "sync": {
+            "lastModified": "2026-11-22T16:47:40.564Z",
+            "checksum": "217e6269b76c3bcda8d980376d63ddf2849040c98d8dae00e10eaa453117212c"
           }
         }
       ],
@@ -32419,7 +32471,11 @@
             "CacheWritePricePerUnit": null
           },
           "primaryKey": {
-            "ID": "59409AC4-E9F8-42DB-A460-D268C6740EEE"
+            "ID": "426EBE9B-5779-4D8A-B0BF-68DF0A309CE8"
+          },
+          "sync": {
+            "lastModified": "2026-11-22T16:47:40.582Z",
+            "checksum": "fbe143a2eecc22dc64e08edd51a7d97bcbe4f9cabc04c9828d73219012170270"
           }
         },
         {
@@ -32439,13 +32495,21 @@
             "CacheWritePricePerUnit": null
           },
           "primaryKey": {
-            "ID": "20427D79-7B68-44B8-BE53-EE0A61BEFA87"
+            "ID": "26F78D2F-E085-4EE9-A959-85BF18403D94"
+          },
+          "sync": {
+            "lastModified": "2026-11-22T16:47:40.601Z",
+            "checksum": "e1249a9d7dc312ee2a83f1af064f83c057870bfb0d2beb982e7b816cd2e7fb72"
           }
         }
       ]
     },
     "primaryKey": {
-      "ID": "DC9D6197-C12E-4741-A836-864E8A3ABF06"
+      "ID": "18A12ED9-DABD-4432-85DC-08FEFD58B917"
+    },
+    "sync": {
+      "lastModified": "2026-11-22T16:47:38.852Z",
+      "checksum": "fe7e052c18ec2e575e5b7ccf5a92e1979660d9eb10a0621ed29fcd0178fbc8b0"
     }
   }
 ]
