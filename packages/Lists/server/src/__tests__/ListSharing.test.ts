@@ -67,12 +67,20 @@ vi.mock('@memberjunction/core', () => {
   };
 });
 
+vi.mock('@memberjunction/global', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@memberjunction/global')>();
+  return actual;
+});
+
+const mockConsumeEntityShareNotificationDispatched = vi.fn().mockReturnValue(false);
+
 vi.mock('@memberjunction/core-entities', () => ({
   MJAuditLogEntity: class {},
   MJListEntity: class {},
   MJListInvitationEntity: class {},
   MJResourcePermissionEntity: class {},
   MJUserEntity: class {},
+  ConsumeEntityShareNotificationDispatched: (entity: object) => mockConsumeEntityShareNotificationDispatched(entity),
   CreateShareNotification: (input: unknown) => mockCreateShareNotification(input),
   // ListSharing resolves resource-type / audit-log-type IDs by name through
   // these singleton engines. The mocks return test stand-in IDs so
@@ -199,6 +207,8 @@ describe('ListSharing', () => {
     mockEntities.push(LIST_ENTITY);
     mockCreateShareNotification.mockReset();
     mockCreateShareNotification.mockResolvedValue(true);
+    mockConsumeEntityShareNotificationDispatched.mockReset();
+    mockConsumeEntityShareNotificationDispatched.mockReturnValue(false);
   });
 
   describe('Share', () => {
@@ -236,7 +246,30 @@ describe('ListSharing', () => {
         GrantorUserID: CTX_USER.ID,
         GranteeUserID: 'recipient-user',
         ResourceTypeName: 'Lists',
+        PermissionLevel: 'Edit',
       });
+    });
+
+    it('skips duplicate dispatch when MJResourcePermissionEntityExtended.Save already emitted the notification', async () => {
+      const auditLog = makeMockAuditLog();
+      const permission = makeMockPermission();
+      mockConsumeEntityShareNotificationDispatched.mockReturnValueOnce(true);
+      mockGetEntityObject.mockImplementation(async (entityName: string) => {
+        if (entityName === 'MJ: Audit Logs') return auditLog;
+        if (entityName === 'MJ: Resource Permissions') return permission;
+        throw new Error(`unexpected ${entityName}`);
+      });
+      mockRunViewImpl.mockResolvedValue({ Success: true, Results: [], RowCount: 0 });
+
+      const sharing = new ListSharing(CTX_USER as never);
+      const result = await sharing.Share({
+        ListID: 'list-1',
+        Target: { kind: 'user', userId: 'recipient-user' },
+        PermissionLevel: 'View',
+      });
+
+      expect(result.Success).toBe(true);
+      expect(mockCreateShareNotification).not.toHaveBeenCalled();
     });
 
     it('reuses an existing permission row (idempotent)', async () => {

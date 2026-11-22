@@ -1,4 +1,5 @@
 import { IMetadataProvider, LogError } from '@memberjunction/core';
+import { GetGlobalObjectStore } from '@memberjunction/global';
 
 import { MJUserEntity, MJUserNotificationEntity } from '../../generated/entity_subclasses';
 import { ResourcePermissionEngine } from '../ResourcePermissions/ResourcePermissionEngine';
@@ -34,6 +35,8 @@ export interface ShareNotificationInput {
     ResourceRecordID: string;
     /** Short sentence describing what was granted. Goes in the notification body. */
     ActionsSummary?: string;
+    /** Explicit permission level granted (e.g., `'View'`, `'Edit'`, `'Owner'`). */
+    PermissionLevel?: string;
     /** Extra JSON payload for the notification (e.g., PermissionID, DomainName). */
     ExtraConfiguration?: Record<string, unknown>;
     /**
@@ -59,7 +62,54 @@ export interface ShareNotificationInput {
  */
 export type ShareNotificationHandler = (input: ShareNotificationInput) => Promise<boolean>;
 
-let registeredHandler: ShareNotificationHandler | null = null;
+const HANDLER_STORE_KEY = '___MJ_SHARE_NOTIFICATION_HANDLER___';
+const DISPATCHED_ENTITIES_STORE_KEY = '___MJ_SHARE_NOTIFICATION_DISPATCHED_ENTITIES___';
+let fallbackHandler: ShareNotificationHandler | null = null;
+const fallbackDispatchedEntities = new WeakSet<object>();
+
+function getDispatchedEntitiesSet(): WeakSet<object> {
+    const store = GetGlobalObjectStore();
+    if (store) {
+        const existing = store[DISPATCHED_ENTITIES_STORE_KEY];
+        if (existing instanceof WeakSet) {
+            return existing as WeakSet<object>;
+        }
+        const created = new WeakSet<object>();
+        store[DISPATCHED_ENTITIES_STORE_KEY] = created;
+        return created;
+    }
+    return fallbackDispatchedEntities;
+}
+
+/**
+ * Records that an entity-level `Save()` override already dispatched a share
+ * notification for `entity`, so an outer service wrapper (e.g. `ListSharing.Share`)
+ * can avoid emitting a duplicate notification for the same share event.
+ */
+export function MarkEntityShareNotificationDispatched(entity: object): void {
+    getDispatchedEntitiesSet().add(entity);
+}
+
+/**
+ * Checks and clears the entity-level share notification dispatch marker for `entity`.
+ * Returns `true` when the entity's `Save()` override already dispatched the notification.
+ */
+export function ConsumeEntityShareNotificationDispatched(entity: object): boolean {
+    const set = getDispatchedEntitiesSet();
+    if (!set.has(entity)) {
+        return false;
+    }
+    set.delete(entity);
+    return true;
+}
+
+function getRegisteredHandler(): ShareNotificationHandler | null {
+    const store = GetGlobalObjectStore();
+    if (store && HANDLER_STORE_KEY in store) {
+        return (store[HANDLER_STORE_KEY] as ShareNotificationHandler | null) ?? null;
+    }
+    return fallbackHandler;
+}
 
 /**
  * Register a custom dispatcher (e.g., one backed by `NotificationEngine.SendNotification`).
@@ -67,7 +117,11 @@ let registeredHandler: ShareNotificationHandler | null = null;
  * Passing `null` restores the default in-app-only behavior.
  */
 export function RegisterShareNotificationHandler(handler: ShareNotificationHandler | null): void {
-    registeredHandler = handler;
+    fallbackHandler = handler;
+    const store = GetGlobalObjectStore();
+    if (store) {
+        store[HANDLER_STORE_KEY] = handler;
+    }
 }
 
 /**
@@ -84,9 +138,10 @@ export async function CreateShareNotification(input: ShareNotificationInput): Pr
     if (input.GrantorUserID === input.GranteeUserID) return true;
     if (!input.GranteeUserID || !input.ResourceRecordID) return true;
 
-    if (registeredHandler) {
+    const handler = getRegisteredHandler();
+    if (handler) {
         try {
-            return await registeredHandler(input);
+            return await handler(input);
         } catch (err) {
             LogError(
                 `Share notification handler threw; falling back to in-app only delivery: ${
@@ -129,12 +184,15 @@ async function defaultInAppDispatch(input: ShareNotificationInput): Promise<bool
                 : `${grantorName} shared ${resourceLabel} with you.`);
         notification.Unread = true;
 
-        const resolvedTypeId = await resolveResourceTypeId(input.ResourceTypeName, input.ContextUser);
+        const resolvedTypeId = await resolveResourceTypeId(input.ResourceTypeName, input.ContextUser, input.Provider);
         if (resolvedTypeId) notification.ResourceTypeID = resolvedTypeId;
 
         notification.ResourceRecordID = input.ResourceRecordID;
         notification.ResourceConfiguration = JSON.stringify({
             DomainName: input.ResourceTypeLabel,
+            ...(input.ResourceTypeName ? { ResourceTypeName: input.ResourceTypeName } : {}),
+            ResourceRecordID: input.ResourceRecordID,
+            ...(input.PermissionLevel ? { PermissionLevel: input.PermissionLevel } : {}),
             ...input.ExtraConfiguration,
         });
 
@@ -157,12 +215,15 @@ async function defaultInAppDispatch(input: ShareNotificationInput): Promise<bool
  */
 async function resolveResourceTypeId(
     name: string | undefined,
-    contextUser: import('@memberjunction/core').UserInfo
+    contextUser: import('@memberjunction/core').UserInfo,
+    provider?: IMetadataProvider
 ): Promise<string | null> {
     if (!name) return null;
     try {
-        const engine = ResourcePermissionEngine.Instance;
-        await engine.Config(false, contextUser);
+        const engine = provider && typeof ResourcePermissionEngine.GetProviderInstance === 'function'
+            ? (ResourcePermissionEngine.GetProviderInstance<ResourcePermissionEngine>(provider, ResourcePermissionEngine) as ResourcePermissionEngine)
+            : ResourcePermissionEngine.Instance;
+        await engine.Config(false, contextUser, provider);
         return engine.ResourceTypeIdByName(name);
     } catch (err) {
         LogError(`resolveResourceTypeId('${name}'): ${err instanceof Error ? err.message : String(err)}`);
