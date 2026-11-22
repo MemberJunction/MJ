@@ -28,6 +28,7 @@
     "graph-types",
     "graph-concept-types",
     "graph-edge-types",
+    "graph-edge-type-endpoints",
     "graphs",
     "integration-source-types",
     "integrations",

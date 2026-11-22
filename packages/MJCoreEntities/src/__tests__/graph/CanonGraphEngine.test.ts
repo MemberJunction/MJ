@@ -152,6 +152,30 @@ describe('CanonGraphEngine', () => {
             expect(explained.MeasuringQueries.map((q) => q.Label)).toEqual(['Base Invoices']);
         });
 
+        it('classifies a pipeline-trained metric concept: the query that Measures it is a MeasuringQuery (artifact -> concept)', async () => {
+            // The shape the Content Pipeline's synthesizer now writes for a concept grounded to both an
+            // entity and a query: Entity --Describes--> Concept and Query --Measures--> Concept, Inferred.
+            const inferred = (row: ReturnType<typeof StoredEdge>) => ({ ...row, Origin: 'Inferred', Confidence: 0.8 });
+            await setup({
+                'MJ: Graph Edges': [
+                    inferred(StoredEdge(IDS.GraphCanon, IDS.EdgeTypeDescribes, 'Describes', NODE.Entity(IDS.Invoices), NODE.Concept(IDS.ConceptRevenue), 0.9)),
+                    inferred(StoredEdge(IDS.GraphCanon, IDS.EdgeTypeMeasures, 'Measures', NODE.Query(IDS.QueryArAging), NODE.Concept(IDS.ConceptRevenue), 0.9)),
+                    // Stored the old way (concept as source): the endpoint rows refuse it, so it is never classified.
+                    inferred(StoredEdge(IDS.GraphCanon, IDS.EdgeTypeMeasures, 'Measures', NODE.Concept(IDS.ConceptRevenue), NODE.Query(IDS.QueryBaseInvoices), 0.9)),
+                ],
+                'MJ: Graph Edge Type Endpoints': [
+                    { ID: 'ep-describes-source', EdgeTypeID: IDS.EdgeTypeDescribes, Side: 'Source', EntityID: IDS.EntityMeta },
+                    { ID: 'ep-describes-target', EdgeTypeID: IDS.EdgeTypeDescribes, Side: 'Target', EntityID: IDS.ConceptMeta },
+                    { ID: 'ep-measures-source', EdgeTypeID: IDS.EdgeTypeMeasures, Side: 'Source', EntityID: IDS.QueryMeta },
+                    { ID: 'ep-measures-target', EdgeTypeID: IDS.EdgeTypeMeasures, Side: 'Target', EntityID: IDS.ConceptMeta },
+                ],
+            });
+            const explained = await CanonGraphEngine.Instance.ExplainEntity('Invoices', analyst);
+            expect(explained.DescribedConcepts.map((c) => c.Label)).toEqual(['Net Revenue']);
+            expect(explained.MeasuringQueries.map((q) => q.Label)).toEqual(['AR Aging']);
+            expect(explained.Edges.some((e) => e.Source.EntityName === 'MJ: Graph Concepts' && e.TypeName === 'Measures')).toBe(false);
+        });
+
         it('reads through the provider it is given, for the entity explanation and the expansion service', async () => {
             await setup({
                 'MJ: Graph Edges': [StoredEdge(IDS.GraphCanon, IDS.EdgeTypeDescribes, 'Describes', NODE.Entity(IDS.Invoices), NODE.Concept(IDS.ConceptOpenAr), 0.9)],

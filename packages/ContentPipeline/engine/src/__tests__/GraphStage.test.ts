@@ -311,6 +311,14 @@ describe('GraphStage (@memberjunction/content-pipeline)', () => {
         expect(edgeTypes).toContain('Describes');
         expect(edgeTypes).toContain('Contradicts');
 
+        // Grounding edges run artifact -> concept: the entity describes the concept, not the reverse.
+        const describes = store.SavedEdges.filter((e) => e.Edge.EdgeTypeName === 'Describes').map((e) => e.Edge);
+        expect(describes.length).toBeGreaterThan(0);
+        for (const edge of describes) {
+            expect(edge.SourceEntityName).toBe('MJ: Entities');
+            expect(edge.TargetEntityName).toBe('MJ: Graph Concepts');
+        }
+
         const summary = record.GetExtension<GraphStageExecutionSummary>(GRAPH_STAGE, 'summary');
         expect(summary).toBeDefined();
         expect(summary!.PersistedConceptCount).toBe(store.SavedConcepts.length);
@@ -447,6 +455,13 @@ describe('GraphStage (@memberjunction/content-pipeline)', () => {
         expect(edgeTypes).toContain('Measures'); // MJ: Queries included in schema-and-queries mode
         expect(edgeTypes).not.toContain('Implements'); // MJ: Actions excluded in schema-and-queries mode
         expect(synth.Edges.every((e) => e.Origin === 'Inferred')).toBe(true);
+
+        // A metric concept trained from content is MEASURED BY its query: query -> concept, the
+        // direction CanonGraphEngine.ExplainEntity reads into MeasuringQueries.
+        const measuresEdge = synth.Edges.find((e) => e.EdgeTypeName === 'Measures')!;
+        expect(measuresEdge.SourceEntityName).toBe('MJ: Queries');
+        expect(measuresEdge.TargetEntityName).toBe('MJ: Graph Concepts');
+        expect(measuresEdge.TargetRecordID).toBe('concept:Annual Dues Assessment');
     });
 
     it('preserves existing concept Status (e.g., Deprecated) and keeps new edges Proposed in propose-only mode', async () => {

@@ -27,7 +27,7 @@ import {
     MJGraphEntity,
     MJGraphTypeEntity,
 } from '../generated/entity_subclasses';
-import type { MJGraphEdgeEntityType, MJGraphEntityType, MJGraphTypeEntityType } from '../generated/entities/__mj';
+import type { MJGraphEdgeEntityType, MJGraphEdgeTypeEndpointEntityType, MJGraphEntityType, MJGraphTypeEntityType } from '../generated/entities/__mj';
 import { QueryEngine } from '../engines/QueryEngine';
 import {
     GraphAccessPolicyRegistry,
@@ -112,6 +112,29 @@ type GraphTypeProbeRow = Pick<MJGraphTypeEntityType, 'ID' | 'IsCanon'>;
  */
 export function IsCanonGraph(graph: Pick<MJGraphEntityType, 'GraphTypeID'>, canonTypeIds: UUIDSet): boolean {
     return canonTypeIds.Has(graph.GraphTypeID);
+}
+
+/** The `MJ: Graph Edge Type Endpoints` columns an endpoint check reads. */
+export type GraphEdgeEndpointRule = Pick<MJGraphEdgeTypeEndpointEntityType, 'EdgeTypeID' | 'Side' | 'EntityID'>;
+
+/**
+ * Whether `entityId` may sit on `side` of an edge of type `edgeTypeId`, according to `endpoints`
+ * (`MJ: Graph Edge Type Endpoints` rows). With no row for that type and side, any entity may.
+ *
+ * The one rule behind {@link GraphEngine.ValidateEdgeEndpoint} (read path and the edge server
+ * subclass) and every proposer that checks an edge before writing it, so they cannot disagree.
+ */
+export function GraphEdgeEndpointAllows(
+    endpoints: readonly GraphEdgeEndpointRule[],
+    edgeTypeId: string,
+    side: GraphEdgeEndpointRule['Side'],
+    entityId: string,
+): boolean {
+    const constraints = endpoints.filter((ep) => UUIDsEqual(ep.EdgeTypeID, edgeTypeId) && ep.Side === side);
+    if (constraints.length === 0) {
+        return true;
+    }
+    return constraints.some((ep) => UUIDsEqual(ep.EntityID, entityId));
 }
 
 /** The stored-edge columns traversal reads. */
@@ -475,13 +498,7 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
      * any entity is permitted.
      */
     public ValidateEdgeEndpoint(edgeTypeId: string, side: 'Source' | 'Target', entityId: string): boolean {
-        const constraints = this.EdgeTypeEndpoints.filter(
-            (ep) => UUIDsEqual(ep.EdgeTypeID, edgeTypeId) && ep.Side === side,
-        );
-        if (constraints.length === 0) {
-            return true;
-        }
-        return constraints.some((ep) => UUIDsEqual(ep.EntityID, entityId));
+        return GraphEdgeEndpointAllows(this.EdgeTypeEndpoints, edgeTypeId, side, entityId);
     }
 
     /**
