@@ -137,7 +137,8 @@ Classification outcomes:
 - **`Ambiguous`**: invokes `FastConvergenceJudge` (`packages/AI/Agents/src/FastConvergenceJudge.ts`) strictly when classification is `'Ambiguous'`:
   - **Deadline & input caps**: `AbortController` timer enforces `FastJudgeTimeoutMs` (default `200ms`) via `Promise.race`, and state summaries are truncated to `FastJudgeMaxInputChars` (default `8,192`).
   - **Cooldown throttling**: skips model calls within `FastJudgeMinIntervalIterations` (default `5`) iterations since the previous judge invocation (resettable on human resume via `ResetCooldown()`).
-  - **Failure / timeout fallback**: never blocks execution past the deadline; on timeout, disabled flag, missing `ContextUser`, or evaluator error it applies `FastJudgeFailureFallback` (`'ContinueWithWarning'` or `'PauseForHuman'`) and appends the bounded reason (`<= 240` chars) to `AIAgentRun.Data.__progressDiagnostics`.
+  - **Budget attribution**: captures `CostUsd` and `TokensUsed` from `AgentDecisionService.Ask()` (or evaluator output), attributes them to the active run's `TotalCost` / `TotalTokensUsed`, `_treeBudget`, and `AIAgentRun.Data.__progressDiagnostics`, and re-evaluates `BudgetEnforcementGuard` if judge spend breaches any scope ceiling.
+  - **Failure / timeout / invalid-response fallback**: never blocks execution past the deadline; on timeout, disabled flag, missing `ContextUser`, invalid choice/response shape, or evaluator error it applies `FastJudgeFailureFallback` (`'ContinueWithWarning'` or `'PauseForHuman'`) and appends the bounded reason (`<= 240` chars) to `AIAgentRun.Data.__progressDiagnostics`.
 
 ---
 
