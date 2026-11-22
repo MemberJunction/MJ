@@ -17,6 +17,7 @@ import {
 } from '@memberjunction/communication-types';
 import {
   EntityInfo,
+  LogError,
   Metadata,
   RunView,
   RunViewParams,
@@ -232,13 +233,24 @@ export class TemplatedCommunicationService
 
     if (this.config.EnqueueWork) {
       for (const batch of batches) {
+        const sanitizedBatch = batch.map((r) =>
+          r.Principal?.RecordData
+            ? {
+                ...r,
+                Principal: {
+                  EntityID: r.Principal.EntityID,
+                  RecordID: r.Principal.RecordID,
+                },
+              }
+            : r,
+        );
         const batchPayload: RenderBatchPayload = {
           CommunicationRunID: run.ID,
           Envelope: params.Envelope,
           EntityID: params.EntityID,
           Templates: params.Templates,
           AutoAppendComplianceFooter: autoAppendFooter,
-          Recipients: batch,
+          Recipients: sanitizedBatch,
           ActingUserID: user?.ID,
         };
         await this.config.EnqueueWork('comms.render', batchPayload);
@@ -284,7 +296,9 @@ export class TemplatedCommunicationService
       }
     }
 
-    await CommunicationEngineBase.Instance.EndRun(run);
+    if (!(await CommunicationEngineBase.Instance.EndRun(run))) {
+      LogError(`TemplatedCommunicationService: failed to finalize CommunicationRun ${run.ID}`);
+    }
 
     return {
       Success: allSucceeded,
@@ -369,26 +383,37 @@ export class TemplatedCommunicationService
       await CommunicationEngine.Instance.Config(false, user, provider);
     }
 
-    let renderUser = user;
-    if (payload.ActingUserID) {
-      if (contextUser && UUIDsEqual(contextUser.ID, payload.ActingUserID)) {
-        renderUser = contextUser;
-      } else {
-        const resolvedActingUser = this.config.ResolveUser?.(payload.ActingUserID);
-        if (!resolvedActingUser) {
-          return {
-            Success: false,
-            CommunicationRunID: payload.CommunicationRunID,
-            IsAsyncRun: false,
-            TotalCount: payload.Recipients.length,
-            QueuedCount: 0,
-            BlockedCount: 0,
-            DeferredCount: 0,
-            ErrorMessage: `Acting user '${payload.ActingUserID}' could not be resolved for async template rendering`,
-          };
-        }
-        renderUser = resolvedActingUser;
+    if (!payload.ActingUserID) {
+      return {
+        Success: false,
+        CommunicationRunID: payload.CommunicationRunID,
+        IsAsyncRun: false,
+        TotalCount: payload.Recipients.length,
+        QueuedCount: 0,
+        BlockedCount: 0,
+        DeferredCount: 0,
+        ErrorMessage: 'ActingUserID is required for async template rendering',
+      };
+    }
+
+    let renderUser: UserInfo;
+    if (contextUser && UUIDsEqual(contextUser.ID, payload.ActingUserID)) {
+      renderUser = contextUser;
+    } else {
+      const resolvedActingUser = this.config.ResolveUser?.(payload.ActingUserID);
+      if (!resolvedActingUser) {
+        return {
+          Success: false,
+          CommunicationRunID: payload.CommunicationRunID,
+          IsAsyncRun: false,
+          TotalCount: payload.Recipients.length,
+          QueuedCount: 0,
+          BlockedCount: 0,
+          DeferredCount: 0,
+          ErrorMessage: `Acting user '${payload.ActingUserID}' could not be resolved for async template rendering`,
+        };
       }
+      renderUser = resolvedActingUser;
     }
 
     const resolvedTemplates = await this.resolveTemplates(payload.Templates, renderUser, provider);
@@ -420,7 +445,7 @@ export class TemplatedCommunicationService
       })),
     };
 
-    return CommunicationEngine.Instance.Send(sendParams, user);
+    return CommunicationEngine.Instance.Send(sendParams, renderUser);
   }
 
   /**

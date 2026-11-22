@@ -1537,10 +1537,11 @@ export class ManageMyEmailInboxAction extends BaseUserScopedCommunicationAction 
                     };
                 }
                 const channelID = draftMessage.MessageType?.CommunicationBaseMessageTypeID;
-                if (channelID) {
-                    const complianceCheck = await CommunicationEngine.Instance.CheckV1ComplianceGate(
+                if (channelID && process.env.MJ_COMMS_V1_COMPLIANCE_GATE === 'true') {
+                    const recipientsToGate = [to, ...(cc ?? [])].filter(Boolean);
+                    const complianceCheck = await CommunicationEngine.Instance.CheckV1ComplianceGateBatch(
                         channelID,
-                        to,
+                        recipientsToGate,
                         'Transactional',
                         params.ContextUser,
                     );

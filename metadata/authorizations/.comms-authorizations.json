@@ -10,5 +10,17 @@
     "primaryKey": {
       "ID": "59024F63-B735-4A03-A904-47BC46A9BC5E"
     }
+  },
+  {
+    "fields": {
+      "Name": "Communications: Send Transactional",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Communications: Admin",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants permission to send Transactional communications that bypass marketing opt-in, unsubscribe, and quiet-hours compliance rules."
+    },
+    "primaryKey": {
+      "ID": "D7A661FD-9F5B-4071-B0EA-EA51C84810BA"
+    }
   }
 ]

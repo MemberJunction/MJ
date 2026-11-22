@@ -56,6 +56,7 @@ export interface CommsDispatchWorkPayload {
     Envelope: SendingEnvelope;
     Payload?: MessagePayload;
     Recipients: RecipientSendTarget[];
+    ActingUserID?: string;
 }
 
 interface SendGridWebhookParseCredentials extends ProviderCredentialsBase {
@@ -121,6 +122,14 @@ export class CommsDispatchWorkHandler extends BaseWorkHandler<CommsDispatchWorkP
             return Outcome.DeadLetter('Invalid comms.dispatch payload: missing Envelope or Recipients');
         }
         await CommunicationEngine.Instance.Config(false, this.ContextUser, this.Provider);
+        let dispatchUser = this.ContextUser;
+        if (payload.ActingUserID) {
+            const resolvedUser = UserCache.Instance.UserByID(payload.ActingUserID);
+            if (!resolvedUser) {
+                return Outcome.DeadLetter(`comms.dispatch acting user '${payload.ActingUserID}' not found`);
+            }
+            dispatchUser = resolvedUser;
+        }
         const envelope: SendingEnvelope =
             typeof (payload.Envelope.ScheduledAt as unknown) === 'string'
                 ? { ...payload.Envelope, ScheduledAt: new Date(payload.Envelope.ScheduledAt as unknown as string) }
@@ -132,7 +141,7 @@ export class CommsDispatchWorkHandler extends BaseWorkHandler<CommsDispatchWorkP
                 Payload: payload.Payload,
                 Recipients: payload.Recipients,
             },
-            this.ContextUser,
+            dispatchUser,
         );
         if (!result.Success) {
             const reason = result.ErrorMessage ?? 'comms.dispatch send failed';

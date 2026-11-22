@@ -75,8 +75,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
                 (params.Message.BCCRecipients && params.Message.BCCRecipients.length > 0) ||
                 (params.Message.Subject && (params.Message.BodyTemplate || params.Message.HTMLBodyTemplate) && !params.Message.SubjectTemplate),
             );
-            const v2Engine = CommunicationEngine.Instance as Partial<CommunicationEngine>;
-            if (optInV2 && !usesV1OnlyFeatures && typeof v2Engine.EvaluateEligibility === 'function' && typeof v2Engine.Send === 'function') {
+            if (optInV2 && !usesV1OnlyFeatures) {
                 return await this.runEntityCommunicationV2(params, entityInfo, entityMessageType, records, contextUser, provider);
             }
 
@@ -100,14 +99,14 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
      */
     protected async SendToRecipients(params: EntityCommunicationParams, recipients: EntityCommunicationRecipient[], contextUser: UserInfo): Promise<EntityCommunicationResult> {
         const sendable = recipients.filter(r => !r.SkipReason).map(r => r.Recipient);
-        const gatedMessage: Message = params.Message.ContextData?.['MessageClass']
-            ? params.Message
-            : Object.assign(Object.create(Object.getPrototypeOf(params.Message) as object), params.Message, {
-                ContextData: {
-                    ...(params.Message.ContextData ?? {}),
-                    MessageClass: 'Operational',
-                },
-            });
+        const gatedMessage: Message = Object.assign(
+            Object.create(Object.getPrototypeOf(params.Message) as object),
+            params.Message,
+            {
+                MessageClass: params.Message.MessageClass ?? 'Operational',
+                CheckComplianceGate: params.Message.CheckComplianceGate ?? true,
+            },
+        );
         const sendResult = sendable.length === 0 ? [] :
             await CommunicationEngine.Instance.SendMessages(params.ProviderName, params.ProviderMessageTypeName, gatedMessage, sendable, params.PreviewOnly, undefined, contextUser);
         if (!sendResult || sendResult.length !== sendable.length) {
@@ -441,12 +440,17 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
                 });
                 continue;
             }
+            const hasTemplatesForQueue = Boolean(
+                params.Message.SubjectTemplate ||
+                params.Message.BodyTemplate ||
+                params.Message.HTMLBodyTemplate,
+            );
             const rawAddress = addressField ? r[addressField] : undefined;
             readableRecipients.push({
                 Principal: {
                     EntityID: params.EntityID,
                     RecordID: String(r[pkFieldName] ?? ''),
-                    RecordData: r,
+                    ...(hasTemplatesForQueue && !params.PreviewOnly ? {} : { RecordData: r }),
                 },
                 Endpoint: rawAddress ? { Address: String(rawAddress) } : undefined,
                 ContextData: params.Message.ContextData,

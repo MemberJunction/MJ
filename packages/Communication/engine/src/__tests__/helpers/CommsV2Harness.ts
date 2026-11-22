@@ -11,7 +11,7 @@ import {
   ProviderCredentialsBase,
   ResolvedEndpoint,
 } from '@memberjunction/communication-types';
-import { UserInfo } from '@memberjunction/core';
+import { AuthorizationInfo, AuthorizationRoleInfo, UserInfo } from '@memberjunction/core';
 import type {
   MJCommunicationComplianceRegimeEntity,
   MJCommunicationComplianceRegimeRuleEntity,
@@ -306,7 +306,28 @@ export function InstallCommsEngine(db: FakeCommsDb, options: InstallOptions = {}
     DriverClass: PRINCIPAL_DRIVER_KEY,
   } as MJCommunicationPrincipalEntity;
 
-  vi.spyOn(engine, 'ProviderToUse', 'get').mockReturnValue(db.Provider);
+  const dbProvider = db.Provider;
+  Object.defineProperty(dbProvider, 'AuthorizationRoles', {
+    value: [
+      new AuthorizationRoleInfo({ ID: 'ar-send-tx', AuthorizationID: 'auth-send-transactional', RoleID: IDS.SendRole, Type: 'Allow' }),
+    ],
+    configurable: true,
+  });
+  Object.defineProperty(dbProvider, 'Authorizations', {
+    value: [
+      new AuthorizationInfo(
+        {
+          ID: 'auth-send-transactional',
+          Name: 'Communications: Send Transactional',
+          IsActive: true,
+          ParentID: null,
+        },
+        dbProvider,
+      ),
+    ],
+    configurable: true,
+  });
+  vi.spyOn(engine, 'ProviderToUse', 'get').mockReturnValue(dbProvider);
   vi.spyOn(engine, 'ContextUser', 'get').mockReturnValue(systemUser);
   vi.spyOn(engine, 'Providers', 'get').mockReturnValue([provider]);
   vi.spyOn(engine, 'Principals', 'get').mockReturnValue([principal]);

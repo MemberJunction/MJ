@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   BaseCommunicationPrincipal,
   BaseCommunicationSuppressionPolicy,
@@ -98,35 +99,60 @@ export class CommsActivityWorker {
     }
 
     const persistActivity = options?.PersistActivity ?? true;
-    const deduped = await this.deduplicateEvents(events, contextUser);
+    const preparedEvents = events.map((ev) => this.ensureFirstPartyEventId(ev));
+    const deduped = await this.deduplicateEvents(preparedEvents, contextUser);
     const duplicateCount = events.length - deduped.length;
 
     let processedCount = 0;
     let errorCount = 0;
     let raceDuplicates = 0;
     const processedEvents: NormalizedActivityEvent[] = [];
+    const provider = this.getProvider();
+    const transactional = isTransactionalProvider(provider) ? provider : undefined;
 
     for (const event of deduped) {
       let claimedEvent: MJCommunicationProviderEventEntity | undefined;
+      let inTx = false;
       try {
-        if (event.ProviderEventID) {
+        if (transactional) {
+          await transactional.BeginTransaction();
+          inTx = true;
+        }
+        const preCorrelatedLog = !event.CommunicationProviderID
+          ? await this.correlateEvent(event, contextUser)
+          : undefined;
+        if (event.ProviderEventID && event.CommunicationProviderID) {
           const claim = await this.claimProviderEvent(
             event.CommunicationProviderID,
             event.ProviderEventID,
             contextUser,
           );
           if (claim.Duplicate) {
+            if (inTx && transactional) {
+              await transactional.CommitTransaction();
+              inTx = false;
+            }
             raceDuplicates++;
             continue;
           }
           claimedEvent = claim.Entity;
         }
-        await this.processSingleEvent(event, persistActivity, contextUser);
+        await this.processSingleEvent(event, persistActivity, contextUser, preCorrelatedLog);
+        if (inTx && transactional) {
+          await transactional.CommitTransaction();
+          inTx = false;
+        }
         processedEvents.push(event);
         processedCount++;
       } catch (err) {
-        if (claimedEvent) {
-          await claimedEvent.Delete().catch(() => false);
+        if (inTx && transactional) {
+          await transactional.RollbackTransaction().catch((rbErr) =>
+            LogError(`CommsActivityWorker rollback failed: ${rbErr instanceof Error ? rbErr.message : String(rbErr)}`),
+          );
+        } else if (claimedEvent && typeof claimedEvent.Delete === 'function') {
+          if (!(await claimedEvent.Delete().catch(() => false))) {
+            LogError(`CommsActivityWorker failed to release claimed provider event ${claimedEvent.ID}`);
+          }
         }
         errorCount++;
         LogError(
@@ -235,12 +261,40 @@ export class CommsActivityWorker {
     return RunView.FromMetadataProvider(this.getProvider());
   }
 
+  private ensureFirstPartyEventId(event: NormalizedActivityEvent): NormalizedActivityEvent {
+    if (event.ProviderEventID) {
+      return event;
+    }
+    if (
+      event.EventType !== 'Opened' &&
+      event.EventType !== 'Clicked' &&
+      event.EventType !== 'Unsubscribed'
+    ) {
+      return event;
+    }
+    const token = event.CommunicationLogID ?? event.UnsubscribeToken ?? event.TrackingToken;
+    if (!token) {
+      return event;
+    }
+    const occurredIso =
+      event.OccurredAt instanceof Date
+        ? event.OccurredAt.toISOString()
+        : String(event.OccurredAt ?? '');
+    const digest = createHash('sha256')
+      .update(`${event.EventType}:${token}:${event.TargetURL ?? ''}:${occurredIso}`)
+      .digest('hex')
+      .slice(0, 32);
+    event.ProviderEventID = `firstparty:${event.EventType.toLowerCase()}:${digest}`;
+    return event;
+  }
+
   private async processSingleEvent(
     event: NormalizedActivityEvent,
     persistActivity: boolean,
     contextUser: UserInfo,
+    preCorrelatedLog?: MJCommunicationLogEntity,
   ): Promise<void> {
-    const log = await this.correlateEvent(event, contextUser);
+    const log = preCorrelatedLog ?? (await this.correlateEvent(event, contextUser));
 
     if (
       (event.EventType === 'Opened' || event.EventType === 'Clicked') &&
@@ -396,7 +450,12 @@ export class CommsActivityWorker {
       contextUser,
     );
 
-    if (!res.Success || !res.Results || res.Results.length === 0) {
+    if (!res.Success) {
+      throw new Error(
+        `Failed correlating activity event with CommunicationLog: ${res.ErrorMessage ?? 'RunView failed'}`,
+      );
+    }
+    if (!res.Results || res.Results.length === 0) {
       return undefined;
     }
 
@@ -431,6 +490,8 @@ export class CommsActivityWorker {
     log: MJCommunicationLogEntity,
   ): void {
     event.CommunicationLogID = event.CommunicationLogID ?? log.ID;
+    event.CommunicationProviderID =
+      event.CommunicationProviderID || log.CommunicationProviderID || undefined!;
     event.CommunicationSenderID =
       event.CommunicationSenderID ?? log.CommunicationSenderID ?? undefined;
     event.CommunicationEndpointID =
@@ -443,10 +504,15 @@ export class CommsActivityWorker {
     if (log.CorrelationData) {
       try {
         const parsed = JSON.parse(log.CorrelationData) as Record<string, unknown>;
-        event.CorrelationData = {
-          ...parsed,
-          ...(event.CorrelationData ?? {}),
-        };
+        const sanitized = Object.fromEntries(
+          Object.entries(parsed).filter(([k]) => !k.startsWith('__')),
+        );
+        if (Object.keys(sanitized).length > 0) {
+          event.CorrelationData = {
+            ...sanitized,
+            ...(event.CorrelationData ?? {}),
+          };
+        }
       } catch {
         // Ignore malformed CorrelationData JSON on log
       }
@@ -467,7 +533,12 @@ export class CommsActivityWorker {
         },
         contextUser,
       );
-      return res.Success && res.Results.length > 0 ? res.Results[0] : undefined;
+      if (!res.Success) {
+        throw new Error(
+          `Failed loading CommunicationEndpoint ${event.CommunicationEndpointID}: ${res.ErrorMessage ?? 'RunView failed'}`,
+        );
+      }
+      return res.Results.length > 0 ? res.Results[0] : undefined;
     }
 
     const hash =
@@ -485,7 +556,12 @@ export class CommsActivityWorker {
       },
       contextUser,
     );
-    if (res.Success && res.Results.length > 0) {
+    if (!res.Success) {
+      throw new Error(
+        `Failed resolving CommunicationEndpoint by hash: ${res.ErrorMessage ?? 'RunView failed'}`,
+      );
+    }
+    if (res.Results.length > 0) {
       event.CommunicationEndpointID = res.Results[0].ID;
       return res.Results[0];
     }
@@ -1197,8 +1273,9 @@ export class CommsActivityWorker {
     const logIDs: string[] = [];
     for (const log of res.Results) {
       logIDs.push(log.ID);
-      if (log.RecipientAddress !== null) {
+      if (log.RecipientAddress !== null || log.CorrelationData !== null) {
         log.RecipientAddress = null;
+        log.CorrelationData = null;
         if (await log.Save()) {
           scrubbedCount++;
         }
@@ -1224,10 +1301,16 @@ export class CommsActivityWorker {
 
     let scrubbedCount = 0;
     for (const activity of res.Results) {
-      if (activity.IPAddress !== null || activity.UserAgent !== null || activity.RawPayload !== null) {
+      if (
+        activity.IPAddress !== null ||
+        activity.UserAgent !== null ||
+        activity.RawPayload !== null ||
+        activity.CorrelationData !== null
+      ) {
         activity.IPAddress = null;
         activity.UserAgent = null;
         activity.RawPayload = null;
+        activity.CorrelationData = null;
         if (await activity.Save()) {
           scrubbedCount++;
         }
@@ -1235,6 +1318,25 @@ export class CommsActivityWorker {
     }
     return scrubbedCount;
   }
+}
+
+interface TransactionalProvider {
+  BeginTransaction(): Promise<void>;
+  CommitTransaction(): Promise<void>;
+  RollbackTransaction(): Promise<void>;
+}
+
+function isTransactionalProvider(provider: unknown): provider is TransactionalProvider {
+  return (
+    typeof provider === 'object' &&
+    provider !== null &&
+    'BeginTransaction' in provider &&
+    typeof (provider as { BeginTransaction?: unknown }).BeginTransaction === 'function' &&
+    'CommitTransaction' in provider &&
+    typeof (provider as { CommitTransaction?: unknown }).CommitTransaction === 'function' &&
+    'RollbackTransaction' in provider &&
+    typeof (provider as { RollbackTransaction?: unknown }).RollbackTransaction === 'function'
+  );
 }
 
 /**

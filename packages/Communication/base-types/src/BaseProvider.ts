@@ -6,6 +6,7 @@ import type {
     CreateDomainAuthParams,
     CreateDomainAuthResult,
     DeleteDomainAuthParams,
+    MessageClass,
     NormalizedActivityEvent,
     VerifyDomainAuthParams,
     VerifyDomainAuthResult,
@@ -150,6 +151,19 @@ export class Message {
      * lifecycle, stopping only at the external transport boundary.
      */
     public DryRun?: boolean;
+
+    /**
+     * Optional compliance message class (`Transactional`, `Operational`, or `Marketing`).
+     * Used when V1 sends run through the compliance gate; defaults to `Transactional` on
+     * single sends and `Operational` on entity-communications bulk sends.
+     */
+    public MessageClass?: MessageClass;
+
+    /**
+     * Optional opt-in flag to run the V2 compliance gate on V1 `SendSingleMessage` /
+     * `SendMessages` calls. Can also be enabled globally with `MJ_COMMS_V1_COMPLIANCE_GATE=true`.
+     */
+    public CheckComplianceGate?: boolean;
 
     constructor(copyFrom?: Message) {
         // copy all properties from the message to us, used for copying a message

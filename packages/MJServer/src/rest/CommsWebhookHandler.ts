@@ -1014,11 +1014,15 @@ function parseTemplateContext(raw: string | null | undefined): PreferenceCenterT
     }
 }
 
-async function defaultVerifyToken(kind: 'tracking' | 'unsubscribe', token: string): Promise<boolean> {
+async function defaultVerifyToken(
+    kind: 'tracking' | 'unsubscribe',
+    token: string,
+    provider?: IMetadataProvider,
+): Promise<boolean> {
     const systemUser = getSystemUser();
     if (!systemUser) return false;
     const field = kind === 'tracking' ? 'TrackingToken' : 'UnsubscribeToken';
-    const rv = RunView.FromMetadataProvider(getCommsProvider());
+    const rv = RunView.FromMetadataProvider(getCommsProvider(provider));
     const res = await rv.RunView<{ ID: string }>(
         {
             EntityName: 'MJ: Communication Logs',
@@ -1065,7 +1069,10 @@ async function defaultResolvePreferenceCenterData(token: string, provider?: IMet
         },
         systemUser,
     );
-    const prefs = prefRes.Success ? prefRes.Results : [];
+    if (!prefRes.Success) {
+        throw new Error(prefRes.ErrorMessage || 'Failed to load communication preferences');
+    }
+    const prefs = prefRes.Results;
     const principal = await resolvePrincipalFromLog(log, systemUser, md);
 
     let principalPrefs: MJCommunicationPrincipalPreferenceEntity[] = [];
@@ -1113,13 +1120,14 @@ async function defaultResolvePreferenceCenterData(token: string, provider?: IMet
             },
             systemUser,
         );
-        if (suppRes.Success) {
-            for (const s of suppRes.Results) {
-                if (!s.CommunicationSenderID || (sender && UUIDsEqual(s.CommunicationSenderID, sender.ID))) {
-                    hasGlobalUnsubscribe = true;
-                    const effMs = s.EffectiveAt ? s.EffectiveAt.getTime() : 0;
-                    if (effMs > latestUnsubscribeMs) latestUnsubscribeMs = effMs;
-                }
+        if (!suppRes.Success) {
+            throw new Error(suppRes.ErrorMessage || 'Failed to load communication suppressions');
+        }
+        for (const s of suppRes.Results) {
+            if (!s.CommunicationSenderID || (sender && UUIDsEqual(s.CommunicationSenderID, sender.ID))) {
+                hasGlobalUnsubscribe = true;
+                const effMs = s.EffectiveAt ? s.EffectiveAt.getTime() : 0;
+                if (effMs > latestUnsubscribeMs) latestUnsubscribeMs = effMs;
             }
         }
     }

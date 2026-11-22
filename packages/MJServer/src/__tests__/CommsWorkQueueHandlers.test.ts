@@ -364,11 +364,6 @@ describe('CommsDispatchWorkHandler (comms.dispatch)', () => {
     expect(Object.keys(DISPATCH_PAYLOAD).sort()).toEqual(['CommunicationRunID', 'Envelope', 'Payload', 'Recipients']);
   });
 
-  // DEFECT CommsWorkQueueHandlers.ts, toWorkJson + CommsDispatchWorkHandler.Handle: `toWorkJson` casts the payload to WorkJson
-  // without converting it, and the handler passes the delivered Envelope straight to Send(). The
-  // envelope's `ScheduledAt` is typed `Date`, but a transport delivers JSON, so it arrives as an
-  // ISO string and V2SendService.Send calls `scheduledAt.getTime()` on a string. Every queued
-  // chunk of a scheduled bulk send throws, retries, and dead-letters.
   it('hands Send() an Envelope whose ScheduledAt is a Date again after the queue round trip', async () => {
     const scheduled: CommsDispatchWorkPayload = {
       ...DISPATCH_PAYLOAD,
@@ -381,10 +376,6 @@ describe('CommsDispatchWorkHandler (comms.dispatch)', () => {
     expect(sent.Envelope.ScheduledAt).toBeInstanceOf(Date);
   });
 
-  // DEFECT CommsWorkQueueHandlers.ts, all three handlers' Handle(): the handler ignores
-  // `this.Provider`, the provider the host mints for this delivery, and configures and runs the
-  // engine on the process-global one. BaseWorkHandler's contract is "use `this.Provider` and
-  // `this.ContextUser` for every data call".
   it('configures the engine on the provider the host bound to this delivery', async () => {
     await handle(DISPATCH_PAYLOAD);
 
@@ -496,8 +487,6 @@ describe('CommsRenderWorkHandler (comms.render)', () => {
     expect((state.renderCalls[0].Payload as RenderBatchPayload).ActingUserID).toBeUndefined();
   });
 
-  // DEFECT CommsRenderWorkHandler.Handle: `this.Provider` is not passed on, although
-  // HandleRenderBatch takes a provider as its third argument.
   it('passes the provider the host bound to this delivery to HandleRenderBatch', async () => {
     await handle(RENDER_PAYLOAD);
 
@@ -835,11 +824,6 @@ describe('CommsActivityWorkHandler (comms.activity)', () => {
       expect(processedEvents()[0].CommunicationProviderID).toBe('');
     });
 
-    // DEFECT CommsActivityWorkHandler.normalizePayloadEvents: a tracking event is built with no ProviderEventID
-    // and nothing derived from `message.MessageID` (normalizePayloadEvents is not even given the
-    // message). CommsActivityWorker deduplicates only on ProviderEventID, so a redelivery of the
-    // same message records the open, click or unsubscribe a second time. The consumer guide's
-    // rule is that `MessageID` (stable across redeliveries) is the idempotency key.
     it('gives a tracking event an idempotency key, so a redelivered message is not recorded twice', async () => {
       const hit = { Source: 'open-pixel', EventType: 'Opened', TrackingToken: TRACKING_TOKEN, OccurredAt: '2026-11-20T12:00:00.000Z' };
 

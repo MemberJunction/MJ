@@ -319,13 +319,16 @@ export class CommsPoliciesPrincipalsTabComponent extends BaseAngularComponent {
 
   public async TogglePolicyStatus(policy: MJCommunicationSuppressionPolicyEntity): Promise<void> {
     this.ErrorMessage = '';
+    const previousStatus = policy.Status;
     try {
       policy.Status = policy.Status === 'Active' ? 'Disabled' : 'Active';
       if (!(await policy.Save())) {
+        policy.Status = previousStatus;
         throw new Error(policy.LatestResult?.CompleteMessage || 'Failed to update policy.');
       }
       this.RefreshRequested.emit();
     } catch (err: unknown) {
+      policy.Status = previousStatus;
       this.ErrorMessage = err instanceof Error ? err.message : 'Failed to update policy.';
       this.cdr.markForCheck();
     }
@@ -336,6 +339,8 @@ export class CommsPoliciesPrincipalsTabComponent extends BaseAngularComponent {
     this.ErrorMessage = '';
     this.cdr.markForCheck();
 
+    let createdPrincipal: MJCommunicationPrincipalEntity | undefined;
+    const previousPrincipalID = item.CommunicationPrincipalID;
     try {
       const p = this.ProviderToUse;
       let principal = (this._metadata?.Principals ?? []).find((pr) =>
@@ -354,14 +359,20 @@ export class CommsPoliciesPrincipalsTabComponent extends BaseAngularComponent {
           throw new Error(created.LatestResult?.CompleteMessage || 'Failed to create principal.');
         }
         principal = created;
+        createdPrincipal = created;
       }
 
       item.CommunicationPrincipalID = principal.ID;
       if (!(await item.Save())) {
+        item.CommunicationPrincipalID = previousPrincipalID;
+        if (createdPrincipal) {
+          await createdPrincipal.Delete().catch(() => false);
+        }
         throw new Error(item.LatestResult?.CompleteMessage || 'Failed to link principal.');
       }
       this.RefreshRequested.emit();
     } catch (err: unknown) {
+      item.CommunicationPrincipalID = previousPrincipalID;
       this.ErrorMessage = err instanceof Error ? err.message : 'Failed to register principal.';
     } finally {
       this.BusyId = null;

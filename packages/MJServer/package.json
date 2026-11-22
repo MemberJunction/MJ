@@ -118,6 +118,7 @@
     "@memberjunction/lists-base": "6.3.0-edge.1",
     "@memberjunction/livekit-room-server": "6.3.0-edge.1",
     "@memberjunction/network-utils": "6.3.0-edge.1",
+    "@memberjunction/ng-communications": "6.3.0-edge.1",
     "@memberjunction/notifications": "6.3.0-edge.1",
     "@memberjunction/postgresql-dataprovider": "6.3.0-edge.1",
     "@memberjunction/queue": "6.3.0-edge.1",

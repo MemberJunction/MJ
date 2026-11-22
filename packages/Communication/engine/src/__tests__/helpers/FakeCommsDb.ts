@@ -9,7 +9,7 @@ import { BaseEntity, BaseEntityResult, IMetadataProvider, IRunViewProvider, RunV
  * - Every `RunView` hands out NEW entity objects built from the stored row, so an unsaved
  *   in-memory mutation is never visible to another reader (exactly like the database).
  * - The CHECK / UNIQUE constraints of the Communications V2 schema
- *   (`migrations/v6/V202611201300__v6.3.x__Communications_V2_Schema.sql`) are enforced on save.
+ *   (`migrations/v6/V202611211800__v6.3.x__Communications_V2_Schema.sql`) are enforced on save.
  * - `uniqueidentifier` columns read back upper-case, the way SQL Server returns them.
  * - String comparison in filters is case-insensitive (`SQL_Latin1_General_CP1_CI_AS`).
  *

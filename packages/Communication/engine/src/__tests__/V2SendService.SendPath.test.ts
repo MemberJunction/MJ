@@ -430,9 +430,6 @@ describe('V2SendService.Send — deferral and scheduling', () => {
     expect(String(logFor(alice)?.ErrorMessage)).toContain('Spam Complaint');
   });
 
-  // DEFECT (V2SendService.executeInlineSend, V2SendService.ts:667-674 at time of writing): when the Pending log for a deferred recipient cannot be saved,
-  // claimOrCreateV2Log returns no Log, but the recipient is still reported `Deferred` and counted in
-  // DeferredCount. Nothing was persisted, so the sweep will never send it: the message is silently lost.
   it('does not report a recipient as Deferred when its Pending log could not be saved', async () => {
     SeedEndpoint(db, 'alice@example.com');
     db.FailSave(ENTITY.Logs);
@@ -702,10 +699,6 @@ describe('V2SendService.Send — provider failures', () => {
     expect(db.Rows(ENTITY.Runs)[0].Status).toBe('Complete');
   });
 
-  // DEFECT (V2SendService.dispatchSingleRecipient, V2SendService.ts:830 at time of writing): provider.SendSingleMessage is awaited with no try/catch. A provider
-  // that throws (network reset, SDK exception) rejects the whole Send: the recipient's log is left
-  // `In-Progress` forever (a retry of the run then reports LogAlreadyInProgress and never re-sends),
-  // the remaining recipients are never attempted, and the run is never ended.
   it('contains a provider exception to the one recipient: log Failed, others still sent', async () => {
     const alice = SeedEndpoint(db, 'alice@example.com');
     const bob = SeedEndpoint(db, 'bob@example.com');
@@ -720,9 +713,6 @@ describe('V2SendService.Send — provider failures', () => {
     expect(db.Rows(ENTITY.Runs)[0].Status).toBe('Complete');
   });
 
-  // DEFECT (V2SendService.dispatchSingleRecipient, V2SendService.ts:768-771 at time of writing): a throwing PreProcess/PostProcess principal hook has the same
-  // effect as a throwing provider — Send rejects, the claimed log stays In-Progress, later recipients
-  // are skipped.
   it('contains a throwing PreProcess hook to the one recipient: log Failed, others still sent', async () => {
     const first = SeedPrincipal(db, 'contact-1', 'first@example.com');
     const second = SeedPrincipal(db, 'contact-2', 'second@example.com');
@@ -877,11 +867,6 @@ describe('V2SendService.Send — RunView failures are errors, never "no rows"', 
     expect(provider.Attempts).toHaveLength(0);
   });
 
-  // DEFECT (V2SendService.loadSenderAncestry, V2SendService.ts:1065, with resolveSender :1039 and
-  // checkSenderPermission :1409-1412, at time of writing): loadSenderAncestry treats a FAILED
-  // parent-sender read as "no parent" and truncates the chain. checkSenderPermission then queries only
-  // the child, finds no ACL rows and returns Allowed ("unrestricted"), so a caller the parent's ACL
-  // excludes can send. The truncated chain is also cached for 60s and hides sender-scoped suppressions.
   it('parent-sender lookup failure must not bypass the inherited sender ACL', async () => {
     arrange({ Sender: { ParentSenderID: IDS.ParentSender } });
     SeedSender(db, { ID: IDS.ParentSender, Name: 'Parent Org', IsDefault: false });

@@ -51,7 +51,7 @@ describe('CommsAdminOperations', () => {
     const ordinary = makeUser({ Type: 'User ', UserRoles: [{ RoleID: 'role-ui', RoleName: 'UI' }] });
 
     const run = async (u: UserInfo) =>
-      op.ExecuteServer({ EndpointID: 'ep-missing' }, { provider, user: u });
+      op.ExecuteServer({ EndpointID: 'ep-missing' }, { provider, user: u, emitProgress: vi.fn() });
 
     // Owner and Developer pass Authorize() (and hit Entity load returning Found: false / not found)
     vi.spyOn(provider, 'GetEntityObject').mockResolvedValue({
@@ -111,7 +111,7 @@ describe('CommsAdminOperations', () => {
 
     const res = await op.ExecuteServer(
       { DomainID: 'dom-1' },
-      { provider, user: makeUser({ Type: 'Owner' }) },
+      { provider, user: makeUser({ Type: 'Owner' }), emitProgress: vi.fn() },
     );
     expect(res.Success).toBe(true);
     expect(res.Output?.Success).toBe(true);
@@ -145,7 +145,7 @@ describe('CommsAdminOperations', () => {
 
     const res = await op.ExecuteServer(
       { EndpointID: 'ep-1' },
-      { provider, user: makeUser({ ID: 'admin-42', Type: 'Owner' }) },
+      { provider, user: makeUser({ ID: 'admin-42', Type: 'Owner' }), emitProgress: vi.fn() },
     );
 
     expect(res.Success).toBe(true);
@@ -207,7 +207,7 @@ describe('CommsAdminOperations', () => {
 
     const res = await op.ExecuteServer(
       { SuppressionID: 'supp-1' },
-      { provider, user: makeUser({ ID: 'admin-42', Type: 'Owner' }) },
+      { provider, user: makeUser({ ID: 'admin-42', Type: 'Owner' }), emitProgress: vi.fn() },
     );
 
     expect(res.Success).toBe(true);

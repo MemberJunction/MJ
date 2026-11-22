@@ -21,6 +21,20 @@ import {
   type UserInfo,
 } from '@memberjunction/core';
 import {
+  type CommsAdminMutationOutput,
+  type CommsBlockEndpointInput,
+  type CommsBlockEndpointOutput,
+  type CommsRevokeSuppressionInput,
+  type CommsSendingDomainAuthOutput,
+  type CommsSendingDomainInput,
+  type CommsSimulateComplianceGateInput,
+  type CommsSimulateComplianceGateOutput,
+  CommunicationsBlockEndpointOperation,
+  CommunicationsCreateSendingDomainOperation,
+  CommunicationsDeleteSendingDomainOperation,
+  CommunicationsRevokeSuppressionOperation,
+  CommunicationsSimulateComplianceGateOperation,
+  CommunicationsVerifySendingDomainOperation,
   MJCommunicationComplianceRegimeEntity,
   MJCommunicationComplianceRegimeJurisdictionEntity,
   MJCommunicationComplianceRegimeRuleEntity,
@@ -48,63 +62,29 @@ import { CredentialEngine } from '@memberjunction/credentials';
 import { EscapeSQLString, IndexByUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { IsOwner } from '../auth/actionAuthorization.js';
 
+/** Operation key for simulating the Communications V2 compliance gate. */
 export const COMMS_SIMULATE_GATE_KEY = 'Communications.SimulateComplianceGate';
+/** Operation key for registering a sending domain with its provider. */
 export const COMMS_CREATE_SENDING_DOMAIN_KEY = 'Communications.CreateSendingDomain';
+/** Operation key for verifying DNS authentication on a sending domain. */
 export const COMMS_VERIFY_SENDING_DOMAIN_KEY = 'Communications.VerifySendingDomain';
+/** Operation key for deleting a sending domain from its provider and database. */
 export const COMMS_DELETE_SENDING_DOMAIN_KEY = 'Communications.DeleteSendingDomain';
+/** Operation key for revoking an active communication suppression. */
 export const COMMS_REVOKE_SUPPRESSION_KEY = 'Communications.RevokeSuppression';
+/** Operation key for blocking a communication endpoint with an Admin Block suppression. */
 export const COMMS_BLOCK_ENDPOINT_KEY = 'Communications.BlockEndpoint';
 
-export interface CommsSimulateComplianceGateInput {
-  SenderID: string;
-  PrincipalID?: string;
-  RecordID?: string;
-  PreferenceID?: string;
-  MessageClass: string;
-  RecipientJurisdictionID?: string;
-}
-
-export interface CommsSimulateComplianceGateOutput {
-  Success: boolean;
-  Decision?: string;
-  Reason?: string;
-  Detail?: string;
-  ResultJSON?: string;
-  ErrorMessage?: string;
-}
-
-export interface CommsSendingDomainInput {
-  DomainID: string;
-}
-
-export interface CommsSendingDomainAuthOutput {
-  Success: boolean;
-  Verified?: boolean;
-  Status?: string;
-  ProviderDomainID?: string;
-  DNSRecordsJSON?: string;
-  ErrorMessage?: string;
-}
-
-export interface CommsAdminMutationOutput {
-  Success: boolean;
-  ErrorMessage?: string;
-  WarningMessage?: string;
-}
-
-export interface CommsRevokeSuppressionInput {
-  SuppressionID: string;
-}
-
-export interface CommsBlockEndpointInput {
-  EndpointID: string;
-}
-
-export interface CommsBlockEndpointOutput {
-  Success: boolean;
-  SuppressionID?: string;
-  ErrorMessage?: string;
-}
+export type {
+  CommsAdminMutationOutput,
+  CommsBlockEndpointInput,
+  CommsBlockEndpointOutput,
+  CommsRevokeSuppressionInput,
+  CommsSendingDomainAuthOutput,
+  CommsSendingDomainInput,
+  CommsSimulateComplianceGateInput,
+  CommsSimulateComplianceGateOutput,
+};
 
 interface SuppressionRemovableProvider {
   RemoveSuppression(
@@ -363,15 +343,9 @@ async function clearDownstreamSuppression(
   return warnings.length > 0 ? warnings.join('; ') : undefined;
 }
 
+/** Server implementation of `Communications.SimulateComplianceGate`. */
 @RegisterClass(BaseRemotableOperation, COMMS_SIMULATE_GATE_KEY)
-export class CommsSimulateComplianceGateServerOperation extends BaseRemotableOperation<
-  CommsSimulateComplianceGateInput,
-  CommsSimulateComplianceGateOutput
-> {
-  public get OperationKey(): string {
-    return COMMS_SIMULATE_GATE_KEY;
-  }
-
+export class CommsSimulateComplianceGateServerOperation extends CommunicationsSimulateComplianceGateOperation {
   protected override async Authorize(
     _input: CommsSimulateComplianceGateInput,
     user: UserInfo,
@@ -539,15 +513,9 @@ export class CommsSimulateComplianceGateServerOperation extends BaseRemotableOpe
   }
 }
 
+/** Server implementation of `Communications.CreateSendingDomain`. */
 @RegisterClass(BaseRemotableOperation, COMMS_CREATE_SENDING_DOMAIN_KEY)
-export class CommsCreateSendingDomainServerOperation extends BaseRemotableOperation<
-  CommsSendingDomainInput,
-  CommsSendingDomainAuthOutput
-> {
-  public get OperationKey(): string {
-    return COMMS_CREATE_SENDING_DOMAIN_KEY;
-  }
-
+export class CommsCreateSendingDomainServerOperation extends CommunicationsCreateSendingDomainOperation {
   protected override async Authorize(
     _input: CommsSendingDomainInput,
     user: UserInfo,
@@ -613,15 +581,9 @@ export class CommsCreateSendingDomainServerOperation extends BaseRemotableOperat
   }
 }
 
+/** Server implementation of `Communications.VerifySendingDomain`. */
 @RegisterClass(BaseRemotableOperation, COMMS_VERIFY_SENDING_DOMAIN_KEY)
-export class CommsVerifySendingDomainServerOperation extends BaseRemotableOperation<
-  CommsSendingDomainInput,
-  CommsSendingDomainAuthOutput
-> {
-  public get OperationKey(): string {
-    return COMMS_VERIFY_SENDING_DOMAIN_KEY;
-  }
-
+export class CommsVerifySendingDomainServerOperation extends CommunicationsVerifySendingDomainOperation {
   protected override async Authorize(
     _input: CommsSendingDomainInput,
     user: UserInfo,
@@ -705,15 +667,9 @@ export class CommsVerifySendingDomainServerOperation extends BaseRemotableOperat
   }
 }
 
+/** Server implementation of `Communications.DeleteSendingDomain`. */
 @RegisterClass(BaseRemotableOperation, COMMS_DELETE_SENDING_DOMAIN_KEY)
-export class CommsDeleteSendingDomainServerOperation extends BaseRemotableOperation<
-  CommsSendingDomainInput,
-  CommsAdminMutationOutput
-> {
-  public get OperationKey(): string {
-    return COMMS_DELETE_SENDING_DOMAIN_KEY;
-  }
-
+export class CommsDeleteSendingDomainServerOperation extends CommunicationsDeleteSendingDomainOperation {
   protected override async Authorize(
     _input: CommsSendingDomainInput,
     user: UserInfo,
@@ -768,15 +724,9 @@ export class CommsDeleteSendingDomainServerOperation extends BaseRemotableOperat
   }
 }
 
+/** Server implementation of `Communications.RevokeSuppression`. */
 @RegisterClass(BaseRemotableOperation, COMMS_REVOKE_SUPPRESSION_KEY)
-export class CommsRevokeSuppressionServerOperation extends BaseRemotableOperation<
-  CommsRevokeSuppressionInput,
-  CommsAdminMutationOutput
-> {
-  public get OperationKey(): string {
-    return COMMS_REVOKE_SUPPRESSION_KEY;
-  }
-
+export class CommsRevokeSuppressionServerOperation extends CommunicationsRevokeSuppressionOperation {
   protected override async Authorize(
     _input: CommsRevokeSuppressionInput,
     user: UserInfo,
@@ -831,15 +781,9 @@ export class CommsRevokeSuppressionServerOperation extends BaseRemotableOperatio
   }
 }
 
+/** Server implementation of `Communications.BlockEndpoint`. */
 @RegisterClass(BaseRemotableOperation, COMMS_BLOCK_ENDPOINT_KEY)
-export class CommsBlockEndpointServerOperation extends BaseRemotableOperation<
-  CommsBlockEndpointInput,
-  CommsBlockEndpointOutput
-> {
-  public get OperationKey(): string {
-    return COMMS_BLOCK_ENDPOINT_KEY;
-  }
-
+export class CommsBlockEndpointServerOperation extends CommunicationsBlockEndpointOperation {
   protected override async Authorize(
     _input: CommsBlockEndpointInput,
     user: UserInfo,

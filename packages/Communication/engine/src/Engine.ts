@@ -371,13 +371,12 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
                 if (log) {
                     const effectiveUser = contextUser ?? this.ContextUser;
                     const channelID = message.MessageType?.CommunicationBaseMessageTypeID;
-                    const rawClass = message.ContextData?.['MessageClass'];
-                    const messageClass: MessageClass =
-                        rawClass === 'Marketing' || rawClass === 'Operational' || rawClass === 'Transactional'
-                            ? rawClass
-                            : 'Transactional';
+                    const messageClass: MessageClass = message.MessageClass ?? 'Transactional';
+                    const shouldGateV1 =
+                        message.CheckComplianceGate === true ||
+                        process.env.MJ_COMMS_V1_COMPLIANCE_GATE === 'true';
 
-                    if (channelID && effectiveUser) {
+                    if (shouldGateV1 && channelID && effectiveUser) {
                         const recipientsToCheck = [
                             ...(message.To ? [message.To] : []),
                             ...(message.CCRecipients ?? []),

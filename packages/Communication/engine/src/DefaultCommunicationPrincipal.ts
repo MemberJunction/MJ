@@ -322,7 +322,12 @@ export class DefaultCommunicationPrincipal extends BaseCommunicationPrincipal {
       contextUser,
     );
 
-    if (res.Success && res.Results) {
+    if (!res.Success) {
+      throw new Error(
+        `Failed reading ${entityInfo.Name} records for principal resolution: ${res.ErrorMessage ?? 'RunView failed'}`,
+      );
+    }
+    if (res.Results) {
       for (const row of res.Results) {
         const pkVal = row[pkName];
         if (typeof pkVal === 'string') {

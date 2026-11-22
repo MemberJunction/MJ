@@ -5,7 +5,7 @@ import {
   CommunicationEngineBase,
   NormalizedActivityEvent,
 } from '@memberjunction/communication-types';
-import { IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
 import type { MJCommunicationSuppressionPolicyEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { CommsActivityWorker } from '../CommsActivityWorker';
@@ -85,7 +85,7 @@ function isUnset(value: unknown): boolean {
 
 /**
  * CHECK constraints on CommunicationSuppression that the real database enforces
- * (migrations/v6/V202611201300__v6.3.x__Communications_V2_Schema.sql).
+ * (migrations/v6/V202611211800__v6.3.x__Communications_V2_Schema.sql).
  */
 function suppressionConstraintViolation(row: MockRecord): string | null {
   const prefix = 'The INSERT statement conflicted with the CHECK constraint';
@@ -422,13 +422,6 @@ describe('CommsActivityWorker', () => {
     expect(rejectedSaves).toEqual([]);
   });
 
-  // DEFECT (CommsActivityWorker.dispatchDriverHooks :1118-1120 with SoftBounceThresholdPolicy.Evaluate
-  // :1266-1271 and :1304-1313, line numbers at time of writing): when no active
-  // SoftBounceThresholdPolicy row is loaded, the worker still runs a default SoftBounceThresholdPolicy,
-  // which writes Reason='Policy' with CommunicationSuppressionPolicyID = null. The database rejects that
-  // row (CK_CommunicationSuppression_PolicyLink), Save() returns false, createSuppression throws, and the
-  // catch right after only logs it — so the endpoint is never suppressed. This test previously passed only
-  // because the fake accepted the invalid row.
   it('without a SoftBounceThresholdPolicy row, does not attempt a Policy suppression the database rejects', async () => {
     const ep = seedSoftBouncingEndpoint(4);
 
@@ -783,6 +776,7 @@ describe('CommsActivityWorker', () => {
         ID: 'log-gdpr',
         CommunicationEndpointID: ep.ID,
         RecipientAddress: 'gdpr@example.com',
+        CorrelationData: JSON.stringify({ campaignId: 'c1', __deferredPayload: { Body: 'Secret body' } }),
       },
       false,
     );
@@ -796,6 +790,7 @@ describe('CommsActivityWorker', () => {
         CommunicationEndpointID: ep.ID,
         IPAddress: '203.0.113.42',
         UserAgent: 'CustomUA/1.0',
+        CorrelationData: JSON.stringify({ campaignId: 'c1' }),
       },
       false,
     );
@@ -826,10 +821,129 @@ describe('CommsActivityWorker', () => {
     expect(ep.ValueHash).toBe('hash-gdpr-123');
     expect(store['MJ: Communication Suppressions']).toHaveLength(1);
     expect(log.RecipientAddress).toBeNull();
+    expect(log.CorrelationData).toBeNull();
     expect(activity.IPAddress).toBeNull();
     expect(activity.UserAgent).toBeNull();
+    expect(activity.CorrelationData).toBeNull();
     // Append-only consent audit log is never mutated by erasure
     expect(audit.IPAddress).toBe('203.0.113.42');
     expect(audit.UserAgent).toBe('CustomUA/1.0');
+  });
+
+  it('reports ErrorCount instead of dropping an event when CommunicationLog correlation RunView fails', async () => {
+    const origFromProvider = RunView.FromMetadataProvider;
+    vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation((md) => {
+      const rv = origFromProvider.call(RunView, md);
+      const origRunView = rv.RunView.bind(rv);
+      rv.RunView = vi.fn().mockImplementation(async (params: { EntityName: string }, u?: UserInfo) => {
+        if (params.EntityName === 'MJ: Communication Logs') {
+          return { Success: false, Results: [], ErrorMessage: 'DB read timeout' };
+        }
+        return origRunView(params as never, u);
+      }) as typeof rv.RunView;
+      return rv;
+    });
+
+    const result = await worker.ProcessActivityBatch(
+      [
+        {
+          CommunicationProviderID: 'prov-1',
+          UnsubscribeToken: 'tok-unsub-fail',
+          EventType: 'Unsubscribed',
+          OccurredAt: new Date('2026-02-02T00:00:00Z'),
+          IsMachineEvent: false,
+        },
+      ],
+      mockUser,
+    );
+
+    expect(result.ErrorCount).toBe(1);
+    expect(result.ProcessedCount).toBe(0);
+    expect(store['MJ: Communication Activities']).toHaveLength(0);
+  });
+
+  it('reports ErrorCount when endpoint resolution RunView fails', async () => {
+    const origFromProvider = RunView.FromMetadataProvider;
+    vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation((md) => {
+      const rv = origFromProvider.call(RunView, md);
+      const origRunView = rv.RunView.bind(rv);
+      rv.RunView = vi.fn().mockImplementation(async (params: { EntityName: string }, u?: UserInfo) => {
+        if (params.EntityName === 'MJ: Communication Endpoints') {
+          return { Success: false, Results: [], ErrorMessage: 'Endpoint table unavailable' };
+        }
+        return origRunView(params as never, u);
+      }) as typeof rv.RunView;
+      return rv;
+    });
+
+    const result = await worker.ProcessActivityBatch(
+      [
+        {
+          CommunicationProviderID: 'prov-1',
+          CommunicationEndpointID: 'ep-1',
+          EventType: 'Unsubscribed',
+          OccurredAt: new Date('2026-02-02T00:00:00Z'),
+          IsMachineEvent: false,
+        },
+      ],
+      mockUser,
+    );
+
+    expect(result.ErrorCount).toBe(1);
+    expect(result.ProcessedCount).toBe(0);
+  });
+
+  it('deduplicates first-party events lacking ProviderEventID and strips __deferredPayload from CorrelationData', async () => {
+    store['MJ: Communication Logs'].push(
+      makeRecord(
+        'MJ: Communication Logs',
+        store,
+        {
+          ID: 'log-fp',
+          CommunicationProviderID: 'prov-1',
+          CommunicationSenderID: 'sender-1',
+          CommunicationEndpointID: 'ep-fp',
+          TrackingToken: 'tok-fp-1',
+          CorrelationData: JSON.stringify({
+            campaignId: 'camp-fp',
+            __deferredPayload: { Subject: 'Secret', Body: 'Private body' },
+          }),
+        },
+        false,
+      ),
+    );
+
+    const occurredAt = new Date('2026-02-03T12:00:00Z');
+    const first = await worker.ProcessActivityBatch(
+      [
+        {
+          CommunicationProviderID: 'prov-1',
+          TrackingToken: 'tok-fp-1',
+          EventType: 'Opened',
+          OccurredAt: occurredAt,
+          IsMachineEvent: false,
+        },
+      ],
+      mockUser,
+    );
+    const second = await worker.ProcessActivityBatch(
+      [
+        {
+          CommunicationProviderID: 'prov-1',
+          TrackingToken: 'tok-fp-1',
+          EventType: 'Opened',
+          OccurredAt: occurredAt,
+          IsMachineEvent: false,
+        },
+      ],
+      mockUser,
+    );
+
+    expect(first.ProcessedCount).toBe(1);
+    expect(second.DuplicateCount).toBe(1);
+    expect(second.ProcessedCount).toBe(0);
+    expect(store['MJ: Communication Activities']).toHaveLength(1);
+    const savedCorrelation = JSON.parse(String(store['MJ: Communication Activities'][0].CorrelationData));
+    expect(savedCorrelation).toEqual({ campaignId: 'camp-fp' });
   });
 });
