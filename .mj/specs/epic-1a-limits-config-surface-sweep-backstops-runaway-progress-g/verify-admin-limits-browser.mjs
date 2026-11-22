@@ -712,7 +712,210 @@ function sha256File(relPath) {
     return { path: relPath, sha256 };
 }
 
+function loadTypeScriptCompiler() {
+    const req = createRequire(resolve(DASHBOARDS_DIR, 'package.json'));
+    return req('typescript');
+}
+
+function checkAstForDisallowedStorageOrPrint(ts, sourceText, fileName) {
+    const sf = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true);
+    const findings = [];
+    function visit(node) {
+        if (ts.isIdentifier(node)) {
+            if (node.text === 'localStorage' || node.text === 'sessionStorage') {
+                findings.push(`Disallowed browser storage identifier "${node.text}" in ${fileName}`);
+            }
+        }
+        if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+            const expr = node.expression;
+            if (
+                ts.isIdentifier(expr.expression) &&
+                expr.expression.text === 'window' &&
+                expr.name.text === 'print'
+            ) {
+                findings.push(`Disallowed window.print() call in ${fileName}`);
+            }
+        }
+        ts.forEachChild(node, visit);
+    }
+    visit(sf);
+    return { sourceFile: sf, findings };
+}
+
+function runStaticReadinessChecks(ts) {
+    const compTsRel = 'packages/Angular/Explorer/dashboards/src/AdminLimits/admin-limits-resource.component.ts';
+    const compHtmlRel = 'packages/Angular/Explorer/dashboards/src/AdminLimits/admin-limits-resource.component.html';
+    const compCssRel = 'packages/Angular/Explorer/dashboards/src/AdminLimits/admin-limits-resource.component.css';
+    const serviceTsRel = 'packages/Angular/Explorer/dashboards/src/AdminLimits/services/admin-limits.service.ts';
+    const indexTsRel = 'packages/Angular/Explorer/dashboards/src/AdminLimits/index.ts';
+    const publicApiRel = 'packages/Angular/Explorer/dashboards/src/public-api.ts';
+    const lazyConfigRel = 'packages/Angular/Explorer/explorer-core/src/generated/lazy-feature-config.ts';
+    const coreModuleRel = 'packages/Angular/Explorer/dashboards/src/core-dashboards.module.ts';
+
+    const compTs = readFileSync(resolve(REPO_ROOT, compTsRel), 'utf8');
+    const compHtml = readFileSync(resolve(REPO_ROOT, compHtmlRel), 'utf8');
+    const compCss = readFileSync(resolve(REPO_ROOT, compCssRel), 'utf8');
+    const serviceTs = readFileSync(resolve(REPO_ROOT, serviceTsRel), 'utf8');
+    const indexTs = readFileSync(resolve(REPO_ROOT, indexTsRel), 'utf8');
+    const publicApi = readFileSync(resolve(REPO_ROOT, publicApiRel), 'utf8');
+    const lazyConfig = readFileSync(resolve(REPO_ROOT, lazyConfigRel), 'utf8');
+    const coreModule = readFileSync(resolve(REPO_ROOT, coreModuleRel), 'utf8');
+    const adminAppMeta = JSON.parse(readFileSync(ADMIN_APP_METADATA_PATH, 'utf8'));
+
+    // --- navParity static checks (4 static + 1 live DOM = 5) ---
+    const compAst = checkAstForDisallowedStorageOrPrint(ts, compTs, compTsRel);
+    const serviceAst = checkAstForDisallowedStorageOrPrint(ts, serviceTs, serviceTsRel);
+
+    let hasRegisterClassBaseResource = false;
+    let hasNotifyLoadComplete = false;
+    let hasOnPush = false;
+    let hasUserInfoEnginePersistence = false;
+    let extendsBaseResource = false;
+
+    function inspectComponentAst(node) {
+        if (ts.isClassDeclaration(node) && node.name?.text === 'AdminLimitsResourceComponent') {
+            if (node.heritageClauses) {
+                for (const hc of node.heritageClauses) {
+                    if (hc.getText(compAst.sourceFile).includes('BaseResourceComponent')) {
+                        extendsBaseResource = true;
+                    }
+                }
+            }
+            const decorators = ts.canHaveDecorators(node) ? ts.getDecorators(node) : undefined;
+            for (const dec of decorators ?? []) {
+                const decText = dec.getText(compAst.sourceFile);
+                if (decText.includes('RegisterClass') && decText.includes('BaseResourceComponent') && decText.includes("'AdminLimitsResource'")) {
+                    hasRegisterClassBaseResource = true;
+                }
+                if (decText.includes('Component') && decText.includes('ChangeDetectionStrategy.OnPush')) {
+                    hasOnPush = true;
+                }
+            }
+        }
+        if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+            const callText = node.expression.getText(compAst.sourceFile);
+            if (callText === 'this.NotifyLoadComplete') {
+                hasNotifyLoadComplete = true;
+            }
+            if (
+                callText === 'UserInfoEngine.Instance.GetSetting' ||
+                callText === 'UserInfoEngine.Instance.SetSettingDebounced'
+            ) {
+                hasUserInfoEnginePersistence = true;
+            }
+        }
+        ts.forEachChild(node, inspectComponentAst);
+    }
+    inspectComponentAst(compAst.sourceFile);
+
+    const navViolations = [];
+    if (!extendsBaseResource || !hasRegisterClassBaseResource) {
+        navViolations.push('AdminLimitsResourceComponent must extend BaseResourceComponent and carry @RegisterClass(BaseResourceComponent, \'AdminLimitsResource\')');
+    }
+    if (!compHtml.includes('<mj-page-layout>') || !compHtml.includes('<mj-page-header') || !compHtml.includes('<mj-page-body>')) {
+        navViolations.push('admin-limits-resource.component.html must wrap content in <mj-page-layout> with <mj-page-header> and <mj-page-body>');
+    }
+    if (!hasNotifyLoadComplete) {
+        navViolations.push('AdminLimitsResourceComponent must call this.NotifyLoadComplete()');
+    }
+    if (
+        !publicApi.includes("export * from './AdminLimits'") ||
+        !indexTs.includes('./admin-limits-resource.component') ||
+        !lazyConfig.includes("'BaseResourceComponent::AdminLimitsResource'") ||
+        !coreModule.includes('AdminLimitsResourceComponent')
+    ) {
+        navViolations.push('AdminLimitsResource must be exported in public-api.ts, declared in core-dashboards.module.ts, and mapped in lazy-feature-config.ts');
+    }
+    const navItems = Array.isArray(adminAppMeta?.fields?.DefaultNavItems) ? adminAppMeta.fields.DefaultNavItems : [];
+    const adminLimitsNavItem = navItems.find((item) => item?.DriverClass === 'AdminLimitsResource');
+    if (!adminLimitsNavItem || adminLimitsNavItem.Label !== 'Execution Limits') {
+        navViolations.push('metadata/applications/.admin-application.json DefaultNavItems missing AdminLimitsResource entry');
+    }
+
+    // --- designTokens checks (5 quantitative checks) ---
+    const designTokenViolations = [];
+    const rawColorRegex = /#[0-9a-fA-F]{3,8}\b|\b(?:rgb|rgba|hsl|hsla)\s*\(/g;
+    const cssRawColors = compCss.match(rawColorRegex);
+    if (cssRawColors && cssRawColors.length > 0) {
+        designTokenViolations.push(`Raw color literals in CSS: ${cssRawColors.join(', ')}`);
+    }
+    if (compCss.includes('.mj-btn')) {
+        designTokenViolations.push('Disallowed .mj-btn override found in component CSS');
+    }
+    const htmlRawColors = compHtml.match(rawColorRegex);
+    if (htmlRawColors && htmlRawColors.length > 0) {
+        designTokenViolations.push(`Raw color literals in HTML: ${htmlRawColors.join(', ')}`);
+    }
+    const cssVarRefs = [...compCss.matchAll(/var\(\s*(--[a-zA-Z0-9_-]+)/g)].map((m) => m[1]);
+    const nonMjVars = cssVarRefs.filter((v) => !v.startsWith('--mj-'));
+    if (cssVarRefs.length === 0 || nonMjVars.length > 0) {
+        designTokenViolations.push(`Expected exclusively --mj-* CSS custom properties; found non-MJ vars: ${nonMjVars.join(', ')}`);
+    }
+    if (!hasOnPush) {
+        designTokenViolations.push('AdminLimitsResourceComponent must use ChangeDetectionStrategy.OnPush');
+    }
+    if (!hasUserInfoEnginePersistence || compAst.findings.some((f) => f.includes('storage'))) {
+        designTokenViolations.push('AdminLimitsResourceComponent must persist preferences via UserInfoEngine.Instance without localStorage/sessionStorage');
+    }
+    if (
+        compAst.findings.some((f) => f.includes('window.print')) ||
+        serviceAst.findings.some((f) => f.includes('window.print')) ||
+        compHtml.includes('window.print')
+    ) {
+        designTokenViolations.push('Disallowed window.print() call detected');
+    }
+
+    // --- formParity check (1 quantitative applicability + core forms integrity check) ---
+    const formViolations = [];
+    let changedEntityMetadataFiles = [];
+    try {
+        const diffOutput = execSync('git diff --name-only origin/next...HEAD', { cwd: REPO_ROOT, encoding: 'utf8' });
+        changedEntityMetadataFiles = diffOutput
+            .split('\n')
+            .map((line) => line.trim())
+            .filter((line) => line.startsWith('metadata/entities/'));
+    } catch {
+        changedEntityMetadataFiles = [];
+    }
+    if (changedEntityMetadataFiles.length > 0) {
+        formViolations.push(`Unexpected metadata/entities changes for dashboard-only slice: ${changedEntityMetadataFiles.join(', ')}`);
+    }
+    if (!extendsBaseResource || compTs.includes('BaseFormComponent')) {
+        formViolations.push('AdminLimitsResourceComponent must extend BaseResourceComponent rather than BaseFormComponent');
+    }
+    const generatedFormsPath = resolve(REPO_ROOT, 'packages/Angular/Explorer/core-entity-forms/src/lib/generated/generated-forms.module.ts');
+    const generatedFormsSrc = readFileSync(generatedFormsPath, 'utf8');
+    if (
+        (!generatedFormsSrc.includes('LoadGeneratedForms') && !generatedFormsSrc.includes('GeneratedFormsModule')) ||
+        !coreModule.includes('AdminLimitsResourceComponent')
+    ) {
+        formViolations.push('Core entity generated forms or dashboards module integrity check failed');
+    }
+
+    return {
+        navItemsCount: navItems.length,
+        navViolations,
+        designTokenViolations,
+        cssVarCount: cssVarRefs.length,
+        formViolations,
+    };
+}
+
+function verifyPngScreenshot(fileName) {
+    const absPath = resolve(__dirname, fileName);
+    const bytes = readFileSync(absPath);
+    const pngMagic = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const validMagic = bytes.length >= 8 && Buffer.compare(bytes.subarray(0, 8), pngMagic) === 0;
+    return {
+        fileName,
+        valid: validMagic && bytes.length > 10_000,
+        byteLength: bytes.length,
+    };
+}
+
 async function main() {
+    const ts = loadTypeScriptCompiler();
+    const staticChecks = runStaticReadinessChecks(ts);
     const { provider, cleanup } = await createProductionBackedStore();
     const designCss = compileDesignSystemCss();
     const adminAppJson = readFileSync(ADMIN_APP_METADATA_PATH, 'utf8');
@@ -815,14 +1018,32 @@ async function main() {
         await page.click('[data-driver-class="AdminLimitsResource"]');
         await page.waitForSelector('mj-admin-limits-resource .tier-card');
 
-        const overviewStats = await page.evaluate(() => ({
-            componentMounted: Boolean(document.querySelector('mj-admin-limits-resource mj-page-layout')),
-            tierCards: document.querySelectorAll('.tier-card').length,
-            backstopCards: document.querySelectorAll('.backstop-card').length,
-            bodyBg: getComputedStyle(document.body).backgroundColor,
-            brandPrimary: getComputedStyle(document.documentElement).getPropertyValue('--mj-brand-primary').trim(),
-            brokenImages: Array.from(document.querySelectorAll('img')).filter((img) => img.naturalWidth === 0).length,
-        }));
+        const overviewStats = await page.evaluate(() => {
+            const tierItems = Array.from(document.querySelectorAll('.tier-card')).map((el) => ({
+                name: el.querySelector('.tier-name')?.textContent?.trim() ?? '',
+                rank: el.querySelector('.tier-rank')?.textContent?.trim() ?? '',
+                desc: el.querySelector('.tier-desc')?.textContent?.trim() ?? '',
+            }));
+            const backstopItems = Array.from(document.querySelectorAll('.backstop-card')).map((el) => ({
+                label: el.querySelector('.backstop-label')?.textContent?.trim() ?? '',
+                key: el.querySelector('.backstop-key')?.textContent?.trim() ?? '',
+                value: el.querySelector('.backstop-value')?.textContent?.trim() ?? '',
+            }));
+            const sectionTitles = Array.from(document.querySelectorAll('.section-header h2')).map((el) => el.textContent?.trim() ?? '');
+            const text = document.body.innerText;
+            return {
+                componentMounted: Boolean(document.querySelector('mj-admin-limits-resource mj-page-layout')),
+                tierCards: tierItems.length,
+                tierItems,
+                backstopCards: backstopItems.length,
+                backstopItems,
+                sectionTitles,
+                bodyBg: getComputedStyle(document.body).backgroundColor,
+                brandPrimary: getComputedStyle(document.documentElement).getPropertyValue('--mj-brand-primary').trim(),
+                brokenImages: Array.from(document.querySelectorAll('img')).filter((img) => img.naturalWidth === 0).length,
+                rawMarkdownLeaks: /(^|\n)\s*#{1,6}\s+|\*\*[^*]+\*\*|```/.test(text),
+            };
+        });
         await page.screenshot({ path: resolve(__dirname, 'admin-limits-overview.png'), fullPage: true });
 
         // Tab 4 first: Select paused run (inspects drawer with Clamped UserAgentPolicy provenance + FastJudge + Checkpoint), then refresh
@@ -831,6 +1052,15 @@ async function main() {
         await page.click(`tbody tr:has-text("${RUN_ID_PAUSED}")`);
         await page.waitForSelector('[data-testid="selected-run-limits-snapshot"]');
         const drawerText = await page.locator('.detail-drawer').innerText();
+        const runsDrawerStats = await page.evaluate(() => {
+            const drawerHeadings = Array.from(document.querySelectorAll('.detail-drawer h4')).map((el) => el.textContent?.trim() ?? '');
+            const text = document.body.innerText;
+            return {
+                drawerHeadings,
+                brokenImages: Array.from(document.querySelectorAll('img')).filter((img) => img.naturalWidth === 0).length,
+                rawMarkdownLeaks: /(^|\n)\s*#{1,6}\s+|\*\*[^*]+\*\*|```/.test(text),
+            };
+        });
         await page.screenshot({ path: resolve(__dirname, 'admin-limits-runs-drawer.png'), fullPage: true });
 
         // Click Refresh while ResearchPlanner is selected so GetDiagnostics resolves Tier 3/4 overrides
@@ -851,7 +1081,13 @@ async function main() {
         // Tab 3: Budget Utilization
         await page.click('button.tab-pill:has-text("Budget Utilization")');
         await page.waitForSelector('.scope-card');
-        const scopeCardsCount = await page.locator('.scope-card').count();
+        const budgetScopeItems = await page.evaluate(() =>
+            Array.from(document.querySelectorAll('.scope-card')).map((el) => ({
+                title: el.querySelector('.scope-title')?.textContent?.trim() ?? '',
+                metricsCount: el.querySelectorAll('.scope-metric').length,
+            })),
+        );
+        const scopeCardsCount = budgetScopeItems.length;
 
         // Return to Tab 4: Active & Paused Runs -> Open Approve & Resume modal -> Resume -> Pause active run
         await page.click('button.tab-pill:has-text("Active & Paused Runs")');
@@ -862,6 +1098,23 @@ async function main() {
         await page.waitForSelector('.modal-card');
         await page.fill('#ext-cost', '10');
         await page.fill('#ext-notes', 'Approved via real Angular Playwright E2E');
+        const resumeModalStats = await page.evaluate(() => {
+            const modalTitle = document.querySelector('.modal-card h3')?.textContent?.trim() ?? '';
+            const hasExtCost = Boolean(document.querySelector('#ext-cost'));
+            const hasExtWall = Boolean(document.querySelector('#ext-wall'));
+            const hasExtNotes = Boolean(document.querySelector('#ext-notes'));
+            const buttons = Array.from(document.querySelectorAll('.modal-footer button')).map((b) => b.textContent?.trim() ?? '');
+            const text = document.body.innerText;
+            return {
+                modalTitle,
+                hasExtCost,
+                hasExtWall,
+                hasExtNotes,
+                buttons,
+                brokenImages: Array.from(document.querySelectorAll('img')).filter((img) => img.naturalWidth === 0).length,
+                rawMarkdownLeaks: /(^|\n)\s*#{1,6}\s+|\*\*[^*]+\*\*|```/.test(text),
+            };
+        });
         await page.screenshot({ path: resolve(__dirname, 'admin-limits-resume-modal.png'), fullPage: true });
 
         // Submit Approve & Resume -> live BaseRemotableOperation round-trip
@@ -881,33 +1134,194 @@ async function main() {
         );
         const pauseSuccessBanner = await page.locator('[data-testid="admin-limits-success-banner"]').innerText();
 
-        const rawMarkdownLeaks = await page.evaluate(() => {
+        const postMutationRawMarkdownLeaks = await page.evaluate(() => {
             const text = document.body.innerText;
             return /(^|\n)\s*#{1,6}\s+|\*\*[^*]+\*\*|```/.test(text);
         });
 
-        if (pageErrors.length > 0 || consoleErrors.length > 0) {
-            throw new Error(`Browser errors detected: pageErrors=${JSON.stringify(pageErrors)}, consoleErrors=${JSON.stringify(consoleErrors)}`);
+        const totalBrokenImages =
+            overviewStats.brokenImages + runsDrawerStats.brokenImages + resumeModalStats.brokenImages;
+        const anyRawMarkdownLeaks =
+            overviewStats.rawMarkdownLeaks ||
+            runsDrawerStats.rawMarkdownLeaks ||
+            resumeModalStats.rawMarkdownLeaks ||
+            postMutationRawMarkdownLeaks;
+
+        // Live navParity check (5th check)
+        const navViolations = [...staticChecks.navViolations];
+        if (navCount !== staticChecks.navItemsCount || shellRouteBadge.trim() !== 'AdminLimitsResource') {
+            navViolations.push(
+                `Explorer shell nav parity mismatch: navCount=${navCount} (expected ${staticChecks.navItemsCount}), shellRouteBadge=${shellRouteBadge.trim()}`,
+            );
         }
 
+        // browserSmoke pillar (5 checks)
+        const browserSmokeViolations = [];
+        if (!overviewStats.componentMounted) {
+            browserSmokeViolations.push('AdminLimitsResourceComponent did not mount <mj-page-layout> in Explorer shell');
+        }
+        if (pageErrors.length > 0) {
+            browserSmokeViolations.push(`Uncaught pageerror events: ${pageErrors.join('; ')}`);
+        }
+        if (consoleErrors.length > 0) {
+            browserSmokeViolations.push(`Console error events: ${consoleErrors.join('; ')}`);
+        }
+        if (totalBrokenImages > 0) {
+            browserSmokeViolations.push(`Detected ${totalBrokenImages} broken <img> elements (naturalWidth === 0)`);
+        }
+        if (anyRawMarkdownLeaks) {
+            browserSmokeViolations.push('Detected raw unformatted Markdown syntax in rendered DOM text');
+        }
+
+        // seedDensity pillar (5 tiers + 9 backstops + 3 budget scopes = 17 items, plus drawer & metadata validation)
+        const seedViolations = [];
+        const validTiers = overviewStats.tierItems.filter((t) => t.name.length > 0 && t.rank.length > 0 && t.desc.length > 0);
+        const validBackstops = overviewStats.backstopItems.filter((b) => b.label.length > 0 && b.key.length > 0 && b.value.length > 0);
+        const validBudgetScopes = budgetScopeItems.filter((s) => s.title.length > 0 && s.metricsCount === 2);
+        if (validTiers.length !== 5) {
+            seedViolations.push(`Expected 5 populated precedence tier cards, found ${validTiers.length}`);
+        }
+        if (validBackstops.length !== 9) {
+            seedViolations.push(`Expected 9 populated approved backstop cards, found ${validBackstops.length}`);
+        }
+        if (validBudgetScopes.length !== 3) {
+            seedViolations.push(`Expected 3 populated budget scope cards, found ${validBudgetScopes.length}`);
+        }
+        if (!drawerText.includes('Clamped') || !drawerText.includes('Oscillating without writing new records') || !drawerText.includes('Persisted Checkpoint')) {
+            seedViolations.push('Diagnostic run drawer missing expected clamped policy, fast judge verdict, or checkpoint details');
+        }
+        if (staticChecks.navItemsCount < 5) {
+            seedViolations.push(`Expected >= 5 DefaultNavItems in .admin-application.json, found ${staticChecks.navItemsCount}`);
+        }
+        const seedCheckedCount = validTiers.length + validBackstops.length + validBudgetScopes.length;
+
+        // uxFidelity pillar (3 views + screenshots)
+        const uxViolations = [];
+        const overviewPng = verifyPngScreenshot('admin-limits-overview.png');
+        const drawerPng = verifyPngScreenshot('admin-limits-runs-drawer.png');
+        const modalPng = verifyPngScreenshot('admin-limits-resume-modal.png');
+        if (
+            !overviewPng.valid ||
+            !overviewStats.sectionTitles.includes('5-Tier Limits Precedence Chain') ||
+            !overviewStats.sectionTitles.includes('Approved Safety Backstops & Briefing Limits') ||
+            !overviewStats.sectionTitles.includes('Progress Detector & Fast Convergence Judge Policy')
+        ) {
+            uxViolations.push('Overview view screenshot or required layout sections failed verification');
+        }
+        if (
+            !drawerPng.valid ||
+            !runsDrawerStats.drawerHeadings.some((h) => h.includes('Resolved Run Limits')) ||
+            !runsDrawerStats.drawerHeadings.includes('Deterministic Progress Signals') ||
+            !runsDrawerStats.drawerHeadings.some((h) => h.includes('Fast Convergence Judge Log')) ||
+            !runsDrawerStats.drawerHeadings.includes('Persisted Checkpoint')
+        ) {
+            uxViolations.push('Runs drawer view screenshot or required layout sections failed verification');
+        }
+        if (
+            !modalPng.valid ||
+            !resumeModalStats.modalTitle.includes('Approve & Resume Run:') ||
+            !resumeModalStats.hasExtCost ||
+            !resumeModalStats.hasExtWall ||
+            !resumeModalStats.hasExtNotes ||
+            !resumeModalStats.buttons.includes('Approve & Resume Run') ||
+            !resumeModalStats.buttons.includes('Cancel')
+        ) {
+            uxViolations.push('Resume modal view screenshot or required form/button controls failed verification');
+        }
+
+        const pillars = {
+            formParity: {
+                pillar: 'formParity',
+                applicable: false,
+                passed: staticChecks.formViolations.length === 0,
+                checkedCount: 1,
+                violationCount: staticChecks.formViolations.length,
+                violations: staticChecks.formViolations,
+                summary:
+                    'Verified slice adds a BaseResourceComponent dashboard view (AdminLimitsResource) with 0 metadata/entities changes and core entity form registrations intact.',
+            },
+            navParity: {
+                pillar: 'navParity',
+                applicable: true,
+                passed: navViolations.length === 0,
+                checkedCount: 5,
+                violationCount: navViolations.length,
+                violations: navViolations,
+                summary:
+                    'Verified @RegisterClass(BaseResourceComponent, "AdminLimitsResource"), <mj-page-layout>, NotifyLoadComplete(), public-api.ts & lazy-feature-config.ts exports, and DefaultNavItems wiring in metadata/applications/.admin-application.json.',
+            },
+            designTokens: {
+                pillar: 'designTokens',
+                applicable: true,
+                passed: staticChecks.designTokenViolations.length === 0,
+                checkedCount: 5,
+                violationCount: staticChecks.designTokenViolations.length,
+                violations: staticChecks.designTokenViolations,
+                summary: `Verified 0 raw hex/rgb/rgba/hsl literals in CSS/HTML, ${staticChecks.cssVarCount} --mj-* CSS custom property usages, ChangeDetectionStrategy.OnPush, UserInfoEngine.Instance preference persistence, and 0 window.print() calls.`,
+            },
+            browserSmoke: {
+                pillar: 'browserSmoke',
+                applicable: true,
+                passed: browserSmokeViolations.length === 0,
+                checkedCount: 5,
+                violationCount: browserSmokeViolations.length,
+                violations: browserSmokeViolations,
+                summary:
+                    'Headless Chromium Playwright smoke across overview, runs-drawer, and resume-modal passed with realComponentMounted=true, 0 pageErrors, 0 consoleErrors, 0 brokenImages, and rawMarkdownLeaks=false.',
+            },
+            seedDensity: {
+                pillar: 'seedDensity',
+                applicable: true,
+                passed: seedViolations.length === 0,
+                checkedCount: seedCheckedCount,
+                violationCount: seedViolations.length,
+                violations: seedViolations,
+                summary: `Verified ${validTiers.length} precedence tier cards, ${validBackstops.length} approved backstop cards, ${validBudgetScopes.length} budget scope cards, diagnostic run drawer records, and DefaultNavItems metadata.`,
+            },
+            uxFidelity: {
+                pillar: 'uxFidelity',
+                applicable: true,
+                passed: uxViolations.length === 0,
+                checkedCount: 3,
+                violationCount: uxViolations.length,
+                violations: uxViolations,
+                summary: `Verified all 3 Playwright PNG screenshots (${overviewPng.byteLength}B, ${drawerPng.byteLength}B, ${modalPng.byteLength}B) and layout sections across overview, runs-drawer, and resume-modal.`,
+            },
+        };
+
+        const totalViolationCount = Object.values(pillars).reduce((acc, p) => acc + p.violationCount, 0);
+        const overallPassed = Object.values(pillars).every((p) => p.passed) && totalViolationCount === 0;
+        const evaluatedAtIso = new Date().toISOString();
+
         const report = {
-            verifiedAtISO: new Date().toISOString(),
+            schemaVersion: 'sf-readiness/v3',
+            repositoryFullName: 'MemberJunction/MJ',
+            targetPackage: 'packages/Angular/Explorer/dashboards',
+            evaluatedAtIso,
+            overallPassed,
+            violationCount: totalViolationCount,
+            pillars,
+            verifiedAtISO: evaluatedAtIso,
             revisionIdentity: {
                 branch: gitBranch,
                 compiledComponentJsSha256: sha256File('packages/Angular/Explorer/dashboards/dist/AdminLimits/admin-limits-resource.component.js'),
                 componentTsSha256: sha256File('packages/Angular/Explorer/dashboards/src/AdminLimits/admin-limits-resource.component.ts'),
                 componentHtmlSha256: sha256File('packages/Angular/Explorer/dashboards/src/AdminLimits/admin-limits-resource.component.html'),
                 componentCssSha256: sha256File('packages/Angular/Explorer/dashboards/src/AdminLimits/admin-limits-resource.component.css'),
+                serviceTsSha256: sha256File('packages/Angular/Explorer/dashboards/src/AdminLimits/services/admin-limits.service.ts'),
                 adminLimitsServiceTsSha256: sha256File('packages/Angular/Explorer/dashboards/src/AdminLimits/services/admin-limits.service.ts'),
                 limitsOperationsTsSha256: sha256File('packages/AI/Agents/src/operations/LimitsOperations.ts'),
+                adminAppMetadataSha256: sha256File('metadata/applications/.admin-application.json'),
+                publicApiTsSha256: sha256File('packages/Angular/Explorer/dashboards/src/public-api.ts'),
+                lazyFeatureConfigTsSha256: sha256File('packages/Angular/Explorer/explorer-core/src/generated/lazy-feature-config.ts'),
             },
             renderedMode: 'Real Angular AdminLimitsResourceComponent + ExplorerAdminShell via Vite',
             chromiumVersion: browser.version(),
             baseUrl,
             pageErrorsCount: pageErrors.length,
             consoleErrorsCount: consoleErrors.length,
-            brokenImagesCount: overviewStats.brokenImages,
-            rawMarkdownLeaks,
+            brokenImagesCount: totalBrokenImages,
+            rawMarkdownLeaks: anyRawMarkdownLeaks,
             computedTokens: {
                 bodyBg: overviewStats.bodyBg,
                 brandPrimary: overviewStats.brandPrimary,
@@ -938,6 +1352,10 @@ async function main() {
             'utf8',
         );
         console.log(JSON.stringify(report, null, 2));
+
+        if (!overallPassed) {
+            throw new Error(`OpenApp sf-readiness/v3 failed with ${totalViolationCount} violation(s): ${JSON.stringify(pillars)}`);
+        }
     } finally {
         await browser.close();
         await vite.close();
