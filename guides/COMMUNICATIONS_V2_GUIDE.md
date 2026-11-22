@@ -460,7 +460,7 @@ recipient. `UseV2` defaults to `false`.
 
 | Requirement | Why | What happens without it |
 |---|---|---|
-| Migration `V202611211800__v6.3.x__Communications_V2_Schema.sql` applied, CodeGen run, `mj sync push` run | Tables, generated entities, and the metadata in section 5 | The engine fails to load its metadata. |
+| Migration `V202611221416__v6.3.x__Communications_V2_Schema.sql` applied, CodeGen run, `mj sync push` run | Tables, generated entities, and the metadata in section 5 | The engine fails to load its metadata. |
 | A public URL: `MJAPI_PUBLIC_URL` (and `MJAPI_BASE_PATH` when a proxy forwards a prefix) | Unsubscribe, open and click links in emails are built from `ApiRoute('/comms', { absolute: true })` | Links point at the internal host and port and do not work for recipients. |
 | `/comms/*` reachable from the internet, without authentication | Recipients' mail clients and the provider call it | Unsubscribes, tracking and webhooks fail. |
 | `MJ_COMMS_HMAC_SECRET`, identical on every MJAPI instance | Signs and verifies click links | Links are not rewritten; `/comms/click` answers `400`. |
