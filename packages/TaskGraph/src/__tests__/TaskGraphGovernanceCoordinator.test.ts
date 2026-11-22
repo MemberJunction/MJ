@@ -1723,4 +1723,152 @@ describe('TaskGraphGovernanceCoordinator — default opt-in, 5-tier policy scope
             await disp.Stop();
         }
     });
+
+    it('CR-GRAPH-STANDALONE-GOVERNANCE-RESUME-BYPASS: blocks ordinary ResumeGraph, StepGraph, and PauseGraph on standalone graphs without SubmittingAgentRunID until ApproveAndResumePausedGraph clears durable markers', async () => {
+        const db = new GovernanceInMemoryDb();
+        const provider = db.CreateProvider();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation((p) => p as Partial<RunView> as RunView);
+
+        const executed: string[] = [];
+        const frames: TaskGraphFrame[] = [];
+        const disp = new TaskGraphDispatcher(
+            { CreateProvider: async () => provider },
+            { RunAgentForTask: async () => ({ Success: true }) },
+            TEST_USER,
+            {
+                InstanceID: 'standalone-gov-resume-bypass',
+                MaxConcurrentTasks: 1,
+                PollIntervalSeconds: 0.01,
+                HeartbeatIntervalSeconds: 60,
+                ReconciliationIntervalSeconds: 60,
+            },
+            undefined,
+            { OnFrame: (frame) => frames.push(frame) },
+            {
+                RunActionForTask: async (ctx) => {
+                    executed.push(ctx.TaskID);
+                    return { Success: true, Output: { step: executed.length }, CostUsd: 0.15, TokensUsed: 100 };
+                },
+            },
+        );
+
+        await disp.Start();
+        try {
+            const service = new TaskGraphService();
+            const ctx = {
+                EnvironmentID: 'env-1',
+                Provider: provider,
+                ContextUser: TEST_USER,
+                // Standalone graph: NO AgentRunID (SubmittingAgentRunID is null)
+                LimitsOverride: { Budgets: { PerRun: { MaxCostUsd: 0.25 } } },
+            };
+            const subRes = await service.Submit(buildLinearSpec(5, 'Standalone Governance Pause Graph'), ctx);
+            expect(subRes.Success).toBe(true);
+            const parentId = subRes.ParentTaskID!;
+
+            await waitUntil(
+                () =>
+                    disp.Governance.GetGraphDiagnostics(parentId)?.PausedByGovernance === true &&
+                    frames.some((f) => f.Kind === 'GraphPaused' && f.ParentTaskID === parentId),
+                5_000,
+                () => disp.Kick(),
+            );
+            expect(executed).toHaveLength(2);
+            expect(disp.Governance.IsLocallyPaused(parentId)).toBe(true);
+
+            // Verify durable root task $.debug and Configuration checkpoint state
+            const pausedRow = db.Tasks.get(parentId.toLowerCase())!;
+            const pausedDebug = ParseTaskGraphDebugState(pausedRow.InputPayload);
+            expect(pausedDebug.paused).toBe(true);
+            expect(pausedDebug.pausedReason).toBe('governance');
+            expect(pausedDebug.governancePauseActive).toBe(true);
+            expect(pausedDebug.checkpointPersisted).toBe(true);
+            expect(pausedDebug.pendingCheckpointContext).not.toBeNull();
+            expect(pausedRow.Configuration).toContain('"governanceCheckpoint"');
+            expect(pausedRow.Configuration).toContain('"Status":"Paused"');
+
+            // Ordinary ResumeGraph, StepGraph, and PauseGraph MUST fail and NOT clear durable governance markers
+            const resumeBlocked = await service.ResumeGraph(parentId, ctx);
+            expect(resumeBlocked.Success).toBe(false);
+            const stepBlocked = await service.StepGraph(parentId, 'one', ctx);
+            expect(stepBlocked.Success).toBe(false);
+            const pauseBlocked = await service.PauseGraph(parentId, ctx, TEST_USER.ID);
+            expect(pauseBlocked.Success).toBe(false);
+
+            for (let i = 0; i < 6; i++) {
+                disp.Kick();
+                await new Promise((r) => setTimeout(r, 20));
+            }
+            expect(executed).toHaveLength(2);
+            expect(disp.Governance.IsLocallyPaused(parentId)).toBe(true);
+
+            // Even if an external write strips $.debug.paused/pausedReason while governancePauseActive or Configuration checkpoint remains,
+            // reconcileClearedDurablePause MUST keep PausedByGovernance=true and block claiming.
+            const rawPayload = JSON.parse(pausedRow.InputPayload!) as { debug: RunawayJsonObject };
+            delete rawPayload.debug['paused'];
+            delete rawPayload.debug['pausedReason'];
+            pausedRow.InputPayload = JSON.stringify(rawPayload);
+            expect(
+                await disp.Governance.IsGraphBlockedByGovernance(
+                    provider,
+                    parentId,
+                    ParseTaskGraphDebugState(pausedRow.InputPayload),
+                    null,
+                    TEST_USER,
+                ),
+            ).toBe(true);
+            for (let i = 0; i < 4; i++) {
+                disp.Kick();
+                await new Promise((r) => setTimeout(r, 20));
+            }
+            expect(executed).toHaveLength(2);
+
+            // Non-owner user cannot approve and resume
+            const otherUser = {
+                ID: '99999999-9999-4999-8999-999999999999',
+                Name: 'Unauthorized User',
+                Email: 'unauth@example.com',
+                Type: 'User',
+                IsActive: true,
+            } as UserInfo;
+            const externalCoord = new TaskGraphGovernanceCoordinator(new TaskClaimStore('standalone-approver'));
+            const deniedApprove = await externalCoord.ApproveAndResumePausedGraph({
+                ParentTaskID: parentId,
+                Provider: provider,
+                ContextUser: otherUser,
+                BudgetExtension: { NewPerRunMaxCostUsd: 1.0 },
+            });
+            expect(deniedApprove.Success).toBe(false);
+            expect(executed).toHaveLength(2);
+
+            // Authorized owner approves with a budget extension via external coordinator -> persists to root Configuration and clears $.debug via ClearDebugPauseFields
+            const approveRes = await externalCoord.ApproveAndResumePausedGraph({
+                ParentTaskID: parentId,
+                Provider: provider,
+                ContextUser: TEST_USER,
+                BudgetExtension: { NewPerRunMaxCostUsd: 1.0 },
+                DecisionNotes: 'Approved standalone graph extension',
+            });
+            expect(approveRes.Success).toBe(true);
+            expect(approveRes.ExtendedBudgets?.PerRun.MaxCostUsd).toBe(1.0);
+
+            const clearedDebug = ParseTaskGraphDebugState(db.Tasks.get(parentId.toLowerCase())?.InputPayload);
+            expect(clearedDebug.paused).toBeUndefined();
+            expect(clearedDebug.pausedReason).toBeUndefined();
+            expect(clearedDebug.governancePauseActive).toBeUndefined();
+            expect(clearedDebug.pendingCheckpointContext).toBeUndefined();
+            expect(db.Tasks.get(parentId.toLowerCase())?.Configuration).toContain('"Status":"Approved"');
+
+            // Active dispatcher detects cleared durable pause, hydrates extended budget, and completes remaining 3 tasks
+            await waitUntil(
+                () => db.Tasks.get(parentId.toLowerCase())?.Status === 'Complete',
+                5_000,
+                () => disp.Kick(),
+            );
+            expect(executed).toHaveLength(5);
+            expect(disp.Governance.IsLocallyPaused(parentId)).toBe(false);
+        } finally {
+            await disp.Stop();
+        }
+    });
 });

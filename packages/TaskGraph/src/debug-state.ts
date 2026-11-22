@@ -39,6 +39,14 @@ export type StepTarget = 'one' | 'wave' | string;
 /** A user's answer for an edge whose condition they have overridden. */
 export type EdgeOverrideVerdict = 'true' | 'false';
 
+/** Pause reason identifying a governance-initiated pause (`'governance'` or `'governance:<detail>'`). */
+export type GovernancePausedReason = 'governance' | `governance:${string}`;
+
+/** Returns true when `reason` identifies a governance pause rather than an ordinary debugger pause. */
+export function IsGovernancePausedReason(reason: RunawayJsonValue | undefined): reason is GovernancePausedReason {
+    return reason === 'governance' || (typeof reason === 'string' && reason.startsWith('governance:'));
+}
+
 /**
  * Durable governance pause envelope serialized into `$.debug.pendingCheckpointContext`
  * whenever `$.debug.paused` is written while the submitting `MJ: AI Agent Runs` checkpoint
@@ -71,7 +79,12 @@ export type TaskGraphDebugState = {
     /** Who paused it — informational, for the console and the frame. */
     pausedBy?: string | null;
     /** Whether a person paused it, a breakpoint did, or budget/runaway governance did. */
-    pausedReason?: 'user' | 'breakpoint' | 'governance';
+    pausedReason?: 'user' | 'breakpoint' | GovernancePausedReason;
+    /**
+     * Dedicated durable governance-approval-required marker set when governance pauses the graph
+     * and cleared ONLY by `TaskGraphGovernanceCoordinator.ClearDebugPauseFields` inside `ApproveAndResumePausedGraph`.
+     */
+    governancePauseActive?: boolean;
     /** The task whose breakpoint fired, when `pausedReason` is `'breakpoint'`. */
     pausedAtTaskID?: string | null;
     /** Task IDs the dispatcher pauses the graph on, before claiming them. */
@@ -236,8 +249,11 @@ export function ParseTaskGraphDebugState(raw: string | null | undefined): TaskGr
         if (readBool(d['paused'])) state.paused = true;
         if (typeof d['pausedBy'] === 'string') state.pausedBy = d['pausedBy'];
         const pr = d['pausedReason'];
-        if (pr === 'user' || pr === 'breakpoint' || pr === 'governance') {
+        if (pr === 'user' || pr === 'breakpoint' || IsGovernancePausedReason(pr)) {
             state.pausedReason = pr;
+        }
+        if (readBool(d['governancePauseActive'])) {
+            state.governancePauseActive = true;
         }
         if (typeof d['pausedAtTaskID'] === 'string') state.pausedAtTaskID = d['pausedAtTaskID'];
         if (typeof d['skipBreakpointTaskID'] === 'string') state.skipBreakpointTaskID = d['skipBreakpointTaskID'];
@@ -271,6 +287,21 @@ export function ParseTaskGraphDebugState(raw: string | null | undefined): TaskGr
     } catch {
         return {};
     }
+}
+
+/**
+ * Returns true when `$.debug` carries any active durable governance pause marker
+ * (`governancePauseActive === true`, a governance `pausedReason`, `checkpointPersisted === false`,
+ * or a non-null `pendingCheckpointContext`), even if an ordinary debugger operation altered `paused`.
+ */
+export function IsGovernanceDebugPause(debug: TaskGraphDebugState): boolean {
+    if (debug.governancePauseActive === true) {
+        return true;
+    }
+    if (debug.pendingCheckpointContext != null || debug.checkpointPersisted === false) {
+        return true;
+    }
+    return IsGovernancePausedReason(debug.pausedReason);
 }
 
 /**

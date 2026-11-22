@@ -106,6 +106,8 @@ import {
 import { DispatcherConditionEvaluator } from './DispatcherConditionEvaluator';
 import {
     DecideClaimGate,
+    IsGovernanceDebugPause,
+    IsGovernancePausedReason,
     OverrideVerdictFor,
     ParseTaskGraphDebugState,
     type TaskGraphDebugState,
@@ -881,7 +883,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         parentTaskID: string,
         debug: TaskGraphDebugState,
     ): Promise<void> {
-        const paused = debug.paused === true;
+        const paused = debug.paused === true || IsGovernanceDebugPause(debug);
         if (paused && (debug.checkpointPersisted === false || this.governance.HasPendingPausePersistence(parentTaskID))) {
             return;
         }
@@ -900,7 +902,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             Reason: paused
                 ? (debug.pausedReason === 'breakpoint'
                     ? 'breakpoint'
-                    : debug.pausedReason === 'governance'
+                    : IsGovernancePausedReason(debug.pausedReason) || debug.governancePauseActive === true
                         ? 'governance'
                         : 'paused by user')
                 : 'resumed',

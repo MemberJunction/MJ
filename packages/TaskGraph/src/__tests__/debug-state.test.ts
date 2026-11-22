@@ -6,6 +6,8 @@
 import { describe, expect, it } from 'vitest';
 import {
     DecideClaimGate,
+    IsGovernanceDebugPause,
+    IsGovernancePausedReason,
     OverrideVerdictFor,
     ParseTaskGraphDebugState,
 } from '../debug-state';
@@ -134,6 +136,24 @@ describe('DecideClaimGate', () => {
             mode: 'breakpoint',
             taskID: B,
         });
+    });
+
+    it('parses governancePauseActive and governance:* pausedReason prefixes and detects durable governance pauses', () => {
+        const prefixed = ParseTaskGraphDebugState(payload({
+            paused: true,
+            pausedReason: 'governance:BudgetExceeded',
+            governancePauseActive: true,
+        }));
+        expect(prefixed.pausedReason).toBe('governance:BudgetExceeded');
+        expect(prefixed.governancePauseActive).toBe(true);
+        expect(IsGovernancePausedReason(prefixed.pausedReason)).toBe(true);
+        expect(IsGovernanceDebugPause(prefixed)).toBe(true);
+
+        expect(IsGovernanceDebugPause({ paused: true, pausedReason: 'user' })).toBe(false);
+        expect(IsGovernanceDebugPause({ paused: true, pausedReason: 'breakpoint', pausedAtTaskID: A })).toBe(false);
+        expect(IsGovernanceDebugPause({ governancePauseActive: true })).toBe(true);
+        expect(IsGovernanceDebugPause({ checkpointPersisted: false })).toBe(true);
+        expect(IsGovernancePausedReason('user')).toBe(false);
     });
 
     it('matches breakpoints and named steps case-insensitively', () => {

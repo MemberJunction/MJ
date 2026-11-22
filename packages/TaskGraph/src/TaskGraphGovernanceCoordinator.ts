@@ -11,7 +11,9 @@
  *
  * @module @memberjunction/task-graph
  */
+import { randomUUID } from 'node:crypto';
 import {
+    AuthorizationEvaluator,
     IMetadataProvider,
     IRunViewProvider,
     LimitsConfigResolver,
@@ -28,7 +30,7 @@ import type {
     MJAIAgentUserPolicyEntity,
     MJTaskEntity,
 } from '@memberjunction/core-entities';
-import { EscapeSQLString, IsPlainObject, IsValidUUID, SafeJSONParse } from '@memberjunction/global';
+import { EscapeSQLString, IsPlainObject, IsValidUUID, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
     AgentUserPolicyEngine,
     ExtractLimitsDiagnosticsFromRunData,
@@ -60,6 +62,7 @@ import { TaskClaimStore } from './TaskClaimStore';
 import { ParseTaskGraphParentMetadata, type TaskGraphParentMetadata } from './TaskGraphService';
 import { KickTaskGraphDispatchers } from './task-graph-kick';
 import {
+    IsGovernanceDebugPause,
     ParseTaskGraphDebugState,
     type PendingGovernanceCheckpointContext,
     type TaskGraphDebugState,
@@ -165,6 +168,26 @@ export interface ApproveAndResumePausedGraphInput {
     Provider: IMetadataProvider;
     ContextUser: UserInfo;
     ApprovedByUserID?: string;
+    BudgetExtension?: BudgetExtensionGrant;
+    DecisionNotes?: string | null;
+}
+
+/**
+ * Durable governance checkpoint & approval record persisted onto a standalone workflow parent
+ * task's `Configuration.governanceCheckpoint` when no submitting `MJ: AI Agent Runs` row exists.
+ */
+export interface StandaloneGraphGovernanceCheckpointState {
+    CheckpointID: string;
+    Status: 'Paused' | 'Approved';
+    PauseReason: RunawayPauseReason;
+    Summary: string;
+    PausedAtISO: string;
+    CompletedNodeCount: number;
+    CompletedNodeIDs: string[];
+    CumulativeLedger: CumulativeBudgetLedger;
+    BudgetBreach?: BudgetBreachDetail;
+    ApprovedAtISO?: string;
+    ApprovedByUserID?: string | null;
     BudgetExtension?: BudgetExtensionGrant;
     DecisionNotes?: string | null;
 }
@@ -649,9 +672,41 @@ export class TaskGraphGovernanceCoordinator {
     }
 
     /**
-     * Approves the submitting agent run's persisted checkpoint (with optional {@link BudgetExtensionGrant}),
-     * clears `$.debug.paused` on the parent task graph, updates in-memory state if present, and
-     * kicks dispatchers to resume remaining `Pending` nodes without replaying completed nodes.
+     * Clears all durable governance pause fields from `$.debug` on the parent task row.
+     *
+     * Must ONLY be invoked by {@link ApproveAndResumePausedGraph} after governance approval and
+     * any budget extension have been durably persisted — ordinary debugger verbs (`PauseGraph`,
+     * `ResumeGraph`, `StepGraph`) are prohibited from clearing governance pause markers.
+     */
+    public async ClearDebugPauseFields(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        workflowTaskTypeID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        return this.claims.TryWriteDebugFields(
+            provider,
+            parentTaskID,
+            [
+                TaskClaimStore.DebugField('$.debug.paused', { Kind: 'null' }),
+                TaskClaimStore.DebugField('$.debug.pausedReason', { Kind: 'null' }),
+                TaskClaimStore.DebugField('$.debug.pausedBy', { Kind: 'null' }),
+                TaskClaimStore.DebugField('$.debug.pausedAtTaskID', { Kind: 'null' }),
+                TaskClaimStore.DebugField('$.debug.step', { Kind: 'null' }),
+                TaskClaimStore.DebugField('$.debug.governancePauseActive', { Kind: 'null' }),
+                TaskClaimStore.DebugField('$.debug.checkpointPersisted', { Kind: 'null' }),
+                TaskClaimStore.DebugField('$.debug.pendingCheckpointContext', { Kind: 'null' }),
+            ],
+            workflowTaskTypeID,
+            contextUser,
+        );
+    }
+
+    /**
+     * Approves the submitting agent run's (or standalone graph's) persisted checkpoint (with optional
+     * {@link BudgetExtensionGrant}), clears governance pause markers from `$.debug` via
+     * {@link ClearDebugPauseFields}, updates in-memory state if present, and kicks dispatchers to
+     * resume remaining `Pending` nodes without replaying completed nodes.
      */
     public async ApproveAndResumePausedGraph(
         input: ApproveAndResumePausedGraphInput,
@@ -687,11 +742,12 @@ export class TaskGraphGovernanceCoordinator {
             AgentID: string | null;
             UserID: string | null;
             InputPayload: string | null;
+            Configuration: string | null;
         }>(
             {
                 EntityName: 'MJ: Tasks',
                 ExtraFilter: `ID='${EscapeSQLString(input.ParentTaskID)}'`,
-                Fields: ['ID', 'TypeID', 'AgentRunID', 'AgentID', 'UserID', 'InputPayload'],
+                Fields: ['ID', 'TypeID', 'AgentRunID', 'AgentID', 'UserID', 'InputPayload', 'Configuration'],
                 ResultType: 'simple',
                 BypassCache: true,
             },
@@ -713,8 +769,7 @@ export class TaskGraphGovernanceCoordinator {
         const parentDebug = ParseTaskGraphDebugState(parentRow.InputPayload);
         if (
             !existingPendingState &&
-            parentDebug.paused === true &&
-            parentDebug.pausedReason === 'governance' &&
+            this.isGovernanceDebugPause(parentDebug) &&
             parentDebug.checkpointPersisted === false
         ) {
             await this.HydrateGraphIfNeeded(
@@ -770,8 +825,21 @@ export class TaskGraphGovernanceCoordinator {
             agentRun = loadedRun;
         }
 
-        const effectiveAgentId = meta.submittedByAgentID || agentRun?.AgentID || parentRow.AgentID || '';
         const effectiveUserId = meta.submittedByUserID ?? agentRun?.UserID ?? parentRow.UserID ?? null;
+        const authError = this.authorizeGraphApproval(input.Provider, input.ContextUser, effectiveUserId);
+        if (authError) {
+            return {
+                Success: false,
+                ParentTaskID: input.ParentTaskID,
+                AgentRunID: agentRunId,
+                CheckpointID: null,
+                ExtendedBudgets: null,
+                PriorCumulativeCostUsd: 0,
+                Message: authError,
+            };
+        }
+
+        const effectiveAgentId = meta.submittedByAgentID || agentRun?.AgentID || parentRow.AgentID || '';
         const { agentEntity, userPolicyEntity } = await this.loadPolicyScopeEntities(
             input.Provider,
             effectiveAgentId,
@@ -806,22 +874,30 @@ export class TaskGraphGovernanceCoordinator {
             checkpointId = approvedCp.CheckpointID;
             priorCostUsd = approvedCp.CumulativeLedger.RunCostUsd;
             extendedBudgets = ApplyBudgetExtensionToBudgets(baseBudgets, approvedCp.HumanApproval.BudgetExtension);
-        } else if (input.BudgetExtension) {
-            extendedBudgets = ApplyBudgetExtensionToBudgets(baseBudgets, input.BudgetExtension);
+        } else {
+            const standaloneOutcome = await this.saveStandaloneApprovedCheckpoint(
+                input,
+                parentDebug.pendingCheckpointContext ?? null,
+            );
+            if (!standaloneOutcome.Saved) {
+                return {
+                    Success: false,
+                    ParentTaskID: input.ParentTaskID,
+                    AgentRunID: null,
+                    CheckpointID: standaloneOutcome.CheckpointID,
+                    ExtendedBudgets: null,
+                    PriorCumulativeCostUsd: standaloneOutcome.PriorCostUsd,
+                    Message: standaloneOutcome.ErrorMessage ?? `Failed to persist approval on standalone graph '${input.ParentTaskID}'.`,
+                };
+            }
+            checkpointId = standaloneOutcome.CheckpointID;
+            priorCostUsd = standaloneOutcome.PriorCostUsd;
+            extendedBudgets = ApplyBudgetExtensionToBudgets(baseBudgets, standaloneOutcome.AppliedExtension);
         }
 
-        const ok = await this.claims.TryWriteDebugFields(
+        const ok = await this.ClearDebugPauseFields(
             input.Provider,
             input.ParentTaskID,
-            [
-                TaskClaimStore.DebugField('$.debug.paused', { Kind: 'null' }),
-                TaskClaimStore.DebugField('$.debug.pausedReason', { Kind: 'null' }),
-                TaskClaimStore.DebugField('$.debug.pausedBy', { Kind: 'null' }),
-                TaskClaimStore.DebugField('$.debug.pausedAtTaskID', { Kind: 'null' }),
-                TaskClaimStore.DebugField('$.debug.step', { Kind: 'null' }),
-                TaskClaimStore.DebugField('$.debug.checkpointPersisted', { Kind: 'null' }),
-                TaskClaimStore.DebugField('$.debug.pendingCheckpointContext', { Kind: 'null' }),
-            ],
             parentRow.TypeID,
             input.ContextUser,
         );
@@ -1020,14 +1096,65 @@ export class TaskGraphGovernanceCoordinator {
     }
 
     private isGovernanceDebugPause(debug: TaskGraphDebugState): boolean {
-        if (debug.paused !== true) {
-            return false;
+        return IsGovernanceDebugPause(debug);
+    }
+
+    private authorizeGraphApproval(
+        provider: IMetadataProvider,
+        contextUser: UserInfo | undefined,
+        ownerUserId: string | null,
+    ): string | null {
+        if (!contextUser) {
+            return 'ContextUser is required to approve and resume a governance-paused graph.';
         }
-        return (
-            debug.pausedReason === 'governance' ||
-            debug.pendingCheckpointContext != null ||
-            debug.checkpointPersisted === false
-        );
+        const userType = typeof contextUser.Type === 'string' ? contextUser.Type.trim().toLowerCase() : '';
+        if (userType === 'owner') {
+            return null;
+        }
+        const authorizations = provider.Authorizations ?? [];
+        const matched = authorizations.find((auth) => {
+            const name = auth.Name?.trim().toLowerCase();
+            return name === 'system administrator' || name === 'ai: manage agents';
+        });
+        if (matched && new AuthorizationEvaluator().UserCanExecuteWithAncestors(matched, contextUser, authorizations)) {
+            return null;
+        }
+        if (ownerUserId && UUIDsEqual(ownerUserId, contextUser.ID)) {
+            return null;
+        }
+        return 'Only the workflow owner or an authorized administrator may approve and resume a governance-paused graph.';
+    }
+
+    private async loadRootTaskDurableRow(
+        provider: IMetadataProvider,
+        graphID: string,
+        contextUser: UserInfo,
+    ): Promise<{ InputPayload: string | null; Configuration: string | null } | null> {
+        if (typeof (provider as Partial<IRunViewProvider>).RunView === 'function') {
+            const res = await RunView.FromMetadataProvider(provider).RunView<{
+                InputPayload: string | null;
+                Configuration: string | null;
+            }>(
+                {
+                    EntityName: 'MJ: Tasks',
+                    ExtraFilter: `ID='${EscapeSQLString(graphID)}'`,
+                    Fields: ['ID', 'InputPayload', 'Configuration'],
+                    ResultType: 'simple',
+                    MaxRows: 1,
+                    BypassCache: true,
+                },
+                contextUser,
+            );
+            if (res?.Success && res.Results.length > 0) {
+                return res.Results[0];
+            }
+            return null;
+        }
+        const task = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', contextUser);
+        if (!(await task.Load(graphID))) {
+            return null;
+        }
+        return { InputPayload: task.InputPayload, Configuration: task.Configuration };
     }
 
     private async reconcileClearedDurablePause(
@@ -1035,13 +1162,34 @@ export class TaskGraphGovernanceCoordinator {
         state: GraphGovernanceState,
         contextUser: UserInfo,
     ): Promise<void> {
-        if (!state.SubmittingAgentRunID) {
-            state.PausedByGovernance = false;
-            state.DebugFieldsPersisted = false;
-            state.CheckpointStatusSyncedInDebug = false;
-            return;
-        }
         try {
+            const rootRow = await this.loadRootTaskDurableRow(provider, state.GraphID, contextUser);
+            if (!rootRow) {
+                return;
+            }
+            const durableDebug = ParseTaskGraphDebugState(rootRow.InputPayload);
+            if (this.isGovernanceDebugPause(durableDebug)) {
+                state.PausedByGovernance = true;
+                state.DebugFieldsPersisted = true;
+                return;
+            }
+            if (!state.SubmittingAgentRunID) {
+                const standaloneCp = this.extractStandaloneCheckpointFromConfiguration(rootRow.Configuration);
+                if (standaloneCp && standaloneCp.Status !== 'Approved') {
+                    state.PausedByGovernance = true;
+                    state.CheckpointPersisted = true;
+                    return;
+                }
+                state.PausedByGovernance = false;
+                state.CheckpointPersisted = false;
+                state.DebugFieldsPersisted = false;
+                state.CheckpointStatusSyncedInDebug = false;
+                if (standaloneCp && standaloneCp.Status === 'Approved') {
+                    const baseBudgets = this.resolveStateLimits(state).Budgets;
+                    state.ExtendedBudgets = ApplyBudgetExtensionToBudgets(baseBudgets, standaloneCp.BudgetExtension);
+                }
+                return;
+            }
             const run = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
             if (!(await run.Load(state.SubmittingAgentRunID))) {
                 state.PausedByGovernance = false;
@@ -1062,7 +1210,7 @@ export class TaskGraphGovernanceCoordinator {
                 state.ExtendedBudgets = ApplyBudgetExtensionToBudgets(baseBudgets, cp.HumanApproval.BudgetExtension);
             }
         } catch {
-            // Keep fail-closed state on transient agent run read failures
+            // Keep fail-closed state on transient durable read failures
         }
     }
 
@@ -1073,9 +1221,14 @@ export class TaskGraphGovernanceCoordinator {
         syncNodesFromStore: boolean,
     ): Promise<void> {
         const isInitialHydration = !state.HydratedFromCheckpoint;
+        let standaloneCp: StandaloneGraphGovernanceCheckpointState | null = null;
         if (isInitialHydration) {
             state.HydratedFromCheckpoint = true;
-            await this.hydrateSubmittingRunAndCheckpoint(provider, state, contextUser);
+            if (state.SubmittingAgentRunID) {
+                await this.hydrateSubmittingRunAndCheckpoint(provider, state, contextUser);
+            } else {
+                standaloneCp = await this.hydrateStandaloneCheckpoint(provider, state, contextUser);
+            }
         }
 
         if (!state.PolicyScopeHydrated) {
@@ -1089,16 +1242,66 @@ export class TaskGraphGovernanceCoordinator {
             }
         }
 
-        if (isInitialHydration && state.ExtendedBudgets === null && state.SubmittingAgentRunID) {
-            const approvedCp = await this.tryLoadApprovedCheckpoint(provider, state.SubmittingAgentRunID, contextUser);
-            if (approvedCp) {
+        if (isInitialHydration && state.ExtendedBudgets === null) {
+            if (state.SubmittingAgentRunID) {
+                const approvedCp = await this.tryLoadApprovedCheckpoint(provider, state.SubmittingAgentRunID, contextUser);
+                if (approvedCp) {
+                    const baseBudgets = this.resolveStateLimits(state).Budgets;
+                    state.ExtendedBudgets = ApplyBudgetExtensionToBudgets(baseBudgets, approvedCp.HumanApproval.BudgetExtension);
+                }
+            } else if (standaloneCp?.Status === 'Approved') {
                 const baseBudgets = this.resolveStateLimits(state).Budgets;
-                state.ExtendedBudgets = ApplyBudgetExtensionToBudgets(baseBudgets, approvedCp.HumanApproval.BudgetExtension);
+                state.ExtendedBudgets = ApplyBudgetExtensionToBudgets(baseBudgets, standaloneCp.BudgetExtension);
             }
         }
 
         if (isInitialHydration || syncNodesFromStore) {
             await this.syncSettledNodesFromStore(provider, state, contextUser);
+        }
+    }
+
+    private async hydrateStandaloneCheckpoint(
+        provider: IMetadataProvider,
+        state: GraphGovernanceState,
+        contextUser: UserInfo,
+    ): Promise<StandaloneGraphGovernanceCheckpointState | null> {
+        try {
+            const rootRow = await this.loadRootTaskDurableRow(provider, state.GraphID, contextUser);
+            if (!rootRow) {
+                return null;
+            }
+            const durableDebug = ParseTaskGraphDebugState(rootRow.InputPayload);
+            const cp = this.extractStandaloneCheckpointFromConfiguration(rootRow.Configuration);
+            if (cp) {
+                for (const nodeId of cp.CompletedNodeIDs) {
+                    const norm = this.normId(nodeId);
+                    if (norm && !state.CompletedNodeSet.has(norm)) {
+                        state.CompletedNodeSet.add(norm);
+                        state.CompletedNodeIDs.push(nodeId);
+                    }
+                }
+                state.CompletedNodeCount = Math.max(state.CompletedNodeCount, state.CompletedNodeSet.size);
+                state.CheckpointBaselineNodeIDs = [...cp.CompletedNodeIDs];
+                state.CheckpointBaselineCostUsd = Math.max(state.CheckpointBaselineCostUsd, cp.CumulativeLedger.RunCostUsd);
+                state.CheckpointBaselineWallClockMs = Math.max(
+                    state.CheckpointBaselineWallClockMs,
+                    cp.CumulativeLedger.RunWallClockMs,
+                );
+                state.CheckpointBaselineTokens = Math.max(state.CheckpointBaselineTokens, cp.CumulativeLedger.RunTokens);
+                if (cp.Status === 'Paused') {
+                    state.CheckpointPersisted = true;
+                    if (durableDebug.checkpointPersisted !== false) {
+                        state.PausedByGovernance = true;
+                    }
+                    return cp;
+                }
+            }
+            if (this.isGovernanceDebugPause(durableDebug) && durableDebug.checkpointPersisted !== false) {
+                state.PausedByGovernance = true;
+            }
+            return cp;
+        } catch {
+            return null;
         }
     }
 
@@ -1561,8 +1764,8 @@ export class TaskGraphGovernanceCoordinator {
             if (!typeID) {
                 return `Could not resolve Workflow task type ID for graph ${state.GraphID}`;
             }
-            const hasPendingCheckpoint = Boolean(state.SubmittingAgentRunID) && !state.CheckpointPersisted;
-            const envelope = hasPendingCheckpoint
+            const checkpointAlreadyPersisted = state.CheckpointPersisted;
+            const envelope = !checkpointAlreadyPersisted
                 ? this.buildPendingCheckpointContextEnvelope(state, pending)
                 : null;
             const debugSaved = await this.claims.TryWriteDebugFields(
@@ -1571,10 +1774,11 @@ export class TaskGraphGovernanceCoordinator {
                 [
                     TaskClaimStore.DebugField('$.debug.paused', { Kind: 'bool', Value: true }),
                     TaskClaimStore.DebugField('$.debug.pausedReason', { Kind: 'string', Value: 'governance' }),
+                    TaskClaimStore.DebugField('$.debug.governancePauseActive', { Kind: 'bool', Value: true }),
                     TaskClaimStore.DebugField('$.debug.pausedBy', state.UserID ? { Kind: 'string', Value: state.UserID } : { Kind: 'null' }),
                     TaskClaimStore.DebugField('$.debug.pausedAtTaskID', { Kind: 'null' }),
                     TaskClaimStore.DebugField('$.debug.step', { Kind: 'null' }),
-                    TaskClaimStore.DebugField('$.debug.checkpointPersisted', { Kind: 'bool', Value: !hasPendingCheckpoint }),
+                    TaskClaimStore.DebugField('$.debug.checkpointPersisted', { Kind: 'bool', Value: checkpointAlreadyPersisted }),
                     TaskClaimStore.DebugField(
                         '$.debug.pendingCheckpointContext',
                         envelope ? { Kind: 'json', Value: JSON.stringify(envelope) } : { Kind: 'null' },
@@ -1587,15 +1791,16 @@ export class TaskGraphGovernanceCoordinator {
                 return `TryWriteDebugFields returned false for graph ${state.GraphID}`;
             }
             state.DebugFieldsPersisted = true;
-            state.CheckpointStatusSyncedInDebug = !hasPendingCheckpoint;
+            state.CheckpointStatusSyncedInDebug = checkpointAlreadyPersisted;
             if (pending.DebugStateCache) {
                 const prev = pending.DebugStateCache.get(state.GraphID) ?? {};
                 pending.DebugStateCache.set(state.GraphID, {
                     ...prev,
                     paused: true,
                     pausedReason: 'governance',
+                    governancePauseActive: true,
                     pausedBy: state.UserID,
-                    checkpointPersisted: !hasPendingCheckpoint,
+                    checkpointPersisted: checkpointAlreadyPersisted,
                     pendingCheckpointContext: envelope,
                 });
             }
@@ -1619,13 +1824,18 @@ export class TaskGraphGovernanceCoordinator {
             if (!typeID) {
                 return `Could not resolve Workflow task type ID for graph ${state.GraphID}`;
             }
+            const clearPendingContext = Boolean(state.SubmittingAgentRunID);
+            const fields = [
+                TaskClaimStore.DebugField('$.debug.checkpointPersisted', { Kind: 'bool', Value: true }),
+                TaskClaimStore.DebugField('$.debug.governancePauseActive', { Kind: 'bool', Value: true }),
+                ...(clearPendingContext
+                    ? [TaskClaimStore.DebugField('$.debug.pendingCheckpointContext', { Kind: 'null' })]
+                    : []),
+            ];
             const synced = await this.claims.TryWriteDebugFields(
                 provider,
                 state.GraphID,
-                [
-                    TaskClaimStore.DebugField('$.debug.checkpointPersisted', { Kind: 'bool', Value: true }),
-                    TaskClaimStore.DebugField('$.debug.pendingCheckpointContext', { Kind: 'null' }),
-                ],
+                fields,
                 typeID,
                 contextUser,
             );
@@ -1638,12 +1848,236 @@ export class TaskGraphGovernanceCoordinator {
                 pending.DebugStateCache.set(state.GraphID, {
                     ...prev,
                     checkpointPersisted: true,
-                    pendingCheckpointContext: null,
+                    governancePauseActive: true,
+                    ...(clearPendingContext ? { pendingCheckpointContext: null } : {}),
                 });
             }
             return null;
         } catch (err) {
             return err instanceof Error ? err.message : String(err);
+        }
+    }
+
+    private extractStandaloneCheckpointFromConfiguration(
+        configurationJson: string | null | undefined,
+    ): StandaloneGraphGovernanceCheckpointState | null {
+        if (typeof configurationJson !== 'string' || configurationJson.trim().length === 0) {
+            return null;
+        }
+        const parsed = SafeJSONParse<Record<string, RunawayJsonValue>>(configurationJson);
+        if (!IsPlainObject(parsed)) {
+            return null;
+        }
+        const rawCp = parsed['governanceCheckpoint'];
+        if (!IsPlainObject(rawCp)) {
+            return null;
+        }
+        const status = rawCp['Status'];
+        if (status !== 'Paused' && status !== 'Approved') {
+            return null;
+        }
+        const cpId = typeof rawCp['CheckpointID'] === 'string' ? rawCp['CheckpointID'] : '';
+        const pauseReason = typeof rawCp['PauseReason'] === 'string'
+            ? (rawCp['PauseReason'] as RunawayPauseReason)
+            : 'BudgetExceeded';
+        const summary = typeof rawCp['Summary'] === 'string' ? rawCp['Summary'] : '';
+        const pausedAtIso = typeof rawCp['PausedAtISO'] === 'string' ? rawCp['PausedAtISO'] : new Date().toISOString();
+        const completedCount = typeof rawCp['CompletedNodeCount'] === 'number' && Number.isFinite(rawCp['CompletedNodeCount'])
+            ? rawCp['CompletedNodeCount']
+            : 0;
+        const completedIds = Array.isArray(rawCp['CompletedNodeIDs'])
+            ? rawCp['CompletedNodeIDs'].filter((id): id is string => typeof id === 'string')
+            : [];
+        const ledgerRaw = rawCp['CumulativeLedger'];
+        const ledger: CumulativeBudgetLedger = IsPlainObject(ledgerRaw) && typeof ledgerRaw['RunCostUsd'] === 'number'
+            ? (ledgerRaw as Partial<CumulativeBudgetLedger> as CumulativeBudgetLedger)
+            : {
+                RunCostUsd: 0,
+                RunWallClockMs: 0,
+                RunTokens: 0,
+                RoutineCostUsd: 0,
+                RoutineWallClockMs: 0,
+                UserDailyCostUsd: 0,
+                UserDailyWallClockMs: 0,
+                PausedWallClockMs: 0,
+                PausedIntervals: [],
+                DayBucketUTC: new Date().toISOString().slice(0, 10),
+                DayBoundaryTimezone: 'UTC',
+                AsOfISO: pausedAtIso,
+            };
+        const out: StandaloneGraphGovernanceCheckpointState = {
+            CheckpointID: cpId,
+            Status: status,
+            PauseReason: pauseReason,
+            Summary: summary,
+            PausedAtISO: pausedAtIso,
+            CompletedNodeCount: completedCount,
+            CompletedNodeIDs: completedIds,
+            CumulativeLedger: ledger,
+        };
+        if (IsPlainObject(rawCp['BudgetBreach'])) {
+            out.BudgetBreach = rawCp['BudgetBreach'] as Partial<BudgetBreachDetail> as BudgetBreachDetail;
+        }
+        if (typeof rawCp['ApprovedAtISO'] === 'string') {
+            out.ApprovedAtISO = rawCp['ApprovedAtISO'];
+        }
+        const approvedBy = rawCp['ApprovedByUserID'];
+        if (typeof approvedBy === 'string') {
+            out.ApprovedByUserID = approvedBy;
+        } else if (approvedBy === null) {
+            out.ApprovedByUserID = null;
+        }
+        if (IsPlainObject(rawCp['BudgetExtension'])) {
+            out.BudgetExtension = rawCp['BudgetExtension'] as BudgetExtensionGrant;
+        }
+        const decisionNotes = rawCp['DecisionNotes'];
+        if (typeof decisionNotes === 'string') {
+            out.DecisionNotes = decisionNotes;
+        } else if (decisionNotes === null) {
+            out.DecisionNotes = null;
+        }
+        return out;
+    }
+
+    private writeStandaloneCheckpointToConfiguration(
+        configurationJson: string | null | undefined,
+        checkpoint: StandaloneGraphGovernanceCheckpointState,
+    ): string {
+        const existing = typeof configurationJson === 'string' && configurationJson.trim().length > 0
+            ? SafeJSONParse<Record<string, RunawayJsonValue>>(configurationJson)
+            : null;
+        const bag: Record<string, RunawayJsonValue | StandaloneGraphGovernanceCheckpointState> = IsPlainObject(existing)
+            ? { ...existing }
+            : {};
+        bag['governanceCheckpoint'] = checkpoint;
+        return JSON.stringify(bag);
+    }
+
+    private async persistStandaloneCheckpoint(
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+        state: GraphGovernanceState,
+        pending: PendingGraphPauseContext,
+    ): Promise<string | null> {
+        try {
+            const parentTask = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', contextUser);
+            if (!(await parentTask.Load(state.GraphID))) {
+                return `Standalone root task '${state.GraphID}' could not be loaded`;
+            }
+            const dayWin = ComputeDayBoundaryWindow(Date.now(), pending.BudgetResult.Ledger.DayBoundaryTimezone || 'UTC');
+            const checkpoint: StandaloneGraphGovernanceCheckpointState = {
+                CheckpointID: randomUUID(),
+                Status: 'Paused',
+                PauseReason: pending.PauseReason,
+                Summary: pending.Summary,
+                PausedAtISO: pending.BudgetResult.Ledger.AsOfISO || new Date().toISOString(),
+                CompletedNodeCount: state.CompletedNodeCount,
+                CompletedNodeIDs: [...state.CompletedNodeIDs],
+                CumulativeLedger: {
+                    ...pending.BudgetResult.Ledger,
+                    DayBucketUTC: dayWin.DayBucketUTC,
+                },
+                ...(pending.BudgetResult.Breach ? { BudgetBreach: pending.BudgetResult.Breach } : {}),
+            };
+            parentTask.Configuration = this.writeStandaloneCheckpointToConfiguration(parentTask.Configuration, checkpoint);
+            if (!(await parentTask.Save())) {
+                return parentTask.LatestResult?.CompleteMessage || `Failed to save standalone governance checkpoint on task '${state.GraphID}'`;
+            }
+            state.CheckpointPersisted = true;
+            return null;
+        } catch (err) {
+            return err instanceof Error ? err.message : String(err);
+        }
+    }
+
+    private async saveStandaloneApprovedCheckpoint(
+        input: ApproveAndResumePausedGraphInput,
+        pendingDebugContext: PendingGovernanceCheckpointContext | null,
+    ): Promise<{
+        Saved: boolean;
+        CheckpointID: string | null;
+        PriorCostUsd: number;
+        AppliedExtension: BudgetExtensionGrant | undefined;
+        ErrorMessage?: string;
+    }> {
+        try {
+            const parentTask = await input.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', input.ContextUser);
+            if (!(await parentTask.Load(input.ParentTaskID))) {
+                return {
+                    Saved: false,
+                    CheckpointID: null,
+                    PriorCostUsd: 0,
+                    AppliedExtension: input.BudgetExtension,
+                    ErrorMessage: `Standalone root task '${input.ParentTaskID}' could not be loaded.`,
+                };
+            }
+            const existingCp = this.extractStandaloneCheckpointFromConfiguration(parentTask.Configuration);
+            if (existingCp?.Status === 'Approved' && !input.BudgetExtension && !input.DecisionNotes) {
+                return {
+                    Saved: true,
+                    CheckpointID: existingCp.CheckpointID,
+                    PriorCostUsd: existingCp.CumulativeLedger.RunCostUsd,
+                    AppliedExtension: existingCp.BudgetExtension,
+                };
+            }
+            const fallbackLedger: CumulativeBudgetLedger = pendingDebugContext?.cumulativeLedger ?? {
+                RunCostUsd: 0,
+                RunWallClockMs: 0,
+                RunTokens: 0,
+                RoutineCostUsd: 0,
+                RoutineWallClockMs: 0,
+                UserDailyCostUsd: 0,
+                UserDailyWallClockMs: 0,
+                PausedWallClockMs: 0,
+                PausedIntervals: [],
+                DayBucketUTC: new Date().toISOString().slice(0, 10),
+                DayBoundaryTimezone: 'UTC',
+                AsOfISO: new Date().toISOString(),
+            };
+            const appliedExtension = input.BudgetExtension ?? existingCp?.BudgetExtension;
+            const approvedCp: StandaloneGraphGovernanceCheckpointState = {
+                CheckpointID: existingCp?.CheckpointID || randomUUID(),
+                Status: 'Approved',
+                PauseReason: existingCp?.PauseReason ?? pendingDebugContext?.reason ?? 'BudgetExceeded',
+                Summary: existingCp?.Summary ?? pendingDebugContext?.reasonDetail ?? 'Standalone graph governance pause',
+                PausedAtISO: existingCp?.PausedAtISO ?? pendingDebugContext?.pausedAtIso ?? new Date().toISOString(),
+                CompletedNodeCount: existingCp?.CompletedNodeCount ?? pendingDebugContext?.pausedAtIteration ?? 0,
+                CompletedNodeIDs: existingCp?.CompletedNodeIDs ?? pendingDebugContext?.completedTaskIds ?? [],
+                CumulativeLedger: existingCp?.CumulativeLedger ?? fallbackLedger,
+                ...(existingCp?.BudgetBreach
+                    ? { BudgetBreach: existingCp.BudgetBreach }
+                    : pendingDebugContext?.budgetBreach
+                        ? { BudgetBreach: pendingDebugContext.budgetBreach }
+                        : {}),
+                ApprovedAtISO: new Date().toISOString(),
+                ApprovedByUserID: input.ApprovedByUserID ?? input.ContextUser.ID,
+                ...(appliedExtension ? { BudgetExtension: appliedExtension } : {}),
+                DecisionNotes: input.DecisionNotes ?? existingCp?.DecisionNotes ?? null,
+            };
+            parentTask.Configuration = this.writeStandaloneCheckpointToConfiguration(parentTask.Configuration, approvedCp);
+            if (!(await parentTask.Save())) {
+                return {
+                    Saved: false,
+                    CheckpointID: approvedCp.CheckpointID,
+                    PriorCostUsd: approvedCp.CumulativeLedger.RunCostUsd,
+                    AppliedExtension: appliedExtension,
+                    ErrorMessage: parentTask.LatestResult?.CompleteMessage || `Failed to save approval on standalone task '${input.ParentTaskID}'.`,
+                };
+            }
+            return {
+                Saved: true,
+                CheckpointID: approvedCp.CheckpointID,
+                PriorCostUsd: approvedCp.CumulativeLedger.RunCostUsd,
+                AppliedExtension: appliedExtension,
+            };
+        } catch (err) {
+            return {
+                Saved: false,
+                CheckpointID: null,
+                PriorCostUsd: 0,
+                AppliedExtension: input.BudgetExtension,
+                ErrorMessage: err instanceof Error ? err.message : String(err),
+            };
         }
     }
 
@@ -1657,8 +2091,7 @@ export class TaskGraphGovernanceCoordinator {
             return null;
         }
         if (!state.SubmittingAgentRunID) {
-            state.CheckpointPersisted = true;
-            return null;
+            return this.persistStandaloneCheckpoint(provider, contextUser, state, pending);
         }
         if (pending.RetainedPendingCheckpoint) {
             try {

@@ -68,7 +68,13 @@ import { ResolveRecordsByNameOrToolName } from './resolve-by-tool-name';
 import { HeldDecisionAnswers, type DecisionTaskRow, type TaskStepConfiguration } from './decision-node';
 import { CompensationFromSpec, IsCompensationTask, type SagaExecutionState } from './saga-compensation';
 import { TaskClaimStore, type TaskGraphDebugFieldWrite } from './TaskClaimStore';
-import { ParseTaskGraphDebugState, type EdgeOverrideVerdict, type StepTarget, type TaskGraphDebugState } from './debug-state';
+import {
+    IsGovernanceDebugPause,
+    ParseTaskGraphDebugState,
+    type EdgeOverrideVerdict,
+    type StepTarget,
+    type TaskGraphDebugState,
+} from './debug-state';
 import { KickTaskGraphDispatchers } from './task-graph-kick';
 
 /**
@@ -1488,12 +1494,43 @@ export class TaskGraphService {
         return this.controlResult(true, Next);
     }
 
+    private async ensureNotGovernancePaused(
+        parentTaskID: string,
+        context: TaskGraphSubmitContext,
+        verb: 'pause' | 'resume' | 'step',
+    ): Promise<
+        | { Blocked: true; Result: { Success: boolean; Debug?: TaskGraphDebugState; ErrorMessage?: string } }
+        | { Blocked: false; Current: TaskGraphDebugState }
+    > {
+        const parent = await this.loadWorkflowParent(parentTaskID, context);
+        if (!parent) {
+            return {
+                Blocked: true,
+                Result: this.controlResult(false, undefined, 'Not a workflow graph this control plane can act on.'),
+            };
+        }
+        const current = ParseTaskGraphDebugState(parent.inputPayload);
+        if (IsGovernanceDebugPause(current)) {
+            return {
+                Blocked: true,
+                Result: this.controlResult(
+                    false,
+                    current,
+                    `Cannot ${verb} a workflow paused by execution governance — use ApproveAndResumePausedGraph after approval.`,
+                ),
+            };
+        }
+        return { Blocked: false, Current: current };
+    }
+
     /**
      * Pauses a graph: nothing new is claimed until it is resumed. In-flight steps finish naturally
      * and their completions land — a pause gates claiming and never touches a live claim, which is
      * why there is no "what happens to the claim" question to answer.
      */
     public async PauseGraph(parentTaskID: string, context: TaskGraphSubmitContext, pausedByUserID?: string | null) {
+        const guard = await this.ensureNotGovernancePaused(parentTaskID, context, 'pause');
+        if ('Result' in guard) return guard.Result;
         const pausedBy = pausedByUserID ?? context.ContextUser?.ID ?? null;
         return this.writeDebugFields(parentTaskID, context, (current) => ({
             // Pause owns the pause fields AND the step allowance: an allowance armed a moment ago is
@@ -1513,7 +1550,12 @@ export class TaskGraphService {
 
     /** Resumes a paused graph. Breakpoints and edge overrides survive — only the pause clears. */
     public async ResumeGraph(parentTaskID: string, context: TaskGraphSubmitContext) {
+        const guard = await this.ensureNotGovernancePaused(parentTaskID, context, 'resume');
+        if ('Result' in guard) return guard.Result;
         return this.writeDebugFields(parentTaskID, context, (current) => {
+            if (IsGovernanceDebugPause(current)) {
+                return { Fields: [], Next: current };
+            }
             const next: TaskGraphDebugState = { ...current };
             // Continue from a breakpoint must run the stopped task. Stamping it here so the next
             // poll does not re-hit the same still-eligible breakpoint without claiming.
@@ -1547,11 +1589,10 @@ export class TaskGraphService {
      * consumes the allowance CAS-style, so two instances stepping the same graph release work once.
      */
     public async StepGraph(parentTaskID: string, target: StepTarget, context: TaskGraphSubmitContext) {
-        const parent = await this.loadWorkflowParent(parentTaskID, context);
-        if (!parent) return this.controlResult(false, undefined, 'Not a workflow graph this control plane can act on.');
-        const current = ParseTaskGraphDebugState(parent.inputPayload);
-        if (!current.paused) {
-            return this.controlResult(false, current, 'Step only applies to a paused workflow — pause it first.');
+        const guard = await this.ensureNotGovernancePaused(parentTaskID, context, 'step');
+        if ('Result' in guard) return guard.Result;
+        if (!guard.Current.paused) {
+            return this.controlResult(false, guard.Current, 'Step only applies to a paused workflow — pause it first.');
         }
         return this.writeDebugFields(parentTaskID, context, (state) => ({
             Fields: [TaskClaimStore.DebugField('$.debug.step', { Kind: 'string', Value: target })],
