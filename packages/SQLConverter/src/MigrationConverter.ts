@@ -29,7 +29,7 @@
  */
 import { SplitMigration, type MigrationSplitResult, type MigrationRegionKind } from './MigrationSplitter.js';
 import { SplitByStatement, type StatementBatch, type StatementKind } from './MigrationStatementSplitter.js';
-import { CastBooleanInsertValues, ConvertBooleanLiteralComparisons, StripComments } from './rules/ExpressionHelpers.js';
+import { CastBooleanInsertValues, ConvertBooleanLiteralComparisons, MakeDropDefaultConstraintIdempotent, StripComments } from './rules/ExpressionHelpers.js';
 import { SeedCoreMetadataBooleanColumns } from './rules/CoreMetadataBooleanColumns.js';
 import { BuildPgExtensionStatements } from './rules/DialectHeaderBuilder.js';
 import { SP_REFRESHVIEW_CALL, DescribeRefreshView } from './rules/StatementClassifier.js';
@@ -745,7 +745,7 @@ function assemblePgSQL(
   // `schema.Table` reference whose schema is word characters; until the replacements above run,
   // the table is still `${flyway:defaultSchema}."Entity"`, which is not a word-character token, so
   // an earlier call matches nothing and silently returns the body unchanged.
-  return castCoreMetadataBooleans(rendered).concat('\n');
+  return castCoreMetadataBooleans(MakeDropDefaultConstraintIdempotent(rendered)).concat('\n');
 }
 
 /**

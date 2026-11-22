@@ -8,9 +8,18 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
     ...(await importOriginal() as Record<string, unknown>),
     RegisterClass: () => (target: unknown) => target,
 }));
-vi.mock('@memberjunction/ai-agents', () => ({ AgentRunner: class {} }));
-vi.mock('@memberjunction/ai-prompts', () => ({ AIPromptRunner: class {} }));
-vi.mock('@memberjunction/actions', () => ({ ActionEngineServer: { Instance: { Config: vi.fn(), RunAction: vi.fn() } } }));
+vi.mock('@memberjunction/ai-agents', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/ai-agents')>()),
+    AgentRunner: class {},
+}));
+vi.mock('@memberjunction/ai-prompts', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/ai-prompts')>()),
+    AIPromptRunner: class {},
+}));
+vi.mock('@memberjunction/actions', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/actions')>()),
+    ActionEngineServer: { Instance: { Config: vi.fn(), RunAction: vi.fn() } },
+}));
 
 import { RunView, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
 import { UserRoutineDispatcherDriver } from '../drivers/UserRoutineDispatcherDriver';

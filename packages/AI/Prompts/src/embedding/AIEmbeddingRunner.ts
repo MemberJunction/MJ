@@ -2,10 +2,13 @@ import { MJGlobal, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseEntitySaveQueue, Metadata } from '@memberjunction/core';
 import { AIEngine } from '@memberjunction/aiengine';
 import {
+  AIErrorInfo,
   BaseEmbeddings,
+  ChatMessageContent,
   EmbedTextsResult,
   BaseResult,
   ErrorAnalyzer,
+  ModelUsage,
 } from '@memberjunction/ai';
 import {
   MJAIPromptEntityExtended,
@@ -19,6 +22,7 @@ import {
   ModelVendorCandidate,
   FailoverConfiguration,
 } from '../BaseModelRunner';
+import { AIPromptTimeoutError } from '../AIPromptTimeoutError';
 import {
   EmbeddingRunParams,
   EmbeddingRunResult,
@@ -168,7 +172,7 @@ export class AIEmbeddingRunner extends BaseModelRunner {
       call.PromptRun
     );
     if (!result.success) {
-      return this.failCall(result.errorMessage ?? 'Embedding execution failed', call, answeredBy, result.Cancelled);
+      return this.failCall(result.errorMessage ?? 'Embedding execution failed', call, answeredBy, result.Cancelled, result.errorInfo);
     }
     const endTime = new Date();
     const executionTimeMS = endTime.getTime() - call.StartTime.getTime();
@@ -221,18 +225,34 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     errorMessage: string,
     call: EmbeddingCallState,
     candidate?: ModelVendorCandidate,
-    cancelled = false
+    cancelled = false,
+    errorInfo?: AIErrorInfo
   ): Promise<EmbeddingRunResult> {
     if (call.PromptRun) {
       const endTime = new Date();
       await this.finalizeFailedRun(call.PromptRun, errorMessage, endTime, endTime.getTime() - call.StartTime.getTime(), cancelled);
     }
-    return this.failedResult(errorMessage, call.StartTime, call.PromptRun, candidate);
+    return this.failedResult(errorMessage, call.StartTime, call.PromptRun, candidate, errorInfo);
   }
 
   private validateParams(params: EmbeddingRunParams): string | undefined {
-    if (!params?.Texts || params.Texts.length === 0) {
-      return 'No texts provided for embedding';
+    const hasTexts = Array.isArray(params?.Texts) && params.Texts.length > 0;
+    const hasContents = Array.isArray(params?.Contents) && params.Contents.length > 0;
+    if (!hasTexts && !hasContents) {
+      return 'No texts or content provided for embedding';
+    }
+    if (hasTexts && hasContents) {
+      return 'Provide either Texts or Contents for embedding, not both';
+    }
+    if (hasContents) {
+      const hasEmptyEntry = (params.Contents ?? []).some((entry) =>
+        typeof entry === 'string'
+          ? entry.trim().length === 0
+          : !Array.isArray(entry) || entry.length === 0
+      );
+      if (hasEmptyEntry) {
+        return 'Contents contains an empty entry';
+      }
     }
     if (!params?.ContextUser) {
       return 'ContextUser is required';
@@ -451,11 +471,17 @@ export class AIEmbeddingRunner extends BaseModelRunner {
             run.ParentID = params.ParentRunID;
           }
           if (params.Description) {
-            run.Messages = JSON.stringify({
-              description: params.Description,
-              textCount: params.Texts.length,
-              totalChars: params.Texts.reduce((sum, t) => sum + t.length, 0),
-            });
+            const payload = params.Contents && params.Contents.length > 0
+              ? {
+                  description: params.Description,
+                  contentCount: params.Contents.length,
+                }
+              : {
+                  description: params.Description,
+                  textCount: params.Texts?.length ?? 0,
+                  totalChars: (params.Texts ?? []).reduce((sum, t) => sum + t.length, 0),
+                };
+            run.Messages = JSON.stringify(payload);
           }
         }
       );
@@ -527,7 +553,9 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     }
     const errRes = new EmbeddingInternalResult(false);
     errRes.errorMessage = lastError?.message ?? 'All embedding candidates failed';
-    errRes.errorInfo = { errorType: 'ModelError', severity: 'Retriable', canFailover: false };
+    errRes.errorInfo = lastError && this.isUnsupportedMediaContentError(lastError)
+      ? { errorType: 'VendorValidationError', severity: 'Fatal', canFailover: false }
+      : { errorType: 'ModelError', severity: 'Retriable', canFailover: false };
     errRes.exception = lastError ?? undefined;
     return errRes;
   }
@@ -590,7 +618,11 @@ export class AIEmbeddingRunner extends BaseModelRunner {
   ): Promise<EmbeddingInternalResult> {
     const bound = this.createExecutionBound(prompt, promptParams, promptParams.cancellationToken);
     try {
-      const prepared = AIEngine.Instance.PrepareEmbeddingInput(candidate.model, params.Texts, params.InputType, candidate.vendorId);
+      if (params.Contents && params.Contents.length > 0) {
+        return await this.callDriverForContents(driver, candidate, prompt, params, bound, startTime);
+      }
+      const texts = params.Texts ?? [];
+      const prepared = AIEngine.Instance.PrepareEmbeddingInput(candidate.model, texts, params.InputType, candidate.vendorId);
       const embedResult = await this.RaceWithinBound(
         driver.EmbedTexts({
           texts: prepared.texts,
@@ -611,12 +643,221 @@ export class AIEmbeddingRunner extends BaseModelRunner {
       const error = err instanceof Error ? err : new Error(String(err));
       const res = new EmbeddingInternalResult(false, startTime, new Date());
       res.errorMessage = error.message;
-      res.errorInfo = ErrorAnalyzer.analyzeError(error);
+      res.errorInfo = this.isUnsupportedMediaContentError(error)
+        ? { errorType: 'VendorValidationError', severity: 'Fatal', canFailover: true }
+        : ErrorAnalyzer.analyzeError(error);
       res.exception = error;
       return res;
     } finally {
       bound.Dispose();
     }
+  }
+
+  /**
+   * Whether the driver rejected a media block whose MIME type it cannot embed (thrown by
+   * `BaseEmbeddings.ValidateContentSupported`). Classified as `VendorValidationError` / `Fatal` so
+   * callers pinned to a text-only model settle cleanly instead of retrying forever.
+   */
+  private isUnsupportedMediaContentError(error: Error): boolean {
+    return /cannot embed content of type/i.test(error.message);
+  }
+
+  /**
+   * Embeds multimodal `params.Contents` through `driver.EmbedContent` with bounded concurrency,
+   * preserving input order, aborting sibling in-flight calls on first failure before failover, and
+   * returning a retriable `ModelError` result if any entry returns an empty vector.
+   */
+  private async callDriverForContents(
+    driver: BaseEmbeddings,
+    candidate: ModelVendorCandidate,
+    prompt: MJAIPromptEntityExtended,
+    params: EmbeddingRunParams,
+    bound: ReturnType<AIEmbeddingRunner['createExecutionBound']>,
+    startTime: Date
+  ): Promise<EmbeddingInternalResult> {
+    const contents = params.Contents ?? [];
+    const vectors: number[][] = new Array(contents.length);
+    let totalPromptTokens = 0;
+    let totalCompletionTokens = 0;
+    let totalCacheReadTokens = 0;
+    let totalCacheWriteTokens = 0;
+    let totalQueueTime = 0;
+    let totalPromptTime = 0;
+    let totalCompletionTime = 0;
+    let totalCost = 0;
+    let costCurrency: string | undefined;
+    let nextIndex = 0;
+    let failed = false;
+    let emptyVectorReturned = false;
+    let firstError: unknown = undefined;
+
+    // Per-attempt AbortController chained to `bound.Signal`: when any worker fails or returns an
+    // empty vector, aborting this controller cancels sibling in-flight driver requests immediately
+    // so they don't keep running alongside a failover candidate.
+    const attemptController = new AbortController();
+    const relayBoundAbort = (): void => {
+      attemptController.abort(bound.Signal?.reason);
+    };
+    if (bound.Signal) {
+      if (bound.Signal.aborted) {
+        attemptController.abort(bound.Signal.reason);
+      } else {
+        bound.Signal.addEventListener('abort', relayBoundAbort, { once: true });
+      }
+    }
+
+    const buildAttemptAbortError = (): Error => {
+      if (bound.Signal?.aborted) {
+        return bound.TimedOut()
+          ? (bound.Signal.reason instanceof AIPromptTimeoutError
+              ? bound.Signal.reason
+              : new AIPromptTimeoutError(prompt.Name, bound.TimeoutMS ?? 0))
+          : this.BuildCancellationError(`The ${this.RequiredModelType} call was cancelled`);
+      }
+      return new Error('Embedding attempt aborted');
+    };
+
+    const raceWithAttemptAbort = <T>(callPromise: Promise<T>): Promise<T> => {
+      if (attemptController.signal.aborted) {
+        // Swallow any rejection on the inner promise (e.g. RaceWithinBound rejecting after a
+        // synchronous abort inside driver.EmbedContent) so it never becomes an unhandled rejection.
+        callPromise.catch(() => undefined);
+        return Promise.reject(buildAttemptAbortError());
+      }
+      return new Promise<T>((resolve, reject) => {
+        const onAbort = (): void => {
+          reject(buildAttemptAbortError());
+        };
+        attemptController.signal.addEventListener('abort', onAbort, { once: true });
+        callPromise.then(
+          (value) => {
+            attemptController.signal.removeEventListener('abort', onAbort);
+            resolve(value);
+          },
+          (error: unknown) => {
+            attemptController.signal.removeEventListener('abort', onAbort);
+            reject(error);
+          }
+        );
+      });
+    };
+
+    const worker = async (): Promise<void> => {
+      for (let idx = nextIndex++; !failed && idx < contents.length; idx = nextIndex++) {
+        if (bound.Signal?.aborted) {
+          failed = true;
+          const boundErr = buildAttemptAbortError();
+          if (firstError === undefined) {
+            firstError = boundErr;
+          }
+          attemptController.abort(boundErr);
+          return;
+        }
+        try {
+          const preparedContent = this.prepareMultimodalContent(
+            contents[idx],
+            candidate,
+            params.InputType
+          );
+          const result = await raceWithAttemptAbort(
+            this.RaceWithinBound(
+              driver.EmbedContent({
+                content: preparedContent,
+                model: candidate.apiName,
+                dimensions: params.Dimensions,
+                inputType: params.InputType,
+                CancellationToken: attemptController.signal,
+              }),
+              bound,
+              prompt
+            )
+          );
+          if (failed) {
+            return;
+          }
+          if (!result || !result.vector || result.vector.length === 0) {
+            failed = true;
+            emptyVectorReturned = true;
+            attemptController.abort();
+            return;
+          }
+          vectors[idx] = result.vector;
+          if (result.ModelUsage) {
+            totalPromptTokens += result.ModelUsage.promptTokens ?? 0;
+            totalCompletionTokens += result.ModelUsage.completionTokens ?? 0;
+            totalCacheReadTokens += result.ModelUsage.cacheReadTokens ?? 0;
+            totalCacheWriteTokens += result.ModelUsage.cacheWriteTokens ?? 0;
+            totalQueueTime += result.ModelUsage.queueTime ?? 0;
+            totalPromptTime += result.ModelUsage.promptTime ?? 0;
+            totalCompletionTime += result.ModelUsage.completionTime ?? 0;
+            totalCost += result.ModelUsage.cost ?? 0;
+            if (!costCurrency && result.ModelUsage.costCurrency) {
+              costCurrency = result.ModelUsage.costCurrency;
+            }
+          }
+        } catch (err: unknown) {
+          if (!failed) {
+            failed = true;
+            firstError = err;
+            attemptController.abort();
+          }
+          return;
+        }
+      }
+    };
+
+    try {
+      const concurrency = Math.min(4, contents.length);
+      await Promise.all(Array.from({ length: concurrency }, () => worker()));
+    } finally {
+      bound.Signal?.removeEventListener('abort', relayBoundAbort);
+    }
+
+    if (firstError !== undefined) {
+      throw firstError;
+    }
+    if (emptyVectorReturned) {
+      return this.callResultFrom(undefined, candidate, startTime);
+    }
+
+    const usage = new ModelUsage(totalPromptTokens, totalCompletionTokens);
+    usage.cacheReadTokens = totalCacheReadTokens;
+    usage.cacheWriteTokens = totalCacheWriteTokens;
+    usage.queueTime = totalQueueTime;
+    usage.promptTime = totalPromptTime;
+    usage.completionTime = totalCompletionTime;
+    usage.cost = totalCost;
+    if (costCurrency) {
+      usage.costCurrency = costCurrency;
+    }
+    const aggregated: EmbedTextsResult = {
+      object: 'list',
+      model: candidate.apiName,
+      ModelUsage: usage,
+      vectors,
+    };
+    return this.callResultFrom(aggregated, candidate, startTime);
+  }
+
+  /** Applies the model's catalog embedding prefix (when configured) to string or leading text blocks. */
+  private prepareMultimodalContent(
+    content: ChatMessageContent,
+    candidate: ModelVendorCandidate,
+    inputType: EmbeddingRunParams['InputType']
+  ): ChatMessageContent {
+    if (typeof content === 'string') {
+      return AIEngine.Instance.PrepareEmbeddingInput(candidate.model, [content], inputType, candidate.vendorId).texts[0] ?? content;
+    }
+    const firstTextIndex = content.findIndex(b => b.type === 'text' && b.content.trim().length > 0);
+    if (firstTextIndex < 0) {
+      return content;
+    }
+    const original = content[firstTextIndex].content;
+    const prefixed = AIEngine.Instance.PrepareEmbeddingInput(candidate.model, [original], inputType, candidate.vendorId).texts[0] ?? original;
+    if (prefixed === original) {
+      return content;
+    }
+    return content.map((block, i) => (i === firstTextIndex ? { ...block, content: prefixed } : block));
   }
 
   /** Wraps the driver's result for the failover loop; an empty result fails over as a model error. */
@@ -722,7 +963,8 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     errorMessage: string,
     startTime: Date,
     promptRun?: MJAIPromptRunEntityExtended | null,
-    candidate?: ModelVendorCandidate
+    candidate?: ModelVendorCandidate,
+    errorInfo?: AIErrorInfo
   ): EmbeddingRunResult {
     const executionTimeMs = new Date().getTime() - startTime.getTime();
     const modelInfo = this.buildModelInfo(candidate);
@@ -733,6 +975,7 @@ export class AIEmbeddingRunner extends BaseModelRunner {
       TokensUsed: 0,
       Cost: 0,
       ErrorMessage: errorMessage,
+      ...(errorInfo ? { ErrorInfo: errorInfo } : {}),
       ExecutionTimeMs: executionTimeMs,
       ModelID: candidate?.model.ID,
       ModelName: candidate?.model.Name,

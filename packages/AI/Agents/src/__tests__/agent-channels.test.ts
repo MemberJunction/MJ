@@ -91,6 +91,22 @@ describe('AgentWakeTriggerService.TriggerWakeOnAgentChannelMessage', () => {
                 if (params.EntityName === 'MJ: Agent Channel Participants') {
                     return { Success: true, Results: participants };
                 }
+                if (params.EntityName === 'MJ: AI Agent User Policies') {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: 'policy-bob-1',
+                                AgentID: 'agent-cos',
+                                UserID: bob.ID,
+                                Status: 'Active',
+                                AllowInterAgentCoordination: true,
+                                EmailChannelMode: 'DraftOnly',
+                                Agent: 'Chief of Staff',
+                            },
+                        ],
+                    };
+                }
                 return { Success: true, Results: [] };
             }),
         } as unknown as RunView);

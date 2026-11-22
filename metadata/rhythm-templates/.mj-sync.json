@@ -25,6 +25,10 @@
       "SkillID": {
         "entity": "MJ: AI Skills",
         "field": "Name"
+      },
+      "DefaultAgentConfigurationID": {
+        "entity": "MJ: AI Configurations",
+        "field": "Name"
       }
     }
   }

@@ -7,6 +7,7 @@ import {
     AgentWakeTriggerResult,
     AgentWakeTriggerService,
     InboundUtilityMailboxEmailInput,
+    WakeStartupGuard,
 } from '@memberjunction/ai-agents';
 
 /**
@@ -229,7 +230,7 @@ export class InboundUtilityMailboxIngestionService extends BaseSingleton<Inbound
             results: [],
         };
 
-        if (!activeFetcher) {
+        if (!activeFetcher || WakeStartupGuard.Instance.IsStartupInProgress()) {
             return outcome;
         }
 
@@ -254,9 +255,10 @@ export class InboundUtilityMailboxIngestionService extends BaseSingleton<Inbound
             return outcome;
         }
 
+        const startupBaselineISO = WakeStartupGuard.Instance.BaselineWatermark?.toISOString() ?? null;
         for (const identity of identityRes.Results) {
             outcome.identitiesScanned++;
-            const sinceISO = this.lastPollWatermark.get(identity.ID) ?? null;
+            const sinceISO = this.lastPollWatermark.get(identity.ID) ?? startupBaselineISO;
             const pollStartedISO = new Date().toISOString();
             try {
                 const messages = await activeFetcher.FetchMessages(identity, sinceISO, effectiveUser);
