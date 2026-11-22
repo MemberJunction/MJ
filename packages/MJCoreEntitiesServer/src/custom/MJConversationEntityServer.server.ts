@@ -1,16 +1,19 @@
 import {
     BaseEntity,
     BaseEntityResult,
+    CompositeKey,
     EntityDeleteOptions,
     EntitySaveOptions,
     IMetadataProvider,
     LogError,
+    RunView,
+    RunViewParams,
     ValidationErrorInfo,
     ValidationErrorType,
     ValidationResult,
     WellKnownUserSource
 } from '@memberjunction/core';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     BUILT_IN_CONVERSATION_TYPE_IDS,
     CONVERSATION_TYPE_CODES,
@@ -19,13 +22,20 @@ import {
     IsConversationHiddenByFieldSecurity,
     IsInheritingFolderAccess,
     IsInheritingFolderAccessInSQL,
+    MAX_BRANCH_DEPTH,
     MJConversationEntity,
     MergeRestrictedFieldsIntoAnchorMetadata,
     ParseConversationAnchorMetadata,
     UserCanReadLinkedRecord,
     UserMayDeleteConversation
 } from '@memberjunction/core-entities';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { CheckAnonymousOwnershipKeyChange, IsSetByTransactionVariable } from './anonymousOwnershipKeyGuard';
+import {
+    MarkInternalConversationSecurityQuery,
+    UserCanReadConversation,
+    type ConversationSecurityRow
+} from './ConversationReadSecurityHook';
 
 /**
  * Server-side `MJ: Conversations` entity.
@@ -54,12 +64,65 @@ import { CheckAnonymousOwnershipKeyChange, IsSetByTransactionVariable } from './
  */
 @RegisterClass(BaseEntity, 'MJ: Conversations')
 export class MJConversationEntityServer extends MJConversationEntity {
+    public override async Load(
+        ID: string,
+        EntityRelationshipsToLoad?: string[]
+    ): Promise<boolean> {
+        const key = CompositeKey.FromID(ID);
+        return this.InnerLoad(key, EntityRelationshipsToLoad);
+    }
+
+    public override async InnerLoad(
+        compositeKey: CompositeKey,
+        EntityRelationshipsToLoad?: string[]
+    ): Promise<boolean> {
+        const loaded = await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        if (!loaded) {
+            return false;
+        }
+        const provider = this.ProviderToUse as unknown as IMetadataProvider | undefined;
+        if (provider?.ProviderType !== 'Database') {
+            return true;
+        }
+        const actor = this.ContextCurrentUser;
+        if (actor && WellKnownUserSource.Instance.IsSystemUser(actor)) {
+            return true;
+        }
+        if (!actor || !this.ID) {
+            this.NewRecord();
+            return false;
+        }
+        const candidate: ConversationSecurityRow = {
+            ID: this.ID,
+            UserID: this.UserID,
+            ParentID: this.ParentID,
+            ProjectID: this.ProjectID,
+            AdditionalData: this.AdditionalData,
+            AnchorType: this.AnchorType,
+            LinkedEntityID: this.LinkedEntityID,
+            LinkedRecordID: this.LinkedRecordID,
+            AnchorKey: this.AnchorKey,
+            AnchorMetadata: this.AnchorMetadata,
+            AnchorMetadataObject: this.AnchorMetadataObject,
+            TypeID: this.TypeID,
+            ExternalID: this.ExternalID,
+        };
+        const allowed = await UserCanReadConversation(provider, actor, candidate);
+        if (!allowed) {
+            this.NewRecord();
+            return false;
+        }
+        return true;
+    }
+
     public override Validate(): ValidationResult {
         const result = super.Validate();
         for (const violation of [
             CheckAnonymousOwnershipKeyChange(this, 'ExternalID'),
             checkOwnerChange(this),
             checkOwnerOnlyChange(this),
+            checkParentSelfReference(this),
+            checkParentOwnerOnlyChange(this),
             checkInheritanceReadingsAgree(this),
         ]) {
             if (violation) {
@@ -68,6 +131,59 @@ export class MJConversationEntityServer extends MJConversationEntity {
             }
         }
         return result;
+    }
+
+    public override async ValidateAsync(): Promise<ValidationResult> {
+        const result = await super.ValidateAsync();
+        const cycleViolation = await this.checkParentCycle();
+        if (cycleViolation) {
+            result.Errors.push(cycleViolation);
+            result.Success = false;
+        }
+        return result;
+    }
+
+    private async checkParentCycle(): Promise<ValidationErrorInfo | null> {
+        const parentField = typeof this.GetFieldByName === 'function' ? this.GetFieldByName('ParentID') : undefined;
+        if (!this.ParentID || !parentField?.Dirty) {
+            return null;
+        }
+        const refuse = (message: string): ValidationErrorInfo =>
+            new ValidationErrorInfo('ParentID', message, this.ParentID, ValidationErrorType.Failure);
+        if (this.ID && UUIDsEqual(this.ParentID, this.ID)) {
+            return refuse('A conversation cannot be its own parent.');
+        }
+        if (!this.IsSaved) {
+            return null;
+        }
+        const provider = this.ProviderToUse as unknown as IMetadataProvider | undefined;
+        if (provider?.ProviderType !== 'Database') {
+            return null;
+        }
+        const readUser =
+            (await WellKnownUserSource.Instance.GetSystemUser(provider)) ??
+            UserCache.Instance.GetSystemUser() ??
+            this.ContextCurrentUser;
+        const rv = new RunView(this.RunViewProviderToUse);
+        let cursor: string | null = this.ParentID;
+        for (let depth = 0; cursor && depth < MAX_BRANCH_DEPTH; depth++) {
+            const queryParams: RunViewParams = {
+                EntityName: 'MJ: Conversations',
+                ExtraFilter: `ID='${EscapeSQLString(cursor)}'`,
+                Fields: ['ParentID'],
+                ResultType: 'simple',
+            };
+            MarkInternalConversationSecurityQuery(queryParams);
+            const read = await rv.RunView<{ ParentID: string | null }>(queryParams, readUser);
+            if (!read.Success) {
+                return refuse(`Could not verify conversation hierarchy: ${read.ErrorMessage}`);
+            }
+            cursor = read.Results[0]?.ParentID ?? null;
+            if (cursor && this.ID && UUIDsEqual(cursor, this.ID)) {
+                return refuse('A conversation cannot be reparented under one of its descendants.');
+            }
+        }
+        return cursor ? refuse(`Conversation hierarchy cannot exceed ${MAX_BRANCH_DEPTH} levels deep.`) : null;
     }
 
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
@@ -326,6 +442,43 @@ function checkOwnerOnlyChange(entity: MJConversationEntity): ValidationErrorInfo
         changed,
         "Only the conversation's owner can move it to another folder or change whether it inherits its folder's access.",
         null,
+        ValidationErrorType.Failure,
+    );
+}
+
+/** Rejects setting `ParentID` to the conversation's own `ID`. */
+function checkParentSelfReference(entity: MJConversationEntity): ValidationErrorInfo | null {
+    const parentId = entity.ParentID;
+    const id = entity.ID;
+    if (parentId && id && UUIDsEqual(parentId, id)) {
+        return new ValidationErrorInfo(
+            'ParentID',
+            'A conversation cannot be its own parent.',
+            parentId,
+            ValidationErrorType.Failure,
+        );
+    }
+    return null;
+}
+
+/** Rejects reparenting an existing conversation by anyone other than its owner (`UserID`). */
+function checkParentOwnerOnlyChange(entity: MJConversationEntity): ValidationErrorInfo | null {
+    const user = entity.ContextCurrentUser;
+    if (!entity.IsSaved || !user || WellKnownUserSource.Instance.IsSystemUser(user)) {
+        return null;
+    }
+    const parentField = typeof entity.GetFieldByName === 'function' ? entity.GetFieldByName('ParentID') : undefined;
+    if (!parentField?.Dirty && !IsSetByTransactionVariable(entity, ['ParentID', 'ID'])) {
+        return null;
+    }
+    const owner = entity.GetFieldByName('UserID')?.OldValue as string | null | undefined;
+    if (owner && UUIDsEqual(owner, user.ID)) {
+        return null;
+    }
+    return new ValidationErrorInfo(
+        'ParentID',
+        "Only the conversation's owner can change its parent conversation.",
+        entity.ParentID ?? null,
         ValidationErrorType.Failure,
     );
 }
