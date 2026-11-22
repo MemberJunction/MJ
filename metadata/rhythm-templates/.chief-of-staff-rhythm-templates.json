@@ -10,7 +10,8 @@
       "DefaultWakeGate": null,
       "WakeReason": "Review active skills, newly available offered rhythms, and standing policy posture with the user.",
       "OfferAt": "Both",
-      "Status": "Active"
+      "Status": "Active",
+      "DefaultAgentConfigurationID": "@lookup:MJ: AI Configurations.Name=Standard"
     },
     "primaryKey": {
       "ID": "BAC7A9EA-958B-42CB-A988-6764785D389F"
@@ -31,7 +32,8 @@
       "DefaultWakeGate": null,
       "WakeReason": "Check today's and tomorrow's calendar for conflicts, overbooking, and unprotected focus time.",
       "OfferAt": "Onboarding",
-      "Status": "Active"
+      "Status": "Active",
+      "DefaultAgentConfigurationID": "@lookup:MJ: AI Configurations.Name=Fast"
     },
     "primaryKey": {
       "ID": "F0294D16-F2B7-4DA2-897F-B9FB27FD5BF5"
@@ -52,7 +54,8 @@
       "DefaultWakeGate": null,
       "WakeReason": "Review next week's calendar to protect focus blocks and flag meetings needing prep or rescheduling.",
       "OfferAt": "Onboarding",
-      "Status": "Active"
+      "Status": "Active",
+      "DefaultAgentConfigurationID": "@lookup:MJ: AI Configurations.Name=Standard"
     },
     "primaryKey": {
       "ID": "01532AD0-302D-4C70-A054-608866F86670"
