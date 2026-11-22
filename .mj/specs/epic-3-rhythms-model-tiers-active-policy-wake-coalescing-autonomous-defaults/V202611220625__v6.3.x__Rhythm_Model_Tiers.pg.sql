@@ -49,13 +49,13 @@ ALTER TABLE __mj."UserRoutine"
         REFERENCES __mj."AIConfiguration"("ID") DEFERRABLE INITIALLY DEFERRED;
 
 ALTER TABLE __mj."AIAgentUserPolicy"
-    DROP CONSTRAINT "DF_AIAgentUserPolicy_CoordinationMode";
+    DROP CONSTRAINT IF EXISTS "DF_AIAgentUserPolicy_CoordinationMode";
 
 ALTER TABLE __mj."AIAgentUserPolicy"
-    DROP CONSTRAINT "DF_AIAgentUserPolicy_CalendarChannelMode";
+    DROP CONSTRAINT IF EXISTS "DF_AIAgentUserPolicy_CalendarChannelMode";
 
 ALTER TABLE __mj."AIAgentUserPolicy"
-    DROP CONSTRAINT "DF_AIAgentUserPolicy_PhoneChannelMode";
+    DROP CONSTRAINT IF EXISTS "DF_AIAgentUserPolicy_PhoneChannelMode";
 
 CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_AIAgentRhythmTemplate_DefaultAgentCon_49d86f68" ON __mj."AIAgentRhythmTemplate" ("DefaultAgentConfigurationID");
 

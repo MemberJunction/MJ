@@ -285,6 +285,22 @@ describe('Rhythm Model Tiers (Slice 1)', () => {
         expect(pgSql).toContain("COALESCE(p_EmailChannelMode, 'DraftOnly')");
         expect(pgSql).toContain("COALESCE(p_CalendarChannelMode, 'ProposeWithApproval')");
         expect(pgSql).toContain("COALESCE(p_PhoneChannelMode, 'Disabled')");
+
+        // Never emit unconditional DROP CONSTRAINT "DF_*" (PG defines defaults inline without named DF_* constraints)
+        expect(pgSql).not.toMatch(/DROP\s+CONSTRAINT\s+"DF_/i);
+        expect(pgSql).toContain('DROP CONSTRAINT IF EXISTS "DF_AIAgentUserPolicy_CoordinationMode"');
+        expect(pgSql).toContain('DROP CONSTRAINT IF EXISTS "DF_AIAgentUserPolicy_CalendarChannelMode"');
+        expect(pgSql).toContain('DROP CONSTRAINT IF EXISTS "DF_AIAgentUserPolicy_PhoneChannelMode"');
+
+        // Verify compatibility with inline defaults defined in V202610171900__v6.2.x__AIAgentUserPolicy_And_UserRoutine_Wake.pg.sql
+        const priorPgMigrationPath = path.join(
+            repoRoot,
+            'migrations-pg/v6/V202610171900__v6.2.x__AIAgentUserPolicy_And_UserRoutine_Wake.pg.sql'
+        );
+        const priorPgSql = fs.readFileSync(priorPgMigrationPath, 'utf8');
+        expect(priorPgSql).toContain('CREATE TABLE __mj."AIAgentUserPolicy"');
+        expect(priorPgSql).not.toContain('DF_AIAgentUserPolicy_');
+        expect(priorPgSql).toMatch(/"EmailChannelMode"\s+VARCHAR\(20\)\s+NOT\s+NULL\s+DEFAULT\s+\(\s*'DraftOnly'\s*\)/i);
     });
 
     it('seeds routine AgentConfigurationID from template default on creation unless explicitly overridden', () => {

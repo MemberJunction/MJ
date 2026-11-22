@@ -158,6 +158,27 @@ export function QuoteConstraintNames(sql: string): string {
 }
 
 /**
+ * Make SQL Server default-constraint drops idempotent on PostgreSQL.
+ *
+ * PostgreSQL migrations define column defaults inline (`"Col" VARCHAR(20) NOT NULL DEFAULT 'X'`)
+ * or via `ALTER COLUMN ... SET DEFAULT ...` without creating named `DF_*` constraint objects.
+ * Rewriting `DROP CONSTRAINT "DF_..."` to `DROP CONSTRAINT IF EXISTS "DF_..."` prevents
+ * `constraint "DF_..." of relation "..." does not exist` failures while still dropping any
+ * explicitly named constraint if one exists.
+ */
+export function MakeDropDefaultConstraintIdempotent(sql: string): string {
+  return TransformCodeOnly(sql, (code) =>
+    code.replace(
+      /\bDROP\s+CONSTRAINT\s+(?!IF\s+EXISTS\b)("?DF_[\w$]+"?)/gi,
+      (_match, name: string) => {
+        const quoted = name.startsWith('"') ? name : `"${name}"`;
+        return `DROP CONSTRAINT IF EXISTS ${quoted}`;
+      }
+    )
+  );
+}
+
+/**
  * Emit a DO-block that drops every overload of a function in a given schema.
  *
  * PG dispatches functions by `(name, ordered-arg-type-list)`. `CREATE OR
