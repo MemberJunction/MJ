@@ -9,9 +9,17 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
-import { BaseEntity, StartupManager, WellKnownUserSource, type BaseEntityEvent, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { AuthorizationInfo, AuthorizationRoleInfo, BaseEntity, StartupManager, WellKnownUserSource, type BaseEntityEvent, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { MJGraphEdgeEntity } from '../../generated/entity_subclasses';
-import { GraphEngine, ClampGraphDepth, ClampGraphMaxNodes, CanUserReadEntity, GRAPH_MAX_STORED_EDGES_PER_STEP } from '../../graph/GraphEngine';
+import {
+    GraphEngine,
+    ClampGraphDepth,
+    ClampGraphMaxNodes,
+    CanUserApproveGraph,
+    CanUserReadEntity,
+    GRAPH_APPROVE_EDGES_AUTHORIZATION,
+    GRAPH_MAX_STORED_EDGES_PER_STEP,
+} from '../../graph/GraphEngine';
 import { BaseGraphEdgeProvider, LoadGraphEdgeProviders, type GraphEdgeRequest, type GraphEdgeView, type GraphProviderContext } from '../../graph';
 import { QueryEngine } from '../../engines/QueryEngine';
 import type { MJQueryEntityExtended } from '../../custom/MJQueryEntityExtended';
@@ -565,6 +573,35 @@ describe('GraphEngine', () => {
             expect(n2?.ParentKey).toBe(a.Nodes.find((n) => n.RecordID === 'n1')?.Key);
             expect(n2?.ViaEdgeID).toBeTruthy();
             expect(engine.DescribeForPrompt(a)).toContain('### Semantic Graph Context');
+        });
+    });
+
+    describe('CanUserApproveGraph', () => {
+        function makeAuthList(grantedRoleId: string, name: string = GRAPH_APPROVE_EDGES_AUTHORIZATION): AuthorizationInfo[] {
+            const authId = 'auth-graph-approve';
+            const owningProvider = {
+                AuthorizationRoles: [
+                    new AuthorizationRoleInfo({ ID: 'ar-graph-approve', AuthorizationID: authId, RoleID: grantedRoleId, Type: 'Allow' }),
+                ],
+            } as unknown as IMetadataProvider;
+            return [new AuthorizationInfo({ ID: authId, Name: name, ParentID: null, IsActive: true }, owningProvider)];
+        }
+
+        it('fails closed when user, authorizations, or the seeded authorization are missing', () => {
+            const execRoleId = executive.UserRoles[1].RoleID;
+            const auths = makeAuthList(execRoleId);
+            expect(CanUserApproveGraph(undefined, auths)).toBe(false);
+            expect(CanUserApproveGraph(null, auths)).toBe(false);
+            expect(CanUserApproveGraph(executive, undefined)).toBe(false);
+            expect(CanUserApproveGraph(executive, [])).toBe(false);
+            expect(CanUserApproveGraph(executive, makeAuthList(execRoleId, 'Some Other Authorization'))).toBe(false);
+        });
+
+        it('allows callers holding the granted role (or Owner) and denies callers without it', () => {
+            const execRoleId = executive.UserRoles[1].RoleID;
+            const auths = makeAuthList(execRoleId);
+            expect(CanUserApproveGraph(analyst, auths)).toBe(false);
+            expect(CanUserApproveGraph(executive, auths)).toBe(true);
         });
     });
 });
