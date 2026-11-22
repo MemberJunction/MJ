@@ -1,11 +1,16 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
-  "required": ["model"],
+  "required": [
+    "model"
+  ],
   "properties": {
     "model": {
       "type": "string",
-      "enum": ["opt-in", "opt-out"],
+      "enum": [
+        "opt-in",
+        "opt-out"
+      ],
       "description": "Whether explicit prior consent is required (opt-in) or sending is permitted until unsubscribed (opt-out)."
     },
     "softOptIn": {

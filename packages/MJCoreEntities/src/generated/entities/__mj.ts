@@ -44300,7 +44300,7 @@ export class MJCommunicationSenderPermissionEntity extends BaseEntity<MJCommunic
  * * Schema: __mj
  * * Base Table: CommunicationSenderType
  * * Base View: vwCommunicationSenderTypes
- * * @description Registers a kind of sender, usually backed by an entity, the way Communication Principal registers recipients. Default: Company over MJ: Companies. BCSaaS can register tenants, Rasa newsletters, and so on.
+ * * @description Registers a kind of sender, usually backed by an entity, the way Communication Principal registers recipients. Default: Company over MJ: Companies. Multi-tenant apps can register tenants, newsletters, brands, and so on.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class

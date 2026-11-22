@@ -1522,8 +1522,9 @@ import {
     WorkflowValidateServerOperation,
 } from '@memberjunction/task-graph';
 
-// @memberjunction/messaging-adapters (2 classes)
+// @memberjunction/messaging-adapters (3 classes)
 import {
+    EmailUtilityMailboxExtension,
     SlackMessagingExtension,
     TeamsMessagingExtension,
 } from '@memberjunction/messaging-adapters';
@@ -3070,6 +3071,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     WorkflowDraftServerOperation,
     WorkflowSaveServerOperation,
     WorkflowValidateServerOperation,
+    EmailUtilityMailboxExtension,
     SlackMessagingExtension,
     TeamsMessagingExtension,
     ActionLogRetentionScheduledJobDriver,
@@ -3222,11 +3224,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     AddRecordsToListAction,
     AddViewResultsToListAction,
     AggregateDataAction,
-    AssembleMyBriefingAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    AssembleMyBriefingAction,
     AssignUserRolesAction,
     BraveSearchAction,
     BulkUpdateListItemStatusAction,
@@ -3426,11 +3428,11 @@ const CLASS_REGISTRATIONS_6: any[] = [
     XMLParserAction,
     AutotagAndVectorizeContentAction,
     DatabaseTransportDriverFactory,
-    MJWorkQueueDeduplicationEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_7: any[] = [
+    MJWorkQueueDeduplicationEntityServer,
     MJWorkQueueDeliveryEntityServer,
     MJWorkQueueMessageEntityServer,
     MJWorkQueueSubscriptionEntityServer,
@@ -3496,7 +3498,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1447;
+export const CLASS_REGISTRATIONS_COUNT = 1448;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -36664,7 +36664,7 @@ export class MJCommunicationSenderPermissionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Communication Sender Types
 //****************************************************************************
-@ObjectType({ description: "Registers a kind of sender, usually backed by an entity, the way Communication Principal registers recipients. Default: Company over MJ: Companies. BCSaaS can register tenants, Rasa newsletters, and so on." })
+@ObjectType({ description: "Registers a kind of sender, usually backed by an entity, the way Communication Principal registers recipients. Default: Company over MJ: Companies. Multi-tenant apps can register tenants, newsletters, brands, and so on." })
 export class MJCommunicationSenderType_ {
     @Field() 
     @MaxLength(36)

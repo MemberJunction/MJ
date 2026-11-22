@@ -632,7 +632,7 @@ EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'The principal this
 GO
 
 -- CommunicationSenderType
-EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Registers a kind of sender, usually backed by an entity, the way Communication Principal registers recipients. Default: Company over MJ: Companies. BCSaaS can register tenants, Rasa newsletters, and so on.', @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', @level1type=N'TABLE', @level1name=N'CommunicationSenderType';
+EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Registers a kind of sender, usually backed by an entity, the way Communication Principal registers recipients. Default: Company over MJ: Companies. Multi-tenant apps can register tenants, newsletters, brands, and so on.', @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', @level1type=N'TABLE', @level1name=N'CommunicationSenderType';
 EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Unique name, for example Company, Brand, Tenant or Newsletter.', @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', @level1type=N'TABLE', @level1name=N'CommunicationSenderType', @level2type=N'COLUMN', @level2name=N'Name';
 EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'What this sender type represents.', @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', @level1type=N'TABLE', @level1name=N'CommunicationSenderType', @level2type=N'COLUMN', @level2name=N'Description';
 EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'Entity whose records back senders of this type, for example MJ: Companies. NULL for senders defined only in Communication Senders (for example a brand with no source record).', @level0type=N'SCHEMA', @level0name=N'${flyway:defaultSchema}', @level1type=N'TABLE', @level1name=N'CommunicationSenderType', @level2type=N'COLUMN', @level2name=N'EntityID';
@@ -1605,7 +1605,7 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          '15c20042-aebe-4fb4-b6bb-d2bcfc4dedde',
          'MJ: Communication Sender Types',
          'Communication Sender Types',
-         'Registers a kind of sender, usually backed by an entity, the way Communication Principal registers recipients. Default: Company over MJ: Companies. BCSaaS can register tenants, Rasa newsletters, and so on.',
+         'Registers a kind of sender, usually backed by an entity, the way Communication Principal registers recipients. Default: Company over MJ: Companies. Multi-tenant apps can register tenants, newsletters, brands, and so on.',
          NULL,
          'CommunicationSenderType',
          'vwCommunicationSenderTypes',
