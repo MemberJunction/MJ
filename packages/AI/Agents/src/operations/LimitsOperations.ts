@@ -1,0 +1,718 @@
+/**
+ * @fileoverview Server implementations of `Limits.*` `BaseRemotableOperation` classes
+ * (`Limits.GetDiagnostics`, `Limits.ResumePausedRun`, `Limits.PauseRun`) for inspecting
+ * the 5-tier limits hierarchy, approved backstops, budget utilization, deterministic
+ * progress & fast-judge diagnostics, and executing non-destructive pause/resume actions.
+ *
+ * @module @memberjunction/ai-agents
+ */
+
+import {
+    AuthorizationEvaluator,
+    BaseRemotableOperation,
+    CODE_FALLBACK_LIMITS,
+    LIMITS_KEY_PATHS,
+    LIMITS_TIER_PRECEDENCE,
+    LimitsConfigResolver,
+    RunView,
+    type IMetadataProvider,
+    type LimitsKeyPath,
+    type LimitsKeyProvenance,
+    type LimitsSourceTier,
+    type MJLimitsConfig,
+    type RemoteOpServerContext,
+    type UserInfo,
+} from '@memberjunction/core';
+import type { MJAIAgentEntity, MJAIAgentRunEntity, MJAIAgentUserPolicyEntity } from '@memberjunction/core-entities';
+import {
+    ExtractLimitsDiagnosticsFromRunData,
+    ExtractProgressDiagnosticsFromRunData,
+    ExtractRunawayCheckpointFromRunData,
+    LIMITS_GET_DIAGNOSTICS_OPERATION_KEY,
+    LIMITS_PAUSE_RUN_OPERATION_KEY,
+    LIMITS_RESUME_PAUSED_RUN_OPERATION_KEY,
+    LimitsGetDiagnosticsOperation,
+    LimitsPauseRunOperation,
+    LimitsResumePausedRunOperation,
+    ResolveAgentRunLimits,
+    type LimitsActiveRunDiagnosticSummary,
+    type LimitsBackstopDescriptor,
+    type LimitsBudgetScopeUtilization,
+    type LimitsBudgetUtilizationSummary,
+    type LimitsGetDiagnosticsInput,
+    type LimitsGetDiagnosticsOutput,
+    type LimitsPauseRunInput,
+    type LimitsPauseRunOutput,
+    type LimitsResumePausedRunInput,
+    type LimitsResumePausedRunOutput,
+    type LimitsTierSummary,
+    type MJAIAgentRunEntityExtended,
+} from '@memberjunction/ai-core-plus';
+import { EscapeSQLString, IsValidUUID, RegisterClass } from '@memberjunction/global';
+import { ComputeDayBoundaryWindow } from '../BudgetEnforcementGuard';
+import { RunawayCheckpointManager } from '../RunawayCheckpointManager';
+
+const DEFAULT_INSPECTED_RUNS_LIMIT = 25; // Tuning: default page size for admin limits diagnostics inspection
+const MAX_INSPECTED_RUNS_LIMIT = 100; // Tuning: upper bound for admin limits diagnostics query
+
+type ProjectedAgentRunRow = Pick<
+    MJAIAgentRunEntity,
+    | 'ID'
+    | 'AgentID'
+    | 'Agent'
+    | 'UserID'
+    | 'User'
+    | 'Status'
+    | 'StartedAt'
+    | 'CompletedAt'
+    | 'TotalCost'
+    | 'TotalCostRollup'
+    | 'TotalTokensUsed'
+    | 'TotalPromptIterations'
+    | 'Data'
+    | 'Message'
+>;
+
+const TIER_DESCRIPTIONS: Record<LimitsSourceTier, string> = {
+    CodeFallback: 'Built-in approved code backstops and defaults in @memberjunction/core',
+    MjConfig: 'Host deployment overrides loaded from mj.config.cjs limits section',
+    AgentOrWorkflowMetadata: 'Per-agent columns, TypeConfiguration.limits, or workflow metadata',
+    UserAgentPolicy: 'Per-user active MJ: AI Agent User Policies overrides (can enforce ceilings)',
+    RunOverride: 'Per-execution overrides passed via ExecuteAgentParams or limitsOverride',
+};
+
+function authorizeLimitsRead(user?: UserInfo, provider?: IMetadataProvider): boolean {
+    if (!user) {
+        return false;
+    }
+    const userType = typeof user.Type === 'string' ? user.Type.trim().toLowerCase() : '';
+    if (userType === 'owner') {
+        return true;
+    }
+    const authorizations = provider?.Authorizations ?? [];
+    const matched = authorizations.find((a) => {
+        const name = a.Name?.trim().toLowerCase();
+        return (
+            name === 'system administrator' ||
+            name === 'diagnostics: run sessions' ||
+            name === 'ai: manage agents'
+        );
+    });
+    if (!matched) {
+        return false;
+    }
+    return new AuthorizationEvaluator().UserCanExecuteWithAncestors(matched, user, authorizations);
+}
+
+function authorizeLimitsWrite(user?: UserInfo, provider?: IMetadataProvider): boolean {
+    if (!user) {
+        return false;
+    }
+    const userType = typeof user.Type === 'string' ? user.Type.trim().toLowerCase() : '';
+    if (userType === 'owner') {
+        return true;
+    }
+    const authorizations = provider?.Authorizations ?? [];
+    const matched = authorizations.find((a) => {
+        const name = a.Name?.trim().toLowerCase();
+        return name === 'system administrator' || name === 'ai: manage agents';
+    });
+    if (!matched) {
+        return false;
+    }
+    return new AuthorizationEvaluator().UserCanExecuteWithAncestors(matched, user, authorizations);
+}
+
+function buildApprovedBackstops(
+    limits: MJLimitsConfig,
+    provenance: Record<LimitsKeyPath, LimitsKeyProvenance>,
+): LimitsBackstopDescriptor[] {
+    const specs: Array<{
+        Key: LimitsKeyPath;
+        Label: string;
+        Category: 'Backstops' | 'Briefing';
+        Unit: LimitsBackstopDescriptor['Unit'];
+        EffectiveValue: number;
+        ApprovedDefaultValue: number;
+        Description: string;
+    }> = [
+        {
+            Key: 'AgentChannelConsecutiveTurns',
+            Label: 'Agent Channel Consecutive Turns',
+            Category: 'Backstops',
+            Unit: 'turns',
+            EffectiveValue: limits.AgentChannelConsecutiveTurns,
+            ApprovedDefaultValue: CODE_FALLBACK_LIMITS.AgentChannelConsecutiveTurns,
+            Description: 'Maximum consecutive peer agent turns in an Agent Channel before pausing for human input.',
+        },
+        {
+            Key: 'AgentChannelWakesPerHour',
+            Label: 'Agent Channel Wakes / Hour',
+            Category: 'Backstops',
+            Unit: 'wakes/hr',
+            EffectiveValue: limits.AgentChannelWakesPerHour,
+            ApprovedDefaultValue: CODE_FALLBACK_LIMITS.AgentChannelWakesPerHour,
+            Description: 'Maximum peer-agent wakes permitted per hour in an Agent Channel.',
+        },
+        {
+            Key: 'AgentAbsoluteIterations',
+            Label: 'Agent Absolute Iterations',
+            Category: 'Backstops',
+            Unit: 'iterations',
+            EffectiveValue: limits.AgentAbsoluteIterations,
+            ApprovedDefaultValue: CODE_FALLBACK_LIMITS.AgentAbsoluteIterations,
+            Description: 'System-wide safety net on prompt iterations per agent run.',
+        },
+        {
+            Key: 'MaxTasksPerAgentGraph',
+            Label: 'Max Tasks Per Agent Graph',
+            Category: 'Backstops',
+            Unit: 'nodes',
+            EffectiveValue: limits.MaxTasksPerAgentGraph,
+            ApprovedDefaultValue: CODE_FALLBACK_LIMITS.MaxTasksPerAgentGraph,
+            Description: 'Maximum nodes permitted in a model-authored task graph.',
+        },
+        {
+            Key: 'WhileLoopMaxIterations',
+            Label: 'While Loop Max Iterations',
+            Category: 'Backstops',
+            Unit: 'iterations',
+            EffectiveValue: limits.WhileLoopMaxIterations,
+            ApprovedDefaultValue: CODE_FALLBACK_LIMITS.WhileLoopMaxIterations,
+            Description: 'Default iteration ceiling for While loop task-graph nodes.',
+        },
+        {
+            Key: 'ForEachMaxIterations',
+            Label: 'ForEach Loop Max Iterations',
+            Category: 'Backstops',
+            Unit: 'iterations',
+            EffectiveValue: limits.ForEachMaxIterations,
+            ApprovedDefaultValue: CODE_FALLBACK_LIMITS.ForEachMaxIterations,
+            Description: 'Default iteration ceiling for ForEach loop task-graph nodes.',
+        },
+        {
+            Key: 'MaxTasksPerGraph',
+            Label: 'Max Tasks Per Workflow Graph',
+            Category: 'Backstops',
+            Unit: 'nodes',
+            EffectiveValue: limits.MaxTasksPerGraph,
+            ApprovedDefaultValue: CODE_FALLBACK_LIMITS.MaxTasksPerGraph,
+            Description: 'Blast-radius ceiling on nodes in any submitted workflow or task graph.',
+        },
+        {
+            Key: 'BriefingContributorTimeoutMs',
+            Label: 'Briefing Contributor Timeout',
+            Category: 'Briefing',
+            Unit: 'ms',
+            EffectiveValue: limits.BriefingContributorTimeoutMs,
+            ApprovedDefaultValue: CODE_FALLBACK_LIMITS.BriefingContributorTimeoutMs,
+            Description: 'Timeout in milliseconds per briefing skill contributor execution.',
+        },
+        {
+            Key: 'BriefingMaxContributorChars',
+            Label: 'Briefing Max Contributor Chars',
+            Category: 'Briefing',
+            Unit: 'chars',
+            EffectiveValue: limits.BriefingMaxContributorChars,
+            ApprovedDefaultValue: CODE_FALLBACK_LIMITS.BriefingMaxContributorChars,
+            Description: 'Maximum serialized character length retained per briefing contributor.',
+        },
+    ];
+
+    return specs.map((spec) => {
+        const prov = provenance[spec.Key];
+        return {
+            ...spec,
+            SourceTier: prov.SourceTier,
+            IsOverridden: prov.IsOverridden,
+        };
+    });
+}
+
+function buildTierSummaries(
+    provenance: Record<LimitsKeyPath, LimitsKeyProvenance>,
+): LimitsTierSummary[] {
+    return LIMITS_TIER_PRECEDENCE.map((tier, index) => {
+        let winningCount = 0;
+        let suppliedCount = 0;
+        for (const key of LIMITS_KEY_PATHS) {
+            const prov = provenance[key];
+            if (prov.SourceTier === tier) {
+                winningCount++;
+            }
+            if (prov.TierValues[tier] !== undefined) {
+                suppliedCount++;
+            }
+        }
+        return {
+            Tier: tier,
+            Rank: index + 1,
+            Description: TIER_DESCRIPTIONS[tier],
+            WinningKeyCount: winningCount,
+            SuppliedKeyCount: suppliedCount,
+        };
+    });
+}
+
+function toRunSummary(row: ProjectedAgentRunRow): LimitsActiveRunDiagnosticSummary {
+    const snapshot = ExtractLimitsDiagnosticsFromRunData(row.Data);
+    const progress = ExtractProgressDiagnosticsFromRunData(row.Data);
+    const checkpoint = ExtractRunawayCheckpointFromRunData(row.Data);
+    const costUsd = typeof row.TotalCostRollup === 'number' && row.TotalCostRollup > 0
+        ? row.TotalCostRollup
+        : (typeof row.TotalCost === 'number' ? row.TotalCost : 0);
+
+    return {
+        AgentRunID: row.ID,
+        AgentID: row.AgentID ?? null,
+        AgentName: row.Agent ?? checkpoint?.AgentName ?? 'Unknown Agent',
+        UserID: row.UserID ?? null,
+        UserName: row.User ?? 'Unknown User',
+        Status: row.Status ?? 'Unknown',
+        StartedAtISO: row.StartedAt ? new Date(row.StartedAt).toISOString() : null,
+        CompletedAtISO: row.CompletedAt ? new Date(row.CompletedAt).toISOString() : null,
+        TotalCostUsd: costUsd,
+        TotalTokensUsed: typeof row.TotalTokensUsed === 'number' ? row.TotalTokensUsed : 0,
+        TotalPromptIterations: typeof row.TotalPromptIterations === 'number' ? row.TotalPromptIterations : 0,
+        HasLimitsSnapshot: snapshot !== null,
+        OverriddenKeyCount: snapshot?.OverriddenKeys.length ?? 0,
+        ClampedKeyCount: snapshot?.ClampedKeys.length ?? 0,
+        Snapshot: snapshot,
+        ProgressClassification: progress?.LastClassification ?? null,
+        ProgressScore: progress?.LastScore ?? null,
+        ProgressReason: progress?.LastReason ?? null,
+        FastJudgeEntries: progress?.FastJudgeEntries ?? [],
+        IsPausedWithCheckpoint: row.Status === 'Paused' && checkpoint !== null,
+        CheckpointID: checkpoint?.CheckpointID ?? null,
+        PauseReason: checkpoint?.PauseReason ?? null,
+        PausedAtISO: checkpoint?.PausedAtISO ?? null,
+        PauseSummary: checkpoint?.Summary ?? row.Message ?? null,
+        CompletedStepCount: checkpoint?.CompletedStepCount ?? 0,
+        CompletedPromptTurns: checkpoint?.CompletedPromptTurns ?? 0,
+        HumanApprovalStatus: checkpoint?.HumanApproval.Status ?? null,
+        CumulativeRunCostUsd: checkpoint?.CumulativeLedger.RunCostUsd ?? costUsd,
+        CumulativeRunWallClockMs: checkpoint?.CumulativeLedger.RunWallClockMs ?? 0,
+    };
+}
+
+function pctOf(observed: number, ceiling: number | null): number | null {
+    if (ceiling === null || ceiling <= 0) {
+        return null;
+    }
+    return Math.min(100, Math.round((observed / ceiling) * 1000) / 10);
+}
+
+function buildBudgetUtilization(
+    limits: MJLimitsConfig,
+    runs: readonly LimitsActiveRunDiagnosticSummary[],
+    nowMs: number,
+): LimitsBudgetUtilizationSummary {
+    const activeRuns = runs.filter((r) => r.Status === 'Running');
+    const pausedRuns = runs.filter((r) => r.Status === 'Paused');
+    const totalCost = runs.reduce((acc, r) => acc + r.TotalCostUsd, 0);
+    const totalTokens = runs.reduce((acc, r) => acc + r.TotalTokensUsed, 0);
+
+    const highestRunCost = runs.reduce((max, r) => Math.max(max, r.CumulativeRunCostUsd), 0);
+    const highestRunWall = runs.reduce((max, r) => {
+        if (r.CumulativeRunWallClockMs > 0) {
+            return Math.max(max, r.CumulativeRunWallClockMs);
+        }
+        if (r.StartedAtISO) {
+            const start = Date.parse(r.StartedAtISO);
+            const end = r.CompletedAtISO ? Date.parse(r.CompletedAtISO) : nowMs;
+            if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
+                return Math.max(max, end - start);
+            }
+        }
+        return max;
+    }, 0);
+
+    const dayWindow = ComputeDayBoundaryWindow(nowMs, limits.Budgets.PerUserPerDay.DayBoundaryTimezone);
+    const dayStartMs = Date.parse(dayWindow.DayStartISO);
+    const dayEndMs = Date.parse(dayWindow.DayEndISO);
+    const todayRuns = runs.filter((r) => {
+        if (!r.StartedAtISO) return false;
+        const started = Date.parse(r.StartedAtISO);
+        return started >= dayStartMs && started < dayEndMs;
+    });
+    const todayCost = todayRuns.reduce((acc, r) => acc + r.TotalCostUsd, 0);
+    const todayWall = todayRuns.reduce((acc, r) => acc + r.CumulativeRunWallClockMs, 0);
+
+    const routineRuns = runs.filter((r) => Boolean(r.Snapshot?.Context.RoutineID));
+    const routineCost = routineRuns.reduce((acc, r) => acc + r.TotalCostUsd, 0);
+    const routineWall = routineRuns.reduce((acc, r) => acc + r.CumulativeRunWallClockMs, 0);
+
+    const scopes: LimitsBudgetScopeUtilization[] = [
+        {
+            Scope: 'PerRun',
+            Label: 'Per-Run Ceiling (Peak Inspected Run)',
+            MaxCostUsd: limits.Budgets.PerRun.MaxCostUsd,
+            ObservedCostUsd: highestRunCost,
+            CostUtilizationPct: pctOf(highestRunCost, limits.Budgets.PerRun.MaxCostUsd),
+            MaxWallClockMs: limits.Budgets.PerRun.MaxWallClockMs,
+            ObservedWallClockMs: highestRunWall,
+            WallClockUtilizationPct: pctOf(highestRunWall, limits.Budgets.PerRun.MaxWallClockMs),
+            Note: limits.Budgets.PerRun.MaxTokens != null
+                ? `Token ceiling: ${limits.Budgets.PerRun.MaxTokens.toLocaleString()} tokens`
+                : 'No per-run dollar/token ceiling unless configured per tier.',
+        },
+        {
+            Scope: 'PerRoutine',
+            Label: 'Per-Routine Ceiling',
+            MaxCostUsd: limits.Budgets.PerRoutine.MaxCostUsd,
+            ObservedCostUsd: routineCost,
+            CostUtilizationPct: pctOf(routineCost, limits.Budgets.PerRoutine.MaxCostUsd),
+            MaxWallClockMs: limits.Budgets.PerRoutine.MaxWallClockMs,
+            ObservedWallClockMs: routineWall,
+            WallClockUtilizationPct: pctOf(routineWall, limits.Budgets.PerRoutine.MaxWallClockMs),
+            Note: `${routineRuns.length} routine-attributed run(s) in recent window.`,
+        },
+        {
+            Scope: 'PerUserPerDay',
+            Label: `Per-User Daily Ceiling (${dayWindow.DayBucketUTC} ${limits.Budgets.PerUserPerDay.DayBoundaryTimezone})`,
+            MaxCostUsd: limits.Budgets.PerUserPerDay.MaxCostUsd,
+            ObservedCostUsd: todayCost,
+            CostUtilizationPct: pctOf(todayCost, limits.Budgets.PerUserPerDay.MaxCostUsd),
+            MaxWallClockMs: limits.Budgets.PerUserPerDay.MaxWallClockMs,
+            ObservedWallClockMs: todayWall,
+            WallClockUtilizationPct: pctOf(todayWall, limits.Budgets.PerUserPerDay.MaxWallClockMs),
+            Note: `${todayRuns.length} run(s) started in current ${limits.Budgets.PerUserPerDay.DayBoundaryTimezone} day bucket.`,
+        },
+    ];
+
+    return {
+        ActiveRunCount: activeRuns.length,
+        PausedRunCount: pausedRuns.length,
+        InspectedRunCount: runs.length,
+        TotalObservedCostUsd: totalCost,
+        TotalObservedTokens: totalTokens,
+        CountPausedTimeTowardsWallClock: limits.Budgets.CountPausedTimeTowardsWallClock,
+        AllowedInFlightOvershootUsd: limits.Budgets.AllowedInFlightOvershootUsd,
+        AllowedInFlightOvershootMs: limits.Budgets.AllowedInFlightOvershootMs,
+        DayBoundaryTimezone: limits.Budgets.PerUserPerDay.DayBoundaryTimezone,
+        Scopes: scopes,
+    };
+}
+
+/**
+ * `Limits.GetDiagnostics` — resolves the active 5-tier limits configuration, per-key
+ * provenance, approved backstops, multi-scope budget utilization, deterministic progress
+ * diagnostics, fast-judge reasons, and paused runs awaiting approval/resume.
+ */
+@RegisterClass(BaseRemotableOperation, LIMITS_GET_DIAGNOSTICS_OPERATION_KEY)
+export class LimitsGetDiagnosticsServerOperation extends LimitsGetDiagnosticsOperation {
+    protected override async Authorize(
+        _input: LimitsGetDiagnosticsInput,
+        user: UserInfo,
+        context?: RemoteOpServerContext,
+    ): Promise<boolean> {
+        return authorizeLimitsRead(user, context?.provider);
+    }
+
+    protected override async InternalExecute(
+        input: LimitsGetDiagnosticsInput,
+        provider: IMetadataProvider,
+        user: UserInfo,
+    ): Promise<LimitsGetDiagnosticsOutput> {
+        const rv = RunView.FromMetadataProvider(provider);
+        const maxRuns = Math.min(
+            MAX_INSPECTED_RUNS_LIMIT,
+            Math.max(1, Math.trunc(input?.MaxRuns ?? DEFAULT_INSPECTED_RUNS_LIMIT)),
+        );
+
+        let agentEntity: MJAIAgentEntity | null = null;
+        if (input?.AgentID && IsValidUUID(input.AgentID)) {
+            const agentRes = await rv.RunView<MJAIAgentEntity>(
+                {
+                    EntityName: 'MJ: AI Agents',
+                    ExtraFilter: `ID='${EscapeSQLString(input.AgentID)}'`,
+                    ResultType: 'entity_object',
+                    MaxRows: 1,
+                },
+                user,
+            );
+            if (agentRes.Success && agentRes.Results.length > 0) {
+                agentEntity = agentRes.Results[0];
+            }
+        }
+
+        let userPolicyEntity: MJAIAgentUserPolicyEntity | null = null;
+        if (input?.UserID && IsValidUUID(input.UserID)) {
+            const agentClause = input.AgentID && IsValidUUID(input.AgentID)
+                ? ` AND AgentID='${EscapeSQLString(input.AgentID)}'`
+                : '';
+            const policyRes = await rv.RunView<MJAIAgentUserPolicyEntity>(
+                {
+                    EntityName: 'MJ: AI Agent User Policies',
+                    ExtraFilter: `UserID='${EscapeSQLString(input.UserID)}' AND Status='Active'${agentClause}`,
+                    ResultType: 'entity_object',
+                    MaxRows: 1,
+                },
+                user,
+            );
+            if (policyRes.Success && policyRes.Results.length > 0) {
+                userPolicyEntity = policyRes.Results[0];
+            }
+        }
+
+        const resolution = ResolveAgentRunLimits({
+            Agent: agentEntity,
+            UserPolicy: userPolicyEntity,
+            RunOverride: input?.RunOverride ?? null,
+        });
+
+        const runFilters: string[] = [];
+        if (input?.AgentID && IsValidUUID(input.AgentID)) {
+            runFilters.push(`AgentID='${EscapeSQLString(input.AgentID)}'`);
+        }
+        if (input?.UserID && IsValidUUID(input.UserID)) {
+            runFilters.push(`UserID='${EscapeSQLString(input.UserID)}'`);
+        }
+
+        const [recentRunsRes, pausedRunsRes] = await rv.RunViews<ProjectedAgentRunRow>(
+            [
+                {
+                    EntityName: 'MJ: AI Agent Runs',
+                    ExtraFilter: runFilters.join(' AND '),
+                    Fields: [
+                        'ID',
+                        'AgentID',
+                        'Agent',
+                        'UserID',
+                        'User',
+                        'Status',
+                        'StartedAt',
+                        'CompletedAt',
+                        'TotalCost',
+                        'TotalCostRollup',
+                        'TotalTokensUsed',
+                        'TotalPromptIterations',
+                        'Data',
+                        'Message',
+                    ],
+                    OrderBy: 'StartedAt DESC',
+                    MaxRows: maxRuns,
+                    ResultType: 'simple',
+                },
+                {
+                    EntityName: 'MJ: AI Agent Runs',
+                    ExtraFilter: [...runFilters, `Status='Paused'`].join(' AND '),
+                    Fields: [
+                        'ID',
+                        'AgentID',
+                        'Agent',
+                        'UserID',
+                        'User',
+                        'Status',
+                        'StartedAt',
+                        'CompletedAt',
+                        'TotalCost',
+                        'TotalCostRollup',
+                        'TotalTokensUsed',
+                        'TotalPromptIterations',
+                        'Data',
+                        'Message',
+                    ],
+                    OrderBy: 'StartedAt DESC',
+                    MaxRows: maxRuns,
+                    ResultType: 'simple',
+                },
+            ],
+            user,
+        );
+
+        const seenIds = new Set<string>();
+        const combinedRows: ProjectedAgentRunRow[] = [];
+        for (const row of [...(pausedRunsRes?.Results ?? []), ...(recentRunsRes?.Results ?? [])]) {
+            if (!row?.ID) continue;
+            const norm = row.ID.trim().toLowerCase();
+            if (seenIds.has(norm)) continue;
+            seenIds.add(norm);
+            combinedRows.push(row);
+        }
+
+        const runSummaries = combinedRows.map(toRunSummary);
+        const pausedRuns = runSummaries.filter((r) => r.Status === 'Paused');
+
+        return {
+            ResolvedAtISO: resolution.ResolvedAtISO,
+            TierPrecedence: LIMITS_TIER_PRECEDENCE,
+            TierSummaries: buildTierSummaries(resolution.Provenance),
+            ResolvedLimits: resolution.Limits,
+            Provenance: resolution.Provenance,
+            OverriddenKeys: [...resolution.OverriddenKeys],
+            ClampedKeys: [...resolution.ClampedKeys],
+            ApprovedBackstops: buildApprovedBackstops(resolution.Limits, resolution.Provenance),
+            BudgetUtilization: buildBudgetUtilization(resolution.Limits, runSummaries, Date.now()),
+            ActiveAndRecentRuns: runSummaries,
+            PausedRuns: pausedRuns,
+        };
+    }
+}
+
+/**
+ * `Limits.ResumePausedRun` — records human approval and optional budget extension on a paused
+ * `MJ: AI Agent Runs` checkpoint, then transitions the run cleanly back to `Running` while
+ * preserving completed steps, payload, scratchpad, and cumulative USD/wall-clock accounting.
+ */
+@RegisterClass(BaseRemotableOperation, LIMITS_RESUME_PAUSED_RUN_OPERATION_KEY)
+export class LimitsResumePausedRunServerOperation extends LimitsResumePausedRunOperation {
+    protected override async Authorize(
+        _input: LimitsResumePausedRunInput,
+        user: UserInfo,
+        context?: RemoteOpServerContext,
+    ): Promise<boolean> {
+        return authorizeLimitsWrite(user, context?.provider);
+    }
+
+    protected override async InternalExecute(
+        input: LimitsResumePausedRunInput,
+        provider: IMetadataProvider,
+        user: UserInfo,
+    ): Promise<LimitsResumePausedRunOutput> {
+        const runId = input?.AgentRunID?.trim();
+        if (!runId) {
+            throw new Error('AgentRunID is required to resume a paused run');
+        }
+
+        const checkpointManager = new RunawayCheckpointManager();
+        const approvedCheckpoint = await checkpointManager.ApproveCheckpoint({
+            AgentRunID: runId,
+            ApprovedByUserID: user.ID,
+            BudgetExtension: input.BudgetExtension,
+            DecisionNotes: input.DecisionNotes ?? null,
+            Provider: provider,
+            ContextUser: user,
+        });
+
+        if (input.PrepareResume === false) {
+            return {
+                Success: true,
+                AgentRunID: runId,
+                Status: 'Paused',
+                CheckpointID: approvedCheckpoint.CheckpointID,
+                ApprovalStatus: approvedCheckpoint.HumanApproval.Status,
+                ExtendedBudgets: null,
+                PriorCumulativeCostUsd: approvedCheckpoint.CumulativeLedger.RunCostUsd,
+                PriorCumulativeActiveWallClockMs: approvedCheckpoint.CumulativeLedger.RunWallClockMs,
+                StartingStepCount: approvedCheckpoint.CompletedStepCount,
+                StartingPromptTurns: approvedCheckpoint.CompletedPromptTurns,
+                Message: `Checkpoint ${approvedCheckpoint.CheckpointID} approved for run ${runId}.`,
+            };
+        }
+
+        const baseBudgets = LimitsConfigResolver.Resolve().Limits.Budgets;
+        const restored = await checkpointManager.PrepareResumeFromCheckpoint({
+            AgentRunID: runId,
+            BaseBudgets: baseBudgets,
+            Provider: provider,
+            ContextUser: user,
+        });
+
+        return {
+            Success: true,
+            AgentRunID: runId,
+            Status: restored.AgentRun.Status,
+            CheckpointID: restored.Checkpoint.CheckpointID,
+            ApprovalStatus: restored.Checkpoint.HumanApproval.Status,
+            ExtendedBudgets: restored.ExtendedBudgets,
+            PriorCumulativeCostUsd: restored.PriorCumulativeCostUsd,
+            PriorCumulativeActiveWallClockMs: restored.PriorCumulativeActiveWallClockMs,
+            StartingStepCount: restored.StartingStepCount,
+            StartingPromptTurns: restored.StartingPromptTurns,
+            Message: `Run ${runId} approved and transitioned back to Running preserving ${restored.StartingStepCount} completed step(s).`,
+        };
+    }
+}
+
+/**
+ * `Limits.PauseRun` — non-destructively pauses an active `Running` agent run with a persisted
+ * checkpoint so administrators can halt runaway work without discarding completed steps or state.
+ */
+@RegisterClass(BaseRemotableOperation, LIMITS_PAUSE_RUN_OPERATION_KEY)
+export class LimitsPauseRunServerOperation extends LimitsPauseRunOperation {
+    protected override async Authorize(
+        _input: LimitsPauseRunInput,
+        user: UserInfo,
+        context?: RemoteOpServerContext,
+    ): Promise<boolean> {
+        return authorizeLimitsWrite(user, context?.provider);
+    }
+
+    protected override async InternalExecute(
+        input: LimitsPauseRunInput,
+        provider: IMetadataProvider,
+        user: UserInfo,
+    ): Promise<LimitsPauseRunOutput> {
+        const runId = input?.AgentRunID?.trim();
+        if (!runId) {
+            throw new Error('AgentRunID is required to pause a run');
+        }
+
+        const agentRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', user);
+        const loaded = await agentRun.Load(runId);
+        if (!loaded) {
+            throw new Error(`Could not load MJ: AI Agent Runs record '${runId}'`);
+        }
+        if (agentRun.Status !== 'Running') {
+            throw new Error(`Cannot pause run '${runId}': status is '${agentRun.Status}', expected 'Running'`);
+        }
+
+        const nowMs = Date.now();
+        const startedAtMs = agentRun.StartedAt ? new Date(agentRun.StartedAt).getTime() : nowMs;
+        const runCost = typeof agentRun.TotalCostRollup === 'number' && agentRun.TotalCostRollup > 0
+            ? agentRun.TotalCostRollup
+            : (typeof agentRun.TotalCost === 'number' ? agentRun.TotalCost : 0);
+        const budgets = LimitsConfigResolver.Resolve().Limits.Budgets;
+        const dayWindow = ComputeDayBoundaryWindow(nowMs, budgets.PerUserPerDay.DayBoundaryTimezone);
+
+        const checkpointManager = new RunawayCheckpointManager();
+        const pauseResult = await checkpointManager.PauseRunWithCheckpoint({
+            AgentRun: agentRun,
+            AgentID: agentRun.AgentID,
+            AgentName: agentRun.Agent ?? 'Agent',
+            UserID: agentRun.UserID ?? user.ID,
+            RoutineID: null,
+            PauseReason: 'ProgressStalled',
+            Summary: input.Summary?.trim() || `Manually paused by administrator ${user.Name || user.Email || user.ID}`,
+            CompletedPromptTurns: agentRun.TotalPromptIterations ?? 0,
+            ConversationMessages: [],
+            InFlightPayload: agentRun.FinalPayloadObject ?? null,
+            Scratchpad: { notes: '', tasks: [] },
+            CumulativeLedger: {
+                RunCostUsd: runCost,
+                RunWallClockMs: Math.max(0, nowMs - startedAtMs),
+                RunTokens: agentRun.TotalTokensUsed ?? 0,
+                RoutineCostUsd: runCost,
+                RoutineWallClockMs: Math.max(0, nowMs - startedAtMs),
+                UserDailyCostUsd: runCost,
+                UserDailyWallClockMs: Math.max(0, nowMs - startedAtMs),
+                PausedWallClockMs: 0,
+                PausedIntervals: [],
+                DayBucketUTC: dayWindow.DayBucketUTC,
+                DayBoundaryTimezone: budgets.PerUserPerDay.DayBoundaryTimezone,
+                AsOfISO: new Date(nowMs).toISOString(),
+            },
+            Provider: provider,
+            ContextUser: user,
+            NowMs: nowMs,
+        });
+
+        return {
+            Success: pauseResult.Saved,
+            AgentRunID: runId,
+            Status: agentRun.Status,
+            CheckpointID: pauseResult.Checkpoint.CheckpointID,
+            Message: pauseResult.Saved
+                ? `Run ${runId} paused non-destructively at checkpoint ${pauseResult.Checkpoint.CheckpointID}.`
+                : `Run ${runId} checkpoint created but save returned false.`,
+        };
+    }
+}
+
+/** Retains `Limits.*` `BaseRemotableOperation` registrations against bundler tree-shaking. */
+export function LoadLimitsOperations(): void {
+    void LimitsGetDiagnosticsServerOperation;
+    void LimitsResumePausedRunServerOperation;
+    void LimitsPauseRunServerOperation;
+}
