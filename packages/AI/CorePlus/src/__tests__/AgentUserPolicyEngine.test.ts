@@ -397,6 +397,26 @@ describe('AgentUserPolicyEngine', () => {
             expect(engine.EvaluateCalendarOperation(autonomousCal, true).verdict).toBe('Allow');
             expect(engine.EvaluateEmailOperation(autonomousCal, 'Send').verdict).toBe('RequireApproval');
         });
+
+        it('evaluates PhoneChannelMode verdicts and disables phone calls when PhoneChannelMode is Disabled', () => {
+            const disabledPhone = buildPolicy({ PhoneChannelMode: 'Disabled' });
+            expect(engine.EvaluatePhoneOperation(disabledPhone, 'Inbound').verdict).toBe('Deny');
+            expect(engine.EvaluatePhoneOperation(disabledPhone, 'Outbound').verdict).toBe('Deny');
+
+            const inboundOnly = buildPolicy({ PhoneChannelMode: 'InboundOnly' });
+            expect(engine.EvaluatePhoneOperation(inboundOnly, 'Inbound').verdict).toBe('Allow');
+            expect(engine.EvaluatePhoneOperation(inboundOnly, 'Outbound').verdict).toBe('Deny');
+
+            const outboundApproval = buildPolicy({ PhoneChannelMode: 'OutboundWithApproval' });
+            expect(engine.EvaluatePhoneOperation(outboundApproval, 'Inbound').verdict).toBe('Allow');
+            expect(engine.EvaluatePhoneOperation(outboundApproval, 'Outbound').verdict).toBe('RequireApproval');
+
+            const outboundAutoApproval = buildPolicy({ PhoneChannelMode: 'OutboundAutonomous', RequireApprovalForExternalComms: true });
+            expect(engine.EvaluatePhoneOperation(outboundAutoApproval, 'Outbound').verdict).toBe('RequireApproval');
+
+            const outboundAuto = buildPolicy({ PhoneChannelMode: 'OutboundAutonomous', RequireApprovalForExternalComms: false });
+            expect(engine.EvaluatePhoneOperation(outboundAuto, 'Outbound').verdict).toBe('Allow');
+        });
     });
 });
 

@@ -5494,6 +5494,10 @@ export class MJAIAgentRhythmTemplate_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: "Optional default AI Configuration (model tier such as Fast, Standard, or High Power) seeded onto UserRoutine.AgentConfigurationID when this rhythm template is enabled and used as a fallback on wake."}) 
+    @MaxLength(36)
+    DefaultAgentConfigurationID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -5501,6 +5505,10 @@ export class MJAIAgentRhythmTemplate_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     Skill?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    DefaultAgentConfiguration?: string;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
@@ -5545,6 +5553,9 @@ export class CreateMJAIAgentRhythmTemplateInput {
     @Field({ nullable: true })
     Status?: string;
 
+    @Field({ nullable: true })
+    DefaultAgentConfigurationID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -5587,6 +5598,9 @@ export class UpdateMJAIAgentRhythmTemplateInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    DefaultAgentConfigurationID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -106181,6 +106195,10 @@ export class MJUserRoutine_ {
     @Field({nullable: true, description: "Timestamp when the dispatcher last evaluated this routine's watched entities and wake gate conditions."}) 
     LastCheckedAt?: Date;
         
+    @Field({nullable: true, description: "Optional AI Configuration (model tier such as Fast, Standard, or High Power) used when executing this routine's Agent target. Seeded from the originating rhythm template's DefaultAgentConfigurationID on creation and changeable by the user or agent."}) 
+    @MaxLength(36)
+    AgentConfigurationID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     User?: string;
@@ -106196,6 +106214,10 @@ export class MJUserRoutine_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     Conversation?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    AgentConfiguration?: string;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
@@ -106291,6 +106313,9 @@ export class CreateMJUserRoutineInput {
     @Field({ nullable: true })
     LastCheckedAt: Date | null;
 
+    @Field({ nullable: true })
+    AgentConfigurationID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -106384,6 +106409,9 @@ export class UpdateMJUserRoutineInput {
 
     @Field({ nullable: true })
     LastCheckedAt?: Date | null;
+
+    @Field({ nullable: true })
+    AgentConfigurationID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

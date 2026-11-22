@@ -6578,6 +6578,20 @@ export class MJAIAgentRhythmTemplateEntity extends BaseEntity<MJAIAgentRhythmTem
     }
 
     /**
+    * * Field Name: DefaultAgentConfigurationID
+    * * Display Name: Default Agent Configuration ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+    * * Description: Optional default AI Configuration (model tier such as Fast, Standard, or High Power) seeded onto UserRoutine.AgentConfigurationID when this rhythm template is enabled and used as a fallback on wake.
+    */
+    get DefaultAgentConfigurationID(): string | null {
+        return this.Get('DefaultAgentConfigurationID');
+    }
+    set DefaultAgentConfigurationID(value: string | null) {
+        this.Set('DefaultAgentConfigurationID', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -6593,6 +6607,15 @@ export class MJAIAgentRhythmTemplateEntity extends BaseEntity<MJAIAgentRhythmTem
     */
     get Skill(): string | null {
         return this.Get('Skill');
+    }
+
+    /**
+    * * Field Name: DefaultAgentConfiguration
+    * * Display Name: Default Agent Configuration
+    * * SQL Data Type: nvarchar(100)
+    */
+    get DefaultAgentConfiguration(): string | null {
+        return this.Get('DefaultAgentConfiguration');
     }
 }
 
@@ -12530,7 +12553,7 @@ export class MJAIAgentUserPolicyEntity extends BaseEntity<MJAIAgentUserPolicyEnt
     * * Field Name: CoordinationMode
     * * Display Name: Coordination Mode
     * * SQL Data Type: nvarchar(20)
-    * * Default Value: Observer
+    * * Default Value: Autonomous
     * * Value List Type: List
     * * Possible Values 
     *   * Autonomous
@@ -12589,7 +12612,7 @@ export class MJAIAgentUserPolicyEntity extends BaseEntity<MJAIAgentUserPolicyEnt
     * * Field Name: PhoneChannelMode
     * * Display Name: Phone Channel Mode
     * * SQL Data Type: nvarchar(20)
-    * * Default Value: InboundOnly
+    * * Default Value: Disabled
     * * Value List Type: List
     * * Possible Values 
     *   * Disabled
@@ -12627,7 +12650,7 @@ export class MJAIAgentUserPolicyEntity extends BaseEntity<MJAIAgentUserPolicyEnt
     * * Field Name: CalendarChannelMode
     * * Display Name: Calendar Channel Mode
     * * SQL Data Type: nvarchar(30)
-    * * Default Value: ReadOnly
+    * * Default Value: ProposeWithApproval
     * * Value List Type: List
     * * Possible Values 
     *   * Autonomous
@@ -117529,6 +117552,20 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
     }
 
     /**
+    * * Field Name: AgentConfigurationID
+    * * Display Name: Agent Configuration ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+    * * Description: Optional AI Configuration (model tier such as Fast, Standard, or High Power) used when executing this routine's Agent target. Seeded from the originating rhythm template's DefaultAgentConfigurationID on creation and changeable by the user or agent.
+    */
+    get AgentConfigurationID(): string | null {
+        return this.Get('AgentConfigurationID');
+    }
+    set AgentConfigurationID(value: string | null) {
+        this.Set('AgentConfigurationID', value);
+    }
+
+    /**
     * * Field Name: User
     * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
@@ -117562,6 +117599,15 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
     */
     get Conversation(): string | null {
         return this.Get('Conversation');
+    }
+
+    /**
+    * * Field Name: AgentConfiguration
+    * * Display Name: Agent Configuration
+    * * SQL Data Type: nvarchar(100)
+    */
+    get AgentConfiguration(): string | null {
+        return this.Get('AgentConfiguration');
     }
 }
 
