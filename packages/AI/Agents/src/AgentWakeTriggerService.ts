@@ -20,9 +20,10 @@
  * @module @memberjunction/ai-agents
  */
 
-import { IMetadataProvider, LimitsConfigResolver, LogError, LogStatus, Metadata, RunView, UserInfo, WellKnownUserSource } from '@memberjunction/core';
-import { BaseSingleton, EscapeSQLString, GetGlobalObjectStore, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { IMetadataProvider, LogError, LogStatus, Metadata, type MJLimitsOverride, RunView, UserInfo, WellKnownUserSource } from '@memberjunction/core';
+import { BaseSingleton, EscapeSQLString, GetGlobalObjectStore, IsValidUUID, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
+    MJAIAgentEntity,
     MJAIAgentRequestEntity,
     MJAIAgentUserPolicyEntity,
     MJAIBridgeAgentIdentityEntity,
@@ -31,7 +32,8 @@ import {
     MJUserRoutineEntity,
     MJUserRoutineEntity_IRoutineWakeConfiguration,
 } from '@memberjunction/core-entities';
-import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
+import { AgentUserPolicyEngine, ResolveAgentRunLimits } from '@memberjunction/ai-core-plus';
+import { AIEngine } from '@memberjunction/aiengine';
 import { UserCache } from '@memberjunction/generic-database-provider';
 
 /**
@@ -874,10 +876,85 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
                 };
             }
 
-            const resolvedLimits = LimitsConfigResolver.Resolve().Limits;
-            const maxTurns = channel.MaxConsecutiveAgentTurns > 0
-                ? channel.MaxConsecutiveAgentTurns
-                : resolvedLimits.AgentChannelConsecutiveTurns;
+            const senderParticipant = participants.find((p) => UUIDsEqual(p.UserID, senderUserID));
+            const senderAgentID = (input.senderAgentID ?? '').trim() || (senderParticipant?.AgentID ?? '').trim();
+            let senderAgent: MJAIAgentEntity | null =
+                senderAgentID
+                    ? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, senderAgentID)) ?? null
+                    : null;
+            if (!senderAgent && senderAgentID && IsValidUUID(senderAgentID)) {
+                try {
+                    const agentRes = await rv.RunView<MJAIAgentEntity>(
+                        {
+                            EntityName: 'MJ: AI Agents',
+                            ExtraFilter: `ID='${EscapeSQLString(senderAgentID)}'`,
+                            MaxRows: 1,
+                            ResultType: 'entity_object',
+                        },
+                        systemUser
+                    );
+                    if (agentRes?.Success && agentRes.Results.length > 0) {
+                        senderAgent = agentRes.Results[0];
+                    }
+                } catch {
+                    // Offline/minimal test harnesses may not stub MJ: AI Agents RunView queries
+                }
+            }
+
+            let senderPolicy: MJAIAgentUserPolicyEntity | null = null;
+            if (senderAgentID) {
+                const senderPolicyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
+                    senderAgentID,
+                    senderUserID,
+                    systemUser,
+                    { provider: md }
+                );
+                if (senderPolicyLookup.status === 'error') {
+                    return {
+                        channelID: channel.ID,
+                        channelStatus: channel.ChannelStatus,
+                        pausedByGuard: false,
+                        pauseReason: null,
+                        results: [
+                            this.notTriggered(
+                                'POLICY_DENIED',
+                                `Could not verify sender policy for user "${senderUserID}": ${senderPolicyLookup.errorMessage}`
+                            ),
+                        ],
+                    };
+                }
+                senderPolicy = senderPolicyLookup.policy;
+            }
+
+            const channelRunOverride: MJLimitsOverride = {};
+            if (
+                typeof channel.MaxConsecutiveAgentTurns === 'number' &&
+                Number.isFinite(channel.MaxConsecutiveAgentTurns) &&
+                channel.MaxConsecutiveAgentTurns > 0
+            ) {
+                channelRunOverride.AgentChannelConsecutiveTurns = Math.trunc(channel.MaxConsecutiveAgentTurns);
+            }
+            if (
+                typeof channel.MaxHourlyWakes === 'number' &&
+                Number.isFinite(channel.MaxHourlyWakes) &&
+                channel.MaxHourlyWakes > 0
+            ) {
+                channelRunOverride.AgentChannelWakesPerHour = Math.trunc(channel.MaxHourlyWakes);
+            }
+
+            const limitsResolution = ResolveAgentRunLimits({
+                Agent: senderAgent,
+                UserPolicy: senderPolicy,
+                RunOverride: Object.keys(channelRunOverride).length > 0 ? channelRunOverride : null,
+                ContextUser: input.contextUser,
+                Provider: md,
+                Options: {
+                    EnforceUserPolicyAsCeiling: Boolean(senderPolicy),
+                    EnforceConfiguredCeilings: true,
+                    AllowAuthorizedCeilingOverride: true,
+                },
+            });
+            const maxTurns = limitsResolution.Limits.AgentChannelConsecutiveTurns;
             const nextTurns = (channel.ConsecutiveAgentTurns ?? 0) + 1;
             channel.ConsecutiveAgentTurns = nextTurns;
 
@@ -901,9 +978,7 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
                 channel.HourlyWakeCount = 0;
             }
 
-            const maxHourlyWakes = channel.MaxHourlyWakes > 0
-                ? channel.MaxHourlyWakes
-                : resolvedLimits.AgentChannelWakesPerHour;
+            const maxHourlyWakes = limitsResolution.Limits.AgentChannelWakesPerHour;
             if (peers.length > 0 && (channel.HourlyWakeCount ?? 0) + 1 > maxHourlyWakes) {
                 channel.ChannelStatus = 'Paused For Human';
                 await channel.Save();

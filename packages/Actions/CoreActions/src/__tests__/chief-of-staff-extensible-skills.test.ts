@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { RunActionParams } from '@memberjunction/actions-base';
-import { IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
+import { AuthorizationInfo, IMetadataProvider, LimitsConfigResolver, RunView, UserInfo } from '@memberjunction/core';
 import {
     MJAIAgentRhythmTemplateEntity,
     MJAIAgentSuggestionEntity,
@@ -659,6 +659,179 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
             'MJ: Conversation Details',
         ]);
         expect(wakeSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('CR-CHANNEL-CEILING-BYPASS: OpenAgentChannel enforces deployment and user-policy ceilings, allows tightening, and permits authorized ceiling overrides', async () => {
+        const makeChannelMd = () => {
+            const capturedChannels: Array<Partial<MJAgentChannelEntity>> = [];
+            const adminAuth: Partial<AuthorizationInfo> = {
+                ID: 'auth-manage-agents',
+                Name: 'AI: Manage Agents',
+                ParentID: null,
+                UserCanExecute: (u: UserInfo) => u.UserRoles.some((r) => r.RoleID === 'role-manage-agents'),
+            };
+            const md: Partial<IMetadataProvider> = {
+                Authorizations: [adminAuth as AuthorizationInfo],
+                GetEntityObject: vi.fn(async (name: string) => {
+                    if (name === 'MJ: Agent Channels') {
+                        const chan: Partial<MJAgentChannelEntity> = {
+                            ID: 'chan-ceiling-test',
+                            NewRecord: vi.fn(),
+                            Save: vi.fn(async () => {
+                                capturedChannels.push(chan);
+                                return true;
+                            }),
+                        };
+                        return chan as never;
+                    }
+                    return {
+                        ID: `${name}-1`,
+                        NewRecord: vi.fn(),
+                        Save: vi.fn(async () => true),
+                    } as never;
+                }),
+            };
+            return { md: md as IMetadataProvider, capturedChannels };
+        };
+
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn().mockResolvedValue({ Success: true, Results: [bob] }),
+        } as Partial<RunView> as RunView);
+        vi.spyOn(AgentWakeTriggerService.Instance, 'TriggerWakeOnAgentChannelMessage').mockResolvedValue({
+            channelID: 'chan-ceiling-test',
+            channelStatus: 'Open',
+            pausedByGuard: false,
+            pauseReason: null,
+            results: [],
+        });
+
+        try {
+            // 1) Ordinary coordination-enabled user cannot exceed deployment (MjConfig) ceiling
+            LimitsConfigResolver.Instance.RegisterMjConfigLimits({
+                AgentChannelConsecutiveTurns: 25,
+                AgentChannelWakesPerHour: 12,
+            });
+            vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockResolvedValueOnce({
+                status: 'found',
+                policy: {
+                    Status: 'Active',
+                    CoordinationMode: 'Autonomous',
+                    AllowInterAgentCoordination: true,
+                } as Partial<MJAIAgentUserPolicyEntity> as MJAIAgentUserPolicyEntity,
+            });
+            const fixture1 = makeChannelMd();
+            const res1 = await callAction(new OpenAgentChannelAction() as never, {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: alice,
+                Context: { AgentID: cosAgent.ID },
+                Provider: fixture1.md,
+                Filters: [],
+                Params: [
+                    { Name: 'Topic', Type: 'Input', Value: 'Ceiling clamp test 1' },
+                    { Name: 'TargetUserIDs', Type: 'Input', Value: bob.ID },
+                    { Name: 'InitialMessage', Type: 'Input', Value: 'Attempt widening above deployment' },
+                    { Name: 'MaxConsecutiveAgentTurns', Type: 'Input', Value: 9999 },
+                    { Name: 'MaxHourlyWakes', Type: 'Input', Value: 5000 },
+                ],
+            });
+            expect(res1.Success).toBe(true);
+            expect(fixture1.capturedChannels[0]?.MaxConsecutiveAgentTurns).toBe(25);
+            expect(fixture1.capturedChannels[0]?.MaxHourlyWakes).toBe(12);
+
+            // 2) Ordinary user cannot exceed tighter UserAgentPolicy ceiling
+            vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockResolvedValueOnce({
+                status: 'found',
+                policy: {
+                    Status: 'Active',
+                    CoordinationMode: 'Autonomous',
+                    AllowInterAgentCoordination: true,
+                    InstructionsOverride: '<!-- mj-limits: {"AgentChannelConsecutiveTurns": 7, "AgentChannelWakesPerHour": 4} -->',
+                } as Partial<MJAIAgentUserPolicyEntity> as MJAIAgentUserPolicyEntity,
+            });
+            const fixture2 = makeChannelMd();
+            const res2 = await callAction(new OpenAgentChannelAction() as never, {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: alice,
+                Context: { AgentID: cosAgent.ID },
+                Provider: fixture2.md,
+                Filters: [],
+                Params: [
+                    { Name: 'Topic', Type: 'Input', Value: 'Ceiling clamp test 2' },
+                    { Name: 'TargetUserIDs', Type: 'Input', Value: bob.ID },
+                    { Name: 'InitialMessage', Type: 'Input', Value: 'Attempt widening above user policy' },
+                    { Name: 'MaxConsecutiveAgentTurns', Type: 'Input', Value: 20 },
+                    { Name: 'MaxHourlyWakes', Type: 'Input', Value: 10 },
+                ],
+            });
+            expect(res2.Success).toBe(true);
+            expect(fixture2.capturedChannels[0]?.MaxConsecutiveAgentTurns).toBe(7);
+            expect(fixture2.capturedChannels[0]?.MaxHourlyWakes).toBe(4);
+
+            // 3) Tightening below defaults/policy remains effective for ordinary user
+            vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockResolvedValueOnce({
+                status: 'found',
+                policy: {
+                    Status: 'Active',
+                    CoordinationMode: 'Autonomous',
+                    AllowInterAgentCoordination: true,
+                    InstructionsOverride: '<!-- mj-limits: {"AgentChannelConsecutiveTurns": 15, "AgentChannelWakesPerHour": 10} -->',
+                } as Partial<MJAIAgentUserPolicyEntity> as MJAIAgentUserPolicyEntity,
+            });
+            const fixture3 = makeChannelMd();
+            const res3 = await callAction(new OpenAgentChannelAction() as never, {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: alice,
+                Context: { AgentID: cosAgent.ID },
+                Provider: fixture3.md,
+                Filters: [],
+                Params: [
+                    { Name: 'Topic', Type: 'Input', Value: 'Tightening test' },
+                    { Name: 'TargetUserIDs', Type: 'Input', Value: bob.ID },
+                    { Name: 'InitialMessage', Type: 'Input', Value: 'Tighten below defaults' },
+                    { Name: 'MaxConsecutiveAgentTurns', Type: 'Input', Value: 3 },
+                    { Name: 'MaxHourlyWakes', Type: 'Input', Value: 2 },
+                ],
+            });
+            expect(res3.Success).toBe(true);
+            expect(fixture3.capturedChannels[0]?.MaxConsecutiveAgentTurns).toBe(3);
+            expect(fixture3.capturedChannels[0]?.MaxHourlyWakes).toBe(2);
+
+            // 4) Explicitly authorized caller ('AI: Manage Agents') can override ceilings following policy
+            const authorizedUser: UserInfo = {
+                ...alice,
+                ID: 'user-agent-admin',
+                UserRoles: [{ RoleID: 'role-manage-agents', Role: 'AI Manager' } as UserInfo['UserRoles'][number]],
+            } as UserInfo;
+            vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockResolvedValueOnce({
+                status: 'found',
+                policy: {
+                    Status: 'Active',
+                    CoordinationMode: 'Autonomous',
+                    AllowInterAgentCoordination: true,
+                    InstructionsOverride: '<!-- mj-limits: {"AgentChannelConsecutiveTurns": 7, "AgentChannelWakesPerHour": 4} -->',
+                } as Partial<MJAIAgentUserPolicyEntity> as MJAIAgentUserPolicyEntity,
+            });
+            const fixture4 = makeChannelMd();
+            const res4 = await callAction(new OpenAgentChannelAction() as never, {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: authorizedUser,
+                Context: { AgentID: cosAgent.ID },
+                Provider: fixture4.md,
+                Filters: [],
+                Params: [
+                    { Name: 'Topic', Type: 'Input', Value: 'Authorized override test' },
+                    { Name: 'TargetUserIDs', Type: 'Input', Value: bob.ID },
+                    { Name: 'InitialMessage', Type: 'Input', Value: 'Authorized raise' },
+                    { Name: 'MaxConsecutiveAgentTurns', Type: 'Input', Value: 150 },
+                    { Name: 'MaxHourlyWakes', Type: 'Input', Value: 80 },
+                ],
+            });
+            expect(res4.Success).toBe(true);
+            expect(fixture4.capturedChannels[0]?.MaxConsecutiveAgentTurns).toBe(150);
+            expect(fixture4.capturedChannels[0]?.MaxHourlyWakes).toBe(80);
+        } finally {
+            LimitsConfigResolver.Instance.ClearMjConfigLimits();
+        }
     });
 
     it('ReplyInAgentChannel blocks agents from posting when channel is Paused For Human', async () => {
