@@ -26,7 +26,14 @@
  *
  * @module @memberjunction/ai-core-plus
  */
-import { CODE_FALLBACK_LIMITS, LimitsConfigResolver, type MJLimitsOverride } from '@memberjunction/core';
+import {
+    CODE_FALLBACK_LIMITS,
+    IsTaskGraphIsolationLevel,
+    LimitsConfigResolver,
+    TASK_GRAPH_ISOLATION_LEVELS,
+    type MJLimitsOverride,
+    type TaskGraphIsolationLevel,
+} from '@memberjunction/core';
 import type { AgentDecisionAnswerSummary, AgentDecisionQuestion } from '../agent-decisions';
 import type { ForEachOperation } from '../foreach-operation';
 import type { WhileOperation } from '../while-operation';
@@ -467,6 +474,13 @@ export type TaskGraphSpec = {
 
     /** Optional Tier-5 limits override carried on the workflow spec. */
     limitsOverride?: MJLimitsOverride;
+
+    /**
+     * Per-graph execution isolation level (`'InProcess' | 'Worker' | 'Process' | 'Container'`).
+     * Derived from the owning workflow entity or `LimitsConfigResolver` (`'InProcess'` default for
+     * upgraded workflows/graphs; `'Worker'` default for newly drafted `Workflow.Draft` graphs).
+     */
+    isolation?: TaskGraphIsolationLevel;
 };
 
 /**
@@ -552,7 +566,9 @@ export type TaskGraphValidationError = {
          * so whether `payload.x` resolves is a question about a run that has not happened yet;
          * whether `payload.x >` parses is not.
          */
-        | 'InvalidCondition';
+        | 'InvalidCondition'
+        /** `spec.isolation` was supplied with a value outside `InProcess | Worker | Process | Container`. */
+        | 'InvalidIsolation';
     Message: string;
     /** The offending node, when the error is attributable to one. */
     TempId?: string;

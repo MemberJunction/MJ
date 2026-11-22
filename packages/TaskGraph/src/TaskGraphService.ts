@@ -18,6 +18,7 @@
 import {
     CODE_FALLBACK_LIMITS,
     IMetadataProvider,
+    IsTaskGraphIsolationLevel,
     LimitsConfigResolver,
     LogError,
     LogStatus,
@@ -27,6 +28,7 @@ import {
     UserInfo,
     type EntityTransactionScope,
     type MJLimitsOverride,
+    type TaskGraphIsolationLevel,
 } from '@memberjunction/core';
 import {
     MJTaskEntity,
@@ -142,6 +144,8 @@ export type TaskGraphSubmitContext = {
     LimitsOverride?: MJLimitsOverride;
     /** Enables (or explicitly disables when `false`) runtime budget/runaway governance evaluation on the dispatcher for this graph. */
     EnableGovernance?: boolean;
+    /** Optional per-graph isolation level override (defaults from `spec.isolation` then `LimitsConfigResolver`). */
+    Isolation?: TaskGraphIsolationLevel;
 };
 
 /**
@@ -243,6 +247,8 @@ export type TaskGraphParentMetadata = {
     limitsOverride?: MJLimitsOverride;
     /** Explicit governance opt-in/opt-out flag persisted onto the parent graph (`false` disables governance). */
     governanceEnabled?: boolean;
+    /** Execution isolation mode for tasks in this graph (`'InProcess' | 'Worker' | 'Process' | 'Container'`). */
+    isolation?: TaskGraphIsolationLevel;
 };
 
 /**
@@ -307,6 +313,9 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
         const sagaState = VALID_SAGA_STATES.has(parsed.sagaState as string)
             ? parsed.sagaState
             : undefined;
+        const isolation = IsTaskGraphIsolationLevel(parsed.isolation)
+            ? parsed.isolation
+            : undefined;
         const out: TaskGraphParentMetadata = {
             ...DEFAULT_PARENT_METADATA,
             ...parsed,
@@ -328,9 +337,11 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
                 : undefined,
             ...(failurePolicy !== undefined ? { failurePolicy } : {}),
             ...(sagaState !== undefined ? { sagaState } : {}),
+            ...(isolation !== undefined ? { isolation } : {}),
         };
         if (failurePolicy === undefined) delete out.failurePolicy;
         if (sagaState === undefined) delete out.sagaState;
+        if (isolation === undefined) delete out.isolation;
         return out;
     } catch {
         return { ...DEFAULT_PARENT_METADATA };
@@ -359,6 +370,7 @@ export function BuildTaskGraphParentInputPayload(args: {
     startPaused?: boolean;
     limitsOverride?: MJLimitsOverride;
     governanceEnabled?: boolean;
+    isolation?: TaskGraphIsolationLevel;
 }): Record<string, unknown> {
     const parentAgentHierarchy = Array.isArray(args.parentAgentHierarchy)
         ? args.parentAgentHierarchy
@@ -387,6 +399,7 @@ export function BuildTaskGraphParentInputPayload(args: {
         ...(args.governanceEnabled !== undefined
             ? { governanceEnabled: args.governanceEnabled }
             : (args.limitsOverride ? { governanceEnabled: true } : {})),
+        ...(args.isolation ? { isolation: args.isolation } : {}),
         ...(args.startPaused
             ? {
                 debug: {
@@ -2149,6 +2162,12 @@ export class TaskGraphService {
             startPaused: context.Debug?.paused === true,
             limitsOverride: context.LimitsOverride ?? spec.limitsOverride,
             governanceEnabled: context.EnableGovernance,
+            isolation:
+                context.Isolation ??
+                spec.isolation ??
+                LimitsConfigResolver.Resolve({
+                    AgentOrWorkflowMetadata: context.LimitsOverride ?? spec.limitsOverride,
+                }).Limits.Isolation.DefaultIsolation,
         }));
         parent.SecurityEnvelope = SerializeTaskSecurityEnvelope(context.SecurityEnvelope);
         if (!(await this.saveAsService(parent, 'MJ: Tasks', context))) {

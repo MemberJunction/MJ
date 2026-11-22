@@ -1748,7 +1748,12 @@ export class FlowAgentType extends BaseAgentType {
     private compileAndValidateFlow<P>(
         params: ExecuteAgentParams<P>
     ): { Spec: TaskGraphSpec; Excluded: FlowCompileResult['Excluded'] } | { ErrorMessage: string } {
-        const compiled = CompileFlowAgentToTaskGraph(params.agent.ID, params.agent.Name, params.agent.Description ?? undefined);
+        const compiled = CompileFlowAgentToTaskGraph(
+            params.agent.ID,
+            params.agent.Name,
+            params.agent.Description ?? undefined,
+            params.agent.Isolation,
+        );
         if (!compiled.Success || !compiled.Spec) {
             return { ErrorMessage: `Workflow '${params.agent.Name}' could not be prepared to run:\n${FormatFlowCompileErrors(compiled)}` };
         }

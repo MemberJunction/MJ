@@ -228,6 +228,7 @@ export function ConvertTaskGraphToAgentSpec(
         Description: graph.reasoning || `Saved from a task graph: ${graph.workflowName}`,
         TypeID: options.FlowAgentTypeID,
         Status: 'Active',
+        ...(graph.isolation ? { Isolation: graph.isolation } : {}),
         // A saved workflow inherits no payload contract from the graph it came from — a runtime
         // graph never had one. 'Warn' rather than 'Fail' so a first invocation surfaces a mismatch
         // instead of refusing to run something the user just watched succeed.

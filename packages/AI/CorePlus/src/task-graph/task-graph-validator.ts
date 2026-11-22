@@ -32,6 +32,7 @@ import {
     type TaskGraphEdge,
     type TaskGraphNode,
 } from './graph-algorithms';
+import { IsTaskGraphIsolationLevel, TASK_GRAPH_ISOLATION_LEVELS } from '@memberjunction/core';
 import {
     ConfigOf,
     DECISION_ANSWER_FIELDS,
@@ -1014,6 +1015,13 @@ export function ValidateTaskGraphSpec(spec: TaskGraphSpec, options?: TaskGraphVa
 
     if (!spec.workflowName || spec.workflowName.trim().length === 0) {
         errors.push({ Code: 'MissingWorkflowName', Message: 'workflowName is required.' });
+    }
+
+    if (spec.isolation !== undefined && !IsTaskGraphIsolationLevel(spec.isolation)) {
+        errors.push({
+            Code: 'InvalidIsolation',
+            Message: `Invalid isolation level "${String(spec.isolation)}". Expected one of: ${TASK_GRAPH_ISOLATION_LEVELS.join(', ')}.`,
+        });
     }
 
     const tasks = spec.tasks ?? [];

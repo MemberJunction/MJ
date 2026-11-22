@@ -112,7 +112,10 @@ export class WorkflowDraftServerOperation extends WorkflowDraftOperation {
     protected acceptDraft(draft: TaskGraphSpec, workflowName: string): WorkflowDraftOutput {
         // The name is the author's, not the model's: they typed it on the front door, and a model
         // quietly renaming their workflow is a small betrayal of a field they filled in themselves.
-        const graph: TaskGraphSpec = { ...draft, workflowName };
+        // Newly drafted workflows default to 'Worker' isolation via LimitsConfigResolver unless the
+        // draft or host limits configuration specifies another isolation level.
+        const isolation = draft.isolation ?? LimitsConfigResolver.Resolve().Limits.Isolation.DraftDefaultIsolation;
+        const graph: TaskGraphSpec = { ...draft, workflowName, isolation };
 
         // A draft is model output, so the model-output cap applies; the author can grow it on the canvas.
         const validation = ValidateTaskGraphSpec(graph, { MaxTasks: GetMaxTasksPerAgentGraph() });

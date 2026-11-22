@@ -16,7 +16,8 @@
  *
  * @module @memberjunction/ai-core-plus
  */
-import type { MJAIAgentStepEntity } from '@memberjunction/core-entities';
+import type { TaskGraphIsolationLevel } from '@memberjunction/core';
+import type { MJAIAgentEntity, MJAIAgentStepEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { RewriteDecisionReferences } from './decision-conditions';
 import { ReadFlowDecisionStepConfiguration } from './flow-decision-step';
@@ -98,6 +99,8 @@ export type FlowCompilerOptions = {
     TraversalMode?: 'sequential' | 'parallel';
     /** Fan-in rule in parallel mode. `'all'` (AND-join) is the default. */
     JoinMode?: 'all' | 'any';
+    /** Execution isolation level carried from the owning Flow agent onto the compiled graph. */
+    Isolation?: MJAIAgentEntity['Isolation'] | TaskGraphIsolationLevel;
 };
 
 /** Why a flow could not be compiled, in workflow vocabulary (D18 — never graph/DAG/node). */
@@ -219,6 +222,7 @@ export function CompileFlowToTaskGraph(
             // evaluates its paths with the failure in context, and a satisfied one is a recovery
             // path. The dispatcher's default is the opposite, so every compiled flow says so.
             failureSemantics: 'edges',
+            ...(options.Isolation ? { isolation: options.Isolation } : {}),
         },
         Errors: [],
         Excluded: excluded,
