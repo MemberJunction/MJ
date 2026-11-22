@@ -861,6 +861,34 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "AgentConfigurationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional MJ: AI Configurations UUID (or configuration name) overriding the template DefaultAgentConfigurationID for this user's routine.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9705E1CA-E205-4F62-BCE7-472589609FD5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ModelTier",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional logical model tier ('Draft', 'Standard', or 'High') resolved to Fast / Standard / High Power in MJ: AI Configurations when AgentConfigurationID is not provided.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2BB1CF15-D8BF-4F26-8B44-C88B0AB78DC2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "ConfirmedByUser",
             "Type": "Input",
             "ValueType": "Scalar",

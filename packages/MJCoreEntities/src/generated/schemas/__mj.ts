@@ -2240,6 +2240,12 @@ export const MJAIAgentRhythmTemplateSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    DefaultAgentConfigurationID: z.string().nullable().describe(`
+        * * Field Name: DefaultAgentConfigurationID
+        * * Display Name: Default Agent Configuration ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+        * * Description: Optional default AI Configuration (model tier such as Fast, Standard, or High Power) seeded onto UserRoutine.AgentConfigurationID when this rhythm template is enabled and used as a fallback on wake.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -2248,6 +2254,10 @@ export const MJAIAgentRhythmTemplateSchema = z.object({
         * * Field Name: Skill
         * * Display Name: Skill
         * * SQL Data Type: nvarchar(255)`),
+    DefaultAgentConfiguration: z.string().nullable().describe(`
+        * * Field Name: DefaultAgentConfiguration
+        * * Display Name: Default Agent Configuration
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJAIAgentRhythmTemplateEntityType = z.infer<typeof MJAIAgentRhythmTemplateSchema>;
@@ -4321,7 +4331,7 @@ export const MJAIAgentUserPolicySchema = z.object({
         * * Field Name: CoordinationMode
         * * Display Name: Coordination Mode
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: Observer
+        * * Default Value: Autonomous
     * * Value List Type: List
     * * Possible Values 
     *   * Autonomous
@@ -4356,7 +4366,7 @@ export const MJAIAgentUserPolicySchema = z.object({
         * * Field Name: PhoneChannelMode
         * * Display Name: Phone Channel Mode
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: InboundOnly
+        * * Default Value: Disabled
     * * Value List Type: List
     * * Possible Values 
     *   * Disabled
@@ -4378,7 +4388,7 @@ export const MJAIAgentUserPolicySchema = z.object({
         * * Field Name: CalendarChannelMode
         * * Display Name: Calendar Channel Mode
         * * SQL Data Type: nvarchar(30)
-        * * Default Value: ReadOnly
+        * * Default Value: ProposeWithApproval
     * * Value List Type: List
     * * Possible Values 
     *   * Autonomous
@@ -41705,6 +41715,12 @@ export const MJUserRoutineSchema = z.object({
         * * Display Name: Last Checked At
         * * SQL Data Type: datetimeoffset
         * * Description: Timestamp when the dispatcher last evaluated this routine's watched entities and wake gate conditions.`),
+    AgentConfigurationID: z.string().nullable().describe(`
+        * * Field Name: AgentConfigurationID
+        * * Display Name: Agent Configuration ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+        * * Description: Optional AI Configuration (model tier such as Fast, Standard, or High Power) used when executing this routine's Agent target. Seeded from the originating rhythm template's DefaultAgentConfigurationID on creation and changeable by the user or agent.`),
     User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User Name
@@ -41721,6 +41737,10 @@ export const MJUserRoutineSchema = z.object({
         * * Field Name: Conversation
         * * Display Name: Conversation Name
         * * SQL Data Type: nvarchar(255)`),
+    AgentConfiguration: z.string().nullable().describe(`
+        * * Field Name: AgentConfiguration
+        * * Display Name: Agent Configuration
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJUserRoutineEntityType = z.infer<typeof MJUserRoutineSchema>;

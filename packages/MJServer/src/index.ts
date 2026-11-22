@@ -49,6 +49,12 @@ import { ApplyRootVariablesLoggingMiddleware, variablesLoggingMiddleware } from 
 import { auditResolversForUndecoratedArgs } from './logging/bootAudit.js';
 import { StartupLogger } from './logging/StartupLogger.js';
 import { MJServerStartupState } from './startupState.js';
+import {
+  BeginServerWakeStartupGuard,
+  CompleteServerWakeStartupGuard,
+  GetServerWakeStartupGuardStatus,
+  ResetServerWakeStartupGuard,
+} from './wakeStartupLifecycle.js';
 import { AssertEntityMetadataLoaded, ENTITY_METADATA_CHECK_PHASE } from './metadataReadiness.js';
 import { CreateStartupGate, ListenOnPort, RejectUpgradeWhileStarting } from './startupGate.js';
 import { AuthProviderFactory } from '@memberjunction/auth-providers';
@@ -524,6 +530,7 @@ GetAttachmentService().BlobStore = new MJStorageBlobStore();
 export const Serve = async (resolverPaths: Array<string>, app: Application = CreateApp(), options?: MJServerOptions): Promise<void> => {
   const startup = MJServerStartupState.Instance;
   startup.Begin();
+  BeginServerWakeStartupGuard('MJServer.Serve');
   const httpServer = createServer(CreateStartupGate(app, startup));
   // Until the upgrade router is installed, every WebSocket upgrade is refused with a 503.
   httpServer.on('upgrade', (_request, socket) => {
@@ -1920,6 +1927,7 @@ const setupComplete$ = new ReplaySubject(1);
 
   // The port was bound at the top of Serve; from here on requests reach the app.
   startup.MarkReady();
+  CompleteServerWakeStartupGuard();
   // The summary headline reports TRUE wall-clock since process start (see
   // StartupLogger.buildStartupLine), so we don't push a synthetic "total" phase row
   // (that double-counted the headline). Keep a verbose-only line for the serve()-scoped span.
@@ -2725,3 +2733,9 @@ export type { StartupSummarySnapshot } from './logging/StartupLogger.js';
 
 export * from './generic/RedisClusterPubSubEngine.js';
 export { WrapSharedCacheWithL1 } from './sharedCache.js';
+export {
+  BeginServerWakeStartupGuard,
+  CompleteServerWakeStartupGuard,
+  GetServerWakeStartupGuardStatus,
+  ResetServerWakeStartupGuard,
+};
