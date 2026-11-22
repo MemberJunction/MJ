@@ -85,4 +85,39 @@ describe('SQLServerDataProvider.Refresh while a save is in flight', () => {
     provider.OnResumeRefresh();
     expect(provider.AllowRefresh).toBe(true);
   });
+
+  it('RefreshIfNeeded does not silently drop peer metadata checks while saves or an unrelated transaction are active', async () => {
+    const provider = new SQLServerDataProvider();
+    const internal = provider as unknown as {
+      OnSuspendRefresh(): void;
+      OnResumeRefresh(): void;
+      AllowRefresh: boolean;
+      AllowRefreshCheck: boolean;
+      RefreshRemoteMetadataTimestamps(): Promise<boolean>;
+      LoadLocalMetadataFromStorage(): Promise<void>;
+      LocalMetadataObsolete(): boolean;
+    };
+
+    const tsSpy = vi.spyOn(internal, 'RefreshRemoteMetadataTimestamps').mockResolvedValue(true);
+    const loadSpy = vi.spyOn(internal, 'LoadLocalMetadataFromStorage').mockResolvedValue(undefined);
+    vi.spyOn(internal, 'LocalMetadataObsolete').mockReturnValue(false);
+    vi.spyOn(provider, 'IsTransactionActive', 'get').mockReturnValue(true);
+
+    internal.OnSuspendRefresh();
+    try {
+      expect(internal.AllowRefresh).toBe(false);
+      expect(internal.AllowRefreshCheck).toBe(true);
+
+      // Previously: IsTransactionActive caused RefreshIfNeeded to return false immediately,
+      // and AllowRefresh=false caused CheckToSeeIfRefreshNeeded to return false without reading
+      // remote timestamps or adopting a peer snapshot from shared storage.
+      const ok = await provider.RefreshIfNeeded(undefined, true);
+      expect(ok).toBe(true);
+      expect(tsSpy).toHaveBeenCalledTimes(1);
+      expect(loadSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      internal.OnResumeRefresh();
+      vi.restoreAllMocks();
+    }
+  });
 });

@@ -247,7 +247,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (504 classes)
+// @memberjunction/core-entities (508 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -258,12 +258,15 @@ import {
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
+    ContentChunkProvenancePolicy,
+    ContentItemProvenancePolicy,
     DashboardPartDocumentBlock,
     DashboardPermissionProvider,
     EntityMetadataEdgeProvider,
     EntityPermissionProvider,
     EntityViewDocumentBlock,
     ForeignKeyEdgeProvider,
+    GraphConceptProvenancePolicy,
     InteractiveComponentDocumentBlock,
     JoinEntityEdgeProvider,
     MJAIActionEntity,
@@ -753,6 +756,7 @@ import {
     RecordLinkEdgeProvider,
     ResourcePermissionProvider,
     SavedQueryDocumentBlock,
+    SharedConceptEdgeProvider,
 } from '@memberjunction/core-entities';
 
 // @memberjunction/actions-base (2 classes)
@@ -2054,12 +2058,15 @@ const CLASS_REGISTRATIONS_0: any[] = [
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
+    ContentChunkProvenancePolicy,
+    ContentItemProvenancePolicy,
     DashboardPartDocumentBlock,
     DashboardPermissionProvider,
     EntityMetadataEdgeProvider,
     EntityPermissionProvider,
     EntityViewDocumentBlock,
     ForeignKeyEdgeProvider,
+    GraphConceptProvenancePolicy,
     InteractiveComponentDocumentBlock,
     JoinEntityEdgeProvider,
     MJAIActionEntity,
@@ -2166,13 +2173,13 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
     MJApplicationSettingEntity,
-    MJArchiveConfigurationEntity,
-    MJArchiveConfigurationEntityEntity,
-    MJArchiveRunDetailEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJArchiveConfigurationEntity,
+    MJArchiveConfigurationEntityEntity,
+    MJArchiveRunDetailEntity,
     MJArchiveRunEntity,
     MJArtifactEntity,
     MJArtifactGuestShareLinkEntity,
@@ -2370,13 +2377,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJListShareEntity,
     MJMCPServerConnectionEntity,
     MJMCPServerConnectionPermissionEntity,
-    MJMCPServerConnectionToolEntity,
-    MJMCPServerEntity,
-    MJMCPServerToolEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJMCPServerConnectionToolEntity,
+    MJMCPServerEntity,
+    MJMCPServerToolEntity,
     MJMCPToolExecutionLogEntity,
     MJMCPToolFavoriteEntity,
     MJMLAlgorithmEntity,
@@ -2557,6 +2564,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RecordLinkEdgeProvider,
     ResourcePermissionProvider,
     SavedQueryDocumentBlock,
+    SharedConceptEdgeProvider,
     MJActionEntityExtended,
     MJEntityActionEntityExtended,
     LiveKitBridge,
@@ -2573,14 +2581,14 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJAIPromptRunEntityExtended,
     MJEntityDocumentEntityExtended,
     LinearPriceUnitType,
-    MJAICredentialBindingEntityExtended,
-    PerHundredThousandTokensPriceUnitType,
-    PerImagePriceUnitType,
-    PerMillionTokensPriceUnitType,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    MJAICredentialBindingEntityExtended,
+    PerHundredThousandTokensPriceUnitType,
+    PerImagePriceUnitType,
+    PerMillionTokensPriceUnitType,
     PerThousandTokensPriceUnitType,
     TimePerHourPriceUnitType,
     TimePerMinutePriceUnitType,
@@ -2777,14 +2785,14 @@ const CLASS_REGISTRATIONS_3: any[] = [
     GetAccountBalancesAction,
     GetBudgetAction,
     GetBusinessCentralAccountBalancesAction,
-    GetBusinessCentralCustomersAction,
-    GetBusinessCentralDimensionsAction,
-    GetBusinessCentralGLAccountsAction,
-    GetBusinessCentralGeneralLedgerEntriesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    GetBusinessCentralCustomersAction,
+    GetBusinessCentralDimensionsAction,
+    GetBusinessCentralGLAccountsAction,
+    GetBusinessCentralGeneralLedgerEntriesAction,
     GetBusinessCentralSalesInvoicesAction,
     GetChartOfAccountsAction,
     GetCustomersAction,
@@ -2981,14 +2989,14 @@ const CLASS_REGISTRATIONS_4: any[] = [
     PredictiveStudioRunExperimentAction,
     PredictiveStudioRunFeaturePipelineServerOperation,
     PredictiveStudioScheduleModelScoringAction,
-    PredictiveStudioScoreRecordSetAction,
-    PredictiveStudioScoreRecordSetServerOperation,
-    PredictiveStudioStartExperimentSessionServerOperation,
-    PredictiveStudioTrainModelAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    PredictiveStudioScoreRecordSetAction,
+    PredictiveStudioScoreRecordSetServerOperation,
+    PredictiveStudioStartExperimentSessionServerOperation,
+    PredictiveStudioTrainModelAction,
     PredictiveStudioTrainModelServerOperation,
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
@@ -3185,14 +3193,14 @@ const CLASS_REGISTRATIONS_5: any[] = [
     CreateInteractiveFormAction,
     CreateListAction,
     CreateListFromQueryAction,
-    CreateMermaidDiagramAction,
-    CreateRecordAction,
-    CreateRuntimeActionAction,
-    CreateSVGChartAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    CreateMermaidDiagramAction,
+    CreateRecordAction,
+    CreateRuntimeActionAction,
+    CreateSVGChartAction,
     CreateSVGDiagramAction,
     CreateSVGInfographicAction,
     CreateSVGNetworkAction,
@@ -3389,14 +3397,14 @@ const CLASS_REGISTRATIONS_6: any[] = [
     RedisStreamBroadcastProvider,
     RevokeGuestShareLinkServerOperation,
     SequencedRoleBucketBroadcastProvider,
-    SynthesizeArtifactFromSourcesServerOperation,
-    DiagnosticRetentionScheduledJobDriver,
-    DiagnosticsBuildBundleServerOperation,
-    DiagnosticsEnrolSenderServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_7: any[] = [
+    SynthesizeArtifactFromSourcesServerOperation,
+    DiagnosticRetentionScheduledJobDriver,
+    DiagnosticsBuildBundleServerOperation,
+    DiagnosticsEnrolSenderServerOperation,
     DiagnosticsGetBundlePreviewServerOperation,
     DiagnosticsGetMySessionStatusServerOperation,
     DiagnosticsIssueSenderRegistrationCodeServerOperation,
@@ -3428,7 +3436,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1413;
+export const CLASS_REGISTRATIONS_COUNT = 1417;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

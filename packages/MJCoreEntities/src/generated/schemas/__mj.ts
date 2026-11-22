@@ -25895,6 +25895,16 @@ export const MJGraphConceptSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Origin: z.union([z.literal('Declared'), z.literal('Inferred')]).describe(`
+        * * Field Name: Origin
+        * * Display Name: Origin
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Declared
+    *   * Inferred
+        * * Description: How the concept came to exist. Declared: authored by a person or seeded; visible to anyone who can read concepts. Inferred: synthesized by the Content Pipeline from document chunks; visible only to someone who can read its sources (SourcedFrom edges), unless it is Approved in a Canon graph.`),
     Graph: z.string().nullable().describe(`
         * * Field Name: Graph
         * * Display Name: Graph
@@ -26261,6 +26271,38 @@ export const MJGraphTypeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    DefaultAuthorityTierID: z.string().nullable().describe(`
+        * * Field Name: DefaultAuthorityTierID
+        * * Display Name: Default Authority Tier ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graph Authority Tiers (vwGraphAuthorityTiers.ID)
+        * * Description: Authority tier given to content sources that feed graphs of this type and name no tier of their own. NULL leaves such sources unranked, below every configured tier.`),
+    DefaultConceptTaxonomyMode: z.union([z.literal('Auto Grow'), z.literal('Constrained'), z.literal('Propose Only')]).describe(`
+        * * Field Name: DefaultConceptTaxonomyMode
+        * * Display Name: Default Concept Taxonomy Mode
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: Auto Grow
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Auto Grow
+    *   * Constrained
+    *   * Propose Only
+        * * Description: Concept taxonomy mode used when a content source feeding a graph of this type names none: Constrained links only to existing concepts, Propose Only creates new concepts and edges as Proposed for steward review, Auto Grow creates them as Approved.`),
+    DefaultGroundingMode: z.union([z.literal('Full Canon'), z.literal('None'), z.literal('Schema and Queries')]).describe(`
+        * * Field Name: DefaultGroundingMode
+        * * Display Name: Default Grounding Mode
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Full Canon
+    *   * None
+    *   * Schema and Queries
+        * * Description: Grounding depth used when a content source feeding a graph of this type names none: None extracts document concepts only, Schema and Queries also links concepts to entities, alternate base views and queries, Full Canon additionally links actions, skills and workflows.`),
+    DefaultAuthorityTier: z.string().nullable().describe(`
+        * * Field Name: DefaultAuthorityTier
+        * * Display Name: Default Authority Tier
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJGraphTypeEntityType = z.infer<typeof MJGraphTypeSchema>;

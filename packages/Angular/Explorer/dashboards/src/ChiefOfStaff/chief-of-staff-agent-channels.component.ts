@@ -55,6 +55,7 @@ export class ChiefOfStaffAgentChannelsComponent extends BaseChiefOfStaffPage {
     public IsPostingReply = false;
     public ReplyDraft = '';
     public ChannelErrorMessage: string | null = null;
+    public ChannelStatusMessage: string | null = null;
 
     public get FilteredChannels(): MJAgentChannelEntity[] {
         const search = this.SearchText.trim().toLowerCase();
@@ -159,9 +160,15 @@ export class ChiefOfStaffAgentChannelsComponent extends BaseChiefOfStaffPage {
     public async SelectChannel(channel: MJAgentChannelEntity): Promise<void> {
         this.SelectedChannel = channel;
         this.ReplyDraft = '';
+        this.ChannelStatusMessage = null;
         this.cdr.markForCheck();
         await this.LoadMessagesForChannel(channel.ID);
         this.publishAgentContext();
+    }
+
+    public DismissChannelStatusMessage(): void {
+        this.ChannelStatusMessage = null;
+        this.cdr.markForCheck();
     }
 
     public async LoadMessagesForChannel(channelId: string): Promise<void> {
@@ -208,8 +215,10 @@ export class ChiefOfStaffAgentChannelsComponent extends BaseChiefOfStaffPage {
         if (!channel || !messageText || this.IsPostingReply) {
             return;
         }
+        const wasPaused = channel.ChannelStatus === 'Paused For Human';
         this.IsPostingReply = true;
         this.ChannelErrorMessage = null;
+        this.ChannelStatusMessage = null;
         this.cdr.markForCheck();
 
         try {
@@ -233,6 +242,9 @@ export class ChiefOfStaffAgentChannelsComponent extends BaseChiefOfStaffPage {
 
             this.ReplyDraft = '';
             await this.LoadChannels();
+            this.ChannelStatusMessage = wasPaused
+                ? 'Reply posted. Channel resumed to Open and participant agents have been notified.'
+                : 'Reply posted and participant agents have been notified.';
         } catch (error) {
             this.ChannelErrorMessage =
                 error instanceof Error ? error.message : 'Failed to post reply.';
@@ -249,6 +261,7 @@ export class ChiefOfStaffAgentChannelsComponent extends BaseChiefOfStaffPage {
         }
         this.IsPostingReply = true;
         this.ChannelErrorMessage = null;
+        this.ChannelStatusMessage = null;
         this.cdr.markForCheck();
 
         try {
@@ -261,6 +274,7 @@ export class ChiefOfStaffAgentChannelsComponent extends BaseChiefOfStaffPage {
                 );
             }
             await this.LoadChannels();
+            this.ChannelStatusMessage = 'Agent Channel marked as Resolved.';
         } catch (error) {
             this.ChannelErrorMessage =
                 error instanceof Error ? error.message : 'Failed to resolve Agent Channel.';

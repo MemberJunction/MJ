@@ -1,0 +1,28 @@
+# Dependabot: surface vulnerable dependency versions and stale action pins.
+# Scope is deliberately narrow — security updates only for npm (a ~300-package
+# workspace would otherwise generate unmanageable version-bump noise; routine
+# version currency is handled by the release process), plus weekly grouped
+# updates for GitHub Actions so SHA-pinned third-party actions keep moving.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    # Security advisories only. A limit of 0 turns off routine version-update PRs for this
+    # ecosystem; security-update PRs are not counted against it and still open when Dependabot
+    # security updates are enabled for the repository.
+    open-pull-requests-limit: 0
+    labels:
+      - dependencies
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns:
+          - '*'
+    labels:
+      - dependencies

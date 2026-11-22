@@ -64759,6 +64759,10 @@ export class MJGraphConcept_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: "How the concept came to exist. Declared: authored by a person or seeded; visible to anyone who can read concepts. Inferred: synthesized by the Content Pipeline from document chunks; visible only to someone who can read its sources (SourcedFrom edges), unless it is Approved in a Canon graph."}) 
+    @MaxLength(20)
+    Origin?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Graph?: string;
@@ -64815,6 +64819,9 @@ export class CreateMJGraphConceptInput {
     @Field({ nullable: true })
     Status?: string;
 
+    @Field({ nullable: true })
+    Origin?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -64854,6 +64861,9 @@ export class UpdateMJGraphConceptInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    Origin?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -65830,6 +65840,22 @@ export class MJGraphType_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: "Authority tier given to content sources that feed graphs of this type and name no tier of their own. NULL leaves such sources unranked, below every configured tier."}) 
+    @MaxLength(36)
+    DefaultAuthorityTierID?: string;
+        
+    @Field({nullable: true, description: "Concept taxonomy mode used when a content source feeding a graph of this type names none: Constrained links only to existing concepts, Propose Only creates new concepts and edges as Proposed for steward review, Auto Grow creates them as Approved."}) 
+    @MaxLength(30)
+    DefaultConceptTaxonomyMode?: string;
+        
+    @Field({nullable: true, description: "Grounding depth used when a content source feeding a graph of this type names none: None extracts document concepts only, Schema and Queries also links concepts to entities, alternate base views and queries, Full Canon additionally links actions, skills and workflows."}) 
+    @MaxLength(30)
+    DefaultGroundingMode?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    DefaultAuthorityTier?: string;
+        
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
         
@@ -65861,6 +65887,15 @@ export class CreateMJGraphTypeInput {
     @Field({ nullable: true })
     Status?: string;
 
+    @Field({ nullable: true })
+    DefaultAuthorityTierID: string | null;
+
+    @Field({ nullable: true })
+    DefaultConceptTaxonomyMode?: string;
+
+    @Field({ nullable: true })
+    DefaultGroundingMode?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -65891,6 +65926,15 @@ export class UpdateMJGraphTypeInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    DefaultAuthorityTierID?: string | null;
+
+    @Field({ nullable: true })
+    DefaultConceptTaxonomyMode?: string;
+
+    @Field({ nullable: true })
+    DefaultGroundingMode?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

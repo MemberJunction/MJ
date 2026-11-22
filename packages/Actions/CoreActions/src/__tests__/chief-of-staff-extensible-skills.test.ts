@@ -99,16 +99,53 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
         });
     });
 
-    it('ScheduleNextAgentWakeAction blocks autonomous Recurring creation without RhythmTemplateID or ConfirmedByUser', async () => {
+    it('ScheduleNextAgentWakeAction rejects self-attested ConfirmedByUser and fake RhythmTemplateID in agent context, and succeeds with a real Approved ConfirmedApprovalRequestID', async () => {
+        const activeTemplate = {
+            ID: 'tpl-active-1',
+            AgentID: cosAgent.ID,
+            Status: 'Active',
+        } as unknown as MJAIAgentRhythmTemplateEntity;
+        const approvedRequest = {
+            ID: 'req-approved-1',
+            AgentID: cosAgent.ID,
+            RequestForUserID: alice.ID,
+            Status: 'Approved',
+        };
+
+        const runViewSpy = vi.fn(async (p: { EntityName: string; ExtraFilter?: string }) => {
+            if (p.EntityName === 'MJ: AI Agent Rhythm Templates') {
+                if (p.ExtraFilter?.includes('tpl-active-1')) {
+                    return { Success: true, Results: [activeTemplate] };
+                }
+                return { Success: true, Results: [] };
+            }
+            if (p.EntityName === 'MJ: AI Agent Requests') {
+                if (p.ExtraFilter?.includes('req-approved-1')) {
+                    return { Success: true, Results: [approvedRequest] };
+                }
+                return { Success: true, Results: [] };
+            }
+            return { Success: true, Results: [] };
+        });
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
-            RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] }),
+            RunView: runViewSpy,
         } as unknown as RunView);
 
-        const res = await callAction(new ScheduleNextAgentWakeAction() as never, {
+        const routineStub = {
+            ID: 'routine-approved-1',
+            Save: vi.fn().mockResolvedValue(true),
+            NextRunAt: null,
+        } as unknown as MJUserRoutineEntity;
+        const md = {
+            GetEntityObject: vi.fn().mockResolvedValue(routineStub),
+        } as unknown as IMetadataProvider;
+
+        // 1. No approval at all -> APPROVAL_REQUIRED
+        const unconfirmed = await callAction(new ScheduleNextAgentWakeAction() as never, {
             Action: {} as RunActionParams['Action'],
             ContextUser: alice,
             Context: { AgentID: cosAgent.ID },
-            Provider: {} as IMetadataProvider,
+            Provider: md,
             Filters: [],
             Params: [
                 { Name: 'ScheduleMode', Type: 'Input', Value: 'Recurring' },
@@ -117,9 +154,82 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
                 { Name: 'WakeReason', Type: 'Input', Value: 'Auto-created rhythm' },
             ],
         });
+        expect(unconfirmed.Success).toBe(false);
+        expect(unconfirmed.ResultCode).toBe('APPROVAL_REQUIRED');
 
-        expect(res.Success).toBe(false);
-        expect(res.ResultCode).toBe('APPROVAL_REQUIRED');
+        // 2. Self-attested ConfirmedByUser=true alone -> STILL rejected in agent context!
+        const selfAttested = await callAction(new ScheduleNextAgentWakeAction() as never, {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: alice,
+            Context: { AgentID: cosAgent.ID },
+            Provider: md,
+            Filters: [],
+            Params: [
+                { Name: 'ScheduleMode', Type: 'Input', Value: 'Recurring' },
+                { Name: 'CronExpression', Type: 'Input', Value: '0 8 * * 1-5' },
+                { Name: 'WorkstreamKey', Type: 'Input', Value: 'self-attested-rhythm' },
+                { Name: 'WakeReason', Type: 'Input', Value: 'Self-attested recurring wake' },
+                { Name: 'ConfirmedByUser', Type: 'Input', Value: true },
+            ],
+        });
+        expect(selfAttested.Success).toBe(false);
+        expect(selfAttested.ResultCode).toBe('APPROVAL_REQUIRED');
+
+        // 3. Fake/non-existent RhythmTemplateID -> rejected with VALIDATION_ERROR
+        const fakeTemplate = await callAction(new ScheduleNextAgentWakeAction() as never, {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: alice,
+            Context: { AgentID: cosAgent.ID },
+            Provider: md,
+            Filters: [],
+            Params: [
+                { Name: 'ScheduleMode', Type: 'Input', Value: 'Recurring' },
+                { Name: 'CronExpression', Type: 'Input', Value: '0 8 * * 1-5' },
+                { Name: 'WorkstreamKey', Type: 'Input', Value: 'spoofed-tpl' },
+                { Name: 'WakeReason', Type: 'Input', Value: 'Spoofed template' },
+                { Name: 'RhythmTemplateID', Type: 'Input', Value: 'fake-template-id' },
+                { Name: 'ConfirmedApprovalRequestID', Type: 'Input', Value: 'req-approved-1' },
+            ],
+        });
+        expect(fakeTemplate.Success).toBe(false);
+        expect(fakeTemplate.ResultCode).toBe('VALIDATION_ERROR');
+
+        // 4. Real Active RhythmTemplateID WITHOUT Approved ConfirmedApprovalRequestID -> STILL rejected!
+        const templateWithoutApproval = await callAction(new ScheduleNextAgentWakeAction() as never, {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: alice,
+            Context: { AgentID: cosAgent.ID },
+            Provider: md,
+            Filters: [],
+            Params: [
+                { Name: 'ScheduleMode', Type: 'Input', Value: 'Recurring' },
+                { Name: 'CronExpression', Type: 'Input', Value: '0 8 * * 1-5' },
+                { Name: 'WorkstreamKey', Type: 'Input', Value: 'tpl-no-approval' },
+                { Name: 'WakeReason', Type: 'Input', Value: 'Template without approval' },
+                { Name: 'RhythmTemplateID', Type: 'Input', Value: 'tpl-active-1' },
+            ],
+        });
+        expect(templateWithoutApproval.Success).toBe(false);
+        expect(templateWithoutApproval.ResultCode).toBe('APPROVAL_REQUIRED');
+
+        // 5. Real Active RhythmTemplateID + real server-verified Approved ConfirmedApprovalRequestID -> SUCCEEDS!
+        const approved = await callAction(new ScheduleNextAgentWakeAction() as never, {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: alice,
+            Context: { AgentID: cosAgent.ID },
+            Provider: md,
+            Filters: [],
+            Params: [
+                { Name: 'ScheduleMode', Type: 'Input', Value: 'Recurring' },
+                { Name: 'CronExpression', Type: 'Input', Value: '0 8 * * 1-5' },
+                { Name: 'WorkstreamKey', Type: 'Input', Value: 'approved-rhythm' },
+                { Name: 'WakeReason', Type: 'Input', Value: 'User-approved recurring wake' },
+                { Name: 'RhythmTemplateID', Type: 'Input', Value: 'tpl-active-1' },
+                { Name: 'ConfirmedApprovalRequestID', Type: 'Input', Value: 'req-approved-1' },
+            ],
+        });
+        expect(approved.Success).toBe(true);
+        expect(routineStub.Save).toHaveBeenCalledTimes(1);
     });
 
     it('SendInterAgentRequestAction enforces Coordinator APPROVAL_REQUIRED during autonomous agent runs', async () => {
@@ -244,6 +354,75 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
         });
     });
 
+    it('AssembleMyBriefingAction enforces per-contributor timeout without stalling peers and truncates oversized payloads', async () => {
+        vi.spyOn(ActionEngineServer.Instance, 'Config').mockResolvedValue(undefined);
+        vi.spyOn(AIEngine.Instance, 'GetBriefingActionsForAgent').mockReturnValue([
+            { skill: { ID: 'sk-slow', Name: 'Slow Skill' } as never, actionID: 'act-slow' },
+            { skill: { ID: 'sk-big', Name: 'Verbose Skill' } as never, actionID: 'act-big' },
+        ]);
+        vi.spyOn(ActionEngineServer.Instance, 'Actions', 'get').mockReturnValue([
+            { ID: 'act-slow', Name: 'Slow Briefing' } as never,
+            { ID: 'act-big', Name: 'Verbose Briefing' } as never,
+        ]);
+        vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockImplementation(async (p) => {
+            if (p.Action.ID === 'act-slow') {
+                return await new Promise((resolve) =>
+                    setTimeout(
+                        () =>
+                            resolve({
+                                Success: true,
+                                Message: JSON.stringify({ TooLate: true }),
+                                Result: { Success: true, ResultCode: 'SUCCESS' },
+                                Params: [],
+                            } as never),
+                        500
+                    )
+                );
+            }
+            return {
+                Success: true,
+                Message: JSON.stringify({ Items: 'X'.repeat(500) }),
+                Result: { Success: true, ResultCode: 'SUCCESS' },
+                Params: [],
+            } as never;
+        });
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] }),
+        } as unknown as RunView);
+
+        const res = await callAction(new AssembleMyBriefingAction() as never, {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: alice,
+            Filters: [],
+            Params: [
+                { Name: 'HorizonDays', Type: 'Input', Value: 7 },
+                { Name: 'ContributorTimeoutMs', Type: 'Input', Value: 30 },
+                { Name: 'MaxContributorChars', Type: 'Input', Value: 120 },
+            ],
+        });
+
+        expect(res.Success).toBe(true);
+        const parsed = JSON.parse(res.Message!);
+        expect(parsed.SkillBriefings).toHaveLength(2);
+        expect(parsed.SkillBriefings[0]).toMatchObject({
+            SkillName: 'Slow Skill',
+            Success: false,
+            ResultCode: 'TIMEOUT',
+            Data: null,
+        });
+        expect(parsed.SkillBriefings[0].Error).toContain('timed out');
+
+        expect(parsed.SkillBriefings[1]).toMatchObject({
+            SkillName: 'Verbose Skill',
+            Success: true,
+        });
+        expect(parsed.SkillBriefings[1].Data).toMatchObject({
+            Truncated: true,
+        });
+        expect(parsed.SkillBriefings[1].Data.OriginalChars).toBeGreaterThan(500);
+        expect(parsed.SkillBriefings[1].Data.Preview).toHaveLength(120);
+    });
+
     it('ListAvailableRhythms excludes declined suggestions and EnableAgentRhythm materializes an active recurring routine', async () => {
         const template = {
             ID: 'tpl-1',
@@ -274,13 +453,26 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
             Save: vi.fn().mockResolvedValue(true),
         } as unknown as MJAIAgentSuggestionEntity;
 
+        const approvedReq = {
+            ID: 'req-rhythm-approved-1',
+            AgentID: cosAgent.ID,
+            RequestForUserID: alice.ID,
+            Status: 'Approved',
+        };
+
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
-            RunView: vi.fn(async (p: { EntityName: string }) => {
+            RunView: vi.fn(async (p: { EntityName: string; ExtraFilter?: string }) => {
                 if (p.EntityName === 'MJ: AI Agent Rhythm Templates') {
                     return { Success: true, Results: [template, declinedTemplate] };
                 }
                 if (p.EntityName === 'MJ: AI Agent Suggestions') {
                     return { Success: true, Results: [declinedSuggestion] };
+                }
+                if (p.EntityName === 'MJ: AI Agent Requests') {
+                    if (p.ExtraFilter?.includes('req-rhythm-approved-1')) {
+                        return { Success: true, Results: [approvedReq] };
+                    }
+                    return { Success: true, Results: [] };
                 }
                 return { Success: true, Results: [] };
             }),
@@ -298,13 +490,16 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
             'calendar-daily-review',
         ]);
 
-        // Enabling during an agent call without ConfirmedByUser must fail with APPROVAL_REQUIRED
+        // Enabling during an agent call without ConfirmedApprovalRequestID (even with self-attested ConfirmedByUser=true!) must fail
         const blockedEnable = await callAction(new EnableAgentRhythmAction() as never, {
             Action: {} as RunActionParams['Action'],
             ContextUser: alice,
             Context: { AgentID: cosAgent.ID },
             Filters: [],
-            Params: [{ Name: 'WorkstreamKey', Type: 'Input', Value: 'calendar-daily-review' }],
+            Params: [
+                { Name: 'WorkstreamKey', Type: 'Input', Value: 'calendar-daily-review' },
+                { Name: 'ConfirmedByUser', Type: 'Input', Value: true },
+            ],
         });
         expect(blockedEnable.Success).toBe(false);
         expect(blockedEnable.ResultCode).toBe('APPROVAL_REQUIRED');
@@ -319,6 +514,7 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
             GetEntityObject: vi.fn().mockResolvedValue(routineStub),
         } as unknown as IMetadataProvider;
 
+        // With a real server-verified Approved ConfirmedApprovalRequestID, agent call succeeds!
         const enabledRes = await callAction(new EnableAgentRhythmAction() as never, {
             Action: {} as RunActionParams['Action'],
             ContextUser: alice,
@@ -328,13 +524,26 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
             Params: [
                 { Name: 'WorkstreamKey', Type: 'Input', Value: 'calendar-daily-review' },
                 { Name: 'Timezone', Type: 'Input', Value: 'America/Chicago' },
-                { Name: 'ConfirmedByUser', Type: 'Input', Value: true },
+                { Name: 'ConfirmedApprovalRequestID', Type: 'Input', Value: 'req-rhythm-approved-1' },
             ],
         });
         expect(enabledRes.Success).toBe(true);
         expect(routineStub.ScheduleMode).toBe('Recurring');
         expect(routineStub.CronExpression).toBe('30 7 * * 1-5');
         expect(routineStub.Timezone).toBe('America/Chicago');
+
+        // Direct human/UI call (no Context.AgentID) succeeds cleanly without requiring ConfirmedApprovalRequestID
+        const humanRes = await callAction(new EnableAgentRhythmAction() as never, {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: alice,
+            Provider: md,
+            Filters: [],
+            Params: [
+                { Name: 'WorkstreamKey', Type: 'Input', Value: 'calendar-daily-review' },
+                { Name: 'Timezone', Type: 'Input', Value: 'America/Chicago' },
+            ],
+        });
+        expect(humanRes.Success).toBe(true);
     });
 
     it('ManageAgentSuggestions blocks re-offering a previously declined suggestion with ALREADY_DECLINED', async () => {

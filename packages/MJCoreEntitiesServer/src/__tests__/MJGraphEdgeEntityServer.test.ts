@@ -20,7 +20,7 @@ import {
     ValidationErrorType,
     ValidationResult,
 } from '@memberjunction/core';
-import { GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION, type MJGraphEdgeTypeEntity } from '@memberjunction/core-entities';
+import { GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION, GRAPH_PIPELINE_EVIDENCE_RETRACTION_OPERATION, type MJGraphEdgeTypeEntity } from '@memberjunction/core-entities';
 
 interface EngineStub {
     EdgeTypes: Array<Pick<MJGraphEdgeTypeEntity, 'ID' | 'Name' | 'GraphID' | 'IsDirected' | 'AllowStored'>>;
@@ -641,6 +641,34 @@ describe('MJGraphEdgeEntityServer.ValidateAsync', () => {
         markSaved(approvedByCurator, 'Approved');
         expect(await approvedByCurator.Delete()).toBe(true);
         expect(deleteCalls(approvedByCurator)).toBe(1);
+    });
+
+    it('lets the pipeline retract an Approved Inferred edge in its retraction scope, never a Declared one or outside it', async () => {
+        const authorizations = makeApproveAuthorizations();
+        const retract = <T>(user: UserInfo, work: () => Promise<T>): Promise<T> =>
+            ServerOperationScopeManager.Instance.RunWithAuthority(
+                { operationKey: GRAPH_PIPELINE_EVIDENCE_RETRACTION_OPERATION, source: 'ServerEngine', allowedEntities: ['MJ: Graph Edges'], userId: user.ID },
+                work,
+            );
+
+        const inferred = makeEdge({ Status: 'Approved', Origin: 'Inferred', IsSaved: true }, staff, makeProvider({ Authorizations: authorizations }));
+        markSaved(inferred, 'Approved');
+        expect(await retract(staff, () => inferred.Delete())).toBe(true);
+        expect(deleteCalls(inferred)).toBe(1);
+
+        const declared = makeEdge({ Status: 'Approved', Origin: 'Declared', IsSaved: true }, staff, makeProvider({ Authorizations: authorizations }));
+        markSaved(declared, 'Approved');
+        expect(await retract(staff, () => declared.Delete())).toBe(false);
+        expect(deleteCalls(declared)).toBe(0);
+
+        const outside = makeEdge({ Status: 'Approved', Origin: 'Inferred', IsSaved: true }, staff, makeProvider({ Authorizations: authorizations }));
+        markSaved(outside, 'Approved');
+        expect(await outside.Delete()).toBe(false);
+
+        // The approval scope is for creating edges; it does not license deleting one.
+        const wrongScope = makeEdge({ Status: 'Approved', Origin: 'Inferred', IsSaved: true }, staff, makeProvider({ Authorizations: authorizations }));
+        markSaved(wrongScope, 'Approved');
+        expect(await inPipelineScope(staff, () => wrongScope.Delete())).toBe(false);
     });
 
     it('reports a missing endpoint record', async () => {

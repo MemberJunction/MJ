@@ -456,19 +456,75 @@ describe('Multi-Tenancy Security Edge Cases', () => {
       });
     });
 
-    it('should not set TenantContext when header is missing', () => {
+    it('should reject a request with no tenant header with 400 rather than run it unscoped', () => {
       const middleware = CreateTenantMiddleware(makeConfig());
-      const userRecord = { ID: 'u1' } as Record<string, unknown>;
+      const userRecord = { ID: 'u1', UserRoles: [{ Role: 'Member' }] } as Record<string, unknown>;
       const req = {
         headers: {},
         userPayload: { userRecord, email: 'test@test.com', sessionId: 's1' },
       } as unknown as Parameters<typeof middleware>[0];
-      const res = {} as Parameters<typeof middleware>[1];
+      const json = vi.fn();
+      const status = vi.fn().mockReturnValue({ json });
+      const res = { status } as unknown as Parameters<typeof middleware>[1];
       const next = vi.fn();
 
       middleware(req, res, next);
 
+      // The hooks leave a user with no TenantContext unfiltered, so continuing would show every tenant's rows
+      expect(status).toHaveBeenCalledWith(400);
+      expect(json).toHaveBeenCalledWith({ error: expect.stringContaining('Missing x-tenant-id header') });
+      expect(next).not.toHaveBeenCalled();
       expect(userRecord['TenantContext']).toBeUndefined();
+    });
+
+    it('should treat an empty tenant header as missing', () => {
+      const middleware = CreateTenantMiddleware(makeConfig());
+      const req = {
+        headers: { 'x-tenant-id': '' },
+        userPayload: { userRecord: { ID: 'u1' }, email: 'test@test.com', sessionId: 's1' },
+      } as unknown as Parameters<typeof middleware>[0];
+      const status = vi.fn().mockReturnValue({ json: vi.fn() });
+      const res = { status } as unknown as Parameters<typeof middleware>[1];
+      const next = vi.fn();
+
+      middleware(req, res, next);
+
+      expect(status).toHaveBeenCalledWith(400);
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it('should let an admin-role user through without a tenant header, as the hooks do not filter admins', () => {
+      const middleware = CreateTenantMiddleware(makeConfig({ adminRoles: ['Admin'] }));
+      const userRecord = { ID: 'u1', UserRoles: [{ Role: ' admin ' }] } as Record<string, unknown>;
+      const req = {
+        headers: {},
+        userPayload: { userRecord, email: 'admin@test.com', sessionId: 's1' },
+      } as unknown as Parameters<typeof middleware>[0];
+      const status = vi.fn();
+      const res = { status } as unknown as Parameters<typeof middleware>[1];
+      const next = vi.fn();
+
+      middleware(req, res, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(status).not.toHaveBeenCalled();
+      expect(userRecord['TenantContext']).toBeUndefined();
+    });
+
+    it('should let the system user through without a tenant header', () => {
+      const middleware = CreateTenantMiddleware(makeConfig());
+      const req = {
+        headers: {},
+        userPayload: { userRecord: { ID: 'sys' }, email: 'system@test.com', sessionId: 's1', isSystemUser: true },
+      } as unknown as Parameters<typeof middleware>[0];
+      const status = vi.fn();
+      const res = { status } as unknown as Parameters<typeof middleware>[1];
+      const next = vi.fn();
+
+      middleware(req, res, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(status).not.toHaveBeenCalled();
     });
 
     it('should reject a repeated header (array value) with 400 rather than guessing which value applies', () => {
