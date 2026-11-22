@@ -16,6 +16,7 @@
  */
 import http from 'node:http';
 import { execSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
@@ -705,11 +706,16 @@ void bootstrapApplication(ExplorerAdminShellComponent, {
     writeFileSync(resolve(harnessDir, 'main.ts'), mainTs, 'utf8');
 }
 
+function sha256File(relPath) {
+    const absPath = resolve(REPO_ROOT, relPath);
+    const sha256 = createHash('sha256').update(readFileSync(absPath)).digest('hex');
+    return { path: relPath, sha256 };
+}
+
 async function main() {
     const { provider, cleanup } = await createProductionBackedStore();
     const designCss = compileDesignSystemCss();
     const adminAppJson = readFileSync(ADMIN_APP_METADATA_PATH, 'utf8');
-    const gitHeadSha = execSync('git rev-parse HEAD', { cwd: REPO_ROOT, encoding: 'utf8' }).trim();
     const gitBranch = execSync('git rev-parse --abbrev-ref HEAD', { cwd: REPO_ROOT, encoding: 'utf8' }).trim();
 
     const harnessDir = resolve(DASHBOARDS_DIR, '.browser-harness-tmp');
@@ -886,11 +892,13 @@ async function main() {
 
         const report = {
             verifiedAtISO: new Date().toISOString(),
-            gitRevision: {
+            revisionIdentity: {
                 branch: gitBranch,
-                headSha: gitHeadSha,
-                componentSource: 'packages/Angular/Explorer/dashboards/src/AdminLimits/admin-limits-resource.component.ts',
-                serverOperationsSource: 'packages/AI/Agents/src/operations/LimitsOperations.ts',
+                componentCompiledJs: sha256File('packages/Angular/Explorer/dashboards/dist/AdminLimits/admin-limits-resource.component.js'),
+                componentSourceTs: sha256File('packages/Angular/Explorer/dashboards/src/AdminLimits/admin-limits-resource.component.ts'),
+                componentSourceHtml: sha256File('packages/Angular/Explorer/dashboards/src/AdminLimits/admin-limits-resource.component.html'),
+                componentSourceCss: sha256File('packages/Angular/Explorer/dashboards/src/AdminLimits/admin-limits-resource.component.css'),
+                serverOperationsSource: sha256File('packages/AI/Agents/src/operations/LimitsOperations.ts'),
             },
             renderedMode: 'Real Angular AdminLimitsResourceComponent + ExplorerAdminShell via Vite',
             chromiumVersion: browser.version(),

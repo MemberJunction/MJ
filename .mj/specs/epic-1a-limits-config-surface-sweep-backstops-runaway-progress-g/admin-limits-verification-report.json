@@ -1,14 +1,31 @@
 {
-  "verifiedAtISO": "2026-11-22T05:03:25.058Z",
-  "gitRevision": {
+  "verifiedAtISO": "2026-11-22T05:15:42.501Z",
+  "revisionIdentity": {
     "branch": "factory/bac5fc6c-8417-4c82-a5d0-28742cbeff8f-epic-1a-limits-config",
-    "headSha": "98258684a36cd032d66f71526f4ed23d3808f1f1",
-    "componentSource": "packages/Angular/Explorer/dashboards/src/AdminLimits/admin-limits-resource.component.ts",
-    "serverOperationsSource": "packages/AI/Agents/src/operations/LimitsOperations.ts"
+    "componentCompiledJs": {
+      "path": "packages/Angular/Explorer/dashboards/dist/AdminLimits/admin-limits-resource.component.js",
+      "sha256": "6dff7a058cb42ee037321d8267a422af94e781d229c6b83c6c07e1c7c7baec40"
+    },
+    "componentSourceTs": {
+      "path": "packages/Angular/Explorer/dashboards/src/AdminLimits/admin-limits-resource.component.ts",
+      "sha256": "c16f3f2c99b04989b5ed48b84f60e8ea4a8eaa20a3b82e1e0b460a3161483801"
+    },
+    "componentSourceHtml": {
+      "path": "packages/Angular/Explorer/dashboards/src/AdminLimits/admin-limits-resource.component.html",
+      "sha256": "19078f1b4415ca5a4de37a4a01548243bd19364d3229b58ed34374fe46de34ef"
+    },
+    "componentSourceCss": {
+      "path": "packages/Angular/Explorer/dashboards/src/AdminLimits/admin-limits-resource.component.css",
+      "sha256": "c218cb71c90210093dcc399eeafb07b7ef9b110b96901c1e9d779bc7802500ac"
+    },
+    "serverOperationsSource": {
+      "path": "packages/AI/Agents/src/operations/LimitsOperations.ts",
+      "sha256": "ab9035d93758304f203f6216fc26265fc05992171396ce3c5739817054c93290"
+    }
   },
   "renderedMode": "Real Angular AdminLimitsResourceComponent + ExplorerAdminShell via Vite",
   "chromiumVersion": "145.0.7632.6",
-  "baseUrl": "http://127.0.0.1:53331/",
+  "baseUrl": "http://127.0.0.1:53585/",
   "pageErrorsCount": 0,
   "consoleErrorsCount": 0,
   "brokenImagesCount": 0,
@@ -29,7 +46,7 @@
     "budgetScopeCardsRendered": 3,
     "drawerContainsFastJudgeVerdict": true,
     "resumeSuccessBanner": "Run 33333333-3333-4333-8333-333333333333 approved and transitioned back to Running preserving 0 completed step(s). Fresh worker (ResearchPlanner) dispatched for run 33333333-3333-4333-8333-333333333333.",
-    "pauseSuccessBanner": "Run 44444444-4444-4444-8444-444444444444 cooperatively paused at safe boundary (checkpoint f60d87b0-20d4-41d6-ad56-ce3eddc4fb84)."
+    "pauseSuccessBanner": "Run 44444444-4444-4444-8444-444444444444 cooperatively paused at safe boundary (checkpoint 0c351fcd-375c-4c70-b688-b62ccfc581c9)."
   },
   "screenshots": [
     "admin-limits-overview.png",
