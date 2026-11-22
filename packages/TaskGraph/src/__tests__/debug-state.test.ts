@@ -61,6 +61,32 @@ describe('ParseTaskGraphDebugState', () => {
         expect(OverrideVerdictFor(state, EDGE)).toBe('false');
         expect(OverrideVerdictFor(state, A)).toBeUndefined();
     });
+
+    it('parses checkpointPersisted and pendingCheckpointContext for durable governance pause recovery', () => {
+        const state = ParseTaskGraphDebugState(payload({
+            paused: true,
+            pausedReason: 'governance',
+            checkpointPersisted: false,
+            pendingCheckpointContext: {
+                reason: 'BudgetExceeded',
+                reasonDetail: 'PerRun cost exceeded',
+                scope: 'PerRun',
+                dimension: 'CostUsd',
+                triggerValue: 0.3,
+                thresholdValue: 0.25,
+                pausedAtIso: '2026-11-21T12:00:00.000Z',
+                pausedAtIteration: 3,
+                submittingAgentRunId: A,
+                completedTaskIds: [B, C],
+            },
+        }));
+        expect(state.paused).toBe(true);
+        expect(state.pausedReason).toBe('governance');
+        expect(state.checkpointPersisted).toBe(false);
+        expect(state.pendingCheckpointContext?.reason).toBe('BudgetExceeded');
+        expect(state.pendingCheckpointContext?.submittingAgentRunId).toBe(A);
+        expect(state.pendingCheckpointContext?.completedTaskIds).toEqual([B, C]);
+    });
 });
 
 describe('DecideClaimGate', () => {

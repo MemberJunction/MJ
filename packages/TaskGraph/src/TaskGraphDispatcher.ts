@@ -882,6 +882,9 @@ export class TaskGraphDispatcher implements IShutdownable {
         debug: TaskGraphDebugState,
     ): Promise<void> {
         const paused = debug.paused === true;
+        if (paused && (debug.checkpointPersisted === false || this.governance.HasPendingPausePersistence(parentTaskID))) {
+            return;
+        }
         const previous = this.announcedPaused.get(parentTaskID);
         if (previous === paused) return;
         this.announcedPaused.set(parentTaskID, paused);
@@ -895,7 +898,11 @@ export class TaskGraphDispatcher implements IShutdownable {
             OwnerUserID: await this.resolveOwner(provider, parentTaskID),
             TaskID: debug.pausedAtTaskID ?? undefined,
             Reason: paused
-                ? (debug.pausedReason === 'breakpoint' ? 'breakpoint' : 'paused by user')
+                ? (debug.pausedReason === 'breakpoint'
+                    ? 'breakpoint'
+                    : debug.pausedReason === 'governance'
+                        ? 'governance'
+                        : 'paused by user')
                 : 'resumed',
         });
     }
@@ -2819,6 +2826,15 @@ export class TaskGraphDispatcher implements IShutdownable {
         for (const source of graphSources) {
             if (claimable.length >= limit) break;
             const { parentID } = source;
+            const initialDebug = await this.readDebugState(provider, parentID);
+            await this.governance.HydrateGraphIfNeeded(
+                provider,
+                parentID,
+                initialDebug,
+                source.preloaded?.parent ?? null,
+                this.contextUser,
+                source.preloaded ? [...source.preloaded.entityById.values()] : undefined,
+            );
             if (this.governance.HasPendingPausePersistence(parentID)) {
                 await this.governance.FlushPendingPausePersistence(
                     provider,
@@ -2828,8 +2844,8 @@ export class TaskGraphDispatcher implements IShutdownable {
                     this.debugStateByGraph,
                 );
             }
-            const debug = await this.readDebugState(provider, parentID);
-            if (!this.governance.HasPendingPausePersistence(parentID)) {
+            const debug = this.debugStateByGraph.get(parentID) ?? initialDebug;
+            if (!this.governance.HasPendingPausePersistence(parentID) && debug.checkpointPersisted !== false) {
                 if (this.governance.IsLocallyPaused(parentID)) {
                     this.announcedPaused.set(parentID, true);
                 }
@@ -2870,6 +2886,11 @@ export class TaskGraphDispatcher implements IShutdownable {
                     !graph.cascadeSkipTaskIDs.has(n.id));
             stats.set(parentID, { eligible: eligible.length, held: graph.holdTaskIDs.size });
 
+            // Check governance fail-closed barrier BEFORE the closed debug-gate early return so any
+            // replacement dispatcher hydrates/flushes unpersisted checkpoints and never bypasses governance.
+            if (await this.governance.IsGraphBlockedByGovernance(provider, parentID, debug, graph.parent, this.contextUser, [...graph.entityById.values()])) {
+                continue;
+            }
             // THE DEBUG GATE — pause, single-step, breakpoints — decided by the pure function, with
             // the CAS writes staying here. Every control is a gate on CLAIMING: a claimed task can
             // never be interrupted mid-flight anyway, so "paused" means nothing new starts while
@@ -2878,9 +2899,6 @@ export class TaskGraphDispatcher implements IShutdownable {
             // keep notifying assignees — a notification is starting something.
             const gate = DecideClaimGate(debug, eligible.map((n) => n.id));
             if (gate.mode === 'closed') continue;
-            if (await this.governance.IsGraphBlockedByGovernance(provider, parentID, debug, graph.parent, this.contextUser, [...graph.entityById.values()])) {
-                continue;
-            }
             let allowedTaskIDs: Set<string> | null = null;
             if (gate.mode === 'breakpoint') {
                 const typeID = await this.workflowTaskTypeID(provider);

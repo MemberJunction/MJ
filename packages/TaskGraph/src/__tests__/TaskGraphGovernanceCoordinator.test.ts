@@ -33,6 +33,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { SQLServerDialect } from '@memberjunction/sql-dialect';
 import type { TaskGraphDebugState } from '../debug-state';
+import { ParseTaskGraphDebugState } from '../debug-state';
 import { TaskGraphDispatcher } from '../TaskGraphDispatcher';
 import { TaskGraphService } from '../TaskGraphService';
 import type { TaskActionRunner, TaskAgentRunner, TaskGraphFrame } from '../types';
@@ -446,12 +447,19 @@ class GovernanceInMemoryDb {
                     const debugBag: TaskGraphDebugState = payload.debug && typeof payload.debug === 'object'
                         ? { ...payload.debug }
                         : {};
-                    const fields = JSON.parse(fieldsJson) as Array<{ Path: string; Kind: string; Value?: string | boolean | null }>;
+                    const fields = JSON.parse(fieldsJson) as Array<{
+                        Path: string;
+                        Kind: string;
+                        Value?: TaskGraphDebugState[keyof TaskGraphDebugState];
+                    }>;
                     for (const field of fields) {
                         if (!field.Path.startsWith('$.debug.')) continue;
                         const prop = field.Path.slice('$.debug.'.length) as keyof TaskGraphDebugState;
-                        if (field.Kind === 'null') delete debugBag[prop];
-                        else (debugBag as Record<string, string | boolean | null | undefined>)[prop] = field.Value;
+                        if (field.Kind === 'null') {
+                            Reflect.deleteProperty(debugBag, prop);
+                        } else {
+                            Reflect.set(debugBag, prop, field.Value);
+                        }
                     }
                     payload.debug = debugBag;
                     row.InputPayload = JSON.stringify(payload);
@@ -1244,6 +1252,182 @@ describe('TaskGraphGovernanceCoordinator — default opt-in, 5-tier policy scope
             expect(executedB).toHaveLength(4);
         } finally {
             await dispB.Stop();
+        }
+    });
+
+    it('CR-GRAPH-CHECKPOINT-SAVE-FAILURE: replacement dispatcher reconstructs PendingPauseContext from durable debug state, suppresses GraphPaused while storage fails, flushes checkpoint on recovery, and resumes remaining nodes', async () => {
+        const db = new GovernanceInMemoryDb();
+        const provider = db.CreateProvider();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation((p) => p as Partial<RunView> as RunView);
+
+        const runIdReplace = '50000000-0000-4000-8000-000000000033';
+        const submitRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', TEST_USER);
+        submitRun.ID = runIdReplace;
+        submitRun.Status = 'Running';
+        await submitRun.Save();
+
+        const agentRunner: TaskAgentRunner = { RunAgentForTask: async () => ({ Success: true }) };
+        const executedDisp1: string[] = [];
+        const framesDisp1: TaskGraphFrame[] = [];
+        const runner1: TaskActionRunner = {
+            RunActionForTask: async (ctx) => {
+                executedDisp1.push(ctx.TaskID);
+                return { Success: true, Output: { step: executedDisp1.length, disp: 1 }, CostUsd: 0.10, TokensUsed: 80 };
+            },
+        };
+
+        // Fail AgentRun.Save() while root task debug write succeeds
+        db.AgentRunSaveMode = 'false';
+        db.DebugWriteMode = 'ok';
+
+        const disp1 = new TaskGraphDispatcher(
+            { CreateProvider: async () => provider },
+            agentRunner,
+            TEST_USER,
+            {
+                InstanceID: 'gov-replace-1',
+                MaxConcurrentTasks: 1,
+                PollIntervalSeconds: 0.01,
+                HeartbeatIntervalSeconds: 60,
+                ReconciliationIntervalSeconds: 60,
+            },
+            undefined,
+            { OnFrame: (frame) => framesDisp1.push(frame) },
+            runner1,
+        );
+
+        let parentId = '';
+        await disp1.Start();
+        try {
+            const service = new TaskGraphService();
+            const subRes = await service.Submit(buildLinearSpec(5, 'Replacement Dispatcher Checkpoint Recovery Graph'), {
+                EnvironmentID: 'env-1',
+                Provider: provider,
+                ContextUser: TEST_USER,
+                AgentRunID: runIdReplace,
+                LimitsOverride: { Budgets: { PerRun: { MaxCostUsd: 0.25 } } },
+            });
+            expect(subRes.Success).toBe(true);
+            parentId = subRes.ParentTaskID!;
+
+            await waitUntil(
+                () => disp1.Governance.HasPendingPausePersistence(parentId),
+                5_000,
+                () => disp1.Kick(),
+            );
+            expect(executedDisp1).toHaveLength(3);
+            expect(framesDisp1.filter((f) => f.Kind === 'GraphPaused')).toHaveLength(0);
+
+            // Verify durable root task debug state recorded checkpointPersisted=false + pendingCheckpointContext
+            const persistedDebug = ParseTaskGraphDebugState(db.Tasks.get(parentId.toLowerCase())?.InputPayload);
+            expect(persistedDebug.paused).toBe(true);
+            expect(persistedDebug.pausedReason).toBe('governance');
+            expect(persistedDebug.checkpointPersisted).toBe(false);
+            expect(persistedDebug.pendingCheckpointContext?.submittingAgentRunId).toBe(runIdReplace);
+            expect(persistedDebug.pendingCheckpointContext?.completedTaskIds).toHaveLength(3);
+            expect(persistedDebug.pendingCheckpointContext?.scope).toBe('PerRun');
+        } finally {
+            await disp1.Stop();
+        }
+
+        // Replace Dispatcher 1 / Coordinator 1 with a brand-new Dispatcher 2 / Coordinator 2 (zero in-memory state)
+        const executedDisp2: string[] = [];
+        const framesDisp2: TaskGraphFrame[] = [];
+        const runner2: TaskActionRunner = {
+            RunActionForTask: async (ctx) => {
+                executedDisp2.push(ctx.TaskID);
+                return { Success: true, Output: { step: executedDisp2.length, disp: 2 }, CostUsd: 0.10, TokensUsed: 80 };
+            },
+        };
+        const disp2 = new TaskGraphDispatcher(
+            { CreateProvider: async () => provider },
+            agentRunner,
+            TEST_USER,
+            {
+                InstanceID: 'gov-replace-2',
+                MaxConcurrentTasks: 1,
+                PollIntervalSeconds: 0.01,
+                HeartbeatIntervalSeconds: 60,
+                ReconciliationIntervalSeconds: 60,
+            },
+            undefined,
+            { OnFrame: (frame) => framesDisp2.push(frame) },
+            runner2,
+        );
+
+        await disp2.Start();
+        try {
+            // While AgentRun.Save() is still failing, Dispatcher 2 hydrates pending pause context,
+            // keeps claiming blocked, and MUST NOT emit GraphPaused prematurely.
+            await waitUntil(
+                () => disp2.Governance.HasPendingPausePersistence(parentId),
+                5_000,
+                () => disp2.Kick(),
+            );
+            for (let i = 0; i < 4; i++) {
+                disp2.Kick();
+                await new Promise((r) => setTimeout(r, 25));
+            }
+            expect(executedDisp2).toHaveLength(0);
+            expect(framesDisp2.filter((f) => f.Kind === 'GraphPaused')).toHaveLength(0);
+            expect(db.AgentRuns.get(runIdReplace.toLowerCase())?.Status).toBe('Running');
+
+            const currentDebug = ParseTaskGraphDebugState(db.Tasks.get(parentId.toLowerCase())?.InputPayload);
+            expect(await disp2.Governance.CanClaimTasks(provider, parentId, currentDebug, null, TEST_USER)).toBe(false);
+            expect(
+                await disp2.Governance.IsGraphBlockedByGovernance(provider, parentId, currentDebug, null, TEST_USER),
+            ).toBe(true);
+
+            // ApproveAndResumePausedGraph on Dispatcher 2 must fail closed while AgentRun.Save() is down
+            const prematureApprove = await disp2.Governance.ApproveAndResumePausedGraph({
+                ParentTaskID: parentId,
+                Provider: provider,
+                ContextUser: TEST_USER,
+                BudgetExtension: { NewPerRunMaxCostUsd: 1.0 },
+            });
+            expect(prematureApprove.Success).toBe(false);
+            expect(prematureApprove.Message).toContain('pause persistence is still pending');
+
+            // Restore AgentRun storage -> Dispatcher 2 reconstructs & flushes checkpoint, flips checkpointPersisted=true,
+            // and emits GraphPaused ONCE.
+            db.AgentRunSaveMode = 'ok';
+            await waitUntil(
+                () =>
+                    db.AgentRuns.get(runIdReplace.toLowerCase())?.Status === 'Paused' &&
+                    framesDisp2.some((f) => f.Kind === 'GraphPaused'),
+                5_000,
+                () => disp2.Kick(),
+            );
+            expect(framesDisp2.filter((f) => f.Kind === 'GraphPaused')).toHaveLength(1);
+
+            const flushedCp = ExtractRunawayCheckpointFromRunData(db.AgentRuns.get(runIdReplace.toLowerCase())?.Data);
+            expect(flushedCp).not.toBeNull();
+            expect(flushedCp?.CompletedNodeIDs).toHaveLength(3);
+            expect(flushedCp?.CumulativeLedger.RunCostUsd).toBeCloseTo(0.30, 4);
+
+            const syncedDebug = ParseTaskGraphDebugState(db.Tasks.get(parentId.toLowerCase())?.InputPayload);
+            expect(syncedDebug.checkpointPersisted).toBe(true);
+            expect(syncedDebug.pendingCheckpointContext).toBeUndefined();
+
+            // Approve and resume remaining 2 nodes on Dispatcher 2 without replaying the first 3
+            const approveRes = await disp2.Governance.ApproveAndResumePausedGraph({
+                ParentTaskID: parentId,
+                Provider: provider,
+                ContextUser: TEST_USER,
+                BudgetExtension: { NewPerRunMaxCostUsd: 1.0 },
+            });
+            expect(approveRes.Success).toBe(true);
+
+            await waitUntil(
+                () => db.Tasks.get(parentId.toLowerCase())?.Status === 'Complete',
+                5_000,
+                () => disp2.Kick(),
+            );
+            expect(executedDisp1).toHaveLength(3);
+            expect(executedDisp2).toHaveLength(2);
+            expect(executedDisp2.every((id) => !executedDisp1.includes(id))).toBe(true);
+        } finally {
+            await disp2.Stop();
         }
     });
 });
