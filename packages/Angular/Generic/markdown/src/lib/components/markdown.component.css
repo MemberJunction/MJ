@@ -275,6 +275,88 @@
 }
 
 /* ============================================
+   Inline Video + Synced Transcript Drawer
+   ============================================ */
+.mj-markdown-container .mj-markdown-video {
+  margin: 0.75em 0;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--mj-bg-surface-sunken);
+}
+
+.mj-markdown-container .mj-markdown-video__player {
+  display: block;
+  width: 100%;
+  max-height: var(--mj-markdown-video-max-height, 420px);
+  background: var(--mj-bg-surface-sunken);
+}
+
+.mj-markdown-container .mj-markdown-video__transcript {
+  border-top: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
+  font-size: 0.85em;
+}
+
+.mj-markdown-container .mj-markdown-video__transcript-summary {
+  padding: 0.5em 0.75em;
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--mj-text-secondary);
+  user-select: none;
+}
+
+.mj-markdown-container .mj-markdown-video__cues {
+  max-height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0.25em 0.5em 0.5em;
+}
+
+.mj-markdown-container .mj-markdown-video__cue {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6em;
+  width: 100%;
+  padding: 0.3em 0.5em;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--mj-text-primary);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.mj-markdown-container .mj-markdown-video__cue:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+.mj-markdown-container .mj-markdown-video__cue:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: 1px;
+}
+
+.mj-markdown-container .mj-markdown-video__cue--active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface-card));
+  font-weight: 500;
+}
+
+.mj-markdown-container .mj-markdown-video__cue-time {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
+  color: var(--mj-brand-primary);
+}
+
+.mj-markdown-container .mj-markdown-video__cue-text {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ============================================
    GitHub-style Alerts (marked-alert)
    ============================================ */
 .mj-markdown-container .markdown-alert {
