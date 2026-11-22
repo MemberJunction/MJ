@@ -115,16 +115,20 @@ export class TaskGraphWaitingSteps {
         if ('Error' in tasks) return { Success: false, Completed: [], Buffered: [], Refused: [], ErrorMessage: tasks.Error };
 
         // Early completion arriving before the waiting step row has been marked with its correlation key:
-        // buffer cleanly so WaitingStepRunner.Reach reconciles it immediately without stranding the step.
+        // buffer durably so WaitingStepRunner.Reach reconciles it immediately across restarts or hosts.
         if (tasks.Tasks.length === 0 && request.CorrelationKey) {
             const key = request.CorrelationKey.trim();
-            ForEachEnqueueCoordinator.Instance.BufferEarlyCompletion({
-                CorrelationKey: key,
-                Status: request.Status ?? 'Complete',
-                Payload: request.Payload,
-                ErrorMessage: request.ErrorMessage,
-                ReceivedAt: new Date().toISOString(),
-            });
+            await ForEachEnqueueCoordinator.Instance.BufferEarlyCompletionDurable(
+                {
+                    CorrelationKey: key,
+                    Status: request.Status ?? 'Complete',
+                    Payload: request.Payload,
+                    ErrorMessage: request.ErrorMessage,
+                    ReceivedAt: new Date().toISOString(),
+                },
+                provider,
+                contextUser,
+            );
             return { Success: true, Completed: [], Buffered: [key], Refused: [] };
         }
 

@@ -166,4 +166,66 @@ describe('CreateServiceBusFunctionHandler', () => {
         });
         await expect(missing([], { getRemainingTimeInMillis: () => 60_000 })).rejects.toThrow('MJ_WQ_SUBSCRIPTION');
     });
+
+    it('lazily creates ServiceBusClient only when delayed Retry requires Schedule(), reuses across warm calls, and closes on Close()', async () => {
+        let clientCreations = 0;
+        let senderCloses = 0;
+        let scheduledCount = 0;
+        let clientCloses = 0;
+
+        const handler = CreateServiceBusFunctionHandler(() => new ScriptedHandler(), {
+            Binding: binding,
+            Env: { AzureWebJobsServiceBus: 'Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=Root;SharedAccessKey=dGVzdA==' },
+            Now: () => fake.Now,
+            EmitMetrics: () => undefined,
+            ThrowOnSingleMessageFailure: false,
+            CreateClient: () => {
+                clientCreations += 1;
+                return {
+                    createSender: () => ({
+                        scheduleMessages: async () => {
+                            scheduledCount += 1;
+                            return [BigInt(scheduledCount)];
+                        },
+                        close: async () => {
+                            senderCloses += 1;
+                        },
+                    }),
+                    close: async () => {
+                        clientCloses += 1;
+                    },
+                } as never;
+            },
+        });
+
+        // Happy-path batch with no delayed Schedule() creates ZERO clients
+        const okBatch = await batchEvent(true, [{ index: 1 }]);
+        const okCtx: AzureFunctionInvocationContext = {
+            getRemainingTimeInMillis: () => 60_000,
+            actions: {
+                complete: async () => undefined,
+                abandon: async () => undefined,
+                deadLetter: async () => undefined,
+            },
+        };
+        expect(await handler(okBatch, okCtx)).toEqual({ batchItemFailures: [] });
+        expect(clientCreations).toBe(0);
+
+        // Two warm invocations requiring delayed Retry schedule create ONE ServiceBusClient and reuse it
+        const r1 = await batchEvent(true, [{ index: 2 }]);
+        script.set(TestMessage(2).MessageID, Outcome.Retry('wait 30s', 30));
+        await handler(r1, okCtx);
+
+        const r2 = await batchEvent(true, [{ index: 3 }]);
+        script.set(TestMessage(3).MessageID, Outcome.Retry('wait 60s', 60));
+        await handler(r2, okCtx);
+
+        expect(clientCreations).toBe(1);
+        expect(scheduledCount).toBe(2);
+        expect(senderCloses).toBe(2);
+        expect(clientCloses).toBe(0);
+
+        await handler.Close();
+        expect(clientCloses).toBe(1);
+    });
 });

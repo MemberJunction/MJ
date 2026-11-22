@@ -76,6 +76,8 @@ export interface TaskGraphEnqueueStepWorkPayload {
     Topic: string;
     HandlerKey?: string;
     ActionName?: string;
+    SubAgentName?: string;
+    Isolation?: TaskGraphIsolationLevel;
     InputPayload: Record<string, unknown>;
     MaxRetries: number;
     PublishedAt: string;
@@ -99,6 +101,7 @@ export interface TaskGraphEnqueueFanOutItemPayload {
     HandlerKey?: string;
     ActionName?: string;
     SubAgentName?: string;
+    Isolation?: TaskGraphIsolationLevel;
     ContinueOnError: boolean;
     Payload: Record<string, unknown>;
     MaxRetries: number;

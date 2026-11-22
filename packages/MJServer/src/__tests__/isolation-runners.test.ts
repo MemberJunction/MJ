@@ -1,17 +1,21 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+    type IMetadataProvider,
     LimitsConfigResolver,
     Metadata,
     type TaskGraphIsolationLevel,
     UserInfo,
 } from '@memberjunction/core';
-import { MJAIAgentEntity, MJAIAgentSchema } from '@memberjunction/core-entities';
+import { MJAIAgentEntity, MJAIAgentSchema, MJTaskEntity } from '@memberjunction/core-entities';
 import { TaskNode, type AgentSpec, type TaskGraphSpec, type WorkflowSpec } from '@memberjunction/ai-core-plus';
 import { WorkflowAgentWriter } from '@memberjunction/ai-agent-manager';
 import {
     WorkflowDraftServerOperation,
     TASK_GRAPH_ISOLATION_GUARANTEES,
     InProcessIsolationRunner,
+    TaskGraphDispatcher,
+    type TaskActionRunner,
+    type TaskGraphIsolationExecutionMetadata,
 } from '@memberjunction/task-graph';
 import {
     BuildContainerRunArgs,
@@ -32,21 +36,131 @@ class InspectableWorkflowDraftOp extends WorkflowDraftServerOperation {
 }
 
 function buildMinimalAIAgentEntity(overrides: { Isolation?: MJAIAgentEntity['Isolation'] } = {}): MJAIAgentEntity {
-    const fields = new Map<string, unknown>([
-        ['ID', '11111111-1111-1111-1111-111111111111'],
-        ['Name', 'Upgraded Workflow'],
-        ['Status', 'Active'],
-        ['Isolation', overrides.Isolation ?? 'InProcess'],
-    ]);
-    const fakeAgent = Object.create(MJAIAgentEntity.prototype) as MJAIAgentEntity & {
-        Get: (fieldName: string) => unknown;
-        Set: (fieldName: string, value: unknown) => void;
+    const state: {
+        ID: string;
+        Name: string;
+        Status: MJAIAgentEntity['Status'];
+        Isolation: MJAIAgentEntity['Isolation'];
+    } = {
+        ID: '11111111-1111-1111-1111-111111111111',
+        Name: 'Upgraded Workflow',
+        Status: 'Active',
+        Isolation: overrides.Isolation ?? 'InProcess',
     };
-    fakeAgent.Get = (fieldName: string): unknown => fields.get(fieldName) ?? null;
-    fakeAgent.Set = (fieldName: string, value: unknown): void => {
-        fields.set(fieldName, value);
-    };
+    const fakeAgent = Object.create(MJAIAgentEntity.prototype) as MJAIAgentEntity;
+    Object.defineProperties(fakeAgent, {
+        ID: {
+            get: () => state.ID,
+            set: (value: string) => {
+                state.ID = value;
+            },
+            enumerable: true,
+        },
+        Name: {
+            get: () => state.Name,
+            set: (value: string) => {
+                state.Name = value;
+            },
+            enumerable: true,
+        },
+        Status: {
+            get: () => state.Status,
+            set: (value: MJAIAgentEntity['Status']) => {
+                state.Status = value;
+            },
+            enumerable: true,
+        },
+        Isolation: {
+            get: () => state.Isolation,
+            set: (value: MJAIAgentEntity['Isolation']) => {
+                state.Isolation = value;
+            },
+            enumerable: true,
+        },
+    });
     return fakeAgent;
+}
+
+function buildMinimalTaskEntity(overrides: {
+    ID: string;
+    ParentID: string;
+    Name: string;
+    StepType?: MJTaskEntity['StepType'];
+    ActionID?: string | null;
+    Configuration?: string | null;
+    InputPayload?: string | null;
+}): MJTaskEntity {
+    const state = {
+        ID: overrides.ID,
+        ParentID: overrides.ParentID,
+        Name: overrides.Name,
+        Status: 'In Progress' as MJTaskEntity['Status'],
+        StepType: overrides.StepType ?? ('Action' as MJTaskEntity['StepType']),
+        ActionID: overrides.ActionID ?? 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        AgentID: null as string | null,
+        PromptID: null as string | null,
+        UserID: null as string | null,
+        AgentRunID: null as string | null,
+        ConversationDetailID: null as string | null,
+        CompensatesTaskID: null as string | null,
+        SecurityEnvelope: null as string | null,
+        Configuration: overrides.Configuration ?? null,
+        InputPayload: overrides.InputPayload ?? null,
+        OutputPayload: null as string | null,
+        EnvironmentID: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+        Description: null as string | null,
+        ErrorMessage: null as string | null,
+        ClaimedBy: null as string | null,
+        ClaimExpiresAt: null as Date | null,
+        StartedAt: null as Date | null,
+        CompletedAt: null as Date | null,
+        DueAt: null as Date | null,
+        CorrelationKey: null as string | null,
+        PercentComplete: 0,
+        RetryCount: 0,
+    };
+    const entity = Object.create(MJTaskEntity.prototype) as MJTaskEntity;
+    Object.defineProperties(entity, {
+        ID: { get: () => state.ID, enumerable: true },
+        ParentID: { get: () => state.ParentID, enumerable: true },
+        Name: { get: () => state.Name, enumerable: true },
+        Status: { get: () => state.Status, set: (v: MJTaskEntity['Status']) => { state.Status = v; }, enumerable: true },
+        StepType: { get: () => state.StepType, enumerable: true },
+        ActionID: { get: () => state.ActionID, enumerable: true },
+        AgentID: { get: () => state.AgentID, enumerable: true },
+        PromptID: { get: () => state.PromptID, enumerable: true },
+        UserID: { get: () => state.UserID, enumerable: true },
+        AgentRunID: { get: () => state.AgentRunID, enumerable: true },
+        ConversationDetailID: { get: () => state.ConversationDetailID, enumerable: true },
+        CompensatesTaskID: { get: () => state.CompensatesTaskID, enumerable: true },
+        SecurityEnvelope: { get: () => state.SecurityEnvelope, enumerable: true },
+        Configuration: { get: () => state.Configuration, set: (v: string | null) => { state.Configuration = v; }, enumerable: true },
+        ConfigurationObject: {
+            get: () => {
+                if (!state.Configuration) return null;
+                try {
+                    return JSON.parse(state.Configuration) as MJTaskEntity['ConfigurationObject'];
+                } catch {
+                    return null;
+                }
+            },
+            enumerable: true,
+        },
+        InputPayload: { get: () => state.InputPayload, enumerable: true },
+        OutputPayload: { get: () => state.OutputPayload, set: (v: string | null) => { state.OutputPayload = v; }, enumerable: true },
+        EnvironmentID: { get: () => state.EnvironmentID, enumerable: true },
+        Description: { get: () => state.Description, enumerable: true },
+        ErrorMessage: { get: () => state.ErrorMessage, enumerable: true },
+        ClaimedBy: { get: () => state.ClaimedBy, enumerable: true },
+        ClaimExpiresAt: { get: () => state.ClaimExpiresAt, enumerable: true },
+        StartedAt: { get: () => state.StartedAt, enumerable: true },
+        CompletedAt: { get: () => state.CompletedAt, enumerable: true },
+        DueAt: { get: () => state.DueAt, enumerable: true },
+        CorrelationKey: { get: () => state.CorrelationKey, enumerable: true },
+        PercentComplete: { get: () => state.PercentComplete, enumerable: true },
+        RetryCount: { get: () => state.RetryCount, enumerable: true },
+    });
+    return entity;
 }
 
 describe('TaskGraph Isolation Execution Runners (Slice 1 — AC-1 & AC-2)', () => {
@@ -475,5 +589,277 @@ describe('TaskGraph Isolation Execution Runners (Slice 1 — AC-1 & AC-2)', () =
             expect(MJAIAgentSchema.shape.Isolation.safeParse('Container').success).toBe(true);
             expect(MJAIAgentSchema.shape.Isolation.safeParse('InvalidMode').success).toBe(false);
         });
+    });
+
+    describe('Fail-Closed Isolated Workloads, Container Validation & TaskGraphDispatcher Integration (CR-1, CR-3)', () => {
+        it('rejects InProcessCallback workloads across Worker, Process, and Container runners with UNSUPPORTED_ISOLATED_WORKLOAD', async () => {
+            let callbackExecuted = false;
+            const executeInProcess = async () => {
+                callbackExecuted = true;
+                return { Success: true, Output: { leaked: true } };
+            };
+
+            const workerRes = await new WorkerIsolationRunner().Execute({
+                Level: 'Worker',
+                TaskID: 'reject-w1',
+                TaskName: 'Reject Worker Callback',
+                GraphID: 'g-reject',
+                Workload: { Kind: 'InProcessCallback' },
+                ExecuteInProcess: executeInProcess,
+            });
+            expect(workerRes.Success).toBe(false);
+            expect(workerRes.ErrorCode).toBe('UNSUPPORTED_ISOLATED_WORKLOAD');
+
+            const procRes = await new ProcessIsolationRunner().Execute({
+                Level: 'Process',
+                TaskID: 'reject-p1',
+                TaskName: 'Reject Process Callback',
+                GraphID: 'g-reject',
+                Workload: { Kind: 'InProcessCallback' },
+                ExecuteInProcess: executeInProcess,
+            });
+            expect(procRes.Success).toBe(false);
+            expect(procRes.ErrorCode).toBe('UNSUPPORTED_ISOLATED_WORKLOAD');
+
+            const ctrRes = await new ContainerIsolationRunner({
+                Executor: async () => {
+                    throw new Error('Executor should never run for InProcessCallback');
+                },
+            }).Execute({
+                Level: 'Container',
+                TaskID: 'reject-c1',
+                TaskName: 'Reject Container Callback',
+                GraphID: 'g-reject',
+                Workload: { Kind: 'InProcessCallback' },
+                ExecuteInProcess: executeInProcess,
+            });
+            expect(ctrRes.Success).toBe(false);
+            expect(ctrRes.ErrorCode).toBe('UNSUPPORTED_ISOLATED_WORKLOAD');
+            expect(callbackExecuted).toBe(false);
+        });
+
+        it('rejects unsafe ContainerRuntime and ContainerImage flags (CR-3) and blocks non-host overrides', async () => {
+            expect(() =>
+                BuildContainerRunArgs({
+                    MemoryMb: 256,
+                    CpuQuota: 0.5,
+                    Image: '--privileged',
+                }),
+            ).toThrow(/ContainerImage/i);
+
+            const badRuntimeRes = await new ContainerIsolationRunner({
+                Executor: async () => {
+                    throw new Error('Executor should not run for unsafe runtime');
+                },
+            }).Execute({
+                Level: 'Container',
+                TaskID: 'ctr-sec-0',
+                TaskName: 'Unsafe Runtime Test',
+                GraphID: 'g-sec',
+                Workload: {
+                    Kind: 'InlineScript',
+                    Script: 'return { ok: true };',
+                },
+                Limits: {
+                    ContainerRuntime: '/bin/sh',
+                    ContainerImage: 'node:20-alpine',
+                },
+            });
+            expect(badRuntimeRes.Success).toBe(false);
+            expect(badRuntimeRes.TerminationReason).toBe('StartupFailed');
+            expect(badRuntimeRes.ErrorCode).toBe('ERR_CONTAINER_INVALID_RUNTIME');
+
+            const badImageRes = await new ContainerIsolationRunner({
+                Executor: async () => {
+                    throw new Error('Executor should not run for unsafe image');
+                },
+            }).Execute({
+                Level: 'Container',
+                TaskID: 'ctr-sec-1',
+                TaskName: 'Injected Flag Test',
+                GraphID: 'g-sec',
+                Workload: {
+                    Kind: 'InlineScript',
+                    Script: 'return { ok: true };',
+                },
+                Limits: {
+                    ContainerRuntime: 'docker',
+                    ContainerImage: '-v=/:/host',
+                },
+            });
+            expect(badImageRes.Success).toBe(false);
+            expect(badImageRes.TerminationReason).toBe('StartupFailed');
+            expect(badImageRes.ErrorCode).toBe('ERR_CONTAINER_INVALID_IMAGE');
+
+            // Even if Tier-5 RunOverride tries to override ContainerRuntime/ContainerImage, LimitsConfigResolver ignores it
+            const resolved = LimitsConfigResolver.Resolve({
+                RunOverride: {
+                    Isolation: {
+                        ContainerRuntime: '/bin/sh',
+                        ContainerImage: '--privileged',
+                    },
+                },
+            });
+            expect(resolved.Limits.Isolation.ContainerRuntime).toBe('docker');
+            expect(resolved.Limits.Isolation.ContainerImage).toBe('node:20-alpine');
+        });
+
+        it('drives TaskGraphDispatcher steps genuinely out-of-thread (Worker), out-of-process (Process), and inside Container over HostRpc', async () => {
+            const user = new UserInfo(Metadata.Provider, { ID: 'user-iso', Name: 'Iso Tester', Email: 'iso@example.com' });
+            const providerStub: IMetadataProvider = Metadata.Provider;
+            let actionCalls = 0;
+            const actionRunner: TaskActionRunner = {
+                EnforcesSecurityEnvelope: true,
+                RunActionForTask: async (params) => {
+                    actionCalls += 1;
+                    return {
+                        Success: true,
+                        Output: {
+                            actionExecutedTaskId: params.TaskID,
+                            echoedInput: params.InputPayload,
+                        },
+                        ActionLogID: `log-${actionCalls}`,
+                    };
+                },
+            };
+
+            const capturedSpecs: ContainerCommandSpec[] = [];
+            const runners = CreateDefaultIsolationRunners({
+                ContainerOptions: {
+                    Executor: async (spec) => {
+                        capturedSpecs.push(spec);
+                        return {
+                            ExitCode: 0,
+                            Stdout:
+                                `${CONTAINER_RESULT_START_MARKER}` +
+                                JSON.stringify({
+                                    ok: true,
+                                    delegateToHost: true,
+                                }) +
+                                `${CONTAINER_RESULT_END_MARKER}`,
+                            Stderr: '',
+                        };
+                    },
+                },
+            });
+
+            const dispatcher = new TaskGraphDispatcher(
+                { CreateProvider: async () => providerStub },
+                { RunAgentForTask: async () => ({ Success: true, Output: {} }) },
+                user,
+                {
+                    InstanceID: 'dispatcher-iso-integration',
+                    IsolationRunners: runners,
+                },
+                undefined,
+                undefined,
+                actionRunner,
+            );
+
+            const invokeRunTaskBody = async (
+                isolation: TaskGraphIsolationLevel,
+                taskID: string,
+            ): Promise<{
+                Success: boolean;
+                Output?: unknown;
+                IsolationExecution?: TaskGraphIsolationExecutionMetadata & Record<string, unknown>;
+            }> => {
+                const parentID = `parent-${taskID}`;
+                const parentTask = buildMinimalTaskEntity({
+                    ID: parentID,
+                    ParentID: parentID,
+                    Name: `Parent ${isolation}`,
+                    InputPayload: JSON.stringify({ isolation }),
+                });
+                const childTask = buildMinimalTaskEntity({
+                    ID: taskID,
+                    ParentID: parentID,
+                    Name: `Step ${isolation}`,
+                    InputPayload: JSON.stringify({ sample: isolation }),
+                });
+                const runnerFn = (dispatcher as unknown as {
+                    runTaskBody: (
+                        task: MJTaskEntity,
+                        provider: IMetadataProvider,
+                        inputPayload: unknown,
+                        dependencyOutputs: Map<string, unknown>,
+                        onProgress?: unknown,
+                        prehydrated?: unknown,
+                    ) => Promise<{
+                        Success: boolean;
+                        Output?: unknown;
+                        IsolationExecution?: TaskGraphIsolationExecutionMetadata & Record<string, unknown>;
+                    }>;
+                }).runTaskBody.bind(dispatcher);
+
+                return runnerFn(
+                    childTask,
+                    providerStub,
+                    { sample: isolation },
+                    new Map<string, unknown>(),
+                    undefined,
+                    {
+                        parentTask,
+                        parentMetadata: {
+                            version: 1,
+                            graph: false,
+                            workflowName: `Parent ${isolation}`,
+                            isolation,
+                            continuation: 'none',
+                            submittedAt: new Date().toISOString(),
+                        },
+                        upstreamTasks: [],
+                        upstreamOf: new Map(),
+                    },
+                );
+            };
+
+            const workerOutcome = await invokeRunTaskBody('Worker', 'task-worker-step');
+            expect(workerOutcome.Success).toBe(true);
+            expect(workerOutcome.Output).toEqual({
+                sample: 'Worker',
+                actionExecutedTaskId: 'task-worker-step',
+                echoedInput: { sample: 'Worker' },
+            });
+            expect(workerOutcome.IsolationExecution).toMatchObject({
+                level: 'Worker',
+                isMainThread: false,
+                processId: process.pid,
+                terminationReason: 'Completed',
+            });
+            expect((workerOutcome.IsolationExecution as { threadId?: number }).threadId).toBeGreaterThan(0);
+
+            const processOutcome = await invokeRunTaskBody('Process', 'task-process-step');
+            expect(processOutcome.Success).toBe(true);
+            expect(processOutcome.Output).toEqual({
+                sample: 'Process',
+                actionExecutedTaskId: 'task-process-step',
+                echoedInput: { sample: 'Process' },
+            });
+            expect(processOutcome.IsolationExecution).toMatchObject({
+                level: 'Process',
+                isMainThread: true,
+                terminationReason: 'Completed',
+            });
+            expect((processOutcome.IsolationExecution as { processId?: number }).processId).not.toBe(process.pid);
+
+            const containerOutcome = await invokeRunTaskBody('Container', 'task-container-step');
+            expect(containerOutcome.Success).toBe(true);
+            expect(containerOutcome.Output).toEqual({
+                sample: 'Container',
+                actionExecutedTaskId: 'task-container-step',
+                echoedInput: { sample: 'Container' },
+            });
+            expect(capturedSpecs).toHaveLength(1);
+            expect(capturedSpecs[0].Command).toBe('docker');
+            expect(capturedSpecs[0].Args).toContain('--network=none');
+            expect(capturedSpecs[0].Args).toContain('--read-only');
+            expect(containerOutcome.IsolationExecution).toMatchObject({
+                level: 'Container',
+                runtime: 'docker',
+                image: 'node:20-alpine',
+                terminationReason: 'Completed',
+            });
+        }, 30_000);
     });
 });

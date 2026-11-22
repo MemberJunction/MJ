@@ -50,6 +50,202 @@ export interface EarlyCompletionEntry {
     ReceivedAt: string;
 }
 
+/**
+ * Durable backing store for early waiting-step completions arriving before `CorrelationKey`
+ * persistence completes, enabling recovery across host restarts and multi-instance deployments.
+ */
+export interface DurableEarlyCompletionStore {
+    Save(storageKey: string, entry: EarlyCompletionEntry, provider: IMetadataProvider, contextUser: UserInfo): Promise<void>;
+    Consume(storageKey: string, provider: IMetadataProvider, contextUser: UserInfo): Promise<EarlyCompletionEntry[]>;
+}
+
+const EARLY_SIGNAL_PREFIX = '__early_signal__:';
+const EARLY_SIGNAL_MARKER = '__early_signal__';
+
+/**
+ * Default {@link DurableEarlyCompletionStore} backed by `MJ: Tasks` sentinel rows (`Status = 'Deferred'`,
+ * `ClaimedBy = '__early_signal__'`, `CorrelationKey = '__early_signal__:<key>'`).
+ */
+export class TaskRowDurableEarlyCompletionStore implements DurableEarlyCompletionStore {
+    public async Save(
+        storageKey: string,
+        entry: EarlyCompletionEntry,
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+    ): Promise<void> {
+        if (!provider || typeof provider.GetEntityObject !== 'function') {
+            return;
+        }
+        try {
+            const serviceUser = ResolveServiceUser(contextUser);
+            const sentinelKey = `${EARLY_SIGNAL_PREFIX}${storageKey}`;
+            const rv = RunView.FromMetadataProvider(provider);
+            const existingRes = await rv.RunView<MJTaskEntity>(
+                {
+                    EntityName: 'MJ: Tasks',
+                    ExtraFilter: `CorrelationKey='${EscapeSQLString(sentinelKey)}' AND Status='Deferred'`,
+                    MaxRows: 1,
+                    ResultType: 'entity_object',
+                    BypassCache: true,
+                },
+                serviceUser,
+            );
+            const existingRow = existingRes.Success
+                ? (existingRes.Results ?? []).find((r) => r.Status === 'Deferred' && r.ClaimedBy === EARLY_SIGNAL_MARKER)
+                : undefined;
+
+            if (existingRow) {
+                const cfg = ParseStepConfiguration(existingRow.Configuration) as TaskStepConfiguration & {
+                    runtime?: { earlyCompletions?: EarlyCompletionEntry[] };
+                };
+                const existingEntries = Array.isArray(cfg.runtime?.earlyCompletions) ? cfg.runtime.earlyCompletions : [];
+                existingRow.Configuration = JSON.stringify({
+                    ...cfg,
+                    runtime: {
+                        ...(cfg.runtime ?? {}),
+                        earlyCompletions: [...existingEntries, entry],
+                    },
+                });
+                await SaveTaskWithAuthority(existingRow, serviceUser);
+                return;
+            }
+
+            const defaults = await this.resolveTaskDefaults(provider, serviceUser);
+            if (!defaults) {
+                return;
+            }
+            const row = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', serviceUser);
+            row.NewRecord();
+            row.TypeID = defaults.TypeID;
+            row.EnvironmentID = defaults.EnvironmentID;
+            row.Name = `Early Signal: ${storageKey}`.slice(0, 255);
+            row.Status = 'Deferred';
+            row.StepType = 'External';
+            row.ClaimedBy = EARLY_SIGNAL_MARKER;
+            row.CorrelationKey = sentinelKey;
+            row.Configuration = JSON.stringify({
+                runtime: {
+                    earlyCompletions: [entry],
+                },
+            });
+            await SaveTaskWithAuthority(row, serviceUser);
+        } catch (err) {
+            LogError(
+                `[ForEachEnqueue] Durable early-completion save failed (falling back to in-memory buffer): ${
+                    err instanceof Error ? err.message : String(err)
+                }`,
+            );
+        }
+    }
+
+    public async Consume(
+        storageKey: string,
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+    ): Promise<EarlyCompletionEntry[]> {
+        if (!provider) {
+            return [];
+        }
+        try {
+            const serviceUser = ResolveServiceUser(contextUser);
+            const sentinelKey = `${EARLY_SIGNAL_PREFIX}${storageKey}`;
+            const rv = RunView.FromMetadataProvider(provider);
+            const res = await rv.RunView<MJTaskEntity>(
+                {
+                    EntityName: 'MJ: Tasks',
+                    ExtraFilter: `CorrelationKey='${EscapeSQLString(sentinelKey)}' AND Status='Deferred'`,
+                    MaxRows: 25,
+                    ResultType: 'entity_object',
+                    BypassCache: true,
+                },
+                serviceUser,
+            );
+            if (!res.Success || !res.Results?.length) {
+                return [];
+            }
+            const collected: EarlyCompletionEntry[] = [];
+            for (const row of res.Results) {
+                if (row.Status !== 'Deferred' || row.ClaimedBy !== EARLY_SIGNAL_MARKER) {
+                    continue;
+                }
+                const cfg = ParseStepConfiguration(row.Configuration) as TaskStepConfiguration & {
+                    runtime?: { earlyCompletions?: EarlyCompletionEntry[] };
+                };
+                const list = Array.isArray(cfg.runtime?.earlyCompletions) ? cfg.runtime.earlyCompletions : [];
+                collected.push(...list);
+                row.Status = 'Complete';
+                row.ClaimedBy = null;
+                row.CompletedAt = new Date();
+                row.Configuration = JSON.stringify({
+                    ...cfg,
+                    runtime: {
+                        ...(cfg.runtime ?? {}),
+                        earlyCompletions: [],
+                    },
+                });
+                await SaveTaskWithAuthority(row, serviceUser);
+            }
+            return collected;
+        } catch (err) {
+            LogError(
+                `[ForEachEnqueue] Durable early-completion consume failed: ${
+                    err instanceof Error ? err.message : String(err)
+                }`,
+            );
+            return [];
+        }
+    }
+
+    private async resolveTaskDefaults(
+        provider: IMetadataProvider,
+        serviceUser: UserInfo,
+    ): Promise<{ TypeID: string; EnvironmentID: string } | null> {
+        const rv = RunView.FromMetadataProvider(provider);
+        const typeRes = await rv.RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Task Types',
+                ExtraFilter: `Name='Orchestrated Workflow'`,
+                Fields: ['ID'],
+                MaxRows: 1,
+                ResultType: 'simple',
+            },
+            serviceUser,
+        );
+        const envRes = await rv.RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Environments',
+                Fields: ['ID'],
+                MaxRows: 1,
+                ResultType: 'simple',
+            },
+            serviceUser,
+        );
+        let typeID = typeRes.Success ? typeRes.Results?.[0]?.ID : undefined;
+        let environmentID = envRes.Success ? envRes.Results?.[0]?.ID : undefined;
+        if (!typeID || !environmentID) {
+            const sampleTask = await rv.RunView<{ TypeID: string; EnvironmentID: string }>(
+                {
+                    EntityName: 'MJ: Tasks',
+                    Fields: ['TypeID', 'EnvironmentID'],
+                    MaxRows: 1,
+                    ResultType: 'simple',
+                },
+                serviceUser,
+            );
+            const first = sampleTask.Success ? sampleTask.Results?.[0] : undefined;
+            typeID = typeID ?? first?.TypeID;
+            environmentID = environmentID ?? first?.EnvironmentID;
+        }
+        if (!typeID) {
+            return null;
+        }
+        return {
+            TypeID: typeID,
+            EnvironmentID: environmentID ?? '00000000-0000-0000-0000-000000000001',
+        };
+    }
+}
+
 /** Result of processing one `ForEach` + `Enqueue` fan-out item completion. */
 export interface FanOutItemCompletionOutcome {
     Success: boolean;
@@ -194,6 +390,7 @@ export function EffectivePublishConcurrency(requested?: number): number {
  */
 export class ForEachEnqueueCoordinator extends BaseSingleton<ForEachEnqueueCoordinator> {
     private earlyByKey = new Map<string, EarlyCompletionEntry[]>();
+    private durableEarlyStore: DurableEarlyCompletionStore = new TaskRowDurableEarlyCompletionStore();
     private taskLocks = new Map<string, Promise<void>>();
     private activeStates = new Map<
         string,
@@ -221,6 +418,11 @@ export class ForEachEnqueueCoordinator extends BaseSingleton<ForEachEnqueueCoord
         return this.peakPublishConcurrency;
     }
 
+    /** Configures an alternate durable early-completion store (or resets to default when `null`). */
+    public SetDurableEarlyCompletionStore(store: DurableEarlyCompletionStore | null): void {
+        this.durableEarlyStore = store ?? new TaskRowDurableEarlyCompletionStore();
+    }
+
     /** Clears in-memory early-completion buffers and instrumentation counters (for tests). */
     public ResetState(): void {
         this.earlyByKey.clear();
@@ -229,18 +431,52 @@ export class ForEachEnqueueCoordinator extends BaseSingleton<ForEachEnqueueCoord
         this.peakPublishConcurrency = 0;
     }
 
-    /** Buffers an early completion arriving before waiting-state persistence or publish finishes. */
+    /** Buffers an early completion in the fast-path in-memory map. */
     public BufferEarlyCompletion(entry: EarlyCompletionEntry): void {
         const list = this.earlyByKey.get(entry.CorrelationKey) ?? [];
         list.push(entry);
         this.earlyByKey.set(entry.CorrelationKey, list);
     }
 
-    /** Consumes and returns buffered early completions for `correlationKey` (empty array when none). */
+    /**
+     * Buffers an early completion in BOTH the in-memory fast-path mirror and the durable store
+     * so signals survive host restarts and multi-instance execution.
+     */
+    public async BufferEarlyCompletionDurable(
+        entry: EarlyCompletionEntry,
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+        storageKey?: string,
+    ): Promise<void> {
+        this.BufferEarlyCompletion(entry);
+        await this.durableEarlyStore.Save(storageKey ?? entry.CorrelationKey, entry, provider, contextUser);
+    }
+
+    /** Consumes and returns buffered early completions for `correlationKey` from in-memory cache. */
     public ConsumeEarlyCompletions(correlationKey: string): EarlyCompletionEntry[] {
         const list = this.earlyByKey.get(correlationKey) ?? [];
         this.earlyByKey.delete(correlationKey);
         return list;
+    }
+
+    /**
+     * Consumes buffered early completions for `correlationKey` from both the in-memory fast-path
+     * mirror and the durable store, deduplicating overlapping entries.
+     */
+    public async ConsumeEarlyCompletionsDurable(
+        correlationKey: string,
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+    ): Promise<EarlyCompletionEntry[]> {
+        const memoryEntries = this.ConsumeEarlyCompletions(correlationKey);
+        const durableEntries = await this.durableEarlyStore.Consume(correlationKey, provider, contextUser);
+        if (durableEntries.length === 0) {
+            return memoryEntries;
+        }
+        if (memoryEntries.length === 0) {
+            return durableEntries;
+        }
+        return deduplicateEarlyEntries([...memoryEntries, ...durableEntries]);
     }
 
     /**
@@ -294,6 +530,7 @@ export class ForEachEnqueueCoordinator extends BaseSingleton<ForEachEnqueueCoord
         const maxRetries = resolveMaxRetries(enqueue.maxRetries, queueLimits.MaxEnqueueRedeliveryAttempts);
 
         await this.persistInitialFanOutState(
+            params.Provider,
             params.Task,
             config,
             {
@@ -364,14 +601,20 @@ export class ForEachEnqueueCoordinator extends BaseSingleton<ForEachEnqueueCoord
         if (!resolved) {
             if (params.CorrelationKey) {
                 const parsed = this.ParseFanOutItemCorrelationKey(params.CorrelationKey);
-                this.BufferEarlyCompletion({
-                    CorrelationKey: parsed ? parsed.BaseKey : params.CorrelationKey,
-                    ItemIndex: params.ItemIndex ?? parsed?.ItemIndex,
-                    Status: params.Status,
-                    Payload: params.Payload,
-                    ErrorMessage: params.ErrorMessage,
-                    ReceivedAt: new Date().toISOString(),
-                });
+                const baseKey = parsed ? parsed.BaseKey : params.CorrelationKey;
+                await this.BufferEarlyCompletionDurable(
+                    {
+                        CorrelationKey: baseKey,
+                        ItemIndex: params.ItemIndex ?? parsed?.ItemIndex,
+                        Status: params.Status,
+                        Payload: params.Payload,
+                        ErrorMessage: params.ErrorMessage,
+                        ReceivedAt: new Date().toISOString(),
+                    },
+                    params.Provider,
+                    params.ContextUser,
+                    baseKey,
+                );
                 return { Success: true, DuplicateIgnored: false, FanOutSettled: false };
             }
             return { Success: false, DuplicateIgnored: false, FanOutSettled: false, ErrorMessage: 'Fan-out task could not be located.' };
@@ -390,17 +633,33 @@ export class ForEachEnqueueCoordinator extends BaseSingleton<ForEachEnqueueCoord
                 if (!(await loadedTask.Load(resolved.TaskID))) {
                     return { Success: false, DuplicateIgnored: false, FanOutSettled: false, ErrorMessage: 'Fan-out task disappeared.' };
                 }
+                if (loadedTask.Status !== 'Pending') {
+                    return {
+                        Success: true,
+                        DuplicateIgnored: true,
+                        FanOutSettled: true,
+                        FanOutStatus: loadedTask.Status === 'Complete' ? 'Complete' : 'Failed',
+                    };
+                }
                 const loadedConfig = ParseStepConfiguration(loadedTask.Configuration);
                 const loadedState = loadedConfig.runtime?.enqueueFanOut;
                 if (!loadedState) {
-                    this.BufferEarlyCompletion({
-                        CorrelationKey: params.CorrelationKey ?? `${loadedTask.ParentID ?? loadedTask.ID}:${loadedTask.ID}`,
-                        ItemIndex: itemIndex,
-                        Status: params.Status,
-                        Payload: params.Payload,
-                        ErrorMessage: params.ErrorMessage,
-                        ReceivedAt: new Date().toISOString(),
-                    });
+                    const fallbackBaseKey = params.CorrelationKey
+                        ? (this.ParseFanOutItemCorrelationKey(params.CorrelationKey)?.BaseKey ?? params.CorrelationKey)
+                        : `${loadedTask.ParentID ?? loadedTask.ID}:${loadedTask.ID}`;
+                    await this.BufferEarlyCompletionDurable(
+                        {
+                            CorrelationKey: fallbackBaseKey,
+                            ItemIndex: itemIndex,
+                            Status: params.Status,
+                            Payload: params.Payload,
+                            ErrorMessage: params.ErrorMessage,
+                            ReceivedAt: new Date().toISOString(),
+                        },
+                        params.Provider,
+                        params.ContextUser,
+                        fallbackBaseKey,
+                    );
                     return { Success: true, DuplicateIgnored: false, FanOutSettled: false };
                 }
                 cached = {
@@ -414,8 +673,8 @@ export class ForEachEnqueueCoordinator extends BaseSingleton<ForEachEnqueueCoord
                 this.activeStates.set(resolved.TaskID, cached);
             }
 
-            const { task, config, state, completedBmp, failedBmp } = cached;
-            if (task.Status !== 'Pending' || state.status === 'Complete' || state.status === 'Failed') {
+            const { config, state, completedBmp, failedBmp } = cached;
+            if (cached.task.Status !== 'Pending' || state.status === 'Complete' || state.status === 'Failed') {
                 return {
                     Success: true,
                     DuplicateIgnored: true,
@@ -441,10 +700,19 @@ export class ForEachEnqueueCoordinator extends BaseSingleton<ForEachEnqueueCoord
                     state.status = 'Failed';
                     state.completedAt = new Date().toISOString();
                     state.errorMessage = params.ErrorMessage ?? `Fan-out item ${itemIndex} failed.`;
-                    task.Configuration = JSON.stringify({ ...config, runtime: { ...(config.runtime ?? {}), enqueueFanOut: state } });
-                    await SaveTaskWithAuthority(task, serviceUser);
+                    const freshTask = await this.loadPendingTaskForMutation(params.Provider, resolved.TaskID, serviceUser);
+                    if (!freshTask) {
+                        this.activeStates.delete(resolved.TaskID);
+                        return { Success: true, DuplicateIgnored: true, FanOutSettled: true, FanOutStatus: 'Failed' };
+                    }
+                    const freshConfig = ParseStepConfiguration(freshTask.Configuration);
+                    freshTask.Configuration = JSON.stringify({
+                        ...freshConfig,
+                        runtime: { ...(freshConfig.runtime ?? {}), enqueueFanOut: state },
+                    });
+                    await SaveTaskWithAuthority(freshTask, serviceUser);
                     this.activeStates.delete(resolved.TaskID);
-                    await this.settleWaitingFanOutTask(params.Provider, task, config, 'Failed', null, state.errorMessage, params.ContextUser);
+                    await this.settleWaitingFanOutTask(params.Provider, freshTask, freshConfig, 'Failed', null, state.errorMessage, params.ContextUser);
                     return { Success: true, DuplicateIgnored: false, FanOutSettled: true, FanOutStatus: 'Failed' };
                 }
             } else {
@@ -462,8 +730,17 @@ export class ForEachEnqueueCoordinator extends BaseSingleton<ForEachEnqueueCoord
                 state.failedBitmapHex = failedBmp.ToHex();
                 state.status = 'Complete';
                 state.completedAt = new Date().toISOString();
-                task.Configuration = JSON.stringify({ ...config, runtime: { ...(config.runtime ?? {}), enqueueFanOut: state } });
-                await SaveTaskWithAuthority(task, serviceUser);
+                const freshTask = await this.loadPendingTaskForMutation(params.Provider, resolved.TaskID, serviceUser);
+                if (!freshTask) {
+                    this.activeStates.delete(resolved.TaskID);
+                    return { Success: true, DuplicateIgnored: true, FanOutSettled: true, FanOutStatus: 'Failed' };
+                }
+                const freshConfig = ParseStepConfiguration(freshTask.Configuration);
+                freshTask.Configuration = JSON.stringify({
+                    ...freshConfig,
+                    runtime: { ...(freshConfig.runtime ?? {}), enqueueFanOut: state },
+                });
+                await SaveTaskWithAuthority(freshTask, serviceUser);
                 this.activeStates.delete(resolved.TaskID);
 
                 const summaryOutput = {
@@ -475,8 +752,8 @@ export class ForEachEnqueueCoordinator extends BaseSingleton<ForEachEnqueueCoord
                 };
                 await this.settleWaitingFanOutTask(
                     params.Provider,
-                    task,
-                    config,
+                    freshTask,
+                    freshConfig,
                     'Complete',
                     summaryOutput,
                     null,
@@ -488,8 +765,19 @@ export class ForEachEnqueueCoordinator extends BaseSingleton<ForEachEnqueueCoord
             if (cached.dirtySinceFlush >= flushInterval) {
                 state.completedBitmapHex = completedBmp.ToHex();
                 state.failedBitmapHex = failedBmp.ToHex();
-                task.Configuration = JSON.stringify({ ...config, runtime: { ...(config.runtime ?? {}), enqueueFanOut: state } });
-                await SaveTaskWithAuthority(task, serviceUser);
+                const freshTask = await this.loadPendingTaskForMutation(params.Provider, resolved.TaskID, serviceUser);
+                if (!freshTask) {
+                    this.activeStates.delete(resolved.TaskID);
+                    return { Success: true, DuplicateIgnored: true, FanOutSettled: true, FanOutStatus: 'Failed' };
+                }
+                const freshConfig = ParseStepConfiguration(freshTask.Configuration);
+                freshTask.Configuration = JSON.stringify({
+                    ...freshConfig,
+                    runtime: { ...(freshConfig.runtime ?? {}), enqueueFanOut: state },
+                });
+                await SaveTaskWithAuthority(freshTask, serviceUser);
+                cached.task = freshTask;
+                cached.config = freshConfig;
                 cached.dirtySinceFlush = 0;
             }
 
@@ -497,7 +785,23 @@ export class ForEachEnqueueCoordinator extends BaseSingleton<ForEachEnqueueCoord
         });
     }
 
+    private async loadPendingTaskForMutation(
+        provider: IMetadataProvider,
+        taskID: string,
+        serviceUser: UserInfo,
+    ): Promise<MJTaskEntity | null> {
+        const freshTask = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', serviceUser);
+        if (!(await freshTask.Load(taskID))) {
+            return null;
+        }
+        if (freshTask.Status !== 'Pending') {
+            return null;
+        }
+        return freshTask;
+    }
+
     private async persistInitialFanOutState(
+        provider: IMetadataProvider,
         task: MJTaskEntity,
         config: TaskStepConfiguration,
         initialState: NonNullable<NonNullable<TaskStepConfiguration['runtime']>['enqueueFanOut']>,
@@ -506,19 +810,26 @@ export class ForEachEnqueueCoordinator extends BaseSingleton<ForEachEnqueueCoord
         contextUser: UserInfo,
     ): Promise<void> {
         const serviceUser = ResolveServiceUser(contextUser);
+        const freshTask = await this.loadPendingTaskForMutation(provider, task.ID, serviceUser);
+        if (!freshTask) {
+            throw new Error(`Cannot persist initial ForEach fan-out state for '${task.ID}' because it is no longer Pending.`);
+        }
+        const freshConfig = ParseStepConfiguration(freshTask.Configuration);
         const nextConfig: TaskStepConfiguration = {
             ...config,
+            ...freshConfig,
             runtime: {
-                ...(config.runtime ?? {}),
+                ...(freshConfig.runtime ?? config.runtime ?? {}),
                 payloadAtStart: payload,
                 isInputTainted: inputTainted,
                 enqueueFanOut: initialState,
             },
         };
-        task.Configuration = JSON.stringify(nextConfig);
-        if (!(await SaveTaskWithAuthority(task, serviceUser))) {
+        freshTask.Configuration = JSON.stringify(nextConfig);
+        if (!(await SaveTaskWithAuthority(freshTask, serviceUser))) {
             throw new Error(`Could not persist initial ForEach fan-out state for '${task.ID}'.`);
         }
+        task.Configuration = freshTask.Configuration;
     }
 
     private async completeZeroItemFanOut(
@@ -649,6 +960,12 @@ export class ForEachEnqueueCoordinator extends BaseSingleton<ForEachEnqueueCoord
     ): Promise<void> {
         await this.withTaskLock(taskID, async () => {
             const serviceUser = ResolveServiceUser(contextUser);
+            const freshTask = await this.loadPendingTaskForMutation(provider, taskID, serviceUser);
+            if (!freshTask) {
+                this.activeStates.delete(taskID);
+                return;
+            }
+            const freshConfig = ParseStepConfiguration(freshTask.Configuration);
             const cached = this.activeStates.get(taskID);
             if (cached) {
                 if (cached.state.status === 'Publishing') {
@@ -656,39 +973,53 @@ export class ForEachEnqueueCoordinator extends BaseSingleton<ForEachEnqueueCoord
                 }
                 cached.state.publishBatchCount = batchCount;
                 cached.state.peakPublishConcurrency = peakConcurrency;
-                cached.task.Configuration = JSON.stringify({ ...cached.config, runtime: { ...(cached.config.runtime ?? {}), enqueueFanOut: cached.state } });
-                await SaveTaskWithAuthority(cached.task, serviceUser);
+                freshTask.Configuration = JSON.stringify({
+                    ...freshConfig,
+                    runtime: { ...(freshConfig.runtime ?? {}), enqueueFanOut: cached.state },
+                });
+                await SaveTaskWithAuthority(freshTask, serviceUser);
+                cached.task = freshTask;
+                cached.config = freshConfig;
                 return;
             }
-            const task = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', serviceUser);
-            if (!(await task.Load(taskID))) return;
-            const cfg = ParseStepConfiguration(task.Configuration);
-            if (!cfg.runtime?.enqueueFanOut) return;
-            if (cfg.runtime.enqueueFanOut.status === 'Publishing') {
-                cfg.runtime.enqueueFanOut.status = 'Waiting';
+            if (!freshConfig.runtime?.enqueueFanOut) return;
+            if (freshConfig.runtime.enqueueFanOut.status === 'Publishing') {
+                freshConfig.runtime.enqueueFanOut.status = 'Waiting';
             }
-            cfg.runtime.enqueueFanOut.publishBatchCount = batchCount;
-            cfg.runtime.enqueueFanOut.peakPublishConcurrency = peakConcurrency;
-            task.Configuration = JSON.stringify(cfg);
-            await SaveTaskWithAuthority(task, serviceUser);
+            freshConfig.runtime.enqueueFanOut.publishBatchCount = batchCount;
+            freshConfig.runtime.enqueueFanOut.peakPublishConcurrency = peakConcurrency;
+            freshTask.Configuration = JSON.stringify(freshConfig);
+            await SaveTaskWithAuthority(freshTask, serviceUser);
         });
     }
 
     private async reconcileEarlyCompletions(
         taskID: string,
         correlationKey: string,
-        totalItems: number,
+        _totalItems: number,
         provider: IMetadataProvider,
         contextUser: UserInfo,
     ): Promise<void> {
-        const earlyEntries: EarlyCompletionEntry[] = [
-            ...this.ConsumeEarlyCompletions(correlationKey),
-        ];
-        for (let i = 0; i < totalItems; i++) {
-            const itemKey = `${correlationKey}:item:${i}`;
-            earlyEntries.push(...this.ConsumeEarlyCompletions(itemKey));
+        const earlyEntries: EarlyCompletionEntry[] = [];
+        if (this.earlyByKey.size > 0) {
+            const itemPrefix = `${correlationKey}:item:`;
+            for (const key of [...this.earlyByKey.keys()]) {
+                if (key === correlationKey || key.startsWith(itemPrefix)) {
+                    earlyEntries.push(...this.ConsumeEarlyCompletions(key));
+                }
+            }
         }
-        for (const entry of earlyEntries) {
+        const durableEntries = await this.durableEarlyStore.Consume(correlationKey, provider, contextUser);
+        const combined =
+            durableEntries.length === 0
+                ? earlyEntries
+                : earlyEntries.length === 0
+                    ? durableEntries
+                    : deduplicateEarlyEntries([...earlyEntries, ...durableEntries]);
+        if (combined.length === 0) {
+            return;
+        }
+        for (const entry of combined) {
             await this.RecordItemCompletion({
                 TaskID: taskID,
                 CorrelationKey: correlationKey,
@@ -855,4 +1186,16 @@ function resolveMaxRetries(requested: number | undefined, ceiling: number): numb
         return Math.min(requested, ceiling);
     }
     return ceiling;
+}
+
+function deduplicateEarlyEntries(entries: EarlyCompletionEntry[]): EarlyCompletionEntry[] {
+    const seen = new Set<string>();
+    const out: EarlyCompletionEntry[] = [];
+    for (const entry of entries) {
+        const key = `${entry.CorrelationKey}|${String(entry.ItemIndex ?? '')}|${entry.Status}|${entry.ReceivedAt}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(entry);
+    }
+    return out;
 }

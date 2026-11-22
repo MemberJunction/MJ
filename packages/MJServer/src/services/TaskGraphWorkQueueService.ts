@@ -13,10 +13,13 @@ import {
     type TaskGraphIsolationLevel,
 } from '@memberjunction/core';
 import { MJTaskEntity } from '@memberjunction/core-entities';
+import { ActionEngineServer } from '@memberjunction/actions';
+import { AIEngine } from '@memberjunction/aiengine';
 import {
     BoundedRunnerSemaphore,
     ParseTaskGraphParentMetadata,
     TaskGraphCallerNotificationService,
+    TaskGraphDispatcher,
     TaskGraphQueueRegistry,
     TaskGraphService,
     TaskGraphWaitingSteps,
@@ -29,8 +32,9 @@ import {
     type TaskGraphWorkQueuePublishResult,
     type TaskGraphWorkQueuePublisher,
 } from '@memberjunction/task-graph';
-import { BaseWorkHandler, WorkQueueEngine } from '@memberjunction/work-queue-engine';
+import { BaseWorkHandler, ResolveWorkHandler, WorkQueueEngine } from '@memberjunction/work-queue-engine';
 import {
+    NULL_WORK_LOGGER,
     Outcome,
     type PublishRequest,
     type WorkContext,
@@ -40,6 +44,9 @@ import {
 } from '@memberjunction/work-queue-core';
 import { BaseSingleton, RegisterClass } from '@memberjunction/global';
 import { CreateDefaultIsolationRunners } from './isolation/index.js';
+import { TaskGraphActionRunner } from './TaskGraphActionRunner.js';
+import { TaskGraphAgentRunner } from './TaskGraphAgentRunner.js';
+import { TaskGraphPromptRunner } from './TaskGraphPromptRunner.js';
 
 /** Execution callback used by {@link TaskGraphRunWorkHandler} after materializing a queued graph. */
 export type QueuedGraphExecutor = (params: {
@@ -57,6 +64,8 @@ export type EnqueueItemExecutor = (params: {
     MaxAttempts: number;
     Provider: IMetadataProvider;
     ContextUser: UserInfo;
+    WorkContext?: WorkContext;
+    Message?: WorkMessage<WorkJson>;
 }) => Promise<{ Success: boolean; Output?: Record<string, unknown>; ErrorMessage?: string; Retryable?: boolean }>;
 
 /**
@@ -268,6 +277,8 @@ export class TaskGraphEnqueueItemWorkHandler extends BaseWorkHandler<WorkJson> {
                     MaxAttempts: maxAllowedAttempts,
                     Provider: this.Provider,
                     ContextUser: this.ContextUser,
+                    WorkContext: context,
+                    Message: message,
                 }),
             );
 
@@ -360,43 +371,302 @@ async function defaultQueuedGraphExecutor(params: {
     ContextUser: UserInfo;
 }): Promise<{ Success: boolean; Output?: unknown; ErrorMessage?: string }> {
     const runners = CreateDefaultIsolationRunners();
-    const runner = runners[params.Isolation];
-    if (params.Isolation !== 'InProcess' && !runner) {
-        LogError(`[TaskGraphRunWorkHandler] Requested isolation '${params.Isolation}' runner unavailable for graph '${params.ParentTaskID}'.`);
+    if (params.Isolation !== 'InProcess' && !runners[params.Isolation]) {
+        const msg = `Requested isolation '${params.Isolation}' runner unavailable for graph '${params.ParentTaskID}'.`;
+        LogError(`[TaskGraphRunWorkHandler] ${msg}`);
+        return { Success: false, ErrorMessage: msg };
     }
-    const timeoutMs = LimitsConfigResolver.Resolve().Limits.TaskGraphQueue.CallerNotificationRetentionMs;
-    const note = await TaskGraphCallerNotificationService.Instance.WaitForNotification(
-        params.ParentTaskID,
-        params.Provider,
-        params.ContextUser,
-        timeoutMs,
+
+    const serviceUser = ResolveServiceUser(params.ContextUser);
+    const timeoutMs = LimitsConfigResolver.Resolve().Limits.TaskGraphQueue.QueueDispatchExecutionTimeoutMs;
+    const dispatcher = new TaskGraphDispatcher(
+        { CreateProvider: async () => params.Provider },
+        new TaskGraphAgentRunner(),
+        serviceUser,
+        {
+            InstanceID: `wq-graph-${params.ParentTaskID}-${Date.now()}`,
+            IsolationRunners: runners,
+        },
+        undefined,
+        undefined,
+        new TaskGraphActionRunner(),
+        new TaskGraphPromptRunner(),
     );
-    return {
-        Success: note.TerminalOutcome === 'Succeeded',
-        Output: note.Output,
-        ErrorMessage: note.ErrorMessage,
-    };
+
+    try {
+        await dispatcher.Start();
+        const note = await TaskGraphCallerNotificationService.Instance.WaitForNotification(
+            params.ParentTaskID,
+            params.Provider,
+            serviceUser,
+            timeoutMs,
+        );
+        return {
+            Success: note.TerminalOutcome === 'Succeeded',
+            Output: note.Output,
+            ErrorMessage: note.ErrorMessage,
+        };
+    } catch (err) {
+        return {
+            Success: false,
+            ErrorMessage: err instanceof Error ? err.message : String(err),
+        };
+    } finally {
+        await dispatcher.Stop().catch((stopErr) => {
+            LogError(
+                `[TaskGraphRunWorkHandler] Failed to stop scoped dispatcher for graph '${params.ParentTaskID}': ${
+                    stopErr instanceof Error ? stopErr.message : String(stopErr)
+                }`,
+            );
+        });
+    }
 }
 
 async function defaultEnqueueItemExecutor(params: {
     WorkItem: TaskGraphEnqueueStepWorkPayload | TaskGraphEnqueueFanOutItemPayload;
-}): Promise<{ Success: boolean; Output?: Record<string, unknown> }> {
-    if (params.WorkItem.Kind === 'TaskGraph.EnqueueFanOutItem') {
+    Attempt: number;
+    MaxAttempts: number;
+    Provider: IMetadataProvider;
+    ContextUser: UserInfo;
+    WorkContext?: WorkContext;
+    Message?: WorkMessage<WorkJson>;
+}): Promise<{ Success: boolean; Output?: Record<string, unknown>; ErrorMessage?: string; Retryable?: boolean }> {
+    const serviceUser = ResolveServiceUser(params.ContextUser);
+    const item = params.WorkItem;
+    const mergedPayload = buildEnqueueExecutionPayload(item);
+    const isolation: TaskGraphIsolationLevel = item.Isolation ?? 'InProcess';
+    const runners = CreateDefaultIsolationRunners();
+    const runner = runners[isolation];
+    if (isolation !== 'InProcess' && !runner) {
         return {
-            Success: true,
-            Output: {
-                itemIndex: params.WorkItem.ItemIndex,
-                itemKey: params.WorkItem.ItemKey,
-            },
+            Success: false,
+            Retryable: false,
+            ErrorMessage: `Requested isolation '${isolation}' runner unavailable for queued work item '${item.TaskID}'.`,
         };
     }
-    return {
-        Success: true,
-        Output: {
-            stepInvocationId: params.WorkItem.StepInvocationID,
-            correlationKey: params.WorkItem.CorrelationKey,
+
+    const invokeTarget = (): Promise<{
+        Success: boolean;
+        Output?: Record<string, unknown>;
+        ErrorMessage?: string;
+        Retryable?: boolean;
+    }> => executeEnqueueTarget(item, mergedPayload, serviceUser, params);
+
+    if (isolation === 'InProcess' || !runner) {
+        return invokeTarget();
+    }
+
+    const stepType = item.ActionName ? 'Action' : item.SubAgentName ? 'Agent' : 'External';
+    const execResult = await runner.Execute({
+        Level: isolation,
+        TaskID: item.TaskID,
+        TaskName: item.TaskName,
+        GraphID: item.GraphRunID || item.TaskID,
+        Workload: {
+            Kind: 'IsolatedTaskStep',
+            TaskID: item.TaskID,
+            TaskName: item.TaskName,
+            GraphID: item.GraphRunID || item.TaskID,
+            StepType: stepType,
+            ActionID: null,
+            AgentID: null,
+            PromptID: null,
+            InputPayload: mergedPayload,
+            DependencyOutputs: {},
+            Configuration: null,
+            InputTainted: false,
         },
+        HostRpc: {
+            Invoke: async (method) => {
+                if (method !== 'executeTaskStep') {
+                    throw new Error(`Unsupported TaskGraph isolation HostRpc method "${method}".`);
+                }
+                const outcome = await invokeTarget();
+                return {
+                    BodyOutcome: {
+                        Success: outcome.Success,
+                        Output: outcome.Output,
+                        ErrorMessage: outcome.ErrorMessage,
+                        ResultCode: outcome.Retryable === false ? 'NON_RETRYABLE_ENQUEUE_ERROR' : undefined,
+                    },
+                };
+            },
+        },
+    });
+
+    return {
+        Success: execResult.Success,
+        Output: toPlainRecord(execResult.BodyOutcome?.Output ?? execResult.Output),
+        ErrorMessage: execResult.BodyOutcome?.ErrorMessage ?? execResult.ErrorMessage,
+        Retryable:
+            execResult.BodyOutcome?.ResultCode === 'NON_RETRYABLE_ENQUEUE_ERROR' ||
+            execResult.ErrorCode === 'NON_RETRYABLE_ENQUEUE_ERROR'
+                ? false
+                : execResult.Success
+                    ? undefined
+                    : true,
     };
+}
+
+function buildEnqueueExecutionPayload(
+    item: TaskGraphEnqueueStepWorkPayload | TaskGraphEnqueueFanOutItemPayload,
+): Record<string, unknown> {
+    if (item.Kind === 'TaskGraph.EnqueueFanOutItem') {
+        const merged: Record<string, unknown> = {
+            ...item.Payload,
+            [item.ItemVariable]: item.ItemValue,
+        };
+        if (item.IndexVariable) {
+            merged[item.IndexVariable] = item.ItemIndex;
+        }
+        return merged;
+    }
+    return { ...item.InputPayload };
+}
+
+async function executeEnqueueTarget(
+    item: TaskGraphEnqueueStepWorkPayload | TaskGraphEnqueueFanOutItemPayload,
+    mergedPayload: Record<string, unknown>,
+    serviceUser: UserInfo,
+    params: {
+        Attempt: number;
+        MaxAttempts: number;
+        Provider: IMetadataProvider;
+        WorkContext?: WorkContext;
+        Message?: WorkMessage<WorkJson>;
+    },
+): Promise<{ Success: boolean; Output?: Record<string, unknown>; ErrorMessage?: string; Retryable?: boolean }> {
+    const actionName = item.ActionName?.trim();
+    if (actionName) {
+        await ActionEngineServer.Instance.Config(false, serviceUser);
+        const action = ActionEngineServer.Instance.Actions.find(
+            (a) => a.Name.trim().toLowerCase() === actionName.toLowerCase(),
+        );
+        if (!action) {
+            return {
+                Success: false,
+                Retryable: false,
+                ErrorMessage: `Action '${actionName}' not found for queued work item '${item.TaskID}'.`,
+            };
+        }
+        const actionResult = await new TaskGraphActionRunner().RunActionForTask({
+            TaskID: item.TaskID,
+            ActionID: action.ID,
+            InputPayload: mergedPayload,
+            DependencyOutputs: new Map<string, unknown>(),
+            Provider: params.Provider,
+            ContextUser: serviceUser,
+        });
+        return {
+            Success: actionResult.Success,
+            Output: toPlainRecord(actionResult.Output),
+            ErrorMessage: actionResult.ErrorMessage,
+            Retryable: actionResult.Success ? undefined : true,
+        };
+    }
+
+    const subAgentName = item.SubAgentName?.trim();
+    if (subAgentName) {
+        await AIEngine.Instance.Config(false, serviceUser);
+        const agent = AIEngine.Instance.Agents.find(
+            (a) => a.Name.trim().toLowerCase() === subAgentName.toLowerCase(),
+        );
+        if (!agent) {
+            return {
+                Success: false,
+                Retryable: false,
+                ErrorMessage: `Sub-agent '${subAgentName}' not found for queued work item '${item.TaskID}'.`,
+            };
+        }
+        const agentResult = await new TaskGraphAgentRunner().RunAgentForTask({
+            TaskID: item.TaskID,
+            AgentID: agent.ID,
+            InputPayload: mergedPayload,
+            DependencyOutputs: new Map<string, unknown>(),
+            Provider: params.Provider,
+            ContextUser: serviceUser,
+        });
+        return {
+            Success: agentResult.Success,
+            Output: toPlainRecord(agentResult.Output),
+            ErrorMessage: agentResult.ErrorMessage,
+            Retryable: agentResult.Success ? undefined : true,
+        };
+    }
+
+    const handlerKey = item.HandlerKey?.trim();
+    if (handlerKey && handlerKey !== 'TaskGraph.EnqueueItem') {
+        const customHandler = ResolveWorkHandler(handlerKey);
+        if (!customHandler || customHandler instanceof TaskGraphEnqueueItemWorkHandler) {
+            return {
+                Success: false,
+                Retryable: false,
+                ErrorMessage: `Custom WorkQueue handler '${handlerKey}' is not registered for queued work item '${item.TaskID}'.`,
+            };
+        }
+        customHandler.BindExecutionContext({ ContextUser: serviceUser, Provider: params.Provider });
+        const fallbackMessage: WorkMessage<WorkJson> = params.Message ?? {
+            MessageID: item.StepInvocationID,
+            Topic: item.Topic,
+            Payload: toWorkJsonValue(mergedPayload),
+            Attributes: {},
+            CorrelationID:
+                item.Kind === 'TaskGraph.EnqueueFanOutItem'
+                    ? item.ItemCorrelationKey
+                    : item.CorrelationKey,
+            PublishedAt: item.PublishedAt || new Date().toISOString(),
+        };
+        const fallbackContext: WorkContext = params.WorkContext ?? {
+            SubscriptionName: item.Topic,
+            DeliveryID: item.StepInvocationID,
+            Attempt: params.Attempt,
+            MaxAttempts: params.MaxAttempts,
+            IsReplay: params.Attempt > 1,
+            Signal: new AbortController().signal,
+            Heartbeat: async () => true,
+            Log: NULL_WORK_LOGGER,
+        };
+        const outcome = await customHandler.Handle(fallbackMessage, fallbackContext);
+        if (outcome.Kind === 'Complete') {
+            return {
+                Success: true,
+                Output: {
+                    handlerKey,
+                    executed: true,
+                },
+            };
+        }
+        if (outcome.Kind === 'Retry') {
+            return {
+                Success: false,
+                Retryable: true,
+                ErrorMessage: outcome.Reason ?? `Handler '${handlerKey}' requested retry.`,
+            };
+        }
+        return {
+            Success: false,
+            Retryable: false,
+            ErrorMessage: outcome.Reason,
+        };
+    }
+
+    return {
+        Success: false,
+        Retryable: false,
+        ErrorMessage: `Enqueue work item '${item.TaskID}' does not specify ActionName, SubAgentName, or a custom HandlerKey.`,
+    };
+}
+
+function toPlainRecord(val: unknown): Record<string, unknown> | undefined {
+    if (val === null || val === undefined) return undefined;
+    if (typeof val === 'object' && !Array.isArray(val)) {
+        const result: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(val)) {
+            result[k] = v;
+        }
+        return result;
+    }
+    return { value: val };
 }
 
 function parseQueuedRunEnvelope(raw: WorkJson | undefined): TaskGraphQueuedRunEnvelope | null {
@@ -434,6 +704,8 @@ function parseEnqueueWorkPayload(
             Topic: String(rec['Topic'] ?? ''),
             HandlerKey: typeof rec['HandlerKey'] === 'string' ? rec['HandlerKey'] : undefined,
             ActionName: typeof rec['ActionName'] === 'string' ? rec['ActionName'] : undefined,
+            SubAgentName: typeof rec['SubAgentName'] === 'string' ? rec['SubAgentName'] : undefined,
+            Isolation: rec['Isolation'] !== undefined ? parseIsolation(rec['Isolation']) : undefined,
             InputPayload: toRecord(rec['InputPayload']),
             MaxRetries: typeof rec['MaxRetries'] === 'number' ? rec['MaxRetries'] : 0,
             PublishedAt: String(rec['PublishedAt'] ?? ''),
@@ -462,6 +734,7 @@ function parseEnqueueWorkPayload(
             HandlerKey: typeof rec['HandlerKey'] === 'string' ? rec['HandlerKey'] : undefined,
             ActionName: typeof rec['ActionName'] === 'string' ? rec['ActionName'] : undefined,
             SubAgentName: typeof rec['SubAgentName'] === 'string' ? rec['SubAgentName'] : undefined,
+            Isolation: rec['Isolation'] !== undefined ? parseIsolation(rec['Isolation']) : undefined,
             ContinueOnError: rec['ContinueOnError'] === true,
             Payload: toRecord(rec['Payload']),
             MaxRetries: typeof rec['MaxRetries'] === 'number' ? rec['MaxRetries'] : 0,

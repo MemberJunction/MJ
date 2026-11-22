@@ -126,6 +126,25 @@ export const TASK_GRAPH_ISOLATION_GUARANTEES: Readonly<
 };
 
 /**
+ * Runtime thread/process/container execution telemetry captured inside an isolation boundary.
+ */
+export interface TaskGraphIsolationExecutionMetadata {
+    readonly IsMainThread: boolean;
+    readonly ThreadId?: number;
+    readonly ProcessId: number;
+    readonly Runtime?: string;
+    readonly Image?: string;
+}
+
+/**
+ * Host-side RPC bridge passed to isolated runners so isolated step execution can invoke
+ * host-governed MJ services (Actions, Agents, Prompts, Decisions) across the boundary.
+ */
+export interface TaskGraphIsolationHostRpcBridge {
+    Invoke(method: string, params: Record<string, unknown>): Promise<Record<string, unknown>>;
+}
+
+/**
  * Minimal outcome shape returned by an in-process task step callback when wrapped by an isolation runner.
  */
 export interface TaskGraphIsolationStepOutcome {
@@ -143,6 +162,7 @@ export interface TaskGraphIsolationStepOutcome {
     IsOutputTainted?: boolean;
     CostUsd?: number;
     TokensUsed?: number;
+    IsolationMetadata?: TaskGraphIsolationExecutionMetadata;
 }
 
 /**
@@ -151,6 +171,20 @@ export interface TaskGraphIsolationStepOutcome {
 export type TaskGraphIsolationWorkload =
     | {
           readonly Kind: 'InProcessCallback';
+      }
+    | {
+          readonly Kind: 'IsolatedTaskStep';
+          readonly TaskID: string;
+          readonly TaskName: string;
+          readonly GraphID: string;
+          readonly StepType: string;
+          readonly ActionID?: string | null;
+          readonly AgentID?: string | null;
+          readonly PromptID?: string | null;
+          readonly InputPayload: Readonly<Record<string, unknown>>;
+          readonly DependencyOutputs: Readonly<Record<string, unknown>>;
+          readonly Configuration?: string | null;
+          readonly InputTainted: boolean;
       }
     | {
           readonly Kind: 'InlineScript';
@@ -182,6 +216,8 @@ export interface TaskGraphIsolationRunRequest<
     readonly Workload: TaskGraphIsolationWorkload;
     /** Callback executing the standard in-process step pipeline when `Workload.Kind === 'InProcessCallback'`. */
     readonly ExecuteInProcess?: () => Promise<TOutcome>;
+    /** Host RPC bridge enabling isolated runners (`Worker`, `Process`, `Container`) to invoke host MJ step services. */
+    readonly HostRpc?: TaskGraphIsolationHostRpcBridge;
     /** Effective isolation limits resolved via `LimitsConfigResolver` (`Limits.Isolation`). */
     readonly Limits?: Partial<MJLimitsIsolationConfig>;
     /** Explicit step-level timeout override in milliseconds. */
@@ -206,6 +242,7 @@ export interface TaskGraphIsolationExecutionResult<
     readonly Stdout?: string;
     readonly Stderr?: string;
     readonly BodyOutcome?: TOutcome;
+    readonly ExecutionMetadata?: TaskGraphIsolationExecutionMetadata;
 }
 
 /**
@@ -282,20 +319,66 @@ export class InProcessIsolationRunner implements TaskGraphIsolationRunner {
                     TerminationReason: outcome.Success ? 'Completed' : 'Error',
                     DurationMs: Date.now() - startedAt,
                     BodyOutcome: outcome,
+                    ExecutionMetadata: {
+                        IsMainThread: true,
+                        ProcessId: process.pid,
+                    },
+                };
+            }
+
+            if (request.Workload.Kind === 'IsolatedTaskStep') {
+                if (!request.HostRpc) {
+                    return {
+                        Success: false,
+                        IsolationLevel: this.Level,
+                        TerminationReason: 'Error',
+                        ErrorCode: 'MISSING_HOST_RPC',
+                        ErrorMessage: 'InProcessIsolationRunner requires HostRpc for IsolatedTaskStep workloads.',
+                        DurationMs: Date.now() - startedAt,
+                    };
+                }
+                const rpcResult = await request.HostRpc.Invoke('executeTaskStep', {
+                    TaskID: request.Workload.TaskID,
+                    StepType: request.Workload.StepType,
+                });
+                const outcome = rpcResult['BodyOutcome'] as TOutcome | undefined;
+                if (!outcome) {
+                    return {
+                        Success: false,
+                        IsolationLevel: this.Level,
+                        TerminationReason: 'Error',
+                        ErrorCode: 'INVALID_RPC_OUTCOME',
+                        ErrorMessage: 'HostRpc executeTaskStep did not return BodyOutcome.',
+                        DurationMs: Date.now() - startedAt,
+                    };
+                }
+                const outputObj =
+                    outcome.Output && typeof outcome.Output === 'object' && !Array.isArray(outcome.Output)
+                        ? (outcome.Output as Record<string, unknown>)
+                        : undefined;
+                return {
+                    Success: outcome.Success,
+                    IsolationLevel: this.Level,
+                    Output: outputObj,
+                    ErrorMessage: outcome.ErrorMessage,
+                    TerminationReason: outcome.Success ? 'Completed' : 'Error',
+                    DurationMs: Date.now() - startedAt,
+                    BodyOutcome: outcome,
+                    ExecutionMetadata: {
+                        IsMainThread: true,
+                        ProcessId: process.pid,
+                    },
                 };
             }
 
             if (request.Workload.Kind === 'InlineScript') {
-                const fn = new Function('input', `'use strict'; return (async () => { ${request.Workload.Script} })();`) as (
-                    input: Record<string, unknown>,
-                ) => Promise<unknown>;
-                const rawResult = await fn({ ...(request.Workload.Input ?? {}) });
-                const normalized = normalizeOutputRecord(rawResult);
                 return {
-                    Success: true,
+                    Success: false,
                     IsolationLevel: this.Level,
-                    Output: normalized,
-                    TerminationReason: 'Completed',
+                    TerminationReason: 'Error',
+                    ErrorCode: 'UNSUPPORTED_INPROCESS_SCRIPT',
+                    ErrorMessage:
+                        'InProcessIsolationRunner does not evaluate inline scripts; script evaluation requires Worker, Process, or Container isolation.',
                     DurationMs: Date.now() - startedAt,
                 };
             }
@@ -318,11 +401,4 @@ export class InProcessIsolationRunner implements TaskGraphIsolationRunner {
             };
         }
     }
-}
-
-function normalizeOutputRecord(value: unknown): Record<string, unknown> {
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-        return value as Record<string, unknown>;
-    }
-    return { value };
 }

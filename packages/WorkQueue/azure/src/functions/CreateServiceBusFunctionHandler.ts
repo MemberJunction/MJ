@@ -49,12 +49,16 @@ export interface ServiceBusFunctionHandlerOptions {
     Log?: WorkLogger;
     EmitMetrics?: (line: string) => void;
     Now?: () => number;
+    /** Optional ServiceBusClient factory override for lazy schedule client caching and testing. */
+    CreateClient?: typeof CreateServiceBusClient;
 }
 
-export type ServiceBusFunctionHandler = (
+export type ServiceBusFunctionHandler = ((
     input: AzureFunctionServiceBusMessage | AzureFunctionServiceBusMessage[] | unknown,
     context?: AzureFunctionInvocationContext,
-) => Promise<AzureFunctionBatchResponse>;
+) => Promise<AzureFunctionBatchResponse>) & {
+    Close(): Promise<void>;
+};
 
 interface TriggerSettlementDeps {
     Records: Map<string, AzureFunctionServiceBusMessage>;
@@ -198,10 +202,11 @@ function tally(metrics: InvocationMetrics, result: SettleResult | undefined): vo
     }
 }
 
-function createScheduleSender(
+function createLazyScheduleGateway(
     binding: SubscriptionBinding,
     options: ServiceBusFunctionHandlerOptions,
     env: Record<string, string | undefined>,
+    getOrCreateClient: () => ReturnType<typeof CreateServiceBusClient> | undefined,
 ): ServiceBusGateway | undefined {
     const connKey = options.ConnectionStringEnvVar ?? 'AzureWebJobsServiceBus';
     const conn = env[connKey] ?? env['MJ_WQ_AZURE_CONNECTION_STRING'];
@@ -209,13 +214,14 @@ function createScheduleSender(
     if (!conn && !subConfig.Namespace) {
         return undefined;
     }
-    const client = conn
-        ? CreateServiceBusClient({ Namespace: subConfig.Namespace, Endpoint: null, UseEmulator: false }, { ConnectionString: conn })
-        : CreateServiceBusClient({ Namespace: subConfig.Namespace, Endpoint: null, UseEmulator: false }, options.Credentials);
     return {
         SendBatch: async () => [],
         Send: async () => '',
         Schedule: async (request) => {
+            const client = getOrCreateClient();
+            if (!client) {
+                throw new Error('Service Bus client could not be initialized for scheduling.');
+            }
             const sender = client.createSender(request.TopicName);
             try {
                 const seqs = await sender.scheduleMessages({
@@ -240,7 +246,7 @@ function createScheduleSender(
         ReceiveDeadLetters: async () => [],
         CompleteDeadLetter: async () => false,
         AbandonDeadLetter: async () => false,
-        Close: () => client.close(),
+        Close: () => Promise.resolve(),
     };
 }
 
@@ -260,6 +266,7 @@ export function CreateServiceBusFunctionHandler<TPayload extends WorkJson = Work
     const throwOnSingle = options.ThrowOnSingleMessageFailure ?? true;
 
     let cachedBinding: SubscriptionBinding | null = null;
+    let cachedClient: ReturnType<typeof CreateServiceBusClient> | null = null;
     const resolveBinding = (): SubscriptionBinding => {
         if (cachedBinding === null) {
             const env = options.Env ?? process.env;
@@ -267,9 +274,29 @@ export function CreateServiceBusFunctionHandler<TPayload extends WorkJson = Work
         }
         return cachedBinding;
     };
+    const getOrCreateScheduleClient = (
+        binding: SubscriptionBinding,
+        env: Record<string, string | undefined>,
+    ): ReturnType<typeof CreateServiceBusClient> | undefined => {
+        if (cachedClient) {
+            return cachedClient;
+        }
+        const connKey = options.ConnectionStringEnvVar ?? 'AzureWebJobsServiceBus';
+        const conn = env[connKey] ?? env['MJ_WQ_AZURE_CONNECTION_STRING'];
+        const subConfig = ReadAzureSubscriptionConfig(binding.Config);
+        if (!conn && !subConfig.Namespace) {
+            return undefined;
+        }
+        const clientFactory = options.CreateClient ?? CreateServiceBusClient;
+        cachedClient = conn
+            ? clientFactory({ Namespace: subConfig.Namespace, Endpoint: null, UseEmulator: false }, { ConnectionString: conn })
+            : clientFactory({ Namespace: subConfig.Namespace, Endpoint: null, UseEmulator: false }, options.Credentials);
+        return cachedClient;
+    };
 
-    return async (input, context) => {
-        const binding = resolveBinding();
+    const handler: ServiceBusFunctionHandler = Object.assign(
+        async (input: AzureFunctionServiceBusMessage | AzureFunctionServiceBusMessage[] | unknown, context?: AzureFunctionInvocationContext): Promise<AzureFunctionBatchResponse> => {
+            const binding = resolveBinding();
         const env = options.Env ?? process.env;
         const started = now();
         const isBatch = Array.isArray(input);
@@ -283,11 +310,13 @@ export function CreateServiceBusFunctionHandler<TPayload extends WorkJson = Work
         });
 
         const recordByLock = new Map<string, AzureFunctionServiceBusMessage>(items.map((item) => [item.Record.LockToken, item.Raw]));
-        const ownedSender = options.Gateway ? undefined : createScheduleSender(binding, options, env);
+        const lazySender = options.Gateway
+            ? undefined
+            : createLazyScheduleGateway(binding, options, env, () => getOrCreateScheduleClient(binding, env));
         const gateway: ServiceBusGateway = options.Gateway ?? new TriggerContextGateway({
             Records: recordByLock,
             Actions: context?.actions,
-            TopicSenderGateway: ownedSender,
+            TopicSenderGateway: lazySender,
         });
 
         const subConfig = ReadAzureSubscriptionConfig(binding.Config);
@@ -373,9 +402,6 @@ export function CreateServiceBusFunctionHandler<TPayload extends WorkJson = Work
         } finally {
             clearTimeout(timer);
             context?.abortSignal?.removeEventListener('abort', onAbort);
-            if (ownedSender) {
-                await ownedSender.Close().catch(() => undefined);
-            }
             metrics.DurationMs = now() - started;
             emit(FormatTelemetryLine(binding.Policy.SubscriptionName, metrics, now()));
         }
@@ -390,5 +416,16 @@ export function CreateServiceBusFunctionHandler<TPayload extends WorkJson = Work
                 .filter((item) => failures.has(item.Record.MessageId))
                 .map((item) => ({ itemIdentifier: item.Record.MessageId })),
         };
-    };
+        },
+        {
+            Close: async (): Promise<void> => {
+                if (cachedClient) {
+                    const clientToClose = cachedClient;
+                    cachedClient = null;
+                    await clientToClose.close().catch(() => undefined);
+                }
+            },
+        },
+    );
+    return handler;
 }

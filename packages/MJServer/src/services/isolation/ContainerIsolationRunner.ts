@@ -14,7 +14,12 @@
  * @module @memberjunction/server
  */
 import { spawn, type ChildProcess } from 'node:child_process';
-import { LimitsConfigResolver, type MJLimitsIsolationConfig } from '@memberjunction/core';
+import {
+    IsValidContainerImage,
+    IsValidContainerRuntime,
+    LimitsConfigResolver,
+    type MJLimitsIsolationConfig,
+} from '@memberjunction/core';
 import {
     TASK_GRAPH_ISOLATION_GUARANTEES,
     type TaskGraphIsolationExecutionResult,
@@ -72,6 +77,7 @@ export interface ContainerIsolationRunnerOptions {
 
 const CONTAINER_BOOTSTRAP_CODE = `
 'use strict';
+const vm = require('node:vm');
 const START = '${CONTAINER_RESULT_START_MARKER}';
 const END = '${CONTAINER_RESULT_END_MARKER}';
 
@@ -97,11 +103,34 @@ async function readStdin() {
 (async () => {
     try {
         const data = JSON.parse(await readStdin());
+        if (data.kind === 'IsolatedTaskStep') {
+            emit({
+                ok: true,
+                delegateToHost: true,
+                output: { containerValidated: true, taskId: data.step && data.step.TaskID },
+            });
+            return;
+        }
         let rawResult;
         if (data.kind === 'InlineScript') {
-            const AsyncFn = Object.getPrototypeOf(async function () {}).constructor;
-            const fn = new AsyncFn('input', data.script);
-            rawResult = await fn(data.input || {});
+            const context = vm.createContext({
+                input: data.input || {},
+                require,
+                process,
+                Buffer,
+                console,
+                setTimeout,
+                clearTimeout,
+                setInterval,
+                clearInterval,
+                URL,
+                TextEncoder,
+                TextDecoder,
+            });
+            const script = new vm.Script("'use strict'; (async () => {\\n" + String(data.script || '') + "\\n})()", {
+                filename: 'container-inline-script.js',
+            });
+            rawResult = await script.runInContext(context);
         } else if (data.kind === 'Module') {
             const loaded = require(data.modulePath);
             const targetName = data.exportName || 'default';
@@ -136,12 +165,18 @@ function appendBounded(buffer: string, chunk: string): string {
 
 /**
  * Builds hardened OCI `docker run` / `podman run` CLI arguments for a single step execution.
+ * Validates `Image` strictly to reject flag injection (`--privileged`, `-v=...`, whitespace, or `..`).
  */
 export function BuildContainerRunArgs(args: {
     readonly MemoryMb: number;
     readonly CpuQuota: number;
     readonly Image: string;
 }): string[] {
+    if (!IsValidContainerImage(args.Image)) {
+        throw new Error(
+            `Invalid ContainerImage "${args.Image}": must match OCI image reference syntax without leading "-", "..", or whitespace.`,
+        );
+    }
     const mem = `${Math.max(1, Math.trunc(args.MemoryMb))}m`;
     const cpus = String(Math.max(0.1, args.CpuQuota));
     return [
@@ -249,7 +284,9 @@ export function DefaultContainerCommandExecutor(spec: ContainerCommandSpec): Pro
 
 interface ParsedContainerEnvelope {
     readonly ok: boolean;
+    readonly delegateToHost?: boolean;
     readonly output?: Record<string, unknown>;
+    readonly bodyOutcome?: TaskGraphIsolationStepOutcome;
     readonly errorMessage?: string;
     readonly errorCode?: string;
 }
@@ -313,7 +350,15 @@ export class ContainerIsolationRunner implements TaskGraphIsolationRunner {
     ): Promise<TaskGraphIsolationExecutionResult<TOutcome>> {
         const startedAt = Date.now();
         if (request.Workload.Kind === 'InProcessCallback') {
-            return this.executeInProcessCallback(request, startedAt);
+            return {
+                Success: false,
+                IsolationLevel: this.Level,
+                TerminationReason: 'Error',
+                ErrorCode: 'UNSUPPORTED_ISOLATED_WORKLOAD',
+                ErrorMessage:
+                    'ContainerIsolationRunner cannot execute unisolated InProcessCallback workloads; provide IsolatedTaskStep, InlineScript, or Module.',
+                DurationMs: Date.now() - startedAt,
+            };
         }
 
         const defaults = LimitsConfigResolver.Resolve().Limits.Isolation;
@@ -321,23 +366,62 @@ export class ContainerIsolationRunner implements TaskGraphIsolationRunner {
         const memoryMb = Math.max(1, Math.trunc(limits.ContainerMemoryMb));
         const cpuQuota = Math.max(0.1, limits.ContainerCpuQuota);
         const timeoutMs = Math.max(1, Math.trunc(request.TimeoutMs ?? limits.ContainerTimeoutMs));
-        const image = limits.ContainerImage?.trim() || defaults.ContainerImage;
-        const command = limits.ContainerRuntime?.trim() || defaults.ContainerRuntime;
+        const image = limits.ContainerImage !== undefined ? limits.ContainerImage.trim() : defaults.ContainerImage;
+        const command = limits.ContainerRuntime !== undefined ? limits.ContainerRuntime.trim() : defaults.ContainerRuntime;
 
-        const stdinPayload = JSON.stringify(
-            request.Workload.Kind === 'InlineScript'
-                ? {
-                      kind: 'InlineScript',
-                      script: request.Workload.Script,
-                      input: { ...(request.Workload.Input ?? {}) },
-                  }
-                : {
-                      kind: 'Module',
-                      modulePath: request.Workload.ModulePath,
-                      exportName: request.Workload.ExportName,
-                      args: request.Workload.Args ? { ...request.Workload.Args } : {},
-                  },
-        );
+        if (!IsValidContainerRuntime(command)) {
+            return {
+                Success: false,
+                IsolationLevel: this.Level,
+                TerminationReason: 'StartupFailed',
+                ErrorCode: 'ERR_CONTAINER_INVALID_RUNTIME',
+                ErrorMessage: `ContainerRuntime "${command}" is not allowed; permitted runtimes are docker or podman.`,
+                DurationMs: Date.now() - startedAt,
+            };
+        }
+
+        if (!IsValidContainerImage(image)) {
+            return {
+                Success: false,
+                IsolationLevel: this.Level,
+                TerminationReason: 'StartupFailed',
+                ErrorCode: 'ERR_CONTAINER_INVALID_IMAGE',
+                ErrorMessage: `ContainerImage "${image}" is invalid; must match OCI image reference syntax without leading "-", "..", or whitespace.`,
+                DurationMs: Date.now() - startedAt,
+            };
+        }
+
+        if (request.Workload.Kind === 'IsolatedTaskStep' && !request.HostRpc) {
+            return {
+                Success: false,
+                IsolationLevel: this.Level,
+                TerminationReason: 'Error',
+                ErrorCode: 'MISSING_HOST_RPC',
+                ErrorMessage: 'ContainerIsolationRunner requires HostRpc for IsolatedTaskStep workloads.',
+                DurationMs: Date.now() - startedAt,
+            };
+        }
+
+        let stdinPayload: string;
+        if (request.Workload.Kind === 'InlineScript') {
+            stdinPayload = JSON.stringify({
+                kind: 'InlineScript',
+                script: request.Workload.Script,
+                input: { ...(request.Workload.Input ?? {}) },
+            });
+        } else if (request.Workload.Kind === 'Module') {
+            stdinPayload = JSON.stringify({
+                kind: 'Module',
+                modulePath: request.Workload.ModulePath,
+                exportName: request.Workload.ExportName,
+                args: request.Workload.Args ? { ...request.Workload.Args } : {},
+            });
+        } else {
+            stdinPayload = JSON.stringify({
+                kind: 'IsolatedTaskStep',
+                step: request.Workload,
+            });
+        }
 
         const cliArgs = BuildContainerRunArgs({ MemoryMb: memoryMb, CpuQuota: cpuQuota, Image: image });
         const outcome = await this.executor({
@@ -350,7 +434,115 @@ export class ContainerIsolationRunner implements TaskGraphIsolationRunner {
             Image: image,
         });
 
-        return this.translateOutcome<TOutcome>(outcome, memoryMb, timeoutMs, command, startedAt);
+        const translated = this.translateOutcome<TOutcome>(outcome, memoryMb, timeoutMs, command, image, startedAt);
+        if (!translated.Success) {
+            return translated;
+        }
+
+        const parsed = parseMarkedContainerEnvelope(outcome.Stdout);
+        if (request.Workload.Kind === 'IsolatedTaskStep' && parsed?.delegateToHost) {
+            if (!request.HostRpc) {
+                return {
+                    Success: false,
+                    IsolationLevel: this.Level,
+                    TerminationReason: 'Error',
+                    ErrorCode: 'MISSING_HOST_RPC',
+                    ErrorMessage: 'ContainerIsolationRunner requires HostRpc when delegating IsolatedTaskStep host services.',
+                    DurationMs: Date.now() - startedAt,
+                };
+            }
+            const elapsedMs = Date.now() - startedAt;
+            const remainingMs = Math.max(1, timeoutMs - elapsedMs);
+            return this.invokeHostRpcBounded<TOutcome>(
+                request.HostRpc,
+                request.Workload.TaskID,
+                request.Workload.StepType,
+                command,
+                image,
+                remainingMs,
+                timeoutMs,
+                startedAt,
+                outcome,
+            );
+        }
+
+        return translated;
+    }
+
+    private async invokeHostRpcBounded<TOutcome extends TaskGraphIsolationStepOutcome>(
+        hostRpc: NonNullable<TaskGraphIsolationRunRequest<TOutcome>['HostRpc']>,
+        taskID: string,
+        stepType: string,
+        command: string,
+        image: string,
+        remainingMs: number,
+        totalTimeoutMs: number,
+        startedAt: number,
+        containerOutcome: ContainerCommandExecutionOutcome,
+    ): Promise<TaskGraphIsolationExecutionResult<TOutcome>> {
+        let timer: NodeJS.Timeout | null = null;
+        try {
+            const timeoutPromise = new Promise<never>((_, reject) => {
+                timer = setTimeout(() => {
+                    reject(new Error(`Container execution exceeded timeout limit (${totalTimeoutMs} ms).`));
+                }, remainingMs);
+            });
+            const rpcRes = await Promise.race([
+                hostRpc.Invoke('executeTaskStep', {
+                    TaskID: taskID,
+                    StepType: stepType,
+                    IsolationContext: { Runtime: command, Image: image, ProcessId: process.pid },
+                }),
+                timeoutPromise,
+            ]);
+            const bodyOutcome = rpcRes['BodyOutcome'] as TOutcome | undefined;
+            if (!bodyOutcome) {
+                return {
+                    Success: false,
+                    IsolationLevel: this.Level,
+                    TerminationReason: 'Error',
+                    ErrorCode: 'INVALID_RPC_OUTCOME',
+                    ErrorMessage: 'HostRpc executeTaskStep did not return BodyOutcome.',
+                    DurationMs: Date.now() - startedAt,
+                };
+            }
+            const outputObj =
+                bodyOutcome.Output && typeof bodyOutcome.Output === 'object' && !Array.isArray(bodyOutcome.Output)
+                    ? (bodyOutcome.Output as Record<string, unknown>)
+                    : undefined;
+            return {
+                Success: bodyOutcome.Success,
+                IsolationLevel: this.Level,
+                Output: outputObj,
+                ErrorMessage: bodyOutcome.ErrorMessage,
+                ErrorCode: bodyOutcome.ResultCode,
+                TerminationReason: bodyOutcome.Success ? 'Completed' : 'Error',
+                ExitCode: containerOutcome.ExitCode,
+                DurationMs: Date.now() - startedAt,
+                BodyOutcome: bodyOutcome,
+                ExecutionMetadata: {
+                    IsMainThread: true,
+                    ProcessId: process.pid,
+                    Runtime: command,
+                    Image: image,
+                },
+            };
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            const isTimeout = message.includes('exceeded timeout limit');
+            return {
+                Success: false,
+                IsolationLevel: this.Level,
+                TerminationReason: isTimeout ? 'Timeout' : 'Error',
+                ErrorCode: isTimeout ? 'ERR_CONTAINER_TIMEOUT' : 'ERR_CONTAINER_EXECUTION',
+                ErrorMessage: message,
+                DurationMs: Date.now() - startedAt,
+            };
+        } finally {
+            if (timer) {
+                clearTimeout(timer);
+            }
+        }
     }
 
     private translateOutcome<TOutcome extends TaskGraphIsolationStepOutcome>(
@@ -358,6 +550,7 @@ export class ContainerIsolationRunner implements TaskGraphIsolationRunner {
         memoryMb: number,
         timeoutMs: number,
         command: string,
+        image: string,
         startedAt: number,
     ): TaskGraphIsolationExecutionResult<TOutcome> {
         const durationMs = Date.now() - startedAt;
@@ -366,6 +559,12 @@ export class ContainerIsolationRunner implements TaskGraphIsolationRunner {
             DurationMs: durationMs,
             ExitCode: outcome.ExitCode,
             Signal: outcome.Signal ?? null,
+            ExecutionMetadata: {
+                IsMainThread: true,
+                ProcessId: process.pid,
+                Runtime: command,
+                Image: image,
+            },
             ...(outcome.Stdout ? { Stdout: outcome.Stdout } : {}),
             ...(outcome.Stderr ? { Stderr: outcome.Stderr } : {}),
         } as const;
@@ -410,6 +609,7 @@ export class ContainerIsolationRunner implements TaskGraphIsolationRunner {
                 Success: true,
                 TerminationReason: 'Completed',
                 Output: parsed.output ?? {},
+                ...(parsed.bodyOutcome ? { BodyOutcome: parsed.bodyOutcome as TOutcome } : {}),
             };
         }
 
@@ -441,45 +641,5 @@ export class ContainerIsolationRunner implements TaskGraphIsolationRunner {
                 outcome.Stderr.trim() ||
                 `Container exited with non-zero exit code ${String(outcome.ExitCode)}${outcome.Signal ? ` (signal ${outcome.Signal})` : ''}.`,
         };
-    }
-
-    private async executeInProcessCallback<TOutcome extends TaskGraphIsolationStepOutcome>(
-        request: TaskGraphIsolationRunRequest<TOutcome>,
-        startedAt: number,
-    ): Promise<TaskGraphIsolationExecutionResult<TOutcome>> {
-        if (!request.ExecuteInProcess) {
-            return {
-                Success: false,
-                IsolationLevel: this.Level,
-                TerminationReason: 'Error',
-                ErrorCode: 'MISSING_CALLBACK',
-                ErrorMessage: 'ContainerIsolationRunner requires ExecuteInProcess for InProcessCallback workloads.',
-                DurationMs: Date.now() - startedAt,
-            };
-        }
-        try {
-            const outcome = await request.ExecuteInProcess();
-            const outputObj =
-                outcome.Output && typeof outcome.Output === 'object' && !Array.isArray(outcome.Output)
-                    ? (outcome.Output as Record<string, unknown>)
-                    : undefined;
-            return {
-                Success: outcome.Success,
-                IsolationLevel: this.Level,
-                Output: outputObj,
-                ErrorMessage: outcome.ErrorMessage,
-                TerminationReason: outcome.Success ? 'Completed' : 'Error',
-                DurationMs: Date.now() - startedAt,
-                BodyOutcome: outcome,
-            };
-        } catch (err) {
-            return {
-                Success: false,
-                IsolationLevel: this.Level,
-                TerminationReason: 'Error',
-                ErrorMessage: err instanceof Error ? err.message : String(err),
-                DurationMs: Date.now() - startedAt,
-            };
-        }
     }
 }

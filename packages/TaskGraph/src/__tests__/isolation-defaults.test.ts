@@ -207,8 +207,23 @@ describe('TaskGraph Isolation Defaults, Metadata & Validation', () => {
         expect(projected.Spec?.Isolation).toBe('Worker');
     });
 
-    it('executes InProcessIsolationRunner cleanly for callbacks and inline scripts', async () => {
+    it('executes InProcessIsolationRunner for callbacks and rejects InlineScript workloads cleanly', async () => {
         const runner = new InProcessIsolationRunner();
+        const callbackResult = await runner.Execute({
+            Level: 'InProcess',
+            TaskID: 'task-cb-1',
+            TaskName: 'InProcess Callback',
+            GraphID: 'graph-1',
+            Workload: { Kind: 'InProcessCallback' },
+            ExecuteInProcess: async () => ({
+                Success: true,
+                Output: { ranInProcess: true },
+            }),
+        });
+        expect(callbackResult.Success).toBe(true);
+        expect(callbackResult.IsolationLevel).toBe('InProcess');
+        expect(callbackResult.Output).toEqual({ ranInProcess: true });
+
         const scriptResult = await runner.Execute({
             Level: 'InProcess',
             TaskID: 'task-1',
@@ -220,9 +235,10 @@ describe('TaskGraph Isolation Defaults, Metadata & Validation', () => {
                 Input: { val: 21 },
             },
         });
-        expect(scriptResult.Success).toBe(true);
+        expect(scriptResult.Success).toBe(false);
         expect(scriptResult.IsolationLevel).toBe('InProcess');
-        expect(scriptResult.Output).toEqual({ doubled: 42 });
+        expect(scriptResult.ErrorCode).toBe('UNSUPPORTED_INPROCESS_SCRIPT');
+        expect(scriptResult.ErrorMessage).toContain('Worker, Process, or Container isolation');
     });
 
     it('dispatches tasks via configured IsolationRunners inside TaskGraphDispatcher', async () => {

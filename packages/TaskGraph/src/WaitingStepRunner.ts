@@ -83,6 +83,52 @@ export class WaitingStepRunner {
         const due = WaitingStepDueAt(kind, config, step.Payload, now);
         const key = this.resolveStepCorrelationKey(kind, task, config, step.Payload);
 
+        let preparedEnqueue:
+            | {
+                  correlationKey: string;
+                  topic: string;
+                  maxRetries: number;
+                  graphRunID: string;
+                  publishedAt: string;
+                  handlerKey: string;
+                  enqueueCfg: NonNullable<typeof config.enqueue>;
+              }
+            | undefined;
+
+        if (kind === 'Enqueue' && !('Error' in due) && !('Error' in key)) {
+            const queueLimits = LimitsConfigResolver.Resolve().Limits.TaskGraphQueue;
+            const enqueueCfg = config.enqueue ?? {};
+            const topic = enqueueCfg.topic?.trim() || queueLimits.DefaultEnqueueTopicName;
+            const maxRetries =
+                typeof enqueueCfg.maxRetries === 'number'
+                    ? Math.min(enqueueCfg.maxRetries, queueLimits.MaxEnqueueRedeliveryAttempts)
+                    : queueLimits.MaxEnqueueRedeliveryAttempts;
+            const graphRunID = task.ParentID ?? task.ID;
+            const publishedAt = now.toISOString();
+            const handlerKey = enqueueCfg.handlerKey?.trim() || 'TaskGraph.EnqueueItem';
+            const correlationKey = key.Value ?? BuildEnqueueCorrelationKey(graphRunID, task.ID);
+
+            const persisted = await this.persistEnqueueStateBeforeWaiting(
+                provider,
+                task,
+                correlationKey,
+                topic,
+                publishedAt,
+            );
+            if (!persisted) {
+                return false;
+            }
+            preparedEnqueue = {
+                correlationKey,
+                topic,
+                maxRetries,
+                graphRunID,
+                publishedAt,
+                handlerKey,
+                enqueueCfg,
+            };
+        }
+
         const won = await this.claims.TryMarkWaiting(
             provider,
             task.ID,
@@ -100,7 +146,12 @@ export class WaitingStepRunner {
         }
         // The procedure wrote the start payload and input taint to the row; keep the in-memory copy
         // in step, so a held signal applied below decides its taint from the same record.
-        config.runtime = { ...(config.runtime ?? {}), payloadAtStart: step.Payload, isInputTainted: step.InputTainted };
+        const latestConfig = ParseStepConfiguration(task.Configuration);
+        config.runtime = {
+            ...(latestConfig.runtime ?? config.runtime ?? {}),
+            payloadAtStart: step.Payload,
+            isInputTainted: step.InputTainted,
+        };
 
         // Unresolvable settings fail the step loudly rather than guessing. A Wait whose moment was
         // "now" because a payload value was missing would take a wrong turn nobody could see.
@@ -111,8 +162,8 @@ export class WaitingStepRunner {
             const raised = await this.raiseWithProvider(task, config, step, due.Value, provider);
             if (raised) return raised;
         }
-        if (kind === 'Enqueue') {
-            return this.reachEnqueueStep(provider, task, config, step, key.Value ?? BuildEnqueueCorrelationKey(task.ParentID ?? task.ID, task.ID));
+        if (kind === 'Enqueue' && preparedEnqueue) {
+            return this.reachEnqueueStep(provider, task, config, step, preparedEnqueue);
         }
         if (kind === 'EnqueueFanOut') {
             return ForEachEnqueueCoordinator.Instance.StartFanOut({
@@ -152,14 +203,64 @@ export class WaitingStepRunner {
         return { Value: null };
     }
 
+    /**
+     * Persists `enqueueState` BEFORE `TryMarkWaiting` exposes `ClaimedBy = '__waiting__'` and `CorrelationKey`,
+     * reloading the live row and refusing if the task is no longer `Pending` or already claimed.
+     */
+    private async persistEnqueueStateBeforeWaiting(
+        provider: IMetadataProvider,
+        task: MJTaskEntity,
+        correlationKey: string,
+        topic: string,
+        publishedAt: string,
+    ): Promise<boolean> {
+        const serviceUser = ResolveServiceUser(this.contextUser());
+        const freshTask = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', serviceUser);
+        if (!(await freshTask.Load(task.ID))) {
+            return false;
+        }
+        if (freshTask.Status !== 'Pending' || freshTask.ClaimedBy != null) {
+            return false;
+        }
+        const freshConfig = ParseStepConfiguration(freshTask.Configuration);
+        freshConfig.runtime = {
+            ...(freshConfig.runtime ?? {}),
+            enqueueState: {
+                correlationKey,
+                topic,
+                publishedAt,
+                processedKeys: freshConfig.runtime?.enqueueState?.processedKeys ?? [],
+            },
+        };
+        freshTask.Configuration = JSON.stringify(freshConfig);
+        if (!(await SaveTaskWithAuthority(freshTask, serviceUser))) {
+            return false;
+        }
+        task.Configuration = freshTask.Configuration;
+        return true;
+    }
+
     private async reachEnqueueStep(
         provider: IMetadataProvider,
         task: MJTaskEntity,
         config: ReturnType<typeof ParseStepConfiguration>,
         step: ReachedWaitingStep,
-        correlationKey: string,
+        prepared: {
+            correlationKey: string;
+            topic: string;
+            maxRetries: number;
+            graphRunID: string;
+            publishedAt: string;
+            handlerKey: string;
+            enqueueCfg: NonNullable<ReturnType<typeof ParseStepConfiguration>['enqueue']>;
+        },
     ): Promise<boolean> {
-        const earlyEntries = ForEachEnqueueCoordinator.Instance.ConsumeEarlyCompletions(correlationKey);
+        const { correlationKey, topic, maxRetries, graphRunID, publishedAt, handlerKey, enqueueCfg } = prepared;
+        const earlyEntries = await ForEachEnqueueCoordinator.Instance.ConsumeEarlyCompletionsDurable(
+            correlationKey,
+            provider,
+            this.contextUser(),
+        );
         if (earlyEntries.length > 0) {
             const first = earlyEntries[0];
             return this.completeEnqueueFromEarlyEntry(provider, task, config, first);
@@ -167,29 +268,6 @@ export class WaitingStepRunner {
         if (await this.applyHeldSignal(provider, task, config)) {
             return true;
         }
-
-        const queueLimits = LimitsConfigResolver.Resolve().Limits.TaskGraphQueue;
-        const enqueueCfg = config.enqueue ?? {};
-        const topic = enqueueCfg.topic?.trim() || queueLimits.DefaultEnqueueTopicName;
-        const maxRetries = typeof enqueueCfg.maxRetries === 'number'
-            ? Math.min(enqueueCfg.maxRetries, queueLimits.MaxEnqueueRedeliveryAttempts)
-            : queueLimits.MaxEnqueueRedeliveryAttempts;
-        const graphRunID = task.ParentID ?? task.ID;
-        const publishedAt = this.now().toISOString();
-        const handlerKey = enqueueCfg.handlerKey?.trim() || 'TaskGraph.EnqueueItem';
-
-        const serviceUser = ResolveServiceUser(this.contextUser());
-        config.runtime = {
-            ...(config.runtime ?? {}),
-            enqueueState: {
-                correlationKey,
-                topic,
-                publishedAt,
-                processedKeys: config.runtime?.enqueueState?.processedKeys ?? [],
-            },
-        };
-        task.Configuration = JSON.stringify(config);
-        await SaveTaskWithAuthority(task, serviceUser);
 
         const workPayload: TaskGraphEnqueueStepWorkPayload = {
             Kind: 'TaskGraph.EnqueueStep',
@@ -228,7 +306,11 @@ export class WaitingStepRunner {
             return this.fail(provider, task, `Enqueue step "${task.Name}" could not publish to topic "${topic}": ${msg}`);
         }
 
-        const lateEarly = ForEachEnqueueCoordinator.Instance.ConsumeEarlyCompletions(correlationKey);
+        const lateEarly = await ForEachEnqueueCoordinator.Instance.ConsumeEarlyCompletionsDurable(
+            correlationKey,
+            provider,
+            this.contextUser(),
+        );
         if (lateEarly.length > 0) {
             return this.completeEnqueueFromEarlyEntry(provider, task, config, lateEarly[0]);
         }

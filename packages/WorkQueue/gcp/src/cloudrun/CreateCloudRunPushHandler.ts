@@ -51,9 +51,13 @@ export interface CloudRunPushHandlerOptions {
     Log?: WorkLogger;
     EmitMetrics?: (line: string) => void;
     Now?: () => number;
+    /** Optional client factory override used for lazy DLQ client creation and deterministic testing. */
+    CreateDataClients?: typeof CreatePubSubDataClients;
 }
 
-export type CloudRunPushHandler = (request: CloudRunPushHttpRequest) => Promise<CloudRunPushHttpResponse>;
+export type CloudRunPushHandler = ((request: CloudRunPushHttpRequest) => Promise<CloudRunPushHttpResponse>) & {
+    Close(): Promise<void>;
+};
 
 const JSON_LOGGER: WorkLogger = {
     Info: (message, data) => console.log(JSON.stringify({ level: 'info', message, ...data })),
@@ -131,7 +135,8 @@ function createDeadLetterPublisher(
     if (!subConfig.DeadLetterTopicName || !projectId) {
         return undefined;
     }
-    const dataBundle = CreatePubSubDataClients(
+    const factory = options.CreateDataClients ?? CreatePubSubDataClients;
+    const dataBundle = factory(
         {
             ProjectId: projectId,
             ApiEndpoint: env['PUBSUB_EMULATOR_HOST'] ?? null,
@@ -198,6 +203,7 @@ export function CreateCloudRunPushHandler<TPayload extends WorkJson = WorkJson>(
     const defaultTimeoutMs = options.DefaultInvocationTimeoutMs ?? 300_000;
 
     let cachedBinding: SubscriptionBinding | null = null;
+    let cachedDlqPublisher: { Publish(topic: string, msg: PubSubOutgoingMessage): Promise<string>; Close(): Promise<void> } | null = null;
     const resolveBinding = (): SubscriptionBinding => {
         if (cachedBinding === null) {
             const env = options.Env ?? process.env;
@@ -206,8 +212,9 @@ export function CreateCloudRunPushHandler<TPayload extends WorkJson = WorkJson>(
         return cachedBinding;
     };
 
-    return async (request) => {
-        const started = now();
+    const handler: CloudRunPushHandler = Object.assign(
+        async (request: CloudRunPushHttpRequest): Promise<CloudRunPushHttpResponse> => {
+            const started = now();
         const headers = request.Headers ?? {};
         const bearerToken = ExtractBearerToken(headers);
 
@@ -241,13 +248,27 @@ export function CreateCloudRunPushHandler<TPayload extends WorkJson = WorkJson>(
         const binding = resolveBinding();
         const env = options.Env ?? process.env;
         const providedGateway = options.Gateway;
-        const ownedPublisher = providedGateway ? undefined : createDeadLetterPublisher(binding, options, env);
+        const subConfig = ReadGcpSubscriptionConfig(binding.Config);
+        const dlqProjectId = subConfig.ProjectId ?? env['GOOGLE_CLOUD_PROJECT'] ?? env['GCP_PROJECT_ID'];
         const dlqSender = providedGateway
             ? {
                 Publish: (topicName: string, msg: PubSubOutgoingMessage) => providedGateway.Publish(topicName, msg),
                 Close: () => Promise.resolve(),
             }
-            : ownedPublisher;
+            : subConfig.DeadLetterTopicName && dlqProjectId
+                ? {
+                    Publish: async (topicName: string, msg: PubSubOutgoingMessage): Promise<string> => {
+                        if (!cachedDlqPublisher) {
+                            cachedDlqPublisher = createDeadLetterPublisher(binding, options, env) ?? null;
+                        }
+                        if (!cachedDlqPublisher) {
+                            throw new Error('Dead-letter publisher configuration is incomplete.');
+                        }
+                        return cachedDlqPublisher.Publish(topicName, msg);
+                    },
+                    Close: () => Promise.resolve(),
+                }
+                : undefined;
         const pushGateway = new PushContextGateway(dlqSender);
         const gateway: PubSubGateway = pushGateway;
 
@@ -332,13 +353,21 @@ export function CreateCloudRunPushHandler<TPayload extends WorkJson = WorkJson>(
         } finally {
             clearTimeout(timer);
             request.Signal?.removeEventListener('abort', onAbort);
-            if (ownedPublisher) {
-                await ownedPublisher.Close().catch(() => undefined);
-            }
             metrics.DurationMs = now() - started;
             emit(FormatTelemetryLine(binding.Policy.SubscriptionName, metrics, now()));
         }
-    };
+        },
+        {
+            Close: async (): Promise<void> => {
+                if (cachedDlqPublisher) {
+                    const publisherToClose = cachedDlqPublisher;
+                    cachedDlqPublisher = null;
+                    await publisherToClose.Close().catch(() => undefined);
+                }
+            },
+        },
+    );
+    return handler;
 }
 
 /** Reads a Node.js `http.IncomingMessage` body and writes the `CloudRunPushHttpResponse` to `ServerResponse`. */

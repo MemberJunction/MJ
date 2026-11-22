@@ -10,32 +10,42 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { LimitsConfigResolver, type MJLimitsIsolationConfig } from '@memberjunction/core';
 import type {
+    TaskGraphIsolationExecutionMetadata,
     TaskGraphIsolationExecutionResult,
     TaskGraphIsolationRunRequest,
     TaskGraphIsolationRunner,
     TaskGraphIsolationStepOutcome,
+    TaskGraphIsolationWorkload,
 } from '@memberjunction/task-graph';
 
 interface ProcessIpcMessage {
-    readonly ok: boolean;
+    readonly type?: 'result' | 'rpc';
+    readonly ok?: boolean;
     readonly output?: Record<string, unknown>;
+    readonly bodyOutcome?: TaskGraphIsolationStepOutcome;
+    readonly executionMeta?: TaskGraphIsolationExecutionMetadata;
     readonly errorMessage?: string;
     readonly errorCode?: string;
+    readonly callId?: number;
+    readonly method?: string;
+    readonly params?: Record<string, unknown>;
 }
 
 interface ProcessEnvelopePayload {
-    readonly kind: 'InlineScript' | 'Module';
+    readonly kind: 'InlineScript' | 'Module' | 'IsolatedTaskStep';
     readonly script?: string;
     readonly input?: Readonly<Record<string, unknown>>;
     readonly modulePath?: string;
     readonly exportName?: string;
     readonly args?: Readonly<Record<string, unknown>>;
+    readonly step?: Extract<TaskGraphIsolationWorkload, { Kind: 'IsolatedTaskStep' }>;
     readonly maxMemoryMb: number;
 }
 
 const PROCESS_BOOTSTRAP_CODE = `
 'use strict';
 const { pathToFileURL } = require('node:url');
+const vm = require('node:vm');
 
 function normalizeOutput(val) {
     if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
@@ -58,6 +68,30 @@ async function readStdin() {
     return Buffer.concat(chunks).toString('utf8');
 }
 
+let nextCallId = 1;
+const pendingRpc = new Map();
+
+process.on('message', (msg) => {
+    if (msg && msg.type === 'rpcResult' && typeof msg.callId === 'number') {
+        const entry = pendingRpc.get(msg.callId);
+        if (!entry) return;
+        pendingRpc.delete(msg.callId);
+        if (msg.ok) {
+            entry.resolve(msg.result || {});
+        } else {
+            entry.reject(new Error(msg.errorMessage || 'Host RPC invocation failed.'));
+        }
+    }
+});
+
+function invokeHostRpc(method, params) {
+    return new Promise((resolve, reject) => {
+        const callId = nextCallId++;
+        pendingRpc.set(callId, { resolve, reject });
+        sendIpc({ type: 'rpc', callId, method, params });
+    });
+}
+
 (async () => {
     let rssMonitor = null;
     try {
@@ -69,6 +103,7 @@ async function readStdin() {
             if (rss > maxRssBytes) {
                 clearInterval(rssMonitor);
                 sendIpc({
+                    type: 'result',
                     ok: false,
                     errorCode: 'ERR_PROCESS_OUT_OF_MEMORY',
                     errorMessage: 'Child process RSS (' + Math.round(rss / (1024 * 1024)) + ' MB) exceeded configured memory ceiling (' + data.maxMemoryMb + ' MB).'
@@ -80,11 +115,54 @@ async function readStdin() {
             rssMonitor.unref();
         }
 
+        const executionMeta = {
+            IsMainThread: true,
+            ProcessId: process.pid,
+        };
+
+        if (data.kind === 'IsolatedTaskStep') {
+            const rpcRes = await invokeHostRpc('executeTaskStep', {
+                TaskID: data.step.TaskID,
+                StepType: data.step.StepType,
+                IsolationContext: executionMeta,
+            });
+            if (rssMonitor) clearInterval(rssMonitor);
+            const bodyOutcome = rpcRes && rpcRes.BodyOutcome ? rpcRes.BodyOutcome : { Success: false, ErrorMessage: 'Missing BodyOutcome from host RPC.' };
+            sendIpc({
+                type: 'result',
+                ok: bodyOutcome.Success === true,
+                output: normalizeOutput(bodyOutcome.Output),
+                bodyOutcome,
+                executionMeta,
+                errorMessage: bodyOutcome.ErrorMessage,
+                errorCode: bodyOutcome.ResultCode,
+            });
+            if (typeof process.disconnect === 'function' && process.connected) {
+                process.disconnect();
+            }
+            return;
+        }
+
         let rawResult;
         if (data.kind === 'InlineScript') {
-            const AsyncFn = Object.getPrototypeOf(async function () {}).constructor;
-            const fn = new AsyncFn('input', data.script);
-            rawResult = await fn(data.input || {});
+            const context = vm.createContext({
+                input: data.input || {},
+                require,
+                process,
+                Buffer,
+                console,
+                setTimeout,
+                clearTimeout,
+                setInterval,
+                clearInterval,
+                URL,
+                TextEncoder,
+                TextDecoder,
+            });
+            const script = new vm.Script("'use strict'; (async () => {\\n" + String(data.script || '') + "\\n})()", {
+                filename: 'process-inline-script.js',
+            });
+            rawResult = await script.runInContext(context);
         } else if (data.kind === 'Module') {
             let loaded;
             try {
@@ -107,15 +185,23 @@ async function readStdin() {
         }
 
         if (rssMonitor) clearInterval(rssMonitor);
-        sendIpc({ ok: true, output: normalizeOutput(rawResult) });
+        sendIpc({ type: 'result', ok: true, output: normalizeOutput(rawResult), executionMeta });
+        if (typeof process.disconnect === 'function' && process.connected) {
+            process.disconnect();
+        }
     } catch (err) {
         if (rssMonitor) clearInterval(rssMonitor);
         sendIpc({
+            type: 'result',
             ok: false,
             errorMessage: err instanceof Error ? err.message : String(err),
             errorCode: err && typeof err === 'object' && 'code' in err ? String(err.code) : 'ERR_PROCESS_EXECUTION',
+            executionMeta: { IsMainThread: true, ProcessId: process.pid },
         });
         process.exitCode = 1;
+        if (typeof process.disconnect === 'function' && process.connected) {
+            process.disconnect();
+        }
     }
 })();
 `;
@@ -157,7 +243,26 @@ export class ProcessIsolationRunner implements TaskGraphIsolationRunner {
     ): Promise<TaskGraphIsolationExecutionResult<TOutcome>> {
         const startedAt = Date.now();
         if (request.Workload.Kind === 'InProcessCallback') {
-            return this.executeInProcessCallback(request, startedAt);
+            return {
+                Success: false,
+                IsolationLevel: this.Level,
+                TerminationReason: 'Error',
+                ErrorCode: 'UNSUPPORTED_ISOLATED_WORKLOAD',
+                ErrorMessage:
+                    'ProcessIsolationRunner cannot execute unisolated InProcessCallback workloads; provide IsolatedTaskStep, InlineScript, or Module.',
+                DurationMs: Date.now() - startedAt,
+            };
+        }
+
+        if (request.Workload.Kind === 'IsolatedTaskStep' && !request.HostRpc) {
+            return {
+                Success: false,
+                IsolationLevel: this.Level,
+                TerminationReason: 'Error',
+                ErrorCode: 'MISSING_HOST_RPC',
+                ErrorMessage: 'ProcessIsolationRunner requires HostRpc for IsolatedTaskStep workloads.',
+                DurationMs: Date.now() - startedAt,
+            };
         }
 
         const defaults = LimitsConfigResolver.Resolve().Limits.Isolation;
@@ -165,63 +270,31 @@ export class ProcessIsolationRunner implements TaskGraphIsolationRunner {
         const maxMemoryMb = Math.max(1, Math.trunc(limits.ProcessMaxMemoryMb));
         const timeoutMs = Math.max(1, Math.trunc(request.TimeoutMs ?? limits.ProcessTimeoutMs));
 
-        const envelope: ProcessEnvelopePayload =
-            request.Workload.Kind === 'InlineScript'
-                ? {
-                      kind: 'InlineScript',
-                      script: request.Workload.Script,
-                      input: { ...(request.Workload.Input ?? {}) },
-                      maxMemoryMb,
-                  }
-                : {
-                      kind: 'Module',
-                      modulePath: request.Workload.ModulePath,
-                      exportName: request.Workload.ExportName,
-                      args: request.Workload.Args ? { ...request.Workload.Args } : {},
-                      maxMemoryMb,
-                  };
-
-        return this.spawnProcess<TOutcome>(envelope, maxMemoryMb, timeoutMs, startedAt);
-    }
-
-    private async executeInProcessCallback<TOutcome extends TaskGraphIsolationStepOutcome>(
-        request: TaskGraphIsolationRunRequest<TOutcome>,
-        startedAt: number,
-    ): Promise<TaskGraphIsolationExecutionResult<TOutcome>> {
-        if (!request.ExecuteInProcess) {
-            return {
-                Success: false,
-                IsolationLevel: this.Level,
-                TerminationReason: 'Error',
-                ErrorCode: 'MISSING_CALLBACK',
-                ErrorMessage: 'ProcessIsolationRunner requires ExecuteInProcess for InProcessCallback workloads.',
-                DurationMs: Date.now() - startedAt,
+        let envelope: ProcessEnvelopePayload;
+        if (request.Workload.Kind === 'InlineScript') {
+            envelope = {
+                kind: 'InlineScript',
+                script: request.Workload.Script,
+                input: { ...(request.Workload.Input ?? {}) },
+                maxMemoryMb,
+            };
+        } else if (request.Workload.Kind === 'Module') {
+            envelope = {
+                kind: 'Module',
+                modulePath: request.Workload.ModulePath,
+                exportName: request.Workload.ExportName,
+                args: request.Workload.Args ? { ...request.Workload.Args } : {},
+                maxMemoryMb,
+            };
+        } else {
+            envelope = {
+                kind: 'IsolatedTaskStep',
+                step: request.Workload,
+                maxMemoryMb,
             };
         }
-        try {
-            const outcome = await request.ExecuteInProcess();
-            const outputObj =
-                outcome.Output && typeof outcome.Output === 'object' && !Array.isArray(outcome.Output)
-                    ? (outcome.Output as Record<string, unknown>)
-                    : undefined;
-            return {
-                Success: outcome.Success,
-                IsolationLevel: this.Level,
-                Output: outputObj,
-                ErrorMessage: outcome.ErrorMessage,
-                TerminationReason: outcome.Success ? 'Completed' : 'Error',
-                DurationMs: Date.now() - startedAt,
-                BodyOutcome: outcome,
-            };
-        } catch (err) {
-            return {
-                Success: false,
-                IsolationLevel: this.Level,
-                TerminationReason: 'Error',
-                ErrorMessage: err instanceof Error ? err.message : String(err),
-                DurationMs: Date.now() - startedAt,
-            };
-        }
+
+        return this.spawnProcess<TOutcome>(envelope, maxMemoryMb, timeoutMs, startedAt, request.HostRpc);
     }
 
     private spawnProcess<TOutcome extends TaskGraphIsolationStepOutcome>(
@@ -229,6 +302,7 @@ export class ProcessIsolationRunner implements TaskGraphIsolationRunner {
         maxMemoryMb: number,
         timeoutMs: number,
         startedAt: number,
+        hostRpc?: TaskGraphIsolationRunRequest<TOutcome>['HostRpc'],
     ): Promise<TaskGraphIsolationExecutionResult<TOutcome>> {
         return new Promise((resolve) => {
             let settled = false;
@@ -289,6 +363,37 @@ export class ProcessIsolationRunner implements TaskGraphIsolationRunner {
             });
 
             child.on('message', (msg: ProcessIpcMessage) => {
+                if (msg.type === 'rpc' && typeof msg.callId === 'number' && msg.method) {
+                    if (!hostRpc) {
+                        if (child.connected) {
+                            child.send({
+                                type: 'rpcResult',
+                                callId: msg.callId,
+                                ok: false,
+                                errorMessage: 'No HostRpc bridge registered.',
+                            });
+                        }
+                        return;
+                    }
+                    void hostRpc
+                        .Invoke(msg.method, msg.params ?? {})
+                        .then((result) => {
+                            if (!settled && child.connected) {
+                                child.send({ type: 'rpcResult', callId: msg.callId, ok: true, result });
+                            }
+                        })
+                        .catch((err) => {
+                            if (!settled && child.connected) {
+                                child.send({
+                                    type: 'rpcResult',
+                                    callId: msg.callId,
+                                    ok: false,
+                                    errorMessage: err instanceof Error ? err.message : String(err),
+                                });
+                            }
+                        });
+                    return;
+                }
                 lastIpc = msg;
             });
 
@@ -302,6 +407,7 @@ export class ProcessIsolationRunner implements TaskGraphIsolationRunner {
             });
 
             child.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
+                const execMeta = lastIpc?.executionMeta ?? (child.pid ? { IsMainThread: true, ProcessId: child.pid } : undefined);
                 if (timedOut) {
                     finish({
                         Success: false,
@@ -310,6 +416,7 @@ export class ProcessIsolationRunner implements TaskGraphIsolationRunner {
                         ErrorMessage: `Child process exceeded timeout limit (${timeoutMs} ms) and was terminated.`,
                         ExitCode: code,
                         Signal: signal,
+                        ...(execMeta ? { ExecutionMetadata: execMeta } : {}),
                     });
                     return;
                 }
@@ -321,6 +428,8 @@ export class ProcessIsolationRunner implements TaskGraphIsolationRunner {
                         Output: normalizeOutputRecord(lastIpc.output),
                         ExitCode: 0,
                         Signal: signal,
+                        ...(lastIpc.bodyOutcome ? { BodyOutcome: lastIpc.bodyOutcome as TOutcome } : {}),
+                        ...(execMeta ? { ExecutionMetadata: execMeta } : {}),
                     });
                     return;
                 }
@@ -334,6 +443,8 @@ export class ProcessIsolationRunner implements TaskGraphIsolationRunner {
                         ErrorMessage: lastIpc.errorMessage ?? (stderr.trim() || `Process exited with code ${String(code)}`),
                         ExitCode: code,
                         Signal: signal,
+                        ...(lastIpc.bodyOutcome ? { BodyOutcome: lastIpc.bodyOutcome as TOutcome } : {}),
+                        ...(execMeta ? { ExecutionMetadata: execMeta } : {}),
                     });
                     return;
                 }
@@ -344,6 +455,7 @@ export class ProcessIsolationRunner implements TaskGraphIsolationRunner {
                         TerminationReason: 'Completed',
                         Output: {},
                         ExitCode: 0,
+                        ...(execMeta ? { ExecutionMetadata: execMeta } : {}),
                     });
                     return;
                 }
@@ -356,6 +468,7 @@ export class ProcessIsolationRunner implements TaskGraphIsolationRunner {
                     ErrorMessage: stderr.trim() || `Process terminated with exit code ${String(code)}${signal ? ` (signal ${signal})` : ''}.`,
                     ExitCode: code,
                     Signal: signal,
+                    ...(execMeta ? { ExecutionMetadata: execMeta } : {}),
                 });
             });
 

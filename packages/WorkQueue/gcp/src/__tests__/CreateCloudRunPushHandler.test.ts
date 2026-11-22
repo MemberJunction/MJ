@@ -124,4 +124,56 @@ describe('CreateCloudRunPushHandler', () => {
         });
         expect((await fromEnv(makePushRequest(TestMessage(6)))).StatusCode).toBe(200);
     });
+
+    it('lazily creates DLQ Pub/Sub client on first DeadLetter, reuses it across warm requests, and closes on handler.Close()', async () => {
+        let clientCreations = 0;
+        let publishCount = 0;
+        let closeCount = 0;
+        const fakeBinding = TestGcpSubscriptionBinding(false);
+
+        const handler = CreateCloudRunPushHandler(() => new ScriptedHandler(), {
+            Binding: fakeBinding,
+            Env: { GOOGLE_CLOUD_PROJECT: 'mj-wq-test' },
+            EmitMetrics: () => undefined,
+            CreateDataClients: () => {
+                clientCreations += 1;
+                return {
+                    ProjectId: 'mj-wq-test',
+                    Publisher: {
+                        publish: async () => {
+                            publishCount += 1;
+                            return [{ messageIds: [`dlq-${publishCount}`] }];
+                        },
+                        close: async () => undefined,
+                    } as never,
+                    Subscriber: {
+                        close: async () => undefined,
+                    } as never,
+                    Close: async () => {
+                        closeCount += 1;
+                    },
+                };
+            },
+        });
+
+        // Happy path (200 Completed) creates ZERO Pub/Sub clients
+        const okRes = await handler(makePushRequest(TestMessage(20)));
+        expect(okRes.StatusCode).toBe(200);
+        expect(okRes.Body.Status).toBe('Completed');
+        expect(clientCreations).toBe(0);
+
+        // Two warm DeadLetter requests create the DLQ client ONCE and reuse it
+        const msg1 = TestMessage(21);
+        const msg2 = TestMessage(22);
+        script.set(msg1.MessageID, Outcome.DeadLetter('bad payload 1'));
+        script.set(msg2.MessageID, Outcome.DeadLetter('bad payload 2'));
+        expect((await handler(makePushRequest(msg1))).Body.Status).toBe('DeadLettered');
+        expect((await handler(makePushRequest(msg2))).Body.Status).toBe('DeadLettered');
+        expect(clientCreations).toBe(1);
+        expect(publishCount).toBe(2);
+        expect(closeCount).toBe(0);
+
+        await handler.Close();
+        expect(closeCount).toBe(1);
+    });
 });

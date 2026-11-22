@@ -338,6 +338,8 @@ type TaskBodyOutcome = {
     TokensUsed?: number;
     /** Optional timestamped USD spend deltas incurred across loop iterations. */
     CostEvents?: BudgetCostEvent[];
+    /** Isolation runtime telemetry recorded when a step executed through an isolation runner. */
+    IsolationExecution?: NonNullable<TaskStepConfiguration['runtime']>['isolationExecution'];
 };
 
 interface GlobalUserCacheLookup {
@@ -1471,6 +1473,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                         attemptAccounting.ShouldPersistAttempts ? attemptAccounting.UpdatedAttempts : undefined,
                         attemptAccounting.PriorPromptRunIDs,
                         attemptAccounting.PriorAgentRunIDs,
+                        result.IsolationExecution,
                     ),
                 },
                 this.contextUser,
@@ -4341,7 +4344,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         const nodeEnvelope = this.nodeEnvelope(task, context, prehydrated);
         const isolationRunner = this.config?.IsolationRunners?.[context.Isolation];
         const outcome = isolationRunner
-            ? await this.runWithIsolationRunner(isolationRunner, context.Isolation, task, provider, rawPayload, dependencyOutputs, context, nodeEnvelope, onProgress, prehydrated?.parentTask ?? null)
+            ? await this.runWithIsolationRunner(isolationRunner, context.Isolation, task, provider, rawPayload, dependencyOutputs, context, nodeEnvelope, onProgress, prehydrated?.parentTask ?? null, prehydrated?.parentMetadata ?? null)
             : await this.runTaskBodyOfKind(
                 task,
                 provider,
@@ -4367,37 +4370,99 @@ export class TaskGraphDispatcher implements IShutdownable {
         nodeEnvelope: { Envelope: TaskSecurityEnvelope | undefined } | { Refusal: string },
         onProgress?: TaskRunProgressCallback,
         parentTask?: MJTaskEntity | null,
+        parentMetadata?: TaskGraphParentMetadata | null,
     ): Promise<TaskBodyOutcome> {
-        const isoConfig = LimitsConfigResolver.Resolve().Limits.Isolation;
+        const isoConfig = LimitsConfigResolver.Resolve({
+            AgentOrWorkflowMetadata: parentMetadata?.limitsOverride,
+        }).Limits.Isolation;
+
+        const isIsolatedBoundary = level !== 'InProcess';
         const stepResult = await runner.Execute<TaskBodyOutcome>({
             Level: level,
             TaskID: task.ID,
             TaskName: task.Name,
             GraphID: task.ParentID ?? task.ID,
-            Workload: { Kind: 'InProcessCallback' },
+            Workload: isIsolatedBoundary
+                ? {
+                      Kind: 'IsolatedTaskStep',
+                      TaskID: task.ID,
+                      TaskName: task.Name,
+                      GraphID: task.ParentID ?? task.ID,
+                      StepType: task.StepType ?? 'Action',
+                      ActionID: task.ActionID ?? null,
+                      AgentID: task.AgentID ?? null,
+                      PromptID: task.PromptID ?? null,
+                      InputPayload: rawPayload,
+                      DependencyOutputs: Object.fromEntries(dependencyOutputs),
+                      Configuration: task.Configuration ?? null,
+                      InputTainted: this.inputTaintOf(nodeEnvelope),
+                  }
+                : { Kind: 'InProcessCallback' },
             Limits: isoConfig,
-            ExecuteInProcess: () =>
-                this.runTaskBodyOfKind(
-                    task,
-                    provider,
-                    rawPayload,
-                    dependencyOutputs,
-                    context,
-                    nodeEnvelope,
-                    onProgress,
-                    parentTask,
-                ),
+            ...(isIsolatedBoundary
+                ? {
+                      HostRpc: {
+                          Invoke: async (method: string): Promise<Record<string, unknown>> => {
+                              if (method !== 'executeTaskStep') {
+                                  throw new Error(`Unsupported TaskGraph isolation HostRpc method "${method}".`);
+                              }
+                              const bodyOutcome = await this.runTaskBodyOfKind(
+                                  task,
+                                  provider,
+                                  rawPayload,
+                                  dependencyOutputs,
+                                  context,
+                                  nodeEnvelope,
+                                  onProgress,
+                                  parentTask,
+                              );
+                              return { BodyOutcome: bodyOutcome };
+                          },
+                      },
+                  }
+                : {
+                      ExecuteInProcess: () =>
+                          this.runTaskBodyOfKind(
+                              task,
+                              provider,
+                              rawPayload,
+                              dependencyOutputs,
+                              context,
+                              nodeEnvelope,
+                              onProgress,
+                              parentTask,
+                          ),
+                  }),
         });
-        if (stepResult.BodyOutcome) {
-            return stepResult.BodyOutcome;
+
+        const isolationExecution = stepResult.ExecutionMetadata
+            ? {
+                  level,
+                  isMainThread: stepResult.ExecutionMetadata.IsMainThread,
+                  ...(stepResult.ExecutionMetadata.ThreadId !== undefined
+                      ? { threadId: stepResult.ExecutionMetadata.ThreadId }
+                      : {}),
+                  processId: stepResult.ExecutionMetadata.ProcessId,
+                  ...(stepResult.ExecutionMetadata.Runtime ? { runtime: stepResult.ExecutionMetadata.Runtime } : {}),
+                  ...(stepResult.ExecutionMetadata.Image ? { image: stepResult.ExecutionMetadata.Image } : {}),
+                  terminationReason: stepResult.TerminationReason,
+              }
+            : undefined;
+
+        if (stepResult.Success && stepResult.BodyOutcome) {
+            return {
+                ...stepResult.BodyOutcome,
+                ...(isolationExecution ? { IsolationExecution: isolationExecution } : {}),
+            };
         }
         return {
             Success: stepResult.Success,
-            AgentRunID: null,
-            Output: stepResult.Output,
+            AgentRunID: stepResult.BodyOutcome?.AgentRunID ?? null,
+            Output: stepResult.Output ?? stepResult.BodyOutcome?.Output,
             PayloadAtStart: rawPayload,
-            ErrorMessage: stepResult.ErrorMessage,
-            ResultCode: stepResult.ErrorCode,
+            ErrorMessage: stepResult.ErrorMessage ?? stepResult.BodyOutcome?.ErrorMessage,
+            ResultCode: stepResult.ErrorCode ?? stepResult.BodyOutcome?.ResultCode,
+            ...(isolationExecution ? { IsolationExecution: isolationExecution } : {}),
         };
     }
 
@@ -7008,6 +7073,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         attempts?: TaskRuntimeAttemptBilling[],
         priorPromptRunIDs?: string[],
         priorAgentRunIDs?: string[],
+        isolationExecution?: NonNullable<TaskStepConfiguration['runtime']>['isolationExecution'],
     ): string | undefined {
         const existing = this.parseConfiguration(task) as TaskStepConfiguration | undefined;
         const clearingCursor = loopCursor === null && Boolean(existing?.runtime?.loopCursor);
@@ -7025,7 +7091,8 @@ export class TaskGraphDispatcher implements IShutdownable {
             !governanceCostEvents?.length &&
             !attempts?.length &&
             !priorPromptRunIDs?.length &&
-            !priorAgentRunIDs?.length
+            !priorAgentRunIDs?.length &&
+            !isolationExecution
         ) return undefined;
 
         const baseRuntime = existing?.runtime ? { ...existing.runtime } : {};
@@ -7057,6 +7124,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 ...(priorPromptRunIDs?.length ? { priorPromptRunIDs } : {}),
                 ...(priorAgentRunIDs?.length ? { priorAgentRunIDs } : {}),
                 ...(loopCursor ? { loopCursor } : {}),
+                ...(isolationExecution ? { isolationExecution } : {}),
             },
         };
         return JSON.stringify(merged);

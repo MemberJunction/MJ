@@ -72,6 +72,40 @@ export function IsTaskGraphIsolationLevel(value: unknown): value is TaskGraphIso
 }
 
 /**
+ * Strictly allowlisted OCI container CLI binaries permitted for `'Container'` isolation.
+ */
+export const ALLOWED_CONTAINER_RUNTIMES = ['docker', 'podman'] as const;
+
+/**
+ * Union of permitted OCI container runtime binaries.
+ */
+export type AllowedContainerRuntime = (typeof ALLOWED_CONTAINER_RUNTIMES)[number];
+
+const CONTAINER_IMAGE_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9._/:@-]*$/;
+const MAX_CONTAINER_IMAGE_LENGTH = 255;
+
+/**
+ * Validates that a container runtime binary name is strictly allowlisted (`'docker'` or `'podman'`).
+ */
+export function IsValidContainerRuntime(value: unknown): value is AllowedContainerRuntime {
+    return value === 'docker' || value === 'podman';
+}
+
+/**
+ * Validates an OCI container image reference against strict syntax rules:
+ * non-empty, <= 255 chars, starts with alphanumeric, no leading `-`, no `..`, no whitespace or shell metacharacters.
+ */
+export function IsValidContainerImage(value: unknown): value is string {
+    return (
+        typeof value === 'string' &&
+        value.length >= 1 &&
+        value.length <= MAX_CONTAINER_IMAGE_LENGTH &&
+        !value.includes('..') &&
+        CONTAINER_IMAGE_REGEX.test(value)
+    );
+}
+
+/**
  * Execution isolation defaults and resource-containment guard settings for task graphs and workflows.
  */
 export interface MJLimitsIsolationConfig {
@@ -124,6 +158,8 @@ export interface MJLimitsTaskGraphQueueConfig {
     EnqueuePublishRetryAttempts: number;
     /** Retention window (ms) for recovering unacknowledged terminal caller notifications across restarts. */
     CallerNotificationRetentionMs: number;
+    /** Maximum execution timeout (ms) when a queued graph worker awaits graph completion inside its runner slot. */
+    QueueDispatchExecutionTimeoutMs: number;
 }
 
 /**
@@ -525,6 +561,7 @@ export const CODE_FALLBACK_LIMITS: Readonly<MJLimitsConfig> = {
         MaxEnqueueRedeliveryAttempts: 5,
         EnqueuePublishRetryAttempts: 3,
         CallerNotificationRetentionMs: 86_400_000,
+        QueueDispatchExecutionTimeoutMs: 300_000,
     },
 };
 
@@ -669,6 +706,7 @@ const TASK_GRAPH_QUEUE_NUMERIC_KEYS: readonly (
     | 'MaxEnqueueRedeliveryAttempts'
     | 'EnqueuePublishRetryAttempts'
     | 'CallerNotificationRetentionMs'
+    | 'QueueDispatchExecutionTimeoutMs'
 )[] = [
     'MaxEnqueuePublishConcurrency',
     'EnqueuePublishBatchSize',
@@ -677,6 +715,7 @@ const TASK_GRAPH_QUEUE_NUMERIC_KEYS: readonly (
     'MaxEnqueueRedeliveryAttempts',
     'EnqueuePublishRetryAttempts',
     'CallerNotificationRetentionMs',
+    'QueueDispatchExecutionTimeoutMs',
 ] as const;
 
 const TASK_GRAPH_QUEUE_KEYS: readonly TaskGraphQueueKey[] = [
@@ -1027,9 +1066,13 @@ function normalizeIsolationOverride(raw: LimitsInputValue): MJLimitsIsolationOve
         Object.assign(out, numeric);
     }
     const containerImage = readNonEmptyString(readObjectProperty(raw, ['ContainerImage', 'containerImage']));
-    if (containerImage !== undefined) out.ContainerImage = containerImage;
+    if (containerImage !== undefined && IsValidContainerImage(containerImage)) {
+        out.ContainerImage = containerImage;
+    }
     const containerRuntime = readNonEmptyString(readObjectProperty(raw, ['ContainerRuntime', 'containerRuntime']));
-    if (containerRuntime !== undefined) out.ContainerRuntime = containerRuntime;
+    if (containerRuntime !== undefined && IsValidContainerRuntime(containerRuntime)) {
+        out.ContainerRuntime = containerRuntime;
+    }
     return Object.keys(out).length > 0 ? out : undefined;
 }
 
@@ -1378,6 +1421,21 @@ function shouldClampToPolicyCeiling(
     return typeof runVal === 'number' && Number.isFinite(runVal) && runVal > policyVal;
 }
 
+const HOST_GOVERNED_ONLY_KEYS: ReadonlySet<LimitsKeyPath> = new Set<LimitsKeyPath>([
+    'Isolation.ContainerRuntime',
+    'Isolation.ContainerImage',
+]);
+
+function isValidHostGovernedValue(key: LimitsKeyPath, value: LimitsScalarValue): boolean {
+    if (key === 'Isolation.ContainerRuntime') {
+        return IsValidContainerRuntime(value);
+    }
+    if (key === 'Isolation.ContainerImage') {
+        return IsValidContainerImage(value);
+    }
+    return true;
+}
+
 function resolveSingleKey(
     key: LimitsKeyPath,
     defaults: MJLimitsConfig,
@@ -1392,9 +1450,13 @@ function resolveSingleKey(
     };
     let preRunValue: LimitsScalarValue = codeFallbackBase;
     let preRunTier: LimitsSourceTier = 'CodeFallback';
+    const hostGovernedOnly = HOST_GOVERNED_ONLY_KEYS.has(key);
 
     for (const tier of LIMITS_TIER_PRECEDENCE) {
         if (tier === 'RunOverride') {
+            continue;
+        }
+        if (hostGovernedOnly && tier !== 'CodeFallback' && tier !== 'MjConfig') {
             continue;
         }
         const layer = tiers[tier];
@@ -1402,7 +1464,7 @@ function resolveSingleKey(
             continue;
         }
         const candidate = extractTierValue(layer, key);
-        if (candidate !== undefined) {
+        if (candidate !== undefined && (!hostGovernedOnly || isValidHostGovernedValue(key, candidate))) {
             tierValues[tier] = candidate;
             preRunValue = candidate;
             preRunTier = tier;
@@ -1413,7 +1475,7 @@ function resolveSingleKey(
     let sourceTier: LimitsSourceTier = preRunTier;
     let wasClamped = false;
 
-    const runLayer = tiers.RunOverride;
+    const runLayer = hostGovernedOnly ? null : tiers.RunOverride;
     const runCandidate = runLayer ? extractTierValue(runLayer, key) : undefined;
     if (runCandidate !== undefined) {
         tierValues.RunOverride = runCandidate;
@@ -1492,16 +1554,17 @@ export function ValidateLimitsConfig(config: MJLimitsConfig): LimitsValidationRe
             Message: 'Isolation.DraftDefaultIsolation must be one of InProcess, Worker, Process, or Container.',
         });
     }
-    if (!config.Isolation.ContainerImage || !config.Isolation.ContainerImage.trim()) {
+    if (!IsValidContainerImage(config.Isolation.ContainerImage?.trim())) {
         issues.push({
             Key: 'Isolation.ContainerImage',
-            Message: 'Isolation.ContainerImage must be a non-empty string.',
+            Message:
+                'Isolation.ContainerImage must be a valid OCI image reference (1-255 chars, no leading "-", "..", or whitespace).',
         });
     }
-    if (!config.Isolation.ContainerRuntime || !config.Isolation.ContainerRuntime.trim()) {
+    if (!IsValidContainerRuntime(config.Isolation.ContainerRuntime?.trim())) {
         issues.push({
             Key: 'Isolation.ContainerRuntime',
-            Message: 'Isolation.ContainerRuntime must be a non-empty string.',
+            Message: 'Isolation.ContainerRuntime must be "docker" or "podman".',
         });
     }
     if (!config.TaskGraphQueue.GraphDispatchTopicName || !config.TaskGraphQueue.GraphDispatchTopicName.trim()) {

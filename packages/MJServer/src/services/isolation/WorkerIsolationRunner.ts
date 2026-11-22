@@ -21,32 +21,42 @@ import { Worker, type ResourceLimits } from 'node:worker_threads';
 import { createRequire } from 'node:module';
 import { LimitsConfigResolver, type MJLimitsIsolationConfig } from '@memberjunction/core';
 import type {
+    TaskGraphIsolationExecutionMetadata,
     TaskGraphIsolationExecutionResult,
     TaskGraphIsolationRunRequest,
     TaskGraphIsolationRunner,
     TaskGraphIsolationStepOutcome,
+    TaskGraphIsolationWorkload,
 } from '@memberjunction/task-graph';
 
 interface WorkerPayloadMessage {
-    readonly ok: boolean;
+    readonly type?: 'result' | 'rpc';
+    readonly ok?: boolean;
     readonly output?: Record<string, unknown>;
+    readonly bodyOutcome?: TaskGraphIsolationStepOutcome;
+    readonly executionMeta?: TaskGraphIsolationExecutionMetadata;
     readonly errorMessage?: string;
     readonly errorCode?: string;
+    readonly callId?: number;
+    readonly method?: string;
+    readonly params?: Record<string, unknown>;
 }
 
 interface WorkerBootstrapData {
-    readonly kind: 'InlineScript' | 'Module';
+    readonly kind: 'InlineScript' | 'Module' | 'IsolatedTaskStep';
     readonly script?: string;
     readonly input?: Readonly<Record<string, unknown>>;
     readonly modulePath?: string;
     readonly exportName?: string;
     readonly args?: Readonly<Record<string, unknown>>;
+    readonly step?: Extract<TaskGraphIsolationWorkload, { Kind: 'IsolatedTaskStep' }>;
 }
 
 const WORKER_BOOTSTRAP_CODE = `
 'use strict';
-const { parentPort, workerData } = require('node:worker_threads');
+const { parentPort, workerData, isMainThread, threadId } = require('node:worker_threads');
 const { pathToFileURL } = require('node:url');
+const vm = require('node:vm');
 
 function normalizeOutput(val) {
     if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
@@ -55,13 +65,79 @@ function normalizeOutput(val) {
     return { value: val };
 }
 
+let nextCallId = 1;
+const pendingRpc = new Map();
+
+parentPort.on('message', (msg) => {
+    if (msg && msg.type === 'rpcResult' && typeof msg.callId === 'number') {
+        const entry = pendingRpc.get(msg.callId);
+        if (!entry) return;
+        pendingRpc.delete(msg.callId);
+        if (msg.ok) {
+            entry.resolve(msg.result || {});
+        } else {
+            entry.reject(new Error(msg.errorMessage || 'Host RPC invocation failed.'));
+        }
+    }
+});
+
+function invokeHostRpc(method, params) {
+    return new Promise((resolve, reject) => {
+        const callId = nextCallId++;
+        pendingRpc.set(callId, { resolve, reject });
+        parentPort.postMessage({ type: 'rpc', callId, method, params });
+    });
+}
+
 (async () => {
     try {
+        const executionMeta = {
+            IsMainThread: isMainThread,
+            ThreadId: threadId,
+            ProcessId: process.pid,
+        };
+        if (workerData.kind === 'IsolatedTaskStep') {
+            if (isMainThread) {
+                throw new Error('WorkerIsolationRunner expected worker thread (!isMainThread).');
+            }
+            const step = workerData.step;
+            const rpcRes = await invokeHostRpc('executeTaskStep', {
+                TaskID: step.TaskID,
+                StepType: step.StepType,
+                IsolationContext: executionMeta,
+            });
+            const bodyOutcome = rpcRes && rpcRes.BodyOutcome ? rpcRes.BodyOutcome : { Success: false, ErrorMessage: 'Missing BodyOutcome from host RPC.' };
+            parentPort.postMessage({
+                type: 'result',
+                ok: bodyOutcome.Success === true,
+                output: normalizeOutput(bodyOutcome.Output),
+                bodyOutcome,
+                executionMeta,
+                errorMessage: bodyOutcome.ErrorMessage,
+                errorCode: bodyOutcome.ResultCode,
+            });
+            return;
+        }
         let rawResult;
         if (workerData.kind === 'InlineScript') {
-            const AsyncFn = Object.getPrototypeOf(async function () {}).constructor;
-            const fn = new AsyncFn('input', workerData.script);
-            rawResult = await fn(workerData.input || {});
+            const context = vm.createContext({
+                input: workerData.input || {},
+                require,
+                process,
+                Buffer,
+                console,
+                setTimeout,
+                clearTimeout,
+                setInterval,
+                clearInterval,
+                URL,
+                TextEncoder,
+                TextDecoder,
+            });
+            const script = new vm.Script("'use strict'; (async () => {\\n" + String(workerData.script || '') + "\\n})()", {
+                filename: 'worker-inline-script.js',
+            });
+            rawResult = await script.runInContext(context);
         } else if (workerData.kind === 'Module') {
             let loaded;
             try {
@@ -82,12 +158,18 @@ function normalizeOutput(val) {
         } else {
             throw new Error('Unsupported worker workload kind: ' + String(workerData.kind));
         }
-        parentPort.postMessage({ ok: true, output: normalizeOutput(rawResult) });
+        parentPort.postMessage({ type: 'result', ok: true, output: normalizeOutput(rawResult), executionMeta });
     } catch (err) {
         parentPort.postMessage({
+            type: 'result',
             ok: false,
             errorMessage: err instanceof Error ? err.message : String(err),
             errorCode: err && typeof err === 'object' && 'code' in err ? String(err.code) : undefined,
+            executionMeta: {
+                IsMainThread: isMainThread,
+                ThreadId: threadId,
+                ProcessId: process.pid,
+            },
         });
     }
 })();
@@ -129,7 +211,26 @@ export class WorkerIsolationRunner implements TaskGraphIsolationRunner {
     ): Promise<TaskGraphIsolationExecutionResult<TOutcome>> {
         const startedAt = Date.now();
         if (request.Workload.Kind === 'InProcessCallback') {
-            return this.executeInProcessCallback(request, startedAt);
+            return {
+                Success: false,
+                IsolationLevel: this.Level,
+                TerminationReason: 'Error',
+                ErrorCode: 'UNSUPPORTED_ISOLATED_WORKLOAD',
+                ErrorMessage:
+                    'WorkerIsolationRunner cannot execute unisolated InProcessCallback workloads; provide IsolatedTaskStep, InlineScript, or Module.',
+                DurationMs: Date.now() - startedAt,
+            };
+        }
+
+        if (request.Workload.Kind === 'IsolatedTaskStep' && !request.HostRpc) {
+            return {
+                Success: false,
+                IsolationLevel: this.Level,
+                TerminationReason: 'Error',
+                ErrorCode: 'MISSING_HOST_RPC',
+                ErrorMessage: 'WorkerIsolationRunner requires HostRpc for IsolatedTaskStep workloads.',
+                DurationMs: Date.now() - startedAt,
+            };
         }
 
         const defaults = LimitsConfigResolver.Resolve().Limits.Isolation;
@@ -142,21 +243,28 @@ export class WorkerIsolationRunner implements TaskGraphIsolationRunner {
             maxYoungGenerationSizeMb: maxYoungMb,
         };
 
-        const workerData: WorkerBootstrapData =
-            request.Workload.Kind === 'InlineScript'
-                ? {
-                      kind: 'InlineScript',
-                      script: request.Workload.Script,
-                      input: { ...(request.Workload.Input ?? {}) },
-                  }
-                : {
-                      kind: 'Module',
-                      modulePath: this.resolveModulePath(request.Workload.ModulePath),
-                      exportName: request.Workload.ExportName,
-                      args: request.Workload.Args ? { ...request.Workload.Args } : {},
-                  };
+        let workerData: WorkerBootstrapData;
+        if (request.Workload.Kind === 'InlineScript') {
+            workerData = {
+                kind: 'InlineScript',
+                script: request.Workload.Script,
+                input: { ...(request.Workload.Input ?? {}) },
+            };
+        } else if (request.Workload.Kind === 'Module') {
+            workerData = {
+                kind: 'Module',
+                modulePath: this.resolveModulePath(request.Workload.ModulePath),
+                exportName: request.Workload.ExportName,
+                args: request.Workload.Args ? { ...request.Workload.Args } : {},
+            };
+        } else {
+            workerData = {
+                kind: 'IsolatedTaskStep',
+                step: request.Workload,
+            };
+        }
 
-        return this.runWorkerThread<TOutcome>(workerData, resourceLimits, timeoutMs, startedAt);
+        return this.runWorkerThread<TOutcome>(workerData, resourceLimits, timeoutMs, startedAt, request.HostRpc);
     }
 
     private resolveModulePath(modulePath: string): string {
@@ -171,51 +279,12 @@ export class WorkerIsolationRunner implements TaskGraphIsolationRunner {
         }
     }
 
-    private async executeInProcessCallback<TOutcome extends TaskGraphIsolationStepOutcome>(
-        request: TaskGraphIsolationRunRequest<TOutcome>,
-        startedAt: number,
-    ): Promise<TaskGraphIsolationExecutionResult<TOutcome>> {
-        if (!request.ExecuteInProcess) {
-            return {
-                Success: false,
-                IsolationLevel: this.Level,
-                TerminationReason: 'Error',
-                ErrorCode: 'MISSING_CALLBACK',
-                ErrorMessage: 'WorkerIsolationRunner requires ExecuteInProcess for InProcessCallback workloads.',
-                DurationMs: Date.now() - startedAt,
-            };
-        }
-        try {
-            const outcome = await request.ExecuteInProcess();
-            const outputObj =
-                outcome.Output && typeof outcome.Output === 'object' && !Array.isArray(outcome.Output)
-                    ? (outcome.Output as Record<string, unknown>)
-                    : undefined;
-            return {
-                Success: outcome.Success,
-                IsolationLevel: this.Level,
-                Output: outputObj,
-                ErrorMessage: outcome.ErrorMessage,
-                TerminationReason: outcome.Success ? 'Completed' : 'Error',
-                DurationMs: Date.now() - startedAt,
-                BodyOutcome: outcome,
-            };
-        } catch (err) {
-            return {
-                Success: false,
-                IsolationLevel: this.Level,
-                TerminationReason: 'Error',
-                ErrorMessage: err instanceof Error ? err.message : String(err),
-                DurationMs: Date.now() - startedAt,
-            };
-        }
-    }
-
     private runWorkerThread<TOutcome extends TaskGraphIsolationStepOutcome>(
         workerData: WorkerBootstrapData,
         resourceLimits: ResourceLimits,
         timeoutMs: number,
         startedAt: number,
+        hostRpc?: TaskGraphIsolationRunRequest<TOutcome>['HostRpc'],
     ): Promise<TaskGraphIsolationExecutionResult<TOutcome>> {
         return new Promise((resolve) => {
             let settled = false;
@@ -269,6 +338,36 @@ export class WorkerIsolationRunner implements TaskGraphIsolationRunner {
             });
 
             worker.on('message', (msg: WorkerPayloadMessage) => {
+                if (msg.type === 'rpc' && typeof msg.callId === 'number' && msg.method) {
+                    if (!hostRpc) {
+                        worker.postMessage({
+                            type: 'rpcResult',
+                            callId: msg.callId,
+                            ok: false,
+                            errorMessage: 'No HostRpc bridge registered.',
+                        });
+                        return;
+                    }
+                    void hostRpc
+                        .Invoke(msg.method, msg.params ?? {})
+                        .then((result) => {
+                            if (!settled) {
+                                worker.postMessage({ type: 'rpcResult', callId: msg.callId, ok: true, result });
+                            }
+                        })
+                        .catch((err) => {
+                            if (!settled) {
+                                worker.postMessage({
+                                    type: 'rpcResult',
+                                    callId: msg.callId,
+                                    ok: false,
+                                    errorMessage: err instanceof Error ? err.message : String(err),
+                                });
+                            }
+                        });
+                    return;
+                }
+
                 lastMessage = msg;
                 if (msg.ok) {
                     finish({
@@ -276,6 +375,8 @@ export class WorkerIsolationRunner implements TaskGraphIsolationRunner {
                         TerminationReason: 'Completed',
                         Output: normalizeOutputRecord(msg.output),
                         ExitCode: 0,
+                        ...(msg.bodyOutcome ? { BodyOutcome: msg.bodyOutcome as TOutcome } : {}),
+                        ...(msg.executionMeta ? { ExecutionMetadata: msg.executionMeta } : {}),
                     });
                 } else {
                     finish({
@@ -283,6 +384,8 @@ export class WorkerIsolationRunner implements TaskGraphIsolationRunner {
                         TerminationReason: 'Error',
                         ErrorCode: msg.errorCode ?? 'ERR_WORKER_EXECUTION',
                         ErrorMessage: msg.errorMessage ?? 'Worker reported execution failure.',
+                        ...(msg.bodyOutcome ? { BodyOutcome: msg.bodyOutcome as TOutcome } : {}),
+                        ...(msg.executionMeta ? { ExecutionMetadata: msg.executionMeta } : {}),
                     });
                 }
             });
@@ -315,6 +418,8 @@ export class WorkerIsolationRunner implements TaskGraphIsolationRunner {
                         TerminationReason: 'Completed',
                         Output: normalizeOutputRecord(lastMessage.output),
                         ExitCode: code,
+                        ...(lastMessage.bodyOutcome ? { BodyOutcome: lastMessage.bodyOutcome as TOutcome } : {}),
+                        ...(lastMessage.executionMeta ? { ExecutionMetadata: lastMessage.executionMeta } : {}),
                     });
                     return;
                 }

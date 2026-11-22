@@ -1,4 +1,4 @@
-import { PubSub, v1, type ClientConfig } from '@google-cloud/pubsub';
+import { v1, type ClientConfig } from '@google-cloud/pubsub';
 import { WorkQueueConfigurationError } from '@memberjunction/work-queue-core';
 import type { GcpTransportConfig } from '../config';
 
@@ -71,7 +71,6 @@ export function BuildPubSubClientConfig(config: GcpTransportConfig, credentials?
 /** Creates data-plane Pub/Sub GAPIC publisher & subscriber clients without exposing admin operations in Cloud Run entrypoints. */
 export function CreatePubSubDataClients(config: GcpTransportConfig, credentials?: GcpCredentialsOption): GcpDataClientBundle {
     const clientConfig = BuildPubSubClientConfig(config, credentials);
-    const pubsub = new PubSub(clientConfig);
     const publisher = new v1.PublisherClient({
         projectId: clientConfig.projectId,
         ...(clientConfig.apiEndpoint ? { apiEndpoint: clientConfig.apiEndpoint } : {}),
@@ -92,7 +91,6 @@ export function CreatePubSubDataClients(config: GcpTransportConfig, credentials?
             await Promise.all([
                 publisher.close().catch(() => undefined),
                 subscriber.close().catch(() => undefined),
-                pubsub.close().catch(() => undefined),
             ]);
         },
     };

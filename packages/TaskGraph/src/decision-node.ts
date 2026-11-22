@@ -21,10 +21,12 @@ import {
     type TaskGraphNodeConfigMap,
     type TaskGraphNodeKind,
 } from '@memberjunction/ai-core-plus';
+import type { TaskGraphIsolationLevel } from '@memberjunction/core';
 import type { MJTaskEntity_ITaskLoopIteration, MJTaskEntity_ITaskStepConfiguration } from '@memberjunction/core-entities';
 import type { LoopCursorSnapshot, LoopIterationOutcome } from './TaskLoopExecutor';
 import { ParseConditionOutput } from './condition-gate';
 import type { TaskCompensationStepMetadata } from './saga-compensation';
+import type { TaskGraphIsolationTerminationReason } from './isolation';
 
 /**
  * What a Decision step keeps in `Task.Configuration.decision`: its spec configuration, plus the name
@@ -166,6 +168,16 @@ export type TaskStepConfiguration = MJTaskEntity_ITaskStepConfiguration & {
             CostEvents?: BudgetCostEvent[];
             /** Epoch ms when the loop cursor was last persisted/updated. */
             UpdatedAtMs?: number;
+        };
+        /** Isolation runtime telemetry recorded when a step executes through an isolation runner. */
+        isolationExecution?: {
+            level: TaskGraphIsolationLevel;
+            isMainThread: boolean;
+            threadId?: number;
+            processId: number;
+            runtime?: string;
+            image?: string;
+            terminationReason: TaskGraphIsolationTerminationReason;
         };
     };
 };
