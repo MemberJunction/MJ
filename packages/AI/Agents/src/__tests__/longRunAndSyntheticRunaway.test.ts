@@ -31,6 +31,7 @@ import {
     type MJAIAgentEntityExtended,
     type MJAIAgentRunEntityExtended,
     type MJAIAgentRunStepEntityExtended,
+    type RunawayJsonValue,
     type TaskGraphSpec,
     type TaskGraphSpecNode,
 } from '@memberjunction/ai-core-plus';
@@ -75,7 +76,7 @@ const AGENT_TYPE_ID = '44444444-4444-4444-8444-444444444444';
 const PROMPT_ID = '55555555-5555-4555-8555-555555555555';
 const ACTION_ID = '66666666-6666-4666-8666-666666666666';
 
-const catalogMap = new Map<string, unknown>();
+const catalogMap = new Map<string, object>();
 
 vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {
@@ -94,7 +95,7 @@ vi.mock('@memberjunction/aiengine', () => ({
                         SystemPromptID: PROMPT_ID,
                         AgentPromptPlaceholder: '{{ _AGENT_PROMPT_ }}',
                         IsActive: true,
-                    } as unknown as MJAIAgentTypeEntity,
+                    } as Partial<MJAIAgentTypeEntity> as MJAIAgentTypeEntity,
                 ],
                 Prompts: [
                     {
@@ -102,7 +103,7 @@ vi.mock('@memberjunction/aiengine', () => ({
                         Name: 'Loop System Prompt',
                         TemplateText: 'System',
                         IsActive: true,
-                    } as unknown as MJAIPromptEntity,
+                    } as Partial<MJAIPromptEntity> as MJAIPromptEntity,
                 ],
                 AgentActions: [
                     {
@@ -138,7 +139,7 @@ vi.mock('@memberjunction/aiengine', () => ({
                 GetAgentRelationships: vi.fn(() => []),
                 GetAgentPrompts: vi.fn(() => []),
                 GetAgentBaseCatalog: vi.fn((agentId: string) => catalogMap.get(agentId)),
-                SetAgentBaseCatalog: vi.fn((agentId: string, cat: unknown) => {
+                SetAgentBaseCatalog: vi.fn((agentId: string, cat: object) => {
                     catalogMap.set(agentId, cat);
                 }),
                 ResolveAgentStorageAccountID: vi.fn(async () => null),
@@ -149,29 +150,44 @@ vi.mock('@memberjunction/aiengine', () => ({
 
 vi.mock('@memberjunction/actions', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/actions')>();
+    let mockActionEngine: {
+        Config: ReturnType<typeof vi.fn>;
+        Actions: Array<{
+            ID: string;
+            Name: string;
+            Description: string;
+            Status: string;
+            Params: { Items: never[] };
+            ResultCodes: { Items: never[] };
+        }>;
+        RunAction: ReturnType<typeof vi.fn>;
+    } | null = null;
     return {
         ...actual,
         ActionEngineServer: {
             get Instance() {
-                return {
-                    Config: vi.fn(async () => undefined),
-                    Actions: [
-                        {
-                            ID: ACTION_ID,
-                            Name: 'ExecuteStep',
-                            Description: 'Executes a step',
-                            Status: 'Active',
-                            Params: { Items: [] },
-                            ResultCodes: { Items: [] },
-                        },
-                    ],
-                    RunAction: vi.fn(async () => ({
-                        Success: true,
-                        Message: 'Executed step cleanly',
-                        Params: [],
-                        Result: { ResultCode: 'SUCCESS' },
-                    })),
-                };
+                if (!mockActionEngine) {
+                    mockActionEngine = {
+                        Config: vi.fn(async () => undefined),
+                        Actions: [
+                            {
+                                ID: ACTION_ID,
+                                Name: 'ExecuteStep',
+                                Description: 'Executes a step',
+                                Status: 'Active',
+                                Params: { Items: [] },
+                                ResultCodes: { Items: [] },
+                            },
+                        ],
+                        RunAction: vi.fn(async () => ({
+                            Success: true,
+                            Message: 'Executed step cleanly',
+                            Params: [],
+                            Result: { ResultCode: 'SUCCESS' },
+                        })),
+                    };
+                }
+                return mockActionEngine;
             },
         },
     };
@@ -182,6 +198,15 @@ vi.mock('@memberjunction/ai-engine-base', () => ({
         HasPermission: vi.fn(async () => true),
     },
 }));
+
+interface AcceptanceEnvelope extends Record<string, RunawayJsonValue | object | undefined> {
+    taskComplete: boolean;
+    reasoning?: string;
+    message?: string;
+    scratchpad?: object;
+    payloadChangeRequest?: object;
+    nextStep?: object;
+}
 
 class AcceptanceRunHarness {
     public readonly Runs = new Map<string, MJAIAgentRunEntityExtended>();
@@ -194,7 +219,7 @@ class AcceptanceRunHarness {
 
     public CreateProvider(): IMetadataProvider {
         const self = this;
-        return {
+        const provider: Partial<IMetadataProvider> = {
             Entities: [],
             EntityByName: vi.fn(() => undefined),
             GetEntityObject: vi.fn(async (entityName: string) => {
@@ -206,7 +231,8 @@ class AcceptanceRunHarness {
             }),
             RunViews: vi.fn(async () => []),
             RunView: vi.fn(async () => ({ Success: true, Results: [] })),
-        } as unknown as IMetadataProvider;
+        };
+        return provider as IMetadataProvider;
     }
 
     private makeRun(): MJAIAgentRunEntityExtended {
@@ -214,10 +240,10 @@ class AcceptanceRunHarness {
         const steps: MJAIAgentRunStepEntityExtended[] = [];
         let dataJson: string | null = null;
         let checkpointCache: ReturnType<typeof ExtractRunawayCheckpointFromRunData> = null;
-        let finalPayloadObj: unknown = null;
+        let finalPayloadObj: RunawayJsonValue | object | null = null;
         let finalPayload: string | null = null;
 
-        const run: Partial<MJAIAgentRunEntityExtended> & Record<string, unknown> = {
+        const run: Partial<MJAIAgentRunEntityExtended> & { ID: string; Steps: MJAIAgentRunStepEntityExtended[] } = {
             ID: id,
             AgentID: AGENT_ID,
             Status: 'Running',
@@ -251,7 +277,7 @@ class AcceptanceRunHarness {
             get FinalPayloadObject() {
                 return finalPayloadObj;
             },
-            set FinalPayloadObject(v) {
+            set FinalPayloadObject(v: RunawayJsonValue | object | null) {
                 finalPayloadObj = v;
             },
             get FinalPayload() {
@@ -267,23 +293,23 @@ class AcceptanceRunHarness {
                 dataJson = stored.Data;
                 checkpointCache = stored.RunawayCheckpoint;
                 finalPayload = stored.FinalPayload;
-                finalPayloadObj = stored.FinalPayloadObject;
+                finalPayloadObj = stored.FinalPayloadObject as RunawayJsonValue | object | null;
                 steps.length = 0;
                 steps.push(...stored.Steps);
                 return true;
             }),
             Save: vi.fn(async () => {
-                this.Runs.set(run.ID as string, run as unknown as MJAIAgentRunEntityExtended);
+                this.Runs.set(run.ID, run as MJAIAgentRunEntityExtended);
                 return true;
             }),
             SetServerBoundActionParams: vi.fn(),
         };
-        return run as unknown as MJAIAgentRunEntityExtended;
+        return run as MJAIAgentRunEntityExtended;
     }
 
     private makeStep(): MJAIAgentRunStepEntityExtended {
         const id = `88888888-8888-4888-8888-${String(this.nextStep++).padStart(12, '0')}`;
-        return {
+        const step: Partial<MJAIAgentRunStepEntityExtended> = {
             ID: id,
             Status: 'Running',
             Success: null,
@@ -292,7 +318,8 @@ class AcceptanceRunHarness {
             StepName: 'Step',
             Save: vi.fn(async () => true),
             NewRecord: vi.fn(() => true),
-        } as unknown as MJAIAgentRunStepEntityExtended;
+        };
+        return step as MJAIAgentRunStepEntityExtended;
     }
 
     private makeNotification(): MJUserNotificationEntity {
@@ -329,10 +356,10 @@ class AcceptanceRunHarness {
 }
 
 function makePromptResult(
-    envelope: Record<string, unknown>,
+    envelope: AcceptanceEnvelope,
     costUsd: number,
     tokens: number,
-): AIPromptRunResult<Record<string, unknown>> {
+): AIPromptRunResult<AcceptanceEnvelope> {
     const promptRun: Partial<MJAIPromptRunEntity> = {
         ID: `pr-${Math.random().toString(36).slice(2)}`,
         TotalCost: costUsd,
@@ -353,15 +380,15 @@ function makePromptResult(
         cost: costUsd,
         combinedCost: costUsd,
         combinedTokensUsed: tokens,
-        chatResult: {} as AIPromptRunResult<Record<string, unknown>>['chatResult'],
+        chatResult: {} as AIPromptRunResult<AcceptanceEnvelope>['chatResult'],
     };
 }
 
 class ScriptedAcceptanceAgent extends BaseAgent {
-    private readonly generator: (callIndex: number) => AIPromptRunResult<Record<string, unknown>>;
+    private readonly generator: (callIndex: number) => AIPromptRunResult<AcceptanceEnvelope>;
     public CallCount = 0;
 
-    constructor(generator: (callIndex: number) => AIPromptRunResult<Record<string, unknown>>) {
+    constructor(generator: (callIndex: number) => AIPromptRunResult<AcceptanceEnvelope>) {
         super();
         this.generator = generator;
         const promptRunnerStub = {
@@ -384,21 +411,21 @@ class ScriptedAcceptanceAgent extends BaseAgent {
                 SystemPromptID: PROMPT_ID,
                 AgentPromptPlaceholder: '{{ _AGENT_PROMPT }}',
                 PromptParamsSchema: JSON.stringify({}),
-            } as unknown as MJAIAgentTypeEntity,
+            } as Partial<MJAIAgentTypeEntity> as MJAIAgentTypeEntity,
             systemPrompt: {
                 ID: PROMPT_ID,
                 Name: 'Loop System Prompt',
                 TemplateText: 'System',
-            } as unknown as AgentConfiguration['systemPrompt'],
+            } as Partial<AgentConfiguration['systemPrompt']> as AgentConfiguration['systemPrompt'],
             childPrompt: {
                 ID: PROMPT_ID,
                 Name: 'Child Prompt',
                 TemplateText: 'Child',
-            } as unknown as AgentConfiguration['childPrompt'],
+            } as Partial<AgentConfiguration['childPrompt']> as AgentConfiguration['childPrompt'],
         };
     }
 
-    protected override async loadAgentTypePromptParams(): Promise<Record<string, unknown>> {
+    protected override async loadAgentTypePromptParams(): Promise<Record<string, boolean | number | string | null | undefined>> {
         return { ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS, enableTaskGraphs: false };
     }
 
@@ -452,35 +479,85 @@ describe('Epic 1a End-to-End Acceptance: Long-Run Workflows/Channels & Early Syn
         expect(validation.Valid).toBe(true);
         expect(validation.Errors).toHaveLength(0);
 
-        // 2) Execute all 5,000 nodes through DeterministicProgressDetector + BudgetEnforcementGuard
+        // 2) Execute all 5,000 topological nodes through ActionEngineServer.RunAction + persisted step entities + guard pipeline
+        const contextUser = { ID: USER_ID, Name: 'Alice Owner', Email: 'alice@example.com' } as Partial<UserInfo> as UserInfo;
+        const provider = harness.CreateProvider();
+        const completedNodeIds: string[] = [];
+        const persistedSteps: MJAIAgentRunStepEntityExtended[] = [];
+        let runCostUsd = 0;
+
+        vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockImplementation(async (actionParams) => {
+            const batchParam = (actionParams.Params ?? []).find((p) => p.Name === 'batchIndex');
+            const batchIndex = Number(batchParam?.Value ?? 0);
+            completedNodeIds.push(`node-${batchIndex}`);
+            runCostUsd += 0.0001;
+            return {
+                Success: true,
+                Message: `Executed ETL slice ${batchIndex} affecting row key rec-${batchIndex}`,
+                Params: [],
+                Result: { ResultCode: 'SUCCESS' },
+            };
+        });
+
+        const nodeById = new Map<string, TaskGraphSpecNode>(tasks.map((t) => [t.tempId, t]));
+        const inDegree = new Map<string, number>();
+        const dependents = new Map<string, string[]>();
+        for (const node of tasks) {
+            const deps = node.dependsOn ?? [];
+            inDegree.set(node.tempId, deps.length);
+            for (const dep of deps) {
+                const list = dependents.get(dep) ?? [];
+                list.push(node.tempId);
+                dependents.set(dep, list);
+            }
+        }
+        const readyQueue: string[] = tasks.filter((t) => (inDegree.get(t.tempId) ?? 0) === 0).map((t) => t.tempId);
+
         const detector = new DeterministicProgressDetector();
         const budgetGuard = new BudgetEnforcementGuard();
         const progressConfig = LimitsConfigResolver.Resolve().Limits.ProgressDetector;
         const budgets = LimitsConfigResolver.Resolve().Limits.Budgets;
         const startedAtMs = Date.UTC(2026, 10, 21, 10, 0, 0);
 
-        let completedNodes = 0;
         let stalledCount = 0;
         let budgetBreachCount = 0;
+        let executedIdx = 0;
 
-        for (let i = 0; i < nodeCount; i++) {
-            const node = tasks[i];
-            completedNodes++;
+        while (readyQueue.length > 0) {
+            const nodeId = readyQueue.shift()!;
+            const node = nodeById.get(nodeId)!;
+            executedIdx++;
+
+            const actionResult = await ActionEngineServer.Instance.RunAction({
+                Action: { ID: ACTION_ID, Name: 'ExecuteStep' } as never,
+                Params: [{ Name: 'batchIndex', Value: executedIdx, Type: 'Input' }],
+                ContextUser: contextUser,
+            });
+            expect(actionResult.Success).toBe(true);
+
+            const stepEntity = await provider.GetEntityObject<MJAIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', contextUser);
+            stepEntity.StepNumber = executedIdx;
+            stepEntity.StepType = 'Actions';
+            stepEntity.StepName = node.name;
+            stepEntity.Status = 'Completed';
+            stepEntity.Success = true;
+            await stepEntity.Save();
+            persistedSteps.push(stepEntity);
+
             detector.RecordSample({
-                IterationIndex: i + 1,
+                IterationIndex: executedIdx,
                 StepType: 'Action',
                 StepSignature: `Action:${node.tempId}`,
                 RecordsCreatedOrChanged: 1,
                 TasksClosed: 1,
-                OutputText: `Completed ${node.name} processing unique record slice #${i + 1} with hash ${((i + 1) * 2654435761) >>> 0}.`,
-                PayloadFingerprint: `fp-${i + 1}`,
+                OutputText: actionResult.Message ?? node.name,
+                PayloadFingerprint: `completed=${completedNodeIds.length}:last=${completedNodeIds[completedNodeIds.length - 1]}`,
                 TokensSpent: 120,
                 ErrorSignature: null,
-                HeapUsedBytes: 64_000_000 + (i % 50) * 1024,
+                HeapUsedBytes: 64_000_000 + (executedIdx % 50) * 1024,
             });
 
-            // Evaluate sliding window every 50 nodes and on the final node
-            if ((i + 1) % 50 === 0 || i === nodeCount - 1) {
+            if (executedIdx % 50 === 0 || executedIdx === nodeCount) {
                 const evalResult = detector.Evaluate(progressConfig);
                 if (evalResult.Checked && evalResult.Classification === 'Stalled') {
                     stalledCount++;
@@ -489,18 +566,29 @@ describe('Epic 1a End-to-End Acceptance: Long-Run Workflows/Channels & Early Syn
                     Budgets: budgets,
                     AgentRunID: '5000-node-run',
                     UserID: USER_ID,
-                    CurrentRunCostUsd: (i + 1) * 0.0001,
+                    CurrentRunCostUsd: runCostUsd,
                     CurrentRunStartedAtMs: startedAtMs,
-                    CurrentRunTokens: (i + 1) * 120,
-                    NowMs: startedAtMs + (i + 1) * 100, // 500s total << 7,200,000ms PerRun wall-clock limit
+                    CurrentRunTokens: executedIdx * 120,
+                    NowMs: startedAtMs + executedIdx * 100,
                 });
                 if (budgetResult.Exceeded) {
                     budgetBreachCount++;
                 }
             }
+
+            for (const depId of dependents.get(node.tempId) ?? []) {
+                const remaining = (inDegree.get(depId) ?? 1) - 1;
+                inDegree.set(depId, remaining);
+                if (remaining === 0) {
+                    readyQueue.push(depId);
+                }
+            }
         }
 
-        expect(completedNodes).toBe(5_000);
+        expect(persistedSteps).toHaveLength(5_000);
+        expect(completedNodeIds).toHaveLength(5_000);
+        expect(completedNodeIds[0]).toBe('node-1');
+        expect(completedNodeIds[4_999]).toBe('node-5000');
         expect(stalledCount).toBe(0);
         expect(budgetBreachCount).toBe(0);
     }, 30_000);
@@ -520,7 +608,7 @@ describe('Epic 1a End-to-End Acceptance: Long-Run Workflows/Channels & Early Syn
             IsActive: true,
             Type: 'User',
             UserRoles: [],
-        } as unknown as UserInfo;
+        } as Partial<UserInfo> as UserInfo;
         const bob = {
             ID: PEER_USER_ID,
             Name: 'bob',
@@ -528,7 +616,7 @@ describe('Epic 1a End-to-End Acceptance: Long-Run Workflows/Channels & Early Syn
             IsActive: true,
             Type: 'User',
             UserRoles: [],
-        } as unknown as UserInfo;
+        } as Partial<UserInfo> as UserInfo;
         const systemUser = {
             ID: APPROVER_ID,
             Name: 'system',
@@ -536,7 +624,7 @@ describe('Epic 1a End-to-End Acceptance: Long-Run Workflows/Channels & Early Syn
             IsActive: true,
             Type: 'Owner',
             UserRoles: [],
-        } as unknown as UserInfo;
+        } as Partial<UserInfo> as UserInfo;
 
         vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(systemUser);
 
@@ -553,13 +641,14 @@ describe('Epic 1a End-to-End Acceptance: Long-Run Workflows/Channels & Early Syn
             Save: vi.fn(async () => true),
             Load: vi.fn(async () => true),
             LatestResult: null,
-        } as unknown as MJAgentChannelEntity;
+        } as Partial<MJAgentChannelEntity> as MJAgentChannelEntity;
 
         const participants = [
             { ID: 'p1', AgentChannelID: channel.ID, UserID: alice.ID, AgentID: AGENT_ID, Role: 'Initiator' },
             { ID: 'p2', AgentChannelID: channel.ID, UserID: bob.ID, AgentID: AGENT_ID, Role: 'Participant' },
-        ] as unknown as MJAgentChannelParticipantEntity[];
+        ] as Partial<MJAgentChannelParticipantEntity>[] as MJAgentChannelParticipantEntity[];
 
+        let routineSaveCount = 0;
         const routineStub = {
             ID: 'routine-long-chan',
             UserID: '',
@@ -574,17 +663,20 @@ describe('Epic 1a End-to-End Acceptance: Long-Run Workflows/Channels & Early Syn
             StartingPayload: '',
             Description: '',
             WakeConfiguration: null as string | null,
-            WakeConfigurationObject: null as Record<string, unknown> | null,
+            WakeConfigurationObject: null as MJUserRoutineEntity['WakeConfigurationObject'],
             NewRecord: vi.fn(),
-            Save: vi.fn(async () => true),
+            Save: vi.fn(async () => {
+                routineSaveCount++;
+                return true;
+            }),
             LatestResult: null,
-        } as unknown as MJUserRoutineEntity;
+        } as Partial<MJUserRoutineEntity> as MJUserRoutineEntity;
 
         const md = {
             GetEntityObject: vi.fn(async (entityName: string) =>
                 entityName === 'MJ: Agent Channels' ? channel : routineStub,
             ),
-        } as unknown as IMetadataProvider;
+        } as Partial<IMetadataProvider> as IMetadataProvider;
 
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunView: vi.fn(async (params: { EntityName: string }) => {
@@ -593,7 +685,7 @@ describe('Epic 1a End-to-End Acceptance: Long-Run Workflows/Channels & Early Syn
                 }
                 return { Success: true, Results: [] };
             }),
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
 
         vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockResolvedValue({
             status: 'found',
@@ -601,16 +693,31 @@ describe('Epic 1a End-to-End Acceptance: Long-Run Workflows/Channels & Early Syn
                 Status: 'Active',
                 AllowInterAgentCoordination: true,
                 Agent: 'Chief of Staff',
-            } as unknown as never,
+            } as Partial<AgentUserPolicyEngine extends never ? never : NonNullable<Awaited<ReturnType<AgentUserPolicyEngine['ResolvePolicyForAgentAndUser']>>['policy']>> as never,
+        });
+
+        let dispatchedTurnActions = 0;
+        vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockImplementation(async (actionParams) => {
+            dispatchedTurnActions++;
+            const turnVal = Number((actionParams.Params ?? []).find((p) => p.Name === 'turn')?.Value ?? dispatchedTurnActions);
+            return {
+                Success: true,
+                Message: `Reconciled portfolio ledger turn ${turnVal}`,
+                Params: [],
+                Result: { ResultCode: 'SUCCESS' },
+            };
         });
 
         const detector = new DeterministicProgressDetector();
+        const budgetGuard = new BudgetEnforcementGuard();
         const progressConfig = LimitsConfigResolver.Resolve().Limits.ProgressDetector;
+        const budgets = LimitsConfigResolver.Resolve().Limits.Budgets;
         const baseNowMs = Date.UTC(2026, 10, 21, 12, 0, 0);
 
         let completedTurns = 0;
         let pausedTurns = 0;
         let stalledTurns = 0;
+        let budgetBreachTurns = 0;
 
         for (let turn = 1; turn <= totalTurns; turn++) {
             const sender = turn % 2 === 1 ? alice : bob;
@@ -619,7 +726,7 @@ describe('Epic 1a End-to-End Acceptance: Long-Run Workflows/Channels & Early Syn
                 conversationDetailID: `detail-${turn}`,
                 senderUserID: sender.ID,
                 senderAgentID: AGENT_ID,
-                messagePreview: `Reconciled ledger segment #${turn} (${(turn * 7919).toString(16)})`,
+                messagePreview: `Reconciled ledger segment #${turn}`,
                 contextUser: sender,
                 metadataProvider: md,
                 now: new Date(baseNowMs + turn * 1_000),
@@ -627,9 +734,16 @@ describe('Epic 1a End-to-End Acceptance: Long-Run Workflows/Channels & Early Syn
 
             if (outcome.pausedByGuard) {
                 pausedTurns++;
-            } else {
-                completedTurns++;
+                break;
             }
+            completedTurns++;
+
+            const turnActionOutcome = await ActionEngineServer.Instance.RunAction({
+                Action: { ID: ACTION_ID, Name: 'ExecuteStep' } as never,
+                Params: [{ Name: 'turn', Value: turn, Type: 'Input' }],
+                ContextUser: sender,
+            });
+            expect(turnActionOutcome.Success).toBe(true);
 
             detector.RecordSample({
                 IterationIndex: turn,
@@ -637,8 +751,8 @@ describe('Epic 1a End-to-End Acceptance: Long-Run Workflows/Channels & Early Syn
                 StepSignature: `Channel:Turn-${turn}`,
                 RecordsCreatedOrChanged: 1,
                 TasksClosed: turn % 4 === 0 ? 1 : 0,
-                OutputText: `Verified channel segment ${turn} checksum ${(turn * 104729).toString(36)}`,
-                PayloadFingerprint: `chan-fp-${turn}`,
+                OutputText: turnActionOutcome.Message ?? `Turn ${turn}`,
+                PayloadFingerprint: `chan-turns=${channel.ConsecutiveAgentTurns}:wakes=${routineSaveCount}`,
                 TokensSpent: 180,
                 ErrorSignature: null,
             });
@@ -648,12 +762,27 @@ describe('Epic 1a End-to-End Acceptance: Long-Run Workflows/Channels & Early Syn
                 if (evalRes.Checked && evalRes.Classification === 'Stalled') {
                     stalledTurns++;
                 }
+                const budgetRes = await budgetGuard.Evaluate({
+                    Budgets: budgets,
+                    AgentRunID: channel.ID,
+                    UserID: sender.ID,
+                    CurrentRunCostUsd: turn * 0.0001,
+                    CurrentRunStartedAtMs: baseNowMs,
+                    CurrentRunTokens: turn * 180,
+                    NowMs: baseNowMs + turn * 1_000,
+                });
+                if (budgetRes.Exceeded) {
+                    budgetBreachTurns++;
+                }
             }
         }
 
         expect(completedTurns).toBe(2_000);
+        expect(dispatchedTurnActions).toBe(2_000);
+        expect(routineSaveCount).toBe(2_000);
         expect(pausedTurns).toBe(0);
         expect(stalledTurns).toBe(0);
+        expect(budgetBreachTurns).toBe(0);
         expect(channel.ChannelStatus).toBe('Open');
         expect(channel.ConsecutiveAgentTurns).toBe(2_000);
 
@@ -676,7 +805,7 @@ describe('Epic 1a End-to-End Acceptance: Long-Run Workflows/Channels & Early Syn
             IsActive: true,
             Type: 'User',
             UserRoles: [],
-        } as unknown as UserInfo;
+        } as Partial<UserInfo> as UserInfo;
         const systemUser = {
             ID: APPROVER_ID,
             Name: 'system',
@@ -684,7 +813,7 @@ describe('Epic 1a End-to-End Acceptance: Long-Run Workflows/Channels & Early Syn
             IsActive: true,
             Type: 'Owner',
             UserRoles: [],
-        } as unknown as UserInfo;
+        } as Partial<UserInfo> as UserInfo;
         vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(systemUser);
 
         // Channel leaves MaxConsecutiveAgentTurns = 0 so it falls back to CODE_FALLBACK_LIMITS (1,000)
@@ -701,11 +830,11 @@ describe('Epic 1a End-to-End Acceptance: Long-Run Workflows/Channels & Early Syn
             Save: vi.fn(async () => true),
             Load: vi.fn(async () => true),
             LatestResult: null,
-        } as unknown as MJAgentChannelEntity;
+        } as Partial<MJAgentChannelEntity> as MJAgentChannelEntity;
 
         const participants = [
             { ID: 'p1', AgentChannelID: channel.ID, UserID: alice.ID, AgentID: AGENT_ID, Role: 'Initiator' },
-        ] as unknown as MJAgentChannelParticipantEntity[];
+        ] as Partial<MJAgentChannelParticipantEntity>[] as MJAgentChannelParticipantEntity[];
 
         const routineStub = {
             ID: 'routine-default-backstop',
@@ -721,17 +850,17 @@ describe('Epic 1a End-to-End Acceptance: Long-Run Workflows/Channels & Early Syn
             StartingPayload: '',
             Description: '',
             WakeConfiguration: null as string | null,
-            WakeConfigurationObject: null as Record<string, unknown> | null,
+            WakeConfigurationObject: null as MJUserRoutineEntity['WakeConfigurationObject'],
             NewRecord: vi.fn(),
             Save: vi.fn(async () => true),
             LatestResult: null,
-        } as unknown as MJUserRoutineEntity;
+        } as Partial<MJUserRoutineEntity> as MJUserRoutineEntity;
 
         const md = {
             GetEntityObject: vi.fn(async (entityName: string) =>
                 entityName === 'MJ: Agent Channels' ? channel : routineStub,
             ),
-        } as unknown as IMetadataProvider;
+        } as Partial<IMetadataProvider> as IMetadataProvider;
 
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunView: vi.fn(async (params: { EntityName: string }) => {
@@ -740,7 +869,7 @@ describe('Epic 1a End-to-End Acceptance: Long-Run Workflows/Channels & Early Syn
                 }
                 return { Success: true, Results: [] };
             }),
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
 
         vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockResolvedValue({
             status: 'found',
@@ -748,7 +877,7 @@ describe('Epic 1a End-to-End Acceptance: Long-Run Workflows/Channels & Early Syn
                 Status: 'Active',
                 AllowInterAgentCoordination: true,
                 Agent: 'Chief of Staff',
-            } as unknown as never,
+            } as never,
         });
 
         const baseNowMs = Date.UTC(2026, 10, 21, 13, 0, 0);
@@ -798,7 +927,7 @@ describe('Epic 1a End-to-End Acceptance: Long-Run Workflows/Channels & Early Syn
             MaxTimePerRun: null,
             MaxIterationsPerRun: null,
             TypeConfiguration: null,
-        } as unknown as MJAIAgentEntityExtended;
+        } as Partial<MJAIAgentEntityExtended> as MJAIAgentEntityExtended;
 
         // Turn 1-2: genuine work creating batches ['item-1', 'item-2']
         // Turn 3-10: synthetic repeating runaway loop (identical action + reasoning, zero new records/payload delta)

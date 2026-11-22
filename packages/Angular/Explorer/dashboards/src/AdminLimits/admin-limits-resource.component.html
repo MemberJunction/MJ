@@ -429,6 +429,26 @@
                                             </button>
                                         </div>
 
+                                        <div class="drawer-block" data-testid="selected-run-limits-snapshot">
+                                            <h4>Resolved Run Limits &amp; Tier Provenance</h4>
+                                            @if (!SelectedRun.Snapshot) {
+                                                <p class="muted-text" data-testid="legacy-run-no-snapshot">No resolved limits snapshot was persisted for this legacy run.</p>
+                                            } @else {
+                                                <div class="kv-line"><span>Agent Channel Consecutive Turns</span><span>{{ SelectedRun.Snapshot.ResolvedLimits.AgentChannelConsecutiveTurns }} ({{ SelectedRun.Snapshot.Provenance['AgentChannelConsecutiveTurns'].SourceTier }})</span></div>
+                                                <div class="kv-line"><span>Absolute Iteration Ceiling</span><span>{{ SelectedRun.Snapshot.ResolvedLimits.AgentAbsoluteIterations }} ({{ SelectedRun.Snapshot.Provenance['AgentAbsoluteIterations'].SourceTier }})</span></div>
+                                                <div class="kv-line"><span>Per-Run Max Cost</span><span>{{ FormatCostUsd(SelectedRun.Snapshot.ResolvedLimits.Budgets.PerRun.MaxCostUsd) }} ({{ SelectedRun.Snapshot.Provenance['Budgets.PerRun.MaxCostUsd'].SourceTier }})</span></div>
+                                                <div class="kv-line"><span>Per-Run Wall Clock</span><span>{{ FormatDurationMs(SelectedRun.Snapshot.ResolvedLimits.Budgets.PerRun.MaxWallClockMs) }} ({{ SelectedRun.Snapshot.Provenance['Budgets.PerRun.MaxWallClockMs'].SourceTier }})</span></div>
+                                                @if (SelectedRunSnapshotRows.length > 0) {
+                                                    @for (row of SelectedRunSnapshotRows; track row.Key) {
+                                                        <div class="kv-line" data-testid="selected-run-provenance-row">
+                                                            <span class="mono-sub">{{ row.Key }}</span>
+                                                            <span>{{ FormatScalarValue(row.EffectiveValue) }} · {{ row.SourceTier }}@if (row.WasClampedByPolicyCeiling) { · Clamped }</span>
+                                                        </div>
+                                                    }
+                                                }
+                                            }
+                                        </div>
+
                                         <div class="drawer-block">
                                             <h4>Deterministic Progress Signals</h4>
                                             <p class="drawer-text">{{ SelectedRun.ProgressReason || 'No progress evaluation logged yet.' }}</p>

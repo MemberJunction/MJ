@@ -14,6 +14,8 @@
 import { IsPlainObject, SafeJSONParse } from '@memberjunction/global';
 import type { ChatMessage } from '@memberjunction/ai';
 import type { ScratchpadSnapshot } from './agent-scratchpad';
+import type { ForEachOperation } from './foreach-operation';
+import type { WhileOperation } from './while-operation';
 import type { AgentResponseForm } from './response-forms';
 import type { MJAIAgentRunEntityExtended } from './MJAIAgentRunEntityExtended';
 
@@ -37,6 +39,14 @@ export type RunawayJsonValue =
 
 /** JSON-compatible object used for strongly-typed checkpoint payloads. */
 export type RunawayJsonObject = { [key: string]: RunawayJsonValue };
+
+/** Serializable runtime input accepted by {@link ToRunawayJsonValue} without `any` or `unknown`. */
+export type RunawaySerializable =
+    | RunawayJsonValue
+    | Date
+    | object
+    | undefined
+    | readonly RunawaySerializable[];
 
 /** The three hierarchical budget scopes enforced by `BudgetEnforcementGuard`. */
 export type BudgetScope = 'PerRun' | 'PerRoutine' | 'PerUserPerDay';
@@ -104,6 +114,8 @@ export interface BudgetScopeStatus {
 /** Full result of evaluating all budget scopes and dimensions. */
 export interface BudgetEnforcementResult {
     Exceeded: boolean;
+    LedgerUnavailable?: boolean;
+    LedgerError?: string;
     Breach?: BudgetBreachDetail;
     Ledger: CumulativeBudgetLedger;
     ScopeStatuses: Record<BudgetScope, BudgetScopeStatus>;
@@ -197,7 +209,59 @@ export interface RunProgressDiagnostics {
 }
 
 /** Why a run was non-destructively paused by runaway governance. */
-export type RunawayPauseReason = 'BudgetExceeded' | 'ProgressStalled' | 'FastJudgeStalled';
+export type RunawayPauseReason =
+    | 'BudgetExceeded'
+    | 'ProgressStalled'
+    | 'FastJudgeStalled'
+    | 'LedgerUnavailable'
+    | 'ManualPause';
+
+/** Persisted pending action entry preserved inside {@link PendingStepDecision}. */
+export interface PendingActionDecision {
+    name: string;
+    params: RunawayJsonObject;
+    instruction?: string;
+}
+
+/** Persisted pending sub-agent invocation preserved inside {@link PendingStepDecision}. */
+export interface PendingSubAgentDecision {
+    name: string;
+    message: string;
+    templateParameters?: RunawayJsonObject;
+    terminateAfter?: boolean;
+}
+
+/** Persisted cursor state for inline `ForEach` / `While` loop resumption across pause boundaries. */
+export interface PendingLoopCursorState {
+    LoopType: 'ForEach' | 'While';
+    ParentStepID: string | null;
+    IterationIndex: number;
+    CompletedItemResults: RunawayJsonValue[];
+    WorkingPayload: RunawayJsonValue;
+    DelayBetweenIterationsMs?: number;
+    ContinueOnError?: boolean;
+}
+
+/** Full structured pending step decision persisted for deterministic zero-replay resumption. */
+export interface PendingStepDecision {
+    step: string;
+    terminate: boolean;
+    previousPayload?: RunawayJsonValue;
+    newPayload?: RunawayJsonValue;
+    message?: string;
+    errorMessage?: string;
+    retryReason?: string;
+    retryInstructions?: string;
+    reasoning?: string;
+    actions?: PendingActionDecision[];
+    subAgent?: PendingSubAgentDecision;
+    subAgents?: PendingSubAgentDecision[];
+    forEach?: ForEachOperation;
+    while?: WhileOperation;
+    priorStepResult?: RunawayJsonValue;
+    payloadChangeRequest?: RunawayJsonObject;
+    LoopCursor?: PendingLoopCursorState;
+}
 
 /** Lightweight summary of a completed step retained inside a persisted checkpoint. */
 export interface CheckpointStepSummary {
@@ -269,6 +333,8 @@ export interface RunawayCheckpointState {
     InFlightPayload: RunawayJsonValue;
     Scratchpad: ScratchpadSnapshot;
     NextStepSummary: string | null;
+    PendingStepDecision?: PendingStepDecision | null;
+    LoopCursor?: PendingLoopCursorState | null;
     Evidence: RunawayPauseEvidence;
     CumulativeLedger: CumulativeBudgetLedger;
     HumanApproval: HumanResumeApproval;
@@ -296,11 +362,15 @@ export type AgentRunCheckpointTarget = Pick<MJAIAgentRunEntityExtended, 'Data' |
 /** Target structural subset of `MJAIAgentRunEntityExtended` for progress diagnostics. */
 export type AgentRunProgressDiagnosticsTarget = Pick<MJAIAgentRunEntityExtended, 'Data'>;
 
+function isRunawayObject(value: RunawayJsonValue | undefined): value is RunawayJsonObject {
+    return IsPlainObject(value);
+}
+
 /**
  * Safely converts an arbitrary runtime value into a JSON-compatible {@link RunawayJsonValue}
  * without using `any` or unsafe casts.
  */
-export function ToRunawayJsonValue(value: unknown): RunawayJsonValue {
+export function ToRunawayJsonValue(value: RunawaySerializable): RunawayJsonValue {
     if (value === undefined || value === null) {
         return null;
     }
@@ -314,7 +384,7 @@ export function ToRunawayJsonValue(value: unknown): RunawayJsonValue {
         return value.toISOString();
     }
     if (Array.isArray(value)) {
-        return value.map((item) => ToRunawayJsonValue(item));
+        return value.map((item) => ToRunawayJsonValue(item as RunawaySerializable));
     }
     if (typeof value === 'object') {
         const serialized = SafeJSONParse<RunawayJsonValue>(JSON.stringify(value));
@@ -323,29 +393,35 @@ export function ToRunawayJsonValue(value: unknown): RunawayJsonValue {
     return String(value);
 }
 
-function isBudgetScope(value: unknown): value is BudgetScope {
+function isBudgetScope(value: RunawayJsonValue | undefined): value is BudgetScope {
     return value === 'PerRun' || value === 'PerRoutine' || value === 'PerUserPerDay';
 }
 
-function isBudgetDimension(value: unknown): value is BudgetDimension {
+function isBudgetDimension(value: RunawayJsonValue | undefined): value is BudgetDimension {
     return value === 'CostUsd' || value === 'WallClockMs' || value === 'Tokens';
 }
 
-function isProgressClassification(value: unknown): value is ProgressClassification {
+function isProgressClassification(value: RunawayJsonValue | undefined): value is ProgressClassification {
     return value === 'Converging' || value === 'Stalled' || value === 'Ambiguous';
 }
 
-function isRunawayPauseReason(value: unknown): value is RunawayPauseReason {
-    return value === 'BudgetExceeded' || value === 'ProgressStalled' || value === 'FastJudgeStalled';
+function isRunawayPauseReason(value: RunawayJsonValue | undefined): value is RunawayPauseReason {
+    return (
+        value === 'BudgetExceeded' ||
+        value === 'ProgressStalled' ||
+        value === 'FastJudgeStalled' ||
+        value === 'LedgerUnavailable' ||
+        value === 'ManualPause'
+    );
 }
 
-function parsePausedIntervals(raw: unknown): BudgetPausedInterval[] {
+function parsePausedIntervals(raw: RunawayJsonValue | undefined): BudgetPausedInterval[] {
     if (!Array.isArray(raw)) {
         return [];
     }
     const intervals: BudgetPausedInterval[] = [];
     for (const item of raw) {
-        if (IsPlainObject(item) && typeof item['PausedAtMs'] === 'number') {
+        if (isRunawayObject(item) && typeof item['PausedAtMs'] === 'number') {
             intervals.push({
                 PausedAtMs: item['PausedAtMs'],
                 ResumedAtMs: typeof item['ResumedAtMs'] === 'number' ? item['ResumedAtMs'] : null,
@@ -355,8 +431,8 @@ function parsePausedIntervals(raw: unknown): BudgetPausedInterval[] {
     return intervals;
 }
 
-function parseCumulativeBudgetLedger(raw: unknown): CumulativeBudgetLedger | null {
-    if (!IsPlainObject(raw)) {
+function parseCumulativeBudgetLedger(raw: RunawayJsonValue | undefined): CumulativeBudgetLedger | null {
+    if (!isRunawayObject(raw)) {
         return null;
     }
     return {
@@ -375,13 +451,13 @@ function parseCumulativeBudgetLedger(raw: unknown): CumulativeBudgetLedger | nul
     };
 }
 
-function readNullableNumber(val: unknown): number | null | undefined {
+function readNullableNumber(val: RunawayJsonValue | undefined): number | null | undefined {
     if (val === null) return null;
     return typeof val === 'number' ? val : undefined;
 }
 
-function parseBudgetExtensionGrant(raw: unknown): BudgetExtensionGrant | undefined {
-    if (!IsPlainObject(raw)) {
+function parseBudgetExtensionGrant(raw: RunawayJsonValue | undefined): BudgetExtensionGrant | undefined {
+    if (!isRunawayObject(raw)) {
         return undefined;
     }
     const out: BudgetExtensionGrant = {};
@@ -404,8 +480,8 @@ function parseBudgetExtensionGrant(raw: unknown): BudgetExtensionGrant | undefin
     return out;
 }
 
-function parseHumanResumeApproval(raw: unknown): HumanResumeApproval | null {
-    if (!IsPlainObject(raw)) {
+function parseHumanResumeApproval(raw: RunawayJsonValue | undefined): HumanResumeApproval | null {
+    if (!isRunawayObject(raw)) {
         return null;
     }
     const rawStatus = raw['Status'];
@@ -424,39 +500,39 @@ function parseHumanResumeApproval(raw: unknown): HumanResumeApproval | null {
     };
 }
 
-function parseStringArray(raw: unknown): string[] {
+function parseStringArray(raw: RunawayJsonValue | undefined): string[] {
     if (!Array.isArray(raw)) {
         return [];
     }
     return raw.filter((item): item is string => typeof item === 'string');
 }
 
-function isChatMessageRole(role: unknown): role is ChatMessage['role'] {
+function isChatMessageRole(role: RunawayJsonValue | undefined): role is ChatMessage['role'] {
     return role === 'system' || role === 'user' || role === 'assistant' || role === 'tool';
 }
 
-function parseCheckpointMessages(raw: unknown): CheckpointMessageRecord[] {
+function parseCheckpointMessages(raw: RunawayJsonValue | undefined): CheckpointMessageRecord[] {
     if (!Array.isArray(raw)) {
         return [];
     }
     const messages: CheckpointMessageRecord[] = [];
     for (const item of raw) {
-        if (IsPlainObject(item) && isChatMessageRole(item['Role']) && typeof item['Content'] === 'string') {
+        if (isRunawayObject(item) && isChatMessageRole(item['Role']) && typeof item['Content'] === 'string') {
             messages.push({ Role: item['Role'], Content: item['Content'] });
         }
     }
     return messages;
 }
 
-function parseScratchpadSnapshot(raw: unknown): ScratchpadSnapshot {
-    if (!IsPlainObject(raw)) {
+function parseScratchpadSnapshot(raw: RunawayJsonValue | undefined): ScratchpadSnapshot {
+    if (!isRunawayObject(raw)) {
         return { notes: '', tasks: [] };
     }
     const notes = typeof raw['notes'] === 'string' ? raw['notes'] : '';
     const tasks: ScratchpadSnapshot['tasks'] = [];
     if (Array.isArray(raw['tasks'])) {
         for (const t of raw['tasks']) {
-            if (IsPlainObject(t) && typeof t['id'] === 'string' && typeof t['title'] === 'string') {
+            if (isRunawayObject(t) && typeof t['id'] === 'string' && typeof t['title'] === 'string') {
                 const status = t['status'];
                 const normalizedStatus: ScratchpadSnapshot['tasks'][number]['status'] =
                     status === 'pending' || status === 'in_progress' || status === 'completed' || status === 'blocked'
@@ -474,8 +550,142 @@ function parseScratchpadSnapshot(raw: unknown): ScratchpadSnapshot {
     return { notes, tasks };
 }
 
-function parseBudgetBreachDetail(raw: unknown): BudgetBreachDetail | undefined {
-    if (!IsPlainObject(raw) || !isBudgetScope(raw['Scope']) || !isBudgetDimension(raw['Dimension'])) {
+function parseLoopCursorState(raw: RunawayJsonValue | undefined): PendingLoopCursorState | null {
+    if (!isRunawayObject(raw)) {
+        return null;
+    }
+    const loopType = raw['LoopType'];
+    if (loopType !== 'ForEach' && loopType !== 'While') {
+        return null;
+    }
+    const indexVal = raw['IterationIndex'];
+    const completedRaw = raw['CompletedItemResults'];
+    return {
+        LoopType: loopType,
+        ParentStepID: typeof raw['ParentStepID'] === 'string' ? raw['ParentStepID'] : null,
+        IterationIndex: typeof indexVal === 'number' && Number.isFinite(indexVal) ? Math.max(0, Math.trunc(indexVal)) : 0,
+        CompletedItemResults: Array.isArray(completedRaw) ? completedRaw.map((item) => ToRunawayJsonValue(item)) : [],
+        WorkingPayload: ToRunawayJsonValue(raw['WorkingPayload']),
+        ...(typeof raw['DelayBetweenIterationsMs'] === 'number' ? { DelayBetweenIterationsMs: raw['DelayBetweenIterationsMs'] } : {}),
+        ...(typeof raw['ContinueOnError'] === 'boolean' ? { ContinueOnError: raw['ContinueOnError'] } : {}),
+    };
+}
+
+function parsePendingActionDecisions(raw: RunawayJsonValue | undefined): PendingActionDecision[] | undefined {
+    if (!Array.isArray(raw)) {
+        return undefined;
+    }
+    const out: PendingActionDecision[] = [];
+    for (const item of raw) {
+        if (isRunawayObject(item) && typeof item['name'] === 'string') {
+            out.push({
+                name: item['name'],
+                params: isRunawayObject(item['params']) ? item['params'] : {},
+                ...(typeof item['instruction'] === 'string' ? { instruction: item['instruction'] } : {}),
+            });
+        }
+    }
+    return out;
+}
+
+function parsePendingSubAgentDecision(raw: RunawayJsonValue | undefined): PendingSubAgentDecision | undefined {
+    if (!isRunawayObject(raw) || typeof raw['name'] !== 'string') {
+        return undefined;
+    }
+    return {
+        name: raw['name'],
+        message: typeof raw['message'] === 'string' ? raw['message'] : '',
+        ...(isRunawayObject(raw['templateParameters']) ? { templateParameters: raw['templateParameters'] } : {}),
+        ...(typeof raw['terminateAfter'] === 'boolean' ? { terminateAfter: raw['terminateAfter'] } : {}),
+    };
+}
+
+function parseLoopAction(raw: RunawayJsonValue | undefined): ForEachOperation['action'] | undefined {
+    if (!isRunawayObject(raw) || typeof raw['name'] !== 'string') {
+        return undefined;
+    }
+    const rawParams = raw['params'];
+    return {
+        name: raw['name'],
+        params: isRunawayObject(rawParams) ? rawParams : {},
+        ...(typeof raw['outputMapping'] === 'string' ? { outputMapping: raw['outputMapping'] } : {}),
+    };
+}
+
+function parseForEachOperation(raw: RunawayJsonValue | undefined): ForEachOperation | undefined {
+    if (!isRunawayObject(raw) || typeof raw['collectionPath'] !== 'string') {
+        return undefined;
+    }
+    const action = parseLoopAction(raw['action']);
+    return {
+        collectionPath: raw['collectionPath'],
+        ...(typeof raw['itemVariable'] === 'string' ? { itemVariable: raw['itemVariable'] } : {}),
+        ...(typeof raw['indexVariable'] === 'string' ? { indexVariable: raw['indexVariable'] } : {}),
+        ...(typeof raw['maxIterations'] === 'number' ? { maxIterations: raw['maxIterations'] } : {}),
+        ...(typeof raw['continueOnError'] === 'boolean' ? { continueOnError: raw['continueOnError'] } : {}),
+        ...(typeof raw['delayBetweenIterationsMs'] === 'number' ? { delayBetweenIterationsMs: raw['delayBetweenIterationsMs'] } : {}),
+        ...(raw['executionMode'] === 'sequential' || raw['executionMode'] === 'parallel' ? { executionMode: raw['executionMode'] } : {}),
+        ...(typeof raw['maxConcurrency'] === 'number' ? { maxConcurrency: raw['maxConcurrency'] } : {}),
+        ...(action ? { action } : {}),
+    };
+}
+
+function parseWhileOperation(raw: RunawayJsonValue | undefined): WhileOperation | undefined {
+    if (!isRunawayObject(raw) || typeof raw['condition'] !== 'string') {
+        return undefined;
+    }
+    const action = parseLoopAction(raw['action']);
+    return {
+        condition: raw['condition'],
+        ...(typeof raw['itemVariable'] === 'string' ? { itemVariable: raw['itemVariable'] } : {}),
+        ...(typeof raw['maxIterations'] === 'number' ? { maxIterations: raw['maxIterations'] } : {}),
+        ...(typeof raw['continueOnError'] === 'boolean' ? { continueOnError: raw['continueOnError'] } : {}),
+        ...(typeof raw['delayBetweenIterationsMs'] === 'number' ? { delayBetweenIterationsMs: raw['delayBetweenIterationsMs'] } : {}),
+        ...(action ? { action } : {}),
+    };
+}
+
+function parsePendingStepDecision(raw: RunawayJsonValue | undefined): PendingStepDecision | null {
+    if (!isRunawayObject(raw) || typeof raw['step'] !== 'string') {
+        return null;
+    }
+    const subAgentsRaw = raw['subAgents'];
+    let subAgents: PendingSubAgentDecision[] | undefined;
+    if (Array.isArray(subAgentsRaw)) {
+        const mapped: PendingSubAgentDecision[] = [];
+        for (const item of subAgentsRaw) {
+            const parsedSub = parsePendingSubAgentDecision(item);
+            if (parsedSub) {
+                mapped.push(parsedSub);
+            }
+        }
+        subAgents = mapped;
+    }
+    const parsedForEach = parseForEachOperation(raw['forEach']);
+    const parsedWhile = parseWhileOperation(raw['while']);
+    return {
+        step: raw['step'],
+        terminate: raw['terminate'] === true,
+        ...(raw['previousPayload'] !== undefined ? { previousPayload: ToRunawayJsonValue(raw['previousPayload']) } : {}),
+        ...(raw['newPayload'] !== undefined ? { newPayload: ToRunawayJsonValue(raw['newPayload']) } : {}),
+        ...(typeof raw['message'] === 'string' ? { message: raw['message'] } : {}),
+        ...(typeof raw['errorMessage'] === 'string' ? { errorMessage: raw['errorMessage'] } : {}),
+        ...(typeof raw['retryReason'] === 'string' ? { retryReason: raw['retryReason'] } : {}),
+        ...(typeof raw['retryInstructions'] === 'string' ? { retryInstructions: raw['retryInstructions'] } : {}),
+        ...(typeof raw['reasoning'] === 'string' ? { reasoning: raw['reasoning'] } : {}),
+        ...(parsePendingActionDecisions(raw['actions']) ? { actions: parsePendingActionDecisions(raw['actions']) } : {}),
+        ...(parsePendingSubAgentDecision(raw['subAgent']) ? { subAgent: parsePendingSubAgentDecision(raw['subAgent']) } : {}),
+        ...(subAgents ? { subAgents } : {}),
+        ...(parsedForEach ? { forEach: parsedForEach } : {}),
+        ...(parsedWhile ? { while: parsedWhile } : {}),
+        ...(raw['priorStepResult'] !== undefined ? { priorStepResult: ToRunawayJsonValue(raw['priorStepResult']) } : {}),
+        ...(isRunawayObject(raw['payloadChangeRequest']) ? { payloadChangeRequest: raw['payloadChangeRequest'] } : {}),
+        ...(parseLoopCursorState(raw['LoopCursor']) ? { LoopCursor: parseLoopCursorState(raw['LoopCursor'])! } : {}),
+    };
+}
+
+function parseBudgetBreachDetail(raw: RunawayJsonValue | undefined): BudgetBreachDetail | undefined {
+    if (!isRunawayObject(raw) || !isBudgetScope(raw['Scope']) || !isBudgetDimension(raw['Dimension'])) {
         return undefined;
     }
     return {
@@ -489,13 +699,13 @@ function parseBudgetBreachDetail(raw: unknown): BudgetBreachDetail | undefined {
     };
 }
 
-function parseCheckpointStepSummaries(raw: unknown): CheckpointStepSummary[] {
+function parseCheckpointStepSummaries(raw: RunawayJsonValue | undefined): CheckpointStepSummary[] {
     if (!Array.isArray(raw)) {
         return [];
     }
     const summaries: CheckpointStepSummary[] = [];
     for (const item of raw) {
-        if (IsPlainObject(item) && typeof item['StepNumber'] === 'number' && typeof item['StepType'] === 'string') {
+        if (isRunawayObject(item) && typeof item['StepNumber'] === 'number' && typeof item['StepType'] === 'string') {
             summaries.push({
                 StepNumber: item['StepNumber'],
                 StepType: item['StepType'],
@@ -509,8 +719,8 @@ function parseCheckpointStepSummaries(raw: unknown): CheckpointStepSummary[] {
     return summaries;
 }
 
-function parsePauseEvidence(raw: unknown): RunawayPauseEvidence {
-    if (!IsPlainObject(raw)) {
+function parsePauseEvidence(raw: RunawayJsonValue | undefined): RunawayPauseEvidence {
+    if (!isRunawayObject(raw)) {
         return { RecentStepSummaries: [] };
     }
     return {
@@ -519,13 +729,13 @@ function parsePauseEvidence(raw: unknown): RunawayPauseEvidence {
     };
 }
 
-function parseFastJudgeDiagnosticEntries(raw: unknown): FastJudgeDiagnosticEntry[] {
+function parseFastJudgeDiagnosticEntries(raw: RunawayJsonValue | undefined): FastJudgeDiagnosticEntry[] {
     if (!Array.isArray(raw)) {
         return [];
     }
     const entries: FastJudgeDiagnosticEntry[] = [];
     for (const item of raw) {
-        if (IsPlainObject(item) && typeof item['TimestampISO'] === 'string' && typeof item['Reason'] === 'string') {
+        if (isRunawayObject(item) && typeof item['TimestampISO'] === 'string' && typeof item['Reason'] === 'string') {
             const src = item['Source'];
             const source: FastJudgeDiagnosticEntry['Source'] =
                 src === 'Model' || src === 'Fallback' || src === 'Error' ? src : 'Fallback';
@@ -547,8 +757,8 @@ function parseFastJudgeDiagnosticEntries(raw: unknown): FastJudgeDiagnosticEntry
 /**
  * Validates and hydrates an object into {@link RunawayCheckpointState}.
  */
-export function ValidateRunawayCheckpoint(raw: unknown): RunawayCheckpointState | null {
-    if (!IsPlainObject(raw) || raw['SchemaVersion'] !== RUNAWAY_CHECKPOINT_SCHEMA_VERSION) {
+export function ValidateRunawayCheckpoint(raw: RunawayJsonValue | undefined): RunawayCheckpointState | null {
+    if (!isRunawayObject(raw) || raw['SchemaVersion'] !== RUNAWAY_CHECKPOINT_SCHEMA_VERSION) {
         return null;
     }
     if (
@@ -566,6 +776,8 @@ export function ValidateRunawayCheckpoint(raw: unknown): RunawayCheckpointState 
     if (!ledger || !approval) {
         return null;
     }
+    const pendingDecision = parsePendingStepDecision(raw['PendingStepDecision']);
+    const loopCursor = parseLoopCursorState(raw['LoopCursor']);
     return {
         SchemaVersion: RUNAWAY_CHECKPOINT_SCHEMA_VERSION,
         CheckpointID: raw['CheckpointID'],
@@ -586,6 +798,8 @@ export function ValidateRunawayCheckpoint(raw: unknown): RunawayCheckpointState 
         InFlightPayload: ToRunawayJsonValue(raw['InFlightPayload']),
         Scratchpad: parseScratchpadSnapshot(raw['Scratchpad']),
         NextStepSummary: typeof raw['NextStepSummary'] === 'string' ? raw['NextStepSummary'] : null,
+        PendingStepDecision: pendingDecision,
+        LoopCursor: loopCursor,
         Evidence: parsePauseEvidence(raw['Evidence']),
         CumulativeLedger: ledger,
         HumanApproval: approval,

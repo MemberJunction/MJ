@@ -57,6 +57,14 @@ const RUNAWAY_GUARD_NAME_RE =
 const RUNAWAY_FALLBACK_EXPR_RE =
     /(?:whileOp|forEach|op|params|channel)\.(?:maxIterations|absoluteMaxIterations|MaxConsecutiveAgentTurns|MaxHourlyWakes)/i;
 
+const LOOP_GUARD_VAR_RE = /^(?:turn|turns|iteration|iterations)$/i;
+
+const GENERIC_LOOP_COUNTER_RE = /^(?:i|j|k|idx|count|n)$/i;
+
+const LARGE_LOOP_BOUND_THRESHOLD = 10_000;
+
+const INTEGRATION_BENCHMARK_PATH_RE = /^packages\/TestingFramework\/integration-test-suite\//;
+
 const COMMENT_EXEMPT_RE = /\/\/\s*(?:ProtocolLimit|UX|ResourceGuard|Tuning)\s*:/;
 
 function walkSourceFiles(dir: string, out: string[] = []): string[] {
@@ -94,14 +102,75 @@ function isInsideSkippedNode(ts: TypeScriptApi, node: TSApi.Node): boolean {
     return false;
 }
 
+function isArithmeticOperator(ts: TypeScriptApi, kind: TSApi.SyntaxKind): boolean {
+    return (
+        kind === ts.SyntaxKind.AsteriskToken ||
+        kind === ts.SyntaxKind.PlusToken ||
+        kind === ts.SyntaxKind.MinusToken ||
+        kind === ts.SyntaxKind.SlashToken ||
+        kind === ts.SyntaxKind.PercentToken ||
+        kind === ts.SyntaxKind.AsteriskAsteriskToken
+    );
+}
+
+function isLoopComparisonOperator(ts: TypeScriptApi, kind: TSApi.SyntaxKind): boolean {
+    return (
+        kind === ts.SyntaxKind.LessThanToken ||
+        kind === ts.SyntaxKind.LessThanEqualsToken ||
+        kind === ts.SyntaxKind.GreaterThanToken ||
+        kind === ts.SyntaxKind.GreaterThanEqualsToken
+    );
+}
+
+function isInsideLoopCondition(ts: TypeScriptApi, comparisonNode: TSApi.BinaryExpression): boolean {
+    let cur: TSApi.Node = comparisonNode;
+    while (cur.parent) {
+        const parent = cur.parent;
+        if (ts.isWhileStatement(parent) || ts.isDoStatement(parent)) {
+            return parent.expression === cur;
+        }
+        if (ts.isForStatement(parent)) {
+            return parent.condition === cur;
+        }
+        if (ts.isParenthesizedExpression(parent) || ts.isBinaryExpression(parent)) {
+            cur = parent;
+            continue;
+        }
+        break;
+    }
+    return false;
+}
+
 function evaluateNumeric(ts: TypeScriptApi, node: TSApi.Node): number | null {
     if (ts.isNumericLiteral(node)) return Number(node.text);
     if (ts.isParenthesizedExpression(node)) return evaluateNumeric(ts, node.expression);
-    if (ts.isBinaryExpression(node)) {
+    if (ts.isPrefixUnaryExpression(node)) {
+        const operandVal = evaluateNumeric(ts, node.operand);
+        if (operandVal === null) return null;
+        if (node.operator === ts.SyntaxKind.MinusToken) return -operandVal;
+        if (node.operator === ts.SyntaxKind.PlusToken) return operandVal;
+        return null;
+    }
+    if (ts.isBinaryExpression(node) && isArithmeticOperator(ts, node.operatorToken.kind)) {
         const l = evaluateNumeric(ts, node.left);
         const r = evaluateNumeric(ts, node.right);
         if (l === null || r === null) return null;
-        if (node.operatorToken.kind === ts.SyntaxKind.AsteriskToken) return l * r;
+        switch (node.operatorToken.kind) {
+            case ts.SyntaxKind.AsteriskToken:
+                return l * r;
+            case ts.SyntaxKind.PlusToken:
+                return l + r;
+            case ts.SyntaxKind.MinusToken:
+                return l - r;
+            case ts.SyntaxKind.SlashToken:
+                return r !== 0 ? l / r : null;
+            case ts.SyntaxKind.PercentToken:
+                return r !== 0 ? l % r : null;
+            case ts.SyntaxKind.AsteriskAsteriskToken:
+                return l ** r;
+            default:
+                return null;
+        }
     }
     return null;
 }
@@ -120,10 +189,17 @@ function scanFileForRunawayLiterals(ts: TypeScriptApi, absPath: string, repoRoot
     const seen = new Set<string>();
 
     const visit = (node: TSApi.Node): void => {
-        if (ts.isNumericLiteral(node) && !isInsideSkippedNode(ts, node)) {
+        const isCandidate =
+            ts.isNumericLiteral(node) ||
+            (ts.isBinaryExpression(node) && isArithmeticOperator(ts, node.operatorToken.kind)) ||
+            (ts.isPrefixUnaryExpression(node) &&
+                (node.operator === ts.SyntaxKind.MinusToken || node.operator === ts.SyntaxKind.PlusToken));
+
+        if (isCandidate && !isInsideSkippedNode(ts, node)) {
             const p = node.parent;
             let name: string | null = null;
             let isFallback = false;
+            let isLoopBound = false;
             if (ts.isVariableDeclaration(p) && ts.isIdentifier(p.name) && p.initializer === node) {
                 name = p.name.text;
             } else if (ts.isPropertyDeclaration(p) && ts.isIdentifier(p.name) && p.initializer === node) {
@@ -140,11 +216,32 @@ function scanFileForRunawayLiterals(ts: TypeScriptApi, absPath: string, repoRoot
             ) {
                 name = p.left.getText(sf).trim();
                 isFallback = true;
+            } else if (
+                ts.isBinaryExpression(p) &&
+                p.right === node &&
+                isLoopComparisonOperator(ts, p.operatorToken.kind) &&
+                isInsideLoopCondition(ts, p)
+            ) {
+                name = p.left.getText(sf).trim();
+                isLoopBound = true;
             }
 
-            if (name && (RUNAWAY_GUARD_NAME_RE.test(name) || (isFallback && RUNAWAY_FALLBACK_EXPR_RE.test(name)))) {
-                const val = evaluateNumeric(ts, node);
-                if (val !== null && (Math.abs(val) > 1 || /^(?:MAX_|MIN_|DEFAULT_|LIMIT_)/.test(name))) {
+            const val = evaluateNumeric(ts, node);
+            const isTestBenchmarkPath = INTEGRATION_BENCHMARK_PATH_RE.test(rel);
+            const matchesName =
+                name !== null &&
+                (RUNAWAY_GUARD_NAME_RE.test(name) ||
+                    (isFallback && RUNAWAY_FALLBACK_EXPR_RE.test(name)) ||
+                    (isLoopBound &&
+                        !isTestBenchmarkPath &&
+                        (LOOP_GUARD_VAR_RE.test(name) ||
+                            (GENERIC_LOOP_COUNTER_RE.test(name) && val !== null && Math.abs(val) >= LARGE_LOOP_BOUND_THRESHOLD))));
+
+            if (matchesName && name && val !== null && Number.isFinite(val)) {
+                const qualifies = isLoopBound
+                    ? Math.abs(val) > 1
+                    : Math.abs(val) > 1 || /^(?:MAX_|MIN_|DEFAULT_|LIMIT_)/.test(name);
+                if (qualifies) {
                     const line = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
                     const key = `${line}:${name}`;
                     if (!seen.has(key) && !hasNonRunawayAnnotation(lines, line - 1)) {
@@ -156,6 +253,10 @@ function scanFileForRunawayLiterals(ts: TypeScriptApi, absPath: string, repoRoot
                                 `Unapproved RunawayGuard literal "${name} = ${val}" outside LimitsConfigResolver. ` +
                                 `Resolve via LimitsConfigResolver.Instance in @memberjunction/core (CODE_FALLBACK_LIMITS).`,
                         });
+                    }
+                    // Skip descending into sub-literals of an already evaluated constant expression
+                    if (!ts.isNumericLiteral(node)) {
+                        return;
                     }
                 }
             }

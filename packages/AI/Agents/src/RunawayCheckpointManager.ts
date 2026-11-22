@@ -39,16 +39,23 @@ import {
     type CheckpointStepSummary,
     type CumulativeBudgetLedger,
     type FastConvergenceJudgeResult,
+    type ForEachOperation,
     type HumanResumeApproval,
     type MJAIAgentRunEntityExtended,
     type OwnerPauseNotificationPayload,
+    type PendingLoopCursorState,
+    type PendingStepDecision,
     type ProgressEvaluationResult,
     type RunawayCheckpointState,
+    type RunawayJsonObject,
+    type RunawayJsonValue,
     type RunawayPauseReason,
+    type RunawaySerializable,
     type ScratchpadSnapshot,
+    type WhileOperation,
 } from '@memberjunction/ai-core-plus';
 import type { ChatMessage } from '@memberjunction/ai';
-import { IsValidUUID } from '@memberjunction/global';
+import { IsPlainObject, IsValidUUID } from '@memberjunction/global';
 import { ApplyBudgetExtensionToBudgets, ComputeTotalPausedMs } from './BudgetEnforcementGuard';
 
 /** Input parameters for {@link RunawayCheckpointManager.PauseRunWithCheckpoint}. */
@@ -63,9 +70,10 @@ export interface PauseRunWithCheckpointInput {
     CompletedPromptTurns: number;
     CompletedNodeIDs?: readonly string[];
     ConversationMessages: readonly ChatMessage[];
-    InFlightPayload: unknown;
+    InFlightPayload: RunawaySerializable;
     Scratchpad: ScratchpadSnapshot;
     NextStepToResume?: BaseAgentNextStep | null;
+    LoopCursor?: PendingLoopCursorState | null;
     BudgetBreach?: BudgetBreachDetail;
     ProgressEvaluation?: ProgressEvaluationResult;
     FastJudgeResult?: FastConvergenceJudgeResult;
@@ -114,9 +122,11 @@ export interface RestoredCheckpointContext {
     AgentRun: MJAIAgentRunEntityExtended;
     Checkpoint: RunawayCheckpointState;
     ExtendedBudgets: MJLimitsBudgetsConfig;
-    RestoredPayload: unknown;
+    RestoredPayload: RunawayJsonValue;
     RestoredScratchpad: ScratchpadSnapshot;
     RestoredMessages: ChatMessage[];
+    RestoredNextStep: BaseAgentNextStep | null;
+    RestoredLoopCursor: PendingLoopCursorState | null;
     StartingStepCount: number;
     StartingPromptTurns: number;
     PriorCumulativeCostUsd: number;
@@ -163,7 +173,7 @@ export class RunawayCheckpointManager {
 
         const saved = await input.AgentRun.Save({ SaveReturnMode: 'datestamps_only' });
         if (!saved) {
-            LogError(`RunawayCheckpointManager: failed to save paused run ${input.AgentRun.ID}: ${input.AgentRun.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            LogError(`RunawayCheckpointManager: failed to save paused run ${input.AgentRun.ID}: ${input.AgentRun.LatestResult?.CompleteMessage ?? 'unspecified error'}`);
         }
 
         if (input.OnOwnerNotification) {
@@ -220,7 +230,7 @@ export class RunawayCheckpointManager {
         AttachRunawayCheckpointToAgentRun(agentRun, checkpoint);
         const saved = await agentRun.Save({ SaveReturnMode: 'datestamps_only' });
         if (!saved) {
-            throw new Error(`Failed to persist checkpoint approval on run ${agentRun.ID}: ${agentRun.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            throw new Error(`Failed to persist checkpoint approval on run ${agentRun.ID}: ${agentRun.LatestResult?.CompleteMessage ?? 'unspecified error'}`);
         }
         return checkpoint;
     }
@@ -267,7 +277,7 @@ export class RunawayCheckpointManager {
 
         const saved = await agentRun.Save({ SaveReturnMode: 'datestamps_only' });
         if (!saved) {
-            throw new Error(`Failed to save resumed run ${agentRun.ID}: ${agentRun.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            throw new Error(`Failed to save resumed run ${agentRun.ID}: ${agentRun.LatestResult?.CompleteMessage ?? 'unspecified error'}`);
         }
 
         return {
@@ -280,6 +290,8 @@ export class RunawayCheckpointManager {
                 tasks: checkpoint.Scratchpad.tasks.map((t) => ({ ...t })),
             },
             RestoredMessages: this.restoreChatMessages(checkpoint.ConversationMessages),
+            RestoredNextStep: this.RestoreNextStepFromDecision(checkpoint.PendingStepDecision),
+            RestoredLoopCursor: checkpoint.LoopCursor ?? checkpoint.PendingStepDecision?.LoopCursor ?? null,
             StartingStepCount: checkpoint.CompletedStepCount,
             StartingPromptTurns: checkpoint.CompletedPromptTurns,
             PriorCumulativeCostUsd: checkpoint.CumulativeLedger.RunCostUsd,
@@ -287,6 +299,69 @@ export class RunawayCheckpointManager {
             PausedIntervals: closedIntervals,
             ResetProgressDetectorWindow: effectiveApproval.BudgetExtension?.ResetProgressDetectorWindow !== false,
         };
+    }
+
+    private toTemplateParamsRecord(raw?: RunawayJsonObject): Record<string, string> | undefined {
+        if (!raw) {
+            return undefined;
+        }
+        const out: Record<string, string> = {};
+        for (const [k, v] of Object.entries(raw)) {
+            out[k] = typeof v === 'string' ? v : JSON.stringify(v);
+        }
+        return out;
+    }
+
+    /**
+     * Converts a {@link PendingStepDecision} persisted in a checkpoint back into a strongly-typed
+     * {@link BaseAgentNextStep} so resumed execution continues deterministically without re-prompting.
+     */
+    public RestoreNextStepFromDecision(decision?: PendingStepDecision | null): BaseAgentNextStep | null {
+        if (!decision) {
+            return null;
+        }
+        const restoredSubAgentTpl = this.toTemplateParamsRecord(decision.subAgent?.templateParameters);
+        const restored: BaseAgentNextStep = {
+            step: decision.step as BaseAgentNextStep['step'],
+            terminate: decision.terminate,
+            ...(decision.previousPayload !== undefined ? { previousPayload: decision.previousPayload } : {}),
+            ...(decision.newPayload !== undefined ? { newPayload: decision.newPayload } : {}),
+            ...(decision.message !== undefined ? { message: decision.message } : {}),
+            ...(decision.errorMessage !== undefined ? { errorMessage: decision.errorMessage } : {}),
+            ...(decision.retryReason !== undefined ? { retryReason: decision.retryReason } : {}),
+            ...(decision.retryInstructions !== undefined ? { retryInstructions: decision.retryInstructions } : {}),
+            ...(decision.reasoning !== undefined ? { reasoning: decision.reasoning } : {}),
+            ...(decision.actions ? {
+                actions: decision.actions.map((a) => ({
+                    name: a.name,
+                    params: a.params,
+                })),
+            } : {}),
+            ...(decision.subAgent ? {
+                subAgent: {
+                    name: decision.subAgent.name,
+                    message: decision.subAgent.message,
+                    ...(restoredSubAgentTpl ? { templateParameters: restoredSubAgentTpl } : {}),
+                    terminateAfter: Boolean(decision.subAgent.terminateAfter),
+                },
+            } : {}),
+            ...(decision.subAgents ? {
+                subAgents: decision.subAgents.map((s) => {
+                    const tpl = this.toTemplateParamsRecord(s.templateParameters);
+                    return {
+                        name: s.name,
+                        message: s.message,
+                        ...(tpl ? { templateParameters: tpl } : {}),
+                        terminateAfter: Boolean(s.terminateAfter),
+                    };
+                }),
+            } : {}),
+            ...(decision.forEach ? { forEach: decision.forEach } : {}),
+            ...(decision.while ? { while: decision.while } : {}),
+            ...(decision.priorStepResult !== undefined ? { priorStepResult: decision.priorStepResult } : {}),
+            ...(decision.payloadChangeRequest ? { payloadChangeRequest: decision.payloadChangeRequest as BaseAgentNextStep['payloadChangeRequest'] } : {}),
+        };
+        return restored;
     }
 
     private buildCheckpointState(
@@ -333,6 +408,8 @@ export class RunawayCheckpointManager {
                 tasks: input.Scratchpad.tasks.map((t) => ({ ...t })),
             },
             NextStepSummary: input.NextStepToResume ? `${input.NextStepToResume.step}` : null,
+            PendingStepDecision: this.serializePendingStepDecision(input.NextStepToResume, input.LoopCursor),
+            LoopCursor: input.LoopCursor ?? null,
             Evidence: {
                 BudgetBreach: input.BudgetBreach,
                 ProgressEvaluation: input.ProgressEvaluation,
@@ -346,10 +423,79 @@ export class RunawayCheckpointManager {
         };
     }
 
+    private serializePendingStepDecision(
+        nextStep?: BaseAgentNextStep | null,
+        loopCursor?: PendingLoopCursorState | null,
+    ): PendingStepDecision | null {
+        if (!nextStep) {
+            return null;
+        }
+        const rawPayloadChange = nextStep.payloadChangeRequest
+            ? ToRunawayJsonValue(nextStep.payloadChangeRequest as RunawaySerializable)
+            : null;
+        return {
+            step: String(nextStep.step),
+            terminate: Boolean(nextStep.terminate),
+            ...(nextStep.previousPayload !== undefined
+                ? { previousPayload: ToRunawayJsonValue(nextStep.previousPayload as RunawaySerializable) }
+                : {}),
+            ...(nextStep.newPayload !== undefined
+                ? { newPayload: ToRunawayJsonValue(nextStep.newPayload as RunawaySerializable) }
+                : {}),
+            ...(nextStep.message !== undefined ? { message: nextStep.message } : {}),
+            ...(nextStep.errorMessage !== undefined ? { errorMessage: nextStep.errorMessage } : {}),
+            ...(nextStep.retryReason !== undefined ? { retryReason: nextStep.retryReason } : {}),
+            ...(nextStep.retryInstructions !== undefined ? { retryInstructions: nextStep.retryInstructions } : {}),
+            ...(nextStep.reasoning !== undefined ? { reasoning: nextStep.reasoning } : {}),
+            ...(Array.isArray(nextStep.actions) ? {
+                actions: nextStep.actions.map((a) => {
+                    const serializedParams = ToRunawayJsonValue(a.params as RunawaySerializable);
+                    return {
+                        name: a.name,
+                        params: IsPlainObject(serializedParams) ? (serializedParams as RunawayJsonObject) : {},
+                    };
+                }),
+            } : {}),
+            ...(nextStep.subAgent ? {
+                subAgent: {
+                    name: nextStep.subAgent.name,
+                    message: nextStep.subAgent.message,
+                    ...(nextStep.subAgent.templateParameters ? {
+                        templateParameters: ((): RunawayJsonObject => {
+                            const serialized = ToRunawayJsonValue(nextStep.subAgent!.templateParameters as RunawaySerializable);
+                            return IsPlainObject(serialized) ? (serialized as RunawayJsonObject) : {};
+                        })(),
+                    } : {}),
+                    ...(nextStep.subAgent.terminateAfter !== undefined ? { terminateAfter: nextStep.subAgent.terminateAfter } : {}),
+                },
+            } : {}),
+            ...(Array.isArray(nextStep.subAgents) ? {
+                subAgents: nextStep.subAgents.map((s) => ({
+                    name: s.name,
+                    message: s.message,
+                    ...(s.templateParameters ? {
+                        templateParameters: ((): RunawayJsonObject => {
+                            const serialized = ToRunawayJsonValue(s.templateParameters as RunawaySerializable);
+                            return IsPlainObject(serialized) ? (serialized as RunawayJsonObject) : {};
+                        })(),
+                    } : {}),
+                    ...(s.terminateAfter !== undefined ? { terminateAfter: s.terminateAfter } : {}),
+                })),
+            } : {}),
+            ...(nextStep.forEach ? { forEach: nextStep.forEach } : {}),
+            ...(nextStep.while ? { while: nextStep.while } : {}),
+            ...(nextStep.priorStepResult !== undefined
+                ? { priorStepResult: ToRunawayJsonValue(nextStep.priorStepResult as RunawaySerializable) }
+                : {}),
+            ...(IsPlainObject(rawPayloadChange) ? { payloadChangeRequest: rawPayloadChange as RunawayJsonObject } : {}),
+            ...(loopCursor ? { LoopCursor: loopCursor } : {}),
+        };
+    }
+
     private applyPausedStateToRun(
         agentRun: MJAIAgentRunEntityExtended,
         checkpoint: RunawayCheckpointState,
-        inFlightPayload: unknown,
+        inFlightPayload: RunawaySerializable,
     ): void {
         agentRun.Status = 'Paused';
         agentRun.CompletedAt = null;

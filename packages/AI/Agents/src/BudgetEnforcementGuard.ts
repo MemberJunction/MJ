@@ -32,6 +32,7 @@ import {
     type BudgetScope,
     type BudgetScopeStatus,
     type CumulativeBudgetLedger,
+    type RunawayJsonObject,
 } from '@memberjunction/ai-core-plus';
 import { EscapeSQLString, IsPlainObject, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 
@@ -39,6 +40,7 @@ import { EscapeSQLString, IsPlainObject, SafeJSONParse, UUIDsEqual } from '@memb
 export type AgentRunBudgetLedgerRow = Pick<
     MJAIAgentRunEntity,
     | 'ID'
+    | 'ParentRunID'
     | 'UserID'
     | 'TotalCost'
     | 'TotalCostRollup'
@@ -70,6 +72,8 @@ export interface BudgetLedgerReader {
     }): Promise<{
         Routine: ScopeHistoricalUsage;
         UserDaily: ScopeHistoricalUsage;
+        LedgerUnavailable?: boolean;
+        LedgerError?: string;
     }>;
 }
 
@@ -93,9 +97,75 @@ export interface BudgetEnforcementInput {
 
 const AGENT_RUN_ENTITY = 'MJ: AI Agent Runs';
 
+interface LocalDateParts {
+    Year: number;
+    Month: number;
+    Day: number;
+    Hour: number;
+    Minute: number;
+    Second: number;
+}
+
+function formatZonedParts(date: Date, timezone: string): LocalDateParts {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        hourCycle: 'h23',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+    });
+    const parts = formatter.formatToParts(date);
+    const readPart = (type: Intl.DateTimeFormatPartTypes): number => {
+        const found = parts.find((p) => p.type === type);
+        return found ? Number(found.value) : 0;
+    };
+    const rawHour = readPart('hour');
+    return {
+        Year: readPart('year'),
+        Month: readPart('month'),
+        Day: readPart('day'),
+        Hour: rawHour === 24 ? 0 : rawHour,
+        Minute: readPart('minute'),
+        Second: readPart('second'),
+    };
+}
+
+function computeTimezoneOffsetMinutes(date: Date, timezone: string): number {
+    const zoned = formatZonedParts(date, timezone);
+    const zonedAsUtcMs = Date.UTC(
+        zoned.Year,
+        zoned.Month - 1,
+        zoned.Day,
+        zoned.Hour,
+        zoned.Minute,
+        zoned.Second,
+    );
+    const utcTruncatedMs = Math.floor(date.getTime() / 1000) * 1000;
+    return Math.round((zonedAsUtcMs - utcTruncatedMs) / 60_000);
+}
+
+/**
+ * Resolves the exact UTC epoch milliseconds for local midnight `00:00:00` of `(year, month, day)`
+ * inside an IANA timezone, accounting for spring-forward (23h) and fall-back (25h) transitions.
+ */
+function findUtcMsForLocalMidnight(year: number, month: number, day: number, timezone: string): number {
+    const naiveUtcMs = Date.UTC(year, month - 1, day, 0, 0, 0);
+    const offsetAtNaive = computeTimezoneOffsetMinutes(new Date(naiveUtcMs), timezone);
+    let candidateMs = naiveUtcMs - offsetAtNaive * 60_000;
+    const offsetAtCandidate = computeTimezoneOffsetMinutes(new Date(candidateMs), timezone);
+    if (offsetAtCandidate !== offsetAtNaive) {
+        candidateMs = naiveUtcMs - offsetAtCandidate * 60_000;
+    }
+    return candidateMs;
+}
+
 /**
  * Computes the UTC day window `[DayStartISO, DayEndISO)` and canonical `YYYY-MM-DD` bucket
- * for a given epoch timestamp and timezone.
+ * for a given epoch timestamp and timezone, resolving start and next-day midnight independently
+ * across DST transitions.
  */
 export function ComputeDayBoundaryWindow(
     nowMs: number,
@@ -114,16 +184,18 @@ export function ComputeDayBoundaryWindow(
     }
 
     try {
-        const formatter = new Intl.DateTimeFormat('en-CA', {
-            timeZone: timezone,
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-        });
-        const localDate = formatter.format(date);
-        const offsetMinutes = computeTimezoneOffsetMinutes(date, timezone);
-        const startUtcMs = Date.parse(`${localDate}T00:00:00.000Z`) - offsetMinutes * 60_000;
-        const endUtcMs = startUtcMs + 86_400_000;
+        const local = formatZonedParts(date, timezone);
+        const monthStr = String(local.Month).padStart(2, '0');
+        const dayStr = String(local.Day).padStart(2, '0');
+        const localDate = `${local.Year}-${monthStr}-${dayStr}`;
+        const startUtcMs = findUtcMsForLocalMidnight(local.Year, local.Month, local.Day, timezone);
+        const nextDateUtc = new Date(Date.UTC(local.Year, local.Month - 1, local.Day + 1));
+        const endUtcMs = findUtcMsForLocalMidnight(
+            nextDateUtc.getUTCFullYear(),
+            nextDateUtc.getUTCMonth() + 1,
+            nextDateUtc.getUTCDate(),
+            timezone,
+        );
         return {
             DayBucketUTC: localDate,
             DayStartISO: new Date(startUtcMs).toISOString(),
@@ -138,14 +210,6 @@ export function ComputeDayBoundaryWindow(
             DayEndISO: end.toISOString(),
         };
     }
-}
-
-function computeTimezoneOffsetMinutes(date: Date, timezone: string): number {
-    const utcString = date.toLocaleString('en-US', { timeZone: 'UTC' });
-    const tzString = date.toLocaleString('en-US', { timeZone: timezone });
-    const utcMs = new Date(utcString).getTime();
-    const tzMs = new Date(tzString).getTime();
-    return Math.round((tzMs - utcMs) / 60_000);
 }
 
 /**
@@ -274,6 +338,16 @@ export class BudgetEnforcementGuard {
             AsOfISO: new Date(nowMs).toISOString(),
         };
 
+        if (scopedHistorical.LedgerUnavailable) {
+            return this.buildLedgerUnavailableResult(
+                input.Budgets,
+                ledger,
+                input.RoutineID ?? null,
+                input.UserID ?? null,
+                scopedHistorical.LedgerError ?? 'Shared budget ledger unavailable',
+            );
+        }
+
         return this.buildEnforcementResult(input.Budgets, ledger, input.RoutineID ?? null, input.UserID ?? null);
     }
 
@@ -282,7 +356,12 @@ export class BudgetEnforcementGuard {
         dayStartISO: string,
         dayEndISO: string,
         nowMs: number,
-    ): Promise<{ Routine: ScopeHistoricalUsage; UserDaily: ScopeHistoricalUsage }> {
+    ): Promise<{
+        Routine: ScopeHistoricalUsage;
+        UserDaily: ScopeHistoricalUsage;
+        LedgerUnavailable?: boolean;
+        LedgerError?: string;
+    }> {
         const needRoutine = Boolean(
             input.RoutineID &&
             (input.Budgets.PerRoutine.MaxCostUsd !== null || input.Budgets.PerRoutine.MaxWallClockMs !== null),
@@ -300,17 +379,28 @@ export class BudgetEnforcementGuard {
         }
 
         if (input.LedgerReader) {
-            return input.LedgerReader.ReadScopedUsage({
-                RoutineID: input.RoutineID ?? null,
-                UserID: input.UserID ?? null,
-                ExcludeRunID: input.AgentRunID ?? null,
-                DayStartISO: dayStartISO,
-                DayEndISO: dayEndISO,
-                NeedRoutine: needRoutine,
-                NeedUserDaily: needUserDaily,
-                CountPausedTimeTowardsWallClock: input.Budgets.CountPausedTimeTowardsWallClock,
-                NowMs: nowMs,
-            });
+            try {
+                return await input.LedgerReader.ReadScopedUsage({
+                    RoutineID: input.RoutineID ?? null,
+                    UserID: input.UserID ?? null,
+                    ExcludeRunID: input.AgentRunID ?? null,
+                    DayStartISO: dayStartISO,
+                    DayEndISO: dayEndISO,
+                    NeedRoutine: needRoutine,
+                    NeedUserDaily: needUserDaily,
+                    CountPausedTimeTowardsWallClock: input.Budgets.CountPausedTimeTowardsWallClock,
+                    NowMs: nowMs,
+                });
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                LogError(`BudgetEnforcementGuard: LedgerReader error (fail closed): ${msg}`);
+                return {
+                    Routine: { CostUsd: 0, WallClockMs: 0 },
+                    UserDaily: { CostUsd: 0, WallClockMs: 0 },
+                    LedgerUnavailable: true,
+                    LedgerError: msg,
+                };
+            }
         }
 
         return this.queryLedgerViaBatchedRunViews({
@@ -340,10 +430,26 @@ export class BudgetEnforcementGuard {
         NeedUserDaily: boolean;
         CountPausedTimeTowardsWallClock: boolean;
         NowMs: number;
-    }): Promise<{ Routine: ScopeHistoricalUsage; UserDaily: ScopeHistoricalUsage }> {
+    }): Promise<{
+        Routine: ScopeHistoricalUsage;
+        UserDaily: ScopeHistoricalUsage;
+        LedgerUnavailable?: boolean;
+        LedgerError?: string;
+    }> {
         const queries: RunViewParams[] = [];
         const queryKinds: Array<'routine' | 'userDaily'> = [];
-        const fields = ['ID', 'UserID', 'TotalCost', 'TotalCostRollup', 'StartedAt', 'CompletedAt', 'ScheduledJobRunID', 'Status', 'Data'];
+        const fields = [
+            'ID',
+            'ParentRunID',
+            'UserID',
+            'TotalCost',
+            'TotalCostRollup',
+            'StartedAt',
+            'CompletedAt',
+            'ScheduledJobRunID',
+            'Status',
+            'Data',
+        ];
 
         if (args.NeedRoutine && args.RoutineID) {
             queries.push({
@@ -370,25 +476,44 @@ export class BudgetEnforcementGuard {
 
         let routineRows: AgentRunBudgetLedgerRow[] = [];
         let userDailyRows: AgentRunBudgetLedgerRow[] = [];
+        let ledgerError: string | undefined;
 
         try {
             const rv = args.Provider ? RunView.FromMetadataProvider(args.Provider) : new RunView();
             const results = await rv.RunViews<AgentRunBudgetLedgerRow>(queries, args.ContextUser);
-            for (let i = 0; i < queryKinds.length; i++) {
-                const res = results[i];
-                if (!res?.Success) {
-                    LogError(`BudgetEnforcementGuard: RunViews failed for ${queryKinds[i]}: ${res?.ErrorMessage ?? 'unknown error'}`);
-                    continue;
-                }
-                const rows = Array.isArray(res.Results) ? res.Results : [];
-                if (queryKinds[i] === 'routine') {
-                    routineRows = rows.filter((r) => this.rowMatchesRoutine(r, args.RoutineID!));
-                } else {
-                    userDailyRows = rows;
+            if (!Array.isArray(results) || results.length < queryKinds.length) {
+                ledgerError = `Shared budget ledger query returned incomplete batch (${Array.isArray(results) ? results.length : 0}/${queryKinds.length} results)`;
+                LogError(`BudgetEnforcementGuard: ${ledgerError}`);
+            } else {
+                for (let i = 0; i < queryKinds.length; i++) {
+                    const res = results[i];
+                    if (!res || !res.Success) {
+                        const errDetail = res?.ErrorMessage ?? `query batch item ${i} unsuccessful`;
+                        ledgerError = `RunViews failed for ${queryKinds[i]}: ${errDetail}`;
+                        LogError(`BudgetEnforcementGuard: ${ledgerError}`);
+                        break;
+                    }
+                    const rows = Array.isArray(res.Results) ? res.Results : [];
+                    if (queryKinds[i] === 'routine') {
+                        routineRows = rows.filter((r) => this.rowMatchesRoutine(r, args.RoutineID!));
+                    } else {
+                        userDailyRows = rows;
+                    }
                 }
             }
         } catch (err) {
-            LogError(`BudgetEnforcementGuard: RunViews error: ${err instanceof Error ? err.message : String(err)}`);
+            const msg = err instanceof Error ? err.message : String(err);
+            ledgerError = `RunViews exception: ${msg}`;
+            LogError(`BudgetEnforcementGuard: ${ledgerError}`);
+        }
+
+        if (ledgerError) {
+            return {
+                Routine: { CostUsd: 0, WallClockMs: 0 },
+                UserDaily: { CostUsd: 0, WallClockMs: 0 },
+                LedgerUnavailable: true,
+                LedgerError: ledgerError,
+            };
         }
 
         return {
@@ -417,7 +542,7 @@ export class BudgetEnforcementGuard {
             return true;
         }
         if (typeof row.Data === 'string' && row.Data.length > 0) {
-            const parsed = SafeJSONParse<Record<string, unknown>>(row.Data);
+            const parsed = SafeJSONParse<RunawayJsonObject>(row.Data);
             const rawDiag = IsPlainObject(parsed) ? parsed['__limitsDiagnostics'] : null;
             const rawCtx = IsPlainObject(rawDiag) ? rawDiag['Context'] : null;
             const rawRoutine = IsPlainObject(rawCtx) ? rawCtx['RoutineID'] : null;
@@ -434,28 +559,184 @@ export class BudgetEnforcementGuard {
         countPausedTime: boolean,
         nowMs: number,
     ): ScopeHistoricalUsage {
-        let costUsd = 0;
-        let wallClockMs = 0;
-        const seenRunIds = new Set<string>();
+        const rowById = new Map<string, AgentRunBudgetLedgerRow>();
+        const childrenByParentId = new Map<string, string[]>();
 
         for (const row of rows) {
-            if (!row?.ID || UUIDsEqual(row.ID, excludeRunId)) {
+            if (!row?.ID) {
                 continue;
             }
             const normId = row.ID.trim().toLowerCase();
-            if (seenRunIds.has(normId)) {
+            if (!normId || rowById.has(normId)) {
                 continue;
             }
-            seenRunIds.add(normId);
+            rowById.set(normId, row);
+            if (typeof row.ParentRunID === 'string' && row.ParentRunID.trim().length > 0) {
+                const parentNorm = row.ParentRunID.trim().toLowerCase();
+                const list = childrenByParentId.get(parentNorm) ?? [];
+                list.push(normId);
+                childrenByParentId.set(parentNorm, list);
+            }
+        }
 
-            const rowCost = typeof row.TotalCostRollup === 'number' && row.TotalCostRollup > 0
-                ? row.TotalCostRollup
-                : (typeof row.TotalCost === 'number' ? row.TotalCost : 0);
-            costUsd += Math.max(0, rowCost);
-            wallClockMs += this.computeHistoricalRowWallClockMs(row, countPausedTime, nowMs);
+        // Exclude active run, its descendants, and its ancestors so live in-flight tree costs are never double-counted.
+        const excludedIds = this.collectExcludedRunTreeIds(excludeRunId, rowById, childrenByParentId);
+
+        const eligibleById = new Map<string, AgentRunBudgetLedgerRow>();
+        for (const [normId, row] of rowById.entries()) {
+            if (!excludedIds.has(normId)) {
+                eligibleById.set(normId, row);
+            }
+        }
+
+        // Group eligible rows into trees so each connected tree contributes max(rootRollup, sum(directTotalCost)) once.
+        const eligibleChildren = new Map<string, string[]>();
+        const treeRoots: AgentRunBudgetLedgerRow[] = [];
+        for (const [normId, row] of eligibleById.entries()) {
+            const parentNorm = typeof row.ParentRunID === 'string' && row.ParentRunID.trim().length > 0
+                ? row.ParentRunID.trim().toLowerCase()
+                : null;
+            if (parentNorm && eligibleById.has(parentNorm)) {
+                const list = eligibleChildren.get(parentNorm) ?? [];
+                list.push(normId);
+                eligibleChildren.set(parentNorm, list);
+            } else {
+                treeRoots.push(row);
+            }
+        }
+
+        let costUsd = 0;
+        let wallClockMs = 0;
+        const visitedRoots = new Set<string>();
+
+        for (const root of treeRoots) {
+            const rootId = root.ID.trim().toLowerCase();
+            if (visitedRoots.has(rootId)) {
+                continue;
+            }
+            const subtreeIds = this.collectSubtreeIds(rootId, eligibleChildren);
+            for (const id of subtreeIds) {
+                visitedRoots.add(id);
+            }
+
+            let directSum = 0;
+            for (const id of subtreeIds) {
+                const nodeRow = eligibleById.get(id);
+                if (nodeRow && typeof nodeRow.TotalCost === 'number' && Number.isFinite(nodeRow.TotalCost)) {
+                    directSum += Math.max(0, nodeRow.TotalCost);
+                }
+            }
+            const rootRollup = typeof root.TotalCostRollup === 'number' && Number.isFinite(root.TotalCostRollup) && root.TotalCostRollup > 0
+                ? root.TotalCostRollup
+                : 0;
+            const rootDirect = typeof root.TotalCost === 'number' && Number.isFinite(root.TotalCost)
+                ? Math.max(0, root.TotalCost)
+                : 0;
+
+            costUsd += Math.max(rootRollup, rootDirect, directSum);
+            wallClockMs += this.computeHistoricalRowWallClockMs(root, countPausedTime, nowMs);
         }
 
         return { CostUsd: costUsd, WallClockMs: wallClockMs };
+    }
+
+    private collectExcludedRunTreeIds(
+        excludeRunId: string | null,
+        rowById: ReadonlyMap<string, AgentRunBudgetLedgerRow>,
+        childrenByParentId: ReadonlyMap<string, string[]>,
+    ): Set<string> {
+        const excluded = new Set<string>();
+        if (!excludeRunId || excludeRunId.trim().length === 0) {
+            return excluded;
+        }
+        const seedNorm = excludeRunId.trim().toLowerCase();
+        excluded.add(seedNorm);
+
+        const queue: string[] = [seedNorm];
+        while (queue.length > 0) {
+            const cur = queue.shift()!;
+            const children = childrenByParentId.get(cur) ?? [];
+            for (const childId of children) {
+                if (!excluded.has(childId)) {
+                    excluded.add(childId);
+                    queue.push(childId);
+                }
+            }
+        }
+
+        let cursorId: string | null = seedNorm;
+        const visitedAncestors = new Set<string>([seedNorm]);
+        while (cursorId) {
+            const row = rowById.get(cursorId);
+            const parentId = row && typeof row.ParentRunID === 'string' && row.ParentRunID.trim().length > 0
+                ? row.ParentRunID.trim().toLowerCase()
+                : null;
+            if (!parentId || visitedAncestors.has(parentId)) {
+                break;
+            }
+            visitedAncestors.add(parentId);
+            excluded.add(parentId);
+            cursorId = parentId;
+        }
+
+        return excluded;
+    }
+
+    private collectSubtreeIds(
+        rootId: string,
+        childrenByParent: ReadonlyMap<string, string[]>,
+    ): string[] {
+        const result: string[] = [];
+        const visited = new Set<string>();
+        const queue: string[] = [rootId];
+        while (queue.length > 0) {
+            const cur = queue.shift()!;
+            if (visited.has(cur)) {
+                continue;
+            }
+            visited.add(cur);
+            result.push(cur);
+            const children = childrenByParent.get(cur) ?? [];
+            for (const childId of children) {
+                if (!visited.has(childId)) {
+                    queue.push(childId);
+                }
+            }
+        }
+        return result;
+    }
+
+    private buildLedgerUnavailableResult(
+        budgets: MJLimitsBudgetsConfig,
+        ledger: CumulativeBudgetLedger,
+        routineId: string | null,
+        userId: string | null,
+        errorDetail: string,
+    ): BudgetEnforcementResult {
+        const base = this.buildEnforcementResult(budgets, ledger, routineId, userId);
+        const needRoutine = Boolean(
+            routineId && (budgets.PerRoutine.MaxCostUsd !== null || budgets.PerRoutine.MaxWallClockMs !== null),
+        );
+        const breachedScope: BudgetScope = needRoutine ? 'PerRoutine' : 'PerUserPerDay';
+        const configuredLimit = breachedScope === 'PerRoutine'
+            ? (budgets.PerRoutine.MaxCostUsd ?? budgets.PerRoutine.MaxWallClockMs ?? 0)
+            : (budgets.PerUserPerDay.MaxCostUsd ?? budgets.PerUserPerDay.MaxWallClockMs ?? 0);
+        const breach: BudgetBreachDetail = base.Breach ?? {
+            Scope: breachedScope,
+            Dimension: budgets[breachedScope].MaxCostUsd !== null ? 'CostUsd' : 'WallClockMs',
+            Limit: configuredLimit,
+            OvershootAllowed: 0,
+            EffectiveLimit: configuredLimit,
+            Current: ledger.RunCostUsd,
+            Reason: `Fail-closed pause: shared ${breachedScope} budget ledger unavailable (${errorDetail})`,
+        };
+        return {
+            ...base,
+            Exceeded: true,
+            LedgerUnavailable: true,
+            LedgerError: errorDetail,
+            Breach: breach,
+        };
     }
 
     private computeHistoricalRowWallClockMs(

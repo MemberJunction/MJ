@@ -19,6 +19,8 @@ import {
     type MJAIAgentRunEntityExtended,
     type RunawayCheckpointState,
 } from '@memberjunction/ai-core-plus';
+import { ActiveRunGovernanceRegistry } from '../ActiveRunGovernanceRegistry';
+import { BaseAgent } from '../base-agent';
 import {
     LimitsGetDiagnosticsServerOperation,
     LimitsPauseRunServerOperation,
@@ -35,21 +37,21 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     };
 });
 
-const OWNER_USER = {
+const OWNER_USER: UserInfo = {
     ID: '11111111-1111-4111-8111-111111111111',
     Name: 'Alice Owner',
     Email: 'alice@example.com',
     Type: 'Owner',
     UserRoles: [],
-} as unknown as UserInfo;
+} as Partial<UserInfo> as UserInfo;
 
-const STANDARD_USER = {
+const STANDARD_USER: UserInfo = {
     ID: '22222222-2222-4222-8222-222222222222',
     Name: 'Bob User',
     Email: 'bob@example.com',
     Type: 'User',
     UserRoles: [],
-} as unknown as UserInfo;
+} as Partial<UserInfo> as UserInfo;
 
 const RUN_ID_PAUSED = '33333333-3333-4333-8333-333333333333';
 const RUN_ID_ACTIVE = '44444444-4444-4444-8444-444444444444';
@@ -75,7 +77,7 @@ describe('Limits.* BaseRemotableOperation implementations', () => {
     });
 
     it('rejects non-Owner/non-Admin callers via Authorize() fail-closed', async () => {
-        const provider = { Authorizations: [] } as unknown as IMetadataProvider;
+        const provider = { Authorizations: [] } as Partial<IMetadataProvider> as IMetadataProvider;
         const diagOp = new LimitsGetDiagnosticsServerOperation();
         const resumeOp = new LimitsResumePausedRunServerOperation();
         const pauseOp = new LimitsPauseRunServerOperation();
@@ -249,9 +251,9 @@ describe('Limits.* BaseRemotableOperation implementations', () => {
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunViews: runViewsSpy,
             RunView: vi.fn(async () => ({ Success: true, Results: [] })),
-        } as unknown as RunView);
+        } as Partial<RunView> as RunView);
 
-        const provider = { Authorizations: [] } as unknown as IMetadataProvider;
+        const provider = { Authorizations: [] } as Partial<IMetadataProvider> as IMetadataProvider;
         const diagOp = new LimitsGetDiagnosticsServerOperation();
         const result = await diagOp.ExecuteServer(
             { RunOverride: { BriefingContributorTimeoutMs: 7500 } },
@@ -364,12 +366,12 @@ describe('Limits.* BaseRemotableOperation implementations', () => {
             LatestResult: { CompleteMessage: '' },
             Load: vi.fn(async () => true),
             Save: vi.fn(async () => true),
-        } as unknown as MJAIAgentRunEntityExtended;
+        } as Partial<MJAIAgentRunEntityExtended> as MJAIAgentRunEntityExtended;
 
         const provider = {
             Authorizations: [],
             GetEntityObject: vi.fn(async () => runEntity),
-        } as unknown as IMetadataProvider;
+        } as Partial<IMetadataProvider> as IMetadataProvider;
 
         const resumeOp = new LimitsResumePausedRunServerOperation();
         const res = await resumeOp.ExecuteServer(
@@ -392,5 +394,316 @@ describe('Limits.* BaseRemotableOperation implementations', () => {
         expect(res.Output?.PriorCumulativeActiveWallClockMs).toBe(12_000);
         expect(res.Output?.StartingStepCount).toBe(8);
         expect(res.Output?.StartingPromptTurns).toBe(4);
+    });
+
+    it('computes budget extensions against persisted LimitsDiagnosticsSnapshot and dispatches continuation idempotently through completion (CR-2)', async () => {
+        ActiveRunGovernanceRegistry.Instance.ClearDispatchedClaims();
+        ActiveRunGovernanceRegistry.Instance.RegisterContinuationDispatcher(null);
+
+        const baseRes = LimitsConfigResolver.Instance.Resolve({
+            AgentOrWorkflowMetadata: { Budgets: { PerRun: { MaxCostUsd: 2.0, MaxWallClockMs: 30_000 } } },
+        });
+        const snapshot = BuildLimitsDiagnosticsSnapshot(baseRes, {
+            AgentID: AGENT_ID,
+            AgentRunID: RUN_ID_PAUSED,
+            UserID: OWNER_USER.ID,
+            RoutineID: 'routine-resume-1',
+        });
+
+        const storedCheckpoint: RunawayCheckpointState = {
+            SchemaVersion: 'mj-runaway-checkpoint/v1',
+            CheckpointID: 'cp-cr2-1',
+            AgentRunID: RUN_ID_PAUSED,
+            AgentID: AGENT_ID,
+            AgentName: 'BudgetAgent',
+            UserID: OWNER_USER.ID,
+            RoutineID: 'routine-resume-1',
+            PausedAtISO: new Date(Date.now() - 2000).toISOString(),
+            PausedAtMs: Date.now() - 2000,
+            PauseReason: 'BudgetExceeded',
+            Summary: 'Paused at $2.00 ceiling',
+            CompletedStepCount: 3,
+            CompletedStepIDs: ['s1'],
+            CompletedPromptTurns: 2,
+            CompletedNodeIDs: [],
+            ConversationMessages: [{ Role: 'user', Content: 'Run job' }],
+            InFlightPayload: { step: 3 },
+            Scratchpad: { notes: 'Halfway done', tasks: [] },
+            NextStepSummary: 'Actions',
+            Evidence: { RecentStepSummaries: [] },
+            CumulativeLedger: {
+                RunCostUsd: 2.0,
+                RunWallClockMs: 5_000,
+                RunTokens: 1000,
+                RoutineCostUsd: 2.0,
+                RoutineWallClockMs: 5_000,
+                UserDailyCostUsd: 2.0,
+                UserDailyWallClockMs: 5_000,
+                PausedWallClockMs: 0,
+                PausedIntervals: [{ PausedAtMs: Date.now() - 2000, ResumedAtMs: null }],
+                DayBucketUTC: new Date().toISOString().slice(0, 10),
+                DayBoundaryTimezone: 'UTC',
+                AsOfISO: new Date().toISOString(),
+            },
+            HumanApproval: { Status: 'Pending' },
+        };
+
+        let runStatus = 'Paused';
+        let dataJson = AttachLimitsDiagnosticsToRunData(AttachRunawayCheckpointToRunData(null, storedCheckpoint), snapshot);
+        let checkpointObj: RunawayCheckpointState | null = storedCheckpoint;
+
+        const runEntity = {
+            ID: RUN_ID_PAUSED,
+            AgentID: AGENT_ID,
+            Agent: 'BudgetAgent',
+            UserID: OWNER_USER.ID,
+            get Status() {
+                return runStatus;
+            },
+            set Status(v: string) {
+                runStatus = v;
+            },
+            CompletedAt: null as Date | null,
+            ErrorMessage: null as string | null,
+            get Data() {
+                return dataJson;
+            },
+            set Data(v: string | null) {
+                dataJson = v ?? '';
+            },
+            get RunawayCheckpoint() {
+                return checkpointObj;
+            },
+            set RunawayCheckpoint(v: RunawayCheckpointState | null) {
+                checkpointObj = v;
+            },
+            LatestResult: { CompleteMessage: '' },
+            Load: vi.fn(async () => true),
+            Save: vi.fn(async () => true),
+        } as Partial<MJAIAgentRunEntityExtended> as MJAIAgentRunEntityExtended;
+
+        const provider = {
+            Authorizations: [],
+            GetEntityObject: vi.fn(async () => runEntity),
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+
+        const dispatchedCalls: Array<{ RunID: string; RoutineID: string | null; MaxCostUsd: number | null }> = [];
+        BaseAgent.RegisterResumeContinuationDispatcher(async (dispatchInput) => {
+            dispatchedCalls.push({
+                RunID: dispatchInput.AgentRunID,
+                RoutineID: dispatchInput.RoutineID,
+                MaxCostUsd: dispatchInput.RestoredContext.ExtendedBudgets.PerRun.MaxCostUsd,
+            });
+            runEntity.Status = 'Completed';
+            return {
+                Dispatched: true,
+                Claimed: true,
+                Completed: true,
+                Status: 'Completed',
+                Message: 'Continued worker to completion.',
+            };
+        });
+
+        try {
+            const resumeOp = new LimitsResumePausedRunServerOperation();
+            const first = await resumeOp.ExecuteServer(
+                {
+                    AgentRunID: RUN_ID_PAUSED,
+                    BudgetExtension: { AdditionalCostUsd: 3.5 },
+                },
+                { provider, user: OWNER_USER, emitProgress: () => undefined },
+            );
+
+            expect(first.Success).toBe(true);
+            // Extended against snapshot's $2.00 + $3.50 = $5.50 (NOT global null!)
+            expect(first.Output?.ExtendedBudgets?.PerRun.MaxCostUsd).toBe(5.5);
+            expect(first.Output?.Status).toBe('Completed');
+            expect(dispatchedCalls).toEqual([
+                { RunID: RUN_ID_PAUSED, RoutineID: 'routine-resume-1', MaxCostUsd: 5.5 },
+            ]);
+
+            // Idempotent repeat invocation on same checkpoint does not double-dispatch
+            runEntity.Status = 'Running';
+            const second = await resumeOp.ExecuteServer(
+                { AgentRunID: RUN_ID_PAUSED },
+                { provider, user: OWNER_USER, emitProgress: () => undefined },
+            );
+            expect(second.Success).toBe(true);
+            expect(dispatchedCalls).toHaveLength(1);
+        } finally {
+            BaseAgent.RegisterResumeContinuationDispatcher(null);
+            ActiveRunGovernanceRegistry.Instance.ClearDispatchedClaims();
+        }
+    });
+
+    it('coordinates Limits.PauseRun with in-process worker safe-point pause and preserves persisted state on detached runs (CR-3)', async () => {
+        // 1) Active in-process worker registered in ActiveRunGovernanceRegistry
+        const coopPauseSpy = vi.fn(async (summary?: string) => ({
+            Paused: true,
+            CheckpointID: 'cp-live-safe-1',
+            Status: 'Paused',
+            Summary: summary ?? 'Paused live worker',
+        }));
+        ActiveRunGovernanceRegistry.Instance.RegisterActiveRun({
+            AgentRunID: RUN_ID_ACTIVE,
+            RequestPause: coopPauseSpy,
+        });
+
+        const pauseOp = new LimitsPauseRunServerOperation();
+        const noopProvider = { Authorizations: [] } as Partial<IMetadataProvider> as IMetadataProvider;
+        try {
+            const livePauseRes = await pauseOp.ExecuteServer(
+                { AgentRunID: RUN_ID_ACTIVE, Summary: 'Cooperate at step boundary' },
+                { provider: noopProvider, user: OWNER_USER, emitProgress: () => undefined },
+            );
+            expect(livePauseRes.Success).toBe(true);
+            expect(coopPauseSpy).toHaveBeenCalledWith('Cooperate at step boundary');
+            expect(livePauseRes.Output?.CheckpointID).toBe('cp-live-safe-1');
+            expect(livePauseRes.Output?.Status).toBe('Paused');
+        } finally {
+            ActiveRunGovernanceRegistry.Instance.UnregisterActiveRun(RUN_ID_ACTIVE);
+        }
+
+        // 2) Inactive/detached run record in DB preserves existing messages, scratchpad, payload, and routine
+        const priorCheckpoint: RunawayCheckpointState = {
+            SchemaVersion: 'mj-runaway-checkpoint/v1',
+            CheckpointID: 'cp-detached-prior',
+            AgentRunID: RUN_ID_ACTIVE,
+            AgentID: AGENT_ID,
+            AgentName: 'DetachedAgent',
+            UserID: OWNER_USER.ID,
+            RoutineID: 'routine-detached-99',
+            PausedAtISO: '2026-11-21T09:00:00.000Z',
+            PausedAtMs: 1_700_000_000_000,
+            PauseReason: 'BudgetExceeded',
+            Summary: 'Prior checkpoint',
+            CompletedStepCount: 4,
+            CompletedStepIDs: ['s1'],
+            CompletedPromptTurns: 2,
+            CompletedNodeIDs: ['node-a'],
+            ConversationMessages: [{ Role: 'user', Content: 'Keep my prompt history' }],
+            InFlightPayload: { preservedKey: 'keep-me' },
+            Scratchpad: { notes: 'Preserved note', tasks: [{ id: 't1', title: 'Task 1', status: 'in_progress' }] },
+            NextStepSummary: 'Actions',
+            PendingStepDecision: {
+                step: 'Actions',
+                terminate: false,
+                actions: [{ name: 'RunStep', params: { batch: 7 } }],
+            },
+            Evidence: { RecentStepSummaries: [] },
+            CumulativeLedger: {
+                RunCostUsd: 1.2,
+                RunWallClockMs: 2_000,
+                RunTokens: 400,
+                RoutineCostUsd: 1.2,
+                RoutineWallClockMs: 2_000,
+                UserDailyCostUsd: 1.2,
+                UserDailyWallClockMs: 2_000,
+                PausedWallClockMs: 0,
+                PausedIntervals: [],
+                DayBucketUTC: '2026-11-21',
+                DayBoundaryTimezone: 'UTC',
+                AsOfISO: '2026-11-21T09:00:00.000Z',
+            },
+            HumanApproval: { Status: 'Pending' },
+        };
+
+        let detachedData = AttachRunawayCheckpointToRunData(null, priorCheckpoint);
+        let detachedStatus = 'Running';
+        const detachedRun = {
+            ID: RUN_ID_ACTIVE,
+            AgentID: AGENT_ID,
+            Agent: 'DetachedAgent',
+            UserID: OWNER_USER.ID,
+            ScheduledJobRunID: 'routine-detached-99',
+            StartedAt: new Date(Date.now() - 4_000),
+            TotalCost: 1.2,
+            TotalCostRollup: 1.2,
+            TotalTokensUsed: 400,
+            TotalPromptIterations: 2,
+            FinalPayload: JSON.stringify({ preservedKey: 'keep-me' }),
+            FinalPayloadObject: { preservedKey: 'keep-me' },
+            get Status() {
+                return detachedStatus;
+            },
+            set Status(v: string) {
+                detachedStatus = v;
+            },
+            CompletedAt: null as Date | null,
+            Success: null as boolean | null,
+            ErrorMessage: null as string | null,
+            Message: null as string | null,
+            get Data() {
+                return detachedData;
+            },
+            set Data(v: string | null) {
+                detachedData = v ?? '';
+            },
+            RunawayCheckpoint: null as RunawayCheckpointState | null,
+            LatestResult: { CompleteMessage: '' },
+            Load: vi.fn(async () => true),
+            Save: vi.fn(async () => true),
+        } as Partial<MJAIAgentRunEntityExtended> as MJAIAgentRunEntityExtended;
+
+        const detachedProvider = {
+            Authorizations: [],
+            GetEntityObject: vi.fn(async () => detachedRun),
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+
+        const detachedRes = await pauseOp.ExecuteServer(
+            { AgentRunID: RUN_ID_ACTIVE, Summary: 'Pause detached run cleanly' },
+            { provider: detachedProvider, user: OWNER_USER, emitProgress: () => undefined },
+        );
+        expect(detachedRes.Success).toBe(true);
+        const savedCp = detachedRun.RunawayCheckpoint;
+        expect(savedCp?.RoutineID).toBe('routine-detached-99');
+        expect(savedCp?.ConversationMessages).toEqual([{ Role: 'user', Content: 'Keep my prompt history' }]);
+        expect(savedCp?.Scratchpad.notes).toBe('Preserved note');
+        expect(savedCp?.InFlightPayload).toEqual({ preservedKey: 'keep-me' });
+        expect(savedCp?.PendingStepDecision?.actions?.[0]?.name).toBe('RunStep');
+    });
+
+    it('resolves durable Tier-4 user policy limits server-side in Limits.GetDiagnostics and clamps widening RunOverrides (CR-5)', async () => {
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn(async (params: { EntityName: string }) => {
+                if (params.EntityName === 'MJ: AI Agent User Policies') {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                Status: 'Active',
+                                InstructionsOverride:
+                                    'Admin ceiling.\n<!-- mj-limits: {"AgentAbsoluteIterations":2500,"Budgets":{"PerRun":{"MaxCostUsd":8.0}}} -->',
+                            },
+                        ],
+                    };
+                }
+                return { Success: true, Results: [] };
+            }),
+            RunViews: vi.fn(async () => [
+                { Success: true, Results: [] },
+                { Success: true, Results: [] },
+            ]),
+        } as Partial<RunView> as RunView);
+
+        const provider = { Authorizations: [] } as Partial<IMetadataProvider> as IMetadataProvider;
+        const diagOp = new LimitsGetDiagnosticsServerOperation();
+        const res = await diagOp.ExecuteServer(
+            {
+                AgentID: AGENT_ID,
+                UserID: OWNER_USER.ID,
+                RunOverride: {
+                    AgentAbsoluteIterations: 99_999,
+                    Budgets: { PerRun: { MaxCostUsd: 500 } },
+                },
+            },
+            { provider, user: OWNER_USER, emitProgress: () => undefined },
+        );
+
+        expect(res.Success).toBe(true);
+        expect(res.Output?.ResolvedLimits.AgentAbsoluteIterations).toBe(2500);
+        expect(res.Output?.ResolvedLimits.Budgets.PerRun.MaxCostUsd).toBe(8.0);
+        expect(res.Output?.ClampedKeys).toContain('AgentAbsoluteIterations');
+        expect(res.Output?.ClampedKeys).toContain('Budgets.PerRun.MaxCostUsd');
     });
 });

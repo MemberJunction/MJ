@@ -2,10 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
     CODE_FALLBACK_LIMITS,
     LimitsConfigResolver,
+    RunView,
     type IMetadataProvider,
     type UserInfo,
 } from '@memberjunction/core';
 import {
+    AgentUserPolicyEngine,
     ExtractRunawayCheckpointFromRunData,
     type AgentConfiguration,
     type AIPromptParams,
@@ -15,10 +17,13 @@ import {
     type MJAIAgentRunEntityExtended,
     type MJAIAgentRunStepEntityExtended,
     type OwnerPauseNotificationPayload,
+    type RunawayJsonValue,
 } from '@memberjunction/ai-core-plus';
-import type { MJAIAgentRequestEntity, MJAIAgentTypeEntity, MJAIPromptEntity, MJAIPromptRunEntity, MJUserNotificationEntity } from '@memberjunction/core-entities';
+import type { MJAIAgentRequestEntity, MJAIAgentTypeEntity, MJAIPromptEntity, MJAIPromptRunEntity, MJAIAgentUserPolicyEntity, MJUserNotificationEntity } from '@memberjunction/core-entities';
 import { ActionEngineServer } from '@memberjunction/actions';
+import { ActiveRunGovernanceRegistry } from '../ActiveRunGovernanceRegistry';
 import { BaseAgent } from '../base-agent';
+import { LimitsPauseRunServerOperation } from '../operations/LimitsOperations';
 import { RunawayCheckpointManager } from '../RunawayCheckpointManager';
 import '../agent-types/loop-agent-type';
 import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS } from '../agent-types/loop-agent-prompt-params';
@@ -42,7 +47,7 @@ const AGENT_TYPE_ID = '44444444-4444-4444-8444-444444444444';
 const PROMPT_ID = '55555555-5555-4555-8555-555555555555';
 const ACTION_ID = '66666666-6666-4666-8666-666666666666';
 
-const catalogMap = new Map<string, unknown>();
+const catalogMap = new Map<string, object>();
 
 vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {
@@ -61,7 +66,7 @@ vi.mock('@memberjunction/aiengine', () => ({
                         SystemPromptID: PROMPT_ID,
                         AgentPromptPlaceholder: '{{ _AGENT_PROMPT_ }}',
                         IsActive: true,
-                    } as unknown as MJAIAgentTypeEntity,
+                    } as Partial<MJAIAgentTypeEntity> as MJAIAgentTypeEntity,
                 ],
                 Prompts: [
                     {
@@ -69,7 +74,7 @@ vi.mock('@memberjunction/aiengine', () => ({
                         Name: 'Loop System Prompt',
                         TemplateText: 'System',
                         IsActive: true,
-                    } as unknown as MJAIPromptEntity,
+                    } as Partial<MJAIPromptEntity> as MJAIPromptEntity,
                 ],
                 AgentActions: [
                     {
@@ -105,7 +110,7 @@ vi.mock('@memberjunction/aiengine', () => ({
                 GetAgentRelationships: vi.fn(() => []),
                 GetAgentPrompts: vi.fn(() => []),
                 GetAgentBaseCatalog: vi.fn((agentId: string) => catalogMap.get(agentId)),
-                SetAgentBaseCatalog: vi.fn((agentId: string, cat: unknown) => {
+                SetAgentBaseCatalog: vi.fn((agentId: string, cat: object) => {
                     catalogMap.set(agentId, cat);
                 }),
                 ResolveAgentStorageAccountID: vi.fn(async () => null),
@@ -116,29 +121,44 @@ vi.mock('@memberjunction/aiengine', () => ({
 
 vi.mock('@memberjunction/actions', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/actions')>();
+    let mockActionEngine: {
+        Config: ReturnType<typeof vi.fn>;
+        Actions: Array<{
+            ID: string;
+            Name: string;
+            Description: string;
+            Status: string;
+            Params: { Items: never[] };
+            ResultCodes: { Items: never[] };
+        }>;
+        RunAction: ReturnType<typeof vi.fn>;
+    } | null = null;
     return {
         ...actual,
         ActionEngineServer: {
             get Instance() {
-                return {
-                    Config: vi.fn(async () => undefined),
-                    Actions: [
-                        {
-                            ID: ACTION_ID,
-                            Name: 'ProcessBatchItem',
-                            Description: 'Processes one batch item',
-                            Status: 'Active',
-                            Params: { Items: [] },
-                            ResultCodes: { Items: [] },
-                        },
-                    ],
-                    RunAction: vi.fn(async () => ({
-                        Success: true,
-                        Message: 'Item processed',
-                        Params: [],
-                        Result: { ResultCode: 'SUCCESS' },
-                    })),
-                };
+                if (!mockActionEngine) {
+                    mockActionEngine = {
+                        Config: vi.fn(async () => undefined),
+                        Actions: [
+                            {
+                                ID: ACTION_ID,
+                                Name: 'ProcessBatchItem',
+                                Description: 'Processes one batch item',
+                                Status: 'Active',
+                                Params: { Items: [] },
+                                ResultCodes: { Items: [] },
+                            },
+                        ],
+                        RunAction: vi.fn(async () => ({
+                            Success: true,
+                            Message: 'Item processed',
+                            Params: [],
+                            Result: { ResultCode: 'SUCCESS' },
+                        })),
+                    };
+                }
+                return mockActionEngine;
             },
         },
     };
@@ -182,7 +202,7 @@ class InMemoryCheckpointHarness {
             RunViews: vi.fn(async () => []),
             RunView: vi.fn(async () => ({ Success: true, Results: [] })),
         };
-        return provider as unknown as IMetadataProvider;
+        return provider as Partial<IMetadataProvider> as IMetadataProvider;
     }
 
     private createMockRun(): MJAIAgentRunEntityExtended {
@@ -190,10 +210,10 @@ class InMemoryCheckpointHarness {
         const steps: MJAIAgentRunStepEntityExtended[] = [];
         let dataJson: string | null = null;
         let checkpointCache: ReturnType<typeof ExtractRunawayCheckpointFromRunData> = null;
-        let finalPayloadObj: unknown = null;
+        let finalPayloadObj: RunawayJsonValue | object | null = null;
         let finalPayload: string | null = null;
 
-        const run: Partial<MJAIAgentRunEntityExtended> & Record<string, unknown> = {
+        const run: Partial<MJAIAgentRunEntityExtended> & { ID: string; Steps: MJAIAgentRunStepEntityExtended[] } = {
             ID: id,
             AgentID: AGENT_ID,
             Status: 'Running',
@@ -227,7 +247,7 @@ class InMemoryCheckpointHarness {
             get FinalPayloadObject() {
                 return finalPayloadObj;
             },
-            set FinalPayloadObject(val) {
+            set FinalPayloadObject(val: RunawayJsonValue | object | null) {
                 finalPayloadObj = val;
             },
             get FinalPayload() {
@@ -243,18 +263,18 @@ class InMemoryCheckpointHarness {
                 dataJson = stored.Data;
                 checkpointCache = stored.RunawayCheckpoint;
                 finalPayload = stored.FinalPayload;
-                finalPayloadObj = stored.FinalPayloadObject;
+                finalPayloadObj = stored.FinalPayloadObject as RunawayJsonValue | object | null;
                 steps.length = 0;
                 steps.push(...stored.Steps);
                 return true;
             }),
             Save: vi.fn(async () => {
-                this.Runs.set(run.ID as string, run as unknown as MJAIAgentRunEntityExtended);
+                this.Runs.set(run.ID, run as MJAIAgentRunEntityExtended);
                 return true;
             }),
             SetServerBoundActionParams: vi.fn(),
         };
-        return run as unknown as MJAIAgentRunEntityExtended;
+        return run as MJAIAgentRunEntityExtended;
     }
 
     private createMockStep(): MJAIAgentRunStepEntityExtended {
@@ -305,11 +325,20 @@ class InMemoryCheckpointHarness {
     }
 }
 
+interface ScriptedEnvelope extends Record<string, RunawayJsonValue | object | undefined> {
+    taskComplete: boolean;
+    reasoning?: string;
+    message?: string;
+    scratchpad?: object;
+    payloadChangeRequest?: object;
+    nextStep?: object;
+}
+
 function makePromptResult(
-    envelope: Record<string, unknown>,
+    envelope: ScriptedEnvelope,
     costUsd: number,
     tokens: number,
-): AIPromptRunResult<Record<string, unknown>> {
+): AIPromptRunResult<ScriptedEnvelope> {
     const promptRun: Partial<MJAIPromptRunEntity> = {
         ID: `pr-${Math.random().toString(36).slice(2)}`,
         TotalCost: costUsd,
@@ -330,15 +359,15 @@ function makePromptResult(
         cost: costUsd,
         combinedCost: costUsd,
         combinedTokensUsed: tokens,
-        chatResult: {} as AIPromptRunResult<Record<string, unknown>>['chatResult'],
+        chatResult: {} as AIPromptRunResult<ScriptedEnvelope>['chatResult'],
     };
 }
 
 class TestableCheckpointAgent extends BaseAgent {
-    private readonly scriptedPromptCalls: Array<() => AIPromptRunResult<Record<string, unknown>>>;
+    private readonly scriptedPromptCalls: Array<() => AIPromptRunResult<ScriptedEnvelope>>;
     public readonly PromptCalls: AIPromptParams[] = [];
 
-    constructor(scripted: Array<() => AIPromptRunResult<Record<string, unknown>>>) {
+    constructor(scripted: Array<() => AIPromptRunResult<ScriptedEnvelope>>) {
         super();
         this.scriptedPromptCalls = scripted;
         const promptRunnerStub = {
@@ -365,21 +394,21 @@ class TestableCheckpointAgent extends BaseAgent {
                 SystemPromptID: PROMPT_ID,
                 AgentPromptPlaceholder: '{{ _AGENT_PROMPT }}',
                 PromptParamsSchema: JSON.stringify({}),
-            } as unknown as MJAIAgentTypeEntity,
+            } as Partial<MJAIAgentTypeEntity> as MJAIAgentTypeEntity,
             systemPrompt: {
                 ID: PROMPT_ID,
                 Name: 'Loop System Prompt',
                 TemplateText: 'System',
-            } as unknown as AgentConfiguration['systemPrompt'],
+            } as Partial<AgentConfiguration['systemPrompt']> as AgentConfiguration['systemPrompt'],
             childPrompt: {
                 ID: PROMPT_ID,
                 Name: 'Child Prompt',
                 TemplateText: 'Child',
-            } as unknown as AgentConfiguration['childPrompt'],
+            } as Partial<AgentConfiguration['childPrompt']> as AgentConfiguration['childPrompt'],
         };
     }
 
-    protected override async loadAgentTypePromptParams(): Promise<Record<string, unknown>> {
+    protected override async loadAgentTypePromptParams(): Promise<Record<string, boolean | number | string | null | undefined>> {
         return { ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS, enableTaskGraphs: false };
     }
 
@@ -425,7 +454,7 @@ describe('Non-destructive pause, persisted checkpoint, owner notification, and h
             MaxTimePerRun: null,
             MaxIterationsPerRun: null,
             TypeConfiguration: null,
-        } as unknown as MJAIAgentEntityExtended;
+        } as Partial<MJAIAgentEntityExtended> as MJAIAgentEntityExtended;
 
         // Scripted turns:
         // Turn 1: updates payload + scratchpad + invokes action ($0.20)
@@ -673,7 +702,7 @@ describe('Non-destructive pause, persisted checkpoint, owner notification, and h
             MaxTimePerRun: null,
             MaxIterationsPerRun: null,
             TypeConfiguration: null,
-        } as unknown as MJAIAgentEntityExtended;
+        } as Partial<MJAIAgentEntityExtended> as MJAIAgentEntityExtended;
 
         const judgeCalls: number[] = [];
         const makeAmbiguousTurn = (idx: number) =>
@@ -769,5 +798,538 @@ describe('Non-destructive pause, persisted checkpoint, owner notification, and h
         expect(resumed.agentRun.Status).toBe('Completed');
         expect(agent.PromptCalls).toHaveLength(4);
         expect(resumed.payload).toEqual({ branchIndex: 99, done: true });
+    });
+
+    it('CR-1: enforces real agent budget columns (MaxCostPerRun) and tree budgets without enableRunawayGovernance and updates ceiling on approved extension', async () => {
+        const provider = harness.CreateProvider();
+        const contextUser = { ID: USER_ID, Name: 'Alice Owner', Email: 'alice@example.com' } as UserInfo;
+
+        const agentWithColumnBudget = {
+            ID: AGENT_ID,
+            Name: 'ColumnBudgetAgent',
+            TypeID: AGENT_TYPE_ID,
+            Status: 'Active',
+            MaxCostPerRun: 0.25,
+            MaxTokensPerRun: null,
+            MaxTimePerRun: null,
+            MaxIterationsPerRun: null,
+            TypeConfiguration: null,
+        } as Partial<MJAIAgentEntityExtended> as MJAIAgentEntityExtended;
+
+        const colAgent = new TestableCheckpointAgent([
+            () =>
+                makePromptResult(
+                    {
+                        taskComplete: false,
+                        reasoning: 'Step 1 ($0.18 < $0.25)',
+                        payloadChangeRequest: { newElements: { phase: 'step-1' } },
+                        nextStep: { type: 'Actions', actions: [{ name: 'ProcessBatchItem', params: { batch: 1 } }] },
+                    },
+                    0.18,
+                    150,
+                ),
+            () =>
+                makePromptResult(
+                    {
+                        taskComplete: false,
+                        reasoning: 'Step 2 ($0.12 => cumulative $0.30 >= $0.25)',
+                        payloadChangeRequest: { updateElements: { phase: 'step-2' } },
+                        nextStep: { type: 'Actions', actions: [{ name: 'ProcessBatchItem', params: { batch: 2 } }] },
+                    },
+                    0.12,
+                    150,
+                ),
+            () =>
+                makePromptResult(
+                    {
+                        taskComplete: true,
+                        message: 'Completed after extending column-derived budget ceiling',
+                        payloadChangeRequest: { updateElements: { phase: 'done' } },
+                    },
+                    0.05,
+                    100,
+                ),
+        ]);
+
+        // Deliberately NO enableRunawayGovernance and NO limitsOverride
+        const colPause = await colAgent.Execute<{ phase?: string }, { phase?: string }>({
+            agent: agentWithColumnBudget,
+            conversationMessages: [{ role: 'user', content: 'Run with MaxCostPerRun=0.25' }],
+            contextUser,
+            provider,
+            userId: USER_ID,
+        });
+
+        expect(colPause.paused).toBe(true);
+        expect(colPause.pausedReason).toBe('BudgetExceeded');
+        expect(colPause.budgetBreach?.Scope).toBe('PerRun');
+        expect(colPause.budgetBreach?.Dimension).toBe('CostUsd');
+        expect(colPause.agentRun.Status).toBe('Paused');
+        expect(colPause.agentRun.ErrorMessage).toBeNull();
+        expect(colPause.payload).toEqual({ phase: 'step-2' });
+
+        const checkpointManager = new RunawayCheckpointManager();
+        await checkpointManager.ApproveCheckpoint({
+            AgentRunID: colPause.agentRun.ID,
+            ApprovedByUserID: APPROVER_ID,
+            BudgetExtension: { AdditionalCostUsd: 0.25 },
+            Provider: provider,
+            ContextUser: contextUser,
+        });
+
+        const colResume = await colAgent.ResumePausedRun<{ phase?: string }, { phase?: string }>({
+            agent: agentWithColumnBudget,
+            conversationMessages: [],
+            contextUser,
+            provider,
+            userId: USER_ID,
+            resumeCheckpointRunId: colPause.agentRun.ID,
+        });
+
+        expect(colResume.success).toBe(true);
+        expect(colResume.agentRun.Status).toBe('Completed');
+        expect(colResume.payload).toEqual({ phase: 'done' });
+
+        // Tree budget maxTreeCost without enableRunawayGovernance must also pause non-destructively BEFORE terminal fail
+        const agentNoColumns = {
+            ID: AGENT_ID,
+            Name: 'TreeBudgetAgent',
+            TypeID: AGENT_TYPE_ID,
+            Status: 'Active',
+            MaxCostPerRun: null,
+            MaxTokensPerRun: null,
+            MaxTimePerRun: null,
+            MaxIterationsPerRun: null,
+            TypeConfiguration: null,
+        } as Partial<MJAIAgentEntityExtended> as MJAIAgentEntityExtended;
+
+        const treeAgent = new TestableCheckpointAgent([
+            () =>
+                makePromptResult(
+                    {
+                        taskComplete: false,
+                        reasoning: 'Tree step 1 ($0.14)',
+                        nextStep: { type: 'Actions', actions: [{ name: 'ProcessBatchItem', params: { batch: 1 } }] },
+                    },
+                    0.14,
+                    120,
+                ),
+            () =>
+                makePromptResult(
+                    {
+                        taskComplete: false,
+                        reasoning: 'Tree step 2 ($0.12 => tree cost $0.26 >= $0.22)',
+                        nextStep: { type: 'Actions', actions: [{ name: 'ProcessBatchItem', params: { batch: 2 } }] },
+                    },
+                    0.12,
+                    120,
+                ),
+        ]);
+
+        const treePause = await treeAgent.Execute({
+            agent: agentNoColumns,
+            conversationMessages: [{ role: 'user', content: 'Run with maxTreeCost=0.22' }],
+            contextUser,
+            provider,
+            userId: USER_ID,
+            maxTreeCost: 0.22,
+        });
+
+        expect(treePause.paused).toBe(true);
+        expect(treePause.agentRun.Status).toBe('Paused');
+        expect(treePause.agentRun.ErrorMessage).toBeNull();
+    });
+
+    it('CR-3: cooperatively pauses a live running BaseAgent at step boundary via Limits.PauseRun and preserves live messages and payload', async () => {
+        const provider = harness.CreateProvider();
+        const ownerUser = {
+            ID: USER_ID,
+            Name: 'Alice Owner',
+            Email: 'alice@example.com',
+            Type: 'Owner',
+            UserRoles: [],
+        } as Partial<UserInfo> as UserInfo;
+        const agentEntity = {
+            ID: AGENT_ID,
+            Name: 'CooperativePauseAgent',
+            TypeID: AGENT_TYPE_ID,
+            Status: 'Active',
+            MaxCostPerRun: null,
+            MaxTokensPerRun: null,
+            MaxTimePerRun: null,
+            MaxIterationsPerRun: null,
+            TypeConfiguration: null,
+        } as Partial<MJAIAgentEntityExtended> as MJAIAgentEntityExtended;
+
+        const pauseOp = new LimitsPauseRunServerOperation();
+        let pauseDispatchedForRunId: string | null = null;
+        let pauseOpPromise: ReturnType<LimitsPauseRunServerOperation['ExecuteServer']> | null = null;
+        vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockImplementation(async () => {
+            if (!pauseDispatchedForRunId) {
+                const activeRuns = Array.from(harness.Runs.values());
+                pauseDispatchedForRunId = activeRuns[0]?.ID ?? null;
+                if (pauseDispatchedForRunId) {
+                    // Launch cooperative pause concurrently while the step action finishes
+                    pauseOpPromise = pauseOp.ExecuteServer(
+                        {
+                            AgentRunID: pauseDispatchedForRunId,
+                            Summary: 'Operator requested safe-point pause during batch action',
+                        },
+                        { provider, user: ownerUser, emitProgress: () => undefined },
+                    );
+                }
+            }
+            return {
+                Success: true,
+                Message: 'Item processed',
+                Params: [],
+                Result: { ResultCode: 'SUCCESS' },
+            };
+        });
+
+        const agent = new TestableCheckpointAgent([
+            () =>
+                makePromptResult(
+                    {
+                        taskComplete: false,
+                        reasoning: 'Running batch 1 before cooperative pause check',
+                        scratchpad: {
+                            notes: 'Live in-flight note preserved during cooperative pause',
+                            taskList: { upsert: [{ id: 't1', title: 'Batch 1', status: 'completed' }] },
+                        },
+                        payloadChangeRequest: { newElements: { syncedRecords: ['rec-1'] } },
+                        nextStep: { type: 'Actions', actions: [{ name: 'ProcessBatchItem', params: { batch: 1 } }] },
+                    },
+                    0.05,
+                    100,
+                ),
+            () =>
+                makePromptResult(
+                    {
+                        taskComplete: true,
+                        message: 'Finished cleanly after cooperative pause resumed',
+                        payloadChangeRequest: { updateElements: { syncedRecords: ['rec-1', 'rec-2'] } },
+                    },
+                    0.03,
+                    80,
+                ),
+        ]);
+
+        const pauseResult = await agent.Execute<{ syncedRecords?: string[] }, { syncedRecords?: string[] }>({
+            agent: agentEntity,
+            conversationMessages: [{ role: 'user', content: 'Sync records with cooperative pause' }],
+            contextUser: ownerUser,
+            provider,
+            userId: USER_ID,
+        });
+
+        expect(pauseDispatchedForRunId).toBe(pauseResult.agentRun.ID);
+        expect(pauseOpPromise).not.toBeNull();
+        const opRes = await pauseOpPromise!;
+        expect(opRes.Success).toBe(true);
+        expect(opRes.Output?.Status).toBe('Paused');
+        expect(pauseResult.paused).toBe(true);
+        expect(pauseResult.pausedReason).toBe('ManualPause');
+        expect(pauseResult.agentRun.Status).toBe('Paused');
+
+        const checkpoint = ExtractRunawayCheckpointFromRunData(pauseResult.agentRun.Data);
+        expect(checkpoint).not.toBeNull();
+        expect(checkpoint?.InFlightPayload).toEqual({ syncedRecords: ['rec-1'] });
+        expect(checkpoint?.Scratchpad.notes).toBe('Live in-flight note preserved during cooperative pause');
+        expect(checkpoint?.ConversationMessages.some((m) => m.Content.includes('Sync records with cooperative pause'))).toBe(true);
+    });
+
+    it('CR-4: persists full PendingStepDecision on post-prompt budget pause and executes the pending action once on a fresh BaseAgent instance without re-prompting', async () => {
+        const provider = harness.CreateProvider();
+        const contextUser = { ID: USER_ID, Name: 'Alice Owner', Email: 'alice@example.com' } as UserInfo;
+        const agentEntity = {
+            ID: AGENT_ID,
+            Name: 'PendingDecisionResumeAgent',
+            TypeID: AGENT_TYPE_ID,
+            Status: 'Active',
+            MaxCostPerRun: null,
+            MaxTokensPerRun: null,
+            MaxTimePerRun: null,
+            MaxIterationsPerRun: null,
+            TypeConfiguration: null,
+        } as Partial<MJAIAgentEntityExtended> as MJAIAgentEntityExtended;
+
+        const executedParams: Array<Record<string, string | number | boolean | null | undefined>> = [];
+        vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockImplementation(async (actionParams) => {
+            const paramMap: Record<string, string | number | boolean | null | undefined> = {};
+            for (const p of actionParams.Params ?? []) {
+                paramMap[p.Name] = p.Value as string | number | boolean | null | undefined;
+            }
+            executedParams.push(paramMap);
+            return {
+                Success: true,
+                Message: 'Executed pending action cleanly',
+                Params: [],
+                Result: { ResultCode: 'SUCCESS' },
+            };
+        });
+
+        // Turn 1 decides to run ProcessBatchItem(batchId='delta-99') and spends $0.35 >= $0.30 PerRunCostUsd,
+        // pausing BEFORE executing the pending Actions step.
+        const initialAgent = new TestableCheckpointAgent([
+            () =>
+                makePromptResult(
+                    {
+                        taskComplete: false,
+                        reasoning: 'Commit delta-99 action next',
+                        payloadChangeRequest: { newElements: { preparedBatch: 'delta-99' } },
+                        nextStep: {
+                            type: 'Actions',
+                            actions: [{ name: 'ProcessBatchItem', params: { batchId: 'delta-99' } }],
+                        },
+                    },
+                    0.35,
+                    300,
+                ),
+        ]);
+
+        const pauseResult = await initialAgent.Execute<{ preparedBatch?: string }, { preparedBatch?: string }>({
+            agent: agentEntity,
+            conversationMessages: [{ role: 'user', content: 'Prepare and process delta-99' }],
+            contextUser,
+            provider,
+            userId: USER_ID,
+            limitsOverride: { Budgets: { PerRun: { MaxCostUsd: 0.30 } } },
+        });
+
+        expect(pauseResult.paused).toBe(true);
+        expect(pauseResult.agentRun.Status).toBe('Paused');
+        expect(executedParams).toHaveLength(0); // Pending action has NOT executed yet!
+
+        const checkpoint = ExtractRunawayCheckpointFromRunData(pauseResult.agentRun.Data);
+        expect(checkpoint?.PendingStepDecision).toBeDefined();
+        expect(checkpoint?.PendingStepDecision?.step).toBe('Actions');
+        expect(checkpoint?.PendingStepDecision?.actions?.[0]?.name).toBe('ProcessBatchItem');
+        expect(checkpoint?.PendingStepDecision?.actions?.[0]?.params).toEqual({ batchId: 'delta-99' });
+
+        const checkpointManager = new RunawayCheckpointManager();
+        await checkpointManager.ApproveCheckpoint({
+            AgentRunID: pauseResult.agentRun.ID,
+            ApprovedByUserID: APPROVER_ID,
+            BudgetExtension: { AdditionalCostUsd: 0.50 },
+            Provider: provider,
+            ContextUser: contextUser,
+        });
+
+        // Resume on a BRAND NEW BaseAgent instance that only has the post-action finalization prompt
+        const freshAgent = new TestableCheckpointAgent([
+            () =>
+                makePromptResult(
+                    {
+                        taskComplete: true,
+                        message: 'Delta-99 pending action completed once on fresh worker',
+                        payloadChangeRequest: { updateElements: { executedBatch: 'delta-99' } },
+                    },
+                    0.05,
+                    100,
+                ),
+        ]);
+
+        const resumed = await freshAgent.ResumePausedRun<{ preparedBatch?: string; executedBatch?: string }>({
+            agent: agentEntity,
+            conversationMessages: [],
+            contextUser,
+            provider,
+            userId: USER_ID,
+            resumeCheckpointRunId: pauseResult.agentRun.ID,
+        });
+
+        expect(resumed.success).toBe(true);
+        expect(resumed.agentRun.Status).toBe('Completed');
+        // Fresh agent ran pending ProcessBatchItem(batchId='delta-99') BEFORE calling its 1 finalization prompt
+        expect(executedParams).toHaveLength(1);
+        expect(executedParams[0]).toEqual({ batchId: 'delta-99' });
+        expect(freshAgent.PromptCalls).toHaveLength(1);
+        expect(resumed.payload).toEqual({ preparedBatch: 'delta-99', executedBatch: 'delta-99' });
+    });
+
+    it('CR-5: resolves Tier-4 MJAIAgentUserPolicy limits server-side during BaseAgent.Execute and clamps widening RunOverride', async () => {
+        const provider = harness.CreateProvider();
+        const contextUser = { ID: USER_ID, Name: 'Alice Owner', Email: 'alice@example.com' } as UserInfo;
+        const agentEntity = {
+            ID: AGENT_ID,
+            Name: 'PolicyClampedAgent',
+            TypeID: AGENT_TYPE_ID,
+            Status: 'Active',
+            MaxCostPerRun: null,
+            MaxTokensPerRun: null,
+            MaxTimePerRun: null,
+            MaxIterationsPerRun: null,
+            TypeConfiguration: null,
+        } as Partial<MJAIAgentEntityExtended> as MJAIAgentEntityExtended;
+
+        vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockResolvedValue({
+            status: 'found',
+            policy: {
+                ID: '99999999-9999-4999-8999-000000000042',
+                UserID: USER_ID,
+                AgentID: AGENT_ID,
+                Status: 'Active',
+                AllowInterAgentCoordination: true,
+                InstructionsOverride: '<!-- mj-limits:{"Budgets":{"PerRun":{"MaxCostUsd":0.25}}} -->',
+            } as Partial<MJAIAgentUserPolicyEntity> as MJAIAgentUserPolicyEntity,
+        });
+
+        const agent = new TestableCheckpointAgent([
+            () =>
+                makePromptResult(
+                    {
+                        taskComplete: false,
+                        reasoning: 'Attempt to spend $0.30 despite $10 RunOverride because policy caps at $0.25',
+                        nextStep: { type: 'Actions', actions: [{ name: 'ProcessBatchItem', params: { idx: 1 } }] },
+                    },
+                    0.30,
+                    200,
+                ),
+        ]);
+
+        const pauseResult = await agent.Execute({
+            agent: agentEntity,
+            conversationMessages: [{ role: 'user', content: 'Run with clamped policy ceiling' }],
+            contextUser,
+            provider,
+            userId: USER_ID,
+            limitsOverride: {
+                Budgets: {
+                    PerRun: { MaxCostUsd: 10.0 },
+                },
+            },
+        });
+
+        expect(pauseResult.paused).toBe(true);
+        expect(pauseResult.pausedReason).toBe('BudgetExceeded');
+        expect(pauseResult.budgetBreach?.Scope).toBe('PerRun');
+        expect(pauseResult.budgetBreach?.Dimension).toBe('CostUsd');
+        expect(pauseResult.agentRun.Status).toBe('Paused');
+    });
+
+    it('CR-7: pauses an inline While loop mid-iteration preserving LoopCursor and resumes from exact iteration index on a fresh BaseAgent', async () => {
+        const provider = harness.CreateProvider();
+        const contextUser = { ID: USER_ID, Name: 'Alice Owner', Email: 'alice@example.com' } as UserInfo;
+        const agentEntity = {
+            ID: AGENT_ID,
+            Name: 'WhileLoopCheckpointAgent',
+            TypeID: AGENT_TYPE_ID,
+            Status: 'Active',
+            MaxCostPerRun: null,
+            MaxTokensPerRun: null,
+            MaxTimePerRun: null,
+            MaxIterationsPerRun: null,
+            TypeConfiguration: null,
+        } as Partial<MJAIAgentEntityExtended> as MJAIAgentEntityExtended;
+
+        const executedAttempts: number[] = [];
+        let loopPausePromise: ReturnType<typeof ActiveRunGovernanceRegistry.Instance.RequestCooperativePause> | null = null;
+        vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockImplementation(async (actionParams) => {
+            const attemptParam = (actionParams.Params ?? []).find((p) => p.Name === 'attempt');
+            const attemptNumber = Number(attemptParam?.Value ?? 0);
+            executedAttempts.push(attemptNumber);
+            if (executedAttempts.length === 2) {
+                const currentRunId = Array.from(harness.Runs.keys())[0];
+                if (currentRunId) {
+                    // Launch cooperative pause signal concurrently so iteration 2 completes cleanly
+                    // and checkInlineLoopIterationGovernance pauses right before iteration 3
+                    loopPausePromise = ActiveRunGovernanceRegistry.Instance.RequestCooperativePause(
+                        currentRunId,
+                        'Pause While loop after iteration 2',
+                    );
+                }
+            }
+            return {
+                Success: true,
+                Message: `Processed iteration ${attemptNumber}`,
+                Params: [],
+                Result: { ResultCode: 'SUCCESS' },
+            };
+        });
+
+        const initialAgent = new TestableCheckpointAgent([
+            () =>
+                makePromptResult(
+                    {
+                        taskComplete: false,
+                        reasoning: 'Execute 4-iteration While loop',
+                        payloadChangeRequest: { newElements: { loopTag: 'while-4' } },
+                        nextStep: {
+                            type: 'While',
+                            while: {
+                                condition: 'results.length < 4',
+                                itemVariable: 'attempt',
+                                maxIterations: 10,
+                                action: {
+                                    name: 'ProcessBatchItem',
+                                    params: { attempt: '{{attempt.attemptNumber}}' },
+                                },
+                            },
+                        },
+                    },
+                    0.05,
+                    150,
+                ),
+        ]);
+
+        const pauseResult = await initialAgent.Execute<{ loopTag?: string }, { loopTag?: string }>({
+            agent: agentEntity,
+            conversationMessages: [{ role: 'user', content: 'Run 4 while iterations with pause after 2' }],
+            contextUser,
+            provider,
+            userId: USER_ID,
+        });
+
+        expect(executedAttempts).toEqual([1, 2]);
+        expect(pauseResult.agentRun.ErrorMessage).toBeNull();
+        expect(loopPausePromise).not.toBeNull();
+        const loopPauseAck = await loopPausePromise!;
+        expect(loopPauseAck?.Paused).toBe(true);
+        expect(pauseResult.paused).toBe(true);
+        expect(pauseResult.agentRun.Status).toBe('Paused');
+
+        const checkpoint = ExtractRunawayCheckpointFromRunData(pauseResult.agentRun.Data);
+        expect(checkpoint?.LoopCursor?.LoopType).toBe('While');
+        expect(checkpoint?.LoopCursor?.IterationIndex).toBe(2);
+        expect(checkpoint?.LoopCursor?.CompletedItemResults).toHaveLength(2);
+        expect(checkpoint?.PendingStepDecision?.step).toBe('While');
+
+        const checkpointManager = new RunawayCheckpointManager();
+        await checkpointManager.ApproveCheckpoint({
+            AgentRunID: pauseResult.agentRun.ID,
+            ApprovedByUserID: APPROVER_ID,
+            Provider: provider,
+            ContextUser: contextUser,
+        });
+
+        const freshAgent = new TestableCheckpointAgent([
+            () =>
+                makePromptResult(
+                    {
+                        taskComplete: true,
+                        message: 'While loop resumed from cursor index 2 and completed remaining items',
+                        payloadChangeRequest: { updateElements: { loopCompleted: true } },
+                    },
+                    0.02,
+                    100,
+                ),
+        ]);
+
+        const resumed = await freshAgent.ResumePausedRun<{ loopTag?: string; loopCompleted?: boolean }>({
+            agent: agentEntity,
+            conversationMessages: [],
+            contextUser,
+            provider,
+            userId: USER_ID,
+            resumeCheckpointRunId: pauseResult.agentRun.ID,
+        });
+
+        expect(resumed.success).toBe(true);
+        expect(resumed.agentRun.Status).toBe('Completed');
+        // Exact non-duplicated continuation: [1, 2] pre-pause + [3, 4] post-resume = 4 total iterations!
+        expect(executedAttempts).toEqual([1, 2, 3, 4]);
+        expect(freshAgent.PromptCalls).toHaveLength(1);
+        expect(resumed.payload).toEqual({ loopTag: 'while-4', loopCompleted: true });
     });
 });

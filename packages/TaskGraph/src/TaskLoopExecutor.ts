@@ -52,9 +52,35 @@ export type LoopBodyInvoker = (iteration: {
     Bindings: Record<string, unknown>;
 }) => Promise<LoopIterationOutcome>;
 
+/** Verdict returned by an optional inter-iteration governance hook. */
+export interface LoopIterationGovernanceVerdict {
+    ShouldPause: boolean;
+    Reason?: string;
+    Status?: string;
+}
+
+/** Optional governance callback checked between sequential loop iterations (budget/progress/pause). */
+export type LoopIterationGovernanceHook = (info: {
+    LoopType: 'ForEach' | 'While';
+    NextIterationIndex: number;
+    CompletedIterations: number;
+    ResultsSoFar: readonly unknown[];
+    LastOutcome?: LoopIterationOutcome;
+}) => Promise<LoopIterationGovernanceVerdict>;
+
+/** Execution options supporting resume cursors and inter-iteration governance checks. */
+export interface LoopExecutionOptions {
+    StartIndex?: number;
+    InitialResults?: readonly unknown[];
+    OnIterationGovernance?: LoopIterationGovernanceHook;
+}
+
 /** What a whole loop step produced. */
 export type LoopExecutionResult = {
     Success: boolean;
+    Paused?: boolean;
+    PauseReason?: string;
+    ResumeCursorIndex?: number;
     /** Persisted to `Task.OutputPayload` — what downstream steps and conditions can read. */
     Output: {
         iterations: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
@@ -79,6 +105,7 @@ export async function RunForEachLoop(
     op: ForEachOperation,
     ctx: PayloadMappingContext,
     invokeBody: LoopBodyInvoker,
+    options?: LoopExecutionOptions,
 ): Promise<LoopExecutionResult> {
     const collection = resolveCollection(op.collectionPath, ctx);
     if (!Array.isArray(collection)) {
@@ -118,7 +145,7 @@ export async function RunForEachLoop(
 
     return op.executionMode === 'parallel'
         ? runParallel(plan, invokeBody, op.maxConcurrency ?? resolvedLimits.ResourceGuards.MaxLoopConcurrency, op.continueOnError === true)
-        : runSequential(plan, invokeBody, op.continueOnError === true, op.delayBetweenIterationsMs ?? 0);
+        : runSequential(plan, invokeBody, op.continueOnError === true, op.delayBetweenIterationsMs ?? 0, options);
 }
 
 /**
@@ -136,15 +163,36 @@ export async function RunWhileLoop(
     op: WhileOperation,
     evaluateCondition: (iteration: number) => { Success: boolean; Value?: unknown; ErrorMessage?: string },
     invokeBody: LoopBodyInvoker,
+    options?: LoopExecutionOptions,
 ): Promise<LoopExecutionResult> {
     const limit = iterationLimit(op.maxIterations, LimitsConfigResolver.Resolve().Limits.WhileLoopMaxIterations);
     const attemptVar = op.itemVariable || 'attempt';
-    const results: unknown[] = [];
-    let succeeded = 0;
+    const startIndex = Math.max(0, options?.StartIndex ?? 0);
+    const results: unknown[] = options?.InitialResults ? [...options.InitialResults] : [];
+    let succeeded = results.length;
     let failed = 0;
-    let index = 0;
+    let index = startIndex;
 
     while (index < limit) {
+        if (options?.OnIterationGovernance) {
+            const gov = await options.OnIterationGovernance({
+                LoopType: 'While',
+                NextIterationIndex: index,
+                CompletedIterations: index,
+                ResultsSoFar: results,
+            });
+            if (gov.ShouldPause) {
+                return {
+                    Success: false,
+                    Paused: true,
+                    PauseReason: gov.Reason,
+                    ResumeCursorIndex: index,
+                    Output: { iterations: index, succeeded, failed, results },
+                    ErrorMessage: gov.Reason,
+                };
+            }
+        }
+
         const verdict = evaluateCondition(index);
         if (!verdict.Success) {
             return {
@@ -172,6 +220,25 @@ export async function RunWhileLoop(
         }
 
         index++;
+        if (options?.OnIterationGovernance) {
+            const postGov = await options.OnIterationGovernance({
+                LoopType: 'While',
+                NextIterationIndex: index,
+                CompletedIterations: index,
+                ResultsSoFar: results,
+                LastOutcome: outcome,
+            });
+            if (postGov.ShouldPause) {
+                return {
+                    Success: false,
+                    Paused: true,
+                    PauseReason: postGov.Reason,
+                    ResumeCursorIndex: index,
+                    Output: { iterations: index, succeeded, failed, results },
+                    ErrorMessage: postGov.Reason,
+                };
+            }
+        }
         if (op.delayBetweenIterationsMs) await delay(op.delayBetweenIterationsMs);
     }
 
@@ -190,12 +257,36 @@ async function runSequential(
     invokeBody: LoopBodyInvoker,
     continueOnError: boolean,
     delayMs: number,
+    options?: LoopExecutionOptions,
 ): Promise<LoopExecutionResult> {
-    const results: unknown[] = [];
-    let succeeded = 0;
+    const startIndex = Math.max(0, options?.StartIndex ?? 0);
+    const results: unknown[] = options?.InitialResults ? [...options.InitialResults] : [];
+    let succeeded = results.length;
     let failed = 0;
 
     for (const iteration of plan) {
+        if (iteration.Index < startIndex) {
+            continue;
+        }
+        if (options?.OnIterationGovernance) {
+            const gov = await options.OnIterationGovernance({
+                LoopType: 'ForEach',
+                NextIterationIndex: iteration.Index,
+                CompletedIterations: iteration.Index,
+                ResultsSoFar: results,
+            });
+            if (gov.ShouldPause) {
+                return {
+                    Success: false,
+                    Paused: true,
+                    PauseReason: gov.Reason,
+                    ResumeCursorIndex: iteration.Index,
+                    Output: { iterations: results.length, succeeded, failed, results },
+                    ErrorMessage: gov.Reason,
+                };
+            }
+        }
+
         const outcome = await invokeBody(iteration);
         results.push(outcome.Output ?? null);
         if (outcome.Success) succeeded++;

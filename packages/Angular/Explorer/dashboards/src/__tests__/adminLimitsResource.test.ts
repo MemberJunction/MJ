@@ -244,17 +244,18 @@ describe('AdminLimitsResourceComponent & Explorer Governance Surface', () => {
             Message: 'Run run-active-1 paused non-destructively.',
         }));
 
-        mockService = {
+        const mockServiceInstance: Partial<AdminLimitsService> = {
             GetDiagnostics: getDiagnosticsSpy,
             ResumePausedRun: resumePausedRunSpy,
             PauseRun: pauseRunSpy,
-        } as unknown as AdminLimitsService;
+        };
+        mockService = mockServiceInstance as AdminLimitsService;
 
         vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
         vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockReturnValue(undefined);
 
         component = new AdminLimitsResourceComponent(
-            mockCdr as unknown as ChangeDetectorRef,
+            mockCdr as Partial<ChangeDetectorRef> as ChangeDetectorRef,
             mockService,
         );
     });
@@ -291,14 +292,13 @@ describe('AdminLimitsResourceComponent & Explorer Governance Surface', () => {
     });
 
     it('defers NotifyLoadStarted out of synchronous ngOnInit and calls NotifyLoadComplete after loading diagnostics', async () => {
-        const notifyStartedSpy = vi.spyOn(
-            component as unknown as { NotifyLoadStarted(): void },
-            'NotifyLoadStarted',
-        );
-        const notifyCompleteSpy = vi.spyOn(
-            component as unknown as { NotifyLoadComplete(): void },
-            'NotifyLoadComplete',
-        );
+        const componentWithLifecycle = component as AdminLimitsResourceComponent & {
+            NotifyLoadStarted(): void;
+            NotifyLoadComplete(): void;
+            OnQueryParamsChanged(p: Record<string, string>, s: 'popstate' | 'deeplink'): void;
+        };
+        const notifyStartedSpy = vi.spyOn(componentWithLifecycle, 'NotifyLoadStarted');
+        const notifyCompleteSpy = vi.spyOn(componentWithLifecycle, 'NotifyLoadComplete');
 
         component.ngOnInit();
         // Deferred via queueMicrotask to prevent NG0100
@@ -327,7 +327,7 @@ describe('AdminLimitsResourceComponent & Explorer Governance Surface', () => {
         expect(component.ProvenanceRows.length).toBeGreaterThanOrEqual(1);
 
         // Simulate back/forward popstate query param restoration
-        (component as unknown as {
+        (component as AdminLimitsResourceComponent & {
             OnQueryParamsChanged(p: Record<string, string>, s: 'popstate' | 'deeplink'): void;
         }).OnQueryParamsChanged({ tab: 'runs', category: 'All' }, 'popstate');
         expect(component.ActiveTab).toBe('runs');

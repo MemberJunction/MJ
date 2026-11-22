@@ -31,6 +31,7 @@ import type { MJAIAgentEntity, MJAIAgentUserPolicyEntity } from '@memberjunction
 import { IsPlainObject, SafeJSONParse } from '@memberjunction/global';
 import type { ExecuteAgentParams } from './agent-types';
 import type { MJAIAgentRunEntityExtended } from './MJAIAgentRunEntityExtended';
+import type { RunawayJsonObject, RunawayJsonValue } from './runaway-governance';
 
 /** Schema version tag embedded in every serialized {@link LimitsDiagnosticsSnapshot}. */
 export const LIMITS_DIAGNOSTICS_SCHEMA_VERSION = 'mj-limits-snapshot/v1' as const;
@@ -86,9 +87,23 @@ export type AgentLimitsMetadataInput = Pick<
 >;
 
 /**
- * Minimal structural subset of `MJAIAgentUserPolicyEntity` needed for Tier 4 limits extraction.
+ * Minimal structural subset of `MJAIAgentUserPolicyEntity` needed for Tier 4 limits extraction,
+ * including persisted configuration/notes JSON envelopes when storing limits without schema changes.
  */
-export type UserPolicyLimitsMetadataInput = Pick<MJAIAgentUserPolicyEntity, 'Status'>;
+export type UserPolicyLimitsMetadataInput = Pick<MJAIAgentUserPolicyEntity, 'Status'> &
+    Partial<
+        Pick<
+            MJAIAgentUserPolicyEntity,
+            'InstructionsOverride' | 'AutoApproveAmountThreshold' | 'ActionPolicyRules' | 'EntityAccessRules'
+        >
+    > & {
+        LimitsOverride?: MJLimitsOverride | string | null;
+        Limits?: MJLimitsOverride | string | null;
+        LimitsConfiguration?: MJLimitsOverride | string | null;
+        Configuration?: MJLimitsOverride | string | null;
+        Settings?: MJLimitsOverride | string | null;
+        Notes?: string | null;
+    };
 
 /**
  * Minimal structural subset of `MJAIAgentRunEntityExtended` needed for diagnostics attachment/extraction.
@@ -147,11 +162,15 @@ function mergeLimitsOverrides(base: MJLimitsOverride, extra: MJLimitsOverride): 
     };
 }
 
+function isJsonObject(value: RunawayJsonValue | undefined): value is RunawayJsonObject {
+    return IsPlainObject(value);
+}
+
 function extractAgentTypeConfigLimits(typeConfigJson: string | null | undefined): MJLimitsOverride {
     if (typeof typeConfigJson !== 'string' || typeConfigJson.trim().length === 0) {
         return {};
     }
-    const parsed = SafeJSONParse<Record<string, unknown>>(typeConfigJson);
+    const parsed = SafeJSONParse<RunawayJsonObject>(typeConfigJson);
     if (!IsPlainObject(parsed)) {
         return {};
     }
@@ -159,6 +178,60 @@ function extractAgentTypeConfigLimits(typeConfigJson: string | null | undefined)
         ? parsed['limits']
         : parsed['Limits'];
     return NormalizeLimitsInput(rawLimits);
+}
+
+function parseEnvelopeObject(text: string): RunawayJsonObject | null {
+    const trimmed = text.trim();
+    if (!trimmed) {
+        return null;
+    }
+    if (trimmed.startsWith('{')) {
+        const direct = SafeJSONParse<RunawayJsonObject>(trimmed);
+        if (IsPlainObject(direct)) {
+            return direct;
+        }
+    }
+    const commentMatch = /<!--\s*mj-limits:\s*(\{[\s\S]*?\})\s*-->/i.exec(text);
+    if (commentMatch?.[1]) {
+        const parsed = SafeJSONParse<RunawayJsonObject>(commentMatch[1]);
+        if (IsPlainObject(parsed)) {
+            return parsed;
+        }
+    }
+    const tagMatch = /<limits(?:_json)?\s*>\s*(\{[\s\S]*?\})\s*<\/limits(?:_json)?>/i.exec(text);
+    if (tagMatch?.[1]) {
+        const parsed = SafeJSONParse<RunawayJsonObject>(tagMatch[1]);
+        if (IsPlainObject(parsed)) {
+            return parsed;
+        }
+    }
+    const fencedMatch = /```(?:json|limits)\s*\n?(\{[\s\S]*?\})\s*```/i.exec(text);
+    if (fencedMatch?.[1]) {
+        const parsed = SafeJSONParse<RunawayJsonObject>(fencedMatch[1]);
+        if (IsPlainObject(parsed)) {
+            return parsed;
+        }
+    }
+    return null;
+}
+
+function extractLimitsFromFieldValue(raw: MJLimitsOverride | string | null | undefined): MJLimitsOverride {
+    if (!raw) {
+        return {};
+    }
+    if (typeof raw === 'string') {
+        const envelope = parseEnvelopeObject(raw);
+        if (!envelope) {
+            return {};
+        }
+        const nested = Object.prototype.hasOwnProperty.call(envelope, 'limits')
+            ? envelope['limits']
+            : Object.prototype.hasOwnProperty.call(envelope, 'Limits')
+                ? envelope['Limits']
+                : envelope;
+        return NormalizeLimitsInput(nested);
+    }
+    return NormalizeLimitsInput(raw);
 }
 
 function extractAgentEntityColumnLimits(agent: AgentLimitsMetadataInput): MJLimitsOverride {
@@ -234,10 +307,28 @@ export function ExtractUserPolicyLimitsOverride(
     if (policy && policy.Status !== 'Active') {
         return {};
     }
-    if (!explicitOverride) {
-        return {};
+    let resolved: MJLimitsOverride = {};
+    if (policy) {
+        const candidates: Array<MJLimitsOverride | string | null | undefined> = [
+            policy.Notes,
+            policy.InstructionsOverride,
+            policy.Configuration,
+            policy.Settings,
+            policy.LimitsConfiguration,
+            policy.Limits,
+            policy.LimitsOverride,
+        ];
+        for (const candidate of candidates) {
+            const parsed = extractLimitsFromFieldValue(candidate);
+            if (Object.keys(parsed).length > 0) {
+                resolved = mergeLimitsOverrides(resolved, parsed);
+            }
+        }
     }
-    return NormalizeLimitsInput(explicitOverride);
+    if (explicitOverride) {
+        resolved = mergeLimitsOverrides(resolved, NormalizeLimitsInput(explicitOverride));
+    }
+    return resolved;
 }
 
 /**
@@ -288,16 +379,21 @@ export function ResolveAgentRunLimits(input: ResolveAgentRunLimitsInput): MJLimi
     const agentOrWorkflow = ExtractAgentMetadataLimitsOverride(input.Agent, input.WorkflowMetadata);
     const userPolicy = ExtractUserPolicyLimitsOverride(input.UserPolicy, input.UserPolicyLimitsOverride);
     const runOverride = ExtractRunOverrideLimits(input.RunParams, input.RunOverride);
+    const hasActiveUserPolicyLimits = Object.keys(userPolicy).length > 0;
+    const effectiveOptions: LimitsResolveOptions = {
+        ...input.Options,
+        EnforceUserPolicyAsCeiling: input.Options?.EnforceUserPolicyAsCeiling ?? hasActiveUserPolicyLimits,
+    };
 
     return LimitsConfigResolver.Instance.Resolve(
         {
             CodeFallback: input.CodeFallback ?? undefined,
             MjConfig: input.MjConfigLimits,
             AgentOrWorkflowMetadata: Object.keys(agentOrWorkflow).length > 0 ? agentOrWorkflow : undefined,
-            UserAgentPolicy: Object.keys(userPolicy).length > 0 ? userPolicy : undefined,
+            UserAgentPolicy: hasActiveUserPolicyLimits ? userPolicy : undefined,
             RunOverride: Object.keys(runOverride).length > 0 ? runOverride : undefined,
         },
-        input.Options,
+        effectiveOptions,
     );
 }
 
@@ -334,20 +430,20 @@ export function SerializeLimitsDiagnosticsSnapshot(snapshot: LimitsDiagnosticsSn
     return JSON.stringify(snapshot);
 }
 
-function isLimitsSourceTier(value: unknown): value is LimitsSourceTier {
+function isLimitsSourceTier(value: RunawayJsonValue | undefined): value is LimitsSourceTier {
     return typeof value === 'string' && (LIMITS_TIER_PRECEDENCE as readonly string[]).includes(value);
 }
 
-function isLimitsScalarValue(value: unknown): value is LimitsScalarValue {
+function isLimitsScalarValue(value: RunawayJsonValue | undefined): value is LimitsScalarValue {
     return value === null || typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean';
 }
 
-function isLimitsKeyPath(value: unknown): value is LimitsKeyPath {
+function isLimitsKeyPath(value: RunawayJsonValue | undefined): value is LimitsKeyPath {
     return typeof value === 'string' && (LIMITS_KEY_PATHS as readonly string[]).includes(value);
 }
 
-function parseRunContext(raw: unknown): LimitsDiagnosticsRunContext {
-    if (!IsPlainObject(raw)) {
+function parseRunContext(raw: RunawayJsonValue | undefined): LimitsDiagnosticsRunContext {
+    if (!isJsonObject(raw)) {
         return {};
     }
     const ctx: LimitsDiagnosticsRunContext = {};
@@ -360,8 +456,12 @@ function parseRunContext(raw: unknown): LimitsDiagnosticsRunContext {
     return ctx;
 }
 
-function parseKeyProvenance(key: LimitsKeyPath, rawEntry: unknown, fallbackVal: LimitsScalarValue): LimitsKeyProvenance | null {
-    if (!IsPlainObject(rawEntry)) {
+function parseKeyProvenance(
+    key: LimitsKeyPath,
+    rawEntry: RunawayJsonValue | undefined,
+    fallbackVal: LimitsScalarValue,
+): LimitsKeyProvenance | null {
+    if (!isJsonObject(rawEntry)) {
         return null;
     }
     const rawTier = rawEntry['SourceTier'];
@@ -371,9 +471,10 @@ function parseKeyProvenance(key: LimitsKeyPath, rawEntry: unknown, fallbackVal: 
     const rawValue = rawEntry['Value'];
     const value = isLimitsScalarValue(rawValue) ? rawValue : fallbackVal;
     const tierValues: Partial<Record<LimitsSourceTier, LimitsScalarValue>> = {};
-    if (IsPlainObject(rawEntry['TierValues'])) {
+    const rawTierValues = rawEntry['TierValues'];
+    if (isJsonObject(rawTierValues)) {
         for (const tier of LIMITS_TIER_PRECEDENCE) {
-            const candidate = rawEntry['TierValues'][tier];
+            const candidate = rawTierValues[tier];
             if (isLimitsScalarValue(candidate)) {
                 tierValues[tier] = candidate;
             }
@@ -390,7 +491,7 @@ function parseKeyProvenance(key: LimitsKeyPath, rawEntry: unknown, fallbackVal: 
 }
 
 function parseProvenanceMap(
-    rawProvenance: Record<string, unknown>,
+    rawProvenance: RunawayJsonObject,
     resolvedLimits: MJLimitsConfig,
 ): Record<LimitsKeyPath, LimitsKeyProvenance> | null {
     const fallbackResolution = LimitsConfigResolver.Instance.Resolve({
@@ -416,7 +517,7 @@ export function ParseLimitsDiagnosticsSnapshot(json: string | null | undefined):
     if (typeof json !== 'string' || json.trim().length === 0) {
         return null;
     }
-    const parsed = SafeJSONParse<Record<string, unknown>>(json);
+    const parsed = SafeJSONParse<RunawayJsonValue>(json);
     if (!IsPlainObject(parsed)) {
         return null;
     }
@@ -426,14 +527,16 @@ export function ParseLimitsDiagnosticsSnapshot(json: string | null | undefined):
 /**
  * Validates and hydrates an already-parsed snapshot object (e.g. extracted from `AIAgentRun.Data`).
  */
-export function ValidateAndHydrateLimitsDiagnosticsSnapshot(raw: unknown): LimitsDiagnosticsSnapshot | null {
-    if (!IsPlainObject(raw) || raw['SchemaVersion'] !== LIMITS_DIAGNOSTICS_SCHEMA_VERSION) {
+export function ValidateAndHydrateLimitsDiagnosticsSnapshot(raw: RunawayJsonValue | undefined): LimitsDiagnosticsSnapshot | null {
+    if (!isJsonObject(raw) || raw['SchemaVersion'] !== LIMITS_DIAGNOSTICS_SCHEMA_VERSION) {
         return null;
     }
-    if (typeof raw['CapturedAtISO'] !== 'string' || !IsPlainObject(raw['ResolvedLimits']) || !IsPlainObject(raw['Provenance'])) {
+    const rawResolved = raw['ResolvedLimits'];
+    const rawProv = raw['Provenance'];
+    if (typeof raw['CapturedAtISO'] !== 'string' || !isJsonObject(rawResolved) || !isJsonObject(rawProv)) {
         return null;
     }
-    const normalizedLimits = NormalizeLimitsInput(raw['ResolvedLimits']);
+    const normalizedLimits = NormalizeLimitsInput(rawResolved);
     const hydratedResolution = LimitsConfigResolver.Instance.Resolve({
         CodeFallback: { ...CODE_FALLBACK_LIMITS, ...normalizedLimits },
         MjConfig: null,
@@ -442,15 +545,17 @@ export function ValidateAndHydrateLimitsDiagnosticsSnapshot(raw: unknown): Limit
     if (!validation.Valid) {
         return null;
     }
-    const provenance = parseProvenanceMap(raw['Provenance'], hydratedResolution.Limits);
+    const provenance = parseProvenanceMap(rawProv, hydratedResolution.Limits);
     if (!provenance) {
         return null;
     }
-    const overriddenKeys = Array.isArray(raw['OverriddenKeys'])
-        ? raw['OverriddenKeys'].filter(isLimitsKeyPath)
+    const rawOverridden = raw['OverriddenKeys'];
+    const overriddenKeys = Array.isArray(rawOverridden)
+        ? rawOverridden.filter(isLimitsKeyPath)
         : [];
-    const clampedKeys = Array.isArray(raw['ClampedKeys'])
-        ? raw['ClampedKeys'].filter(isLimitsKeyPath)
+    const rawClamped = raw['ClampedKeys'];
+    const clampedKeys = Array.isArray(rawClamped)
+        ? rawClamped.filter(isLimitsKeyPath)
         : [];
 
     return {
@@ -472,9 +577,9 @@ export function AttachLimitsDiagnosticsToRunData(
     existingDataJson: string | null | undefined,
     snapshot: LimitsDiagnosticsSnapshot,
 ): string {
-    let baseData: Record<string, unknown> = {};
+    let baseData: Record<string, LimitsDiagnosticsSnapshot | RunawayJsonValue> = {};
     if (typeof existingDataJson === 'string' && existingDataJson.trim().length > 0) {
-        const parsed = SafeJSONParse<Record<string, unknown>>(existingDataJson);
+        const parsed = SafeJSONParse<RunawayJsonObject>(existingDataJson);
         if (IsPlainObject(parsed)) {
             baseData = { ...parsed };
         }
@@ -492,8 +597,8 @@ export function ExtractLimitsDiagnosticsFromRunData(
     if (typeof dataJson !== 'string' || dataJson.trim().length === 0) {
         return null;
     }
-    const parsed = SafeJSONParse<Record<string, unknown>>(dataJson);
-    if (!IsPlainObject(parsed)) {
+    const parsed = SafeJSONParse<RunawayJsonObject>(dataJson);
+    if (!isJsonObject(parsed)) {
         return null;
     }
     return ValidateAndHydrateLimitsDiagnosticsSnapshot(parsed[LIMITS_DIAGNOSTICS_DATA_KEY]);

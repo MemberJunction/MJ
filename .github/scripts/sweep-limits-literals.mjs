@@ -63,6 +63,14 @@ const RUNAWAY_GUARD_NAME_RE = /^(?:(?:MAX|MIN|DEFAULT|LIMIT)_[A-Z0-9_]*(?:ITERAT
 
 const RUNAWAY_FALLBACK_EXPR_RE = /(?:whileOp|forEach|op|params|channel)\.(?:maxIterations|absoluteMaxIterations|MaxConsecutiveAgentTurns|MaxHourlyWakes)/i;
 
+const LOOP_GUARD_VAR_RE = /^(?:turn|turns|iteration|iterations)$/i;
+
+const GENERIC_LOOP_COUNTER_RE = /^(?:i|j|k|idx|count|n)$/i;
+
+const LARGE_LOOP_BOUND_THRESHOLD = 10_000;
+
+const INTEGRATION_BENCHMARK_PATH_RE = /^packages\/TestingFramework\/integration-test-suite\//;
+
 const PROTOCOL_LIMIT_NAME_RE = /^(?:MAX_TOOL_NAME_LENGTH|MAX_TIMER_MS|MAX_EMAIL_LENGTH|CLOSE_[A-Z_]+|MAX_GRAPH_EDGE_RECORD_ID_LENGTH|MAX_TIME_ZONE_LENGTH)$/;
 
 const RESOURCE_GUARD_NAME_RE = /(?:Retries|Retry|Attempts|Concurrency|Timeout|Depth|Hops|Rounds|RateLimit|MaxRows|Batch|Queue|Buffer|Settlement|Reinvoke|Preemption|ChainLength|DecisionRequestsPerTurn|DecisionCallsPerTurn|ConversationToolCallsPerTurn|PipelineStages|MapElements|MaxSize|MaxSessions|MaxTools|MaxDirectIn|MaxPending|MaxFrames|MaxBytes)/i;
@@ -125,17 +133,52 @@ function walkSourceFiles(dir, out = []) {
     return out;
 }
 
+function isArithmeticBinaryNode(node) {
+    return (
+        ts.isBinaryExpression(node) &&
+        (node.operatorToken.kind === ts.SyntaxKind.AsteriskToken ||
+            node.operatorToken.kind === ts.SyntaxKind.PlusToken ||
+            node.operatorToken.kind === ts.SyntaxKind.MinusToken ||
+            node.operatorToken.kind === ts.SyntaxKind.SlashToken ||
+            node.operatorToken.kind === ts.SyntaxKind.PercentToken ||
+            node.operatorToken.kind === ts.SyntaxKind.AsteriskAsteriskToken)
+    );
+}
+
+function isInsideLoopCondition(comparisonNode) {
+    let cur = comparisonNode;
+    while (cur.parent) {
+        const parent = cur.parent;
+        if (ts.isWhileStatement(parent) || ts.isDoStatement(parent)) {
+            return parent.expression === cur;
+        }
+        if (ts.isForStatement(parent)) {
+            return parent.condition === cur;
+        }
+        if (ts.isParenthesizedExpression(parent) || ts.isBinaryExpression(parent)) {
+            cur = parent;
+            continue;
+        }
+        break;
+    }
+    return false;
+}
+
 function evaluateNumericExpr(node) {
     if (ts.isNumericLiteral(node)) {
         return Number(node.text);
     }
-    if (ts.isPrefixUnaryExpression(node) && node.operator === ts.SyntaxKind.MinusToken && ts.isNumericLiteral(node.operand)) {
-        return -Number(node.operand.text);
+    if (ts.isPrefixUnaryExpression(node)) {
+        const inner = evaluateNumericExpr(node.operand);
+        if (inner === null) return null;
+        if (node.operator === ts.SyntaxKind.MinusToken) return -inner;
+        if (node.operator === ts.SyntaxKind.PlusToken) return inner;
+        return null;
     }
     if (ts.isParenthesizedExpression(node)) {
         return evaluateNumericExpr(node.expression);
     }
-    if (ts.isBinaryExpression(node)) {
+    if (isArithmeticBinaryNode(node)) {
         const left = evaluateNumericExpr(node.left);
         const right = evaluateNumericExpr(node.right);
         if (left === null || right === null) return null;
@@ -144,6 +187,8 @@ function evaluateNumericExpr(node) {
             case ts.SyntaxKind.PlusToken: return left + right;
             case ts.SyntaxKind.MinusToken: return left - right;
             case ts.SyntaxKind.SlashToken: return right !== 0 ? left / right : null;
+            case ts.SyntaxKind.PercentToken: return right !== 0 ? left % right : null;
+            case ts.SyntaxKind.AsteriskAsteriskToken: return left ** right;
             default: return null;
         }
     }
@@ -218,18 +263,31 @@ function extractHitFromNode(node, sf, fnStack) {
             p.operatorToken.kind === ts.SyntaxKind.LessThanEqualsToken ||
             p.operatorToken.kind === ts.SyntaxKind.GreaterThanToken ||
             p.operatorToken.kind === ts.SyntaxKind.GreaterThanEqualsToken) &&
-        p.parent &&
-        (ts.isWhileStatement(p.parent) || ts.isForStatement(p.parent) || ts.isDoStatement(p.parent))
+        isInsideLoopCondition(p)
     ) {
         const leftText = p.left.getText(sf).trim();
-        if (WORK_BOUND_NAME_RE.test(leftText)) {
+        const numericValCandidate = evaluateNumericExpr(node);
+        if (
+            WORK_BOUND_NAME_RE.test(leftText) ||
+            RUNAWAY_GUARD_NAME_RE.test(leftText) ||
+            LOOP_GUARD_VAR_RE.test(leftText) ||
+            (GENERIC_LOOP_COUNTER_RE.test(leftText) &&
+                numericValCandidate !== null &&
+                Math.abs(numericValCandidate) >= LARGE_LOOP_BOUND_THRESHOLD)
+        ) {
             name = leftText;
             isLoopBound = true;
         }
     }
 
     if (!name) return null;
-    if (!isLoopBound && !WORK_BOUND_NAME_RE.test(name) && !CANONICAL_RUNAWAY_KEYS.has(name) && !CANONICAL_RESOURCE_GUARD_NAMES.has(name) && !(isFallbackExpr && RUNAWAY_FALLBACK_EXPR_RE.test(name))) {
+    if (
+        !isLoopBound &&
+        !WORK_BOUND_NAME_RE.test(name) &&
+        !CANONICAL_RUNAWAY_KEYS.has(name) &&
+        !CANONICAL_RESOURCE_GUARD_NAMES.has(name) &&
+        !(isFallbackExpr && RUNAWAY_FALLBACK_EXPR_RE.test(name))
+    ) {
         return null;
     }
 
@@ -291,9 +349,16 @@ export function ClassifyLimitHit(relFile, hit, explicitTag) {
         return { label: 'UX', disposition: 'retained-ux-local' };
     }
 
+    const isRunawayLoopBound =
+        hit.isLoopBound &&
+        !INTEGRATION_BENCHMARK_PATH_RE.test(normalizedFile) &&
+        (RUNAWAY_GUARD_NAME_RE.test(hit.name) ||
+            LOOP_GUARD_VAR_RE.test(hit.name) ||
+            (GENERIC_LOOP_COUNTER_RE.test(hit.name) && hit.numericValue >= LARGE_LOOP_BOUND_THRESHOLD));
+
     if (
-        (RUNAWAY_GUARD_NAME_RE.test(hit.name) || RUNAWAY_FALLBACK_EXPR_RE.test(hit.name)) &&
-        !hit.isLoopBound
+        (!hit.isLoopBound && (RUNAWAY_GUARD_NAME_RE.test(hit.name) || RUNAWAY_FALLBACK_EXPR_RE.test(hit.name))) ||
+        isRunawayLoopBound
     ) {
         return { label: 'RunawayGuard', disposition: 'unapproved-runaway-guard' };
     }
@@ -341,9 +406,9 @@ function scanSingleFile(absPath, repoRoot) {
 
         const isCandidateExpr =
             ts.isNumericLiteral(node) ||
-            (ts.isBinaryExpression(node) &&
-                node.parent &&
-                (ts.isVariableDeclaration(node.parent) || ts.isPropertyDeclaration(node.parent) || ts.isPropertyAssignment(node.parent)));
+            isArithmeticBinaryNode(node) ||
+            (ts.isPrefixUnaryExpression(node) &&
+                (node.operator === ts.SyntaxKind.MinusToken || node.operator === ts.SyntaxKind.PlusToken));
 
         if (isCandidateExpr) {
             const hit = extractHitFromNode(node, sf, fnStack);

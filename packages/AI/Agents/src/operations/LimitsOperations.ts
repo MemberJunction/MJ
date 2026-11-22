@@ -19,14 +19,17 @@ import {
     type LimitsKeyPath,
     type LimitsKeyProvenance,
     type LimitsSourceTier,
+    type MJLimitsBudgetsConfig,
     type MJLimitsConfig,
     type RemoteOpServerContext,
     type UserInfo,
 } from '@memberjunction/core';
 import type { MJAIAgentEntity, MJAIAgentRunEntity, MJAIAgentUserPolicyEntity } from '@memberjunction/core-entities';
 import {
+    ExtractLimitsDiagnosticsFromAgentRun,
     ExtractLimitsDiagnosticsFromRunData,
     ExtractProgressDiagnosticsFromRunData,
+    ExtractRunawayCheckpointFromAgentRun,
     ExtractRunawayCheckpointFromRunData,
     LIMITS_GET_DIAGNOSTICS_OPERATION_KEY,
     LIMITS_PAUSE_RUN_OPERATION_KEY,
@@ -47,8 +50,12 @@ import {
     type LimitsResumePausedRunOutput,
     type LimitsTierSummary,
     type MJAIAgentRunEntityExtended,
+    type RunawayJsonValue,
+    type RunawaySerializable,
 } from '@memberjunction/ai-core-plus';
-import { EscapeSQLString, IsValidUUID, RegisterClass } from '@memberjunction/global';
+import { EscapeSQLString, IsValidUUID, RegisterClass, SafeJSONParse } from '@memberjunction/global';
+import type { ChatMessage } from '@memberjunction/ai';
+import { ActiveRunGovernanceRegistry } from '../ActiveRunGovernanceRegistry';
 import { ComputeDayBoundaryWindow } from '../BudgetEnforcementGuard';
 import { RunawayCheckpointManager } from '../RunawayCheckpointManager';
 
@@ -459,6 +466,9 @@ export class LimitsGetDiagnosticsServerOperation extends LimitsGetDiagnosticsOpe
             Agent: agentEntity,
             UserPolicy: userPolicyEntity,
             RunOverride: input?.RunOverride ?? null,
+            Options: {
+                EnforceUserPolicyAsCeiling: Boolean(userPolicyEntity),
+            },
         });
 
         const runFilters: string[] = [];
@@ -575,17 +585,30 @@ export class LimitsResumePausedRunServerOperation extends LimitsResumePausedRunO
             throw new Error('AgentRunID is required to resume a paused run');
         }
 
+        const agentRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', user);
+        const loaded = await agentRun.Load(runId);
+        if (!loaded) {
+            throw new Error(`Could not load paused MJ: AI Agent Runs record '${runId}'`);
+        }
+
         const checkpointManager = new RunawayCheckpointManager();
-        const approvedCheckpoint = await checkpointManager.ApproveCheckpoint({
-            AgentRunID: runId,
-            ApprovedByUserID: user.ID,
-            BudgetExtension: input.BudgetExtension,
-            DecisionNotes: input.DecisionNotes ?? null,
-            Provider: provider,
-            ContextUser: user,
-        });
+        const existingCheckpoint = ExtractRunawayCheckpointFromAgentRun(agentRun);
+
+        // Idempotent resume: if run was already resumed & approved for the current checkpoint, dispatch idempotently
+        const alreadyApprovedRunning =
+            agentRun.Status === 'Running' && existingCheckpoint?.HumanApproval.Status === 'Approved';
 
         if (input.PrepareResume === false) {
+            const approvedCheckpoint = alreadyApprovedRunning
+                ? existingCheckpoint!
+                : await checkpointManager.ApproveCheckpoint({
+                    AgentRun: agentRun,
+                    ApprovedByUserID: user.ID,
+                    BudgetExtension: input.BudgetExtension,
+                    DecisionNotes: input.DecisionNotes ?? null,
+                    Provider: provider,
+                    ContextUser: user,
+                });
             return {
                 Success: true,
                 AgentRunID: runId,
@@ -601,18 +624,42 @@ export class LimitsResumePausedRunServerOperation extends LimitsResumePausedRunO
             };
         }
 
-        const baseBudgets = LimitsConfigResolver.Resolve().Limits.Budgets;
+        const baseBudgets = await this.resolvePausedRunBaseBudgets(agentRun, provider, user);
+        const approvedCheckpoint = alreadyApprovedRunning
+            ? existingCheckpoint!
+            : await checkpointManager.ApproveCheckpoint({
+                AgentRun: agentRun,
+                ApprovedByUserID: user.ID,
+                BudgetExtension: input.BudgetExtension,
+                DecisionNotes: input.DecisionNotes ?? null,
+                Provider: provider,
+                ContextUser: user,
+            });
+
         const restored = await checkpointManager.PrepareResumeFromCheckpoint({
-            AgentRunID: runId,
+            AgentRun: agentRun,
             BaseBudgets: baseBudgets,
             Provider: provider,
             ContextUser: user,
         });
 
+        const dispatchResult = await ActiveRunGovernanceRegistry.Instance.DispatchContinuation({
+            AgentRunID: runId,
+            AgentID: restored.Checkpoint.AgentID || agentRun.AgentID,
+            UserID: restored.Checkpoint.UserID ?? agentRun.UserID ?? null,
+            RoutineID: restored.Checkpoint.RoutineID,
+            CheckpointID: approvedCheckpoint.CheckpointID,
+            RestoredContext: restored,
+            Provider: provider,
+            ContextUser: user,
+        });
+
+        const effectiveStatus = dispatchResult?.Status ?? restored.AgentRun.Status;
+        const dispatchSuffix = dispatchResult?.Message ? ` ${dispatchResult.Message}` : '';
         return {
             Success: true,
             AgentRunID: runId,
-            Status: restored.AgentRun.Status,
+            Status: effectiveStatus,
             CheckpointID: restored.Checkpoint.CheckpointID,
             ApprovalStatus: restored.Checkpoint.HumanApproval.Status,
             ExtendedBudgets: restored.ExtendedBudgets,
@@ -620,8 +667,66 @@ export class LimitsResumePausedRunServerOperation extends LimitsResumePausedRunO
             PriorCumulativeActiveWallClockMs: restored.PriorCumulativeActiveWallClockMs,
             StartingStepCount: restored.StartingStepCount,
             StartingPromptTurns: restored.StartingPromptTurns,
-            Message: `Run ${runId} approved and transitioned back to Running preserving ${restored.StartingStepCount} completed step(s).`,
+            Message:
+                `Run ${runId} approved and transitioned back to ${effectiveStatus} preserving ${restored.StartingStepCount} completed step(s).` +
+                dispatchSuffix,
         };
+    }
+
+    private async resolvePausedRunBaseBudgets(
+        agentRun: MJAIAgentRunEntityExtended,
+        provider: IMetadataProvider,
+        user: UserInfo,
+    ): Promise<MJLimitsBudgetsConfig> {
+        const snapshot = ExtractLimitsDiagnosticsFromAgentRun(agentRun);
+        if (snapshot) {
+            return snapshot.ResolvedLimits.Budgets;
+        }
+
+        let agentEntity: MJAIAgentEntity | null = null;
+        let userPolicyEntity: MJAIAgentUserPolicyEntity | null = null;
+        try {
+            const rv = RunView.FromMetadataProvider(provider);
+            if (agentRun.AgentID && IsValidUUID(agentRun.AgentID)) {
+                const agentRes = await rv.RunView<MJAIAgentEntity>(
+                    {
+                        EntityName: 'MJ: AI Agents',
+                        ExtraFilter: `ID='${EscapeSQLString(agentRun.AgentID)}'`,
+                        ResultType: 'entity_object',
+                        MaxRows: 1,
+                    },
+                    user,
+                );
+                if (agentRes?.Success && agentRes.Results.length > 0) {
+                    agentEntity = agentRes.Results[0];
+                }
+            }
+            if (agentRun.UserID && IsValidUUID(agentRun.UserID)) {
+                const agentClause = agentRun.AgentID && IsValidUUID(agentRun.AgentID)
+                    ? ` AND AgentID='${EscapeSQLString(agentRun.AgentID)}'`
+                    : '';
+                const policyRes = await rv.RunView<MJAIAgentUserPolicyEntity>(
+                    {
+                        EntityName: 'MJ: AI Agent User Policies',
+                        ExtraFilter: `UserID='${EscapeSQLString(agentRun.UserID)}' AND Status='Active'${agentClause}`,
+                        ResultType: 'entity_object',
+                        MaxRows: 1,
+                    },
+                    user,
+                );
+                if (policyRes?.Success && policyRes.Results.length > 0) {
+                    userPolicyEntity = policyRes.Results[0];
+                }
+            }
+        } catch {
+            // Fall back to ResolveAgentRunLimits defaults when metadata RunView is unavailable in offline harnesses
+        }
+
+        return ResolveAgentRunLimits({
+            Agent: agentEntity,
+            UserPolicy: userPolicyEntity,
+            Options: { EnforceUserPolicyAsCeiling: Boolean(userPolicyEntity) },
+        }).Limits.Budgets;
     }
 }
 
@@ -649,6 +754,21 @@ export class LimitsPauseRunServerOperation extends LimitsPauseRunOperation {
             throw new Error('AgentRunID is required to pause a run');
         }
 
+        const requestedSummary = input.Summary?.trim() || `Manually paused by administrator ${user.Name || user.Email || user.ID}`;
+        const cooperativeResult = await ActiveRunGovernanceRegistry.Instance.RequestCooperativePause(
+            runId,
+            requestedSummary,
+        );
+        if (cooperativeResult?.Paused) {
+            return {
+                Success: true,
+                AgentRunID: runId,
+                Status: cooperativeResult.Status,
+                CheckpointID: cooperativeResult.CheckpointID,
+                Message: `Run ${runId} cooperatively paused at safe boundary (checkpoint ${cooperativeResult.CheckpointID ?? 'n/a'}).`,
+            };
+        }
+
         const agentRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', user);
         const loaded = await agentRun.Load(runId);
         if (!loaded) {
@@ -663,22 +783,44 @@ export class LimitsPauseRunServerOperation extends LimitsPauseRunOperation {
         const runCost = typeof agentRun.TotalCostRollup === 'number' && agentRun.TotalCostRollup > 0
             ? agentRun.TotalCostRollup
             : (typeof agentRun.TotalCost === 'number' ? agentRun.TotalCost : 0);
-        const budgets = LimitsConfigResolver.Resolve().Limits.Budgets;
+        const existingCheckpoint = ExtractRunawayCheckpointFromAgentRun(agentRun);
+        const snapshot = ExtractLimitsDiagnosticsFromAgentRun(agentRun);
+        const budgets = snapshot?.ResolvedLimits.Budgets ?? LimitsConfigResolver.Resolve().Limits.Budgets;
         const dayWindow = ComputeDayBoundaryWindow(nowMs, budgets.PerUserPerDay.DayBoundaryTimezone);
 
+        const preservedMessages: ChatMessage[] = existingCheckpoint
+            ? existingCheckpoint.ConversationMessages.map((m) => ({ role: m.Role, content: m.Content }))
+            : [];
+        const preservedPayload: RunawaySerializable =
+            (agentRun.FinalPayloadObject as RunawaySerializable) ??
+            (typeof agentRun.FinalPayload === 'string' && agentRun.FinalPayload.trim().length > 0
+                ? SafeJSONParse<RunawayJsonValue>(agentRun.FinalPayload)
+                : null) ??
+            existingCheckpoint?.InFlightPayload ??
+            null;
+        const preservedScratchpad = existingCheckpoint?.Scratchpad ?? { notes: '', tasks: [] };
+        const preservedRoutineId = existingCheckpoint?.RoutineID ?? snapshot?.Context.RoutineID ?? agentRun.ScheduledJobRunID ?? null;
         const checkpointManager = new RunawayCheckpointManager();
+        const preservedNextStep = existingCheckpoint?.PendingStepDecision
+            ? checkpointManager.RestoreNextStepFromDecision(existingCheckpoint.PendingStepDecision)
+            : null;
+        const preservedLoopCursor = existingCheckpoint?.LoopCursor ?? existingCheckpoint?.PendingStepDecision?.LoopCursor ?? null;
+
         const pauseResult = await checkpointManager.PauseRunWithCheckpoint({
             AgentRun: agentRun,
             AgentID: agentRun.AgentID,
             AgentName: agentRun.Agent ?? 'Agent',
             UserID: agentRun.UserID ?? user.ID,
-            RoutineID: null,
-            PauseReason: 'ProgressStalled',
-            Summary: input.Summary?.trim() || `Manually paused by administrator ${user.Name || user.Email || user.ID}`,
-            CompletedPromptTurns: agentRun.TotalPromptIterations ?? 0,
-            ConversationMessages: [],
-            InFlightPayload: agentRun.FinalPayloadObject ?? null,
-            Scratchpad: { notes: '', tasks: [] },
+            RoutineID: preservedRoutineId,
+            PauseReason: 'ManualPause',
+            Summary: requestedSummary,
+            CompletedPromptTurns: Math.max(agentRun.TotalPromptIterations ?? 0, existingCheckpoint?.CompletedPromptTurns ?? 0),
+            CompletedNodeIDs: existingCheckpoint?.CompletedNodeIDs,
+            ConversationMessages: preservedMessages,
+            InFlightPayload: preservedPayload,
+            Scratchpad: preservedScratchpad,
+            NextStepToResume: preservedNextStep,
+            LoopCursor: preservedLoopCursor,
             CumulativeLedger: {
                 RunCostUsd: runCost,
                 RunWallClockMs: Math.max(0, nowMs - startedAtMs),
@@ -687,8 +829,8 @@ export class LimitsPauseRunServerOperation extends LimitsPauseRunOperation {
                 RoutineWallClockMs: Math.max(0, nowMs - startedAtMs),
                 UserDailyCostUsd: runCost,
                 UserDailyWallClockMs: Math.max(0, nowMs - startedAtMs),
-                PausedWallClockMs: 0,
-                PausedIntervals: [],
+                PausedWallClockMs: existingCheckpoint?.CumulativeLedger.PausedWallClockMs ?? 0,
+                PausedIntervals: existingCheckpoint?.CumulativeLedger.PausedIntervals ?? [],
                 DayBucketUTC: dayWindow.DayBucketUTC,
                 DayBoundaryTimezone: budgets.PerUserPerDay.DayBoundaryTimezone,
                 AsOfISO: new Date(nowMs).toISOString(),

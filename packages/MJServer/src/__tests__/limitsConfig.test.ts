@@ -11,7 +11,12 @@ const { mockConfigRef } = vi.hoisted(() => ({
       dbUsername: 'test-user',
       dbPassword: 'test-password',
       dbDatabase: 'test-db',
-    } as Record<string, unknown>,
+    } as {
+      dbUsername: string;
+      dbPassword: string;
+      dbDatabase: string;
+      limits?: object;
+    },
   },
 }));
 

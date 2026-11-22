@@ -52,9 +52,9 @@ describe('LimitsConfigResolver & CODE_FALLBACK_LIMITS', () => {
 
     it('falls back to DEFAULT_MJ_LIMITS_CONFIG when mj.config.cjs omits limits and applies MjConfig overrides when present', () => {
         const repoConfigPath = path.resolve(__dirname, '..', '..', '..', '..', 'mj.config.cjs');
-        const mjConfig = require(repoConfigPath) as { limits?: Record<string, unknown> };
-
         // When mj.config.cjs has no limits block, resolver cleanly falls back to DEFAULT_MJ_LIMITS_CONFIG
+        const mjConfig = require(repoConfigPath) as { limits?: MJLimitsOverride };
+
         const fallbackResult = LimitsConfigResolver.Resolve({
             MjConfig: mjConfig.limits ? NormalizeLimitsInput(mjConfig.limits) : null,
         });
@@ -64,7 +64,7 @@ describe('LimitsConfigResolver & CODE_FALLBACK_LIMITS', () => {
         );
 
         // When mj.config.cjs supplies a limits block, Tier 2 (MjConfig) overrides DEFAULT_MJ_LIMITS_CONFIG
-        const sampleMjConfigLimits: Record<string, unknown> = {
+        const sampleMjConfigLimits: MJLimitsOverride = {
             agentChannelConsecutiveTurns: 1000,
             agentChannelWakesPerHour: 600,
             agentAbsoluteIterations: 100000,

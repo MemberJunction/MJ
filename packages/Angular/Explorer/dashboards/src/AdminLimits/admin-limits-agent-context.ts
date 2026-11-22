@@ -40,18 +40,21 @@ export const ADMIN_LIMITS_RUN_STATUS_FILTERS = ['All', 'Running', 'Paused', 'Com
 /** Run status filter union for `AdminLimitsResourceComponent`. */
 export type AdminLimitsRunStatusFilter = (typeof ADMIN_LIMITS_RUN_STATUS_FILTERS)[number];
 
-/** Validates whether an unknown value is a valid {@link AdminLimitsTab}. */
-export function IsValidAdminLimitsTab(value: unknown): value is AdminLimitsTab {
+/** Primitive/object input type accepted by Admin Limits type guards without `unknown`. */
+export type AdminLimitsGuardInput = string | number | boolean | object | null | undefined;
+
+/** Validates whether a candidate value is a valid {@link AdminLimitsTab}. */
+export function IsValidAdminLimitsTab(value: AdminLimitsGuardInput): value is AdminLimitsTab {
     return typeof value === 'string' && (ADMIN_LIMITS_TABS as readonly string[]).includes(value);
 }
 
-/** Validates whether an unknown value is a valid {@link AdminLimitsCategoryFilter}. */
-export function IsValidAdminLimitsCategory(value: unknown): value is AdminLimitsCategoryFilter {
+/** Validates whether a candidate value is a valid {@link AdminLimitsCategoryFilter}. */
+export function IsValidAdminLimitsCategory(value: AdminLimitsGuardInput): value is AdminLimitsCategoryFilter {
     return typeof value === 'string' && (ADMIN_LIMITS_CATEGORIES as readonly string[]).includes(value);
 }
 
-/** Validates whether an unknown value is a valid {@link AdminLimitsRunStatusFilter}. */
-export function IsValidAdminLimitsRunStatusFilter(value: unknown): value is AdminLimitsRunStatusFilter {
+/** Validates whether a candidate value is a valid {@link AdminLimitsRunStatusFilter}. */
+export function IsValidAdminLimitsRunStatusFilter(value: AdminLimitsGuardInput): value is AdminLimitsRunStatusFilter {
     return typeof value === 'string' && (ADMIN_LIMITS_RUN_STATUS_FILTERS as readonly string[]).includes(value);
 }
 

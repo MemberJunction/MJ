@@ -99,9 +99,9 @@ describe('limitsDiagnosticsSnapshot & 5-tier AI agent resolution', () => {
         expect(resolved.Provenance['Budgets.PerRun.MaxCostUsd'].SourceTier).toBe('MjConfig');
     });
 
-    it('applies Tier 4 UserAgentPolicy only when policy status is Active', () => {
+    it('applies Tier 4 UserAgentPolicy only when policy status is Active, parses durable JSON envelopes, and clamps widening RunOverrides', () => {
         const activePolicy = makePolicyStub({ Status: 'Active' });
-        const pausedPolicy = makePolicyStub({ Status: 'Paused' });
+        const pausedPolicy = makePolicyStub({ Status: 'Paused', Settings: JSON.stringify({ Budgets: { PerRun: { MaxCostUsd: 5 } } }) });
 
         expect(
             ExtractUserPolicyLimitsOverride(activePolicy, { AgentAbsoluteIterations: 25_000 }),
@@ -110,6 +110,31 @@ describe('limitsDiagnosticsSnapshot & 5-tier AI agent resolution', () => {
         expect(
             ExtractUserPolicyLimitsOverride(pausedPolicy, { AgentAbsoluteIterations: 25_000 }),
         ).toEqual({});
+
+        const durablePolicy = makePolicyStub({
+            Status: 'Active',
+            InstructionsOverride: 'Follow company rules.\n<!-- mj-limits: {"Budgets":{"PerRun":{"MaxCostUsd":6.5},"PerUserPerDay":{"MaxCostUsd":25}},"AgentAbsoluteIterations":1200} -->',
+        });
+        expect(ExtractUserPolicyLimitsOverride(durablePolicy)).toEqual({
+            Budgets: {
+                PerRun: { MaxCostUsd: 6.5 },
+                PerUserPerDay: { MaxCostUsd: 25 },
+            },
+            AgentAbsoluteIterations: 1200,
+        });
+
+        // Attempt to widen admin user policy ceiling via RunOverride must be clamped
+        const clampedResolution = ResolveAgentRunLimits({
+            UserPolicy: durablePolicy,
+            RunParams: {
+                absoluteMaxIterations: 50_000,
+                maxTreeCost: 99,
+            },
+        });
+        expect(clampedResolution.Limits.Budgets.PerRun.MaxCostUsd).toBe(6.5);
+        expect(clampedResolution.Limits.AgentAbsoluteIterations).toBe(1200);
+        expect(clampedResolution.Provenance['Budgets.PerRun.MaxCostUsd'].WasClampedByPolicyCeiling).toBe(true);
+        expect(clampedResolution.Provenance.AgentAbsoluteIterations.WasClampedByPolicyCeiling).toBe(true);
     });
 
     it('extracts Tier 5 RunOverride from ExecuteAgentParams and explicit run overrides', () => {
@@ -213,7 +238,7 @@ describe('limitsDiagnosticsSnapshot & 5-tier AI agent resolution', () => {
 
         const existingData = JSON.stringify({ conversationId: 'conv-1', topic: 'budgeting' });
         const mergedJson = AttachLimitsDiagnosticsToRunData(existingData, snapshot);
-        const parsedMerged = JSON.parse(mergedJson) as Record<string, unknown>;
+        const parsedMerged = JSON.parse(mergedJson) as Record<string, string | number | boolean | object | null>;
 
         expect(parsedMerged['conversationId']).toBe('conv-1');
         expect(parsedMerged['topic']).toBe('budgeting');

@@ -69,17 +69,20 @@ function createMockRunViewsProvider(
                 TotalRowCount: rows.length,
                 ExecutionTime: 1,
                 ErrorMessage: '',
-                UserView: null as unknown as RunViewResult<AgentRunBudgetLedgerRow>['UserView'],
+                UserView: {} as RunViewResult<AgentRunBudgetLedgerRow>['UserView'],
             };
         });
     });
 
-    const providerStub = {
+    const providerStub: Partial<IMetadataProvider> & {
+        RunViews: typeof runViewsSpy;
+        RunView: ReturnType<typeof vi.fn>;
+    } = {
         RunViews: runViewsSpy,
         RunView: vi.fn(),
     };
     return {
-        Provider: providerStub as unknown as IMetadataProvider,
+        Provider: providerStub as IMetadataProvider,
         RunViewsSpy: runViewsSpy,
     };
 }
@@ -413,5 +416,176 @@ describe('BudgetEnforcementGuard — all 6 scope x dimension combinations', () =
 
         const window = ComputeDayBoundaryWindow(Date.UTC(2026, 10, 21, 15, 0, 0), 'UTC');
         expect(window.DayBucketUTC).toBe('2026-11-21');
+    });
+
+    it('fails closed (LedgerUnavailable pause verdict) when RunViews returns Success=false, missing batch results, or throws (CR-6)', async () => {
+        const budgets = createBudgets({
+            PerRun: { MaxCostUsd: 10.0, MaxWallClockMs: 600_000, MaxTokens: null },
+            PerRoutine: { MaxCostUsd: 5.0, MaxWallClockMs: null },
+            PerUserPerDay: { MaxCostUsd: 5.0, MaxWallClockMs: null, DayBoundaryTimezone: 'UTC' },
+        });
+        const nowMs = Date.UTC(2026, 10, 21, 15, 0, 0);
+
+        // 1) Success === false
+        const failedProvider = {
+            RunViews: vi.fn(async () => [
+                { Success: false, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: 'SQL timeout', UserView: {} as RunViewResult<AgentRunBudgetLedgerRow>['UserView'] },
+                { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '', UserView: {} as RunViewResult<AgentRunBudgetLedgerRow>['UserView'] },
+            ]),
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+        const failRes = await guard.Evaluate({
+            Budgets: budgets,
+            AgentRunID: ACTIVE_RUN_ID,
+            UserID: USER_ID,
+            RoutineID: ROUTINE_ID,
+            CurrentRunCostUsd: 0.05,
+            CurrentRunStartedAtMs: nowMs - 1_000,
+            NowMs: nowMs,
+            Provider: failedProvider,
+        });
+        expect(failRes.Exceeded).toBe(true);
+        expect(failRes.LedgerUnavailable).toBe(true);
+        expect(failRes.LedgerError).toContain('SQL timeout');
+
+        // 2) Missing batch result (incomplete array)
+        const incompleteProvider = {
+            RunViews: vi.fn(async () => [
+                { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '', UserView: {} as RunViewResult<AgentRunBudgetLedgerRow>['UserView'] },
+            ]),
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+        const incompleteRes = await guard.Evaluate({
+            Budgets: budgets,
+            AgentRunID: ACTIVE_RUN_ID,
+            UserID: USER_ID,
+            RoutineID: ROUTINE_ID,
+            CurrentRunCostUsd: 0.05,
+            CurrentRunStartedAtMs: nowMs - 1_000,
+            NowMs: nowMs,
+            Provider: incompleteProvider,
+        });
+        expect(incompleteRes.Exceeded).toBe(true);
+        expect(incompleteRes.LedgerUnavailable).toBe(true);
+        expect(incompleteRes.LedgerError).toContain('incomplete batch');
+
+        // 3) Thrown exception from RunViews
+        const throwingProvider = {
+            RunViews: vi.fn(async () => {
+                throw new Error('DB connection dropped');
+            }),
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+        const throwRes = await guard.Evaluate({
+            Budgets: budgets,
+            AgentRunID: ACTIVE_RUN_ID,
+            UserID: USER_ID,
+            RoutineID: ROUTINE_ID,
+            CurrentRunCostUsd: 0.05,
+            CurrentRunStartedAtMs: nowMs - 1_000,
+            NowMs: nowMs,
+            Provider: throwingProvider,
+        });
+        expect(throwRes.Exceeded).toBe(true);
+        expect(throwRes.LedgerUnavailable).toBe(true);
+        expect(throwRes.LedgerError).toContain('DB connection dropped');
+    });
+
+    it('prevents ancestor/descendant double-counting across PerRoutine and PerUserPerDay parent/child hierarchies (CR-9)', async () => {
+        const budgets = createBudgets({
+            PerRun: { MaxCostUsd: 10.0, MaxWallClockMs: 600_000, MaxTokens: null },
+            PerRoutine: { MaxCostUsd: 4.5, MaxWallClockMs: null },
+            PerUserPerDay: { MaxCostUsd: 4.5, MaxWallClockMs: null, DayBoundaryTimezone: 'UTC' },
+        });
+        const nowMs = Date.UTC(2026, 10, 21, 16, 0, 0);
+        const parentRunId = '10000000-0000-4000-8000-000000000001';
+        const childRunId = '10000000-0000-4000-8000-000000000002';
+        const grandChildId = '10000000-0000-4000-8000-000000000003';
+
+        // Prior parent tree: parent direct=1.00, child direct=1.50, grandchild direct=0.50 -> total tree rollup = 3.00
+        // If naively summing TotalCostRollup across all rows: 3.00 + 2.00 + 0.50 = 5.50 (false breach of $4.50)!
+        // With deduplication, tree cost = 3.00; plus active run 0.50 = 3.50 (< 4.50, NOT exceeded).
+        // Plus active run's own child (if present in DB while parent active is evaluated) must be excluded.
+        const hierarchyRows: AgentRunBudgetLedgerRow[] = [
+            {
+                ID: parentRunId,
+                ParentRunID: null,
+                UserID: USER_ID,
+                TotalCost: 1.0,
+                TotalCostRollup: 3.0,
+                StartedAt: new Date(Date.UTC(2026, 10, 21, 10, 0, 0)),
+                CompletedAt: new Date(Date.UTC(2026, 10, 21, 10, 1, 0)),
+                ScheduledJobRunID: ROUTINE_ID,
+                Status: 'Completed',
+                Data: null,
+            },
+            {
+                ID: childRunId,
+                ParentRunID: parentRunId,
+                UserID: USER_ID,
+                TotalCost: 1.5,
+                TotalCostRollup: 2.0,
+                StartedAt: new Date(Date.UTC(2026, 10, 21, 10, 0, 10)),
+                CompletedAt: new Date(Date.UTC(2026, 10, 21, 10, 0, 40)),
+                ScheduledJobRunID: ROUTINE_ID,
+                Status: 'Completed',
+                Data: null,
+            },
+            {
+                ID: grandChildId,
+                ParentRunID: childRunId,
+                UserID: USER_ID,
+                TotalCost: 0.5,
+                TotalCostRollup: 0.5,
+                StartedAt: new Date(Date.UTC(2026, 10, 21, 10, 0, 20)),
+                CompletedAt: new Date(Date.UTC(2026, 10, 21, 10, 0, 35)),
+                ScheduledJobRunID: ROUTINE_ID,
+                Status: 'Completed',
+                Data: null,
+            },
+            {
+                ID: '99999999-0000-4000-8000-000000000001',
+                ParentRunID: ACTIVE_RUN_ID,
+                UserID: USER_ID,
+                TotalCost: 0.4,
+                TotalCostRollup: 0.4,
+                StartedAt: new Date(nowMs - 500),
+                CompletedAt: null,
+                ScheduledJobRunID: ROUTINE_ID,
+                Status: 'Running',
+                Data: null,
+            },
+        ];
+
+        const { Provider } = createMockRunViewsProvider(hierarchyRows, hierarchyRows);
+        const result = await guard.Evaluate({
+            Budgets: budgets,
+            AgentRunID: ACTIVE_RUN_ID,
+            UserID: USER_ID,
+            RoutineID: ROUTINE_ID,
+            CurrentRunCostUsd: 0.5,
+            CurrentRunStartedAtMs: nowMs - 1_000,
+            NowMs: nowMs,
+            Provider,
+        });
+
+        expect(result.Exceeded).toBe(false);
+        expect(result.Ledger.RoutineCostUsd).toBeCloseTo(3.5, 5);
+        expect(result.Ledger.UserDailyCostUsd).toBeCloseTo(3.5, 5);
+    });
+
+    it('computes accurate 23h spring-forward and 25h fall-back IANA timezone day boundaries across DST transitions (CR-11)', () => {
+        // America/New_York 2026-03-08 (Spring forward: clocks jump 02:00 EST -> 03:00 EDT; 23-hour local day)
+        const springForwardNoonUtc = Date.UTC(2026, 2, 8, 17, 0, 0);
+        const springWin = ComputeDayBoundaryWindow(springForwardNoonUtc, 'America/New_York');
+        expect(springWin.DayBucketUTC).toBe('2026-03-08');
+        expect(springWin.DayStartISO).toBe('2026-03-08T05:00:00.000Z');
+        expect(springWin.DayEndISO).toBe('2026-03-09T04:00:00.000Z');
+        expect(Date.parse(springWin.DayEndISO) - Date.parse(springWin.DayStartISO)).toBe(23 * 3_600_000);
+
+        // America/New_York 2026-11-01 (Fall back: clocks repeat 01:00-02:00; 25-hour local day)
+        const fallBackNoonUtc = Date.UTC(2026, 10, 1, 17, 0, 0);
+        const fallWin = ComputeDayBoundaryWindow(fallBackNoonUtc, 'America/New_York');
+        expect(fallWin.DayBucketUTC).toBe('2026-11-01');
+        expect(fallWin.DayStartISO).toBe('2026-11-01T04:00:00.000Z');
+        expect(fallWin.DayEndISO).toBe('2026-11-02T05:00:00.000Z');
+        expect(Date.parse(fallWin.DayEndISO) - Date.parse(fallWin.DayStartISO)).toBe(25 * 3_600_000);
     });
 });

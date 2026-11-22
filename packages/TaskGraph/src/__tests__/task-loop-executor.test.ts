@@ -228,4 +228,46 @@ describe('a While loop must be able to reach its exit condition', () => {
         expect(iterations).toBe(3);
         expect(result.Output).toMatchObject({ iterations: 3 });
     });
+
+    it('pauses at iteration cursor via OnIterationGovernance and resumes from StartIndex + InitialResults without replaying completed items (CR-7)', async () => {
+        const executed: number[] = [];
+        const op: ForEachOperation = { collectionPath: 'static:["a","b","c","d","e"]' };
+        const firstPass = await RunForEachLoop(
+            op,
+            {},
+            async ({ Index }) => {
+                executed.push(Index);
+                return { Success: true, Output: `item-${Index}` };
+            },
+            {
+                OnIterationGovernance: async ({ CompletedIterations }) =>
+                    CompletedIterations >= 2
+                        ? { ShouldPause: true, Reason: 'Budget pause after index 1' }
+                        : { ShouldPause: false },
+            },
+        );
+
+        expect(firstPass.Success).toBe(false);
+        expect(firstPass.Paused).toBe(true);
+        expect(firstPass.ResumeCursorIndex).toBe(2);
+        expect(executed).toEqual([0, 1]);
+        expect(firstPass.Output.results).toEqual(['item-0', 'item-1']);
+
+        const secondPass = await RunForEachLoop(
+            op,
+            {},
+            async ({ Index }) => {
+                executed.push(Index);
+                return { Success: true, Output: `item-${Index}` };
+            },
+            {
+                StartIndex: firstPass.ResumeCursorIndex,
+                InitialResults: firstPass.Output.results,
+            },
+        );
+
+        expect(secondPass.Success).toBe(true);
+        expect(executed).toEqual([0, 1, 2, 3, 4]);
+        expect(secondPass.Output.results).toEqual(['item-0', 'item-1', 'item-2', 'item-3', 'item-4']);
+    });
 });

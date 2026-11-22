@@ -162,7 +162,7 @@ export class AdminLimitsResourceComponent
     }
 
     /** Loads diagnostics from `Limits.GetDiagnostics` using the component's bound provider. */
-    public async RefreshDiagnostics(): Promise<void> {
+    public async RefreshDiagnostics(contextOverride?: { AgentID?: string; UserID?: string }): Promise<void> {
         const initialLoad = this.Diagnostics === null;
         if (initialLoad) {
             this.IsLoading = true;
@@ -173,7 +173,16 @@ export class AdminLimitsResourceComponent
         this.cdr.markForCheck();
 
         try {
-            const output = await this.limitsService.GetDiagnostics({ MaxRuns: 50 }, this.ProviderToUse);
+            const agentId = contextOverride?.AgentID ?? this.SelectedRun?.AgentID ?? undefined;
+            const userId = contextOverride?.UserID ?? this.SelectedRun?.UserID ?? undefined;
+            const output = await this.limitsService.GetDiagnostics(
+                {
+                    ...(agentId ? { AgentID: agentId } : {}),
+                    ...(userId ? { UserID: userId } : {}),
+                    MaxRuns: 50,
+                },
+                this.ProviderToUse,
+            );
             this.Diagnostics = output;
             if (this.SelectedRun) {
                 const updatedSelection = output.ActiveAndRecentRuns.find(
@@ -356,6 +365,33 @@ export class AdminLimitsResourceComponent
             this.IsMutatingRun = false;
             this.cdr.markForCheck();
         }
+    }
+
+    /** Returns per-key resolved values and tier provenance captured on the currently selected run's snapshot. */
+    public get SelectedRunSnapshotRows(): LimitsProvenanceTableRow[] {
+        const snapshot = this.SelectedRun?.Snapshot;
+        if (!snapshot) {
+            return [];
+        }
+        const rows: LimitsProvenanceTableRow[] = [];
+        for (const key of LIMITS_KEY_PATHS) {
+            const prov = snapshot.Provenance[key];
+            if (!prov) {
+                continue;
+            }
+            if (prov.IsOverridden || prov.WasClampedByPolicyCeiling) {
+                rows.push({
+                    Key: key,
+                    Category: ClassifyLimitsKeyCategory(key),
+                    EffectiveValue: prov.Value,
+                    SourceTier: prov.SourceTier,
+                    IsOverridden: prov.IsOverridden,
+                    WasClampedByPolicyCeiling: prov.WasClampedByPolicyCeiling,
+                    TierValues: prov.TierValues,
+                });
+            }
+        }
+        return rows;
     }
 
     public get ProvenanceRows(): LimitsProvenanceTableRow[] {
@@ -584,9 +620,10 @@ export class AdminLimitsResourceComponent
                     },
                     required: ['tab'],
                 },
-                Handler: async (params: Record<string, unknown>) => {
-                    if (IsValidAdminLimitsTab(params['tab'])) {
-                        this.OnTabChange(params['tab']);
+                Handler: async (params) => {
+                    const tabVal = typeof params['tab'] === 'string' ? params['tab'] : undefined;
+                    if (IsValidAdminLimitsTab(tabVal)) {
+                        this.OnTabChange(tabVal);
                         return { success: true, activeTab: this.ActiveTab };
                     }
                     return { success: false, error: `Invalid tab: ${String(params['tab'])}` };
@@ -605,9 +642,10 @@ export class AdminLimitsResourceComponent
                     },
                     required: ['category'],
                 },
-                Handler: async (params: Record<string, unknown>) => {
-                    if (IsValidAdminLimitsCategory(params['category'])) {
-                        this.OnCategoryChange(params['category']);
+                Handler: async (params) => {
+                    const catVal = typeof params['category'] === 'string' ? params['category'] : undefined;
+                    if (IsValidAdminLimitsCategory(catVal)) {
+                        this.OnCategoryChange(catVal);
                         return { success: true, selectedCategory: this.SelectedCategory };
                     }
                     return { success: false, error: `Invalid category: ${String(params['category'])}` };

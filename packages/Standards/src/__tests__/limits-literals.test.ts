@@ -68,4 +68,37 @@ describe('limits-literals standard', () => {
 
         expect(res.Violations).toHaveLength(0);
     });
+
+    it('catches constant arithmetic initializers and direct runaway loop-bound comparisons (CR-13)', async () => {
+        const repo = createTempRepo({
+            'packages/Example/src/sneaky.ts': [
+                'export const MAX_AGENT_ITERATIONS = 100 * 1000;',
+                'export const DEFAULT_BRIEFING_CONTRIBUTOR_TIMEOUT_MS = 60 * 1000;',
+                'export function runLoops(items: string[], turn: number, iterations: number) {',
+                '  for (let i = 0; i < 10000; i++) {',
+                '    items.push(String(i));',
+                '  }',
+                '  while (turn > 1000) {',
+                '    turn--;',
+                '  }',
+                '  while (iterations >= 5000) {',
+                '    iterations--;',
+                '  }',
+                '}',
+            ].join('\n'),
+        });
+
+        const res = await LimitsLiteralsCheck.Run({
+            RepoRoot: repo,
+            Roots: ['packages'],
+            Options: LimitsLiteralsCheck.DefaultOptions ?? {},
+        });
+
+        expect(res.Violations).toHaveLength(5);
+        expect(res.Violations.map((v) => v.Message).join('\n')).toContain('100000');
+        expect(res.Violations.map((v) => v.Message).join('\n')).toContain('60000');
+        expect(res.Violations.map((v) => v.Message).join('\n')).toContain('i = 10000');
+        expect(res.Violations.map((v) => v.Message).join('\n')).toContain('turn = 1000');
+        expect(res.Violations.map((v) => v.Message).join('\n')).toContain('iterations = 5000');
+    });
 });

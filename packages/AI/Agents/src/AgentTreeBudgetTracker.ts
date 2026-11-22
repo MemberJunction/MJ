@@ -10,12 +10,15 @@
  */
 
 import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
+import type { MJLimitsBudgetsConfig } from '@memberjunction/core';
 import type {
     AIPromptRunResult,
     AgentTreeBudget,
+    BudgetPausedInterval,
     ExecuteAgentParams,
     MJAIAgentRunEntityExtended,
 } from '@memberjunction/ai-core-plus';
+import { ComputeTotalPausedMs } from './BudgetEnforcementGuard';
 
 /**
  * The six denormalized token and cost figures rolled up from an agent run's steps.
@@ -76,6 +79,8 @@ export interface AgentGuardrailEvaluationInput {
     AbsoluteMaxIterations: number;
     ValidationRetryCount: number;
     MaxValidationRetries: number;
+    EffectiveBudgets?: MJLimitsBudgetsConfig | null;
+    PausedIntervals?: readonly BudgetPausedInterval[];
     NowMs?: number;
     /**
      * Optional callback routing tree-budget initialization through `BaseAgent.ensureTreeBudget`
@@ -354,7 +359,9 @@ export class AgentTreeBudgetTracker {
             absoluteMaxIterations,
             validationRetryCount,
             maxValidationRetries,
-            nowMs
+            nowMs,
+            input.EffectiveBudgets ?? null,
+            input.PausedIntervals,
         );
         const budget = input.EnsureTreeBudgetFn
             ? input.EnsureTreeBudgetFn(params)
@@ -402,6 +409,30 @@ export class AgentTreeBudgetTracker {
             ...(verdict.current !== undefined ? { Current: verdict.current } : {}),
             ...(verdict.reason !== undefined ? { Reason: verdict.reason } : {}),
         };
+    }
+
+    /**
+     * Synchronizes extended per-run budget ceilings onto a shared {@link AgentTreeBudget} after
+     * a human-approved checkpoint resume so prior tree ceilings or `breachedReason` do not
+     * immediately re-trip on the next step.
+     */
+    public UpdateTreeBudgetFromExtendedBudgets(
+        budget: AgentTreeBudget | undefined,
+        extendedBudgets: MJLimitsBudgetsConfig,
+    ): void {
+        if (!budget) {
+            return;
+        }
+        budget.breachedReason = undefined;
+        if (budget.maxTreeCost !== undefined) {
+            budget.maxTreeCost = extendedBudgets.PerRun.MaxCostUsd ?? undefined;
+        }
+        if (budget.maxTreeDurationMs !== undefined) {
+            budget.maxTreeDurationMs = extendedBudgets.PerRun.MaxWallClockMs ?? undefined;
+        }
+        if (budget.maxTreeTokens !== undefined) {
+            budget.maxTreeTokens = extendedBudgets.PerRun.MaxTokens ?? undefined;
+        }
     }
 
     /**
@@ -511,7 +542,9 @@ export class AgentTreeBudgetTracker {
         absoluteMaxIterations: number,
         validationRetryCount: number,
         maxValidationRetries: number,
-        nowMs: number
+        nowMs: number,
+        effectiveBudgets: MJLimitsBudgetsConfig | null = null,
+        pausedIntervals?: readonly BudgetPausedInterval[],
     ): AgentGuardrailCheckResult {
         const agent = params.agent;
 
@@ -525,27 +558,29 @@ export class AgentTreeBudgetTracker {
             };
         }
 
-        if (agent.MaxCostPerRun != null && agentRun.TotalCost != null && agentRun.TotalCost >= agent.MaxCostPerRun) {
+        const effectiveMaxCostUsd = effectiveBudgets ? effectiveBudgets.PerRun.MaxCostUsd : agent.MaxCostPerRun;
+        if (effectiveMaxCostUsd != null && agentRun.TotalCost != null && agentRun.TotalCost >= effectiveMaxCostUsd) {
             return {
                 Exceeded: true,
                 Type: 'cost',
-                Limit: agent.MaxCostPerRun,
+                Limit: effectiveMaxCostUsd,
                 Current: agentRun.TotalCost,
-                Reason: `Maximum cost limit of $${agent.MaxCostPerRun} exceeded. Current cost: $${agentRun.TotalCost.toFixed(4)}`,
+                Reason: `Maximum cost limit of $${effectiveMaxCostUsd} exceeded. Current cost: $${agentRun.TotalCost.toFixed(4)}`,
             };
         }
 
+        const effectiveMaxTokens = effectiveBudgets ? effectiveBudgets.PerRun.MaxTokens : agent.MaxTokensPerRun;
         if (
-            agent.MaxTokensPerRun != null &&
+            effectiveMaxTokens != null &&
             agentRun.TotalTokensUsed != null &&
-            agentRun.TotalTokensUsed >= agent.MaxTokensPerRun
+            agentRun.TotalTokensUsed >= effectiveMaxTokens
         ) {
             return {
                 Exceeded: true,
                 Type: 'tokens',
-                Limit: agent.MaxTokensPerRun,
+                Limit: effectiveMaxTokens,
                 Current: agentRun.TotalTokensUsed,
-                Reason: `Maximum token limit of ${agent.MaxTokensPerRun} exceeded. Current tokens: ${agentRun.TotalTokensUsed}`,
+                Reason: `Maximum token limit of ${effectiveMaxTokens} exceeded. Current tokens: ${agentRun.TotalTokensUsed}`,
             };
         }
 
@@ -563,15 +598,25 @@ export class AgentTreeBudgetTracker {
             };
         }
 
-        if (agent.MaxTimePerRun != null && agentRun.StartedAt) {
-            const elapsedSeconds = Math.floor((nowMs - new Date(agentRun.StartedAt).getTime()) / 1000);
-            if (elapsedSeconds >= agent.MaxTimePerRun) {
+        const effectiveMaxTimeMs = effectiveBudgets
+            ? effectiveBudgets.PerRun.MaxWallClockMs
+            : (agent.MaxTimePerRun != null ? agent.MaxTimePerRun * 1000 : null);
+        if (effectiveMaxTimeMs != null && agentRun.StartedAt) {
+            const rawElapsedMs = Math.max(0, nowMs - new Date(agentRun.StartedAt).getTime());
+            const pausedMs =
+                effectiveBudgets?.CountPausedTimeTowardsWallClock === true
+                    ? 0
+                    : ComputeTotalPausedMs(pausedIntervals, nowMs);
+            const activeElapsedMs = Math.max(0, rawElapsedMs - pausedMs);
+            if (activeElapsedMs >= effectiveMaxTimeMs) {
+                const limitSeconds = Math.max(1, Math.round(effectiveMaxTimeMs / 1000));
+                const elapsedSeconds = Math.floor(activeElapsedMs / 1000);
                 return {
                     Exceeded: true,
                     Type: 'time',
-                    Limit: agent.MaxTimePerRun,
+                    Limit: agent.MaxTimePerRun ?? limitSeconds,
                     Current: elapsedSeconds,
-                    Reason: `Maximum time limit of ${agent.MaxTimePerRun} seconds exceeded. Elapsed time: ${elapsedSeconds} seconds`,
+                    Reason: `Maximum time limit of ${agent.MaxTimePerRun ?? limitSeconds} seconds exceeded. Elapsed time: ${elapsedSeconds} seconds`,
                 };
             }
         }
