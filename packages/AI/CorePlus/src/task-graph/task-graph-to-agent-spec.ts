@@ -459,6 +459,11 @@ function stepShapeFor(
         }
         case 'External':
             return { StepType: 'External', Configuration: JSON.stringify(ConfigOf(node, 'External') ?? { domain: 'external' }) };
+        case 'Enqueue':
+            return {
+                StepType: 'External',
+                Configuration: JSON.stringify({ stepKind: 'Enqueue', enqueue: ConfigOf(node, 'Enqueue') ?? {} }),
+            };
         case 'Wait':
             return { StepType: 'Wait', Configuration: JSON.stringify(ConfigOf(node, 'Wait') ?? {}) };
         default:

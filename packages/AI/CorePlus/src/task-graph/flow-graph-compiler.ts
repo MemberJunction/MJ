@@ -25,13 +25,14 @@ import { DetectCycle, type TaskGraphEdge, type TaskGraphNode } from './graph-alg
 import {
     TaskNode,
     type TaskGraphDependency,
+    type TaskGraphNodeConfigMap,
     type TaskGraphSpec,
     type TaskGraphSpecNode,
     type NodeExecutionPolicy,
     type NodeLayout,
     type TaskNodeBase,
 } from './task-graph-spec';
-import type { ForEachOperation, LoopBodyActionStep } from '../foreach-operation';
+import type { ForEachEnqueueOperation, ForEachOperation, LoopBodyActionStep } from '../foreach-operation';
 import type { WhileOperation } from '../while-operation';
 
 /**
@@ -468,9 +469,12 @@ function emitNode(
             });
         }
         case 'External': {
-            // Completed by a signal from outside the graph. The step's description is what it waits
-            // for; `domain` defaults to "external" so a step drawn without one still compiles.
+            // Completed by a signal from outside the graph (or via an Enqueue WorkQueue round-trip).
             const config = parseJSONObject(step.Configuration);
+            if (config['stepKind'] === 'Enqueue' || isPlainObject(config['enqueue'])) {
+                const rawEnqueue = isPlainObject(config['enqueue']) ? config['enqueue'] : config;
+                return TaskNode.Enqueue(base, parseEnqueueConfig(rawEnqueue));
+            }
             return TaskNode.External(base, {
                 domain: typeof config['domain'] === 'string' && config['domain'].trim() ? config['domain'].trim() : 'external',
                 ...(typeof config['ref'] === 'string' ? { ref: config['ref'] } : {}),
@@ -610,12 +614,16 @@ function parseLoopConfig(step: FlowCompilerStep, errors: FlowCompileError[]): Lo
     }
 }
 
-/** Loop body → the operation's `action` / `steps` / `subAgent` / `prompt` arm, shared by ForEach and While. */
+/** Loop body -> the operation's `action` / `steps` / `subAgent` / `prompt` / `enqueue` arm, shared by ForEach and While. */
 function buildLoopBody(
     step: FlowCompilerStep,
     options: FlowCompilerOptions,
     errors: FlowCompileError[],
-): Pick<ForEachOperation, 'action' | 'steps' | 'subAgent' | 'prompt'> {
+): Pick<ForEachOperation, 'action' | 'steps' | 'subAgent' | 'prompt' | 'enqueue'> {
+    const stepConfig = parseJSONObject(step.Configuration);
+    if (step.StepType === 'ForEach' && isPlainObject(stepConfig['enqueue'])) {
+        return { enqueue: parseEnqueueLoopBody(stepConfig['enqueue']) };
+    }
     switch (step.LoopBodyType) {
         case 'Action': {
             const rawConfig = parseJSONObject(step.Configuration);
@@ -708,6 +716,40 @@ function buildWhile(step: FlowCompilerStep, options: FlowCompilerOptions, errors
         continueOnError: config.continueOnError,
         delayBetweenIterationsMs: config.delayBetweenIterationsMs,
         ...buildLoopBody(step, options, errors),
+    };
+}
+
+function parseEnqueueConfig(raw: Record<string, unknown>): TaskGraphNodeConfigMap['Enqueue'] {
+    return {
+        ...(typeof raw['topic'] === 'string' && raw['topic'].trim() ? { topic: raw['topic'].trim() } : {}),
+        ...(typeof raw['domain'] === 'string' && raw['domain'].trim() ? { domain: raw['domain'].trim() } : {}),
+        ...(typeof raw['handlerKey'] === 'string' && raw['handlerKey'].trim() ? { handlerKey: raw['handlerKey'].trim() } : {}),
+        ...(typeof raw['actionName'] === 'string' && raw['actionName'].trim() ? { actionName: raw['actionName'].trim() } : {}),
+        ...(isPlainObject(raw['payload']) ? { payload: raw['payload'] } : {}),
+        ...(typeof raw['correlationKey'] === 'string' && raw['correlationKey'].trim() ? { correlationKey: raw['correlationKey'].trim() } : {}),
+        ...(typeof raw['expiresInHours'] === 'number' && raw['expiresInHours'] > 0 ? { expiresInHours: raw['expiresInHours'] } : {}),
+        ...(typeof raw['maxRetries'] === 'number' && Number.isInteger(raw['maxRetries']) && raw['maxRetries'] >= 0 ? { maxRetries: raw['maxRetries'] } : {}),
+    };
+}
+
+function parseEnqueueLoopBody(raw: Record<string, unknown>): ForEachEnqueueOperation {
+    return {
+        ...(typeof raw['topic'] === 'string' && raw['topic'].trim() ? { topic: raw['topic'].trim() } : {}),
+        ...(typeof raw['handlerKey'] === 'string' && raw['handlerKey'].trim() ? { handlerKey: raw['handlerKey'].trim() } : {}),
+        ...(typeof raw['actionName'] === 'string' && raw['actionName'].trim() ? { actionName: raw['actionName'].trim() } : {}),
+        ...(typeof raw['subAgentName'] === 'string' && raw['subAgentName'].trim() ? { subAgentName: raw['subAgentName'].trim() } : {}),
+        ...(isPlainObject(raw['payloadTemplate']) ? { payloadTemplate: raw['payloadTemplate'] } : {}),
+        ...(typeof raw['correlationKey'] === 'string' && raw['correlationKey'].trim() ? { correlationKey: raw['correlationKey'].trim() } : {}),
+        ...(typeof raw['publishConcurrency'] === 'number' && Number.isInteger(raw['publishConcurrency']) && raw['publishConcurrency'] >= 1
+            ? { publishConcurrency: raw['publishConcurrency'] }
+            : {}),
+        ...(typeof raw['maxActiveRunners'] === 'number' && Number.isInteger(raw['maxActiveRunners']) && raw['maxActiveRunners'] >= 1
+            ? { maxActiveRunners: raw['maxActiveRunners'] }
+            : {}),
+        ...(typeof raw['maxRetries'] === 'number' && Number.isInteger(raw['maxRetries']) && raw['maxRetries'] >= 0
+            ? { maxRetries: raw['maxRetries'] }
+            : {}),
+        ...(typeof raw['expiresInHours'] === 'number' && raw['expiresInHours'] > 0 ? { expiresInHours: raw['expiresInHours'] } : {}),
     };
 }
 

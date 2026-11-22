@@ -14218,6 +14218,9 @@ importers:
       '@memberjunction/version-history':
         specifier: 6.3.0-edge.1
         version: link:../VersionHistory
+      '@memberjunction/work-queue-core':
+        specifier: 6.3.0-edge.1
+        version: link:../WorkQueue/core
       '@memberjunction/work-queue-engine':
         specifier: 6.3.0-edge.1
         version: link:../WorkQueue/engine
@@ -14342,6 +14345,9 @@ importers:
       '@memberjunction/conversations-runtime':
         specifier: 6.3.0-edge.1
         version: link:../ConversationsRuntime
+      '@memberjunction/work-queue-aws':
+        specifier: 6.3.0-edge.1
+        version: link:../WorkQueue/aws
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6

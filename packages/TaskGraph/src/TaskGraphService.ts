@@ -39,6 +39,7 @@ import {
     type MJActionEntity,
 } from '@memberjunction/core-entities';
 import {
+    BuildEnqueueCorrelationKey,
     FormatValidationErrors,
     NormalizeDependency,
     ParseTaskSecurityEnvelope,
@@ -48,6 +49,7 @@ import {
     TASK_GRAPH_RUNTIME_SECURITY_OPERATION,
     TASK_GRAPH_WORKFLOW_TYPE_NAME,
     ValidateTaskGraphSpec,
+    type TaskGraphDispatchMode,
     type TaskGraphFailurePolicy,
     type TaskGraphInvocationEnvelope,
     type TaskGraphSpec,
@@ -62,6 +64,13 @@ import {
     HumanTaskProviderDefaults,
     ResolveHumanStepProvider,
 } from '@memberjunction/ai-core-plus';
+import {
+    TaskGraphCallerNotificationService,
+    TaskGraphQueueRegistry,
+    type TaskGraphCallerNotificationRecord,
+    type TaskGraphQueuedRunEnvelope,
+    type TaskGraphQueuedSubmissionSnapshot,
+} from './queue-dispatch';
 import { EscapeSQLString, GetGlobalObjectStore, IsValidUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -146,6 +155,10 @@ export type TaskGraphSubmitContext = {
     EnableGovernance?: boolean;
     /** Optional per-graph isolation level override (defaults from `spec.isolation` then `LimitsConfigResolver`). */
     Isolation?: TaskGraphIsolationLevel;
+    /** Execution dispatch mode (`'Inline'` default, or `'Queue'` to enqueue execution onto WorkQueue). */
+    Dispatch?: TaskGraphDispatchMode;
+    /** Optional WorkQueue topic override when `Dispatch === 'Queue'`. */
+    QueueTopic?: string;
 };
 
 /**
@@ -249,6 +262,14 @@ export type TaskGraphParentMetadata = {
     governanceEnabled?: boolean;
     /** Execution isolation mode for tasks in this graph (`'InProcess' | 'Worker' | 'Process' | 'Container'`). */
     isolation?: TaskGraphIsolationLevel;
+    /** Dispatch mode (`'Inline'` or `'Queue'`) used when the graph was submitted. */
+    dispatchMode?: TaskGraphDispatchMode;
+    /** Destination WorkQueue topic when `dispatchMode === 'Queue'`. */
+    queuedTopic?: string;
+    /** WorkQueue work-item / message identifier returned at queue enqueue. */
+    queueMessageID?: string;
+    /** Durable caller notification record recovered across restarts when `dispatchMode === 'Queue'`. */
+    callerNotification?: TaskGraphCallerNotificationRecord;
 };
 
 /**
@@ -316,6 +337,9 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
         const isolation = IsTaskGraphIsolationLevel(parsed.isolation)
             ? parsed.isolation
             : undefined;
+        const dispatchMode = parsed.dispatchMode === 'Queue' || parsed.dispatchMode === 'Inline'
+            ? parsed.dispatchMode
+            : undefined;
         const out: TaskGraphParentMetadata = {
             ...DEFAULT_PARENT_METADATA,
             ...parsed,
@@ -371,6 +395,10 @@ export function BuildTaskGraphParentInputPayload(args: {
     limitsOverride?: MJLimitsOverride;
     governanceEnabled?: boolean;
     isolation?: TaskGraphIsolationLevel;
+    dispatchMode?: TaskGraphDispatchMode;
+    queuedTopic?: string;
+    queueMessageID?: string;
+    callerNotification?: TaskGraphCallerNotificationRecord;
 }): Record<string, unknown> {
     const parentAgentHierarchy = Array.isArray(args.parentAgentHierarchy)
         ? args.parentAgentHierarchy
@@ -400,6 +428,10 @@ export function BuildTaskGraphParentInputPayload(args: {
             ? { governanceEnabled: args.governanceEnabled }
             : (args.limitsOverride ? { governanceEnabled: true } : {})),
         ...(args.isolation ? { isolation: args.isolation } : {}),
+        ...(args.dispatchMode ? { dispatchMode: args.dispatchMode } : {}),
+        ...(args.queuedTopic ? { queuedTopic: args.queuedTopic } : {}),
+        ...(args.queueMessageID ? { queueMessageID: args.queueMessageID } : {}),
+        ...(args.callerNotification ? { callerNotification: args.callerNotification } : {}),
         ...(args.startPaused
             ? {
                 debug: {
@@ -475,6 +507,10 @@ export type TaskGraphSubmitResult = {
     ParentTaskID?: string;
     /** tempId -> persisted Task.ID, for callers that need to correlate back to their spec. */
     TaskIDMap?: Map<string, string>;
+    /** Effective dispatch mode (`'Inline'` or `'Queue'`). */
+    Dispatch?: TaskGraphDispatchMode;
+    /** WorkQueue message identifier when dispatched via queue. */
+    QueueMessageID?: string;
     ErrorMessage?: string;
 };
 
@@ -497,9 +533,9 @@ export const TASK_TYPE_NAME = TASK_GRAPH_WORKFLOW_TYPE_NAME;
  */
 const DISPATCHABLE_KINDS: ReadonlyArray<TaskGraphSpecNode['kind']> = [
     'Agent', 'Action', 'Human', 'ForEach', 'While', 'Prompt', 'Decision',
-    // Waiting steps: never claimed, completed by a signal (External) or a clock (Wait). The
-    // dispatcher reaches and settles them through WaitingStepRunner.
-    'External', 'Wait',
+    // Waiting steps: never claimed, completed by a signal (External / Enqueue) or a clock (Wait).
+    // The dispatcher reaches and settles them through WaitingStepRunner.
+    'External', 'Enqueue', 'Wait',
 ];
 
 /**
@@ -570,6 +606,12 @@ export function BuildStepConfiguration(node: TaskGraphSpecNode): TaskStepConfigu
 
     const external = ConfigOf(node, 'External');
     if (external) config.external = external;
+
+    const enqueue = ConfigOf(node, 'Enqueue');
+    if (enqueue) {
+        config.stepKind = 'Enqueue';
+        config.enqueue = enqueue;
+    }
 
     // A Wait's moment. Without it the row says "Wait" and nothing else, and the dispatcher can only
     // fail the step — which it does, by name, rather than continue immediately.
@@ -1017,6 +1059,10 @@ export class TaskGraphService {
             }
 
             const taskTypeID = await this.ensureTaskType(context);
+            const dispatchMode: TaskGraphDispatchMode = context.Dispatch ?? spec.dispatch ?? 'Inline';
+            if (dispatchMode === 'Queue') {
+                return this.submitQueuedGraph(spec, taskTypeID, context);
+            }
 
             // 3. Persist — ALL of it, or none of it.
             //
@@ -1075,12 +1121,155 @@ export class TaskGraphService {
             } else {
                 KickTaskGraphDispatchers();
             }
-            return { Success: true, ParentTaskID: parentTaskID, TaskIDMap: taskIDMap };
+            return { Success: true, ParentTaskID: parentTaskID, TaskIDMap: taskIDMap, Dispatch: 'Inline' };
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
             LogError(`[TaskGraphService] Submit failed for "${spec.workflowName}": ${message}`);
             return { Success: false, ErrorMessage: message };
         }
+    }
+
+    /**
+     * Submits a validated graph for asynchronous WorkQueue execution (`Dispatch === 'Queue'`).
+     * Persists only the parent `Pending` task row with serialized `queuedSubmission` metadata and a
+     * `Pending` durable caller notification so inline dispatchers never pick it up prematurely.
+     */
+    private async submitQueuedGraph(
+        spec: TaskGraphSpec,
+        taskTypeID: string,
+        context: TaskGraphSubmitContext,
+    ): Promise<TaskGraphSubmitResult> {
+        const limits = LimitsConfigResolver.Resolve({
+            AgentOrWorkflowMetadata: context.LimitsOverride ?? spec.limitsOverride,
+        }).Limits;
+        const topic = context.QueueTopic?.trim() || spec.queueTopic?.trim() || limits.TaskGraphQueue.GraphDispatchTopicName;
+        const isolation = context.Isolation ?? spec.isolation ?? limits.Isolation.DefaultIsolation;
+        const submittedAt = new Date().toISOString();
+
+        const parentID = await RunInEntityTransaction(
+            asTransactionCapable(context.Provider),
+            async () => this.persistQueuedParent(spec, taskTypeID, topic, isolation, submittedAt, context),
+        );
+
+        const envelope: TaskGraphQueuedRunEnvelope = {
+            Kind: 'TaskGraph.RunGraph',
+            ParentTaskID: parentID,
+            WorkflowName: spec.workflowName,
+            Isolation: isolation,
+            Topic: topic,
+            DispatchMode: 'Queue',
+            SubmittedAt: submittedAt,
+            CorrelationId: parentID,
+        };
+
+        try {
+            const pubResults = await TaskGraphQueueRegistry.Instance.PublishWithRetry(
+                [
+                    {
+                        Topic: topic,
+                        HandlerKey: 'TaskGraph.RunGraph',
+                        Payload: envelope,
+                        CorrelationId: parentID,
+                        IdempotencyKey: parentID,
+                        SubjectType: 'MJ: Tasks',
+                        SubjectId: parentID,
+                        MaxAttempts: Math.max(1, limits.TaskGraphQueue.MaxEnqueueRedeliveryAttempts + 1),
+                    },
+                ],
+                context.ContextUser,
+                context.Provider,
+            );
+            const messageID = pubResults[0]?.WorkItemId;
+            return {
+                Success: true,
+                ParentTaskID: parentID,
+                Dispatch: 'Queue',
+                QueueMessageID: messageID,
+            };
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            await TaskGraphCallerNotificationService.Instance.RecordTerminalNotification({
+                ParentTaskID: parentID,
+                WorkflowName: spec.workflowName,
+                TerminalOutcome: 'Failed',
+                ErrorMessage: `Queue publish failed: ${msg}`,
+                Provider: context.Provider,
+                ContextUser: context.ContextUser,
+            });
+            return { Success: false, ParentTaskID: parentID, Dispatch: 'Queue', ErrorMessage: msg };
+        }
+    }
+
+    /**
+     * Idempotently materializes child tasks and dependency edges for a queued graph parent when picked
+     * up by a queue worker, preserving workflow `Isolation` and parent metadata.
+     */
+    public async MaterializeQueuedGraph(
+        parentTaskID: string,
+        context: TaskGraphSubmitContext,
+    ): Promise<{ Success: boolean; AlreadyMaterialized?: boolean; Isolation?: TaskGraphIsolationLevel; ErrorMessage?: string }> {
+        const serviceUser = this.servicePersistenceUser(context);
+        const parent = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', serviceUser);
+        if (!(await parent.Load(parentTaskID))) {
+            return { Success: false, ErrorMessage: `Queued parent task '${parentTaskID}' not found.` };
+        }
+        const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
+        const isolation = meta.isolation ?? LimitsConfigResolver.Resolve().Limits.Isolation.DefaultIsolation;
+
+        const existingChildren = await this.loadChildren(parentTaskID, context, serviceUser);
+        if (existingChildren.length > 0) {
+            return { Success: true, AlreadyMaterialized: true, Isolation: isolation };
+        }
+
+        const snapshot = readQueuedSubmissionSnapshot(parent.Configuration);
+        if (!snapshot) {
+            return { Success: false, ErrorMessage: `Parent task '${parentTaskID}' has no queuedSubmission configuration.` };
+        }
+
+        const effectiveContext: TaskGraphSubmitContext = {
+            ...context,
+            EnvironmentID: snapshot.EnvironmentID || context.EnvironmentID,
+            ConversationDetailID: snapshot.ConversationDetailID ?? context.ConversationDetailID,
+            AgentRunID: snapshot.AgentRunID ?? context.AgentRunID,
+            AgentID: snapshot.AgentID ?? context.AgentID,
+            RoutineID: snapshot.RoutineID ?? context.RoutineID,
+            ReinvokeDepth: snapshot.ReinvokeDepth,
+            Isolation: meta.isolation ?? snapshot.Isolation,
+        };
+
+        const [agentIDsByName, actionIDsByName, promptIDsByName] = await Promise.all([
+            this.resolveAgents(snapshot.Spec, effectiveContext),
+            this.resolveActions(snapshot.Spec, effectiveContext),
+            this.resolvePrompts(snapshot.Spec, effectiveContext),
+        ]);
+        if (!agentIDsByName.Success) return { Success: false, ErrorMessage: agentIDsByName.ErrorMessage };
+        if (!actionIDsByName.Success) return { Success: false, ErrorMessage: actionIDsByName.ErrorMessage };
+        if (!promptIDsByName.Success) return { Success: false, ErrorMessage: promptIDsByName.ErrorMessage };
+
+        const taskTypeID = await this.ensureTaskType(effectiveContext);
+        await RunInEntityTransaction(
+            asTransactionCapable(effectiveContext.Provider),
+            async () => {
+                const refreshedChildren = await this.loadChildren(parentTaskID, effectiveContext, serviceUser);
+                if (refreshedChildren.length > 0) return;
+                const map = await this.persistChildren(
+                    snapshot.Spec,
+                    parentTaskID,
+                    taskTypeID,
+                    agentIDsByName.Map!,
+                    actionIDsByName.Map!,
+                    promptIDsByName.Map!,
+                    effectiveContext,
+                );
+                await this.persistDependencies(snapshot.Spec, map, effectiveContext);
+                if (parent.Status === 'Pending') {
+                    parent.Status = 'In Progress';
+                    await this.saveAsService(parent, 'MJ: Tasks', effectiveContext);
+                }
+            },
+        );
+        KickTaskGraphDispatchers();
+        return { Success: true, AlreadyMaterialized: false, Isolation: isolation };
     }
 
     /**
@@ -1125,6 +1314,21 @@ export class TaskGraphService {
         visited.add(parentTaskID);
         try {
             const children = await this.loadChildren(parentTaskID, context);
+            if (children.length === 0) {
+                const parent = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.servicePersistenceUser(context));
+                if (await parent.Load(parentTaskID)) {
+                    if (parent.Status === 'Pending' || parent.Status === 'In Progress') {
+                        await TaskGraphCallerNotificationService.Instance.RecordTerminalNotification({
+                            ParentTaskID: parentTaskID,
+                            WorkflowName: parent.Name,
+                            TerminalOutcome: 'Cancelled',
+                            Provider: context.Provider,
+                            ContextUser: context.ContextUser,
+                        });
+                    }
+                }
+                return { Success: true, Cancelled: true, UncancelledTaskNames: [] };
+            }
             const uncancelled: string[] = [];
             const settledMeanwhile: string[] = [];
             for (const child of children) {
@@ -2221,7 +2425,7 @@ export class TaskGraphService {
 
                 // The discriminator the dispatcher routes on. Written first because everything below —
                 // and everything the dispatcher later does with this row — reads it.
-                task.StepType = node.kind;
+                task.StepType = node.kind === 'Enqueue' ? 'External' : node.kind;
 
                 // Switching on `kind` rather than on which config field happens to be populated. The
                 // old shape — "agentName? then agent; actionName? then action; ELSE human" — turned
@@ -2257,6 +2461,11 @@ export class TaskGraphService {
                         // now so an early signal can find the step and be held on it.
                         task.CorrelationKey = SubmitTimeCorrelationKey(node);
                         break;
+                    case 'Enqueue':
+                        // Persisted on External Waiting Step semantics with deterministic correlation key.
+                        task.StepType = 'External';
+                        task.CorrelationKey = this.enqueueCorrelationKeyForPersist(parentTaskID, task.ID, ConfigOf(node, 'Enqueue')?.correlationKey);
+                        break;
                     case 'Wait':
                         // Nothing runs it either: the dispatcher stamps its DueAt when it is reached.
                         break;
@@ -2272,10 +2481,12 @@ export class TaskGraphService {
                         else if (op?.steps?.length) task.ActionID = actionIDsByName.get(op.steps[0].name)!;
                         else if (op?.subAgent) task.AgentID = agentIDsByName.get(op.subAgent.name)!;
                         else if (op?.prompt) task.PromptID = promptIDsByName.get(op.prompt.name)!;
-                        else {
+                        else if ('enqueue' in op! && op.enqueue) {
+                            task.CorrelationKey = this.enqueueCorrelationKeyForPersist(parentTaskID, task.ID, op.enqueue.correlationKey);
+                        } else {
                             throw new Error(
                                 `Task "${node.name}" is a loop with nothing to repeat. Choose an action, ` +
-                                `steps, a prompt, or a sub-agent for it to run on each pass.`,
+                                `steps, a prompt, enqueue, or a sub-agent for it to run on each pass.`,
                             );
                         }
                         break;
@@ -2435,5 +2646,97 @@ export class TaskGraphService {
             user,
         );
         return (result.Success ? result.Results : []) ?? [];
+    }
+
+    private enqueueCorrelationKeyForPersist(parentTaskID: string, taskID: string | undefined, configured: string | undefined): string | null {
+        const key = configured?.trim();
+        if (key && key.startsWith('payload.')) {
+            return null;
+        }
+        return BuildEnqueueCorrelationKey(parentTaskID, taskID || parentTaskID, key);
+    }
+
+    private async persistQueuedParent(
+        spec: TaskGraphSpec,
+        taskTypeID: string,
+        topic: string,
+        isolation: TaskGraphIsolationLevel,
+        submittedAt: string,
+        context: TaskGraphSubmitContext,
+    ): Promise<string> {
+        const parent = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.servicePersistenceUser(context));
+        parent.NewRecord();
+        parent.Name = spec.workflowName;
+        parent.Description = spec.reasoning || 'Queued orchestrated workflow';
+        parent.TypeID = taskTypeID;
+        parent.EnvironmentID = context.EnvironmentID;
+        parent.ConversationDetailID = context.ConversationDetailID ?? null;
+        parent.Status = 'Pending';
+        parent.PercentComplete = 0;
+        parent.AgentRunID = context.AgentRunID ?? null;
+
+        const sanitized = SanitizeInvocationEnvelope(context.Invocation);
+        const queuedSnapshot: TaskGraphQueuedSubmissionSnapshot = {
+            Spec: spec,
+            EnvironmentID: context.EnvironmentID,
+            ConversationDetailID: context.ConversationDetailID ?? null,
+            AgentRunID: context.AgentRunID ?? null,
+            AgentID: context.AgentID ?? null,
+            RoutineID: context.RoutineID ?? spec.routineId ?? null,
+            ReinvokeDepth: context.ReinvokeDepth ?? 0,
+            SubmittedByUserID: context.ContextUser?.ID ?? '',
+            Topic: topic,
+            Isolation: isolation,
+            SubmittedAt: submittedAt,
+        };
+        parent.Configuration = JSON.stringify({ queuedSubmission: queuedSnapshot });
+
+        parent.InputPayload = JSON.stringify(BuildTaskGraphParentInputPayload({
+            continuation: spec.continuation ?? 'message',
+            reinvokeDepth: context.ReinvokeDepth ?? 0,
+            failureSemantics: spec.failureSemantics ?? 'block',
+            failurePolicy: spec.failurePolicy ?? 'Halt',
+            submittedByAgentRunID: context.AgentRunID ?? null,
+            submittedByUserID: context.ContextUser?.ID ?? null,
+            submittedByAgentID: context.AgentID ?? null,
+            routineID: context.RoutineID ?? spec.routineId ?? null,
+            workflowMetadata: context.WorkflowMetadata ?? undefined,
+            userPolicyLimitsOverride: context.UserPolicyLimitsOverride,
+            parentAgentHierarchy: context.ParentAgentHierarchy,
+            invocation: sanitized.Envelope
+                ? { data: sanitized.Envelope.Data, context: sanitized.Envelope.Context }
+                : null,
+            startPaused: context.Debug?.paused === true,
+            limitsOverride: context.LimitsOverride ?? spec.limitsOverride,
+            governanceEnabled: context.EnableGovernance,
+            isolation,
+            dispatchMode: 'Queue',
+            queuedTopic: topic,
+            callerNotification: {
+                NotificationID: `${parent.ID}:initial`,
+                ParentTaskID: parent.ID,
+                WorkflowName: spec.workflowName,
+                Status: 'Pending',
+                CreatedAt: submittedAt,
+            },
+        }));
+        parent.SecurityEnvelope = SerializeTaskSecurityEnvelope(context.SecurityEnvelope);
+        if (!(await this.saveAsService(parent, 'MJ: Tasks', context))) {
+            throw new Error(`Could not create queued parent task: ${parent.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+        return parent.ID;
+    }
+}
+
+function readQueuedSubmissionSnapshot(rawConfig: string | null | undefined): TaskGraphQueuedSubmissionSnapshot | null {
+    if (!rawConfig) return null;
+    try {
+        const parsed: unknown = JSON.parse(rawConfig);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+        const snapshot = (parsed as { queuedSubmission?: unknown }).queuedSubmission;
+        if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return null;
+        return snapshot as TaskGraphQueuedSubmissionSnapshot;
+    } catch {
+        return null;
     }
 }

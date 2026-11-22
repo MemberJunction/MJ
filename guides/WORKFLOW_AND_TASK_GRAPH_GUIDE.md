@@ -1083,6 +1083,24 @@ Enabling `'Container'` mode in production hosts requires:
 
 ---
 
+## Queued Graph Dispatch (`Dispatch: 'Queue'`) & `Enqueue` Steps
+
+### 1. Submitting Graphs onto WorkQueue (`Dispatch: 'Queue'`)
+
+`TaskGraph.Submit` (`TaskGraphService.Submit`) accepts `Dispatch?: 'Inline' | 'Queue'` (default `'Inline'`).
+When `Dispatch === 'Queue'`:
+- The parent `MJ: Tasks` row persists immediately in `'Pending'` with `dispatchMode: 'Queue'`, serialized `queuedSubmission` snapshot, workflow `Isolation`, and a durable `'Pending'` caller notification record.
+- Child tasks are **not** materialized at submit time, preventing inline dispatchers from claiming work prematurely.
+- `TaskGraphRunWorkHandler` (`@RegisterClass(BaseWorkHandler, 'TaskGraph.RunGraph')`) idempotently materializes child tasks/dependencies via `TaskGraphService.MaterializeQueuedGraph`, executes the graph honoring its resolved `Isolation`, records terminal state (`Succeeded` / `Failed` / `Cancelled`), and writes a `'Ready'` terminal notification (`TaskGraphCallerNotificationService`).
+- Caller hosts recover unacknowledged `'Ready'` notifications cleanly across process restarts via `TaskGraphCallerNotificationService.Instance.RecoverPendingNotifications(...)` / `WaitForNotification(...)`.
+
+### 2. `Enqueue` Steps & Bounded 10,000-Item `ForEach` + `Enqueue` Fan-Out
+
+- **Single `Enqueue` steps** (`TaskNode.Enqueue`) durably register waiting state (`StepType = 'External'`, deterministic `BuildEnqueueCorrelationKey(graphRunId, stepInvocationId, correlationKey)`) **before** publishing onto the WorkQueue topic, reconcile early completions without stranding, and deduplicate repeated `CompleteWaitingStep` calls.
+- **`ForEach` + `Enqueue` fan-out** (`ForEachOperation.enqueue`) uses `ForEachEnqueueCoordinator` with bounded concurrent publish batches (`Limits.TaskGraphQueue.MaxEnqueuePublishConcurrency`, `EnqueuePublishBatchSize`), a compact hex completion bitmap (`~2.5 KB` per 10,000 items), host-wide active isolated runner bounding (`Limits.TaskGraphQueue.MaxConcurrentIsolatedRunners` via `BoundedRunnerSemaphore`), idempotent per-item completion deduplication, and terminal failure propagation after retry exhaustion (`Limits.TaskGraphQueue.MaxEnqueueRedeliveryAttempts`).
+
+---
+
 ## Related reading
 
 - [Workflows for Business Users](WORKFLOWS_FOR_BUSINESS_USERS.md) — the same concepts for people who

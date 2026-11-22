@@ -15,6 +15,7 @@
 import { CODE_FALLBACK_LIMITS, IMetadataProvider, LimitsConfigResolver, LogError, RunView, UserInfo } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 import type { MJTaskEntity } from '@memberjunction/core-entities';
+import { ForEachEnqueueCoordinator } from './enqueue-fanout';
 import { TaskClaimStore } from './TaskClaimStore';
 import { KickTaskGraphDispatchers } from './task-graph-kick';
 import {
@@ -54,6 +55,8 @@ export type CompleteWaitingStepResult = {
     Buffered: string[];
     /** Steps matched but left alone, each with the reason. */
     Refused: RefusedWaitingStep[];
+    /** True when the step or item was already settled and the repeated completion was idempotently ignored. */
+    DuplicateIgnored?: boolean;
     ErrorMessage?: string;
 };
 
@@ -84,8 +87,46 @@ export class TaskGraphWaitingSteps {
         const problem = requestProblem(request);
         if (problem) return { Success: false, Completed: [], Buffered: [], Refused: [], ErrorMessage: problem };
 
+        // Check if CorrelationKey addresses an individual item inside a ForEach + Enqueue fan-out.
+        if (request.CorrelationKey) {
+            const parsedFanOutItem = ForEachEnqueueCoordinator.Instance.ParseFanOutItemCorrelationKey(request.CorrelationKey.trim());
+            if (parsedFanOutItem) {
+                const fanOutOutcome = await ForEachEnqueueCoordinator.Instance.RecordItemCompletion({
+                    CorrelationKey: request.CorrelationKey.trim(),
+                    ItemIndex: parsedFanOutItem.ItemIndex,
+                    Status: request.Status ?? 'Complete',
+                    Payload: request.Payload,
+                    ErrorMessage: request.ErrorMessage,
+                    Provider: provider,
+                    ContextUser: contextUser,
+                });
+                return {
+                    Success: fanOutOutcome.Success,
+                    Completed: fanOutOutcome.FanOutSettled && !fanOutOutcome.DuplicateIgnored ? [parsedFanOutItem.BaseKey] : [],
+                    Buffered: !fanOutOutcome.FanOutSettled && !fanOutOutcome.DuplicateIgnored ? [request.CorrelationKey.trim()] : [],
+                    Refused: [],
+                    DuplicateIgnored: fanOutOutcome.DuplicateIgnored,
+                    ...(fanOutOutcome.ErrorMessage ? { ErrorMessage: fanOutOutcome.ErrorMessage } : {}),
+                };
+            }
+        }
+
         const tasks = await loadTargets(request, provider, contextUser);
         if ('Error' in tasks) return { Success: false, Completed: [], Buffered: [], Refused: [], ErrorMessage: tasks.Error };
+
+        // Early completion arriving before the waiting step row has been marked with its correlation key:
+        // buffer cleanly so WaitingStepRunner.Reach reconciles it immediately without stranding the step.
+        if (tasks.Tasks.length === 0 && request.CorrelationKey) {
+            const key = request.CorrelationKey.trim();
+            ForEachEnqueueCoordinator.Instance.BufferEarlyCompletion({
+                CorrelationKey: key,
+                Status: request.Status ?? 'Complete',
+                Payload: request.Payload,
+                ErrorMessage: request.ErrorMessage,
+                ReceivedAt: new Date().toISOString(),
+            });
+            return { Success: true, Completed: [], Buffered: [key], Refused: [] };
+        }
 
         const result: CompleteWaitingStepResult = { Success: true, Completed: [], Buffered: [], Refused: [] };
         const claims = new TaskClaimStore('waiting-step-signal', 0);
@@ -94,7 +135,7 @@ export class TaskGraphWaitingSteps {
         }
 
         if (result.Completed.length > 0) KickTaskGraphDispatchers();
-        if (request.TaskID && result.Completed.length === 0 && result.Buffered.length === 0) {
+        if (request.TaskID && result.Completed.length === 0 && result.Buffered.length === 0 && !result.DuplicateIgnored) {
             result.Success = false;
             result.ErrorMessage = result.Refused[0]?.Reason ?? 'The step could not be completed.';
         }
@@ -132,7 +173,7 @@ async function loadTargets(
     const result = await RunView.FromMetadataProvider(provider).RunView<MJTaskEntity>(
         {
             EntityName: 'MJ: Tasks',
-            ExtraFilter: `CorrelationKey='${EscapeSQLString(key)}' AND StepType='External' AND Status='Pending'`,
+            ExtraFilter: `CorrelationKey='${EscapeSQLString(key)}' AND StepType='External'`,
             OrderBy: '__mj_CreatedAt ASC',
             MaxRows: LimitsConfigResolver.Resolve().Limits.Tuning.MaxStepsPerSignal,
             ResultType: 'entity_object',
@@ -141,7 +182,9 @@ async function loadTargets(
         contextUser,
     );
     if (!result.Success) return { Error: `Could not look up steps waiting on "${key}": ${result.ErrorMessage}` };
-    return { Tasks: result.Results ?? [] };
+    const allMatched = result.Results ?? [];
+    const pending = allMatched.filter((t) => t.Status === 'Pending');
+    return { Tasks: pending.length > 0 ? pending : allMatched };
 }
 
 async function completeOne(
@@ -154,8 +197,13 @@ async function completeOne(
     result: CompleteWaitingStepResult,
 ): Promise<void> {
     const kind = WaitingStepKindOf(task);
-    if (kind !== 'External' && kind !== 'ProviderHuman') {
+    if (kind !== 'External' && kind !== 'Enqueue' && kind !== 'ProviderHuman') {
         result.Refused.push({ TaskID: task.ID, Reason: refusalForKind(task) });
+        return;
+    }
+    if (kind === 'Enqueue' && (task.Status === 'Complete' || task.Status === 'Failed')) {
+        // Idempotent duplicate handling for Enqueue steps: repeated signals / redeliveries do not fail or double-apply.
+        result.DuplicateIgnored = true;
         return;
     }
     const denied = authorize ? await authorize(task) : null;

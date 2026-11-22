@@ -36,7 +36,7 @@ import {
     type TaskGraphRetryInput,
     type TaskGraphStatusOutput,
 } from '@memberjunction/core-entities';
-import { ComputeParentRollup, type TaskGraphInvocationEnvelope, type TaskGraphNodeStatus, type TaskGraphSpec } from '@memberjunction/ai-core-plus';
+import { ComputeParentRollup, type TaskGraphDispatchMode, type TaskGraphInvocationEnvelope, type TaskGraphNodeStatus, type TaskGraphSpec } from '@memberjunction/ai-core-plus';
 import { ClampReinvokeDepth, TaskGraphService, TaskGraphSubmitContext } from '../TaskGraphService';
 import { LoadWorkflowDraftOperation } from './WorkflowDraftOperation';
 import { LoadTaskGraphDebugOperations, AuthorizeGraphControl, GraphOfTask } from './TaskGraphDebugOperations';
@@ -131,6 +131,8 @@ export class TaskGraphSubmitServerOperation extends TaskGraphSubmitOperation {
                     // seed would buy hops against the runaway-loop cap.
                     ReinvokeDepth: ClampReinvokeDepth(input.reinvokeDepth),
                     Invocation: invocation,
+                    Dispatch: input.dispatch,
+                    QueueTopic: input.queueTopic,
                 },
             );
         } catch (e) {
@@ -144,6 +146,8 @@ export class TaskGraphSubmitServerOperation extends TaskGraphSubmitOperation {
             success: result.Success,
             parentTaskID: result.ParentTaskID,
             errorMessage: result.ErrorMessage,
+            ...(result.Dispatch ? { dispatch: result.Dispatch } : {}),
+            ...(result.QueueMessageID ? { queueMessageID: result.QueueMessageID } : {}),
             ...(status ? { statusConversationDetailID: status.ID } : {}),
         };
     }
@@ -153,6 +157,8 @@ export class TaskGraphSubmitServerOperation extends TaskGraphSubmitOperation {
 type TaskGraphSubmitServerInput = TaskGraphSubmitInput & {
     reinvokeDepth?: number;
     invocation?: { data?: unknown; context?: unknown };
+    dispatch?: TaskGraphDispatchMode;
+    queueTopic?: string;
     /**
      * Post the workflow's status bubble under `conversationDetailID` (the reply that planned it) and bind the graph to
      * the bubble, so its progress and outcome land there. MJ's chat asks for it.
@@ -161,7 +167,11 @@ type TaskGraphSubmitServerInput = TaskGraphSubmitInput & {
 };
 
 /** What `TaskGraph.Submit` returns beyond its generated output: the status bubble's ID, when it posted one. */
-type TaskGraphSubmitServerOutput = TaskGraphSubmitOutput & { statusConversationDetailID?: string };
+type TaskGraphSubmitServerOutput = TaskGraphSubmitOutput & {
+    statusConversationDetailID?: string;
+    dispatch?: TaskGraphDispatchMode;
+    queueMessageID?: string;
+};
 
 /**
  * The workflow status bubble's text. Only facts the server knows itself: how many tasks, and whether the submission
@@ -312,6 +322,18 @@ export class TaskGraphGetStatusServerOperation extends TaskGraphGetStatusOperati
         }
 
         const rows = children.Results ?? [];
+        if (rows.length === 0) {
+            const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', user);
+            if (await parent.Load(input.parentTaskID)) {
+                return {
+                    success: true,
+                    status: parent.Status,
+                    percentComplete: parent.PercentComplete ?? 0,
+                    tasks: [],
+                    ...(parent.ErrorMessage ? { errorMessage: parent.ErrorMessage } : {}),
+                };
+            }
+        }
         const rollup = ComputeParentRollup(rows.map((r) => ({ id: r.ID, status: r.Status })));
 
         return {

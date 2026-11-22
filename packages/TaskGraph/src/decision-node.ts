@@ -13,11 +13,13 @@ import {
     ResolveDecisionStepAnswers,
     type BudgetCostEvent,
     type EdgeConditionOutcome,
+    type ForEachEnqueueOperation,
     type GraphDecisions,
     type HeldDecisionAnswer,
     type TaskGraphDecisionAnswer,
     type TaskGraphDecisionQuestion,
     type TaskGraphNodeConfigMap,
+    type TaskGraphNodeKind,
 } from '@memberjunction/ai-core-plus';
 import type { MJTaskEntity_ITaskLoopIteration, MJTaskEntity_ITaskStepConfiguration } from '@memberjunction/core-entities';
 import type { LoopCursorSnapshot, LoopIterationOutcome } from './TaskLoopExecutor';
@@ -84,6 +86,14 @@ export type TaskStepConfiguration = MJTaskEntity_ITaskStepConfiguration & {
     agent?: NonNullable<MJTaskEntity_ITaskStepConfiguration['agent']> & {
         presetName?: string;
     };
+    /** ForEach step configuration extended with optional `enqueue` WorkQueue fan-out settings. */
+    forEach?: NonNullable<MJTaskEntity_ITaskStepConfiguration['forEach']> & {
+        enqueue?: ForEachEnqueueOperation;
+    };
+    /** Step discriminator override when DB StepType uses `'External'` for `Enqueue`. */
+    stepKind?: TaskGraphNodeKind;
+    /** Settings for an `Enqueue` step persisted with `StepType: 'External'`. */
+    enqueue?: TaskGraphNodeConfigMap['Enqueue'];
     /** Optional saga compensation metadata for an Action step or synthesized compensation task. */
     compensation?: TaskCompensationStepMetadata;
     /**
@@ -99,6 +109,31 @@ export type TaskStepConfiguration = MJTaskEntity_ITaskStepConfiguration & {
          * completes; absent reads as tainted.
          */
         isInputTainted?: boolean;
+        /** Durable `Enqueue` waiting-state metadata and deduplicated processed correlation keys. */
+        enqueueState?: {
+            correlationKey: string;
+            topic: string;
+            publishedAt?: string;
+            settledAt?: string;
+            processedKeys?: string[];
+        };
+        /** Compact durable `ForEach` + `Enqueue` fan-out progress bitmap and retry ledger. */
+        enqueueFanOut?: {
+            correlationKey: string;
+            topic: string;
+            totalItems: number;
+            completedCount: number;
+            failedCount: number;
+            publishBatchCount: number;
+            peakPublishConcurrency: number;
+            completedBitmapHex: string;
+            failedBitmapHex: string;
+            failedDetails?: Array<{ itemIndex: number; errorMessage: string }>;
+            status: 'Publishing' | 'Waiting' | 'Complete' | 'Failed';
+            errorMessage?: string;
+            startedAt: string;
+            completedAt?: string;
+        };
         /**
          * The parameters an Action step's action was actually given: its input mapping resolved over
          * the upstream outputs, with the envelope's bound parameters restored. `InputPayload` holds only

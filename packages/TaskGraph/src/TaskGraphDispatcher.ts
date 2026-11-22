@@ -97,6 +97,7 @@ import { AIDecisionTaskRunner } from './AIDecisionTaskRunner';
 import { HumanTaskSQL, IsHumanTask } from './task-predicates';
 import { WaitingStepRunner } from './WaitingStepRunner';
 import { IsProviderHumanTask, WAITING_STEP_MARKER, WaitingStepKindOf } from './waiting-steps';
+import { TaskGraphCallerNotificationService, TerminalOutcomeFromTaskStatus } from './queue-dispatch';
 import {
     IsSettlementExpired,
     IsSubmittingRunReady,
@@ -1798,6 +1799,21 @@ export class TaskGraphDispatcher implements IShutdownable {
         }
 
         if (rollup.outcome === 'settled') {
+            if (graph.parentMetadata?.dispatchMode === 'Queue' || graph.parentMetadata?.callerNotification) {
+                const outcome = TerminalOutcomeFromTaskStatus(rollup.status);
+                if (outcome) {
+                    const failedNode = graph.nodes.find((n) => n.status === 'Failed');
+                    const firstError = (failedNode ? graph.entityById.get(failedNode.id)?.ErrorMessage : undefined) ?? parent.ErrorMessage ?? undefined;
+                    await TaskGraphCallerNotificationService.Instance.RecordTerminalNotification({
+                        ParentTaskID: parentID,
+                        WorkflowName: parent.Name,
+                        TerminalOutcome: outcome,
+                        ErrorMessage: firstError,
+                        Provider: provider,
+                        ContextUser: this.contextUser,
+                    });
+                }
+            }
             // ANNOUNCE ONCE PER PROCESS, RETRY THE REST (R2-12). Layout and the frame are
             // idempotent facts about a finished graph; the cost, lifecycle and delivery writes
             // below are the ones re-entry exists to retry. Without this split, a graph that keeps

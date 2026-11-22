@@ -102,6 +102,31 @@ export interface MJLimitsIsolationConfig {
 }
 
 /**
+ * Queue dispatch, bounded `Enqueue` fan-out concurrency, isolated runner backpressure,
+ * redelivery retry caps, and caller notification retention limits for queued TaskGraphs.
+ */
+export interface MJLimitsTaskGraphQueueConfig {
+    /** Default WorkQueue topic used when `TaskGraph.Submit` runs with `Dispatch: 'Queue'`. */
+    GraphDispatchTopicName: string;
+    /** Default WorkQueue topic used by `Enqueue` steps when no explicit topic is supplied. */
+    DefaultEnqueueTopicName: string;
+    /** Bounded concurrent WorkQueue publish operations permitted during `ForEach` + `Enqueue` fan-out. */
+    MaxEnqueuePublishConcurrency: number;
+    /** Batch size for WorkQueue publishes inside `ForEach` + `Enqueue` fan-out. */
+    EnqueuePublishBatchSize: number;
+    /** Bounded concurrent active isolated runners executing queued graph/step work items per host. */
+    MaxConcurrentIsolatedRunners: number;
+    /** Hard safety ceiling on items emitted by a single `ForEach` + `Enqueue` fan-out. */
+    MaxEnqueueItemsPerFanOut: number;
+    /** Maximum delivery/retry attempts before a queued step/item transitions to terminal failure. */
+    MaxEnqueueRedeliveryAttempts: number;
+    /** Maximum publish retry attempts when WorkQueue transport publish fails transiently. */
+    EnqueuePublishRetryAttempts: number;
+    /** Retention window (ms) for recovering unacknowledged terminal caller notifications across restarts. */
+    CallerNotificationRetentionMs: number;
+}
+
+/**
  * Dollar USD and wall-clock time budget ceilings for a single scope.
  */
 export interface MJLimitsScopeBudget {
@@ -304,6 +329,8 @@ export interface MJLimitsConfig {
     Tuning: MJLimitsTuningConfig;
     /** Task graph and workflow execution isolation defaults and runtime resource ceilings. */
     Isolation: MJLimitsIsolationConfig;
+    /** Task graph queue dispatch, bounded fan-out, runner backpressure, and notification retention limits. */
+    TaskGraphQueue: MJLimitsTaskGraphQueueConfig;
 }
 
 /** Partial override for {@link MJLimitsScopeBudget}. */
@@ -358,6 +385,9 @@ export type MJLimitsTuningOverride = Partial<MJLimitsTuningConfig>;
 /** Partial override for {@link MJLimitsIsolationConfig}. */
 export type MJLimitsIsolationOverride = Partial<MJLimitsIsolationConfig>;
 
+/** Partial override for {@link MJLimitsTaskGraphQueueConfig}. */
+export type MJLimitsTaskGraphQueueOverride = Partial<MJLimitsTaskGraphQueueConfig>;
+
 /**
  * Partial override object accepted by any tier of {@link LimitsConfigResolver}.
  */
@@ -376,6 +406,7 @@ export interface MJLimitsOverride {
     ResourceGuards?: MJLimitsResourceGuardsOverride;
     Tuning?: MJLimitsTuningOverride;
     Isolation?: MJLimitsIsolationOverride;
+    TaskGraphQueue?: MJLimitsTaskGraphQueueOverride;
 }
 
 /**
@@ -484,6 +515,17 @@ export const CODE_FALLBACK_LIMITS: Readonly<MJLimitsConfig> = {
         ContainerImage: 'node:20-alpine',
         ContainerRuntime: 'docker',
     },
+    TaskGraphQueue: {
+        GraphDispatchTopicName: 'mj.taskgraph.runs',
+        DefaultEnqueueTopicName: 'mj.taskgraph.steps',
+        MaxEnqueuePublishConcurrency: 25,
+        EnqueuePublishBatchSize: 100,
+        MaxConcurrentIsolatedRunners: 16,
+        MaxEnqueueItemsPerFanOut: 100_000,
+        MaxEnqueueRedeliveryAttempts: 5,
+        EnqueuePublishRetryAttempts: 3,
+        CallerNotificationRetentionMs: 86_400_000,
+    },
 };
 
 /**
@@ -495,10 +537,12 @@ export const DEFAULT_MJ_LIMITS_CONFIG: Readonly<MJLimitsConfig> = CODE_FALLBACK_
 type ResourceGuardKey = keyof MJLimitsResourceGuardsConfig;
 type TuningKey = keyof MJLimitsTuningConfig;
 type IsolationKey = keyof MJLimitsIsolationConfig;
+type TaskGraphQueueKey = keyof MJLimitsTaskGraphQueueConfig;
 
 export type ResourceGuardKeyPath = `ResourceGuards.${ResourceGuardKey}`;
 export type TuningKeyPath = `Tuning.${TuningKey}`;
 export type IsolationKeyPath = `Isolation.${IsolationKey}`;
+export type TaskGraphQueueKeyPath = `TaskGraphQueue.${TaskGraphQueueKey}`;
 
 /**
  * Union of all canonical dot-separated limit key paths tracked for provenance.
@@ -539,7 +583,8 @@ export type LimitsKeyPath =
     | 'ProgressDetector.FastJudgeFailureFallback'
     | ResourceGuardKeyPath
     | TuningKeyPath
-    | IsolationKeyPath;
+    | IsolationKeyPath
+    | TaskGraphQueueKeyPath;
 
 const RESOURCE_GUARD_KEYS: readonly ResourceGuardKey[] = [
     'MaxValidationRetries',
@@ -616,6 +661,30 @@ const ISOLATION_KEYS: readonly IsolationKey[] = [
     'ContainerRuntime',
 ] as const;
 
+const TASK_GRAPH_QUEUE_NUMERIC_KEYS: readonly (
+    | 'MaxEnqueuePublishConcurrency'
+    | 'EnqueuePublishBatchSize'
+    | 'MaxConcurrentIsolatedRunners'
+    | 'MaxEnqueueItemsPerFanOut'
+    | 'MaxEnqueueRedeliveryAttempts'
+    | 'EnqueuePublishRetryAttempts'
+    | 'CallerNotificationRetentionMs'
+)[] = [
+    'MaxEnqueuePublishConcurrency',
+    'EnqueuePublishBatchSize',
+    'MaxConcurrentIsolatedRunners',
+    'MaxEnqueueItemsPerFanOut',
+    'MaxEnqueueRedeliveryAttempts',
+    'EnqueuePublishRetryAttempts',
+    'CallerNotificationRetentionMs',
+] as const;
+
+const TASK_GRAPH_QUEUE_KEYS: readonly TaskGraphQueueKey[] = [
+    'GraphDispatchTopicName',
+    'DefaultEnqueueTopicName',
+    ...TASK_GRAPH_QUEUE_NUMERIC_KEYS,
+] as const;
+
 /**
  * Ordered list of every {@link LimitsKeyPath} covered by {@link LimitsConfigResolver}.
  */
@@ -656,6 +725,7 @@ export const LIMITS_KEY_PATHS: readonly LimitsKeyPath[] = [
     ...RESOURCE_GUARD_KEYS.map((k): ResourceGuardKeyPath => `ResourceGuards.${k}`),
     ...TUNING_KEYS.map((k): TuningKeyPath => `Tuning.${k}`),
     ...ISOLATION_KEYS.map((k): IsolationKeyPath => `Isolation.${k}`),
+    ...TASK_GRAPH_QUEUE_KEYS.map((k): TaskGraphQueueKeyPath => `TaskGraphQueue.${k}`),
 ] as const;
 
 /** Primitive value type for an individual resolved limit key. */
@@ -789,6 +859,7 @@ const NUMERIC_CEILING_KEYS: ReadonlySet<LimitsKeyPath> = new Set<LimitsKeyPath>(
     'ProgressDetector.FastJudgeMaxInputChars',
     ...RESOURCE_GUARD_KEYS.map((k): ResourceGuardKeyPath => `ResourceGuards.${k}`),
     ...ISOLATION_NUMERIC_KEYS.map((k): IsolationKeyPath => `Isolation.${k}`),
+    ...TASK_GRAPH_QUEUE_NUMERIC_KEYS.map((k): TaskGraphQueueKeyPath => `TaskGraphQueue.${k}`),
 ]);
 
 /**
@@ -962,6 +1033,22 @@ function normalizeIsolationOverride(raw: LimitsInputValue): MJLimitsIsolationOve
     return Object.keys(out).length > 0 ? out : undefined;
 }
 
+function normalizeTaskGraphQueueOverride(raw: LimitsInputValue): MJLimitsTaskGraphQueueOverride | undefined {
+    if (!isLimitsInputObject(raw)) {
+        return undefined;
+    }
+    const out: MJLimitsTaskGraphQueueOverride = {};
+    const graphTopic = readNonEmptyString(readObjectProperty(raw, ['GraphDispatchTopicName', 'graphDispatchTopicName']));
+    if (graphTopic !== undefined) out.GraphDispatchTopicName = graphTopic;
+    const stepTopic = readNonEmptyString(readObjectProperty(raw, ['DefaultEnqueueTopicName', 'defaultEnqueueTopicName']));
+    if (stepTopic !== undefined) out.DefaultEnqueueTopicName = stepTopic;
+    const numeric = normalizePositiveIntSection(raw, TASK_GRAPH_QUEUE_NUMERIC_KEYS);
+    if (numeric) {
+        Object.assign(out, numeric);
+    }
+    return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function normalizeScopeBudgetOverride(raw: LimitsInputValue): MJLimitsScopeBudgetOverride | undefined {
     if (!isLimitsInputObject(raw)) {
         return undefined;
@@ -1131,6 +1218,8 @@ export function NormalizeLimitsInput(raw: LimitsInputValue): MJLimitsOverride {
     if (tuning) out.Tuning = tuning;
     const isolation = normalizeIsolationOverride(readObjectProperty(raw, ['Isolation', 'isolation']));
     if (isolation) out.Isolation = isolation;
+    const taskGraphQueue = normalizeTaskGraphQueueOverride(readObjectProperty(raw, ['TaskGraphQueue', 'taskGraphQueue']));
+    if (taskGraphQueue) out.TaskGraphQueue = taskGraphQueue;
     return out;
 }
 
@@ -1149,6 +1238,7 @@ function cloneDefaultLimits(): MJLimitsConfig {
         ResourceGuards: { ...CODE_FALLBACK_LIMITS.ResourceGuards },
         Tuning: { ...CODE_FALLBACK_LIMITS.Tuning },
         Isolation: { ...CODE_FALLBACK_LIMITS.Isolation },
+        TaskGraphQueue: { ...CODE_FALLBACK_LIMITS.TaskGraphQueue },
     };
 }
 
@@ -1164,6 +1254,10 @@ function extractTierValue(layer: MJLimitsOverride, key: LimitsKeyPath): LimitsSc
     if (key.startsWith('Isolation.')) {
         const subKey = key.slice('Isolation.'.length) as IsolationKey;
         return layer.Isolation?.[subKey];
+    }
+    if (key.startsWith('TaskGraphQueue.')) {
+        const subKey = key.slice('TaskGraphQueue.'.length) as TaskGraphQueueKey;
+        return layer.TaskGraphQueue?.[subKey];
     }
     switch (key) {
         case 'AgentChannelConsecutiveTurns': return layer.AgentChannelConsecutiveTurns;
@@ -1215,12 +1309,21 @@ function assignResolvedValue(target: MJLimitsConfig, key: LimitsKeyPath, value: 
     }
     if (key.startsWith('Isolation.')) {
         const subKey = key.slice('Isolation.'.length) as IsolationKey;
-        if (subKey === 'DefaultIsolation' || subKey === 'DraftDefaultIsolation') {
-            target.Isolation[subKey] = value as TaskGraphIsolationLevel;
-        } else if (subKey === 'ContainerImage' || subKey === 'ContainerRuntime') {
+        if (subKey === 'ContainerImage' || subKey === 'ContainerRuntime') {
             target.Isolation[subKey] = value as string;
+        } else if (subKey === 'DefaultIsolation' || subKey === 'DraftDefaultIsolation') {
+            target.Isolation[subKey] = value as TaskGraphIsolationLevel;
         } else {
             target.Isolation[subKey] = value as number;
+        }
+        return;
+    }
+    if (key.startsWith('TaskGraphQueue.')) {
+        const subKey = key.slice('TaskGraphQueue.'.length) as TaskGraphQueueKey;
+        if (subKey === 'GraphDispatchTopicName' || subKey === 'DefaultEnqueueTopicName') {
+            target.TaskGraphQueue[subKey] = value as string;
+        } else {
+            target.TaskGraphQueue[subKey] = value as number;
         }
         return;
     }
@@ -1370,6 +1473,7 @@ export function ValidateLimitsConfig(config: MJLimitsConfig): LimitsValidationRe
         ...RESOURCE_GUARD_KEYS.map((k): [LimitsKeyPath, number] => [`ResourceGuards.${k}`, config.ResourceGuards[k]]),
         ...TUNING_KEYS.map((k): [LimitsKeyPath, number] => [`Tuning.${k}`, config.Tuning[k]]),
         ...ISOLATION_NUMERIC_KEYS.map((k): [LimitsKeyPath, number] => [`Isolation.${k}`, config.Isolation[k]]),
+        ...TASK_GRAPH_QUEUE_NUMERIC_KEYS.map((k): [LimitsKeyPath, number] => [`TaskGraphQueue.${k}`, config.TaskGraphQueue[k]]),
     ];
     for (const [key, val] of positiveIntChecks) {
         if (!Number.isFinite(val) || val < 1) {
@@ -1398,6 +1502,18 @@ export function ValidateLimitsConfig(config: MJLimitsConfig): LimitsValidationRe
         issues.push({
             Key: 'Isolation.ContainerRuntime',
             Message: 'Isolation.ContainerRuntime must be a non-empty string.',
+        });
+    }
+    if (!config.TaskGraphQueue.GraphDispatchTopicName || !config.TaskGraphQueue.GraphDispatchTopicName.trim()) {
+        issues.push({
+            Key: 'TaskGraphQueue.GraphDispatchTopicName',
+            Message: 'TaskGraphQueue.GraphDispatchTopicName must be a non-empty string.',
+        });
+    }
+    if (!config.TaskGraphQueue.DefaultEnqueueTopicName || !config.TaskGraphQueue.DefaultEnqueueTopicName.trim()) {
+        issues.push({
+            Key: 'TaskGraphQueue.DefaultEnqueueTopicName',
+            Message: 'TaskGraphQueue.DefaultEnqueueTopicName must be a non-empty string.',
         });
     }
     if (config.MaxTasksPerAgentGraph > config.MaxTasksPerGraph) {

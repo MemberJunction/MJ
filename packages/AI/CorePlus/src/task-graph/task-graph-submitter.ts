@@ -19,7 +19,7 @@
  */
 import { GetGlobalObjectStore, MJGlobal } from '@memberjunction/global';
 import { UserInfo, IMetadataProvider, type MJLimitsOverride } from '@memberjunction/core';
-import type { TaskGraphSpec } from './task-graph-spec';
+import type { TaskGraphDispatchMode, TaskGraphSpec } from './task-graph-spec';
 import type { TaskSecurityEnvelope } from './task-security-envelope';
 import { SanitizeForPersistence } from '../safe-persist';
 
@@ -86,6 +86,10 @@ export type TaskGraphSubmitRequest = {
      * first poll.
      */
     Debug?: TaskGraphStartDebug;
+    /** Execution dispatch mode (`'Inline'` default, or `'Queue'` to enqueue the graph run onto WorkQueue). */
+    Dispatch?: TaskGraphDispatchMode;
+    /** Optional WorkQueue topic override when `Dispatch === 'Queue'`. */
+    QueueTopic?: string;
     ContextUser: UserInfo;
     Provider: IMetadataProvider;
 };
@@ -134,6 +138,10 @@ export type TaskGraphSubmitOutcome = {
     Success: boolean;
     /** Parent task representing the whole graph — the handle for status, cancel and retry. */
     ParentTaskID?: string;
+    /** Effective dispatch mode honored by submission (`'Inline'` or `'Queue'`). */
+    Dispatch?: TaskGraphDispatchMode;
+    /** WorkQueue message identifier when dispatched via queue. */
+    QueueMessageID?: string;
     /** Every validation failure, not just the first, when the graph was rejected. */
     ErrorMessage?: string;
 };

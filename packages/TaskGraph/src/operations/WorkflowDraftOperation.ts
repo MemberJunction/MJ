@@ -26,10 +26,12 @@ import {
 } from '@memberjunction/core-entities';
 import {
     AIPromptParams,
+    ConfigOf,
     FormatValidationErrors,
     GetMaxTasksPerAgentGraph,
     ValidateTaskGraphSpec,
     type TaskGraphSpec,
+    type TaskGraphSpecNode,
 } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
@@ -125,7 +127,7 @@ export class WorkflowDraftServerOperation extends WorkflowDraftOperation {
                 errorMessage: `The drafted workflow was not usable:\n${FormatValidationErrors(validation.Errors)}`,
             };
         }
-        return { success: true, graph };
+        return { success: true, graph: toWorkflowDraftOutputGraph(graph) };
     }
 
     /**
@@ -158,4 +160,48 @@ export class WorkflowDraftServerOperation extends WorkflowDraftOperation {
 export function LoadWorkflowDraftOperation(): void {
     // Referencing the class is what the bundler needs.
     void WorkflowDraftServerOperation;
+}
+
+type DraftOutputTask = NonNullable<WorkflowDraftOutput['graph']>['tasks'][number];
+
+function toDraftOutputTask(task: TaskGraphSpecNode): DraftOutputTask {
+    const base = {
+        tempId: task.tempId,
+        name: task.name,
+        description: task.description,
+        dependsOn: task.dependsOn,
+        policy: task.policy,
+        layout: task.layout,
+        inputPayload: task.inputPayload,
+    };
+    switch (task.kind) {
+        case 'Agent': return { ...base, kind: 'Agent', configuration: ConfigOf(task, 'Agent')! };
+        case 'Action': return { ...base, kind: 'Action', configuration: ConfigOf(task, 'Action')! };
+        case 'Human': return { ...base, kind: 'Human', configuration: ConfigOf(task, 'Human')! };
+        case 'Prompt': return { ...base, kind: 'Prompt', configuration: ConfigOf(task, 'Prompt')! };
+        case 'ForEach': return { ...base, kind: 'ForEach', configuration: ConfigOf(task, 'ForEach')! };
+        case 'While': return { ...base, kind: 'While', configuration: ConfigOf(task, 'While')! };
+        case 'External': return { ...base, kind: 'External', configuration: ConfigOf(task, 'External')! };
+        case 'Wait': return { ...base, kind: 'Wait', configuration: ConfigOf(task, 'Wait')! };
+        case 'Decision': return { ...base, kind: 'Decision', configuration: ConfigOf(task, 'Decision')! };
+        case 'Enqueue': {
+            const cfg = ConfigOf(task, 'Enqueue')!;
+            return {
+                ...base,
+                kind: 'External',
+                configuration: {
+                    domain: cfg.domain ?? 'work-queue',
+                    ...(cfg.correlationKey ? { correlationKey: cfg.correlationKey } : {}),
+                    ...(cfg.expiresInHours ? { expiresInHours: cfg.expiresInHours } : {}),
+                },
+            };
+        }
+    }
+}
+
+function toWorkflowDraftOutputGraph(spec: TaskGraphSpec): NonNullable<WorkflowDraftOutput['graph']> {
+    return {
+        ...spec,
+        tasks: spec.tasks.map(toDraftOutputTask),
+    };
 }
