@@ -210,6 +210,9 @@ function makeSampleDiagnostics(): LimitsGetDiagnosticsOutput {
 
 describe('AdminLimitsResourceComponent & Explorer Governance Surface', () => {
     let component: AdminLimitsResourceComponent;
+    let getDiagnosticsSpy: ReturnType<typeof vi.fn<AdminLimitsService['GetDiagnostics']>>;
+    let resumePausedRunSpy: ReturnType<typeof vi.fn<AdminLimitsService['ResumePausedRun']>>;
+    let pauseRunSpy: ReturnType<typeof vi.fn<AdminLimitsService['PauseRun']>>;
     let mockService: AdminLimitsService;
     let sampleDiag: LimitsGetDiagnosticsOutput;
 
@@ -219,28 +222,32 @@ describe('AdminLimitsResourceComponent & Explorer Governance Surface', () => {
         LoadAdminLimitsResource();
         sampleDiag = makeSampleDiagnostics();
 
+        getDiagnosticsSpy = vi.fn<AdminLimitsService['GetDiagnostics']>(async () => sampleDiag);
+        resumePausedRunSpy = vi.fn<AdminLimitsService['ResumePausedRun']>(async () => ({
+            Success: true,
+            AgentRunID: 'run-paused-1',
+            Status: 'Running',
+            CheckpointID: 'cp-1',
+            ApprovalStatus: 'Approved',
+            ExtendedBudgets: null,
+            PriorCumulativeCostUsd: 1.25,
+            PriorCumulativeActiveWallClockMs: 5200,
+            StartingStepCount: 12,
+            StartingPromptTurns: 6,
+            Message: 'Run run-paused-1 approved and transitioned back to Running.',
+        }));
+        pauseRunSpy = vi.fn<AdminLimitsService['PauseRun']>(async () => ({
+            Success: true,
+            AgentRunID: 'run-active-1',
+            Status: 'Paused',
+            CheckpointID: 'cp-2',
+            Message: 'Run run-active-1 paused non-destructively.',
+        }));
+
         mockService = {
-            GetDiagnostics: vi.fn(async () => sampleDiag),
-            ResumePausedRun: vi.fn(async () => ({
-                Success: true,
-                AgentRunID: 'run-paused-1',
-                Status: 'Running',
-                CheckpointID: 'cp-1',
-                ApprovalStatus: 'Approved',
-                ExtendedBudgets: null,
-                PriorCumulativeCostUsd: 1.25,
-                PriorCumulativeActiveWallClockMs: 5200,
-                StartingStepCount: 12,
-                StartingPromptTurns: 6,
-                Message: 'Run run-paused-1 approved and transitioned back to Running.',
-            })),
-            PauseRun: vi.fn(async () => ({
-                Success: true,
-                AgentRunID: 'run-active-1',
-                Status: 'Paused',
-                CheckpointID: 'cp-2',
-                Message: 'Run run-active-1 paused non-destructively.',
-            })),
+            GetDiagnostics: getDiagnosticsSpy,
+            ResumePausedRun: resumePausedRunSpy,
+            PauseRun: pauseRunSpy,
         } as unknown as AdminLimitsService;
 
         vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
@@ -346,8 +353,8 @@ describe('AdminLimitsResourceComponent & Explorer Governance Surface', () => {
         component.DecisionNotesInput = 'Approved extension';
         await component.ConfirmResumePausedRun();
 
-        expect(mockService.ResumePausedRun).toHaveBeenCalledTimes(1);
-        expect(mockService.ResumePausedRun.mock.calls[0]?.[0]).toEqual(
+        expect(resumePausedRunSpy).toHaveBeenCalledTimes(1);
+        expect(resumePausedRunSpy.mock.calls[0]?.[0]).toEqual(
             expect.objectContaining({
                 AgentRunID: 'run-paused-1',
                 DecisionNotes: 'Approved extension',
@@ -362,8 +369,8 @@ describe('AdminLimitsResourceComponent & Explorer Governance Surface', () => {
 
         const activeRun = component.Diagnostics!.ActiveAndRecentRuns[1];
         await component.PauseActiveRun(activeRun);
-        expect(mockService.PauseRun).toHaveBeenCalledTimes(1);
-        expect(mockService.PauseRun.mock.calls[0]?.[0]).toEqual(
+        expect(pauseRunSpy).toHaveBeenCalledTimes(1);
+        expect(pauseRunSpy.mock.calls[0]?.[0]).toEqual(
             expect.objectContaining({ AgentRunID: 'run-active-1' }),
         );
     });

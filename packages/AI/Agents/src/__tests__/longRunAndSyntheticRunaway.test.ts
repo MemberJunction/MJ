@@ -656,7 +656,134 @@ describe('Epic 1a End-to-End Acceptance: Long-Run Workflows/Channels & Early Syn
         expect(stalledTurns).toBe(0);
         expect(channel.ChannelStatus).toBe('Open');
         expect(channel.ConsecutiveAgentTurns).toBe(2_000);
+
+        // Verify diagnostics snapshot documents the explicit override vs approved 1,000-turn fallback
+        const resolution = LimitsConfigResolver.Resolve();
+        expect(resolution.Limits.AgentChannelConsecutiveTurns).toBe(2_500);
+        expect(resolution.Provenance.AgentChannelConsecutiveTurns.SourceTier).toBe('MjConfig');
+        expect(resolution.Provenance.AgentChannelConsecutiveTurns.IsOverridden).toBe(true);
     }, 30_000);
+
+    it('2b/3 retains the default 1,000-turn backstop when no channel/config override is applied', async () => {
+        // Ensure no override is registered
+        LimitsConfigResolver.Instance.ClearMjConfigLimits();
+        expect(LimitsConfigResolver.Resolve().Limits.AgentChannelConsecutiveTurns).toBe(1_000);
+
+        const alice = {
+            ID: USER_ID,
+            Name: 'alice',
+            Email: 'alice@example.com',
+            IsActive: true,
+            Type: 'User',
+            UserRoles: [],
+        } as unknown as UserInfo;
+        const systemUser = {
+            ID: APPROVER_ID,
+            Name: 'system',
+            Email: 'system@example.com',
+            IsActive: true,
+            Type: 'Owner',
+            UserRoles: [],
+        } as unknown as UserInfo;
+        vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(systemUser);
+
+        // Channel leaves MaxConsecutiveAgentTurns = 0 so it falls back to CODE_FALLBACK_LIMITS (1,000)
+        const channel = {
+            ID: 'chan-default-backstop-1000',
+            Topic: 'Default 1,000-Turn Backstop Verification',
+            ChannelStatus: 'Open' as MJAgentChannelEntity['ChannelStatus'],
+            ConsecutiveAgentTurns: 999,
+            MaxConsecutiveAgentTurns: 0,
+            LastHumanMessageAt: null as Date | null,
+            HourlyWakeCount: 0,
+            HourlyWakeWindowStart: null as Date | null,
+            MaxHourlyWakes: 2_000,
+            Save: vi.fn(async () => true),
+            Load: vi.fn(async () => true),
+            LatestResult: null,
+        } as unknown as MJAgentChannelEntity;
+
+        const participants = [
+            { ID: 'p1', AgentChannelID: channel.ID, UserID: alice.ID, AgentID: AGENT_ID, Role: 'Initiator' },
+        ] as unknown as MJAgentChannelParticipantEntity[];
+
+        const routineStub = {
+            ID: 'routine-default-backstop',
+            UserID: '',
+            Name: '',
+            RoutineType: 'AgentWake',
+            ScheduleMode: 'OneShot',
+            TargetType: 'Agent',
+            TargetID: '',
+            Status: 'Active',
+            NextRunAt: null as Date | null,
+            InitialMessage: '',
+            StartingPayload: '',
+            Description: '',
+            WakeConfiguration: null as string | null,
+            WakeConfigurationObject: null as Record<string, unknown> | null,
+            NewRecord: vi.fn(),
+            Save: vi.fn(async () => true),
+            LatestResult: null,
+        } as unknown as MJUserRoutineEntity;
+
+        const md = {
+            GetEntityObject: vi.fn(async (entityName: string) =>
+                entityName === 'MJ: Agent Channels' ? channel : routineStub,
+            ),
+        } as unknown as IMetadataProvider;
+
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn(async (params: { EntityName: string }) => {
+                if (params.EntityName === 'MJ: Agent Channel Participants') {
+                    return { Success: true, Results: participants };
+                }
+                return { Success: true, Results: [] };
+            }),
+        } as unknown as RunView);
+
+        vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockResolvedValue({
+            status: 'found',
+            policy: {
+                Status: 'Active',
+                AllowInterAgentCoordination: true,
+                Agent: 'Chief of Staff',
+            } as unknown as never,
+        });
+
+        const baseNowMs = Date.UTC(2026, 10, 21, 13, 0, 0);
+
+        // Turn 1,000 succeeds under default backstop
+        const turn1000 = await AgentWakeTriggerService.Instance.TriggerWakeOnAgentChannelMessage({
+            channelID: channel.ID,
+            conversationDetailID: 'detail-1000',
+            senderUserID: alice.ID,
+            senderAgentID: AGENT_ID,
+            messagePreview: 'Turn 1000 legitimate progress',
+            contextUser: alice,
+            metadataProvider: md,
+            now: new Date(baseNowMs + 1_000),
+        });
+        expect(turn1000.pausedByGuard).toBe(false);
+        expect(channel.ConsecutiveAgentTurns).toBe(1_000);
+        expect(channel.ChannelStatus).toBe('Open');
+
+        // Turn 1,001 trips default 1,000-turn backstop
+        const turn1001 = await AgentWakeTriggerService.Instance.TriggerWakeOnAgentChannelMessage({
+            channelID: channel.ID,
+            conversationDetailID: 'detail-1001',
+            senderUserID: alice.ID,
+            senderAgentID: AGENT_ID,
+            messagePreview: 'Turn 1001 exceeds default 1000 backstop',
+            contextUser: alice,
+            metadataProvider: md,
+            now: new Date(baseNowMs + 2_000),
+        });
+        expect(turn1001.pausedByGuard).toBe(true);
+        expect(turn1001.channelStatus).toBe('Paused For Human');
+        expect(turn1001.results[0]?.resultCode).toBe('CHANNEL_PAUSED_LOOP_GUARD');
+        expect(channel.ChannelStatus).toBe('Paused For Human');
+    });
 
     it('3/3 pauses a synthetic repeating runaway loop early with persisted resumable checkpoint well before 100k/1M backstops, and resumes non-destructively after human intervention', async () => {
         const provider = harness.CreateProvider();

@@ -211,11 +211,53 @@ export class AdminLimitsResourceComponent
         this.cdr.markForCheck();
     }
 
+    public OnCategorySelectEvent(event: Event): void {
+        const target = event.target;
+        if (target instanceof HTMLSelectElement && IsValidAdminLimitsCategory(target.value)) {
+            this.OnCategoryChange(target.value);
+        }
+    }
+
     public OnRunStatusFilterChange(status: AdminLimitsRunStatusFilter): void {
         this.RunStatusFilter = status;
         this.persistUserPreferences();
         this.publishAgentContext();
         this.cdr.markForCheck();
+    }
+
+    public OnRunStatusSelectEvent(event: Event): void {
+        const target = event.target;
+        if (target instanceof HTMLSelectElement && IsValidAdminLimitsRunStatusFilter(target.value)) {
+            this.OnRunStatusFilterChange(target.value);
+        }
+    }
+
+    public OnAdditionalCostInputEvent(event: Event): void {
+        const target = event.target;
+        if (target instanceof HTMLInputElement) {
+            this.AdditionalCostUsdInput = target.value;
+        }
+    }
+
+    public OnAdditionalWallClockInputEvent(event: Event): void {
+        const target = event.target;
+        if (target instanceof HTMLInputElement) {
+            this.AdditionalWallClockMsInput = target.value;
+        }
+    }
+
+    public OnDecisionNotesInputEvent(event: Event): void {
+        const target = event.target;
+        if (target instanceof HTMLTextAreaElement) {
+            this.DecisionNotesInput = target.value;
+        }
+    }
+
+    public OnResetProgressCheckboxEvent(event: Event): void {
+        const target = event.target;
+        if (target instanceof HTMLInputElement) {
+            this.ResetProgressWindowOnResume = target.checked;
+        }
     }
 
     public OnSearchChange(term: string): void {

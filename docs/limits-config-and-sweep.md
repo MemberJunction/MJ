@@ -103,10 +103,14 @@ npm run check:guards
 `BudgetEnforcementGuard` (`packages/AI/Agents/src/BudgetEnforcementGuard.ts`) enforces **both** dollar spend (`CostUsd`) and active wall-clock time (`WallClockMs`) across all three scopes:
 
 1. **`PerRun`** — single run spend, active wall-clock time, and optional token ceiling.
-2. **`PerRoutine`** — cumulative spend and active wall-clock time across runs sharing a `RoutineID`.
-3. **`PerUserPerDay`** — cumulative daily spend and active wall-clock time per user within `DayBoundaryTimezone` (default `'UTC'`).
+2. **`PerRoutine`** — cumulative spend and active wall-clock time across runs sharing a `RoutineID` (matched via `ScheduledJobRunID`, `AIAgentRun.Data.__limitsDiagnostics.Context.RoutineID`, or checkpoint `RoutineID`).
+3. **`PerUserPerDay`** — cumulative daily spend and active wall-clock time per user within `[DayStartISO, DayEndISO)` computed by `ComputeDayBoundaryWindow()` for `DayBoundaryTimezone` (default `'UTC'`), automatically resetting at day rollover.
 
-When `CountPausedTimeTowardsWallClock` is `false` (default), time spent in `Paused` awaiting human approval is subtracted from elapsed wall-clock time via `PausedIntervals`. Bounded in-flight tolerance (`AllowedInFlightOvershootUsd`, `AllowedInFlightOvershootMs`) prevents interrupting already-dispatched billable calls prematurely.
+Key accounting semantics:
+- **Paused time exclusion**: When `CountPausedTimeTowardsWallClock` is `false` (default), time spent in `Paused` awaiting human approval is subtracted from elapsed wall-clock time via `PausedIntervals` (`ComputeTotalPausedMs()`).
+- **Concurrent run deduplication**: Historical `PerRoutine` and `PerUserPerDay` queries exclude `ExcludeRunID` and deduplicate rows by normalized `ID` (`seenRunIds`) via batched `RunView.RunViews`, so concurrent runs under the same routine or user accumulate accurately without double-counting the active run.
+- **In-flight overshoot tolerance**: Bounded `AllowedInFlightOvershootUsd` and `AllowedInFlightOvershootMs` tolerances (`EffectiveLimit = Limit + OvershootAllowed`) prevent interrupting already-dispatched billable LLM/tool calls mid-flight while still halting before the next turn.
+- **Human-approved extensions**: `ApplyBudgetExtensionToBudgets()` applies incremental (`AdditionalCostUsd`, `AdditionalWallClockMs`, `AdditionalTokens`) or explicit replacement ceilings upon human approval.
 
 ---
 
@@ -124,7 +128,10 @@ Before an unproductive loop ever approaches the 100,000 / 1,000,000 backstops, `
 Classification outcomes:
 - **`Converging`** (`ProgressScore >= AmbiguityHighScoreThreshold`): continues uninterrupted with zero judge overhead.
 - **`Stalled`** (hard-stall streak or `ProgressScore < AmbiguityLowScoreThreshold`): immediately pauses non-destructively (`PauseReason = 'ProgressStalled'`).
-- **`Ambiguous`**: invokes `FastConvergenceJudge` (`packages/AI/Agents/src/FastConvergenceJudge.ts`), strictly bounded by `FastJudgeTimeoutMs` (default `200ms`) and `FastJudgeMinIntervalIterations` cooldown, applying `FastJudgeFailureFallback` (`'ContinueWithWarning'` or `'PauseForHuman'`) on timeout/error and logging its short reason to `AIAgentRun.Data.__progressDiagnostics`.
+- **`Ambiguous`**: invokes `FastConvergenceJudge` (`packages/AI/Agents/src/FastConvergenceJudge.ts`) strictly when classification is `'Ambiguous'`:
+  - **Deadline & input caps**: `AbortController` timer enforces `FastJudgeTimeoutMs` (default `200ms`) via `Promise.race`, and state summaries are truncated to `FastJudgeMaxInputChars` (default `8,192`).
+  - **Cooldown throttling**: skips model calls within `FastJudgeMinIntervalIterations` (default `5`) iterations since the previous judge invocation (resettable on human resume via `ResetCooldown()`).
+  - **Failure / timeout fallback**: never blocks execution past the deadline; on timeout, disabled flag, missing `ContextUser`, or evaluator error it applies `FastJudgeFailureFallback` (`'ContinueWithWarning'` or `'PauseForHuman'`) and appends the bounded reason (`<= 240` chars) to `AIAgentRun.Data.__progressDiagnostics`.
 
 ---
 

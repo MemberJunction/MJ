@@ -188,7 +188,7 @@
                                     id="category-select"
                                     class="mj-select"
                                     [value]="SelectedCategory"
-                                    (change)="OnCategoryChange($any($event.target).value)"
+                                    (change)="OnCategorySelectEvent($event)"
                                 >
                                     @for (cat of CategoryOptions; track cat) {
                                         <option [value]="cat">{{ cat }}</option>
@@ -310,7 +310,7 @@
                                     id="status-select"
                                     class="mj-select"
                                     [value]="RunStatusFilter"
-                                    (change)="OnRunStatusFilterChange($any($event.target).value)"
+                                    (change)="OnRunStatusSelectEvent($event)"
                                 >
                                     @for (st of RunStatusOptions; track st) {
                                         <option [value]="st">{{ st }}</option>
@@ -491,7 +491,7 @@
                             min="0"
                             class="mj-input"
                             [value]="AdditionalCostUsdInput"
-                            (input)="AdditionalCostUsdInput = $any($event.target).value"
+                            (input)="OnAdditionalCostInputEvent($event)"
                         />
                     </div>
                     <div class="form-field">
@@ -503,7 +503,7 @@
                             min="0"
                             class="mj-input"
                             [value]="AdditionalWallClockMsInput"
-                            (input)="AdditionalWallClockMsInput = $any($event.target).value"
+                            (input)="OnAdditionalWallClockInputEvent($event)"
                         />
                     </div>
                     <div class="form-field">
@@ -513,14 +513,14 @@
                             rows="3"
                             class="mj-input"
                             [value]="DecisionNotesInput"
-                            (input)="DecisionNotesInput = $any($event.target).value"
+                            (input)="OnDecisionNotesInputEvent($event)"
                         ></textarea>
                     </div>
                     <label class="checkbox-row">
                         <input
                             type="checkbox"
                             [checked]="ResetProgressWindowOnResume"
-                            (change)="ResetProgressWindowOnResume = $any($event.target).checked"
+                            (change)="OnResetProgressCheckboxEvent($event)"
                         />
                         <span>Reset ProgressDetector sliding window on resume</span>
                     </label>
