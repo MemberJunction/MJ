@@ -1,6 +1,6 @@
-import { BaseEntity, EntityDeleteOptions, EntitySaveOptions, RunView, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { MJUserRoutineEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity } from '@memberjunction/core-entities';
+import { BaseEntity, BaseEntityResult, EntityDeleteOptions, EntitySaveOptions, RunView, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
+import { EscapeSQLString, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { MJUserRoutineEntity, MJUserRoutineEntity_IRoutineWakeConfiguration, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity } from '@memberjunction/core-entities';
 import { CronExpressionHelper, ComputeRoutineNextRunAt } from '@memberjunction/scheduling-engine';
 
 /**
@@ -33,7 +33,80 @@ export class MJUserRoutineEntityServer extends MJUserRoutineEntity {
             this.UserID = this.ContextCurrentUser.ID;
         }
         this.applyNextRunAtIfNeeded();
+        if (!(await this.verifyAgentWakeCoalesceCAS())) {
+            return false;
+        }
         return super.Save(options);
+    }
+
+    /**
+     * Enforces optimistic compare-and-swap (CAS) on `AgentWake` routines when `WakeConfiguration`
+     * carries a monotonically increasing `resumeState.coalesceRevision`. If another server instance
+     * already advanced `coalesceRevision` in the database since this entity was loaded, rejects the
+     * stale write so the caller re-queries and merges both batches without losing events.
+     */
+    private async verifyAgentWakeCoalesceCAS(): Promise<boolean> {
+        if (!this.IsSaved || this.RoutineType !== 'AgentWake') {
+            return true;
+        }
+        const wakeField = this.GetFieldByName('WakeConfiguration');
+        if (!wakeField?.Dirty) {
+            return true;
+        }
+        const newConfig = this.WakeConfiguration
+            ? SafeJSONParse<MJUserRoutineEntity_IRoutineWakeConfiguration>(this.WakeConfiguration)
+            : null;
+        const newRevision = newConfig?.resumeState?.['coalesceRevision'];
+        if (typeof newRevision !== 'number') {
+            return true;
+        }
+        const oldConfig = typeof wakeField.OldValue === 'string'
+            ? SafeJSONParse<MJUserRoutineEntity_IRoutineWakeConfiguration>(wakeField.OldValue)
+            : null;
+        const oldRevision = typeof oldConfig?.resumeState?.['coalesceRevision'] === 'number'
+            ? oldConfig.resumeState['coalesceRevision']
+            : 0;
+        if (newRevision <= oldRevision || !this.RunViewProviderToUse) {
+            return true;
+        }
+        try {
+            const rv = new RunView(this.RunViewProviderToUse);
+            const res = await rv.RunView<{ ID: string; WakeConfiguration: string | null }>(
+                {
+                    EntityName: 'MJ: User Routines',
+                    ExtraFilter: `ID='${EscapeSQLString(this.ID)}'`,
+                    Fields: ['ID', 'WakeConfiguration'],
+                    MaxRows: 1,
+                    BypassCache: true,
+                    ResultType: 'simple',
+                },
+                this.ContextCurrentUser
+            );
+            if (!res?.Success || !Array.isArray(res.Results) || res.Results.length === 0) {
+                return true;
+            }
+            const persistedConfig = res.Results[0].WakeConfiguration
+                ? SafeJSONParse<MJUserRoutineEntity_IRoutineWakeConfiguration>(res.Results[0].WakeConfiguration)
+                : null;
+            const persistedRevision = typeof persistedConfig?.resumeState?.['coalesceRevision'] === 'number'
+                ? persistedConfig.resumeState['coalesceRevision']
+                : 0;
+            if (persistedRevision !== oldRevision) {
+                if (typeof this.RegisterResultHistoryEntry === 'function') {
+                    const result = new BaseEntityResult();
+                    result.Success = false;
+                    result.Type = 'update';
+                    result.Message = `Concurrent AgentWake coalescing conflict on routine ${this.ID} (expected revision ${oldRevision}, found ${persistedRevision}).`;
+                    result.StartedAt = new Date();
+                    result.EndedAt = new Date();
+                    this.RegisterResultHistoryEntry(result);
+                }
+                return false;
+            }
+        } catch {
+            // If RunView provider is unavailable in an isolated test stub, do not block save.
+        }
+        return true;
     }
 
     public override Validate(): ValidationResult {

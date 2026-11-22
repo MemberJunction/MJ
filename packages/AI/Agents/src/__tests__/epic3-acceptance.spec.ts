@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EntityInfo, RunView, UserInfo } from '@memberjunction/core';
 import type { IMetadataProvider } from '@memberjunction/core';
@@ -25,7 +27,9 @@ import {
     CoalescedWakeResumeState,
     EventWakeCoalescer,
     ResolveAgentConfigurationIDInput,
+    ResolveRoutineSeededAgentConfigurationID,
     ResolveSeededRoutineAgentConfigurationID,
+    ResolveWakeAgentConfigurationID,
     WakeStartupGuard,
 } from '../index';
 
@@ -865,5 +869,330 @@ describe('Epic 3 Acceptance Suite (Rhythms Model Tiers, Policy Gating, Burst Coa
         expect(engine.EvaluateCalendarOperation(freshPolicy, true).verdict).toBe('RequireApproval');
         expect(engine.EvaluatePhoneOperation(freshPolicy, 'Outbound').verdict).toBe('Deny');
         expect(engine.EvaluatePhoneOperation(freshPolicy, 'Inbound').verdict).toBe('Deny');
+    });
+
+    it('AT-1b: Loads shipped rhythm template metadata and verifies persisted DefaultAgentConfigurationID inheritance across all 10 contracted rhythms', async () => {
+        interface ShippedRhythmTemplate {
+            fields: {
+                WorkstreamKey: string;
+                Name: string;
+                DefaultAgentConfigurationID?: string | null;
+            };
+            primaryKey: { ID: string };
+        }
+        interface ShippedAIConfig {
+            fields: { Name: string; Status: string };
+            primaryKey: { ID: string };
+        }
+
+        const repoRoot = path.resolve(__dirname, '../../../../..');
+        const templates = JSON.parse(
+            fs.readFileSync(path.join(repoRoot, 'metadata/rhythm-templates/.chief-of-staff-rhythm-templates.json'), 'utf8')
+        ) as ShippedRhythmTemplate[];
+        const configs = JSON.parse(
+            fs.readFileSync(path.join(repoRoot, 'metadata/ai-configurations/.ai-configurations.json'), 'utf8')
+        ) as ShippedAIConfig[];
+
+        const configIdByName = new Map(configs.map((c) => [c.fields.Name, c.primaryKey.ID]));
+        const templateByKey = new Map(templates.map((t) => [t.fields.WorkstreamKey, t]));
+
+        const contractedExpectations: Array<{ workstreamKey: string; expectedConfigName: string }> = [
+            { workstreamKey: 'tasks-daily-triage', expectedConfigName: 'Fast' },
+            { workstreamKey: 'calendar-daily-review', expectedConfigName: 'Fast' },
+            { workstreamKey: 'planning-huddle-prep', expectedConfigName: 'Fast' },
+            { workstreamKey: 'daily-15five', expectedConfigName: 'Fast' },
+            { workstreamKey: 'tasks-weekly-review', expectedConfigName: 'Standard' },
+            { workstreamKey: 'planning-weekly-okr-review', expectedConfigName: 'Standard' },
+            { workstreamKey: 'planning-period-close', expectedConfigName: 'Standard' },
+            { workstreamKey: 'planning-midquarter-checkpoint', expectedConfigName: 'High Power' },
+            { workstreamKey: 'growth-coaching', expectedConfigName: 'High Power' },
+            { workstreamKey: 'project-risk-review', expectedConfigName: 'High Power' },
+        ];
+
+        runViewMock.mockImplementation(async (params: { EntityName: string; ExtraFilter?: string }) => {
+            if (params.EntityName === 'MJ: AI Agent Rhythm Templates') {
+                const matched = templates.find((t) =>
+                    params.ExtraFilter?.includes(t.primaryKey.ID) ||
+                    params.ExtraFilter?.toLowerCase().includes(t.fields.WorkstreamKey.toLowerCase())
+                );
+                if (!matched) {
+                    return { Success: true, Results: [] };
+                }
+                const lookupName = matched.fields.DefaultAgentConfigurationID?.replace('@lookup:MJ: AI Configurations.Name=', '') ?? '';
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: matched.primaryKey.ID,
+                            AgentID: COS_AGENT_ID,
+                            WorkstreamKey: matched.fields.WorkstreamKey,
+                            DefaultAgentConfigurationID: configIdByName.get(lookupName) ?? null,
+                        },
+                    ],
+                };
+            }
+            if (params.EntityName === 'MJ: AI Configurations') {
+                const matchedCfg = configs.find((c) => params.ExtraFilter?.includes(`Name='${c.fields.Name}'`));
+                return {
+                    Success: true,
+                    Results: matchedCfg
+                        ? [{ ID: matchedCfg.primaryKey.ID, Name: matchedCfg.fields.Name, Status: matchedCfg.fields.Status }]
+                        : [],
+                };
+            }
+            return { Success: true, Results: [] };
+        });
+
+        for (const item of contractedExpectations) {
+            const tmpl = templateByKey.get(item.workstreamKey);
+            expect(tmpl).toBeDefined();
+            expect(tmpl?.fields.DefaultAgentConfigurationID).toBe(`@lookup:MJ: AI Configurations.Name=${item.expectedConfigName}`);
+
+            const expectedConfigId = configIdByName.get(item.expectedConfigName);
+            expect(expectedConfigId).toBeTruthy();
+
+            const seededId = await ResolveRoutineSeededAgentConfigurationID({
+                templateDefaultAgentConfigurationID: expectedConfigId ?? null,
+                workstreamKey: item.workstreamKey,
+                contextUser: aliceUser,
+            });
+            expect(seededId).toBe(expectedConfigId);
+
+            // Also verify wake-time inheritance when routine.AgentConfigurationID is null
+            const wakeConfigId = await ResolveWakeAgentConfigurationID({
+                routine: {
+                    AgentConfigurationID: null,
+                    TargetID: COS_AGENT_ID,
+                    WakeConfiguration: null,
+                    WakeConfigurationObject: {
+                        workstreamKey: item.workstreamKey,
+                        resumeState: { rhythmTemplateID: tmpl!.primaryKey.ID },
+                    },
+                },
+                contextUser: aliceUser,
+            });
+            expect(wakeConfigId).toBe(expectedConfigId);
+        }
+    });
+
+    it('AT-2b: Multi-instance concurrency across independent AgentWakeTriggerService instances and detached snapshots converges 20 concurrent events into 1 dispatcher wake', async () => {
+        interface Snapshot {
+            ID: string;
+            UserID: string;
+            Name: string;
+            Description: string | null;
+            Status: MJUserRoutineEntity['Status'];
+            RoutineType: MJUserRoutineEntity['RoutineType'];
+            ScheduleMode: MJUserRoutineEntity['ScheduleMode'];
+            TargetType: MJUserRoutineEntity['TargetType'];
+            TargetID: string;
+            CronExpression: string | null;
+            Timezone: string | null;
+            InitialMessage: string | null;
+            StartingPayload: string | null;
+            NextRunAt: Date | null;
+            LastRunAt: Date | null;
+            WakeConfiguration: string | null;
+            WakeConfigurationObject: MJUserRoutineEntity_IRoutineWakeConfiguration | null;
+            AgentConfigurationID: string | null;
+            NotifyViaInApp: boolean;
+            NotifyViaEmail: boolean;
+            CreatedAt: Date;
+            Revision: number;
+        }
+
+        const snapshots = new Map<string, Snapshot>();
+        let seq = 0;
+
+        const hydrateDetached = (snap: Snapshot): InMemoryRoutineEntity => {
+            const clonedCfg = snap.WakeConfiguration
+                ? (JSON.parse(snap.WakeConfiguration) as MJUserRoutineEntity_IRoutineWakeConfiguration)
+                : null;
+            const loadedRev = snap.Revision;
+            const entity = new InMemoryRoutineEntity(snap.ID, () => undefined);
+            entity.UserID = snap.UserID;
+            entity.Name = snap.Name;
+            entity.Description = snap.Description;
+            entity.Status = snap.Status;
+            entity.RoutineType = snap.RoutineType;
+            entity.ScheduleMode = snap.ScheduleMode;
+            entity.TargetType = snap.TargetType;
+            entity.TargetID = snap.TargetID;
+            entity.CronExpression = snap.CronExpression;
+            entity.Timezone = snap.Timezone;
+            entity.InitialMessage = snap.InitialMessage;
+            entity.StartingPayload = snap.StartingPayload;
+            entity.NextRunAt = snap.NextRunAt ? new Date(snap.NextRunAt.getTime()) : null;
+            entity.LastRunAt = snap.LastRunAt ? new Date(snap.LastRunAt.getTime()) : null;
+            entity.WakeConfigurationObject = clonedCfg;
+            entity.AgentConfigurationID = snap.AgentConfigurationID;
+            entity.NotifyViaInApp = snap.NotifyViaInApp;
+            entity.NotifyViaEmail = snap.NotifyViaEmail;
+            Object.defineProperty(entity, '__mj_CreatedAt', { value: new Date(snap.CreatedAt.getTime()) });
+
+            entity.Save = async (): Promise<boolean> => {
+                await Promise.resolve();
+                const current = snapshots.get(entity.ID);
+                const cfgCopy = entity.WakeConfigurationObject
+                    ? (JSON.parse(JSON.stringify(entity.WakeConfigurationObject)) as MJUserRoutineEntity_IRoutineWakeConfiguration)
+                    : null;
+                const incomingRevRaw = cfgCopy?.resumeState?.['coalesceRevision'];
+                const incomingRev = typeof incomingRevRaw === 'number' ? incomingRevRaw : 0;
+
+                if (current && entity.Status === 'Active' && incomingRev > 0 && current.Revision !== loadedRev) {
+                    return false;
+                }
+
+                snapshots.set(entity.ID, {
+                    ID: entity.ID,
+                    UserID: entity.UserID,
+                    Name: entity.Name,
+                    Description: entity.Description,
+                    Status: entity.Status,
+                    RoutineType: entity.RoutineType,
+                    ScheduleMode: entity.ScheduleMode,
+                    TargetType: entity.TargetType,
+                    TargetID: entity.TargetID,
+                    CronExpression: entity.CronExpression,
+                    Timezone: entity.Timezone,
+                    InitialMessage: entity.InitialMessage,
+                    StartingPayload: entity.StartingPayload,
+                    NextRunAt: entity.NextRunAt ? new Date(entity.NextRunAt.getTime()) : null,
+                    LastRunAt: entity.LastRunAt ? new Date(entity.LastRunAt.getTime()) : null,
+                    WakeConfiguration: cfgCopy ? JSON.stringify(cfgCopy) : null,
+                    WakeConfigurationObject: cfgCopy,
+                    AgentConfigurationID: entity.AgentConfigurationID,
+                    NotifyViaInApp: entity.NotifyViaInApp,
+                    NotifyViaEmail: entity.NotifyViaEmail,
+                    CreatedAt: current?.CreatedAt ?? new Date(FIXED_NOW.getTime() + snapshots.size),
+                    Revision: current ? current.Revision + 1 : 1,
+                });
+                return true;
+            };
+            return entity;
+        };
+
+        const detachedProvider = {
+            GetEntityObject: vi.fn(async () => {
+                const id = `00000000-0000-0000-0000-${String(++seq).padStart(12, '0')}`;
+                const createdAt = new Date(FIXED_NOW.getTime() + seq);
+                const entity = new InMemoryRoutineEntity(id, () => undefined);
+                entity.NotifyViaInApp = false;
+                entity.NotifyViaEmail = false;
+                Object.defineProperty(entity, '__mj_CreatedAt', { value: createdAt });
+                entity.Save = async (): Promise<boolean> => {
+                    await Promise.resolve();
+                    const cfgCopy = entity.WakeConfigurationObject
+                        ? (JSON.parse(JSON.stringify(entity.WakeConfigurationObject)) as MJUserRoutineEntity_IRoutineWakeConfiguration)
+                        : null;
+                    snapshots.set(entity.ID, {
+                        ID: entity.ID,
+                        UserID: entity.UserID,
+                        Name: entity.Name,
+                        Description: entity.Description,
+                        Status: entity.Status,
+                        RoutineType: entity.RoutineType,
+                        ScheduleMode: entity.ScheduleMode,
+                        TargetType: entity.TargetType,
+                        TargetID: entity.TargetID,
+                        CronExpression: entity.CronExpression,
+                        Timezone: entity.Timezone,
+                        InitialMessage: entity.InitialMessage,
+                        StartingPayload: entity.StartingPayload,
+                        NextRunAt: entity.NextRunAt ? new Date(entity.NextRunAt.getTime()) : null,
+                        LastRunAt: entity.LastRunAt ? new Date(entity.LastRunAt.getTime()) : null,
+                        WakeConfiguration: cfgCopy ? JSON.stringify(cfgCopy) : null,
+                        WakeConfigurationObject: cfgCopy,
+                        AgentConfigurationID: entity.AgentConfigurationID,
+                        NotifyViaInApp: false,
+                        NotifyViaEmail: false,
+                        CreatedAt: createdAt,
+                        Revision: 1,
+                    });
+                    return true;
+                };
+                return entity;
+            }),
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+
+        runViewMock.mockImplementation(async (params: { EntityName: string }) => {
+            if (params.EntityName === 'MJ: AI Agent User Policies') {
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: 'pol-alice',
+                            AgentID: COS_AGENT_ID,
+                            UserID: USER_ALICE_ID,
+                            Status: 'Active',
+                            AllowInterAgentCoordination: true,
+                            EmailChannelMode: 'DraftOnly',
+                            Agent: 'Chief of Staff',
+                        },
+                    ],
+                };
+            }
+            if (params.EntityName === 'MJ: Users') {
+                return { Success: true, Results: [{ ID: USER_ALICE_ID, IsActive: true }] };
+            }
+            if (params.EntityName === 'MJ: AI Agents') {
+                return { Success: true, Results: [{ ID: COS_AGENT_ID, Name: 'Chief of Staff', Status: 'Active' }] };
+            }
+            if (params.EntityName === 'MJ: User Routines') {
+                await Promise.resolve();
+                return {
+                    Success: true,
+                    Results: Array.from(snapshots.values()).map((snap) => hydrateDetached(snap)),
+                };
+            }
+            return { Success: true, Results: [] };
+        });
+
+        const deliveredTaskIDs: string[] = [];
+        const runAgentSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockImplementation(async (params) => {
+            const payload = params.payload as { _wakeContext?: { resumeState?: CoalescedWakeResumeState } };
+            for (const ev of payload?._wakeContext?.resumeState?.pendingEvents ?? []) {
+                if (ev.taskID) {
+                    deliveredTaskIDs.push(ev.taskID);
+                }
+            }
+            return {
+                success: true,
+                payload: { ok: true },
+                agentRun: { ID: 'agent-run-multi-inst', Message: 'Done' },
+            } as Awaited<ReturnType<AgentRunner['RunAgent']>>;
+        });
+
+        const instance1 = new AgentWakeTriggerService();
+        const instance2 = new AgentWakeTriggerService();
+        const triggerResults = await Promise.all(
+            Array.from({ length: 20 }, (_, idx) => {
+                const i = idx + 1;
+                const svc = i % 2 === 1 ? instance1 : instance2;
+                return svc.TriggerWakeForWorkstream({
+                    targetUserID: USER_ALICE_ID,
+                    targetAgentID: COS_AGENT_ID,
+                    workstreamKey: `task:mi-${i}`,
+                    applicationID: APP_TASKS_ID,
+                    wakeReason: `Multi-instance task #${i}`,
+                    resumeState: { triggerType: 'TaskAssigned', taskID: `mi-${i}` },
+                    contextUser: systemUser,
+                    metadataProvider: detachedProvider,
+                    now: new Date(FIXED_NOW.getTime() + i * 500),
+                });
+            })
+        );
+
+        expect(triggerResults.every((r) => r.triggered && r.resultCode === 'WAKE_SCHEDULED')).toBe(true);
+        const activePending = Array.from(snapshots.values()).filter((s) => s.Status === 'Active' && s.NextRunAt != null);
+        expect(activePending).toHaveLength(1);
+
+        vi.setSystemTime(new Date(FIXED_NOW.getTime() + 65_000));
+        const dispatcher = new UserRoutineDispatcherDriver();
+        const sweep = await dispatcher.Execute(createDispatcherContext());
+        expect(sweep.Success).toBe(true);
+        expect(sweep.Details?.RoutinesRun).toBe(1);
+        expect(runAgentSpy).toHaveBeenCalledTimes(1);
+        expect(new Set(deliveredTaskIDs).size).toBe(20);
     });
 });

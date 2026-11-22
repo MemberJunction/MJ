@@ -20,6 +20,7 @@
  * @module @memberjunction/ai-agents
  */
 
+import { randomUUID } from 'node:crypto';
 import { IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import { BaseSingleton, EscapeSQLString, GetGlobalObjectStore, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
@@ -33,7 +34,7 @@ import {
 import { UserCache } from '@memberjunction/generic-database-provider';
 import {
     LookupActiveRhythmTemplateForWorkstream,
-    ResolveSeededRoutineAgentConfigurationID,
+    ResolveRoutineSeededAgentConfigurationID,
 } from './rhythm-model-tiers';
 import {
     BuildPolicyPairKey,
@@ -1300,6 +1301,9 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
      * `CredentialEngine.enqueueCredentialWrite`. Cross-process races are not covered here; the
      * dispatcher coalesces on claim.
      */
+    private static readonly MAX_CAS_ATTEMPTS = 8;
+    private static readonly MAX_TRACKED_WRITE_TOKENS = 64;
+
     private _wakeWriteChains: Map<string, Promise<void>> = new Map();
 
     private wakeWriteKey(targetUserID: string, targetAgentID: string, workstreamKey: string): string {
@@ -1324,82 +1328,303 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
     }
 
     private upsertImmediateWakeRoutine(params: ImmediateWakeRoutineParams): Promise<AgentWakeTriggerResult> {
-        const key = this.wakeWriteKey(params.targetUserID, params.targetAgentID, params.workstreamKey);
+        const appBucket = params.applicationID?.trim()
+            ? BuildAppWorkstreamKey(params.applicationID, params.workstreamKey)
+            : params.workstreamKey;
+        const key = this.wakeWriteKey(params.targetUserID, params.targetAgentID, appBucket);
         return this.enqueueWakeWrite(key, () => this.upsertImmediateWakeRoutineUnlocked(params));
+    }
+
+    private parseWakeConfiguration(routine: MJUserRoutineEntity): Partial<MJUserRoutineEntity_IRoutineWakeConfiguration> {
+        if (routine.WakeConfigurationObject && typeof routine.WakeConfigurationObject === 'object') {
+            return routine.WakeConfigurationObject;
+        }
+        if (typeof routine.WakeConfiguration === 'string' && routine.WakeConfiguration.trim().length > 0) {
+            return SafeJSONParse<MJUserRoutineEntity_IRoutineWakeConfiguration>(routine.WakeConfiguration) ?? {};
+        }
+        return {};
+    }
+
+    private isRoutineInBucket(
+        routine: MJUserRoutineEntity,
+        workstreamKey: string,
+        normalizedAppKey: string | null
+    ): boolean {
+        const cfg = this.parseWakeConfiguration(routine);
+        const routineWorkstream = (cfg.workstreamKey ?? 'default').toLowerCase();
+        if (routineWorkstream === workstreamKey.toLowerCase()) {
+            return true;
+        }
+        if (normalizedAppKey) {
+            const resumeState = this.asResumeState(cfg.resumeState);
+            const routineApp = typeof resumeState?.applicationID === 'string'
+                ? NormalizeApplicationKey(resumeState.applicationID)
+                : null;
+            if (routineApp === normalizedAppKey) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private isUnclaimedPendingRoutine(routine: MJUserRoutineEntity): boolean {
+        const cfg = this.parseWakeConfiguration(routine);
+        const resumeState = this.asResumeState(cfg.resumeState);
+        return routine.Status === 'Active' && routine.NextRunAt != null && resumeState?.batchConsumed !== true;
+    }
+
+    private compareRoutinesDeterministically(a: MJUserRoutineEntity, b: MJUserRoutineEntity): number {
+        const aCreated = a.__mj_CreatedAt instanceof Date ? a.__mj_CreatedAt.getTime() : Number.MAX_SAFE_INTEGER;
+        const bCreated = b.__mj_CreatedAt instanceof Date ? b.__mj_CreatedAt.getTime() : Number.MAX_SAFE_INTEGER;
+        if (aCreated !== bCreated) {
+            return aCreated - bCreated;
+        }
+        return a.ID.toLowerCase().localeCompare(b.ID.toLowerCase());
+    }
+
+    private selectCanonicalBucketRoutine(matches: MJUserRoutineEntity[]): {
+        canonical: MJUserRoutineEntity | null;
+        duplicates: MJUserRoutineEntity[];
+    } {
+        if (matches.length === 0) {
+            return { canonical: null, duplicates: [] };
+        }
+        const activePending = matches
+            .filter((r) => this.isUnclaimedPendingRoutine(r))
+            .sort((a, b) => this.compareRoutinesDeterministically(a, b));
+        if (activePending.length > 0) {
+            return {
+                canonical: activePending[0],
+                duplicates: activePending.slice(1),
+            };
+        }
+        const sortedAll = [...matches].sort((a, b) => this.compareRoutinesDeterministically(a, b));
+        return {
+            canonical: sortedAll[0],
+            duplicates: [],
+        };
+    }
+
+    private async queryBucketWakeRoutines(
+        md: IMetadataProvider,
+        saveUser: UserInfo,
+        params: ImmediateWakeRoutineParams
+    ): Promise<{ ok: boolean; matches: MJUserRoutineEntity[] }> {
+        const rv = RunView.FromMetadataProvider(md);
+        const safeUserId = EscapeSQLString(params.targetUserID);
+        const safeAgentId = EscapeSQLString(params.targetAgentID);
+        const normalizedAppKey = params.applicationID?.trim()
+            ? NormalizeApplicationKey(params.applicationID)
+            : null;
+
+        const existingResult = await rv.RunView<MJUserRoutineEntity>(
+            {
+                EntityName: 'MJ: User Routines',
+                ExtraFilter: `UserID='${safeUserId}' AND RoutineType='AgentWake' AND TargetType='Agent' AND TargetID='${safeAgentId}'`,
+                OrderBy: '__mj_CreatedAt ASC, ID ASC',
+                MaxRows: 50,
+                BypassCache: true,
+                ResultType: 'entity_object',
+            },
+            saveUser
+        );
+        if (!existingResult || !existingResult.Success) {
+            return { ok: false, matches: [] };
+        }
+        const rows = existingResult.Results ?? [];
+        return {
+            ok: true,
+            matches: rows.filter((r) => this.isRoutineInBucket(r, params.workstreamKey, normalizedAppKey)),
+        };
+    }
+
+    private collectBucketState(
+        canonical: MJUserRoutineEntity | null,
+        duplicates: MJUserRoutineEntity[]
+    ): {
+        priorEvents: AgentWakeResumeState[];
+        extraEvents: AgentWakeResumeState[];
+        existingCoalescedCount: number;
+        existingOverflowCount: number;
+        maxRevision: number;
+        committedWriteTokens: string[];
+    } {
+        const canonicalConfig = canonical ? this.parseWakeConfiguration(canonical) : {};
+        const canonicalResume = this.asResumeState(canonicalConfig.resumeState);
+        const canonicalPending = canonical !== null && this.isUnclaimedPendingRoutine(canonical);
+
+        const priorEvents = canonicalPending ? this.readPendingEvents(canonicalResume) : [];
+        let existingCoalescedCount =
+            canonicalPending && typeof canonicalResume?.coalescedEventCount === 'number'
+                ? canonicalResume.coalescedEventCount
+                : priorEvents.length;
+        let existingOverflowCount =
+            canonicalPending && typeof canonicalResume?.overflowEventCount === 'number'
+                ? canonicalResume.overflowEventCount
+                : 0;
+
+        let maxRevision =
+            typeof canonicalResume?.coalesceRevision === 'number' ? canonicalResume.coalesceRevision : 0;
+        const tokenSet = new Set<string>(canonicalResume?.committedWriteTokens ?? []);
+        const extraEvents: AgentWakeResumeState[] = [];
+
+        for (const dup of duplicates) {
+            const dupResume = this.asResumeState(this.parseWakeConfiguration(dup).resumeState);
+            if (typeof dupResume?.coalesceRevision === 'number') {
+                maxRevision = Math.max(maxRevision, dupResume.coalesceRevision);
+            }
+            for (const tok of dupResume?.committedWriteTokens ?? []) {
+                tokenSet.add(tok);
+            }
+            const dupEvents = this.readPendingEvents(dupResume);
+            extraEvents.push(...dupEvents);
+            const dupTotal = typeof dupResume?.coalescedEventCount === 'number'
+                ? dupResume.coalescedEventCount
+                : dupEvents.length;
+            const dupOverflow = Math.max(0, dupTotal - dupEvents.length);
+            existingOverflowCount += dupOverflow;
+            existingCoalescedCount += dupOverflow;
+        }
+
+        return {
+            priorEvents,
+            extraEvents,
+            existingCoalescedCount,
+            existingOverflowCount,
+            maxRevision,
+            committedWriteTokens: Array.from(tokenSet),
+        };
+    }
+
+    private mergeBucketEvents(params: {
+        priorEvents: AgentWakeResumeState[];
+        extraEvents: AgentWakeResumeState[];
+        newEvent: AgentWakeResumeState;
+        coalesceKey: string;
+        applicationID: string;
+        maxRetainedEvents: number;
+        existingCoalescedCount: number;
+        existingOverflowCount: number;
+    }) {
+        const eventsToAppend = [...params.extraEvents, params.newEvent];
+        let currentEvents = params.priorEvents;
+        let currentTotal = params.existingCoalescedCount;
+        let currentOverflow = params.existingOverflowCount;
+        let lastSummary: string | null = null;
+
+        for (const nextEvent of eventsToAppend) {
+            const merged = EventWakeCoalescer.Instance.MergeCoalescedEvents({
+                PriorEvents: currentEvents,
+                NewEvent: nextEvent,
+                CoalesceKey: params.coalesceKey,
+                ApplicationID: params.applicationID,
+                MaxRetainedEvents: params.maxRetainedEvents,
+                ExistingCoalescedCount: currentTotal,
+                ExistingOverflowCount: currentOverflow,
+                EventKeyExtractor: (e) => this.wakeEventKey(e),
+            });
+            currentEvents = merged.PendingEvents;
+            currentTotal = merged.TotalCoalescedCount;
+            currentOverflow = merged.OverflowCount;
+            lastSummary = merged.SummaryText;
+        }
+
+        return {
+            PendingEvents: currentEvents,
+            TotalCoalescedCount: currentTotal,
+            OverflowCount: currentOverflow,
+            SummaryText: lastSummary,
+        };
+    }
+
+    private async deactivateDuplicateBucketRoutines(
+        duplicates: MJUserRoutineEntity[],
+        canonicalID: string
+    ): Promise<void> {
+        for (const dup of duplicates) {
+            if (UUIDsEqual(dup.ID, canonicalID)) {
+                continue;
+            }
+            const dupConfig = this.parseWakeConfiguration(dup);
+            const dupResume = this.asResumeState(dupConfig.resumeState) ?? {};
+            dup.Status = 'Disabled';
+            dup.NextRunAt = null;
+            dup.WakeConfigurationObject = {
+                ...dupConfig,
+                resumeState: {
+                    ...dupResume,
+                    batchConsumed: true,
+                    coalescedIntoRoutineID: canonicalID,
+                    coalescedEventCount: 0,
+                    overflowEventCount: 0,
+                    pendingEvents: [],
+                },
+            };
+            await dup.Save();
+        }
+    }
+
+    private verifyBucketConverged(
+        matches: MJUserRoutineEntity[],
+        canonicalID: string,
+        writeToken: string,
+        myEventKey: string
+    ): boolean {
+        const activePending = matches.filter((r) => this.isUnclaimedPendingRoutine(r));
+        if (activePending.length !== 1) {
+            return false;
+        }
+        const persisted = activePending[0];
+        if (!UUIDsEqual(persisted.ID, canonicalID)) {
+            return false;
+        }
+        const resumeState = this.asResumeState(this.parseWakeConfiguration(persisted).resumeState);
+        if (Array.isArray(resumeState?.committedWriteTokens) && resumeState.committedWriteTokens.includes(writeToken)) {
+            return true;
+        }
+        return this.readPendingEvents(resumeState).some((e) => this.wakeEventKey(e) === myEventKey);
+    }
+
+    private async createNewWakeRoutine(
+        md: IMetadataProvider,
+        saveUser: UserInfo,
+        params: ImmediateWakeRoutineParams
+    ): Promise<MJUserRoutineEntity> {
+        const routine = await md.GetEntityObject<MJUserRoutineEntity>('MJ: User Routines', saveUser);
+        routine.NewRecord();
+        routine.UserID = params.targetUserID;
+        // Same name Schedule Next Agent Wake gives a routine, so all of an agent's wakes read alike.
+        routine.Name = params.targetAgentName
+            ? `${params.targetAgentName} — Wake (${params.workstreamKey})`
+            : `AgentWake (${params.workstreamKey})`;
+        routine.RoutineType = 'AgentWake';
+        routine.ScheduleMode = 'OneShot';
+        routine.TargetType = 'Agent';
+        routine.TargetID = params.targetAgentID;
+        routine.CronExpression = null;
+        routine.Timezone = 'UTC';
+
+        const matchingTemplate = await LookupActiveRhythmTemplateForWorkstream({
+            agentID: params.targetAgentID,
+            workstreamKey: params.workstreamKey,
+            contextUser: saveUser,
+            metadataProvider: md,
+        });
+        routine.AgentConfigurationID = await ResolveRoutineSeededAgentConfigurationID({
+            templateDefaultAgentConfigurationID: matchingTemplate?.DefaultAgentConfigurationID ?? null,
+            workstreamKey: params.workstreamKey,
+            contextUser: saveUser,
+            metadataProvider: md,
+        });
+        return routine;
     }
 
     private async upsertImmediateWakeRoutineUnlocked(params: ImmediateWakeRoutineParams): Promise<AgentWakeTriggerResult> {
         try {
             const md: IMetadataProvider = params.metadataProvider ?? Metadata.Provider;
             const saveUser = this.resolveRoutineSaveUser(params.targetUserID, params.contextUser);
-            const rv = RunView.FromMetadataProvider(md);
-            const safeUserId = EscapeSQLString(params.targetUserID);
-            const safeAgentId = EscapeSQLString(params.targetAgentID);
-
-            const existingResult = await rv.RunView<MJUserRoutineEntity>(
-                {
-                    EntityName: 'MJ: User Routines',
-                    ExtraFilter: `UserID='${safeUserId}' AND RoutineType='AgentWake' AND TargetType='Agent' AND TargetID='${safeAgentId}'`,
-                    OrderBy: '__mj_UpdatedAt DESC',
-                    MaxRows: 25,
-                    ResultType: 'entity_object',
-                },
-                saveUser
-            );
-
-            let routine: MJUserRoutineEntity | null = null;
-            if (existingResult.Success && existingResult.Results.length > 0) {
-                routine =
-                    existingResult.Results.find((r) => {
-                        const cfg =
-                            r.WakeConfigurationObject ??
-                            (r.WakeConfiguration
-                                ? SafeJSONParse<MJUserRoutineEntity_IRoutineWakeConfiguration>(r.WakeConfiguration)
-                                : null);
-                        return (cfg?.workstreamKey ?? 'default').toLowerCase() === params.workstreamKey.toLowerCase();
-                    }) ?? null;
-            }
-
-            const isExistingPersistedRoutine = routine !== null;
-            if (!routine) {
-                routine = await md.GetEntityObject<MJUserRoutineEntity>(
-                    'MJ: User Routines',
-                    saveUser
-                );
-                routine.NewRecord();
-                routine.UserID = params.targetUserID;
-                // Same name Schedule Next Agent Wake gives a routine, so all of an agent's wakes read alike.
-                routine.Name = params.targetAgentName
-                    ? `${params.targetAgentName} — Wake (${params.workstreamKey})`
-                    : `AgentWake (${params.workstreamKey})`;
-                routine.RoutineType = 'AgentWake';
-                routine.ScheduleMode = 'OneShot';
-                routine.TargetType = 'Agent';
-                routine.TargetID = params.targetAgentID;
-                routine.CronExpression = null;
-                routine.Timezone = 'UTC';
-
-                const matchingTemplate = await LookupActiveRhythmTemplateForWorkstream({
-                    agentID: params.targetAgentID,
-                    workstreamKey: params.workstreamKey,
-                    contextUser: saveUser,
-                    metadataProvider: md,
-                });
-                routine.AgentConfigurationID = ResolveSeededRoutineAgentConfigurationID({
-                    templateDefaultAgentConfigurationID: matchingTemplate?.DefaultAgentConfigurationID ?? null,
-                });
-            }
-
-            const existingConfig: Partial<MJUserRoutineEntity_IRoutineWakeConfiguration> =
-                routine.WakeConfigurationObject ?? {};
-            const existingResumeState = this.asResumeState(existingConfig.resumeState);
-            const isBatchConsumed = existingResumeState?.batchConsumed === true;
-            const isUnclaimedPending =
-                isExistingPersistedRoutine &&
-                routine.Status === 'Active' &&
-                routine.NextRunAt != null &&
-                !isBatchConsumed;
-
+            const writeToken = randomUUID();
+            const myEventKey = this.wakeEventKey(params.resumeState);
             const hasApplicationBucket = Boolean(params.applicationID && params.applicationID.trim().length > 0);
             const effectiveWindowMs =
                 params.coalescingWindowMs !== undefined
@@ -1407,105 +1632,132 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
                     : hasApplicationBucket
                       ? EventWakeCoalescer.Instance.GetDefaultWindowMs()
                       : 0;
+            const maxRetainedEvents = params.maxRetainedEvents ?? DEFAULT_MAX_RETAINED_COALESCED_EVENTS;
 
-            const scheduleEval = EventWakeCoalescer.Instance.EvaluateWindowSchedule({
-                UserID: params.targetUserID,
-                ApplicationID: params.applicationID,
-                Now: params.now,
-                WindowMs: effectiveWindowMs,
-                ExistingRoutineStatus: routine.Status,
-                ExistingRoutineNextRunAt: routine.NextRunAt,
-                ExistingRoutineLastRunAt: routine.LastRunAt,
-                HasExistingRoutineID: isExistingPersistedRoutine,
-                HasPendingUnconsumedBatch: isUnclaimedPending,
-            });
+            let lastSaveError = 'Unknown error saving MJ: User Routines.';
 
-            const priorEvents = isUnclaimedPending ? this.readPendingEvents(existingResumeState) : [];
-            const existingCoalescedCount =
-                isUnclaimedPending && typeof existingResumeState?.coalescedEventCount === 'number'
-                    ? existingResumeState.coalescedEventCount
-                    : priorEvents.length;
-            const existingOverflowCount =
-                isUnclaimedPending && typeof existingResumeState?.overflowEventCount === 'number'
-                    ? existingResumeState.overflowEventCount
-                    : 0;
+            for (let attempt = 0; attempt < AgentWakeTriggerService.MAX_CAS_ATTEMPTS; attempt++) {
+                const query = await this.queryBucketWakeRoutines(md, saveUser, params);
+                const { canonical: existingCanonical, duplicates } = this.selectCanonicalBucketRoutine(query.matches);
+                const isExistingPersistedRoutine = existingCanonical !== null;
+                const routine =
+                    existingCanonical ?? (await this.createNewWakeRoutine(md, saveUser, params));
 
-            const mergeResult = EventWakeCoalescer.Instance.MergeCoalescedEvents({
-                PriorEvents: priorEvents,
-                NewEvent: params.resumeState,
-                CoalesceKey: scheduleEval.CoalesceKey,
-                ApplicationID: NormalizeApplicationKey(params.applicationID),
-                MaxRetainedEvents: params.maxRetainedEvents ?? DEFAULT_MAX_RETAINED_COALESCED_EVENTS,
-                ExistingCoalescedCount: existingCoalescedCount,
-                ExistingOverflowCount: existingOverflowCount,
-                EventKeyExtractor: (e) => this.wakeEventKey(e),
-            });
+                const existingConfig = this.parseWakeConfiguration(routine);
+                const isUnclaimedPending = isExistingPersistedRoutine && this.isUnclaimedPendingRoutine(routine);
+                const bucketState = this.collectBucketState(existingCanonical, duplicates);
 
-            const wakeReason = this.buildCoalescedWakeReason(
-                params.workstreamKey,
-                params.wakeReason,
-                mergeResult.PendingEvents,
-                mergeResult.TotalCoalescedCount,
-                mergeResult.OverflowCount
-            );
-            // Latest event stays at the top level for consumers that predate the queue; the full bounded list rides alongside.
-            const coalescedResumeState: AgentWakeResumeState = {
-                ...params.resumeState,
-                coalesceKey: scheduleEval.CoalesceKey,
-                coalescedEventCount: mergeResult.TotalCoalescedCount,
-                overflowEventCount: mergeResult.OverflowCount,
-                coalesceWindowExpiresAt: scheduleEval.WindowExpiresAt.toISOString(),
-                batchConsumed: false,
-                ...(mergeResult.SummaryText ? { coalescedSummary: mergeResult.SummaryText } : {}),
-                pendingEvents: mergeResult.PendingEvents,
-            };
-            const updatedConfig: MJUserRoutineEntity_IRoutineWakeConfiguration = {
-                ...existingConfig,
-                workstreamKey: params.workstreamKey,
-                wakeReason,
-                resumeState: coalescedResumeState,
-            };
+                const scheduleEval = EventWakeCoalescer.Instance.EvaluateWindowSchedule({
+                    UserID: params.targetUserID,
+                    ApplicationID: params.applicationID,
+                    Now: params.now,
+                    WindowMs: effectiveWindowMs,
+                    ExistingRoutineStatus: routine.Status,
+                    ExistingRoutineNextRunAt: routine.NextRunAt,
+                    ExistingRoutineLastRunAt: routine.LastRunAt,
+                    HasExistingRoutineID: isExistingPersistedRoutine,
+                    HasPendingUnconsumedBatch: isUnclaimedPending || duplicates.length > 0,
+                });
 
-            routine.Status = 'Active';
-            routine.NextRunAt = scheduleEval.EffectiveNextRunAt;
-            routine.InitialMessage = `[AgentWake:${params.workstreamKey}] Resume workstream "${params.workstreamKey}": ${wakeReason}`;
-            routine.StartingPayload = JSON.stringify({
-                workstreamKey: params.workstreamKey,
-                wakeReason,
-                resumeState: coalescedResumeState,
-            });
-            routine.WakeConfigurationObject = updatedConfig;
-            routine.Description = wakeReason;
+                const mergeResult = this.mergeBucketEvents({
+                    priorEvents: bucketState.priorEvents,
+                    extraEvents: bucketState.extraEvents,
+                    newEvent: params.resumeState,
+                    coalesceKey: scheduleEval.CoalesceKey,
+                    applicationID: NormalizeApplicationKey(params.applicationID),
+                    maxRetainedEvents,
+                    existingCoalescedCount: bucketState.existingCoalescedCount,
+                    existingOverflowCount: bucketState.existingOverflowCount,
+                });
 
-            const saved = await routine.Save();
-            if (!saved) {
-                const errMessage = routine.LatestResult?.CompleteMessage || 'Unknown error saving MJ: User Routines.';
-                LogError(`[AgentWakeTriggerService] Failed to save AgentWake routine: ${errMessage}`);
-                return this.notTriggered('SAVE_FAILED', errMessage);
+                const nextTokens = [...bucketState.committedWriteTokens, writeToken].slice(
+                    -AgentWakeTriggerService.MAX_TRACKED_WRITE_TOKENS
+                );
+                const wakeReason = this.buildCoalescedWakeReason(
+                    params.workstreamKey,
+                    params.wakeReason,
+                    mergeResult.PendingEvents,
+                    mergeResult.TotalCoalescedCount,
+                    mergeResult.OverflowCount
+                );
+                const coalescedResumeState: AgentWakeResumeState = {
+                    ...params.resumeState,
+                    coalesceKey: scheduleEval.CoalesceKey,
+                    coalescedEventCount: mergeResult.TotalCoalescedCount,
+                    overflowEventCount: mergeResult.OverflowCount,
+                    coalesceWindowExpiresAt: scheduleEval.WindowExpiresAt.toISOString(),
+                    coalesceRevision: bucketState.maxRevision + 1,
+                    coalesceWriteToken: writeToken,
+                    committedWriteTokens: nextTokens,
+                    batchConsumed: false,
+                    ...(mergeResult.SummaryText ? { coalescedSummary: mergeResult.SummaryText } : {}),
+                    pendingEvents: mergeResult.PendingEvents,
+                };
+                const updatedConfig: MJUserRoutineEntity_IRoutineWakeConfiguration = {
+                    ...existingConfig,
+                    workstreamKey: params.workstreamKey,
+                    wakeReason,
+                    resumeState: coalescedResumeState,
+                };
+
+                routine.Status = 'Active';
+                routine.NextRunAt = scheduleEval.EffectiveNextRunAt;
+                routine.InitialMessage = `[AgentWake:${params.workstreamKey}] Resume workstream "${params.workstreamKey}": ${wakeReason}`;
+                routine.StartingPayload = JSON.stringify({
+                    workstreamKey: params.workstreamKey,
+                    wakeReason,
+                    resumeState: coalescedResumeState,
+                });
+                routine.WakeConfigurationObject = updatedConfig;
+                routine.Description = wakeReason;
+
+                const saved = await routine.Save();
+                if (!saved) {
+                    lastSaveError = routine.LatestResult?.CompleteMessage || lastSaveError;
+                    if (attempt < AgentWakeTriggerService.MAX_CAS_ATTEMPTS - 1) {
+                        continue;
+                    }
+                    LogError(`[AgentWakeTriggerService] Failed to save AgentWake routine: ${lastSaveError}`);
+                    return this.notTriggered('SAVE_FAILED', lastSaveError);
+                }
+
+                await this.deactivateDuplicateBucketRoutines(duplicates, routine.ID);
+
+                const postQuery = await this.queryBucketWakeRoutines(md, saveUser, params);
+                const converged =
+                    !postQuery.ok ||
+                    postQuery.matches.length === 0 ||
+                    this.verifyBucketConverged(postQuery.matches, routine.ID, writeToken, myEventKey);
+                if (!converged && attempt < AgentWakeTriggerService.MAX_CAS_ATTEMPTS - 1) {
+                    continue;
+                }
+
+                EventWakeCoalescer.Instance.RecordEventBuffered(
+                    params.targetUserID,
+                    params.applicationID,
+                    myEventKey,
+                    params.now,
+                    mergeResult.TotalCoalescedCount,
+                    mergeResult.OverflowCount
+                );
+
+                return {
+                    triggered: true,
+                    resultCode: 'WAKE_SCHEDULED',
+                    reason: params.wakeReason,
+                    routineID: routine.ID,
+                    targetUserID: params.targetUserID,
+                    targetAgentID: params.targetAgentID,
+                    workstreamKey: params.workstreamKey,
+                    nextRunAtISO: scheduleEval.EffectiveNextRunAt.toISOString(),
+                    coalesced: mergeResult.TotalCoalescedCount > 1 || scheduleEval.IsCoalescedIntoActiveWindow,
+                    coalescedCount: mergeResult.TotalCoalescedCount,
+                    coalesceKey: scheduleEval.CoalesceKey,
+                };
             }
 
-            EventWakeCoalescer.Instance.RecordEventBuffered(
-                params.targetUserID,
-                params.applicationID,
-                this.wakeEventKey(params.resumeState),
-                params.now,
-                mergeResult.TotalCoalescedCount,
-                mergeResult.OverflowCount
-            );
-
-            return {
-                triggered: true,
-                resultCode: 'WAKE_SCHEDULED',
-                reason: params.wakeReason,
-                routineID: routine.ID,
-                targetUserID: params.targetUserID,
-                targetAgentID: params.targetAgentID,
-                workstreamKey: params.workstreamKey,
-                nextRunAtISO: scheduleEval.EffectiveNextRunAt.toISOString(),
-                coalesced: mergeResult.TotalCoalescedCount > 1 || scheduleEval.IsCoalescedIntoActiveWindow,
-                coalescedCount: mergeResult.TotalCoalescedCount,
-                coalesceKey: scheduleEval.CoalesceKey,
-            };
+            LogError(`[AgentWakeTriggerService] Exhausted CAS retries saving AgentWake routine: ${lastSaveError}`);
+            return this.notTriggered('SAVE_FAILED', lastSaveError);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`[AgentWakeTriggerService] Error scheduling event-driven wake: ${msg}`);

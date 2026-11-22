@@ -66,6 +66,10 @@ export interface CoalescedWakeEventPayload {
     coalescedEventCount?: number;
     overflowEventCount?: number;
     coalescedSummary?: string;
+    coalesceRevision?: number;
+    coalesceWriteToken?: string;
+    committedWriteTokens?: string[];
+    coalescedIntoRoutineID?: string | null;
     pendingEvents?: CoalescedWakeEventPayload[];
 }
 
@@ -79,6 +83,7 @@ export interface CoalescedWakeResumeState extends CoalescedWakeEventPayload {
         | boolean
         | null
         | undefined
+        | string[]
         | CoalescedWakeResumeState
         | CoalescedWakeEventPayload[];
 }

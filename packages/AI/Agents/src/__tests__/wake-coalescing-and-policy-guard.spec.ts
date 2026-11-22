@@ -804,6 +804,218 @@ describe('Slice 2: Active-Policy Gating, (UserID, ApplicationID) Coalescing, and
             );
             expect(cleaned).toBeGreaterThanOrEqual(2);
         });
+
+        it('converges 20 concurrent events across independent service instances operating on detached routine snapshots with zero lost events (CR-COALESCE-ATOMICITY)', async () => {
+            interface PersistedRoutineSnapshot {
+                ID: string;
+                UserID: string;
+                Name: string;
+                Description: string | null;
+                Status: MJUserRoutineEntity['Status'];
+                RoutineType: MJUserRoutineEntity['RoutineType'];
+                ScheduleMode: MJUserRoutineEntity['ScheduleMode'];
+                TargetType: MJUserRoutineEntity['TargetType'];
+                TargetID: string;
+                CronExpression: string | null;
+                Timezone: string | null;
+                InitialMessage: string | null;
+                StartingPayload: string | null;
+                NextRunAt: Date | null;
+                LastRunAt: Date | null;
+                WakeConfiguration: string | null;
+                WakeConfigurationObject: MJUserRoutineEntity_IRoutineWakeConfiguration | null;
+                AgentConfigurationID: string | null;
+                CreatedAt: Date;
+                Revision: number;
+            }
+
+            const persistedStore = new Map<string, PersistedRoutineSnapshot>();
+            let nextID = 0;
+
+            const hydrateDetached = (snap: PersistedRoutineSnapshot): MJUserRoutineEntity => {
+                const clonedConfig = snap.WakeConfiguration
+                    ? (JSON.parse(snap.WakeConfiguration) as MJUserRoutineEntity_IRoutineWakeConfiguration)
+                    : null;
+                const loadedRevision = snap.Revision;
+                const detached = new InMemoryRoutineEntity(snap.ID, () => undefined);
+                detached.UserID = snap.UserID;
+                detached.Name = snap.Name;
+                detached.Description = snap.Description;
+                detached.Status = snap.Status;
+                detached.RoutineType = snap.RoutineType;
+                detached.ScheduleMode = snap.ScheduleMode;
+                detached.TargetType = snap.TargetType;
+                detached.TargetID = snap.TargetID;
+                detached.CronExpression = snap.CronExpression;
+                detached.Timezone = snap.Timezone;
+                detached.InitialMessage = snap.InitialMessage;
+                detached.StartingPayload = snap.StartingPayload;
+                detached.NextRunAt = snap.NextRunAt ? new Date(snap.NextRunAt.getTime()) : null;
+                detached.LastRunAt = snap.LastRunAt ? new Date(snap.LastRunAt.getTime()) : null;
+                detached.WakeConfigurationObject = clonedConfig;
+                detached.AgentConfigurationID = snap.AgentConfigurationID;
+                Object.defineProperty(detached, '__mj_CreatedAt', { value: new Date(snap.CreatedAt.getTime()) });
+
+                detached.Save = async (): Promise<boolean> => {
+                    await Promise.resolve();
+                    const existing = persistedStore.get(detached.ID);
+                    const incomingConfig = detached.WakeConfigurationObject
+                        ? (JSON.parse(JSON.stringify(detached.WakeConfigurationObject)) as MJUserRoutineEntity_IRoutineWakeConfiguration)
+                        : null;
+                    const incomingRevRaw = incomingConfig?.resumeState?.['coalesceRevision'];
+                    const incomingRev = typeof incomingRevRaw === 'number' ? incomingRevRaw : 0;
+
+                    if (existing && detached.Status === 'Active' && incomingRev > 0 && existing.Revision !== loadedRevision) {
+                        detached.LatestResult = {
+                            Success: false,
+                            Message: 'CAS conflict',
+                            CompleteMessage: `CAS conflict: loaded revision ${loadedRevision} != current ${existing.Revision}`,
+                        } as MJUserRoutineEntity['LatestResult'];
+                        return false;
+                    }
+
+                    persistedStore.set(detached.ID, {
+                        ID: detached.ID,
+                        UserID: detached.UserID,
+                        Name: detached.Name,
+                        Description: detached.Description,
+                        Status: detached.Status,
+                        RoutineType: detached.RoutineType,
+                        ScheduleMode: detached.ScheduleMode,
+                        TargetType: detached.TargetType,
+                        TargetID: detached.TargetID,
+                        CronExpression: detached.CronExpression,
+                        Timezone: detached.Timezone,
+                        InitialMessage: detached.InitialMessage,
+                        StartingPayload: detached.StartingPayload,
+                        NextRunAt: detached.NextRunAt ? new Date(detached.NextRunAt.getTime()) : null,
+                        LastRunAt: detached.LastRunAt ? new Date(detached.LastRunAt.getTime()) : null,
+                        WakeConfiguration: incomingConfig ? JSON.stringify(incomingConfig) : null,
+                        WakeConfigurationObject: incomingConfig,
+                        AgentConfigurationID: detached.AgentConfigurationID,
+                        CreatedAt: existing?.CreatedAt ?? new Date(FIXED_NOW.getTime() + persistedStore.size),
+                        Revision: existing ? existing.Revision + 1 : 1,
+                    });
+                    return true;
+                };
+                return detached;
+            };
+
+            const detachedProvider = {
+                GetEntityObject: vi.fn(async () => {
+                    const id = `00000000-0000-0000-0000-${String(++nextID).padStart(12, '0')}`;
+                    const fresh = new InMemoryRoutineEntity(id, () => undefined);
+                    const createdAt = new Date(FIXED_NOW.getTime() + nextID);
+                    Object.defineProperty(fresh, '__mj_CreatedAt', { value: createdAt });
+                    fresh.Save = async (): Promise<boolean> => {
+                        await Promise.resolve();
+                        const incomingConfig = fresh.WakeConfigurationObject
+                            ? (JSON.parse(JSON.stringify(fresh.WakeConfigurationObject)) as MJUserRoutineEntity_IRoutineWakeConfiguration)
+                            : null;
+                        persistedStore.set(fresh.ID, {
+                            ID: fresh.ID,
+                            UserID: fresh.UserID,
+                            Name: fresh.Name,
+                            Description: fresh.Description,
+                            Status: fresh.Status,
+                            RoutineType: fresh.RoutineType,
+                            ScheduleMode: fresh.ScheduleMode,
+                            TargetType: fresh.TargetType,
+                            TargetID: fresh.TargetID,
+                            CronExpression: fresh.CronExpression,
+                            Timezone: fresh.Timezone,
+                            InitialMessage: fresh.InitialMessage,
+                            StartingPayload: fresh.StartingPayload,
+                            NextRunAt: fresh.NextRunAt ? new Date(fresh.NextRunAt.getTime()) : null,
+                            LastRunAt: fresh.LastRunAt ? new Date(fresh.LastRunAt.getTime()) : null,
+                            WakeConfiguration: incomingConfig ? JSON.stringify(incomingConfig) : null,
+                            WakeConfigurationObject: incomingConfig,
+                            AgentConfigurationID: fresh.AgentConfigurationID,
+                            CreatedAt: createdAt,
+                            Revision: 1,
+                        });
+                        return true;
+                    };
+                    return fresh;
+                }),
+            } as Partial<IMetadataProvider> as IMetadataProvider;
+
+            runViewMock.mockImplementation(async (params: { EntityName: string }) => {
+                if (params.EntityName === 'MJ: AI Agent User Policies') {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: 'pol-alice',
+                                AgentID: COS_AGENT_ID,
+                                UserID: USER_ALICE_ID,
+                                Status: 'Active',
+                                AllowInterAgentCoordination: true,
+                                EmailChannelMode: 'DraftOnly',
+                                Agent: 'Chief of Staff',
+                            },
+                        ],
+                    };
+                }
+                if (params.EntityName === 'MJ: Users') {
+                    return { Success: true, Results: [{ ID: USER_ALICE_ID, IsActive: true }] };
+                }
+                if (params.EntityName === 'MJ: AI Agents') {
+                    return { Success: true, Results: [{ ID: COS_AGENT_ID, Name: 'Chief of Staff', Status: 'Active' }] };
+                }
+                if (params.EntityName === 'MJ: User Routines') {
+                    await Promise.resolve();
+                    return {
+                        Success: true,
+                        Results: Array.from(persistedStore.values()).map((snap) => hydrateDetached(snap)),
+                    };
+                }
+                return { Success: true, Results: [] };
+            });
+
+            // Two independent service instances with separate in-memory _wakeWriteChains
+            const serverInstanceA = new AgentWakeTriggerService();
+            const serverInstanceB = new AgentWakeTriggerService();
+
+            // Fire all 20 events concurrently across both independent instances
+            const results = await Promise.all(
+                Array.from({ length: 20 }, (_, idx) => {
+                    const i = idx + 1;
+                    const instance = i % 2 === 1 ? serverInstanceA : serverInstanceB;
+                    return instance.TriggerWakeForWorkstream({
+                        targetUserID: USER_ALICE_ID,
+                        targetAgentID: COS_AGENT_ID,
+                        workstreamKey: `task:concurrent-${i}`,
+                        applicationID: APP_TASKS_ID,
+                        wakeReason: `Concurrent task #${i}`,
+                        resumeState: {
+                            triggerType: 'TaskAssigned',
+                            taskID: `concurrent-${i}`,
+                            subject: `Concurrent Task #${i}`,
+                        },
+                        contextUser: systemUser,
+                        metadataProvider: detachedProvider,
+                        now: new Date(FIXED_NOW.getTime() + i * 500),
+                    });
+                })
+            );
+
+            expect(results.every((r) => r.triggered && r.resultCode === 'WAKE_SCHEDULED')).toBe(true);
+
+            // Exactly 1 active pending routine remains; any cold-start duplicate rows were deactivated
+            const activePending = Array.from(persistedStore.values()).filter(
+                (r) => r.Status === 'Active' && r.NextRunAt != null
+            );
+            expect(activePending).toHaveLength(1);
+
+            const canonicalResume = activePending[0].WakeConfigurationObject?.resumeState as CoalescedWakeResumeState;
+            const retainedTaskIDs = new Set((canonicalResume.pendingEvents ?? []).map((e) => e.taskID));
+            expect(retainedTaskIDs.size).toBe(20);
+            for (let i = 1; i <= 20; i++) {
+                expect(retainedTaskIDs.has(`concurrent-${i}`)).toBe(true);
+            }
+            expect(canonicalResume.coalescedEventCount).toBe(20);
+        });
     });
 
     describe('S2-AC-3: AIDP Deployment / Startup Guard', () => {

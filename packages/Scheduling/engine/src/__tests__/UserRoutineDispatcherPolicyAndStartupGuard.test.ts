@@ -620,4 +620,237 @@ describe('UserRoutineDispatcherDriver — Active Policy Gating, Coalescing Recov
         expect(singleRoutine.WakeConfigurationObject?.resumeState?.['coalescedEventCount']).toBe(1);
         expect(singleRoutine.WakeConfigurationObject?.resumeState?.['pendingEvents']).toHaveLength(1);
     });
+
+    it('releases and restores a one-shot claim when slot-entry policy recheck hits a transient lookup error, then succeeds on next sweep (CR-POLICY-RECHECK-LOSES-CLAIM)', async () => {
+        const scheduledAt = new Date(PAST.getTime());
+        const oneShotRoutine = makeRoutine({
+            ID: 'R-TRANSIENT-CLAIM',
+            UserID: 'U-ACTIVE',
+            Name: 'Transient Policy Recheck Wake',
+            ScheduleMode: 'OneShot',
+            Status: 'Active',
+            NextRunAt: scheduledAt,
+            WakeConfigurationObject: {
+                workstreamKey: 'app:app-tasks',
+                resumeState: {
+                    applicationID: 'app-tasks',
+                    pendingEvents: [
+                        { triggerType: 'TaskAssigned', taskID: 't-keep-1' },
+                        { triggerType: 'TaskAssigned', taskID: 't-keep-2' },
+                    ],
+                },
+            },
+        });
+
+        let policyQueryCount = 0;
+        let transientFailureActive = true;
+
+        runViewMock.mockImplementation(async (params: RunViewParams) => {
+            if (params.EntityName === 'MJ: User Routines') {
+                return {
+                    Success: true,
+                    Results: oneShotRoutine.Status === 'Active' ? [oneShotRoutine] : [],
+                    TotalRowCount: oneShotRoutine.Status === 'Active' ? 1 : 0,
+                    RowCount: oneShotRoutine.Status === 'Active' ? 1 : 0,
+                    UserViewID: '',
+                    ExecutionTime: 0,
+                    ErrorMessage: '',
+                };
+            }
+            if (params.EntityName === 'MJ: AI Agent User Policies') {
+                policyQueryCount++;
+                // First call is the sweep batch check (succeeds so claimRoutine runs and nulls NextRunAt).
+                // Second call is the slot-entry recheck (fails transiently with DB error).
+                if (transientFailureActive && policyQueryCount === 2) {
+                    return {
+                        Success: false,
+                        ErrorMessage: 'Transient SQL timeout on slot-entry policy recheck',
+                        Results: [],
+                        TotalRowCount: 0,
+                        RowCount: 0,
+                        UserViewID: '',
+                        ExecutionTime: 0,
+                    };
+                }
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: 'POL-ACTIVE',
+                            AgentID: 'AGENT-1',
+                            UserID: 'U-ACTIVE',
+                            Status: 'Active',
+                            AllowInterAgentCoordination: true,
+                            EmailChannelMode: 'DraftOnly',
+                            Agent: 'Chief of Staff',
+                        },
+                    ],
+                    TotalRowCount: 1,
+                    RowCount: 1,
+                    UserViewID: '',
+                    ExecutionTime: 0,
+                    ErrorMessage: '',
+                };
+            }
+            return { Success: true, Results: [], TotalRowCount: 0, RowCount: 0, UserViewID: '', ExecutionTime: 0, ErrorMessage: '' };
+        });
+
+        const firstSweep = await driver.Execute(buildContext());
+        expect(firstSweep.Success).toBe(true);
+        expect(firstSweep.Details?.RoutinesRun).toBe(0);
+        expect(agentRunMock).toHaveBeenCalledTimes(0);
+
+        // Claim must be released/restored so routine is NOT orphaned with NextRunAt=null
+        expect(oneShotRoutine.Status).toBe('Active');
+        expect(oneShotRoutine.NextRunAt?.toISOString()).toBe(scheduledAt.toISOString());
+        expect(oneShotRoutine.WakeConfigurationObject?.resumeState?.['pendingEvents']).toHaveLength(2);
+
+        // Next sweep after DB recovery executes the restored routine with all pending events intact
+        transientFailureActive = false;
+        const recoverySweep = await driver.Execute(buildContext());
+        expect(recoverySweep.Success).toBe(true);
+        expect(recoverySweep.Details?.RoutinesRun).toBe(1);
+        expect(recoverySweep.Details?.Succeeded).toBe(1);
+        expect(agentRunMock).toHaveBeenCalledTimes(1);
+
+        const wakePayload = agentRunMock.mock.calls[0][0].payload as {
+            _wakeContext?: { resumeState?: { pendingEvents?: Array<{ taskID?: string }> } };
+        };
+        expect(wakePayload._wakeContext?.resumeState?.pendingEvents?.map((e) => e.taskID)).toEqual([
+            't-keep-1',
+            't-keep-2',
+        ]);
+    });
+
+    it('cleanly disables a claimed one-shot routine when slot-entry recheck detects genuine policy deactivation (CR-POLICY-RECHECK-LOSES-CLAIM)', async () => {
+        const queuedRoutine = makeRoutine({
+            ID: 'R-GENUINE-PAUSE',
+            UserID: 'U-ACTIVE',
+            Name: 'Genuine Policy Deactivation Wake',
+            ScheduleMode: 'OneShot',
+            Status: 'Active',
+            NextRunAt: PAST,
+        });
+
+        let policyCall = 0;
+        runViewMock.mockImplementation(async (params: RunViewParams) => {
+            if (params.EntityName === 'MJ: User Routines') {
+                return { Success: true, Results: [queuedRoutine], TotalRowCount: 1, RowCount: 1, UserViewID: '', ExecutionTime: 0, ErrorMessage: '' };
+            }
+            if (params.EntityName === 'MJ: AI Agent User Policies') {
+                policyCall++;
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: 'POL-ACTIVE',
+                            AgentID: 'AGENT-1',
+                            UserID: 'U-ACTIVE',
+                            Status: policyCall === 1 ? 'Active' : 'Paused',
+                            AllowInterAgentCoordination: true,
+                            EmailChannelMode: 'DraftOnly',
+                            Agent: 'Chief of Staff',
+                        },
+                    ],
+                    TotalRowCount: 1,
+                    RowCount: 1,
+                    UserViewID: '',
+                    ExecutionTime: 0,
+                    ErrorMessage: '',
+                };
+            }
+            return { Success: true, Results: [], TotalRowCount: 0, RowCount: 0, UserViewID: '', ExecutionTime: 0, ErrorMessage: '' };
+        });
+
+        const sweep = await driver.Execute(buildContext());
+        expect(sweep.Details?.RoutinesRun).toBe(0);
+        expect(agentRunMock).toHaveBeenCalledTimes(0);
+        expect(queuedRoutine.Status).toBe('Disabled');
+        expect(queuedRoutine.LastRunStatus).toBe('Skipped');
+        expect(queuedRoutine.NextRunAt).toBeNull();
+    });
+
+    it('coalesces duplicate pending bucket routines for the same (UserID, ApplicationID) during a dispatcher sweep into ONE execution (CR-COALESCE-ATOMICITY)', async () => {
+        const dupRoutine1 = makeRoutine({
+            ID: '00000000-0000-0000-0000-000000000001',
+            UserID: 'U-ACTIVE',
+            Name: 'Chief of Staff — Wake (app:app-tasks)',
+            NextRunAt: PAST,
+            WakeConfigurationObject: {
+                workstreamKey: 'app:app-tasks',
+                resumeState: {
+                    applicationID: 'app-tasks',
+                    coalesceRevision: 1,
+                    coalescedEventCount: 1,
+                    pendingEvents: [{ triggerType: 'TaskAssigned', taskID: 'dup-1' }],
+                },
+            },
+        });
+        const dupRoutine2 = makeRoutine({
+            ID: '00000000-0000-0000-0000-000000000002',
+            UserID: 'U-ACTIVE',
+            Name: 'Chief of Staff — Wake (app:app-tasks)',
+            NextRunAt: PAST,
+            WakeConfigurationObject: {
+                workstreamKey: 'app:app-tasks',
+                resumeState: {
+                    applicationID: 'app-tasks',
+                    coalesceRevision: 1,
+                    coalescedEventCount: 1,
+                    pendingEvents: [{ triggerType: 'TaskAssigned', taskID: 'dup-2' }],
+                },
+            },
+        });
+
+        runViewMock.mockImplementation(async (params: RunViewParams) => {
+            if (params.EntityName === 'MJ: User Routines') {
+                return {
+                    Success: true,
+                    Results: [dupRoutine2, dupRoutine1],
+                    TotalRowCount: 2,
+                    RowCount: 2,
+                    UserViewID: '',
+                    ExecutionTime: 0,
+                    ErrorMessage: '',
+                };
+            }
+            if (params.EntityName === 'MJ: AI Agent User Policies') {
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: 'POL-ACTIVE',
+                            AgentID: 'AGENT-1',
+                            UserID: 'U-ACTIVE',
+                            Status: 'Active',
+                            AllowInterAgentCoordination: true,
+                            EmailChannelMode: 'DraftOnly',
+                            Agent: 'Chief of Staff',
+                        },
+                    ],
+                    TotalRowCount: 1,
+                    RowCount: 1,
+                    UserViewID: '',
+                    ExecutionTime: 0,
+                    ErrorMessage: '',
+                };
+            }
+            return { Success: true, Results: [], TotalRowCount: 0, RowCount: 0, UserViewID: '', ExecutionTime: 0, ErrorMessage: '' };
+        });
+
+        const sweep = await driver.Execute(buildContext());
+        expect(sweep.Success).toBe(true);
+        expect(sweep.Details?.RoutinesRun).toBe(1);
+        expect(agentRunMock).toHaveBeenCalledTimes(1);
+        expect(dupRoutine2.Status).toBe('Disabled');
+        expect(dupRoutine2.NextRunAt).toBeNull();
+
+        const wakePayload = agentRunMock.mock.calls[0][0].payload as {
+            _wakeContext?: { resumeState?: { pendingEvents?: Array<{ taskID?: string }> } };
+        };
+        expect(wakePayload._wakeContext?.resumeState?.pendingEvents?.map((e) => e.taskID)).toEqual([
+            'dup-1',
+            'dup-2',
+        ]);
+    });
 });

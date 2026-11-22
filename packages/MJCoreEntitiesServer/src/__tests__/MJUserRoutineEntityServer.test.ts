@@ -82,12 +82,18 @@ vi.mock('@memberjunction/core-entities', () => {
         public SuperDeleteCalled = false;
         public ProviderToUse: unknown = {};
         public RunViewProviderToUse: unknown = {};
+        public RoutineType: string | null = 'Scheduled';
+        public WakeConfiguration: string | null = null;
+        public LastRegisteredResult: { Message?: string } | null = null;
         private fieldState: Record<string, FieldState> = {};
         public SetFieldState(name: string, state: FieldState): void {
             this.fieldState[name] = state;
         }
         public GetFieldByName(name: string): FieldState {
             return this.fieldState[name] ?? { Dirty: false, OldValue: null };
+        }
+        public RegisterResultHistoryEntry(result: { Message?: string }): void {
+            this.LastRegisteredResult = result;
         }
         public Validate(): ValidationResult {
             const r = new ValidationResult();
@@ -287,6 +293,44 @@ describe('MJUserRoutineEntityServer.Save', () => {
         await e.Save();
         expect(e.NextRunAt).toBeNull();
         expect(e.SuperSaveCalled).toBe(true);
+    });
+
+    it('rejects stale AgentWake coalescing writes when DB coalesceRevision has already advanced (CAS conflict)', async () => {
+        const e = makeEntity() as MJUserRoutineEntityServer & MockHooks & {
+            RoutineType: string | null;
+            WakeConfiguration: string | null;
+            LastRegisteredResult: { Message?: string } | null;
+        };
+        e.IsSaved = true;
+        e.RoutineType = 'AgentWake';
+        e.CronExpression = null as unknown as string;
+        e.WakeConfiguration = JSON.stringify({
+            workstreamKey: 'app:tasks',
+            resumeState: { coalesceRevision: 2 },
+        });
+        e.SetFieldState('WakeConfiguration', {
+            Dirty: true,
+            OldValue: JSON.stringify({ workstreamKey: 'app:tasks', resumeState: { coalesceRevision: 1 } }),
+        });
+
+        vi.spyOn(RunView.prototype, 'RunView').mockResolvedValueOnce({
+            Success: true,
+            Results: [
+                {
+                    ID: e.ID,
+                    WakeConfiguration: JSON.stringify({
+                        workstreamKey: 'app:tasks',
+                        resumeState: { coalesceRevision: 2 },
+                    }),
+                },
+            ],
+        } as unknown as Awaited<ReturnType<RunView['RunView']>>);
+
+        const ok = await e.Save();
+        expect(ok).toBe(false);
+        expect(e.SuperSaveCalled).toBe(false);
+        expect(e.LastRegisteredResult?.Message).toContain('Concurrent AgentWake coalescing conflict');
+        vi.restoreAllMocks();
     });
 });
 

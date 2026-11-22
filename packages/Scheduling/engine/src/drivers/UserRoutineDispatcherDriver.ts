@@ -39,10 +39,14 @@ import {
 import {
     AgentRunner,
     BuildPolicyPairKey,
+    BuildUserAppWakeKey,
     CheckActivePoliciesForBatch,
     CheckActivePolicyForAgentAndUser,
+    CoalescedWakeEventPayload,
     CoalescedWakeResumeState,
+    DEFAULT_MAX_RETAINED_COALESCED_EVENTS,
     EventWakeCoalescer,
+    NormalizeApplicationKey,
     PolicyPairLookupKey,
     ResolveWakeAgentConfigurationID,
     WakeStartupGuard,
@@ -258,6 +262,8 @@ export interface RoutineRunContext {
     heartbeat?: ScheduledJobExecutionContext['heartbeat'];
     /** True for a run the user asked for by hand: the wake gate is not consulted. */
     BypassWakeGate?: boolean;
+    /** Pre-claim NextRunAt captured during a sweep so transient slot-entry errors can restore the claim. */
+    ClaimedPreviousNextRunAt?: Date | null;
 }
 
 /**
@@ -347,7 +353,8 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         // Batch-check active coordination policies (ResultType: 'simple', bypassCache: true)
         // before claiming or executing any Agent / AgentWake routine so deactivated or missing
         // policies yield zero agent runs without N+1 entity loads.
-        const due = candidates.filter(r => IsRoutineDue(r, now));
+        const rawDue = candidates.filter(r => IsRoutineDue(r, now));
+        const due = await this.coalesceDuplicatePendingBuckets(rawDue);
         const policyPairs: PolicyPairLookupKey[] = due
             .filter((r) => this.requiresAgentCoordinationPolicy(r) && Boolean(r.TargetID) && Boolean(r.UserID))
             .map((r) => ({ AgentID: r.TargetID!, UserID: r.UserID! }));
@@ -361,7 +368,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         // miss never burns a OneShot routine's NextRunAt=null without executing it. Cap consecutive
         // failures at MAX_OWNER_RESOLVE_RETRIES so a permanently missing/inactive owner does not
         // retry on every sweep forever.
-        const claimed: Array<{ routine: MJUserRoutineEntity; ownerUser: UserInfo }> = [];
+        const claimed: Array<{ routine: MJUserRoutineEntity; ownerUser: UserInfo; previousNextRunAt: Date | null }> = [];
         for (const routine of due) {
             const routineKey = NormalizeUUID(routine.ID);
             let ownerUser: UserInfo;
@@ -416,15 +423,20 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
                 }
             }
 
+            const previousNextRunAt = routine.NextRunAt ? new Date(routine.NextRunAt.getTime()) : null;
             if (await this.claimRoutine(routine, now)) {
-                claimed.push({ routine, ownerUser });
+                claimed.push({ routine, ownerUser, previousNextRunAt });
             }
         }
 
-        const summaries = await RunWithBoundedConcurrency(claimed, maxConcurrent, async ({ routine, ownerUser }) => {
+        const summaries = await RunWithBoundedConcurrency(claimed, maxConcurrent, async ({ routine, ownerUser, previousNextRunAt }) => {
             // Per-routine error isolation: one routine failing must never kill the sweep.
             try {
-                return await this.executeRoutine(routine, context, ownerUser);
+                return await this.executeRoutine(
+                    routine,
+                    { ...context, ClaimedPreviousNextRunAt: previousNextRunAt },
+                    ownerUser
+                );
             } catch (error) {
                 this.logError(`Routine "${routine.Name}" (${routine.ID}) failed outside run tracking`, error);
                 return { RoutineID: routine.ID, RunStatus: 'Failed', Notified: false } satisfies RoutineExecutionSummary;
@@ -713,15 +725,266 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         return routine.RoutineType === 'AgentWake' || routine.TargetType === 'Agent';
     }
 
+    private isUnscheduledOneShot(routine: MJUserRoutineEntity): boolean {
+        return (
+            routine.ScheduleMode === 'OneShot' &&
+            routine.NextRunAt == null &&
+            (!routine.CronExpression || routine.CronExpression.trim().length === 0)
+        );
+    }
+
+    private parseRoutineWakeConfig(routine: MJUserRoutineEntity): Partial<MJUserRoutineEntity_IRoutineWakeConfiguration> {
+        if (routine.WakeConfigurationObject && typeof routine.WakeConfigurationObject === 'object') {
+            return routine.WakeConfigurationObject;
+        }
+        if (typeof routine.WakeConfiguration === 'string' && routine.WakeConfiguration.trim().length > 0) {
+            return SafeJSONParse<MJUserRoutineEntity_IRoutineWakeConfiguration>(routine.WakeConfiguration) ?? {};
+        }
+        return {};
+    }
+
     private extractRoutineApplicationID(routine: MJUserRoutineEntity): string | null {
-        const parsedConfig =
-            routine.WakeConfigurationObject ??
-            (routine.WakeConfiguration
-                ? SafeJSONParse<MJUserRoutineEntity_IRoutineWakeConfiguration>(routine.WakeConfiguration)
-                : null);
-        const resumeState = parsedConfig?.resumeState as CoalescedWakeResumeState | undefined;
+        const parsedConfig = this.parseRoutineWakeConfig(routine);
+        const resumeState = parsedConfig.resumeState as CoalescedWakeResumeState | undefined;
         const appID = resumeState?.applicationID;
         return typeof appID === 'string' && appID.trim().length > 0 ? appID.trim() : null;
+    }
+
+    private buildRoutineWakeBucketKey(routine: MJUserRoutineEntity): string | null {
+        if (routine.RoutineType !== 'AgentWake' || !routine.UserID || !routine.TargetID) {
+            return null;
+        }
+        const appID = this.extractRoutineApplicationID(routine);
+        if (appID) {
+            return `${NormalizeUUID(routine.UserID)}::${NormalizeUUID(routine.TargetID)}::app:${NormalizeApplicationKey(appID)}`;
+        }
+        const cfg = this.parseRoutineWakeConfig(routine);
+        const ws = typeof cfg.workstreamKey === 'string' ? cfg.workstreamKey.trim().toLowerCase() : '';
+        if (ws.length > 0) {
+            return `${NormalizeUUID(routine.UserID)}::${NormalizeUUID(routine.TargetID)}::ws:${ws}`;
+        }
+        return null;
+    }
+
+    private readPendingEventsFromRoutine(routine: MJUserRoutineEntity): CoalescedWakeEventPayload[] {
+        const cfg = this.parseRoutineWakeConfig(routine);
+        const resumeState = cfg.resumeState as CoalescedWakeResumeState | undefined;
+        if (!resumeState) {
+            return [];
+        }
+        if (Array.isArray(resumeState.pendingEvents)) {
+            return resumeState.pendingEvents.filter((e): e is CoalescedWakeEventPayload => typeof e === 'object' && e !== null);
+        }
+        return typeof resumeState.triggerType === 'string' ? [resumeState] : [];
+    }
+
+    private compareBucketRoutines(a: MJUserRoutineEntity, b: MJUserRoutineEntity): number {
+        const aCreated = a.__mj_CreatedAt instanceof Date ? a.__mj_CreatedAt.getTime() : Number.MAX_SAFE_INTEGER;
+        const bCreated = b.__mj_CreatedAt instanceof Date ? b.__mj_CreatedAt.getTime() : Number.MAX_SAFE_INTEGER;
+        if (aCreated !== bCreated) {
+            return aCreated - bCreated;
+        }
+        return a.ID.toLowerCase().localeCompare(b.ID.toLowerCase());
+    }
+
+    /**
+     * Converges any duplicate pending `AgentWake` routines that share the same `(UserID, TargetID, ApplicationID)`
+     * or `(UserID, TargetID, WorkstreamKey)` bucket (e.g., created concurrently by independent server instances)
+     * into the earliest/lowest-ID canonical routine so only one wake executes with all pending events preserved.
+     */
+    private async coalesceDuplicatePendingBuckets(due: MJUserRoutineEntity[]): Promise<MJUserRoutineEntity[]> {
+        const groups = new Map<string, MJUserRoutineEntity[]>();
+        const ungrouped: MJUserRoutineEntity[] = [];
+
+        for (const routine of due) {
+            const bucketKey = this.buildRoutineWakeBucketKey(routine);
+            if (!bucketKey) {
+                ungrouped.push(routine);
+                continue;
+            }
+            const existing = groups.get(bucketKey) ?? [];
+            existing.push(routine);
+            groups.set(bucketKey, existing);
+        }
+
+        const result: MJUserRoutineEntity[] = [...ungrouped];
+        for (const bucketRoutines of groups.values()) {
+            if (bucketRoutines.length <= 1) {
+                result.push(...bucketRoutines);
+                continue;
+            }
+            const sorted = [...bucketRoutines].sort((a, b) => this.compareBucketRoutines(a, b));
+            const canonical = sorted[0];
+            const duplicates = sorted.slice(1);
+            const canonicalSaved = await this.mergeBucketRoutinesIntoCanonical(canonical, duplicates);
+            if (!canonicalSaved) {
+                result.push(...sorted);
+                continue;
+            }
+            await this.deactivateSupersededBucketRoutines(duplicates, canonical.ID);
+            result.push(canonical);
+        }
+
+        return result;
+    }
+
+    private async mergeBucketRoutinesIntoCanonical(
+        canonical: MJUserRoutineEntity,
+        duplicates: MJUserRoutineEntity[]
+    ): Promise<boolean> {
+        const canonicalAppID = this.extractRoutineApplicationID(canonical);
+        const coalesceKey = BuildUserAppWakeKey(canonical.UserID, canonicalAppID);
+        const canonicalConfig = this.parseRoutineWakeConfig(canonical);
+        const canonicalResume = (canonicalConfig.resumeState as CoalescedWakeResumeState | undefined) ?? {};
+        const workstreamKey = canonicalConfig.workstreamKey ?? 'default';
+
+        let mergedEvents = this.readPendingEventsFromRoutine(canonical) as CoalescedWakeResumeState[];
+        let totalCount = typeof canonicalResume.coalescedEventCount === 'number'
+            ? canonicalResume.coalescedEventCount
+            : mergedEvents.length;
+        let overflowCount = typeof canonicalResume.overflowEventCount === 'number'
+            ? canonicalResume.overflowEventCount
+            : 0;
+        let summaryText = typeof canonicalResume.coalescedSummary === 'string'
+            ? canonicalResume.coalescedSummary
+            : null;
+        let maxRevision = typeof canonicalResume.coalesceRevision === 'number'
+            ? canonicalResume.coalesceRevision
+            : 0;
+
+        for (const dup of duplicates) {
+            const dupResume = (this.parseRoutineWakeConfig(dup).resumeState as CoalescedWakeResumeState | undefined) ?? {};
+            if (typeof dupResume.coalesceRevision === 'number') {
+                maxRevision = Math.max(maxRevision, dupResume.coalesceRevision);
+            }
+            const dupEvents = this.readPendingEventsFromRoutine(dup) as CoalescedWakeResumeState[];
+            const dupTotal = typeof dupResume.coalescedEventCount === 'number'
+                ? dupResume.coalescedEventCount
+                : dupEvents.length;
+            const dupOverflow = Math.max(0, dupTotal - dupEvents.length);
+            overflowCount += dupOverflow;
+            totalCount += dupOverflow;
+
+            for (const dupEvent of dupEvents) {
+                const merged = EventWakeCoalescer.Instance.MergeCoalescedEvents({
+                    PriorEvents: mergedEvents,
+                    NewEvent: dupEvent,
+                    CoalesceKey: coalesceKey,
+                    ApplicationID: NormalizeApplicationKey(canonicalAppID),
+                    MaxRetainedEvents: DEFAULT_MAX_RETAINED_COALESCED_EVENTS,
+                    ExistingCoalescedCount: totalCount,
+                    ExistingOverflowCount: overflowCount,
+                });
+                mergedEvents = merged.PendingEvents;
+                totalCount = merged.TotalCoalescedCount;
+                overflowCount = merged.OverflowCount;
+                if (merged.SummaryText) {
+                    summaryText = merged.SummaryText;
+                }
+            }
+        }
+
+        const updatedResumeState: CoalescedWakeResumeState = {
+            ...canonicalResume,
+            coalesceKey,
+            coalescedEventCount: totalCount,
+            overflowEventCount: overflowCount,
+            coalesceRevision: maxRevision + 1,
+            batchConsumed: false,
+            ...(summaryText ? { coalescedSummary: summaryText } : {}),
+            pendingEvents: mergedEvents,
+        };
+        const updatedWakeReason =
+            summaryText ?? canonicalConfig.wakeReason ?? `Coalesced ${totalCount} events for ${workstreamKey}`;
+        canonical.WakeConfigurationObject = {
+            ...canonicalConfig,
+            workstreamKey,
+            wakeReason: updatedWakeReason,
+            resumeState: updatedResumeState,
+        };
+        canonical.StartingPayload = JSON.stringify({
+            workstreamKey,
+            wakeReason: updatedWakeReason,
+            resumeState: updatedResumeState,
+        });
+        canonical.InitialMessage = `[AgentWake:${workstreamKey}] Resume workstream "${workstreamKey}": ${updatedWakeReason}`;
+        canonical.Description = updatedWakeReason;
+
+        const canonicalSaved = typeof canonical.Save === 'function' ? await canonical.Save() : true;
+        if (!canonicalSaved) {
+            this.logError(`Failed to persist coalesced canonical wake routine "${canonical.Name}" (${canonical.ID}); skipping duplicate suppression to preserve events`);
+        }
+        return canonicalSaved;
+    }
+
+    private async deactivateSupersededBucketRoutines(
+        duplicates: MJUserRoutineEntity[],
+        canonicalID: string
+    ): Promise<void> {
+        for (const dup of duplicates) {
+            const dupConfig = this.parseRoutineWakeConfig(dup);
+            const dupResume = (dupConfig.resumeState as CoalescedWakeResumeState | undefined) ?? {};
+            dup.Status = 'Disabled';
+            dup.NextRunAt = null;
+            dup.WakeConfigurationObject = {
+                ...dupConfig,
+                resumeState: {
+                    ...dupResume,
+                    batchConsumed: true,
+                    coalescedIntoRoutineID: canonicalID,
+                    coalescedEventCount: 0,
+                    overflowEventCount: 0,
+                    pendingEvents: [],
+                },
+            };
+            if (typeof dup.Save === 'function') {
+                await dup.Save();
+            }
+        }
+    }
+
+    private async handleSlotPolicyBlocked(
+        routine: MJUserRoutineEntity,
+        context: RoutineRunContext,
+        lookupStatus: 'found' | 'not_found' | 'error',
+        reason: string
+    ): Promise<RoutineExecutionSummary> {
+        const wasClaimedInSweep = context.ClaimedPreviousNextRunAt !== undefined;
+        if (lookupStatus === 'error') {
+            if (wasClaimedInSweep) {
+                routine.NextRunAt = context.ClaimedPreviousNextRunAt ?? new Date();
+                routine.Status = 'Active';
+                if (typeof routine.Save === 'function') {
+                    const restored = await routine.Save();
+                    if (!restored) {
+                        this.logError(
+                            `Failed to restore NextRunAt claim for routine "${routine.Name}" (${routine.ID}) after transient policy lookup failure: ${routine.LatestResult?.CompleteMessage ?? 'unknown'}`
+                        );
+                    }
+                }
+            }
+            this.log(
+                `Routine "${routine.Name}" (${routine.ID}) deferred on transient policy lookup error (claim restored): ${reason}`,
+                true
+            );
+            return { RoutineID: routine.ID, RunStatus: 'Skipped', Notified: false };
+        }
+
+        if (wasClaimedInSweep && this.isUnscheduledOneShot(routine)) {
+            routine.Status = 'Disabled';
+            routine.LastRunStatus = 'Skipped';
+            routine.LastCheckedAt = new Date();
+            if (typeof routine.Save === 'function') {
+                const deactivated = await routine.Save();
+                if (!deactivated) {
+                    this.logError(
+                        `Failed to disable one-shot routine "${routine.Name}" (${routine.ID}) after policy deactivation: ${routine.LatestResult?.CompleteMessage ?? 'unknown'}`
+                    );
+                }
+            }
+        }
+        this.log(`Routine "${routine.Name}" (${routine.ID}) blocked by active policy gate: ${reason}`, true);
+        return { RoutineID: routine.ID, RunStatus: 'Skipped', Notified: false };
     }
 
     private async executeRoutine(
@@ -735,8 +998,12 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         // routine waited in the concurrency queue yields zero runs.
         if (this.requiresAgentCoordinationPolicy(routine)) {
             if (!routine.TargetID || !routine.UserID) {
-                this.log(`Routine "${routine.Name}" (${routine.ID}) skipped: TargetID or UserID missing for policy gate.`, true);
-                return { RoutineID: routine.ID, RunStatus: 'Skipped', Notified: false };
+                return this.handleSlotPolicyBlocked(
+                    routine,
+                    context,
+                    'not_found',
+                    'TargetID or UserID missing for policy gate.'
+                );
             }
             const policyEval = await CheckActivePolicyForAgentAndUser(
                 routine.TargetID,
@@ -745,8 +1012,12 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
                 { bypassCache: true }
             );
             if (!policyEval.Allowed) {
-                this.log(`Routine "${routine.Name}" (${routine.ID}) blocked by active policy gate: ${policyEval.Reason}`, true);
-                return { RoutineID: routine.ID, RunStatus: 'Skipped', Notified: false };
+                return this.handleSlotPolicyBlocked(
+                    routine,
+                    context,
+                    policyEval.LookupStatus,
+                    policyEval.Reason
+                );
             }
         }
 
