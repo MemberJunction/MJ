@@ -195,14 +195,17 @@ jobs:
             echo "codegen=true" >> "$GITHUB_OUTPUT"
             # Off the pull-request path the rig runs on its own schedule (see cross-server-invalidation).
             echo "cachestack=false" >> "$GITHUB_OUTPUT"
-            # A dispatch is the build engineer's own run, so it gates. The nightly reports how far
-            # next is from a PostgreSQL build without failing. A merge into next skips the lane,
-            # since next holds T-SQL migrations whose PostgreSQL twins come with the next build.
-            case "${{ github.event_name }}" in
+            # A release (publish.yml calling this workflow with release: true) and a dispatch (the
+            # build engineer's own run) gate. The nightly reports how far next is from a PostgreSQL
+            # build without failing. A merge into next skips the lane, since next holds T-SQL
+            # migrations whose PostgreSQL twins come with the next build.
+            if [ "${{ inputs.release }}" = "true" ]; then
+              echo "pg=gate" >> "$GITHUB_OUTPUT"
+            else case "${{ github.event_name }}" in
               workflow_dispatch) echo "pg=gate" >> "$GITHUB_OUTPUT" ;;
               schedule) echo "pg=report" >> "$GITHUB_OUTPUT" ;;
               *) echo "pg=skip" >> "$GITHUB_OUTPUT" ;;
-            esac
+            esac; fi
           fi
 
       # The deterministic lane is skipped on a PR when either
@@ -994,7 +997,8 @@ jobs:
     name: Integration (PostgreSQL, deterministic)
     # A BUILD gate, not a per-PR gate, like pg-migrations.yml: feature PRs ship T-SQL migrations
     # only, and their PostgreSQL twins arrive in the build engineer's PR (/pg-migrate). The
-    # `changes` job decides the mode: `gate` (a PR touching migrations-pg/, or a dispatch) fails
+    # `changes` job decides the mode: `gate` (a PR touching migrations-pg/, a dispatch, or the
+    # release gate publish.yml runs) fails
     # the job on a regression; `report` (a PR to the PostgreSQL toolchain or this lane, or the
     # nightly) runs it without failing; `skip` (every other PR, and merges into next) does not run.
     needs: [changes, preflight]
