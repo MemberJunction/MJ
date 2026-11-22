@@ -537,32 +537,45 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
   public static readonly AUTO_PUBLISH_DATA_KEY = 'PredictiveStudioAutoPublish';
 
   /**
-   * Whether this build publishes a model that clears the bar. Off unless the run's `data` holds
-   * `PredictiveStudioAutoPublish: true`: a model the conversation builds is evaluated and published only when the user
-   * asks. The key is a reserved run-data key (`RESERVED_AGENT_RUN_DATA_KEYS` in `@memberjunction/ai-core-plus`), so the
-   * run sees it only when its caller set `ExecuteAgentParams.TrustReservedRunData` — MJServer's agent-run resolvers set
-   * that for the system user and for an API key holding `agent:trusted`, as the truth suite's runs are. `BaseAgent`
-   * removes it from every other run's `data`, and from the `templateParameters` a parent agent's model writes for a
-   * sub-agent. A published model goes through the gate's automated publisher with the agent run as its initiator.
-   */
-  public static AutoPublishOf(params: Pick<ExecuteAgentParams, 'data'>): boolean {
-    return params.data?.[PredictiveStudioPipelineBuilderAgent.AUTO_PUBLISH_DATA_KEY] === true;
-  }
-
-  /**
    * The run-data key that supplies the promotion setting of the protocol the build creates (OF4-30):
    * `{ autoPublishKeepBaseline: true }` publishes a kept simple baseline automatically (D-031).
    */
   public static readonly PROTOCOL_PROMOTION_DATA_KEY = 'PredictiveStudioProtocolPromotion';
 
   /**
-   * The protocol promotion setting the run's `data` supplies: `{ autoPublishKeepBaseline: true }` when the key holds an
-   * object whose `autoPublishKeepBaseline` is the boolean `true`; otherwise null, and the build's protocol is the default
-   * one. Like {@link AUTO_PUBLISH_DATA_KEY} the key is reserved run data: only a run whose caller set
-   * `ExecuteAgentParams.TrustReservedRunData` sees it; `BaseAgent` strips it from every other run and from a parent
-   * model's sub-agent `templateParameters`.
+   * Whether this run may read the automated-publishing switches ({@link AUTO_PUBLISH_DATA_KEY},
+   * {@link PROTOCOL_PROMOTION_DATA_KEY}) from its `data`. Both decide whether a model goes live unattended, so the run
+   * must be:
+   *  - **trusted** — its caller set `ExecuteAgentParams.TrustReservedRunData`, which MJServer's agent-run resolvers set
+   *    only for the system user and an API key holding `agent:trusted` (the truth suite's gate runs); a browser, an
+   *    action call or any other caller's `data` cannot switch publishing on;
+   *  - **top-level** — no `parentRun`. A sub-agent's `data` includes the `templateParameters` its parent's model wrote,
+   *    and a sub-agent inherits its root's trust, so a model could otherwise switch publishing on for a trusted root.
+   *
+   * The rule lives here, with the only reader of the keys, so the generic agent framework never has to know them.
    */
-  public static ProtocolPromotionOf(params: Pick<ExecuteAgentParams, 'data'>): ProtocolPromotionSetting | null {
+  public static ReadsPublishingSwitches(params: Pick<ExecuteAgentParams, 'TrustReservedRunData' | 'parentRun'>): boolean {
+    return params.TrustReservedRunData === true && !params.parentRun;
+  }
+
+  /**
+   * Whether this build publishes a model that clears the bar: only when the run reads the publishing switches
+   * ({@link ReadsPublishingSwitches}) and its `data` holds `PredictiveStudioAutoPublish: true`. Otherwise — every
+   * conversation's build — a model is evaluated and published only when the user asks. A published model goes through
+   * the gate's automated publisher with the agent run as its initiator.
+   */
+  public static AutoPublishOf(params: Pick<ExecuteAgentParams, 'data' | 'TrustReservedRunData' | 'parentRun'>): boolean {
+    if (!PredictiveStudioPipelineBuilderAgent.ReadsPublishingSwitches(params)) return false;
+    return params.data?.[PredictiveStudioPipelineBuilderAgent.AUTO_PUBLISH_DATA_KEY] === true;
+  }
+
+  /**
+   * The protocol promotion setting the run's `data` supplies: `{ autoPublishKeepBaseline: true }` when the run reads the
+   * publishing switches ({@link ReadsPublishingSwitches}) and the key holds an object whose `autoPublishKeepBaseline` is
+   * the boolean `true`; otherwise null, and the build's protocol is the default one.
+   */
+  public static ProtocolPromotionOf(params: Pick<ExecuteAgentParams, 'data' | 'TrustReservedRunData' | 'parentRun'>): ProtocolPromotionSetting | null {
+    if (!PredictiveStudioPipelineBuilderAgent.ReadsPublishingSwitches(params)) return null;
     const value: unknown = params.data?.[PredictiveStudioPipelineBuilderAgent.PROTOCOL_PROMOTION_DATA_KEY];
     if (typeof value !== 'object' || value === null || !('autoPublishKeepBaseline' in value)) return null;
     return value.autoPublishKeepBaseline === true ? { autoPublishKeepBaseline: true } : null;

@@ -2,14 +2,15 @@
  * Test doubles at the framework-class boundary (M4b.3 C7, kept by the controller's ruling). Each cast below stands a
  * plain field bag in for a framework class the agent only reads:
  * - `{ … } as unknown as MJMLModelEntity` (a field-bag trained-model row);
- * - `{ payload, contextUser, data, TrustReservedRunData } as unknown as ExecuteAgentParams` (the run parameters
- *   `executeAgentInternal` reads; the full type needs an agent entity and a live run);
+ * - `{ payload, contextUser, data, TrustReservedRunData, parentRun } as unknown as ExecuteAgentParams` (the run
+ *   parameters `executeAgentInternal` reads; the full type needs an agent entity and a live run — `parentRun` is a bare
+ *   `{ ID }` standing in for the parent's run row, which the agent only tests for presence);
  * - `{} as AgentConfiguration` (the configuration `executeAgentInternal` takes and the builder agent never reads).
  */
 import { describe, it, expect } from 'vitest';
 import { EntityInfo, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import { DatabaseProviderStub } from '@memberjunction/unit-testing';
-import { WithAgentRunDataTrustApplied, WithoutHostOnlyAgentRunDataKeys, type ExecuteAgentParams, type AgentConfiguration, type BaseAgentNextStep } from '@memberjunction/ai-core-plus';
+import { type ExecuteAgentParams, type AgentConfiguration, type BaseAgentNextStep } from '@memberjunction/ai-core-plus';
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import {
   TRAINING_RUN_RESULTS_SCHEMA, GateRules, TrainingRunResultsParser, TracedNumbers, TrustVerdicts, ImportanceDisplay,
@@ -544,18 +545,31 @@ class TestableBuilderAgent extends PredictiveStudioPipelineBuilderAgent {
   protected override get ProviderToUse(): IMetadataProvider {
     return new DatabaseProviderStub();
   }
-  public async Run(payload: PredictiveStudioBuilderPayload, data?: ExecuteAgentParams['data'], trustReservedRunData?: boolean): Promise<BaseAgentNextStep<PredictiveStudioBuilderPayload>> {
-    const params = { payload, contextUser: new UserInfo(null, { ID: 'user-1', Email: 'builder-agent-tests@example.com', Type: 'User' }), data, TrustReservedRunData: trustReservedRunData } as unknown as ExecuteAgentParams;
+  /**
+   * Runs the agent's build step. By default the run is what the truth suite's gate runs are: a top-level run whose
+   * caller the server trusts (`TrustReservedRunData`); `run` makes it an untrusted caller's or a sub-agent's run.
+   */
+  public async Run(payload: PredictiveStudioBuilderPayload, data?: ExecuteAgentParams['data'], run: BuilderTestRun = TrustedTopLevelRun): Promise<BaseAgentNextStep<PredictiveStudioBuilderPayload>> {
+    const params = {
+      payload,
+      contextUser: new UserInfo(null, { ID: 'user-1', Email: 'builder-agent-tests@example.com', Type: 'User' }),
+      data,
+      TrustReservedRunData: run.Trusted,
+      parentRun: run.SubAgent ? { ID: 'parent-run-1' } : undefined,
+    } as unknown as ExecuteAgentParams;
     const { finalStep } = await this.executeAgentInternal<PredictiveStudioBuilderPayload>(params, {} as AgentConfiguration);
     return finalStep;
   }
-
-  /** {@link Run} after the run-data trust rule `BaseAgent.Execute` applies to every run (`WithAgentRunDataTrustApplied`). */
-  public async RunUnderTrustRule(payload: PredictiveStudioBuilderPayload, data: ExecuteAgentParams['data'], trustReservedRunData: boolean): Promise<BaseAgentNextStep<PredictiveStudioBuilderPayload>> {
-    const { Params } = WithAgentRunDataTrustApplied({ data, TrustReservedRunData: trustReservedRunData });
-    return this.Run(payload, Params.data, Params.TrustReservedRunData);
-  }
 }
+
+/** Who started a test run: whether the server trusts its caller, and whether a parent agent called it. */
+interface BuilderTestRun {
+  readonly Trusted: boolean;
+  readonly SubAgent: boolean;
+}
+
+/** A top-level run by a trusted caller (the system user, or an API key holding `agent:trusted`). */
+const TrustedTopLevelRun: BuilderTestRun = { Trusted: true, SubAgent: false };
 
 /** The payload a step wrote; a step without one fails the test. */
 function payloadOf(step: BaseAgentNextStep<PredictiveStudioBuilderPayload>): PredictiveStudioBuilderPayload {
@@ -681,25 +695,25 @@ describe('PredictiveStudioPipelineBuilderAgent — publishing', () => {
     expect(builder.AutoPublish).toEqual([false, true]);
   });
 
-  it('publishes and promotes only for a trusted caller: an untrusted run loses both reserved keys before the build', async () => {
+  it('publishes and promotes only for a trusted caller: an untrusted run builds with both switches off', async () => {
     const builder = new DraftBuilder();
     const data = {
       [PredictiveStudioPipelineBuilderAgent.AUTO_PUBLISH_DATA_KEY]: true,
       [PredictiveStudioPipelineBuilderAgent.PROTOCOL_PROMOTION_DATA_KEY]: { autoPublishKeepBaseline: true },
     };
-    await new TestableBuilderAgent(builder).RunUnderTrustRule({ ...plan }, data, false);
-    await new TestableBuilderAgent(builder).RunUnderTrustRule({ ...plan }, data, true);
+    await new TestableBuilderAgent(builder).Run({ ...plan }, data, { Trusted: false, SubAgent: false });
+    await new TestableBuilderAgent(builder).Run({ ...plan }, data, TrustedTopLevelRun);
     expect(builder.AutoPublish).toEqual([false, true]);
     expect(builder.ProtocolPromotion).toEqual([null, { autoPublishKeepBaseline: true }]);
   });
 
-  it('never publishes from the template parameters a parent agent\'s model writes for it', async () => {
+  it('never publishes or promotes as a sub-agent, even under a trusted root: a parent model writes its data', async () => {
     const builder = new DraftBuilder();
-    const templateParameters = WithoutHostOnlyAgentRunDataKeys({
+    const data = {
       [PredictiveStudioPipelineBuilderAgent.AUTO_PUBLISH_DATA_KEY]: true,
       [PredictiveStudioPipelineBuilderAgent.PROTOCOL_PROMOTION_DATA_KEY]: { autoPublishKeepBaseline: true },
-    }).Data;
-    await new TestableBuilderAgent(builder).RunUnderTrustRule({ ...plan }, templateParameters, true);
+    };
+    await new TestableBuilderAgent(builder).Run({ ...plan }, data, { Trusted: true, SubAgent: true });
     expect(builder.AutoPublish).toEqual([false]);
     expect(builder.ProtocolPromotion).toEqual([null]);
   });
@@ -712,8 +726,9 @@ describe('PredictiveStudioPipelineBuilderAgent — publishing', () => {
 
   it('turns publishing on only for the boolean true', () => {
     const key = PredictiveStudioPipelineBuilderAgent.AUTO_PUBLISH_DATA_KEY;
-    expect([undefined, {}, { [key]: false }, { [key]: 'true' }, { [key]: 1 }, { [key]: true }].map((data) => PredictiveStudioPipelineBuilderAgent.AutoPublishOf({ data })))
+    expect([undefined, {}, { [key]: false }, { [key]: 'true' }, { [key]: 1 }, { [key]: true }].map((data) => PredictiveStudioPipelineBuilderAgent.AutoPublishOf({ data, TrustReservedRunData: true })))
       .toEqual([false, false, false, false, false, true]);
+    expect(PredictiveStudioPipelineBuilderAgent.AutoPublishOf({ data: { [key]: true } })).toBe(false);
   });
 
   it('supplies the protocol promotion setting the run data holds, and none otherwise', async () => {
@@ -729,8 +744,9 @@ describe('PredictiveStudioPipelineBuilderAgent — publishing', () => {
     const key = PredictiveStudioPipelineBuilderAgent.PROTOCOL_PROMOTION_DATA_KEY;
     const data = [undefined, {}, { [key]: true }, { [key]: null }, { [key]: {} }, { [key]: { autoPublishKeepBaseline: 'true' } }, { [key]: { autoPublishKeepBaseline: false } },
       { [key]: { autoPublishKeepBaseline: true, requiresHumanSignOff: true } }];
-    expect(data.map((d) => PredictiveStudioPipelineBuilderAgent.ProtocolPromotionOf({ data: d })))
+    expect(data.map((d) => PredictiveStudioPipelineBuilderAgent.ProtocolPromotionOf({ data: d, TrustReservedRunData: true })))
       .toEqual([null, null, null, null, null, null, null, { autoPublishKeepBaseline: true }]);
+    expect(PredictiveStudioPipelineBuilderAgent.ProtocolPromotionOf({ data: { [key]: { autoPublishKeepBaseline: true } } })).toBeNull();
   });
 
   it('reports an evaluated model that clears the bar as ready to publish, in the outcome, the message and the report', async () => {

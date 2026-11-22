@@ -805,9 +805,8 @@ export class RunAIAgentResolver extends ResolverBase {
         await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
 
         const p = GetReadWriteProvider(providers);
-        // Only the system user or an API key holding the agent:trusted scope may set a run's reserved
-        // params (scope, agent-type, Predictive Studio publishing) through data; for anyone else BaseAgent
-        // drops those keys (ExecuteAgentParams.TrustReservedRunData).
+        // Only the system user or an API key holding the agent:trusted scope may set a run's scope and agent-type
+        // params through data; for anyone else BaseAgent drops those keys (ExecuteAgentParams.TrustReservedRunData).
         const trustRunData = await IsTrustedAgentRunCaller({ UserPayload: userPayload, IsWidgetGuestRun: false, AgentID: agentId });
         if (!userPayload.apiKeyHash) {
             this.handoffEligiblePayloads.add(userPayload);
@@ -1272,10 +1271,9 @@ export class RunAIAgentResolver extends ResolverBase {
             await this.CheckAPIKeyScopeAuthorization('agent:execute', effectiveAnnouncedByAgentId, userPayload);
         }
         const effectiveUserPayload = widgetElevation ? ElevateUserPayload(userPayload, widgetElevation.ElevatedUser) : userPayload;
-        // Only the system user or an API key holding the agent:trusted scope may set a run's reserved
-        // params (scope, agent-type, Predictive Studio publishing) through data
-        // (ExecuteAgentParams.TrustReservedRunData). Judged on the caller's own payload: a widget guest runs
-        // under an elevated server principal but is never trusted.
+        // Only the system user or an API key holding the agent:trusted scope may set a run's scope and agent-type
+        // params through data (ExecuteAgentParams.TrustReservedRunData). Judged on the caller's own payload: a widget
+        // guest runs under an elevated server principal but is never trusted.
         const trustRunData = await IsTrustedAgentRunCaller({
             UserPayload: userPayload, IsWidgetGuestRun: widgetElevation !== null, AgentID: agentId,
         });

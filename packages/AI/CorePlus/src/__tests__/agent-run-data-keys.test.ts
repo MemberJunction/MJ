@@ -15,36 +15,14 @@ import {
 import type { ExecuteAgentParams, MJAIAgentEntityExtended } from '../index';
 
 describe('RESERVED_AGENT_RUN_DATA_KEYS', () => {
-    it('names the scope family, the agent-type parameter layer and the Predictive Studio publishing switches', () => {
+    it('names the scope family and the agent-type parameter layer', () => {
         expect([...RESERVED_AGENT_RUN_DATA_KEYS]).toEqual([
             'PrimaryScopeEntityName',
             'PrimaryScopeEntityID',
             'PrimaryScopeRecordID',
             'SecondaryScopes',
             '__agentTypePromptParams',
-            'PredictiveStudioAutoPublish',
-            'PredictiveStudioProtocolPromotion',
         ]);
-    });
-});
-
-describe('the Predictive Studio publishing switches', () => {
-    const publishingData = (): Record<string, unknown> => ({
-        topic: 'churn',
-        PredictiveStudioAutoPublish: true,
-        PredictiveStudioProtocolPromotion: { autoPublishKeepBaseline: true },
-    });
-
-    it('are removed from a run whose caller is not trusted (WithoutReservedAgentRunDataKeys)', () => {
-        const result = WithoutReservedAgentRunDataKeys(publishingData());
-        expect(result.Data).toEqual({ topic: 'churn' });
-        expect(result.StrippedKeys).toEqual(['PredictiveStudioAutoPublish', 'PredictiveStudioProtocolPromotion']);
-    });
-
-    it('are removed from the template parameters a model writes for a sub-agent (WithoutHostOnlyAgentRunDataKeys)', () => {
-        const result = WithoutHostOnlyAgentRunDataKeys(publishingData());
-        expect(result.Data).toEqual({ topic: 'churn' });
-        expect(result.StrippedKeys).toEqual(['PredictiveStudioAutoPublish', 'PredictiveStudioProtocolPromotion']);
     });
 });
 

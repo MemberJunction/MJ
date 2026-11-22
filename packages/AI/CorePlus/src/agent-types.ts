@@ -1456,8 +1456,7 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents.
      *
      * Its reserved keys (`RESERVED_AGENT_RUN_DATA_KEYS`: `PrimaryScopeEntityName`, `PrimaryScopeEntityID`,
-     * `PrimaryScopeRecordID`, `SecondaryScopes`, `__agentTypePromptParams`, and Predictive Studio's
-     * `PredictiveStudioAutoPublish` and `PredictiveStudioProtocolPromotion`) are read only when
+     * `PrimaryScopeRecordID`, `SecondaryScopes`, `__agentTypePromptParams`) are read only when
      * {@link TrustReservedRunData} is set; otherwise `BaseAgent.Execute` removes them. Set a run's scope with
      * {@link PrimaryScopeEntityName}, {@link PrimaryScopeRecordID} and {@link SecondaryScopes} instead.
      */
@@ -1465,9 +1464,8 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     /**
      * **Server-only — never set it from client input.** Lets this run read the reserved keys of {@link data}: the
      * fallbacks for the run's scope (`PrimaryScopeEntityName`, `PrimaryScopeEntityID`, `PrimaryScopeRecordID`,
-     * `SecondaryScopes`), its highest-precedence agent-type parameters (`__agentTypePromptParams`, which can turn
-     * on capabilities such as the Loop type's `enableTaskGraphs`), and Predictive Studio's automated-publishing
-     * switches (`PredictiveStudioAutoPublish`, `PredictiveStudioProtocolPromotion`).
+     * `SecondaryScopes`) and its highest-precedence agent-type parameters (`__agentTypePromptParams`, which can turn
+     * on capabilities such as the Loop type's `enableTaskGraphs`).
      *
      * Without it, `BaseAgent.Execute` removes those keys from `data` before the run starts and logs their names
      * (never their values). So whatever reaches `data` from a browser, an action call (Execute Agent, including one a

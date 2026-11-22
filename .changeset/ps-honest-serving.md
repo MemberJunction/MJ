@@ -1,6 +1,4 @@
 ---
-"@memberjunction/ai-agents": minor
-"@memberjunction/ai-core-plus": minor
 "@memberjunction/codegen-lib": minor
 "@memberjunction/core": minor
 "@memberjunction/core-entities": minor

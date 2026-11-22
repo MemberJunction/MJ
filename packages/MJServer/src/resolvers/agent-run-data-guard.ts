@@ -1,6 +1,6 @@
 /**
- * @fileoverview Decides which callers of the agent-run resolvers may set a run's reserved parameters (scope,
- * agent-type and Predictive Studio publishing parameters) through the free-form `data` argument.
+ * @fileoverview Decides which callers of the agent-run resolvers may set a run's scope or agent-type parameters
+ * through the free-form `data` argument.
  *
  * `BaseAgent` and `AgentRunner` read a few `ExecuteAgentParams.data` keys (`RESERVED_AGENT_RUN_DATA_KEYS` in
  * `@memberjunction/ai-core-plus`) as fallbacks that change what a run is, not just what its prompt says:
@@ -10,9 +10,6 @@
  *    inherit. On a widget-guest run an explicit scope also beats the returning-visitor scope.
  *  - `__agentTypePromptParams` is the highest-precedence agent-type parameter layer. It can turn on the
  *    Loop type's `enableTaskGraphs` capability, and switch decisions on or off.
- *  - `PredictiveStudioAutoPublish` turns on the Predictive Studio Pipeline Builder's automated publishing, and
- *    `PredictiveStudioProtocolPromotion` sets the run protocol's rule that lets a kept simple baseline be
- *    published automatically (it takes effect only with automated publishing on).
  *
  * The rule lives with the run, not here: `BaseAgent.Execute` drops those keys from every run's `data` unless the
  * params set `ExecuteAgentParams.TrustReservedRunData`. The resolvers set that marker for the callers

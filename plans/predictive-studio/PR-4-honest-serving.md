@@ -407,14 +407,6 @@ packages/SQLParser/src/__tests__/legacy-goldens/__snapshots__/legacy/shipped/Str
 packages/SQLParser/src/__tests__/legacy-goldens/__snapshots__/legacy/shipped/SubstituteTemplateVariable.json
 # M4b.5 (D4-147, D-082 caller maintenance): next's IT114 test file had no primaryKey, so every `mj sync push` of PR 4's gate metadata created a duplicate Test row; the primaryKey is added
 metadata-optional/integration-test/tests/integration/.IT114-ai-vendor-effort.json
-# M4b.5 (owner ruling 2026-11-17, review I-1): PredictiveStudioAutoPublish and PredictiveStudioProtocolPromotion become reserved agent run-data keys, read only when the caller set TrustReservedRunData; the list, its JSDoc, the ExecuteAgentParams.data JSDoc and the list's tests
-packages/AI/CorePlus/src/agent-run-data-keys.ts
-packages/AI/CorePlus/src/agent-types.ts
-packages/AI/CorePlus/src/__tests__/agent-run-data-keys.test.ts
-# M4b.5 (same ruling): the strip log line and the trusted-caller comments named only the scope and agent-type keys; they now name every reserved key family
-packages/AI/Agents/src/base-agent.ts
-packages/MJServer/src/resolvers/agent-run-data-guard.ts
-packages/MJServer/src/resolvers/RunAIAgentResolver.ts
 # The bundle barrel and the pinned bundle counts
 packages/TestingFramework/integration-test-suite/src/__tests__/check-registry.test.ts
 packages/TestingFramework/integration-test-suite/src/index.ts
@@ -10157,7 +10149,7 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   mutation cannot bite because no W2 run creates a model. 2026-11-17 (I-1): `PredictiveStudioAutoPublish` and
   `PredictiveStudioProtocolPromotion` are `RESERVED_AGENT_RUN_DATA_KEYS` (CorePlus); a run reads them only when its
   caller sets `TrustReservedRunData` (the system user or an `agent:trusted` API key), and every other entry point and a
-  parent model's `templateParameters` strip them. The gate harness is trusted through the existing system API key.
+  parent model's `templateParameters` strip them. The gate harness is trusted through the existing system API key. Superseded 2026-11-22 by D4-278: the guard lives in the Pipeline Builder (trusted top-level runs only), not in CorePlus.
 - **D4-148 · The stale `MLModelID` relationship is deleted with its column** (M5.1 review, I1). After the binding
   reshape drops `MLModelScoringBinding.MLModelID`, the `EntityRelationship` row `b3324f8a-5e80-4c82-a929-5cf1b8e5d015`
   (`MJ: ML Models` → `MJ: ML Model Scoring Bindings`, joined on `MLModelID`) survived on every fresh install and broke
@@ -10943,7 +10935,7 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   `AuthorizesCaller` and its test (D4-184), the `primaryKey` sync wrote into IT114's metadata file, and `e2e/fixtures.ts`
   (D4-276); IT182's MJAPI-affinity unit test is deleted (IT185 keeps its `requiresSharedServerDatabase` flag). Kept
   outside PS, each needed by PS behaviour or ruled by the owner: RecordSetProcessor's parallel batches (F-L3-4),
-  CorePlus/MJServer's reserved agent-run keys, the React runtime's PS scoring utility, FeaturePipelines' Model-row cache
+  the React runtime's PS scoring utility, FeaturePipelines' Model-row cache
   writes, the server entities, ServerBootstrapLite's `integration-engine` dependency and the generated files. The
   changeset drops `@memberjunction/graphql-dataprovider` and `@memberjunction/core-actions` (no PR 4 change remains).
 - **D4-275 · Save as list stays, built in PS code with entity objects** (D4-274's item 6). The grid's "Send to a list"
@@ -10959,6 +10951,17 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   tests never used it; non-PS stderr noise is next's, accepted). `fls-client.checks.ts` is reverted to `next`; IT185
   mints its keys through the PS-local `PsServingKeys.MintFullAccessKeyThroughMJAPI` (the same writes through the
   system-key wire). Everything else on the remaining-paths list stays (owner-ruled or PS-owned).
+- **D4-278 · The automated-publishing switches are guarded in Predictive Studio, not in CorePlus** (owner review,
+  2026-11-22: naming Predictive Studio in `ai/coreplus/agent-types` is a layering fault; D4-274). Supersedes M4b.5's
+  reserved-key ruling of 2026-11-16/17 (OF4-30's mechanism; the switches themselves stay). `RESERVED_AGENT_RUN_DATA_KEYS`,
+  `ExecuteAgentParams`' JSDoc, the strip log line in `base-agent.ts` and the MJServer agent-run guard comments go back
+  to `next`; CorePlus, AI Agents and MJServer carry no PR 4 source change (the changeset drops `ai-core-plus` and
+  `ai-agents`). `PredictiveStudioPipelineBuilderAgent.ReadsPublishingSwitches(params)` holds the same guarantee with
+  generic fields `next` already has: the switches count only when `TrustReservedRunData === true` (MJServer sets it only
+  for the system user and an `agent:trusted` key) **and** the run has no `parentRun` (a sub-agent's `data` carries its
+  parent model's `templateParameters` and inherits the root's trust). Handoffs pass the caller's own `data`; voice
+  delegation passes none. Tests first: the builder agent's untrusted-caller, sub-agent and value-shape cases red (4)
+  against the reverted CorePlus, green after; the harness tests read the run as the server hands it.
 - **D4-276 · The honest-serving specs' helpers sit beside them** (D4-274's item 5). `EXPLORER_BASE_URL`, `RequiredEnv`,
   `SqlTextLiteral` and `RedeemSignInLink` move unchanged into `e2e/specs/ps-honest-serving.helpers.ts` (not a spec:
   `testMatch` is `**/*.spec.ts`), imported by the two honest-serving specs; the allowlist names it.
@@ -11194,7 +11197,7 @@ default implemented:
 - **OF4-30 · The builder could not bind a supplied protocol** (recorded at M4b.3, concern C1). **Closed by the owner's
   ruling of 2026-11-16:** a run supplies `{ autoPublishKeepBaseline: true }` under the reserved run-data key
   `PredictiveStudioProtocolPromotion` and the builder's v1 protocol draft carries it (M4b.5 fix round 1); since
-  2026-11-17 the key is reserved (`TrustReservedRunData` only). Whether it stays a product feature beyond the gate runs
+  2026-11-17 only a trusted caller's run reads it (`TrustReservedRunData`; since 2026-11-22 checked by the builder on a top-level run, D4-278). Whether it stays a product feature beyond the gate runs
   is the owner's call.
 - **OF4-31 · `ScriptRunner.ConnectWithApiKey` is unusable for PS runtime proofs** (recorded at M4b.3, concern C8): an
   empty websocket URL and a non-global provider. It is next's tool, not a PR 4 file. **Default:** the runtime proofs use
@@ -11337,10 +11340,10 @@ are monitored on real outcomes.
   shipped artifact and the incumbent comparison from stored rows under row locks and requires a passed semantics check
   and a verified artifact. It is **automatic** when the stored gate outcome is `model`: auto-train, the agent and
   monitoring retrains publish without a person through the same function, idempotently per training run, and every
-  refusal is recorded and surfaced. Leakage-flagged models are refused automatically. The agent's two automated-publishing switches are reserved run data: a generic CorePlus list,
-  `RESERVED_AGENT_RUN_DATA_KEYS`, now names two Predictive Studio keys (`PredictiveStudioAutoPublish`,
-  `PredictiveStudioProtocolPromotion`) by the owner's ruling, so only the system user or an `agent:trusted` API key can
-  set them, and every other entry point and a parent model's `templateParameters` strip them. A protocol can optionally require
+  refusal is recorded and surfaced. Leakage-flagged models are refused automatically. The agent's two automated-publishing switches (`PredictiveStudioAutoPublish`,
+  `PredictiveStudioProtocolPromotion`) are read by the Pipeline Builder itself only on a top-level run whose caller the
+  server trusts (`TrustReservedRunData`: the system user or an `agent:trusted` API key), so a browser, an action call or
+  a parent model's `templateParameters` cannot switch publishing on; the generic agent framework does not know the keys (D4-278). A protocol can optionally require
   a human sign-off (`requiresHumanSignOff`, default off; the wait closes automatically). New statuses `KeepBaseline` and `Unevaluated`; a training run whose decision ships no model (no signal, or the existing rule kept) is recorded against the run. Versions are unique per pipeline; each
   model has its own scoring Action. Archiving a flagged model needs no sign-off.
 - **Artifacts.** Stored through the Predictive Studio storage-provider artifact store, write-once, with SHA-256 on the
@@ -11373,7 +11376,7 @@ are monitored on real outcomes.
 - Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, PS_SEED_LIMIT, PS_SIGN_IN_URL, PS_STORAGE_PROVIDER, PW_BASE_URL, STORAGE_LOCAL_ROOT<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->29<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->29<!-- /gen:checks -->
-- Head: <!-- gen:head -->9f604459cd<!-- /gen:head -->
+- Head: <!-- gen:head -->ca7f33b0b1<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,
@@ -11423,8 +11426,6 @@ entity and the `MJ: Entities → MJ: Latest Feature Values` relationship CodeGen
 **Changes outside Predictive Studio.** Only what Predictive Studio needs or the owner ruled (D4-274; no other change
 outside it):
 - `RecordSetProcessor` base/engine — `MaxConcurrentBatches` on the batch path (parallel batches; F-L3-4, owner ruling).
-- `AI CorePlus` / `AI Agents` / `MJServer` — `RESERVED_AGENT_RUN_DATA_KEYS` gains the two Predictive Studio publishing
-  keys; the agent-run data guard's comments and one `base-agent.ts` log line follow (owner ruling).
 - `React runtime` — the Predictive Studio ML scoring utility reads the scoring service's result.
 - `FeaturePipelines` — `FeatureValueCacheService` writes the `Model` rows of a binding (keyed upsert; a person's value
   is never overwritten). `MJCoreEntitiesServer` — server entities for publish records, scoring bindings, output
