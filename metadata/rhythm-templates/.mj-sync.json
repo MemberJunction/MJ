@@ -1,0 +1,31 @@
+{
+  "entity": "MJ: AI Agent Rhythm Templates",
+  "filePattern": "**/.*.json",
+  "defaults": {
+    "AgentID": "@lookup:MJ: AI Agents.Name=Chief of Staff",
+    "Status": "Active"
+  },
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".chief-of-staff-rhythm-templates.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": false,
+    "filter": "AgentID IN (SELECT ID FROM [__mj].vwAIAgents WHERE Name = 'Chief of Staff') AND SkillID IS NULL",
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "lookupFields": {
+      "AgentID": {
+        "entity": "MJ: AI Agents",
+        "field": "Name"
+      },
+      "SkillID": {
+        "entity": "MJ: AI Skills",
+        "field": "Name"
+      }
+    }
+  }
+}

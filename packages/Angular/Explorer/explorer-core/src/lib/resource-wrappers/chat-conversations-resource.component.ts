@@ -1621,9 +1621,14 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
   /**
    * Handle navigation request from artifact viewer plugins or actionable commands.
-   * Opens the target nav item or application (switching apps if needed) then applies query params to the URL.
+   * Opens the requested artifact in its own tab, or the target nav item or application (switching apps
+   * if needed) then applies query params to the URL.
    */
   async OnNavigationRequest(event: NavigationRequest): Promise<void> {
+    if (event.ArtifactID) {
+      this.navigationService.OpenArtifact(event.ArtifactID, event.ArtifactName);
+      return;
+    }
     const appId = event.appName ? this.resolveAppId(event.appName) : undefined;
     if (appId && (!event.navItemName || this.normalizeNavToken(event.navItemName) === this.normalizeNavToken(event.appName))) {
       await this.navigationService.SwitchToApp(appId, undefined, event.queryParams);

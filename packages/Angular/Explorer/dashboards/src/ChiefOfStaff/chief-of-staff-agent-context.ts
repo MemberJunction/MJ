@@ -126,10 +126,11 @@ export function ResolveSelectableAgent(
 export const CHIEF_OF_STAFF_APP_NAME = 'Chief of Staff';
 
 /** The Chief of Staff application's own pages; each is one nav item. */
-export type ChiefOfStaffPage = 'overview' | 'approvals-wakes' | 'governance';
+export type ChiefOfStaffPage = 'overview' | 'approvals-wakes' | 'agent-channels' | 'governance';
 export const CHIEF_OF_STAFF_PAGES: readonly ChiefOfStaffPage[] = [
     'overview',
     'approvals-wakes',
+    'agent-channels',
     'governance',
 ] as const;
 
@@ -137,6 +138,7 @@ export const CHIEF_OF_STAFF_PAGES: readonly ChiefOfStaffPage[] = [
 export const CHIEF_OF_STAFF_PAGE_LABELS: Readonly<Record<ChiefOfStaffPage, string>> = {
     overview: 'Overview',
     'approvals-wakes': 'Approvals & Wakes',
+    'agent-channels': 'Agent Channels',
     governance: 'Governance',
 };
 
@@ -144,8 +146,37 @@ export const CHIEF_OF_STAFF_PAGE_LABELS: Readonly<Record<ChiefOfStaffPage, strin
 export const CHIEF_OF_STAFF_PAGE_ICONS: Readonly<Record<ChiefOfStaffPage, string>> = {
     overview: 'fa-solid fa-compass',
     'approvals-wakes': 'fa-solid fa-bell-concierge',
+    'agent-channels': 'fa-solid fa-comments',
     governance: 'fa-solid fa-shield-halved',
 };
+
+/** Character threshold above which `InstructionsOverride` bloat triggers a governance warning. */
+export const INSTRUCTIONS_OVERRIDE_WARNING_THRESHOLD = 4000;
+
+export interface InstructionsOverrideSizeReport {
+    Length: number;
+    Threshold: number;
+    ExceedsThreshold: boolean;
+    PercentOfThreshold: number;
+}
+
+/**
+ * Evaluates the character size of `MJAIAgentUserPolicyEntity.InstructionsOverride` against
+ * {@link INSTRUCTIONS_OVERRIDE_WARNING_THRESHOLD} so users and admins can spot prompt bloat.
+ */
+export function EvaluateInstructionsOverrideSize(
+    instructions: string | null | undefined,
+    threshold: number = INSTRUCTIONS_OVERRIDE_WARNING_THRESHOLD,
+): InstructionsOverrideSizeReport {
+    const length = instructions ? instructions.length : 0;
+    const safeThreshold = threshold > 0 ? threshold : INSTRUCTIONS_OVERRIDE_WARNING_THRESHOLD;
+    return {
+        Length: length,
+        Threshold: safeThreshold,
+        ExceedsThreshold: length > safeThreshold,
+        PercentOfThreshold: Math.round((length / safeThreshold) * 100),
+    };
+}
 
 export type PolicyStatusValue = MJAIAgentUserPolicyEntity['Status'];
 export type PolicyCoordinationModeValue = MJAIAgentUserPolicyEntity['CoordinationMode'];

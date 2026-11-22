@@ -324,10 +324,14 @@ export class ArtifactResource extends BaseResourceComponent implements OnDestroy
   }
 
   /**
-   * Handles app-level navigation requested by an artifact viewer plugin.
-   * Opens the target nav item (switching apps if needed) then applies query params to the URL.
+   * Handles navigation requested by an artifact viewer plugin. Opens the requested artifact in its own
+   * tab, or the target nav item (switching apps if needed) with its query params.
    */
   async OnNavigationRequest(event: NavigationRequest): Promise<void> {
+    if (event.ArtifactID) {
+      this.navigationService.OpenArtifact(event.ArtifactID, event.ArtifactName);
+      return;
+    }
     const appId = event.appName ? this.resolveAppID(event.appName) : undefined;
     await this.navigationService.OpenNavItemByName(event.navItemName, undefined, appId, {
       queryParams: event.queryParams

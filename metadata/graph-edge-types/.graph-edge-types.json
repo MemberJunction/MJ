@@ -38,10 +38,10 @@
   {
     "fields": {
       "GraphID": null,
-      "Name": "Broader Than",
+      "Name": "BroaderThan",
       "Description": "Connects a parent or umbrella concept to a more specific child concept.",
       "IsDirected": true,
-      "InverseName": "Narrower Than",
+      "InverseName": "NarrowerThan",
       "DefaultWeight": 0.85,
       "AllowStored": true
     },
@@ -231,6 +231,34 @@
     "sync": {
       "lastModified": "2026-11-03T23:46:01.493Z",
       "checksum": "a1f54084492f1f4706999428d8c9ec39629a87fc65057be11363db1b9ae9cc76"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "LinksTo",
+      "Description": "A document links to another record by name (a [[Name]] reference in its text). Recorded as an MJ: Record Links row by the artifact graph indexer and projected by the Record Link edge provider.",
+      "IsDirected": true,
+      "InverseName": "LinkedFrom",
+      "DefaultWeight": 0.8,
+      "AllowStored": true
+    },
+    "primaryKey": {
+      "ID": "E1673319-DC19-416D-9835-4CAA300DCC22"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "SharesConceptWith",
+      "Description": "Two documents (or other records indexed by the Content Pipeline) were each a source of the same graph concept. Derived on read by the Shared Concept edge provider; never stored.",
+      "IsDirected": false,
+      "InverseName": "SharesConceptWith",
+      "DefaultWeight": 0.6,
+      "AllowStored": false
+    },
+    "primaryKey": {
+      "ID": "B0590F00-B92D-4298-9F54-89DEF6C5CE37"
     }
   }
 ]

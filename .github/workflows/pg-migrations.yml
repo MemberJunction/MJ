@@ -64,13 +64,14 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
-      # receive it, so they degrade to a cold local cache rather than failing. Rationale and
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. PR-triggered runs never
+      # receive it (the write token + HMAC signing key must not reach unreviewed PR code, which
+      # could poison cache entries the release gate replays), so they degrade to a cold local cache. Rationale and
       # setup instructions live once, on the build job in test.yml.
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
 
     services:
       postgres:

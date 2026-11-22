@@ -332,37 +332,30 @@ describe('checkPackage', () => {
         expect(elapsed).toBeLessThan(5000);
     }, 30_000);
 
-    it('never runs more than eight import children at once', async () => {
-        // Each entry records its start and end; the largest overlap is the peak child count.
-        const dir = join(FIXTURES, 'star-cap-pkg');
-        const log = join(dir, 'spans.log');
-        let peak = 0;
+    it('imports all the entries of a package in one child process', async () => {
+        // Each entry records the id of the process that imports it.
+        const dir = join(FIXTURES, 'star-one-child-pkg');
+        const log = join(dir, 'pids.log');
+        let result;
+        let pids;
         try {
             mkdirSync(join(dir, 'built', 'checks'), { recursive: true });
-            writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'star-cap-pkg', type: 'module', exports: { './checks/*': './built/checks/*.js' } }));
+            writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'star-one-child-pkg', type: 'module', exports: { './checks/*': './built/checks/*.js' } }));
             writeFileSync(log, '');
             for (let i = 0; i < 20; i++) {
                 writeFileSync(
                     join(dir, 'built', 'checks', `c${i}.js`),
-                    `import { appendFileSync } from 'node:fs';\nappendFileSync(${JSON.stringify(log)}, 'S ' + Date.now() + '\\n');\n` +
-                        `await new Promise((r) => setTimeout(r, 400));\nappendFileSync(${JSON.stringify(log)}, 'E ' + Date.now() + '\\n');\n`
+                    `import { appendFileSync } from 'node:fs';\nappendFileSync(${JSON.stringify(log)}, process.pid + '\\n');\n`
                 );
             }
-            const result = await checkPackage(dir);
-            expect(result.status).toBe('OK');
-            const events = readFileSync(log, 'utf8').trim().split('\n').map((l) => l.split(' ')).map(([k, t]) => ({ k, t: Number(t) }));
-            expect(events.filter((e) => e.k === 'S')).toHaveLength(20);
-            events.sort((a, b) => a.t - b.t || (a.k === 'E' ? -1 : 1));
-            let live = 0;
-            for (const e of events) {
-                live += e.k === 'S' ? 1 : -1;
-                peak = Math.max(peak, live);
-            }
+            result = await checkPackage(dir);
+            pids = readFileSync(log, 'utf8').trim().split('\n');
         } finally {
             rmSync(dir, { recursive: true, force: true });
         }
-        expect(peak).toBeGreaterThan(1);
-        expect(peak).toBeLessThanOrEqual(8);
+        expect(result.status).toBe('OK');
+        expect(pids).toHaveLength(20);
+        expect(new Set(pids).size).toBe(1);
     }, 60_000);
 
     it('bounds a hanging import via the timeout and classifies it OTHER_ERR (CI-hang protection)', async () => {

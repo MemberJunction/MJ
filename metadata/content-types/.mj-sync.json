@@ -1,0 +1,19 @@
+{
+  "entity": "MJ: Content Types",
+  "filePattern": "**/.*.json",
+  "defaults": {},
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".content-types.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "Name = 'MJ Docs'",
+    "externalizeFields": [],
+    "lookupFields": {}
+  }
+}

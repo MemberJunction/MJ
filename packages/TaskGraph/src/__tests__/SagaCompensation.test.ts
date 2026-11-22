@@ -952,7 +952,7 @@ describe('TaskGraphService.Submit compensation actions (S7)', () => {
     });
 });
 
-describe('TaskGraphDispatcher action retries (B4c)', () => {
+describe('TaskGraphDispatcher action retries (B4c), now durable', () => {
     let db: SagaDb;
     beforeEach(() => {
         db = new SagaDb();
@@ -962,7 +962,21 @@ describe('TaskGraphDispatcher action retries (B4c)', () => {
     });
     afterEach(() => vi.restoreAllMocks());
 
-    async function runStep(row: Row, failures: number): Promise<number> {
+    type StepOutcome = {
+        Runs: number;
+        /** The arguments the retry was scheduled with, or null when none was. */
+        Scheduled: { MaxAttempts: number; DelayMs: number; Error: string | null } | null;
+        /** The final status recorded, or null when none was. */
+        Recorded: string | null;
+    };
+
+    /**
+     * Runs ONE claim of a step whose action fails `failures` times, then succeeds.
+     *
+     * A retry is no longer run inside the claim: the run happens once, and a retryable failure is
+     * scheduled on the row for a later claim — so a restart cannot lose it.
+     */
+    async function runStep(row: Row, failures: number, opts: { attemptCount?: number; scheduleAccepted?: boolean } = {}): Promise<StepOutcome> {
         const run = vi.fn();
         for (let i = 0; i < failures; i++) run.mockResolvedValueOnce({ Success: false, ErrorMessage: 'transient' });
         run.mockResolvedValue({ Success: true, Output: {} });
@@ -971,48 +985,120 @@ describe('TaskGraphDispatcher action retries (B4c)', () => {
             { CreateProvider: vi.fn().mockResolvedValue({} as IMetadataProvider) },
             { RunAgentForTask: vi.fn() },
             TEST_USER,
-            { InstanceID: 'inst-retry', RetryBackoffBaseMs: 1 },
+            { InstanceID: 'inst-retry', RetryBackoffBaseMs: 100 },
             undefined,
             undefined,
             actionRunner,
         );
-        (dispatcher as unknown as { claims: { CompleteClaimed: unknown } }).claims.CompleteClaimed = vi.fn().mockResolvedValue(true);
-        const task = { ...row, get ConfigurationObject() { return row.Configuration ? JSON.parse(row.Configuration) : null; } } as unknown as MJTaskEntity;
+        const outcome: StepOutcome = { Runs: 0, Scheduled: null, Recorded: null };
+        const claims = (dispatcher as unknown as { claims: Record<string, unknown> }).claims;
+        claims.CompleteClaimed = vi.fn(async (_p: unknown, _id: string, o: { Status: string }) => { outcome.Recorded = o.Status; return true; });
+        claims.TryScheduleRetry = vi.fn(async (_p: unknown, _id: string, maxAttempts: number, delayMs: number, error: string | null) => {
+            if (opts.scheduleAccepted === false) return false;
+            outcome.Scheduled = { MaxAttempts: maxAttempts, DelayMs: delayMs, Error: error };
+            return true;
+        });
+        const task = {
+            ...row,
+            AttemptCount: opts.attemptCount ?? 0,
+            NextAttemptAt: null,
+            get ConfigurationObject() { return row.Configuration ? JSON.parse(row.Configuration) : null; },
+        } as unknown as MJTaskEntity;
         const parent = parentRow();
         await (dispatcher as unknown as { executeClaimed: (c: ClaimedTaskCandidate) => Promise<void> }).executeClaimed({
             ID: row.ID, ParentID: PARENT_ID, taskEntity: task, parentTask: parent,
             parentMetadata: ParseTaskGraphParentMetadata(parent.InputPayload), dependencyOutputs: new Map(), upstreamTasks: [],
         });
-        return run.mock.calls.length;
+        outcome.Runs = run.mock.calls.length;
+        return outcome;
     }
 
-    it("retries a forward step whose action's IsIdempotent column says so", async () => {
+    it("schedules a retry of a forward step whose action's IsIdempotent column says so, instead of sleeping in the claim", async () => {
         db.Actions.push({ ID: RESERVE, CompensationActionID: null, CompensationInputMapping: null, IsIdempotent: true });
         const row = db.Add({ ID: 'T-1', Name: 'Reserve', ActionID: RESERVE, Configuration: JSON.stringify({ policy: { retryCount: 2 } }) });
-        expect(await runStep(row, 1)).toBe(2);
+        const outcome = await runStep(row, 1);
+        expect(outcome.Runs).toBe(1);
+        expect(outcome.Scheduled).toEqual({ MaxAttempts: 2, DelayMs: 100, Error: 'transient' });
+        expect(outcome.Recorded).toBeNull(); // not a failure yet: nothing downstream may react to it
+    });
+
+    it('backs off from the attempt already on the row', async () => {
+        db.Actions.push({ ID: RESERVE, CompensationActionID: null, CompensationInputMapping: null, IsIdempotent: true });
+        const row = db.Add({ ID: 'T-1b', Name: 'Reserve', ActionID: RESERVE, Configuration: JSON.stringify({ policy: { retryCount: 3 } }) });
+        expect((await runStep(row, 1, { attemptCount: 2 })).Scheduled?.DelayMs).toBe(400);
+    });
+
+    it('records the failure as final once the retries are spent', async () => {
+        db.Actions.push({ ID: RESERVE, CompensationActionID: null, CompensationInputMapping: null, IsIdempotent: true });
+        const row = db.Add({ ID: 'T-1c', Name: 'Reserve', ActionID: RESERVE, Configuration: JSON.stringify({ policy: { retryCount: 2 } }) });
+        const outcome = await runStep(row, 1, { attemptCount: 2 });
+        expect(outcome.Scheduled).toBeNull();
+        expect(outcome.Recorded).toBe('Failed');
+    });
+
+    it('records the failure as final when the row refuses the retry (moved, or already at the cap)', async () => {
+        db.Actions.push({ ID: RESERVE, CompensationActionID: null, CompensationInputMapping: null, IsIdempotent: true });
+        const row = db.Add({ ID: 'T-1d', Name: 'Reserve', ActionID: RESERVE, Configuration: JSON.stringify({ policy: { retryCount: 2 } }) });
+        expect((await runStep(row, 1, { scheduleAccepted: false })).Recorded).toBe('Failed');
     });
 
     it('never retries a forward step whose action is not idempotent', async () => {
         db.Actions.push({ ID: CHARGE, CompensationActionID: null, CompensationInputMapping: null, IsIdempotent: false });
         const row = db.Add({ ID: 'T-2', Name: 'Charge', ActionID: CHARGE, Configuration: JSON.stringify({ policy: { retryCount: 3 } }) });
-        expect(await runStep(row, 1)).toBe(1);
+        const outcome = await runStep(row, 1);
+        expect(outcome.Runs).toBe(1);
+        expect(outcome.Scheduled).toBeNull();
+        expect(outcome.Recorded).toBe('Failed');
     });
 
     it("never lets a node's isIdempotent: true make a non-idempotent action retryable (S8)", async () => {
         db.Actions.push({ ID: CHARGE, CompensationActionID: null, CompensationInputMapping: null, IsIdempotent: false });
         const row = db.Add({ ID: 'T-3', Name: 'Charge', ActionID: CHARGE, Configuration: JSON.stringify({ policy: { retryCount: 1 }, compensation: { isIdempotent: true } }) });
-        expect(await runStep(row, 1)).toBe(1);
+        expect((await runStep(row, 1)).Scheduled).toBeNull();
     });
 
     it("lets a node's isIdempotent: false stop retries of an idempotent action", async () => {
         db.Actions.push({ ID: RESERVE, CompensationActionID: null, CompensationInputMapping: null, IsIdempotent: true });
         const row = db.Add({ ID: 'T-5', Name: 'Reserve', ActionID: RESERVE, Configuration: JSON.stringify({ policy: { retryCount: 2 }, compensation: { isIdempotent: false } }) });
-        expect(await runStep(row, 1)).toBe(1);
+        expect((await runStep(row, 1)).Scheduled).toBeNull();
     });
 
     it("retries a compensation task only when its compensation action is idempotent", async () => {
         db.Actions.push({ ID: VOID_INVOICE, CompensationActionID: null, CompensationInputMapping: null, IsIdempotent: false });
         const row = db.Add({ ID: 'T-4', Name: 'Compensate: Invoice', ActionID: VOID_INVOICE, CompensatesTaskID: 'T-B', Configuration: JSON.stringify({ policy: { retryCount: 3 } }) });
-        expect(await runStep(row, 1)).toBe(1);
+        expect((await runStep(row, 1)).Scheduled).toBeNull();
+    });
+
+    it('does not retry a success', async () => {
+        db.Actions.push({ ID: RESERVE, CompensationActionID: null, CompensationInputMapping: null, IsIdempotent: true });
+        const row = db.Add({ ID: 'T-6', Name: 'Reserve', ActionID: RESERVE, Configuration: JSON.stringify({ policy: { retryCount: 2 } }) });
+        const outcome = await runStep(row, 0);
+        expect(outcome.Scheduled).toBeNull();
+        expect(outcome.Recorded).toBe('Complete');
+    });
+});
+
+describe('which steps may be retried', () => {
+    const dispatcher = new TaskGraphDispatcher(
+        { CreateProvider: vi.fn().mockResolvedValue({} as IMetadataProvider) },
+        { RunAgentForTask: vi.fn() },
+        TEST_USER,
+        { InstanceID: 'inst-kinds' },
+    );
+    const allowed = (task: Partial<MJTaskEntity>) =>
+        (dispatcher as unknown as { allowedRetries: (p: IMetadataProvider, t: MJTaskEntity) => Promise<number> })
+            .allowedRetries({} as IMetadataProvider, { Configuration: JSON.stringify({ policy: { retryCount: 4 } }), ...task } as MJTaskEntity);
+
+    it('retries a Prompt or Decision step: a model call changes nothing it would repeat', async () => {
+        expect(await allowed({ PromptID: 'P', StepType: 'Prompt' })).toBe(4);
+        expect(await allowed({ PromptID: 'P', StepType: 'Decision' })).toBe(4);
+    });
+
+    it('never retries an Agent step, whatever its policy says', async () => {
+        expect(await allowed({ AgentID: 'A', StepType: 'Agent' })).toBe(0);
+    });
+
+    it('never retries a step with no retry policy', async () => {
+        expect(await allowed({ PromptID: 'P', Configuration: null })).toBe(0);
     });
 });

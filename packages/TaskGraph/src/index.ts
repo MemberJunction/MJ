@@ -27,3 +27,7 @@ export * from './operations/TaskGraphOperations';
 export * from './operations/TaskGraphDebugOperations';
 export * from './operations/WorkflowDraftOperation';
 export * from './operations/WorkflowOperations';
+export * from './operations/TaskGraphWaitingStepOperations';
+export * from './waiting-steps';
+export * from './WaitingStepRunner';
+export * from './TaskGraphWaitingSteps';

@@ -3,6 +3,7 @@ import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import nunjucks from "nunjucks";
 import { JSONParamHelper } from "../utilities/json-param-helper";
+import { AssertMappingTemplateSafe } from "./mapping-template-guard";
 
 /**
  * Action that transforms data using Nunjucks templates
@@ -68,7 +69,19 @@ export class DataMapperAction extends BaseAction {
         super();
         // Initialize Nunjucks with custom filters
         this.nunjucksEnv = new nunjucks.Environment();
+        this.removeFunctionGlobals(this.nunjucksEnv);
         this.setupCustomFilters();
+    }
+
+    /**
+     * Removes nunjucks' built-in function globals (`range`, `cycler`, `joiner`, `lipsum`).
+     * They are callable objects whose properties are a path from template code to JavaScript
+     * internals, and data mapping has no use for any of them.
+     */
+    private removeFunctionGlobals(env: nunjucks.Environment): void {
+        for (const name of ['range', 'cycler', 'joiner', 'lipsum']) {
+            env.addGlobal(name, undefined);
+        }
     }
 
     /**
@@ -132,6 +145,7 @@ export class DataMapperAction extends BaseAction {
             if (strictVariables) {
                 // Create a new environment with strict settings
                 activeEnv = new nunjucks.Environment(undefined, { throwOnUndefined: true });
+                this.removeFunctionGlobals(activeEnv);
                 // Copy filters from the main environment
                 this.copyFiltersToEnvironment(activeEnv);
             }
@@ -253,6 +267,12 @@ export class DataMapperAction extends BaseAction {
         });
     }
 
+    /** Single choke point for rendering caller-supplied template strings — validates first. */
+    private renderTemplate(env: nunjucks.Environment, template: string, data: unknown): string {
+        AssertMappingTemplateSafe(template);
+        return env.renderString(template, data);
+    }
+
     /**
      * Transform a single data item using templates
      */
@@ -260,7 +280,7 @@ export class DataMapperAction extends BaseAction {
         try {
             if (templateType === 'string') {
                 // Render string template
-                return env.renderString(template.toString(), data);
+                return this.renderTemplate(env, template.toString(), data);
             } else if (templateType === 'object' && typeof template === 'object' && !Array.isArray(template)) {
                 // Transform object template
                 const result: any = {};
@@ -268,7 +288,7 @@ export class DataMapperAction extends BaseAction {
                 for (const [key, templateValue] of Object.entries(template)) {
                     if (typeof templateValue === 'string') {
                         // Render template string
-                        result[key] = env.renderString(templateValue, data);
+                        result[key] = this.renderTemplate(env, templateValue, data);
                         
                         // Try to parse as JSON if it looks like JSON
                         if (typeof result[key] === 'string' && 
@@ -293,7 +313,7 @@ export class DataMapperAction extends BaseAction {
                 // Transform array template
                 return template.map(item => {
                     if (typeof item === 'string') {
-                        return env.renderString(item, data);
+                        return this.renderTemplate(env, item, data);
                     } else if (typeof item === 'object') {
                         return this.transformData(data, item, 'object', env);
                     } else {

@@ -122,7 +122,11 @@ export class HTTPRequestAction extends BaseAction {
                 headers: context.headers,
                 body: context.body,
                 signal: AbortSignal.timeout(timeout),
-                MaxRedirects: followRedirects ? maxRedirects : 0
+                MaxRedirects: followRedirects ? maxRedirects : 0,
+                // The caller's headers can carry credentials (Authorization, API keys). SafeFetch
+                // follows redirects by hand, so without this flag those headers would be re-sent to
+                // whatever host a redirect chain lands on, letting a redirecting target collect them.
+                StripHeadersOnCrossOriginRedirect: true
             });
 
             return await this.buildResult(params, response, responseType, String(url), method);

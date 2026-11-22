@@ -2,37 +2,184 @@ import { describe, expect, it } from 'vitest';
 import {
     ClusterContentIntoConceptSeeds,
     ExtractLeafTopicFromHeading,
+    FinalizeGraphOverlayConfig,
     GetAuthorityTierRank,
     GetConceptTypeRank,
     InferConceptTypeFromSignals,
+    MergeGraphOverlayConfig,
     ResolveGraphOverlayConfig,
+    UnknownAuthorityTierError,
+    UNRANKED_AUTHORITY_RANK,
     ScoreConceptNameSimilarity,
     type ContentChunkSeedInput,
     type ExistingGraphConceptSeed,
+    type GraphAuthorityTierDescriptor,
     type GraphConceptTypeDescriptor,
+    type GraphTypeDescriptor,
     type SchemaGroundingTarget,
 } from '../graph/index.js';
 
+/** The seeded `MJ: Graph Authority Tiers` rows, as a fixture. Code must not know these names. */
+const SEED_TIERS: GraphAuthorityTierDescriptor[] = [
+    { ID: 'tier-bylaws', Name: 'Bylaws', Rank: 100 },
+    { ID: 'tier-board', Name: 'Board Policy', Rank: 80 },
+    { ID: 'tier-sop', Name: 'Executive SOP', Rank: 60 },
+    { ID: 'tier-dept', Name: 'Department Practice', Rank: 40 },
+    { ID: 'tier-ref', Name: 'Reference', Rank: 20 },
+    { ID: 'tier-inferred', Name: 'Inferred', Rank: 10 },
+];
+
+const CANON_TYPE: GraphTypeDescriptor = {
+    ID: 'gt-canon',
+    Name: 'Canon',
+    IsCanon: true,
+    Rank: 10,
+    DefaultAuthorityTierID: 'tier-sop',
+    DefaultConceptTaxonomyMode: 'propose-only',
+    DefaultGroundingMode: 'full-canon',
+};
+
+const KNOWLEDGE_TYPE: GraphTypeDescriptor = {
+    ID: 'gt-knowledge',
+    Name: 'Knowledge',
+    IsCanon: false,
+    Rank: 20,
+    DefaultAuthorityTierID: 'tier-ref',
+    DefaultConceptTaxonomyMode: 'auto-grow',
+    DefaultGroundingMode: 'none',
+};
+
 describe('GraphOverlay & ConceptSeedClustering', () => {
-    it('resolves Canon vs Knowledge GraphOverlay defaults accurately', () => {
-        const canonResolved = ResolveGraphOverlayConfig('graph-canon-1', {
-            GraphOverlay: { TargetGraphType: 'Canon' },
+    it('fills unset overlay settings from the target graph type, not from names', () => {
+        const canonResolved = FinalizeGraphOverlayConfig(MergeGraphOverlayConfig('graph-canon-1', {}), {
+            GraphType: CANON_TYPE,
+            AuthorityTiers: SEED_TIERS,
         });
         expect(canonResolved.EnableGraphOverlay).toBe(true);
         expect(canonResolved.GraphID).toBe('graph-canon-1');
         expect(canonResolved.TargetGraphType).toBe('Canon');
+        expect(canonResolved.IsCanon).toBe(true);
         expect(canonResolved.ConceptTaxonomyMode).toBe('propose-only');
         expect(canonResolved.GroundingMode).toBe('full-canon');
-        expect(canonResolved.AuthorityTier).toBe('ExecutiveSOP');
+        expect(canonResolved.AuthorityTier).toBe('Executive SOP');
+        expect(canonResolved.AuthorityTierID).toBe('tier-sop');
 
-        const knowledgeResolved = ResolveGraphOverlayConfig(null, {
-            GraphOverlay: { GraphID: 'graph-kb-1', TargetGraphType: 'Knowledge' },
-        });
+        const knowledgeResolved = FinalizeGraphOverlayConfig(
+            MergeGraphOverlayConfig(null, { GraphOverlay: { GraphID: 'graph-kb-1' } }),
+            { GraphType: KNOWLEDGE_TYPE, AuthorityTiers: SEED_TIERS },
+        );
         expect(knowledgeResolved.EnableGraphOverlay).toBe(true);
         expect(knowledgeResolved.GraphID).toBe('graph-kb-1');
         expect(knowledgeResolved.ConceptTaxonomyMode).toBe('auto-grow');
         expect(knowledgeResolved.GroundingMode).toBe('none');
         expect(knowledgeResolved.AuthorityTier).toBe('Reference');
+    });
+
+    it('lets the graph type, not a configured type name, decide whether the graph is Canon', () => {
+        const resolved = FinalizeGraphOverlayConfig(
+            MergeGraphOverlayConfig('graph-1', { GraphOverlay: { TargetGraphType: 'Canon', IsCanon: true } }),
+            { GraphType: KNOWLEDGE_TYPE, AuthorityTiers: SEED_TIERS },
+        );
+        expect(resolved.IsCanon).toBe(false);
+        expect(resolved.TargetGraphType).toBe('Knowledge');
+        expect(resolved.ConceptTaxonomyMode).toBe('auto-grow');
+    });
+
+    it('without graph type metadata, never picks a tier or mode by name', () => {
+        const resolved = ResolveGraphOverlayConfig('graph-1', { GraphOverlay: { TargetGraphType: 'Canon' } });
+        expect(resolved.IsCanon).toBe(false);
+        expect(resolved.AuthorityTier).toBeNull();
+        expect(resolved.AuthorityTierID).toBeNull();
+        expect(resolved.GroundingMode).toBe('none');
+
+        const canonByFlag = ResolveGraphOverlayConfig('graph-1', { GraphOverlay: { IsCanon: true } });
+        expect(canonByFlag.ConceptTaxonomyMode).toBe('propose-only'); // a Canon graph never auto-approves
+    });
+
+    it('resolves a configured tier by ID or by name, case- and space-insensitively', () => {
+        const byName = FinalizeGraphOverlayConfig(
+            MergeGraphOverlayConfig('g', { GraphOverlay: { AuthorityTier: 'boardpolicy' } }),
+            { GraphType: KNOWLEDGE_TYPE, AuthorityTiers: SEED_TIERS },
+        );
+        expect(byName.AuthorityTier).toBe('Board Policy');
+        expect(byName.AuthorityTierID).toBe('tier-board');
+
+        const byID = FinalizeGraphOverlayConfig(
+            MergeGraphOverlayConfig('g', { GraphOverlay: { AuthorityTierID: 'TIER-BYLAWS' } }),
+            { GraphType: KNOWLEDGE_TYPE, AuthorityTiers: SEED_TIERS },
+        );
+        expect(byID.AuthorityTier).toBe('Bylaws');
+    });
+
+    it('accepts the documented IContentSourceGraphOverlayConfig keys as aliases', () => {
+        const merged = MergeGraphOverlayConfig(null, {
+            GraphOverlay: { Enabled: true, GraphID: 'g', DefaultAuthorityTier: 'Department Practice' },
+        });
+        const resolved = FinalizeGraphOverlayConfig(merged, { GraphType: KNOWLEDGE_TYPE, AuthorityTiers: SEED_TIERS });
+        expect(resolved.EnableGraphOverlay).toBe(true);
+        expect(resolved.AuthorityTierID).toBe('tier-dept');
+    });
+
+    it('rejects a configured tier that matches no active tier instead of ranking it silently', () => {
+        expect(() =>
+            FinalizeGraphOverlayConfig(MergeGraphOverlayConfig('g', { GraphOverlay: { AuthorityTier: 'Bylawz' } }), {
+                GraphType: KNOWLEDGE_TYPE,
+                AuthorityTiers: SEED_TIERS,
+            }),
+        ).toThrow(UnknownAuthorityTierError);
+    });
+
+    it('leaves a source unranked when neither it nor its graph type names a tier', () => {
+        const untiered: GraphTypeDescriptor = { ...KNOWLEDGE_TYPE, DefaultAuthorityTierID: null };
+        const resolved = FinalizeGraphOverlayConfig(MergeGraphOverlayConfig('g', {}), {
+            GraphType: untiered,
+            AuthorityTiers: SEED_TIERS,
+        });
+        expect(resolved.AuthorityTier).toBeNull();
+        expect(GetAuthorityTierRank(resolved.AuthorityTier, SEED_TIERS)).toBe(UNRANKED_AUTHORITY_RANK);
+    });
+
+    it('ranks only from configured tiers, so a custom vertical with no seed names works', () => {
+        const statuteTiers: GraphAuthorityTierDescriptor[] = [
+            { ID: 't-statute', Name: 'Statute', Rank: 300 },
+            { ID: 't-reg', Name: 'Regulation', Rank: 200 },
+            { ID: 't-guide', Name: 'Guidance', Rank: 100 },
+        ];
+        expect(GetAuthorityTierRank('Statute', statuteTiers)).toBe(300);
+        expect(GetAuthorityTierRank('Bylaws', statuteTiers)).toBe(UNRANKED_AUTHORITY_RANK);
+        expect(GetAuthorityTierRank('Bylaws', [])).toBe(UNRANKED_AUTHORITY_RANK);
+
+        const chunks: ContentChunkSeedInput[] = [
+            {
+                ChunkID: 'c-guide',
+                ContentItemID: 'item-guide',
+                ContentSourceID: 'src-guide',
+                ContentItemTitle: 'Guidance',
+                HeadingPath: 'Guidance > Filing Deadline',
+                Text: 'Returns are due within 45 days of quarter end.',
+                AuthorityTier: 'Guidance',
+            },
+            {
+                ChunkID: 'c-statute',
+                ContentItemID: 'item-statute',
+                ContentSourceID: 'src-statute',
+                ContentItemTitle: 'Statute',
+                HeadingPath: 'Statute > Filing Deadline',
+                Text: 'Returns are due within 30 days of quarter end.',
+                AuthorityTier: 'Statute',
+            },
+        ];
+        const result = ClusterContentIntoConceptSeeds(chunks, [], { taxonomyMode: 'auto-grow', authorityTiers: statuteTiers });
+        const cluster = result.Clusters[0];
+        expect(cluster.Chunks[0].ChunkID).toBe('c-statute');
+        expect(cluster.HighestAuthorityTier).toBe('Statute');
+        expect(cluster.HighestAuthorityTierID).toBe('t-statute');
+        expect(cluster.PotentialConflicts[0]?.HigherAuthorityChunkID).toBe('c-statute');
+
+        // Reordering the ranks in metadata reorders the result, with no code change.
+        const flipped = statuteTiers.map((t) => ({ ...t, Rank: 400 - t.Rank }));
+        const flippedResult = ClusterContentIntoConceptSeeds(chunks, [], { taxonomyMode: 'auto-grow', authorityTiers: flipped });
+        expect(flippedResult.Clusters[0].Chunks[0].ChunkID).toBe('c-guide');
     });
 
     it('extracts normalized leaf topics from multi-level document headings and strips section numbers', () => {
@@ -132,6 +279,7 @@ describe('GraphOverlay & ConceptSeedClustering', () => {
         const result = ClusterContentIntoConceptSeeds(chunks, existingConcepts, {
             taxonomyMode: 'propose-only',
             groundingTargets,
+            authorityTiers: SEED_TIERS,
         });
 
         expect(result.MatchedExistingCount).toBe(1);
@@ -144,8 +292,8 @@ describe('GraphOverlay & ConceptSeedClustering', () => {
         // Sorted highest authority first: Bylaws chunk before DepartmentPractice chunk
         expect(graceCluster.Chunks[0].ChunkID).toBe('chunk-bylaws-1');
         expect(graceCluster.HighestAuthorityTier).toBe('Bylaws');
-        expect(GetAuthorityTierRank(graceCluster.HighestAuthorityTier)).toBeGreaterThan(
-            GetAuthorityTierRank('DepartmentPractice'),
+        expect(GetAuthorityTierRank(graceCluster.HighestAuthorityTier, SEED_TIERS)).toBeGreaterThan(
+            GetAuthorityTierRank('DepartmentPractice', SEED_TIERS),
         );
 
         // Detected the 60 days vs 90 days conflict between Bylaws and Desk Manual!
@@ -255,6 +403,7 @@ describe('GraphOverlay & ConceptSeedClustering', () => {
             taxonomyMode: 'propose-only',
             maxNewConcepts: 1,
             groundingTargets,
+            authorityTiers: SEED_TIERS,
         });
 
         // Capped to 1 proposed concept; the 2-chunk BoardPolicy cluster wins over the 1-chunk Informational cluster
@@ -276,11 +425,17 @@ describe('GraphOverlay & ConceptSeedClustering', () => {
     });
 
     it('supports custom GraphTypes with IsCanon=true and prioritizes higher-ranked GraphConceptTypes when capped', () => {
-        const customCanon = ResolveGraphOverlayConfig('graph-reg-canon', {
-            GraphOverlay: {
-                TargetGraphType: 'Regulatory Governance',
-                IsCanon: true,
-            },
+        const regulatoryType: GraphTypeDescriptor = {
+            ID: 'gt-reg',
+            Name: 'Regulatory Governance',
+            IsCanon: true,
+            Rank: 15,
+            DefaultConceptTaxonomyMode: 'propose-only',
+            DefaultGroundingMode: 'full-canon',
+        };
+        const customCanon = FinalizeGraphOverlayConfig(MergeGraphOverlayConfig('graph-reg-canon', {}), {
+            GraphType: regulatoryType,
+            AuthorityTiers: SEED_TIERS,
         });
         expect(customCanon.TargetGraphType).toBe('Regulatory Governance');
         expect(customCanon.IsCanon).toBe(true);

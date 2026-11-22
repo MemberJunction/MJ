@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { DataSnapshot } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
+import { BaseArtifactViewerPluginComponent, FILE_EXPORT_KEY, type ArtifactExportOption } from '../base-artifact-viewer.component';
 
 /**
  * Viewer component for HTML artifacts
@@ -159,6 +159,18 @@ export class HtmlArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
     this.HtmlContent = content;
     this.SafeHtmlContent = this.sanitizer.sanitize(1, this.HtmlContent) || '';
+  }
+
+  /** The page source, once loaded. */
+  public override GetExportOptions(): ArtifactExportOption[] {
+    return this.HtmlContent ? [this.FileExportOption('HTML (.html)', 'fa-solid fa-file-code', 'The page source')] : [];
+  }
+
+  public override async RunExport(key: string): Promise<void> {
+    if (key !== FILE_EXPORT_KEY) {
+      return super.RunExport(key);
+    }
+    this.DownloadTextFile(this.HtmlContent, this.ExportFileName('html'), 'text/html');
   }
 
   public override GetCurrentStateSnapshot(): DataSnapshot | null {

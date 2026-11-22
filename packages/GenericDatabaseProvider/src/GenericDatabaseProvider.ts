@@ -21,6 +21,7 @@ import {
     BaseEntityResult,
     ConcurrencyCheckMode,
     SerializeCloneChangeContext,
+    SerializeSyncChangeContext,
     DatabaseProviderBase,
     EntityInfo,
     EntityFieldInfo,
@@ -1461,8 +1462,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 user?.ID ?? '',
                 options.ISAActiveChildEntityName,
                 undefined,
-                entity.CloneContext ? 'Clone' : 'Internal',
-                entity.CloneContext ? SerializeCloneChangeContext(entity.CloneContext) : null,
+                entity.CloneContext ? 'Clone' : entity.SyncContext ? 'Sync' : 'Internal',
+                entity.CloneContext
+                    ? SerializeCloneChangeContext(entity.CloneContext)
+                    : entity.SyncContext
+                      ? SerializeSyncChangeContext(entity.SyncContext)
+                      : null,
+                entity.SyncContext?.IntegrationID ?? null,
             )
             : null;
 
@@ -2464,6 +2470,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 "'",
                 entity.CloneContext,
                 snapshotFromRow,
+                entity.SyncContext,
             );
             if (payload) {
                 // ISA propagation hook: reuse the diff already computed by BuildRecordChangePayload
@@ -4929,6 +4936,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     `tokens, such as an unbalanced quote or bracket.`,
                 );
             }
+            // The denylist alone cannot close the unquoted-format hole its own comment above
+            // describes: a term made of balanced parentheses and comparison operators carries no
+            // forbidden keyword yet still rewrites the predicate structure around `{0}`. When a
+            // format splices the term outside a string literal, refuse the characters that give
+            // SQL its STRUCTURE — parens, quotes, comparison operators, brackets, semicolons.
+            // Ordinary search text (words, numbers, emails, hyphens) is unaffected. A format that
+            // quotes its slot (` = '{0}'`) keeps the quote-doubled term inside the literal, so
+            // those characters are data there and stay allowed.
+            if (this.userSearchFieldsSpliceTermUnquoted(entityInfo, deniedSearchFields) && /[()=<>;'"[\]`]/.test(safeUserSearchString)) {
+                throw new Error(
+                    `Invalid User Search string: this entity has a field using UserSearchParamFormatAPI, ` +
+                    `which splices the term directly into SQL unquoted, so structural SQL characters ` +
+                    `(parentheses, quotes, comparison operators, brackets, semicolons) are not allowed in the term.`,
+                );
+            }
             // The built-in predicates have no phrase syntax, so they search a quoted phrase without its
             // quotes (UnwrapPhraseQuotes). A custom format is SQL, screened above as typed, so it gets
             // the term as typed.
@@ -5003,6 +5025,40 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                  !!f.UserSearchParamFormatAPI && f.UserSearchParamFormatAPI.length > 0 &&
                  !deniedFields?.has(f.Name.trim().toLowerCase()),
         );
+    }
+
+    /**
+     * True when a searchable field's custom format puts the term outside a string literal, as
+     * ` = {0}` does. Fields denied by field security are left out, as in
+     * {@link userSearchFieldsUseCustomFormat}.
+     */
+    protected userSearchFieldsSpliceTermUnquoted(entityInfo: EntityInfo, deniedFields?: Set<string>): boolean {
+        return entityInfo.Fields.some(
+            f => f.IncludeInUserSearchAPI &&
+                 !!f.UserSearchParamFormatAPI &&
+                 !deniedFields?.has(f.Name.trim().toLowerCase()) &&
+                 !this.customSearchFormatQuotesTerm(f.UserSearchParamFormatAPI),
+        );
+    }
+
+    /**
+     * True when the `{0}` slot of a custom search format sits inside a single-quoted SQL string
+     * literal, or the format has no slot. Only the first `{0}` is substituted, so only it is read.
+     */
+    protected customSearchFormatQuotesTerm(format: string): boolean {
+        const slot = format.indexOf('{0}');
+        if (slot < 0) return true;
+        const closers: Record<string, string> = { "'": "'", '[': ']', '"': '"' };
+        let openedBy: string | null = null;
+        for (const ch of format.slice(0, slot)) {
+            if (openedBy === null) {
+                if (ch in closers) openedBy = ch;
+            } else if (ch === closers[openedBy]) {
+                // A doubled quote inside a literal closes and reopens it, which leaves the state right.
+                openedBy = null;
+            }
+        }
+        return openedBy === "'";
     }
 
     /**
@@ -10234,6 +10290,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      */
     protected override get MetadataMemberRefreshMustWait(): boolean {
         return this.CurrentTransactionDepth > 0 || this.HasPhysicalTransaction;
+    }
+
+    /**
+     * Unlike {@link MetadataMemberRefreshMustWait} (which defers a local member-entity write until
+     * that transaction commits), a peer metadata notice comes from another server whose write has
+     * already committed and persisted its snapshot to the shared cache. Because
+     * {@link datasetReadsOnPool} runs `MJ_Metadata` status and dataset reads on the connection pool
+     * (`ignoreAmbientTransaction: true`) whenever {@link MetadataReadsJoinTransaction} is false, an
+     * unrelated local transaction on the global provider (such as a scheduled job saving
+     * `MJ: Entity Record Documents`) must not defer adopting a peer's metadata update.
+     */
+    protected override get PeerMetadataNoticeMustWait(): boolean {
+        return this.MetadataReadsJoinTransaction && this.MetadataMemberRefreshMustWait;
     }
 
     /**

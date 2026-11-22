@@ -14,6 +14,11 @@ export type VectorizeEntityParams = {
     */
     listID?: string;
     /**
+     * Optional SQL WHERE clause filter to restrict vectorization to specific records
+     * (e.g., incremental post-save re-indexing by primary keys in Peer Sync).
+     */
+    extraFilter?: string;
+    /**
      * The number of records to fetch from the list at a time. Defaults to 50.
      */
     listBatchCount?: number;
