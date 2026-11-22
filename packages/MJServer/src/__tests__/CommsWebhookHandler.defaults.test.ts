@@ -817,7 +817,7 @@ describe('default token verification and publish on the tracking and unsubscribe
   // (`Success: false`) is folded into "token not found", so a database error during a one-click
   // unsubscribe answers 404 "Unknown unsubscribe token". A 404 tells the mail client the request
   // is final; the unsubscribe is dropped. The publish-failure path on the same route answers 503.
-  it.fails('answers 503, not 404, when the unsubscribe token lookup fails', async () => {
+  it('answers 503, not 404, when the unsubscribe token lookup fails', async () => {
     views.Fail('MJ: Communication Logs', 'Timeout expired');
 
     await withDefaults(async (baseUrl) => {
@@ -1201,7 +1201,7 @@ describe('GET /preferences/:token with the default resolver', () => {
   // DEFECT CommsWebhookHandler.ts, defaultResolvePreferenceCenterData (`ppRes.Success ? ... : []` and `if (suppRes.Success)`): a failed read of the recipient's own choices, or
   // of their unsubscribe suppressions, is treated as "none", so the page shows topic defaults. A
   // recipient who opted out of everything is shown "Opted In" and is told nothing went wrong.
-  it.fails("does not present default states as the recipient's choices when their choices cannot be read", async () => {
+  it("does not present default states as the recipient's choices when their choices cannot be read", async () => {
     seedSentMessage();
     db.AddPrincipalPreference({ CommunicationPreferenceID: 'pref-news', State: 'Opted Out' });
     views.Fail('MJ: Communication Principal Preferences', 'Timeout expired');
@@ -1453,7 +1453,7 @@ describe('POST /preferences/:token with the default save', () => {
     // DEFECT CommsWebhookHandler.ts, defaultSavePreferenceCenterChoices (`if (!(await supp.Save()))`): the save failure is returned as a bare
     // `Success: false` with no ErrorMessage and is not logged, so neither the recipient nor an
     // operator learns why an unsubscribe was not recorded.
-    it.fails('says why when the unsubscribe suppression cannot be saved', async () => {
+    it('says why when the unsubscribe suppression cannot be saved', async () => {
       db.NewRowBehaviour.set('MJ: Communication Suppressions', { SaveSucceeds: false, SaveError: 'Create not permitted' });
 
       await withDefaults(async (baseUrl) => {
@@ -1481,7 +1481,7 @@ describe('POST /preferences/:token with the default save', () => {
     // without looking for an active one, so a double click, a browser retry or a second visit
     // leaves several Active "User Unsubscribe" rows for the same endpoint and sender. Revoking
     // one (RevokeCommsSuppression) then leaves the recipient suppressed by the others.
-    it.fails('does not add a second active suppression when Unsubscribe All is submitted twice', async () => {
+    it('does not add a second active suppression when Unsubscribe All is submitted twice', async () => {
       await withDefaults(async (baseUrl) => {
         await save(baseUrl, { UnsubscribeAll: true });
         await save(baseUrl, { UnsubscribeAll: true });
@@ -1667,7 +1667,7 @@ describe('POST /confirm/:token with the default confirmation', () => {
   // returned as `Confirmed: false`, which the route answers exactly like an opted-out preference:
   // HTTP 409, and in the HTML page "This subscription cannot be confirmed because it has been
   // opted out." A server-side save failure is reported to the subscriber as their own opt-out.
-  it.fails('answers a 5xx, not the opted-out 409, when the confirmation cannot be saved', async () => {
+  it('answers a 5xx, not the opted-out 409, when the confirmation cannot be saved', async () => {
     pending({ SaveSucceeds: false, SaveError: 'Update not permitted' });
 
     await withDefaults(async (baseUrl) => {

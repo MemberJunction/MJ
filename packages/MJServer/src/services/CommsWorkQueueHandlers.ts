@@ -11,6 +11,7 @@
  *
  * @module @memberjunction/server/services/CommsWorkQueueHandlers
  */
+import crypto from 'node:crypto';
 import { RegisterClass } from '@memberjunction/global';
 import {
     CommsActivityWorker,
@@ -119,11 +120,15 @@ export class CommsDispatchWorkHandler extends BaseWorkHandler<CommsDispatchWorkP
         if (!payload?.Envelope || !Array.isArray(payload.Recipients)) {
             return Outcome.DeadLetter('Invalid comms.dispatch payload: missing Envelope or Recipients');
         }
-        await CommunicationEngine.Instance.Config(false, this.ContextUser);
+        await CommunicationEngine.Instance.Config(false, this.ContextUser, this.Provider);
+        const envelope: SendingEnvelope =
+            typeof (payload.Envelope.ScheduledAt as unknown) === 'string'
+                ? { ...payload.Envelope, ScheduledAt: new Date(payload.Envelope.ScheduledAt as unknown as string) }
+                : payload.Envelope;
         const result = await CommunicationEngine.Instance.Send(
             {
                 CommunicationRunID: payload.CommunicationRunID,
-                Envelope: payload.Envelope,
+                Envelope: envelope,
                 Payload: payload.Payload,
                 Recipients: payload.Recipients,
             },
@@ -151,8 +156,27 @@ export class CommsRenderWorkHandler extends BaseWorkHandler<RenderBatchPayload &
         if (!payload?.Envelope || !Array.isArray(payload.Recipients)) {
             return Outcome.DeadLetter('Invalid comms.render payload: missing Envelope or Recipients');
         }
-        await CommunicationEngine.Instance.Config(false, this.ContextUser);
-        const result = await TemplatedCommunicationService.Instance.HandleRenderBatch(payload, this.ContextUser);
+        await CommunicationEngine.Instance.Config(false, this.ContextUser, this.Provider);
+        const normalizedPayload: RenderBatchPayload =
+            typeof (payload.Envelope.ScheduledAt as unknown) === 'string'
+                ? {
+                    CommunicationRunID: payload.CommunicationRunID,
+                    Envelope: {
+                        ...payload.Envelope,
+                        ScheduledAt: new Date(payload.Envelope.ScheduledAt as unknown as string),
+                    },
+                    EntityID: payload.EntityID,
+                    Templates: payload.Templates,
+                    AutoAppendComplianceFooter: payload.AutoAppendComplianceFooter,
+                    Recipients: payload.Recipients,
+                    ActingUserID: payload.ActingUserID,
+                }
+                : payload;
+        const result = await TemplatedCommunicationService.Instance.HandleRenderBatch(
+            normalizedPayload,
+            this.ContextUser,
+            this.Provider as unknown as Parameters<typeof TemplatedCommunicationService.Instance.HandleRenderBatch>[2],
+        );
         if (!result.Success) {
             return Outcome.Retry(result.ErrorMessage ?? 'comms.render batch failed');
         }
@@ -175,7 +199,7 @@ export class CommsActivityWorkHandler extends BaseWorkHandler<CommsActivityWorkP
             return Outcome.DeadLetter('Invalid comms.activity payload: missing Source');
         }
 
-        await CommunicationEngine.Instance.Config(false, this.ContextUser);
+        await CommunicationEngine.Instance.Config(false, this.ContextUser, this.Provider);
         const worker = new CommsActivityWorker();
         const events = await this.normalizePayloadEvents(payload);
         if (events.length > 0) {
@@ -232,12 +256,28 @@ export class CommsActivityWorkHandler extends BaseWorkHandler<CommsActivityWorkP
             return [];
         }
 
+        const occurredAt = payload.OccurredAt ? new Date(payload.OccurredAt) : new Date();
+        const externalEventId = crypto
+            .createHash('sha256')
+            .update(
+                JSON.stringify({
+                    Source: payload.Source,
+                    EventType: payload.EventType,
+                    TrackingToken: payload.TrackingToken ?? null,
+                    UnsubscribeToken: payload.UnsubscribeToken ?? null,
+                    TargetURL: payload.TargetURL ?? null,
+                    OccurredAt: payload.OccurredAt ?? occurredAt.toISOString(),
+                }),
+            )
+            .digest('hex');
+
         return [
             {
                 CommunicationProviderID: sgEntity?.ID ?? '',
+                ProviderEventID: externalEventId,
                 NormalizedAddress: '',
                 EventType: payload.EventType,
-                OccurredAt: payload.OccurredAt ? new Date(payload.OccurredAt) : new Date(),
+                OccurredAt: occurredAt,
                 Source: payload.Source === 'unsubscribe' ? 'One-Click Header' : 'Provider Webhook',
                 TrackingToken: payload.TrackingToken,
                 UnsubscribeToken: payload.UnsubscribeToken,

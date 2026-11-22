@@ -125,6 +125,7 @@ describe('CommsAdminOperations', () => {
     const op = new CommsBlockEndpointServerOperation();
     const savedEntities: Array<{ entity: string; record: Record<string, unknown> }> = [];
     const provider = makeProvider();
+    vi.spyOn(RunView.prototype, 'RunView').mockResolvedValueOnce({ Success: true, Results: [] } as never);
 
     vi.spyOn(provider, 'GetEntityObject').mockImplementation(async (name: string) => {
       if (name === 'MJ: Communication Endpoints') {

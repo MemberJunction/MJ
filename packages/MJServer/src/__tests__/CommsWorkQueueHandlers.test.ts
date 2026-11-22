@@ -369,7 +369,7 @@ describe('CommsDispatchWorkHandler (comms.dispatch)', () => {
   // envelope's `ScheduledAt` is typed `Date`, but a transport delivers JSON, so it arrives as an
   // ISO string and V2SendService.Send calls `scheduledAt.getTime()` on a string. Every queued
   // chunk of a scheduled bulk send throws, retries, and dead-letters.
-  it.fails('hands Send() an Envelope whose ScheduledAt is a Date again after the queue round trip', async () => {
+  it('hands Send() an Envelope whose ScheduledAt is a Date again after the queue round trip', async () => {
     const scheduled: CommsDispatchWorkPayload = {
       ...DISPATCH_PAYLOAD,
       Envelope: { ...ENVELOPE, ScheduledAt: new Date('2026-12-01T09:00:00.000Z') },
@@ -385,7 +385,7 @@ describe('CommsDispatchWorkHandler (comms.dispatch)', () => {
   // `this.Provider`, the provider the host mints for this delivery, and configures and runs the
   // engine on the process-global one. BaseWorkHandler's contract is "use `this.Provider` and
   // `this.ContextUser` for every data call".
-  it.fails('configures the engine on the provider the host bound to this delivery', async () => {
+  it('configures the engine on the provider the host bound to this delivery', async () => {
     await handle(DISPATCH_PAYLOAD);
 
     expect(state.engineConfig[0].Args).toContain(deliveryProvider);
@@ -498,7 +498,7 @@ describe('CommsRenderWorkHandler (comms.render)', () => {
 
   // DEFECT CommsRenderWorkHandler.Handle: `this.Provider` is not passed on, although
   // HandleRenderBatch takes a provider as its third argument.
-  it.fails('passes the provider the host bound to this delivery to HandleRenderBatch', async () => {
+  it('passes the provider the host bound to this delivery to HandleRenderBatch', async () => {
     await handle(RENDER_PAYLOAD);
 
     expect(state.renderCalls[0].Extra).toEqual([deliveryProvider]);
@@ -768,6 +768,7 @@ describe('CommsActivityWorkHandler (comms.activity)', () => {
       expect(processedEvents()).toEqual([
         {
           CommunicationProviderID: SENDGRID_PROVIDER_ID,
+          ProviderEventID: expect.any(String),
           NormalizedAddress: '',
           EventType: 'Opened',
           OccurredAt: new Date('2026-11-20T12:00:00.000Z'),
@@ -839,7 +840,7 @@ describe('CommsActivityWorkHandler (comms.activity)', () => {
     // message). CommsActivityWorker deduplicates only on ProviderEventID, so a redelivery of the
     // same message records the open, click or unsubscribe a second time. The consumer guide's
     // rule is that `MessageID` (stable across redeliveries) is the idempotency key.
-    it.fails('gives a tracking event an idempotency key, so a redelivered message is not recorded twice', async () => {
+    it('gives a tracking event an idempotency key, so a redelivered message is not recorded twice', async () => {
       const hit = { Source: 'open-pixel', EventType: 'Opened', TrackingToken: TRACKING_TOKEN, OccurredAt: '2026-11-20T12:00:00.000Z' };
 
       await handle(hit, 'msg-open-1');

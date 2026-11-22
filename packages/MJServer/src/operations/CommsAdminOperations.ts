@@ -203,24 +203,34 @@ function mapReasonToSuppressionType(reason: MJCommunicationSuppressionEntity['Re
   }
 }
 
+async function resolveCredentialById(
+  credentialId: string | null | undefined,
+  user: UserInfo,
+  subsystem = 'CommsAdmin',
+): Promise<ProviderCredentialsBase | undefined> {
+  if (!credentialId) {
+    return undefined;
+  }
+  await CredentialEngine.Instance.Config(false, user);
+  const cred = CredentialEngine.Instance.getCredentialById(credentialId);
+  if (!cred) {
+    throw new Error(`Credential '${credentialId}' was not found`);
+  }
+  const resolved = await CredentialEngine.Instance.GetCredential<{ apiKey?: string; APIKey?: string }>(
+    cred.Name,
+    { contextUser: user, subsystem },
+  );
+  const apiKey = resolved.values.apiKey ?? resolved.values.APIKey;
+  return apiKey
+    ? ({ apiKey } as ProviderCredentialsBase)
+    : (resolved.values as ProviderCredentialsBase);
+}
+
 async function resolveDomainCredentials(
   domain: MJCommunicationSendingDomainEntity,
   user: UserInfo,
 ): Promise<ProviderCredentialsBase | undefined> {
-  if (!domain.CredentialID) {
-    return undefined;
-  }
-  await CredentialEngine.Instance.Config(false, user);
-  const cred = CredentialEngine.Instance.getCredentialById(domain.CredentialID);
-  if (!cred) {
-    return undefined;
-  }
-  const resolved = await CredentialEngine.Instance.GetCredential<{ apiKey?: string; APIKey?: string }>(
-    cred.Name,
-    { contextUser: user, subsystem: 'CommsAdmin' },
-  );
-  const apiKey = resolved.values.apiKey ?? resolved.values.APIKey;
-  return apiKey ? ({ apiKey } as ProviderCredentialsBase) : (resolved.values as ProviderCredentialsBase);
+  return resolveCredentialById(domain.CredentialID, user, 'CommsAdmin');
 }
 
 async function loadSendingDomain(
@@ -237,7 +247,10 @@ async function loadSendingDomain(
     },
     user,
   );
-  return res.Success && res.Results.length > 0 ? res.Results[0] : undefined;
+  if (!res.Success) {
+    throw new Error(res.ErrorMessage || `Failed loading sending domain '${domainId}'`);
+  }
+  return res.Results.length > 0 ? res.Results[0] : undefined;
 }
 
 async function restoreEndpointIfNoActiveSuppressions(
@@ -282,7 +295,7 @@ async function resolveProvidersForSuppression(
   mdProvider: IMetadataProvider,
   supp: MJCommunicationSuppressionEntity,
   user: UserInfo,
-): Promise<MJCommunicationProviderEntity[]> {
+): Promise<{ providers: MJCommunicationProviderEntity[]; senderCredentialId?: string | null }> {
   if (supp.CommunicationSenderID) {
     const sender = await mdProvider.GetEntityObject<MJCommunicationSenderEntity>(
       'MJ: Communication Senders',
@@ -292,7 +305,7 @@ async function resolveProvidersForSuppression(
       const matched = CommunicationEngine.Instance.Providers.find((p) =>
         UUIDsEqual(p.ID, sender.CommunicationProviderID),
       );
-      if (matched) return [matched];
+      if (matched) return { providers: [matched], senderCredentialId: sender.CredentialID };
     }
   }
 
@@ -305,7 +318,7 @@ async function resolveProvidersForSuppression(
     },
     user,
   );
-  return res.Success ? res.Results : [];
+  return { providers: res.Success ? res.Results : [] };
 }
 
 async function clearDownstreamSuppression(
@@ -323,18 +336,19 @@ async function clearDownstreamSuppression(
     return undefined;
   }
 
-  const providerEntities = await resolveProvidersForSuppression(mdProvider, supp, user);
+  const { providers: providerEntities, senderCredentialId } = await resolveProvidersForSuppression(mdProvider, supp, user);
   const suppressionType = mapReasonToSuppressionType(supp.Reason);
   if (!suppressionType) {
     return undefined;
   }
+  const credentials = await resolveCredentialById(senderCredentialId, user, 'CommsAdmin');
   const warnings: string[] = [];
 
   for (const pe of providerEntities) {
     try {
       const instance = CommunicationEngine.Instance.GetProvider(pe.Name);
       if (hasRemoveSuppression(instance)) {
-        const res = await instance.RemoveSuppression(endpoint.NormalizedValue, suppressionType);
+        const res = await instance.RemoveSuppression(endpoint.NormalizedValue, suppressionType, credentials);
         if (!res.Success && res.ErrorMessage) {
           warnings.push(`${pe.Name}: ${res.ErrorMessage}`);
         }
@@ -397,7 +411,13 @@ export class CommsSimulateComplianceGateServerOperation extends BaseRemotableOpe
       { EntityName: 'MJ: Communication Compliance Regime Rules', ResultType: 'entity_object' },
     ], user);
 
-    const senders = (sendersRes.Success ? sendersRes.Results : []) as MJCommunicationSenderEntity[];
+    const metadataResults = [sendersRes, prefsRes, principalsRes, jurRes, jmRes, rtRes, regRes, rjRes, rrRes];
+    const failedMeta = metadataResults.find((r) => !r.Success);
+    if (failedMeta) {
+      return { Success: false, ErrorMessage: failedMeta.ErrorMessage || 'Failed loading compliance simulation metadata' };
+    }
+
+    const senders = sendersRes.Results as MJCommunicationSenderEntity[];
     const senderById = IndexByUUID(senders, (s) => s.ID);
     const sender = senderById.Get(input.SenderID);
     if (!sender) {
@@ -450,10 +470,14 @@ export class CommsSimulateComplianceGateServerOperation extends BaseRemotableOpe
             }]
           : []),
       ], user);
-      if (suppRes.Success) {
-        suppressions = suppRes.Results as MJCommunicationSuppressionEntity[];
+      if (!suppRes.Success) {
+        return { Success: false, ErrorMessage: suppRes.ErrorMessage || 'Failed loading recipient suppressions' };
       }
-      if (ppRes?.Success && ppRes.Results.length > 0) {
+      suppressions = suppRes.Results as MJCommunicationSuppressionEntity[];
+      if (ppRes && !ppRes.Success) {
+        return { Success: false, ErrorMessage: ppRes.ErrorMessage || 'Failed loading recipient principal preferences' };
+      }
+      if (ppRes && ppRes.Results.length > 0) {
         principalPref = ppRes.Results[0] as MJCommunicationPrincipalPreferenceEntity;
       }
     }
@@ -540,7 +564,12 @@ export class CommsCreateSendingDomainServerOperation extends BaseRemotableOperat
   ): Promise<CommsSendingDomainAuthOutput> {
     await CommunicationEngine.Instance.Config(false, user, provider);
 
-    const domain = await loadSendingDomain(provider, input.DomainID, user);
+    let domain: MJCommunicationSendingDomainEntity | undefined;
+    try {
+      domain = await loadSendingDomain(provider, input.DomainID, user);
+    } catch (err) {
+      return { Success: false, ErrorMessage: err instanceof Error ? err.message : String(err) };
+    }
     if (!domain) {
       return { Success: false, ErrorMessage: `Sending domain '${input.DomainID}' not found` };
     }
@@ -609,7 +638,12 @@ export class CommsVerifySendingDomainServerOperation extends BaseRemotableOperat
   ): Promise<CommsSendingDomainAuthOutput> {
     await CommunicationEngine.Instance.Config(false, user, provider);
 
-    const domain = await loadSendingDomain(provider, input.DomainID, user);
+    let domain: MJCommunicationSendingDomainEntity | undefined;
+    try {
+      domain = await loadSendingDomain(provider, input.DomainID, user);
+    } catch (err) {
+      return { Success: false, ErrorMessage: err instanceof Error ? err.message : String(err) };
+    }
     if (!domain) {
       return { Success: false, ErrorMessage: `Sending domain '${input.DomainID}' not found` };
     }
@@ -696,7 +730,12 @@ export class CommsDeleteSendingDomainServerOperation extends BaseRemotableOperat
   ): Promise<CommsAdminMutationOutput> {
     await CommunicationEngine.Instance.Config(false, user, provider);
 
-    const domain = await loadSendingDomain(provider, input.DomainID, user);
+    let domain: MJCommunicationSendingDomainEntity | undefined;
+    try {
+      domain = await loadSendingDomain(provider, input.DomainID, user);
+    } catch (err) {
+      return { Success: false, ErrorMessage: err instanceof Error ? err.message : String(err) };
+    }
     if (!domain) {
       return { Success: false, ErrorMessage: `Sending domain '${input.DomainID}' not found` };
     }
@@ -821,6 +860,27 @@ export class CommsBlockEndpointServerOperation extends BaseRemotableOperation<
     );
     if (!(await endpoint.Load(input.EndpointID))) {
       return { Success: false, ErrorMessage: `Endpoint '${input.EndpointID}' not found` };
+    }
+
+    const rv = RunView.FromMetadataProvider(provider);
+    const existingRes = await rv.RunView<{ ID: string }>(
+      {
+        EntityName: 'MJ: Communication Suppressions',
+        ExtraFilter: `CommunicationEndpointID='${EscapeSQLString(endpoint.ID)}' AND Reason='Admin Block' AND Status='Active'`,
+        Fields: ['ID'],
+        MaxRows: 1,
+        ResultType: 'simple',
+      },
+      user,
+    );
+    if (!existingRes.Success) {
+      return {
+        Success: false,
+        ErrorMessage: existingRes.ErrorMessage || 'Failed checking existing Admin Block suppressions',
+      };
+    }
+    if (existingRes.Results.length > 0) {
+      return { Success: true, SuppressionID: existingRes.Results[0].ID };
     }
 
     const supp = await provider.GetEntityObject<MJCommunicationSuppressionEntity>(

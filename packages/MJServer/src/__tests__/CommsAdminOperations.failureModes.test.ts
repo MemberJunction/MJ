@@ -418,7 +418,7 @@ describe('Communications.CreateSendingDomain', () => {
   // DEFECT CommsAdminOperations.ts, loadSendingDomain: a failed RunView is folded into "no
   // rows", so a database error is reported to the admin as "Sending domain '<id>' not found" and
   // the RunView ErrorMessage is dropped. Create, Verify and Delete all go through it.
-  it.fails('reports the view error, not "not found", when the domain view fails', async () => {
+  it('reports the view error, not "not found", when the domain view fails', async () => {
     views.Fail('MJ: Communication Sending Domains', 'Timeout expired');
 
     const res = await create('dom-1');
@@ -490,7 +490,7 @@ describe('Communications.CreateSendingDomain', () => {
   // CredentialID the credential engine does not hold (deleted, inactive, not visible), the function
   // returns undefined and the provider is called with no credentials, so it falls back to the
   // process-wide API key and creates the domain in the wrong provider account.
-  it.fails('does not call the provider with default credentials when the domain names a credential that cannot be found', async () => {
+  it('does not call the provider with default credentials when the domain names a credential that cannot be found', async () => {
     serveDomain(makeDomain({ CredentialID: 'cred-deleted' }));
     state.credentials = [];
 
@@ -878,7 +878,7 @@ describe('Communications.RevokeSuppression', () => {
   // with no credentials, so the removal always goes to the process-wide provider account, even when
   // the suppression's sender is bound to its own credential (Sender.CredentialID, e.g. a
   // subaccount). The address stays on the list of the account that actually sent to it.
-  it.fails("clears the provider list with the credential the suppression's sender is bound to", async () => {
+  it("clears the provider list with the credential the suppression's sender is bound to", async () => {
     seedRevoke({ sender: { CredentialID: 'cred-42' } });
     state.credentials = [{ ID: 'cred-42', Name: 'SendGrid Subaccount' }];
     state.resolveCredential = () => ({ values: { apiKey: 'SG.subaccount-key' } });
@@ -989,7 +989,7 @@ describe('Communications.BlockEndpoint', () => {
   // DEFECT CommsBlockEndpointServerOperation.InternalExecute: the operation never looks for an existing active Admin
   // Block, so blocking the same endpoint twice (a double click, a retried request) creates two
   // active suppressions. Revoking one leaves the endpoint blocked by the other.
-  it.fails('does not create a second active Admin Block for an endpoint that already has one', async () => {
+  it('does not create a second active Admin Block for an endpoint that already has one', async () => {
     seedBlock();
     await block('ep-1');
     views.Serve('MJ: Communication Suppressions', [{ ID: suppressions()[0].ID, CommunicationEndpointID: 'ep-1', Reason: 'Admin Block', Status: 'Active' }]);
@@ -1038,7 +1038,7 @@ describe('Communications.SimulateComplianceGate', () => {
   // failed read of suppressions, preferences, jurisdictions or regimes is treated as "none exist",
   // so the simulator answers as if the recipient had no suppression instead of reporting that it
   // could not evaluate the gate.
-  it.fails("does not report a decision when the recipient's suppressions cannot be read", async () => {
+  it("does not report a decision when the recipient's suppressions cannot be read", async () => {
     views.Serve('MJ: Communication Senders', [SENDER]);
     views.Serve('MJ: Communication Principals', [{ ID: 'principal-1', EntityID: 'entity-contacts' }]);
     views.Fail('MJ: Communication Suppressions', 'Timeout expired');

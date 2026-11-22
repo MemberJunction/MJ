@@ -901,14 +901,18 @@ async function handlePostConfirm(
             return;
         }
         if (!result.Confirmed) {
+            const isOptedOut = result.State === 'Opted Out';
+            const status = isOptedOut ? 409 : 500;
             if (prefersJson(req)) {
-                res.status(409).json(result);
+                res.status(status).json(result);
             } else {
                 const nonce = generateNonce();
                 setSecurityHeaders(res, nonce);
-                res.status(409).send(RenderCommsErrorPage({
-                    Message: 'This subscription cannot be confirmed because it has been opted out.',
-                    PageTitle: 'Confirmation Unavailable',
+                res.status(status).send(RenderCommsErrorPage({
+                    Message: isOptedOut
+                        ? 'This subscription cannot be confirmed because it has been opted out.'
+                        : (result.ErrorMessage || 'Failed to confirm subscription.'),
+                    PageTitle: isOptedOut ? 'Confirmation Unavailable' : 'Confirmation Failed',
                     CspNonce: nonce,
                 }));
             }
@@ -1025,7 +1029,10 @@ async function defaultVerifyToken(kind: 'tracking' | 'unsubscribe', token: strin
         },
         systemUser,
     );
-    return res.Success && res.Results.length > 0;
+    if (!res.Success) {
+        throw new Error(res.ErrorMessage || 'Failed to verify communication token');
+    }
+    return res.Results.length > 0;
 }
 
 async function defaultResolveUnsubscribeRedirect(token: string, provider?: IMetadataProvider): Promise<string | undefined> {
@@ -1071,7 +1078,10 @@ async function defaultResolvePreferenceCenterData(token: string, provider?: IMet
             },
             systemUser,
         );
-        principalPrefs = ppRes.Success ? ppRes.Results : [];
+        if (!ppRes.Success) {
+            throw new Error(ppRes.ErrorMessage || 'Failed to load principal preferences');
+        }
+        principalPrefs = ppRes.Results;
     }
 
     const prefMatchById = new UUIDMap<MJCommunicationPrincipalPreferenceEntity>();
@@ -1236,35 +1246,60 @@ async function defaultSavePreferenceCenterChoices(
     const visibleIds = new Set(data.Preferences.map((p) => p.ID.toLowerCase()));
 
     if (input.UnsubscribeAll) {
-        const supp = await md.GetEntityObject<MJCommunicationSuppressionEntity>('MJ: Communication Suppressions', systemUser);
-        supp.CommunicationEndpointID = found.log.CommunicationEndpointID;
-        supp.EntityID = principal?.EntityID ?? null;
-        supp.RecordID = principal?.RecordID ?? null;
-        supp.CommunicationSenderID = senderId;
-        supp.CommunicationPreferenceID = null;
-        supp.Reason = 'User Unsubscribe';
-        supp.Source = 'Preference Center';
-        supp.Status = 'Active';
-        supp.EffectiveAt = new Date();
-        supp.CommunicationLogID = found.log.ID;
-        if (!(await supp.Save())) {
-            return { Found: true, Success: false, UnsubscribedAll: false, Preferences: data.Preferences };
+        const senderFilter = senderId
+            ? `CommunicationSenderID='${EscapeSQLString(senderId)}'`
+            : 'CommunicationSenderID IS NULL';
+        const existingSuppRes = found.log.CommunicationEndpointID
+            ? await RunView.FromMetadataProvider(md).RunView<MJCommunicationSuppressionEntity>(
+                {
+                    EntityName: 'MJ: Communication Suppressions',
+                    ExtraFilter: `CommunicationEndpointID='${EscapeSQLString(found.log.CommunicationEndpointID)}' AND Status='Active' AND Reason='User Unsubscribe' AND CommunicationPreferenceID IS NULL AND ${senderFilter}`,
+                    MaxRows: 1,
+                    ResultType: 'entity_object',
+                },
+                systemUser,
+            )
+            : undefined;
+        if (existingSuppRes && !existingSuppRes.Success) {
+            throw new Error(existingSuppRes.ErrorMessage || 'Failed checking existing unsubscribe suppression');
         }
+        if (!existingSuppRes || existingSuppRes.Results.length === 0) {
+            const supp = await md.GetEntityObject<MJCommunicationSuppressionEntity>('MJ: Communication Suppressions', systemUser);
+            supp.CommunicationEndpointID = found.log.CommunicationEndpointID;
+            supp.EntityID = principal?.EntityID ?? null;
+            supp.RecordID = principal?.RecordID ?? null;
+            supp.CommunicationSenderID = senderId;
+            supp.CommunicationPreferenceID = null;
+            supp.Reason = 'User Unsubscribe';
+            supp.Source = 'Preference Center';
+            supp.Status = 'Active';
+            supp.EffectiveAt = new Date();
+            supp.CommunicationLogID = found.log.ID;
+            if (!(await supp.Save())) {
+                return {
+                    Found: true,
+                    Success: false,
+                    UnsubscribedAll: false,
+                    Preferences: data.Preferences,
+                    ErrorMessage: supp.LatestResult?.CompleteMessage || 'Failed to save unsubscribe suppression',
+                };
+            }
 
-        const suppAudit = await md.GetEntityObject<MJCommunicationConsentAuditLogEntity>(
-            'MJ: Communication Consent Audit Logs',
-            systemUser,
-        );
-        suppAudit.CommunicationSuppressionID = supp.ID;
-        suppAudit.CommunicationLogID = found.log.ID;
-        suppAudit.Action = 'Created';
-        suppAudit.PreviousValue = null;
-        suppAudit.NewValue = JSON.stringify({ Reason: 'User Unsubscribe', UnsubscribeAll: true });
-        suppAudit.Source = 'Preference Center';
-        suppAudit.IPAddress = input.IPAddress ?? null;
-        suppAudit.UserAgent = input.UserAgent ?? null;
-        if (!(await suppAudit.Save())) {
-            LogError(`[CommsWebhook] Failed to save unsubscribe-all audit log: ${suppAudit.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            const suppAudit = await md.GetEntityObject<MJCommunicationConsentAuditLogEntity>(
+                'MJ: Communication Consent Audit Logs',
+                systemUser,
+            );
+            suppAudit.CommunicationSuppressionID = supp.ID;
+            suppAudit.CommunicationLogID = found.log.ID;
+            suppAudit.Action = 'Created';
+            suppAudit.PreviousValue = null;
+            suppAudit.NewValue = JSON.stringify({ Reason: 'User Unsubscribe', UnsubscribeAll: true });
+            suppAudit.Source = 'Preference Center';
+            suppAudit.IPAddress = input.IPAddress ?? null;
+            suppAudit.UserAgent = input.UserAgent ?? null;
+            if (!(await suppAudit.Save())) {
+                LogError(`[CommsWebhook] Failed to save unsubscribe-all audit log: ${suppAudit.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
         }
 
         if (principal) {
