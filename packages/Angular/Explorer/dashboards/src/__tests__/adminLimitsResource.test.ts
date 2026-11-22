@@ -374,4 +374,34 @@ describe('AdminLimitsResourceComponent & Explorer Governance Surface', () => {
             expect.objectContaining({ AgentRunID: 'run-active-1' }),
         );
     });
+
+    it('CR-UI-UUID-COMPARISON: retains SelectedRun across RefreshDiagnostics when AgentRunID has mixed UUID casing', async () => {
+        const lowerId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+        const upperId = lowerId.toUpperCase();
+        const initialDiag = makeSampleDiagnostics();
+        initialDiag.ActiveAndRecentRuns[0] = {
+            ...initialDiag.ActiveAndRecentRuns[0],
+            AgentRunID: lowerId,
+        };
+        const refreshedDiag = makeSampleDiagnostics();
+        refreshedDiag.ActiveAndRecentRuns[0] = {
+            ...refreshedDiag.ActiveAndRecentRuns[0],
+            AgentRunID: upperId,
+            ProgressReason: 'Refreshed with uppercase UUID',
+        };
+
+        getDiagnosticsSpy
+            .mockResolvedValueOnce(initialDiag)
+            .mockResolvedValueOnce(refreshedDiag);
+
+        await component.RefreshDiagnostics();
+        component.SelectRun(component.Diagnostics!.ActiveAndRecentRuns[0]);
+        expect(component.SelectedRun?.AgentRunID).toBe(lowerId);
+
+        await component.RefreshDiagnostics();
+        expect(component.SelectedRun).not.toBeNull();
+        expect(component.SelectedRun?.AgentRunID).toBe(upperId);
+        expect(component.SelectedRun?.ProgressReason).toBe('Refreshed with uppercase UUID');
+        expect(component.IsRunSelected({ ...initialDiag.ActiveAndRecentRuns[0], AgentRunID: lowerId })).toBe(true);
+    });
 });

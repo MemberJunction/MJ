@@ -344,7 +344,7 @@
                                             @for (run of FilteredRuns; track run.AgentRunID) {
                                                 <tr
                                                     class="clickable-row"
-                                                    [class.selected-row]="SelectedRun?.AgentRunID === run.AgentRunID"
+                                                    [class.selected-row]="IsRunSelected(run)"
                                                     (click)="SelectRun(run)"
                                                 >
                                                     <td>

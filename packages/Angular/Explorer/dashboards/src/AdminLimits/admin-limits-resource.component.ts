@@ -24,7 +24,7 @@ import type {
     LimitsConfigCategory,
     LimitsGetDiagnosticsOutput,
 } from '@memberjunction/ai-core-plus';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import {
     ADMIN_LIMITS_CATEGORIES,
@@ -190,7 +190,7 @@ export class AdminLimitsResourceComponent
             this.Diagnostics = output;
             if (this.SelectedRun) {
                 const updatedSelection = output.ActiveAndRecentRuns.find(
-                    (r) => r.AgentRunID === this.SelectedRun?.AgentRunID,
+                    (r) => UUIDsEqual(r.AgentRunID, this.SelectedRun?.AgentRunID),
                 );
                 this.SelectedRun = updatedSelection ?? null;
             }
@@ -297,6 +297,10 @@ export class AdminLimitsResourceComponent
         this.SelectedRun = run;
         this.publishAgentContext();
         this.cdr.markForCheck();
+    }
+
+    public IsRunSelected(run: LimitsActiveRunDiagnosticSummary): boolean {
+        return Boolean(this.SelectedRun && UUIDsEqual(this.SelectedRun.AgentRunID, run.AgentRunID));
     }
 
     public OpenResumeModal(run: LimitsActiveRunDiagnosticSummary): void {

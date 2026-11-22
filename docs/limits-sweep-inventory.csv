@@ -65,7 +65,7 @@ packages/Actions/BizApps/Social/src/providers/youtube/actions/upload-video.actio
 packages/Actions/BizApps/Social/src/providers/youtube/youtube-base.action.ts,377,maxSize,137438953472,YouTubeBaseAction.validateVideoFile,ResourceGuard,local-resource-guard
 packages/Actions/CodeExecution/test-all-libs.js,123,timeoutSeconds,30,testAllLibraries,ResourceGuard,local-resource-guard
 packages/Actions/ContentAutotag/src/generic/content-autotag-and-vectorize.action.ts,47,DEFAULT_MAX_ITEMS,1000,AutotagAndVectorizeContentAction,Tuning,local-tuning-default
-packages/Actions/CoreActions/src/custom/ai/agent-channel.action.ts,683,MaxRows,50,GetAgentChannelAction.InternalRunAction,ResourceGuard,local-resource-guard
+packages/Actions/CoreActions/src/custom/ai/agent-channel.action.ts,704,MaxRows,50,GetAgentChannelAction.InternalRunAction,ResourceGuard,local-resource-guard
 packages/Actions/CoreActions/src/custom/ai/base-find-skills.action.ts,30,DEFAULT_MAX_RESULTS,10,<module>,Tuning,local-tuning-default
 packages/Actions/CoreActions/src/custom/ai/base-find-skills.action.ts,31,MIN_MAX_RESULTS,1,<module>,Tuning,local-tuning-default
 packages/Actions/CoreActions/src/custom/ai/base-find-skills.action.ts,32,MAX_MAX_RESULTS,50,<module>,Tuning,local-tuning-default
@@ -173,7 +173,7 @@ packages/AI/Agents/src/AgentRunner.ts,287,ARTIFACT_NAME_MAX_LENGTH,255,AgentRunn
 packages/AI/Agents/src/AgentRunner.ts,903,MaxRows,100,AgentRunner.RunAgentInConversation.processTouchedArtifacts,ResourceGuard,local-resource-guard
 packages/AI/Agents/src/AgentRunner.ts,2583,maxParticipantPages,100,AgentRunner.grantForkedArtifactReadPermissions,Tuning,local-tuning-default
 packages/AI/Agents/src/AgentStepDispatcher.ts,356,maxLength,100,AgentStepDispatcher.FormatParamValueForMessage,Tuning,local-tuning-default
-packages/AI/Agents/src/AgentWakeTriggerService.ts,1297,MaxRows,25,AgentWakeTriggerService.upsertImmediateWakeRoutineUnlocked,ResourceGuard,local-resource-guard
+packages/AI/Agents/src/AgentWakeTriggerService.ts,1372,MaxRows,25,AgentWakeTriggerService.upsertImmediateWakeRoutineUnlocked,ResourceGuard,local-resource-guard
 packages/AI/Agents/src/artifact-tools/DataSnapshotToolLibrary.ts,853,MAX_CONTRIBUTING_ROWS,10,DataSnapshotToolLibrary.computeAggregate,Tuning,local-tuning-default
 packages/AI/Agents/src/artifact-tools/DataSnapshotToolLibrary.ts,854,MAX_DISTINCT_VALUES,50,DataSnapshotToolLibrary.computeAggregate,Tuning,local-tuning-default
 packages/AI/Agents/src/artifact-tools/DocumentToolLibrary.ts,36,BATCH_REGEX_MAX_MS,40,<module>,ResourceGuard,local-resource-guard

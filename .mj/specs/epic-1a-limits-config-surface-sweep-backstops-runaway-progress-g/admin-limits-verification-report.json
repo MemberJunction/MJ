@@ -2,7 +2,7 @@
   "schemaVersion": "sf-readiness/v3",
   "repositoryFullName": "MemberJunction/MJ",
   "targetPackage": "packages/Angular/Explorer/dashboards",
-  "evaluatedAtIso": "2026-11-22T12:50:47.101Z",
+  "evaluatedAtIso": "2026-11-22T13:08:41.384Z",
   "overallPassed": true,
   "violationCount": 0,
   "pillars": {
@@ -58,23 +58,23 @@
       "checkedCount": 3,
       "violationCount": 0,
       "violations": [],
-      "summary": "Verified all 3 Playwright PNG screenshots (245527B, 159429B, 164012B) and layout sections across overview, runs-drawer, and resume-modal."
+      "summary": "Verified all 3 Playwright PNG screenshots (245982B, 159944B, 164448B) and layout sections across overview, runs-drawer, and resume-modal."
     }
   },
-  "verifiedAtISO": "2026-11-22T12:50:47.101Z",
+  "verifiedAtISO": "2026-11-22T13:08:41.384Z",
   "revisionIdentity": {
     "branch": "factory/bac5fc6c-8417-4c82-a5d0-28742cbeff8f-epic-1a-limits-config",
     "compiledComponentJsSha256": {
       "path": "packages/Angular/Explorer/dashboards/dist/AdminLimits/admin-limits-resource.component.js",
-      "sha256": "6dff7a058cb42ee037321d8267a422af94e781d229c6b83c6c07e1c7c7baec40"
+      "sha256": "3f4d448b4627b76e9d41e2bd3c482ad14506dbd7f198d6cffde839800554cc17"
     },
     "componentTsSha256": {
       "path": "packages/Angular/Explorer/dashboards/src/AdminLimits/admin-limits-resource.component.ts",
-      "sha256": "c16f3f2c99b04989b5ed48b84f60e8ea4a8eaa20a3b82e1e0b460a3161483801"
+      "sha256": "7c10e629c8e3e5ef1b2b1f1b6bacc92f75676ec87d9d0ca0495bbb017a88978b"
     },
     "componentHtmlSha256": {
       "path": "packages/Angular/Explorer/dashboards/src/AdminLimits/admin-limits-resource.component.html",
-      "sha256": "19078f1b4415ca5a4de37a4a01548243bd19364d3229b58ed34374fe46de34ef"
+      "sha256": "8a4c7ec5d6daf02fcafc88b4e722e9f8ba8a6a6f4c33004d8f98ee5d11bc4ebb"
     },
     "componentCssSha256": {
       "path": "packages/Angular/Explorer/dashboards/src/AdminLimits/admin-limits-resource.component.css",
@@ -107,7 +107,7 @@
   },
   "renderedMode": "Real Angular AdminLimitsResourceComponent + ExplorerAdminShell via Vite",
   "chromiumVersion": "145.0.7632.6",
-  "baseUrl": "http://127.0.0.1:53516/",
+  "baseUrl": "http://127.0.0.1:53967/",
   "pageErrorsCount": 0,
   "consoleErrorsCount": 0,
   "brokenImagesCount": 0,
@@ -128,7 +128,7 @@
     "budgetScopeCardsRendered": 3,
     "drawerContainsFastJudgeVerdict": true,
     "resumeSuccessBanner": "Run 33333333-3333-4333-8333-333333333333 approved and transitioned back to Running preserving 0 completed step(s). Fresh worker (ResearchPlanner) dispatched for run 33333333-3333-4333-8333-333333333333.",
-    "pauseSuccessBanner": "Run 44444444-4444-4444-8444-444444444444 cooperatively paused at safe boundary (checkpoint 6b053978-cf95-4fd0-8bcc-13c4365b5e25)."
+    "pauseSuccessBanner": "Run 44444444-4444-4444-8444-444444444444 cooperatively paused at safe boundary (checkpoint 4302ce23-573f-4d3c-9427-8e7965690230)."
   },
   "screenshots": [
     "admin-limits-overview.png",
