@@ -394,9 +394,15 @@
 
           <div class="card">
             <h3><span class="ic"><i class="fa-solid fa-font"></i></span>Typography<span class="scope">Everywhere</span></h3>
-            <div class="row"><div class="lab">Font family</div>
-              <div class="ctl"><select [(ngModel)]="seeds.fontFamily" (ngModelChange)="onSeedsChanged()">
+            <div class="row"><div class="lab">Body font</div>
+              <div class="ctl"><select aria-label="Body font" [(ngModel)]="seeds.fontFamily" (ngModelChange)="onSeedsChanged()">
                 @for (f of fontOptions; track f.value) {
+                  <option [value]="f.value">{{ f.label }}</option>
+                }
+              </select></div></div>
+            <div class="row"><div class="lab">Heading font<small>h1–h6 display face</small></div>
+              <div class="ctl"><select aria-label="Heading font" [ngModel]="Seeds.fontFamilyDisplay ?? ''" (ngModelChange)="OnHeadingFontChanged($event)">
+                @for (f of HeadingFontOptions; track f.value) {
                   <option [value]="f.value">{{ f.label }}</option>
                 }
               </select></div></div>

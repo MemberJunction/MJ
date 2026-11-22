@@ -1513,7 +1513,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (92 classes)
+// @memberjunction/core-entities-server (93 classes)
 import {
     AgentChannelConversationDriver,
     FieldSuggestionCommentDriver,
@@ -1565,6 +1565,7 @@ import {
     MJEntityFormOverrideEntityServer,
     MJFieldSuggestionEntityServer,
     MJFileEntityServer,
+    MJGraphConceptEntityServer,
     MJGraphEdgeEntityServer,
     MJGraphEdgeProviderEntityServer,
     MJGraphEdgeTypeEntityServer,
@@ -3071,6 +3072,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MJEntityFormOverrideEntityServer,
     MJFieldSuggestionEntityServer,
     MJFileEntityServer,
+    MJGraphConceptEntityServer,
     MJGraphEdgeEntityServer,
     MJGraphEdgeProviderEntityServer,
     MJGraphEdgeTypeEntityServer,
@@ -3186,11 +3188,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     CreateListAction,
     CreateListFromQueryAction,
     CreateMermaidDiagramAction,
-    CreateRecordAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    CreateRecordAction,
     CreateRuntimeActionAction,
     CreateSVGChartAction,
     CreateSVGDiagramAction,
@@ -3390,11 +3392,11 @@ const CLASS_REGISTRATIONS_6: any[] = [
     RevokeGuestShareLinkServerOperation,
     SequencedRoleBucketBroadcastProvider,
     SynthesizeArtifactFromSourcesServerOperation,
-    DiagnosticRetentionScheduledJobDriver,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_7: any[] = [
+    DiagnosticRetentionScheduledJobDriver,
     DiagnosticsBuildBundleServerOperation,
     DiagnosticsEnrolSenderServerOperation,
     DiagnosticsGetBundlePreviewServerOperation,
@@ -3428,7 +3430,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1415;
+export const CLASS_REGISTRATIONS_COUNT = 1416;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
