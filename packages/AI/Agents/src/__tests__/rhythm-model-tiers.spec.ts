@@ -303,6 +303,63 @@ describe('Rhythm Model Tiers (Slice 1)', () => {
         expect(priorPgSql).toMatch(/"EmailChannelMode"\s+VARCHAR\(20\)\s+NOT\s+NULL\s+DEFAULT\s+\(\s*'DraftOnly'\s*\)/i);
     });
 
+    it('emits valid PL/pgSQL control flow for every CREATE OR REPLACE FUNCTION in the PG counterpart (CR-PG-UPDATE-BODY-SCOPELOCK)', () => {
+        const repoRoot = path.resolve(__dirname, '../../../../..');
+        const pgMigrationPath = path.join(
+            repoRoot,
+            '.mj/specs/epic-3-rhythms-model-tiers-active-policy-wake-coalescing-autonomous-defaults/V202611220625__v6.3.x__Rhythm_Model_Tiers.pg.sql'
+        );
+        const pgSql = fs.readFileSync(pgMigrationPath, 'utf8');
+
+        // Zero standalone LIMIT 0; statements (the prior IF @@ROWCOUNT = 0 -> SELECT TOP 0 bug)
+        expect(pgSql).not.toMatch(/^\s*LIMIT\s+0\s*;/im);
+        expect(pgSql).not.toContain('WHERE 1=0');
+
+        // Extract every CREATE OR REPLACE FUNCTION ... $$ LANGUAGE plpgsql; body
+        const fnMatches = [
+            ...pgSql.matchAll(
+                /CREATE OR REPLACE FUNCTION __mj\."(\w+)"[\s\S]*?\$\$\s*([\s\S]*?)\n\$\$ LANGUAGE plpgsql;/g
+            ),
+        ];
+        expect(fnMatches.map((m) => m[1])).toEqual([
+            'spCreateAIAgentRhythmTemplate',
+            'spUpdateAIAgentRhythmTemplate',
+            'spCreateUserRoutine',
+            'spUpdateUserRoutine',
+            'spCreateAIAgentUserPolicy',
+        ]);
+
+        for (const [, fnName, body] of fnMatches) {
+            const ifThenCount = (body.match(/\bIF\b[\s\S]*?\bTHEN\b/gi) ?? []).length;
+            const endIfCount = (body.match(/\bEND\s+IF\s*;/gi) ?? []).length;
+            expect(endIfCount, `${fnName} IF...THEN / END IF; balance`).toBe(ifThenCount);
+
+            // Every statement immediately preceding ELSE must end with a semicolon
+            const lines = body.split('\n');
+            for (let idx = 0; idx < lines.length; idx++) {
+                if (/^\s*ELSE\s*$/i.test(lines[idx])) {
+                    let prevIdx = idx - 1;
+                    while (prevIdx >= 0 && !lines[prevIdx].trim()) {
+                        prevIdx--;
+                    }
+                    expect(prevIdx, `${fnName} statement before ELSE`).toBeGreaterThanOrEqual(0);
+                    expect(lines[prevIdx].trimEnd().endsWith(';'), `${fnName} line before ELSE: ${lines[prevIdx]}`).toBe(true);
+                }
+            }
+        }
+
+        // Verify both spUpdate* functions emit canonical IF NOT FOUND THEN RETURN; ELSE RETURN QUERY ...; END IF;
+        for (const fnName of ['spUpdateAIAgentRhythmTemplate', 'spUpdateUserRoutine']) {
+            const match = fnMatches.find((m) => m[1] === fnName);
+            expect(match, `${fnName} should exist`).toBeDefined();
+            const body = match![2];
+            expect(body).toContain('IF NOT FOUND THEN');
+            expect(body).toContain('RETURN;');
+            expect(body).toContain('RETURN QUERY SELECT * FROM __mj.');
+            expect(body).toContain('END IF;');
+        }
+    });
+
     it('seeds routine AgentConfigurationID from template default on creation unless explicitly overridden', () => {
         expect(
             ResolveSeededRoutineAgentConfigurationID({

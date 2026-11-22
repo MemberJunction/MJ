@@ -852,15 +852,28 @@ export function ConvertTopToLimit(sql: string): string {
     const before = sql.slice(0, r.start);
     const after = sql.slice(r.end);
 
-    // Find end of this SELECT statement (semicolon, closing paren at depth 0, or end)
+    // Find end of this SELECT statement (semicolon, closing paren at depth 0,
+    // statement/control-flow boundary on a new line at depth 0, or end)
     let depth = 0;
     let endPos = after.length;
+    const isProtected = (absPos: number): boolean =>
+      protectedRanges.some(pr => absPos >= pr.start && absPos < pr.end);
     for (let j = 0; j < after.length; j++) {
+      if (isProtected(r.end + j)) continue;
       if (after[j] === '(') depth++;
       else if (after[j] === ')') {
         if (depth === 0) { endPos = j; break; }
         depth--;
-      } else if (after[j] === ';' && depth === 0) { endPos = j; break; }
+      } else if (after[j] === ';' && depth === 0) {
+        endPos = j;
+        break;
+      } else if (after[j] === '\n' && depth === 0) {
+        const nextLine = after.slice(j + 1).replace(/^[ \t]+/, '');
+        if (/^(?:ELSE|ELSIF|END|IF|RETURN|UPDATE|INSERT|DELETE|SET|DECLARE|BEGIN|COMMIT|ROLLBACK|EXEC|PERFORM|RAISE)\b/i.test(nextLine)) {
+          endPos = j;
+          break;
+        }
+      }
     }
 
     const selectBody = after.slice(0, endPos);

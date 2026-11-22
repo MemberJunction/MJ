@@ -357,8 +357,6 @@ CREATE OR REPLACE FUNCTION __mj."spUpdateAIAgentRhythmTemplate"(
 )
 RETURNS SETOF __mj."vwAIAgentRhythmTemplates" AS
 $$
-DECLARE
-    _v_row_count INTEGER;
 BEGIN
 UPDATE
         __mj."AIAgentRhythmTemplate"
@@ -378,11 +376,11 @@ UPDATE
     WHERE
         "ID" = p_ID;
 
-    IF _v_row_count = 0 THEN
-        SELECT * FROM __mj."vwAIAgentRhythmTemplates" WHERE 1=0
+    IF NOT FOUND THEN
+        RETURN;
     ELSE
         RETURN QUERY SELECT * FROM __mj."vwAIAgentRhythmTemplates" WHERE "ID" = p_ID;
-LIMIT 0;
+    END IF;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -636,8 +634,6 @@ CREATE OR REPLACE FUNCTION __mj."spUpdateUserRoutine"(
 )
 RETURNS SETOF __mj."vwUserRoutines" AS
 $$
-DECLARE
-    _v_row_count INTEGER;
 BEGIN
 UPDATE
         __mj."UserRoutine"
@@ -674,11 +670,11 @@ UPDATE
     WHERE
         "ID" = p_ID;
 
-    IF _v_row_count = 0 THEN
-        SELECT * FROM __mj."vwUserRoutines" WHERE 1=0
+    IF NOT FOUND THEN
+        RETURN;
     ELSE
         RETURN QUERY SELECT * FROM __mj."vwUserRoutines" WHERE "ID" = p_ID;
-LIMIT 0;
+    END IF;
 END;
 $$ LANGUAGE plpgsql;
 
