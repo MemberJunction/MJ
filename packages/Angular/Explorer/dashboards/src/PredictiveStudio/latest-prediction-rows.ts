@@ -43,12 +43,13 @@ export class LatestPredictionRows {
 
   /**
    * A stored row as the run-detail row the surfaces parse (`AtRiskRules.ParseAtRiskRows` reads `ResultPayload`'s
-   * `score`, `class` and `drivers`), dated by its as-of date; null when the row stores no score.
+   * `score`, `class` and `drivers`), dated when the value was computed (the grid's "Scored At"); a row with no compute
+   * time is dated by its as-of date (a calendar date, not a time of scoring). Null when the row stores no score.
    */
   public static ToRunDetail(row: LatestPredictionRow): PSRunDetailRow | null {
     const score = LatestPredictionRows.Score(row);
     if (score === null) return null;
-    const scoredAt = LatestPredictionRows.date(row.EffectiveAsOf) || LatestPredictionRows.date(row.ComputedAt);
+    const scoredAt = LatestPredictionRows.date(row.ComputedAt) || LatestPredictionRows.date(row.EffectiveAsOf);
     const payload = { score, class: row.ValueText, drivers: LatestPredictionRows.drivers(row.ValueJSON) };
     return { ID: row.ID, RecordID: row.RecordID, ResultPayload: JSON.stringify(payload), Status: 'Succeeded', CompletedAt: scoredAt, __mj_CreatedAt: scoredAt || new Date(0) };
   }

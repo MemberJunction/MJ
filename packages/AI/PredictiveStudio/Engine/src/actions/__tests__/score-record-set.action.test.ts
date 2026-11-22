@@ -9,6 +9,7 @@ import { ModelNotScorableError } from '../../scoring/model-readiness';
 import { ScoringRefusedError } from '../../scoring/scoring-refused-error';
 import type { IScoreRecordSetRunner, ScoredRecordSet, ScoreRecordSetRequest } from '../score-record-set.action';
 import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
+import { ReadCapExceededError } from '../../feature-assembly/read-cap-error';
 
 /**
  * Unit tests for the Score Record Set action. NO live DB, NO live sidecar — the scoring runner is mocked via the
@@ -112,6 +113,29 @@ describe('PredictiveStudioScoreRecordSetAction — a completed run', () => {
     const runner = new MockRunner(completed(0));
     await new TestableScoreAction(runner).run(params([{ Name: 'ModelID', Type: 'Input', Value: 'm1' }, { Name: 'Scope', Type: 'Input', Value: JSON.stringify({ records: ['rec-1'] }) }]));
     expect(runner.LastRequest?.scope).toEqual({ records: ['rec-1'] });
+  });
+});
+
+describe('PredictiveStudioScoreRecordSetAction — the inline-predictions limit', () => {
+  it('limits a predict-only call (no BindingID) to MAX_INLINE_PREDICTIONS: its predictions return to the caller', async () => {
+    const runner = new MockRunner(completed(0));
+    await new TestableScoreAction(runner).run(scoreParams());
+    expect(runner.LastRequest?.maxInlinePredictions).toBe(PredictiveStudioScoreRecordSetAction.MAX_INLINE_PREDICTIONS);
+  });
+
+  it('sets no limit when scoring through a binding (the values are written, not returned)', async () => {
+    const runner = new MockRunner(completed(3));
+    await new TestableScoreAction(runner).run(scoreParams([{ Name: 'BindingID', Type: 'Input', Value: 'binding-1' }]));
+    expect(runner.LastRequest?.maxInlinePredictions).toBeUndefined();
+  });
+
+  it('fails a scope over the limit with READ_CAP_EXCEEDED and the runner\'s message', async () => {
+    const errors = ConsoleCapture.Errors();
+    const refusal = ReadCapExceededError.ForInlinePredictions('Memberships', 250, 16776);
+    const result = await new TestableScoreAction(new MockRunner(refusal)).run(scoreParams());
+    expect([result.Success, result.ResultCode]).toEqual([false, 'READ_CAP_EXCEEDED']);
+    expect(result.Message).toContain('16776');
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining('16776')]);
   });
 });
 

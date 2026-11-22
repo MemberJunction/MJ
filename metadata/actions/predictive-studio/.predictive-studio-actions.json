@@ -292,7 +292,7 @@
     ],
     "fields": {
       "Name": "Score Record Set",
-      "Description": "Scores a set of records with a trained ML Model. The scope selects records (explicit ids / a saved view / a list / an entity+filter / a single record). With a BindingID the binding's pipeline's Published model scores the scope and the scores are written as the binding's Feature Values (and copied into its column, when it names one); without one the model predicts and the predictions are returned, writing nothing. Outputs the scoring run: ScoringRunID, Status, Total, Written, Failed, and Predictions when nothing was written. A refused or failed run fails the action with the refusal's code and still names its scoring run.",
+      "Description": "Scores a set of records with a trained ML Model. The scope selects records (explicit ids / a saved view / a list / an entity+filter / a single record). With a BindingID the binding's pipeline's Published model scores the scope and the scores are written as the binding's Feature Values (and copied into its column, when it names one); without one the model predicts and the predictions are returned, writing nothing, for a scope of at most 250 records (a larger one is refused with READ_CAP_EXCEEDED before scoring). Outputs the scoring run: ScoringRunID, Status, Total, Written, Failed, and Predictions when nothing was written. A refused or failed run fails the action with the refusal's code and still names its scoring run.",
       "Type": "Custom",
       "DriverClass": "PredictiveStudioScoreRecordSetAction",
       "Status": "Active",
@@ -329,14 +329,14 @@
             "ValueType": "Simple Object",
             "IsArray": false,
             "IsRequired": true,
-            "Description": "JSON describing the records to score. Populate exactly one of: records (id/pk array), viewId, listId, filter ({entityName, extraFilter, maxRows}), single ({entityName, primaryKey})."
+            "Description": "JSON describing the records to score. Populate exactly one of: records (id/pk array), viewId, listId, filter ({entityName, extraFilter, maxRows}), single ({entityName, primaryKey}). A filter's maxRows is a guard: a scope matching more rows is refused (READ_CAP_EXCEEDED), never sampled."
           },
           "primaryKey": {
             "ID": "4BD7614C-CF5C-4D37-BAE1-75957EF88B3C"
           },
           "sync": {
-            "lastModified": "2026-07-01T17:33:33.832Z",
-            "checksum": "70eb218dd5215dfad316ac74f0762500a9c16c0c6959cfa8885268437bda5b1c"
+            "lastModified": "2026-11-22T15:48:42.648Z",
+            "checksum": "e68e245d2df52c5734fba246aa35a0e8bd41167775d4f567a5a91be73b433cd1"
           }
         },
         {
@@ -539,14 +539,14 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "JSON array of predictions ({recordId, score, class, adverseProbability, inTraining}), each keyed by the record's bare key; present when nothing was written (no BindingID, or a dry run)."
+            "Description": "JSON array of predictions ({recordId, score, class, adverseProbability, inTraining}), each keyed by the record's bare key; present when nothing was written (no BindingID, or a dry run). A call without a BindingID returns at most 250 (a larger scope is refused before scoring)."
           },
           "primaryKey": {
             "ID": "65484624-5507-45BC-AE89-3F5443E93C10"
           },
           "sync": {
-            "lastModified": "2026-11-18T20:35:23.403Z",
-            "checksum": "799abbc1219ae10067e85226d4e7eabbad1e90603b7fb8c8865fc857266efca0"
+            "lastModified": "2026-11-22T15:34:16.962Z",
+            "checksum": "930b300a32197a6ab5c335225616856cd0055e7989a47dedee371ae38cd6a87f"
           }
         }
       ],
@@ -601,14 +601,14 @@
             "ActionID": "@parent:ID",
             "ResultCode": "READ_CAP_EXCEEDED",
             "IsSuccess": false,
-            "Description": "Scoring refused: an explicit row cap would cut the scope short. The same code the PredictiveStudio.ScoreRecordSet operation returns."
+            "Description": "Scoring refused: an explicit row cap would cut the scope short, or a call without a BindingID names more than 250 records (its predictions would be returned inline). The same code the PredictiveStudio.ScoreRecordSet operation returns for a capped scope."
           },
           "primaryKey": {
             "ID": "6AC78B9A-2098-4601-8EE0-4F138C1B2918"
           },
           "sync": {
-            "lastModified": "2026-10-28T00:35:16.336Z",
-            "checksum": "9dc546403d1b8d3b8c40569fe755b039a95da41557c6640291bfd17472eea1b6"
+            "lastModified": "2026-11-22T15:34:16.994Z",
+            "checksum": "4021d4473bc5fd0b8bb3973bcf7d238aaedcae161b59b7633f6c9b3ec4313635"
           }
         },
         {
@@ -898,8 +898,8 @@
       "ID": "745B8BDC-B748-42F0-82E2-25C5E0615777"
     },
     "sync": {
-      "lastModified": "2026-11-18T20:35:23.383Z",
-      "checksum": "52774d64eac18c1ed86e2cdaf2b1263cfa3903157ca404de145dacb5ea711b9b"
+      "lastModified": "2026-11-22T15:34:16.907Z",
+      "checksum": "e448749ab0fddf2a08261442fd615f7d905900cb6df410dca05aedd3efdac1f4"
     }
   },
   {

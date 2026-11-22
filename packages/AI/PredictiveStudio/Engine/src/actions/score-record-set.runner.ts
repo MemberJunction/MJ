@@ -11,7 +11,7 @@
  * value (F-L3-6), the form `MJ: Feature Values.RecordID` and the predictions carry.
  */
 
-import { CompositeKey, RunView, type EntityInfo, type IMetadataProvider } from '@memberjunction/core';
+import { CompositeKey, RunView, type EntityInfo, type IMetadataProvider, type RunViewParams } from '@memberjunction/core';
 import type { MJMLModelEntity, MJMLModelScoringBindingEntity, MJMLTrainingPipelineEntity, PredictiveStudioScoredPrediction } from '@memberjunction/core-entities';
 import { EscapeSQLString, IsValidUUID, UUIDsEqual } from '@memberjunction/global';
 import { JsonParse, type ScoredRow, type ScoringResult, type ScoringScope } from '@memberjunction/predictive-studio-core';
@@ -61,6 +61,7 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
       const result = await service.Score(binding, scope, asOf, request.dryRun === true);
       return ProductionScoreRecordSetRunner.completed(result, request.dryRun === true ? service.ScoredRows() : []);
     }
+    await this.refuseOverInlineLimit(scope, request.maxInlinePredictions, ctx);
     const predicted = await service.Predict({
       ScoringRunID: '', ModelID: model.ID, Scope: scope, EntityMapping: null, AsOfDate: asOf.toISOString(),
       Read: { mode: 'complete' }, DryRun: request.dryRun === true, RequestedBy: ScoringRunRecorder.RequestedBy(ctx),
@@ -172,6 +173,29 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
     if (scope.viewId) return this.viewScope(scope.viewId, ctx);
     if (scope.listId) return this.listScope(scope.listId, ctx);
     throw PredictiveStudioRefusals.InvalidInput(OPERATION_KEY, 'scope', 'must populate exactly one of: records, viewId, listId, filter, single');
+  }
+
+  /**
+   * Refuses a predict-only scope with more records than `limit` before anything is scored or recorded
+   * ({@link ReadCapExceededError.ForInlinePredictions}); no limit, no check. A records scope is counted as given; a
+   * filter or view scope by reading at most `limit + 1` of its keys as the caller.
+   */
+  private async refuseOverInlineLimit(scope: ScoringScope, limit: number | undefined, ctx: ScoringContext): Promise<void> {
+    if (limit === undefined) return;
+    const matched = scope.kind === 'record-ids' ? scope.ids.length : await this.countUpTo(scope, limit + 1, ctx);
+    if (matched > limit) throw ReadCapExceededError.ForInlinePredictions(scope.entity, limit, matched);
+  }
+
+  /** How many keys a filter or view scope matches, reading at most `cap` of them as the caller. */
+  private async countUpTo(scope: Exclude<ScoringScope, { kind: 'record-ids' }>, cap: number, ctx: ScoringContext): Promise<number> {
+    const info = this.entityInfo(scope.entity, ctx.Provider);
+    const key = info.FirstPrimaryKey.Name; // first-pk-ok: a count read of the scope's keys only
+    const params: RunViewParams = scope.kind === 'filter'
+      ? { EntityName: info.Name, ExtraFilter: scope.extraFilter, Fields: [key], MaxRows: cap, ResultType: 'simple', BypassCache: true }
+      : { ViewID: scope.userViewId, Fields: [key], MaxRows: cap, ResultType: 'simple', BypassCache: true };
+    const read = await RunView.FromMetadataProvider(ctx.Provider).RunView<Record<string, string>>(params, ctx.ContextUser);
+    if (!read.Success) throw new Error(`Score Record Set: counting the scope of ${info.Name} failed: ${read.ErrorMessage}`);
+    return read.Results.length;
   }
 
   /** A filter scope; a positive `maxRows` refuses a scope with more rows than it (D2-C1), read past the entity's row cap. */

@@ -60,6 +60,18 @@ describe('PSScoringRunsComponent (DOM)', () => {
     expect(queryAll(f, '[data-testid="ps-scoring-run-error"]').map((e) => e.textContent)).toEqual(['Record R1: no value', 'Record R2: bad type']);
   });
 
+  it('shows the as-of date as the stored calendar date in any time zone (a run as of Nov 1 is not Oct 31 in New York)', async () => {
+    const zone = process.env.TZ;
+    process.env.TZ = 'America/New_York';
+    try {
+      const f = await RenderRuns({ runs: [Run({ AsOfDate: new Date('2026-11-01T00:00:00Z') })] });
+      expect(query(f, '.ps-sr-time')?.textContent || '').toContain('as of Nov 1, 2026');
+    } finally {
+      if (zone === undefined) delete process.env.TZ;
+      else process.env.TZ = zone;
+    }
+  });
+
   it('says so when the model has not scored anything', async () => {
     expect(query(await RenderRuns({ runs: [] }), '[data-testid="ps-scoring-runs-empty"]')).not.toBeNull();
   });

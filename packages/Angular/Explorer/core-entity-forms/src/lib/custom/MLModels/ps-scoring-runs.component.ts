@@ -37,7 +37,7 @@ const ERRORS_SHOWN = 3;
               <span [class]="'ps-sr-status ' + run.Status">{{ run.Status }}</span>
               <span class="ps-sr-path">{{ run.Path }}{{ run.DryRun ? ' · dry run' : '' }}</span>
               <span class="ps-sr-counts" data-testid="ps-scoring-run-counts">{{ run.Written }} written of {{ run.Total }} · {{ run.Failed }} failed · {{ run.Skipped }} skipped</span>
-              <span class="ps-sr-time">as of {{ run.AsOfDate | date: 'mediumDate' }} · {{ run.StartedAt | date: 'short' }}</span>
+              <span class="ps-sr-time">as of {{ run.AsOfDate | date: 'mediumDate' : 'UTC' }} · {{ run.StartedAt | date: 'short' }}</span>
             </div>
             @if (RefusalText(run); as refusal) {
               <div class="ps-sr-refusal" data-testid="ps-scoring-run-refusal">{{ refusal }}</div>

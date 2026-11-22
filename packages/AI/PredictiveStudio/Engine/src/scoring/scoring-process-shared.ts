@@ -23,6 +23,8 @@ import type { MJMLModelEntity, MJRecordProcessEntity, MJMLModelScoringBindingEnt
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { ScoringBindings, type ScoringBindingMode } from './scoring-binding';
 import { MetadataEntityFactory } from '../training/seams';
+import { ProviderTransactions } from '../registry/provider-transactions';
+import type { RegistryContext } from '../registry/registry-context';
 
 /**
  * Which prediction value the binding's column copy writes into the target column: the
@@ -124,8 +126,8 @@ type ExistingBindingRow = Pick<MJMLModelScoringBindingEntity, 'ID' | 'MLTraining
  * pipeline, so a newly published version of the pipeline scores it with no binding change.
  *
  * Fail-loud: a failure throws (after `LogError`) — a scoring Record Process whose binding is missing would score records
- * that no prediction feature names. The Record Process is already persisted at this point, so the failure is surfaced
- * for operator follow-up rather than rolled back (there is no cross-row transaction across the two saves).
+ * that no prediction feature names. Call it through {@link SaveScoringProcessWithBinding}, which saves the Record Process
+ * and the binding in one transaction, so a failed binding rolls the Record Process (and its schedule) back with it.
  *
  * @throws when the model cannot be read, no view authorization is given or seeded, or the binding save fails
  */
@@ -154,11 +156,39 @@ export async function CreateScoringBinding(request: ScoringBindingRequest): Prom
     );
   } catch (e) {
     LogError(
-      `${label}: Record Process '${request.RecordProcessID}' saved but its scoring binding ` +
-        `failed for model '${request.ModelID}': ${e instanceof Error ? e.message : String(e)}`,
+      `${label}: the scoring binding of Record Process '${request.RecordProcessID}' failed for model '${request.ModelID}'; ` +
+        `the Record Process is rolled back with it: ${e instanceof Error ? e.message : String(e)}`,
     );
     throw e;
   }
+}
+
+/**
+ * Saves a new scoring Record Process and creates its binding in one provider transaction: both commit, or a failure
+ * of either rolls both back — including the owned `MJ: Scheduled Jobs` row a scheduled Record Process creates on save —
+ * and the error is rethrown. A scoring process never exists without the binding that names its predictions.
+ *
+ * @param rp the populated, unsaved Record Process
+ * @param binding the binding request, less the Record Process id (the saved row's id is used)
+ * @throws EntityTransactionsUnsupportedError when the provider cannot open a server-side transaction (nothing is
+ *   saved); an Error with the save's `CompleteMessage` when the Record Process fails to save; the binding's error
+ */
+export async function SaveScoringProcessWithBinding(
+  rp: MJRecordProcessEntity,
+  binding: Omit<ScoringBindingRequest, 'RecordProcessID'>,
+): Promise<MJMLModelScoringBindingEntity> {
+  const user = binding.ContextUser || binding.Provider.CurrentUser;
+  if (!user) throw new Error(`${binding.ContextLabel}: no user to save the scoring process as`);
+  const ctx: RegistryContext = { Provider: binding.Provider, ContextUser: user };
+  return ProviderTransactions.Run(ctx, `${binding.ContextLabel} scoring process and binding`, async () => {
+    if (!(await rp.Save())) {
+      throw new Error(
+        `${binding.ContextLabel}: failed to save Record Process for model '${binding.ModelID}': ` +
+          `${rp.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+      );
+    }
+    return CreateScoringBinding({ ...binding, RecordProcessID: rp.ID });
+  });
 }
 
 /**

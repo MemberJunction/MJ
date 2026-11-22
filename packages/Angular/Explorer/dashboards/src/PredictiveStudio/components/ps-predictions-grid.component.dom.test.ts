@@ -371,10 +371,10 @@ describe('PSPredictionsGridComponent (DOM) — the latest values of the model\'s
     expect(latestFilter(reads)).toBeUndefined();
   });
 
-  it('takes the drivers and the scored date from the stored value', async () => {
+  it('takes the drivers from the stored value and its Scored At from when it was computed, not its as-of date', async () => {
     const grid = await RenderLatest([Latest('r1', 0.9)], []);
     expect(grid.AllRows[0].drivers.map((d) => [d.Label, d.Up])).toEqual([['Days Since Login', true]]);
-    expect(grid.AllRows[0].scoredAtDate?.toISOString()).toBe('2026-11-03T00:00:00.000Z');
+    expect(grid.AllRows[0].scoredAtDate?.toISOString()).toBe('2026-11-03T01:00:00.000Z');
   });
 });
 

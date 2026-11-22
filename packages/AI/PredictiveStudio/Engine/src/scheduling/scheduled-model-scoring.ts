@@ -54,7 +54,7 @@ import {
   ML_MODEL_WORK_TYPE,
   ApplyScope,
   ModelConfiguration,
-  CreateScoringBinding,
+  SaveScoringProcessWithBinding,
   CountScopeSelectors,
   ResolveTargetEntityID,
   IsNonEmpty,
@@ -195,16 +195,8 @@ export async function CreateScheduledModelScoring(
   rp.NewRecord();
   applyRecordProcessFields(rp, opts, entityID, cron);
 
-  if (!(await rp.Save())) {
-    throw new Error(
-      `${HELPER_NAME}: failed to save Record Process for model '${opts.modelId}': ` +
-        `${rp.LatestResult?.CompleteMessage ?? 'unknown error'}`,
-    );
-  }
-
-  const binding = await CreateScoringBinding({
+  const binding = await SaveScoringProcessWithBinding(rp, {
     ModelID: opts.modelId,
-    RecordProcessID: rp.ID,
     TargetEntityID: entityID,
     TargetColumn: IsNonEmpty(opts.outputField) ? opts.outputField : null,
     ValueKind: opts.valueKind,

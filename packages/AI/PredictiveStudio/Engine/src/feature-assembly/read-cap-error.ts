@@ -37,6 +37,23 @@ export class ReadCapExceededError extends Error {
     );
   }
 
+  /**
+   * The predict-only refusal (Score Record Set without a binding): such a call returns its predictions to the caller
+   * (an agent reads them into its prompt), so a scope larger than the inline limit is refused before anything is
+   * scored. `rowsMatched` is at least `limit + 1` (the scope count stops reading there).
+   */
+  public static ForInlinePredictions(entityName: string, limit: number, rowsMatched: number): ReadCapExceededError {
+    return new ReadCapExceededError(
+      `Score Record Set without a BindingID returns its predictions to the caller, at most ${limit}; the scope matches ` +
+        `${rowsMatched > limit + 1 ? rowsMatched : `more than ${limit}`} rows of '${entityName}'. Score through a binding ` +
+        '(BindingID) to write every prediction as a Feature Value, or narrow the scope.',
+      entityName,
+      limit,
+      limit,
+      rowsMatched,
+    );
+  }
+
   /** The scoring refusal (Score Record Set scope resolution). */
   public static ForScoring(entityName: string, maxRows: number, rowsRead: number, rowsMatched: number): ReadCapExceededError {
     return new ReadCapExceededError(

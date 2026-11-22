@@ -116,6 +116,18 @@ class FakeScoringBinding {
   }
 }
 
+/** A provider transaction double: records whether the helper committed or rolled back. */
+class FakeTransaction {
+  public Committed = false;
+  public RolledBack = false;
+  public async Commit(): Promise<void> {
+    this.Committed = true;
+  }
+  public async Rollback(): Promise<void> {
+    this.RolledBack = true;
+  }
+}
+
 /**
  * Build a fake provider that resolves the named target entity to an id and dispatches
  * `GetEntityObject` by entity name: the RP double for `'MJ: Record Processes'` and the
@@ -128,8 +140,13 @@ function fakeProvider(
   rp: FakeRecordProcess,
   binding: FakeScoringBinding,
   existingBindings: ReadonlyArray<{ ID: string; MLTrainingPipelineID: string }> = [],
+  transaction: FakeTransaction = new FakeTransaction(),
 ): IMetadataProvider {
   return {
+    SupportsEntityTransactions: true,
+    async BeginEntityTransaction() {
+      return transaction;
+    },
     Authorizations: [{ ID: SEEDED_AUTHORIZATION_ID, Name: 'View Model Predictions' }],
     async RunView(params: RunViewParams) {
       if (params.EntityName === 'MJ: ML Models') return { Success: true, Results: [MODEL_ROW], ErrorMessage: '' };
@@ -169,10 +186,11 @@ function setup(
   bindingSaveResult = true,
   bindingCompleteMessage?: string,
   existingBindings: ReadonlyArray<{ ID: string; MLTrainingPipelineID: string }> = [],
-): { opts: ScheduleModelScoringOptions; rp: FakeRecordProcess; binding: FakeScoringBinding } {
+): { opts: ScheduleModelScoringOptions; rp: FakeRecordProcess; binding: FakeScoringBinding; transaction: FakeTransaction } {
   const rp = new FakeRecordProcess(saveResult, completeMessage);
   const binding = new FakeScoringBinding(bindingSaveResult, bindingCompleteMessage);
-  const provider = fakeProvider(ENTITY_NAME, ENTITY_ID, rp, binding, existingBindings);
+  const transaction = new FakeTransaction();
+  const provider = fakeProvider(ENTITY_NAME, ENTITY_ID, rp, binding, existingBindings, transaction);
   const opts: ScheduleModelScoringOptions = {
     modelId: 'model-1',
     targetEntityName: ENTITY_NAME,
@@ -182,7 +200,7 @@ function setup(
     provider,
     ...overrides,
   };
-  return { opts, rp, binding };
+  return { opts, rp, binding, transaction };
 }
 
 // ----- CadenceToCron (pure) ----------------------------------------------------
@@ -312,15 +330,28 @@ describe('CreateScheduledModelScoring — scoring binding (lineage row)', () => 
     expect(binding.TargetColumn).toBe('RenewalSegment');
   });
 
-  it('throws (and does not swallow) when the binding fails to save after the RP saved', async () => {
+  it('rolls the Record Process back with a binding that fails to save, and throws the binding\'s error', async () => {
     const errors = ConsoleCapture.Errors();
     // RP saves OK (true); the binding save fails (false) with a message.
-    const { opts, rp, binding } = setup({}, true, undefined, false, 'binding duplicate key');
+    const { opts, rp, binding, transaction } = setup({}, true, undefined, false, 'binding duplicate key');
     await expect(CreateScheduledModelScoring(opts)).rejects.toThrow(/binding duplicate key/);
-    // The RP WAS saved (the failure is surfaced, not rolled back — no cross-row txn).
-    expect(rp.SaveCalled).toBe(true);
-    expect(binding.SaveCalled).toBe(true);
-    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining(`ScoringBindings.Upsert: failed to save scoring binding "Renewal" of pipeline 'pipe-1': binding duplicate key`), expect.stringContaining("CreateScheduledModelScoring: Record Process 'rp-1' saved but its scoring binding failed for model 'model-1'")]);
+    expect([rp.SaveCalled, binding.SaveCalled]).toEqual([true, true]);
+    // Both saves ran in one transaction, rolled back: no Record Process (and no schedule) is left without its binding.
+    expect([transaction.Committed, transaction.RolledBack]).toEqual([false, true]);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining(`ScoringBindings.Upsert: failed to save scoring binding "Renewal" of pipeline 'pipe-1': binding duplicate key`), expect.stringContaining("CreateScheduledModelScoring: the scoring binding of Record Process 'rp-1' failed for model 'model-1'; the Record Process is rolled back with it")]);
+  });
+
+  it('commits the Record Process and its binding together', async () => {
+    const { opts, transaction } = setup();
+    await CreateScheduledModelScoring(opts);
+    expect([transaction.Committed, transaction.RolledBack]).toEqual([true, false]);
+  });
+
+  it('refuses a provider without entity transactions before saving anything', async () => {
+    const { opts, rp } = setup();
+    const noTransactions: IMetadataProvider = Object.assign(Object.create(opts.provider), { SupportsEntityTransactions: false });
+    await expect(CreateScheduledModelScoring({ ...opts, provider: noTransactions })).rejects.toThrow(/needs a server-side transaction/);
+    expect(rp.SaveCalled).toBe(false);
   });
 
   it('takes the feature name, view authorization and class copy source from the options', async () => {
@@ -341,7 +372,7 @@ describe('CreateScheduledModelScoring — scoring binding (lineage row)', () => 
     const noSeed: IMetadataProvider = Object.assign(Object.create(opts.provider), { Authorizations: [] });
     await expect(CreateScheduledModelScoring({ ...opts, provider: noSeed })).rejects.toThrow(/no view authorization was given and the 'View Model Predictions' authorization is not in the metadata/);
     expect(binding.SaveCalled).toBe(false);
-    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("CreateScheduledModelScoring: Record Process 'rp-1' saved but its scoring binding failed")]);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("CreateScheduledModelScoring: the scoring binding of Record Process 'rp-1' failed")]);
   });
 });
 

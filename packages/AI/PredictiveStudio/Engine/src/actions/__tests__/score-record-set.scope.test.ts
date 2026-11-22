@@ -92,6 +92,32 @@ describe('Score Record Set — the scope', () => {
   });
 });
 
+describe('Score Record Set — the inline-predictions limit (predict-only calls)', () => {
+  it('refuses a records scope larger than maxInlinePredictions before scoring, writing no run row', async () => {
+    const error = await run({ modelId: published().ID, scope: { records: ['r1', 'r2', 'r3'] }, maxInlinePredictions: 2 }).catch((e: Error) => e);
+    expect(error).toBeInstanceOf(ReadCapExceededError);
+    expect(error instanceof ReadCapExceededError ? [error.MaxRows, error.RowsMatched] : null).toEqual([2, 3]);
+    expect(error.message).toMatch(/BindingID/);
+    expect(world.Runs()).toHaveLength(0);
+  });
+
+  it('refuses a filter scope whose match is larger than maxInlinePredictions before scoring, writing no run row', async () => {
+    const error = await run({ modelId: published().ID, scope: { filter: { entityName: MEMBERSHIPS, extraFilter: "ID IN ('a','b','c')" } }, maxInlinePredictions: 2 }).catch((e: Error) => e);
+    expect(error).toBeInstanceOf(ReadCapExceededError);
+    expect(world.Runs()).toHaveLength(0);
+  });
+
+  it('returns the predictions of a scope within maxInlinePredictions', async () => {
+    const out = await run({ modelId: published().ID, scope: { records: ['r1', 'r2'] }, maxInlinePredictions: 2 });
+    expect(out.Predictions.map((p) => p.recordId)).toEqual(['r1', 'r2']);
+  });
+
+  it('applies no limit when the caller sets none (the remote operation)', async () => {
+    const out = await run({ modelId: published().ID, scope: { records: ['r1', 'r2', 'r3'] } });
+    expect(out.Predictions).toHaveLength(3);
+  });
+});
+
 describe('Score Record Set — a model that may not score', () => {
   for (const status of ['Draft', 'Validated', 'Archived'] as const) {
     it(`a ${status} model is refused model-not-published before its scope is read, writing nothing`, async () => {

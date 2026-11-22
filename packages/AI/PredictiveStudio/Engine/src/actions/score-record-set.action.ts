@@ -56,6 +56,11 @@ export interface ScoreRecordSetRequest {
   asOfDate?: string;
   /** Score and record the run, but write no Feature Value and no column. */
   dryRun?: boolean;
+  /**
+   * Predict-only calls (no `bindingId`): refuse a scope with more records than this before scoring
+   * (`ReadCapExceededError`), since the predictions are returned to the caller. Unset: no limit.
+   */
+  maxInlinePredictions?: number;
   contextUser?: UserInfo;
   /** The provider every read and write goes through (required: no fallback to the global provider). */
   provider: IMetadataProvider;
@@ -82,6 +87,13 @@ export interface IScoreRecordSetRunner {
  */
 @RegisterClass(BaseAction, SCORE_RECORD_SET_DRIVER_CLASS)
 export class PredictiveStudioScoreRecordSetAction extends BasePredictiveStudioAction {
+  /**
+   * The most predictions a call without a `BindingID` returns. They travel back as the `Predictions` output, which an
+   * agent reads into its prompt, so a larger scope is refused before scoring and the caller is told to score through a
+   * binding (written as Feature Values) or narrow the scope.
+   */
+  public static readonly MAX_INLINE_PREDICTIONS = 250;
+
   /** @inheritdoc */
   protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
     try {
@@ -108,9 +120,10 @@ export class PredictiveStudioScoreRecordSetAction extends BasePredictiveStudioAc
     if (!scope) return 'Scope parameter is required and must be a JSON object describing records/view/list/filter/single';
     if (!this.scopeHasTarget(scope)) return 'Scope must populate exactly one of: records, viewId, listId, filter, single';
     const provider = params.Provider || Metadata.Provider; // global-provider-ok: RunActionParams.Provider is optional; ActionEngine contract falls back to the global provider (ActionEngine-Base.ts)
+    const bindingId = this.getStringParam(params, 'BindingID');
     return {
-      modelId, scope, bindingId: this.getStringParam(params, 'BindingID'), asOfDate: this.getStringParam(params, 'AsOfDate'),
-      contextUser: params.ContextUser, provider,
+      modelId, scope, bindingId, asOfDate: this.getStringParam(params, 'AsOfDate'), contextUser: params.ContextUser, provider,
+      maxInlinePredictions: bindingId ? undefined : PredictiveStudioScoreRecordSetAction.MAX_INLINE_PREDICTIONS,
     };
   }
 
