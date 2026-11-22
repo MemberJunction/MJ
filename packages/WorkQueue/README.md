@@ -2,7 +2,7 @@
 
 A unified, high-performance messaging and durable work queue substrate for MemberJunction. Engineered to handle high-throughput event fan-out, strict FIFO partitioned workflows, and long-running distributed batch processing.
 
-The framework supports both a **zero-dependency Database transport** (built natively into Microsoft SQL Server and PostgreSQL) and **cloud-native transports** (AWS SNS/SQS FIFO and thin Lambda handlers).
+The framework supports both a **zero-dependency Database transport** (built natively into Microsoft SQL Server and PostgreSQL) and **cloud-native transports** (AWS SNS/SQS FIFO with thin Lambda handlers, and Azure Service Bus with thin Azure Functions handlers).
 
 ---
 
@@ -15,7 +15,8 @@ The framework supports both a **zero-dependency Database transport** (built nati
 | **[engine](./engine/README.md)** | `@memberjunction/work-queue-engine` | Server engine, Database transport driver, SQL stored-procedure builders, `WorkQueueHost`, `WorkQueueSweeper`, and Remote Operations. |
 | **[server](./server/README.md)** | `@memberjunction/work-queue-server` | MJServer REST publish endpoint extension (`POST /work-queue/topics/{topic}/messages`) with API-key and scope authentication. |
 | **[aws](./aws/README.md)** | `@memberjunction/work-queue-aws` | AWS SNS/SQS transport driver, SQS consumer, and `@memberjunction/work-queue-aws/lambda` adapter for thin serverless workers. |
-| **[samples](./samples/README.md)** | `@memberjunction/work-queue-samples` | `HelloWorldHandler` and walkthrough topologies demonstrating publish, retry, dead-letter, replay, and cancellation. |
+| **[azure](./azure/README.md)** | `@memberjunction/work-queue-azure` | Azure Service Bus transport driver, Service Bus consumer & pump, and `@memberjunction/work-queue-azure/functions` adapter for Azure Functions workers. |
+| **[samples](./samples/README.md)** | `@memberjunction/work-queue-samples` | `HelloWorldHandler`, walkthrough topologies, and Azure Service Bus producer/consumer/Functions samples. |
 
 ---
 
@@ -368,6 +369,52 @@ entry ever reaches the SNS client or an MJ runtime package, which is what keeps 
 
 ---
 
+## 4b. Azure Service Bus Transport
+
+The Azure Service Bus transport (`@memberjunction/work-queue-azure`, loaded by MJ servers via `@memberjunction/work-queue-engine/azure`) routes topic publishes to **Azure Service Bus Topics** and subscription deliveries to **Azure Service Bus Subscriptions** with built-in `$DeadLetterQueue` subqueues. Topics with `IsFifo = true` use session-enabled subscriptions (`RequiresSession = true`, mapped from `PartitionKey` -> `SessionId`) for `Exclusive` per-key isolation. `Ordered` requires the Database transport.
+
+### 4b.1 Define the transport in MJ
+
+An `MJ: Work Queue Transports` row with `DriverClass = 'Azure'`:
+
+```json
+{
+  "fields": {
+    "Name": "Azure-prod",
+    "DriverClass": "Azure",
+    "Configuration": { "Namespace": "my-org-wq.servicebus.windows.net", "Endpoint": null, "UseEmulator": false },
+    "CredentialID": null,
+    "Status": "Active"
+  },
+  "primaryKey": { "ID": "<uuidgen>" }
+}
+```
+
+- When `CredentialID` is `null`, the driver uses `DefaultAzureCredential` (Managed Identity / Workload Identity / Azure CLI).
+- When `CredentialID` points to an `MJ: Credentials` row, decrypted values may hold `{ "ConnectionString": "..." }` or Service Principal `{ "TenantId", "ClientId", "ClientSecret" }`.
+
+### 4b.2 Writing an Azure Functions Consumer
+
+Use `@memberjunction/work-queue-azure/functions` for thin Azure Functions Service Bus triggers without loading `@memberjunction/work-queue-engine` or `ServiceBusAdministrationClient`:
+
+```typescript
+import { Outcome, type WorkHandler, type WorkMessage, type WorkContext, type WorkOutcome } from '@memberjunction/work-queue-core';
+import { CreateServiceBusFunctionHandler } from '@memberjunction/work-queue-azure/functions';
+
+class FunctionDocumentHandler implements WorkHandler {
+  public async Handle(message: WorkMessage, context: WorkContext): Promise<WorkOutcome> {
+    await processDocument(message.Payload, context.Signal);
+    return Outcome.Complete();
+  }
+}
+
+export const handler = CreateServiceBusFunctionHandler(() => new FunctionDocumentHandler());
+```
+
+See [packages/WorkQueue/azure/README.md](./azure/README.md) and [packages/WorkQueue/samples/src/azure/README.md](./samples/src/azure/README.md) for standalone `ServiceBusMessagePump` usage, Service Bus SQL filter rules, emulator setup, and live-cloud testing.
+
+---
+
 ## 5. Horizontally Scaled Container Workers
 
 A worker is any process that loads your handler classes and runs `mj queue work`. Run it in a container and scale the
@@ -600,3 +647,12 @@ mj queue validate-bindings --transport AWS-prod
   pnpm --filter @memberjunction/work-queue-aws run test:localstack
   ```
   Two cases (C07, C09: stale-lease fencing) are skipped there because LocalStack never expires receipt handles; confirm them against a real AWS account.
+- **Azure Service Bus Deterministic & Opt-In Live Tests**:
+  ```bash
+  # Deterministic unit + full WorkQueue transport conformance suite (FakeServiceBusGateway)
+  pnpm --filter @memberjunction/work-queue-azure test
+
+  # Opt-in live Azure Service Bus / Emulator integration suite (auto-provisions and cleans up ephemeral resources)
+  MJ_TEST_LIVE_AZURE_SERVICE_BUS=1 AZURE_SERVICE_BUS_CONNECTION_STRING="..." \
+    pnpm --filter @memberjunction/work-queue-azure run test:live
+  ```

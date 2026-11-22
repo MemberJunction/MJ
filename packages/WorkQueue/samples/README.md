@@ -64,6 +64,12 @@ The handler and the CLI commands are transport-neutral. To run the same demo on 
 installed, point `samples.hello`'s `TransportID` at that transport's row and re-run the steps above; nothing in
 this package changes.
 
+## Azure Service Bus samples
+
+For cloud-specific producer, standalone `ServiceBusMessagePump` consumer, and `@memberjunction/work-queue-azure/functions`
+Azure Functions worker samples (plus emulator and live Azure Service Bus configuration), see
+[`src/azure/README.md`](./src/azure/README.md) and import from `@memberjunction/work-queue-samples/azure`.
+
 ## Writing your own handler
 
 Copy `HelloWorldHandler`: extend `BaseWorkHandler<TPayload>` from `@memberjunction/work-queue-engine`, decorate
