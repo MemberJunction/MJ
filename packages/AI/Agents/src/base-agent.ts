@@ -22120,6 +22120,12 @@ The context is now within limits. Please retry your request with the recovered c
             // Calculate total tokens even for cancelled runs
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
+            // Mark as a trusted server-initiated cancellation so finalizing a timeout, system
+            // abort, or attributed-user run (where params.userId !== contextUser.ID) is never
+            // blocked by the user-level stop-ownership gate.
+            if (typeof this._agentRun.MarkServerCancellation === 'function') {
+                this._agentRun.MarkServerCancellation();
+            }
             const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
             this.releaseFinishedRun(ok);
         }

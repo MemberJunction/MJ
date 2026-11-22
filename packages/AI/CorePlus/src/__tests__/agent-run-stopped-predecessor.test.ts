@@ -66,6 +66,7 @@ describe('MJAIAgentRunEntityExtended — BoundActionParams write protection', ()
         let savedState = isSaved;
         Object.defineProperty(run, 'ID', { value: '22222222-2222-4222-8222-222222222222', configurable: true });
         Object.defineProperty(run, 'IsSaved', { get: () => savedState, configurable: true });
+        Object.defineProperty(run, 'Status', { value: 'Running', configurable: true });
         Object.defineProperty(run, 'BoundActionParams', {
             get: () => boundValue,
             set: (v: string | null) => { boundValue = v; },

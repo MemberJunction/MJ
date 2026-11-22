@@ -264,3 +264,44 @@ export async function UserMayDeleteConversation(
     }
     return { Allowed: false, Reason: `${CONVERSATION_DELETE_REFUSED_REASON}.` };
 }
+
+/**
+ * Whether a user owns a conversation: its `UserID`, an Owner-level grant on it, or (when
+ * {@link IsInheritingFolderAccess} is true) an Owner-level grant on its parent folder
+ * (`MJ: Projects`). Mirrors the share gate (`ConversationEngine.CanShareConversation`).
+ * Server-side only: a non-database provider, or a conversation that cannot be loaded, reports
+ * false, since nothing could be verified; callers that must fail open on the client decide
+ * that themselves.
+ */
+export async function UserOwnsConversation(
+    provider: IMetadataProvider,
+    user: UserInfo | null | undefined,
+    conversationId: string
+): Promise<boolean> {
+    if (provider?.ProviderType !== 'Database' || !user) {
+        return false;
+    }
+    const conversation = await provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', user);
+    if (!(await conversation.Load(conversationId))) {
+        return false;
+    }
+    if (conversation.UserID && UUIDsEqual(conversation.UserID, user.ID)) {
+        return true;
+    }
+    const engine = ResourcePermissionEngine.GetProviderInstance<ResourcePermissionEngine>(provider, ResourcePermissionEngine) as ResourcePermissionEngine;
+    await engine.Config(false, user);
+    if (engine.GetUserResourcePermissionLevel(CONVERSATIONS_RESOURCE_TYPE_ID, conversationId, user) === 'Owner') {
+        return true;
+    }
+    if (conversation.ProjectID && IsInheritingFolderAccess(conversation)) {
+        const folderPerm = engine.GetUserResourcePermissionLevel(
+            PROJECTS_RESOURCE_TYPE_ID,
+            conversation.ProjectID,
+            user
+        );
+        if (folderPerm === 'Owner') {
+            return true;
+        }
+    }
+    return false;
+}
