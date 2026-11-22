@@ -10,6 +10,8 @@
  * @module @memberjunction/ai-agents
  */
 
+import { BaseLLM } from '@memberjunction/ai';
+import { MJGlobal } from '@memberjunction/global';
 import { LimitsConfigResolver, LogStatus, UserInfo, type MJLimitsProgressDetectorConfig } from '@memberjunction/core';
 import {
     AppendProgressDiagnosticToRunData,
@@ -203,6 +205,16 @@ export class FastConvergenceJudge {
             );
         }
 
+        if (this.isTestLlmStubActive()) {
+            return this.applyFallbackResult(
+                config,
+                Date.now() - startMs,
+                false,
+                'Fallback',
+                'FastConvergenceJudge skipped decision model call while TestLLM stub is active',
+            );
+        }
+
         const decision = await this.decisionService.Ask({
             State: stateSummary,
             Questions: {
@@ -304,5 +316,32 @@ export class FastConvergenceJudge {
         return trimmed.length > FAST_JUDGE_REASON_MAX_CHARS
             ? `${trimmed.slice(0, FAST_JUDGE_REASON_MAX_CHARS - 3)}...`
             : trimmed;
+    }
+
+    /**
+     * Detects when a scripted `TestLLM` stub is registered as the active `BaseLLM` driver in
+     * `ClassFactory`, preventing background convergence checks from consuming scripted agent turns.
+     */
+    private isTestLlmStubActive(): boolean {
+        const factory = MJGlobal.Instance.ClassFactory;
+        const allRegs = factory.GetAllRegistrations(BaseLLM);
+        const seenKeys = new Set<string>();
+        for (const reg of allRegs) {
+            const key = reg.Key ?? '';
+            if (seenKeys.has(key)) {
+                continue;
+            }
+            seenKeys.add(key);
+            const active = reg.Key ? factory.GetRegistration(BaseLLM, reg.Key) : null;
+            let ctor: object | null = active?.SubClass ?? null;
+            while (ctor) {
+                const name = typeof ctor === 'function' ? ctor.name : undefined;
+                if (name === 'TestLLM' || name === 'TestLLMRegistrationHandle') {
+                    return true;
+                }
+                ctor = Object.getPrototypeOf(ctor);
+            }
+        }
+        return false;
     }
 }

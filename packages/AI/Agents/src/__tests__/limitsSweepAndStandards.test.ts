@@ -32,7 +32,9 @@ class TestBaseAgentAccessor extends BaseAgent {
 
 const REPO_ROOT = path.resolve(__dirname, '../../../../..');
 const SWEEP_SCRIPT_PATH = path.join(REPO_ROOT, '.github/scripts/sweep-limits-literals.mjs');
-const STANDARDS_BIN_PATH = path.join(REPO_ROOT, 'packages/Standards/bin/run.js');
+const STANDARDS_DIR = path.join(REPO_ROOT, 'packages/Standards');
+const STANDARDS_BIN_PATH = path.join(STANDARDS_DIR, 'bin/run.js');
+const STANDARDS_DIST_INDEX = path.join(STANDARDS_DIR, 'dist/index.js');
 const INVENTORY_CSV_PATH = path.join(REPO_ROOT, 'docs/limits-sweep-inventory.csv');
 
 const tempDirs: string[] = [];
@@ -206,7 +208,13 @@ describe('Slice 2 limits sweep script, committed CSV inventory, and standards en
         expect(sweepCheck.stderr.toLowerCase()).toContain('unapproved runawayguard literal');
         expect(sweepCheck.stderr).toContain('packages/BadPkg/src/runaway.ts');
 
-        // 2. @memberjunction/standards CLI check (`mj-standards check` in repo cwd) also fails
+        // 2. @memberjunction/standards CLI check (`mj-standards check` in repo cwd) also fails.
+        // In sharded CI runs, @memberjunction/standards is not a direct dependency of ai-agents,
+        // so ensure its dist/ entry point is built if the shard cache omitted it.
+        if (!fs.existsSync(STANDARDS_DIST_INDEX)) {
+            const buildRes = spawnSync('pnpm', ['run', 'build'], { cwd: STANDARDS_DIR, encoding: 'utf8' });
+            expect(buildRes.status).toBe(0);
+        }
         const standardsCheck = spawnSync(
             process.execPath,
             [STANDARDS_BIN_PATH, 'check'],

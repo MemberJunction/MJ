@@ -917,6 +917,8 @@ export class BaseAgent {
     private _budgetCostEvents: BudgetCostEvent[] = [];
     private _budgetDayBaselines: Record<string, number> = {};
     private _lastRecordedCostUsd: number = 0;
+    private static readonly REMOTE_PAUSE_POLL_INTERVAL_MS = 2_000;
+    private _lastRemotePausePollMs: number = 0;
     private _pendingCheckpointPersistence: PendingRunawayCheckpointPersistence | null = null;
     private _pausedRunOutcome: {
         PauseResult: PauseRunWithCheckpointResult;
@@ -3084,6 +3086,7 @@ export class BaseAgent {
         this._budgetCostEvents = [];
         this._budgetDayBaselines = {};
         this._lastRecordedCostUsd = 0;
+        this._lastRemotePausePollMs = params.resumeCheckpointRunId ? 0 : Date.now();
         this._progressDetector.Reset();
         this._fastConvergenceJudge.ResetCooldown();
         const policyResolution = await this.resolveServerUserPolicy(params);
@@ -5559,10 +5562,15 @@ export class BaseAgent {
         if (!allowRemotePoll) {
             return null;
         }
+        const nowMs = Date.now();
+        if (nowMs - this._lastRemotePausePollMs < BaseAgent.REMOTE_PAUSE_POLL_INTERVAL_MS) {
+            return null;
+        }
         const provider = params.provider || this._activeProvider;
         if (!provider || typeof (provider as Partial<IRunViewProvider>).RunView !== 'function') {
             return null;
         }
+        this._lastRemotePausePollMs = nowMs;
         try {
             const rv = RunView.FromMetadataProvider(provider);
             const res = await rv.RunView<{ ID: string; Data: string | null }>(

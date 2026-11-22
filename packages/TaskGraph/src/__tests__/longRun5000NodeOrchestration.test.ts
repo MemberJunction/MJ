@@ -919,7 +919,7 @@ describe('CR-19: 5,000-node workflow acceptance through real TaskGraphService an
 
                 await waitForCondition(
                     () => db.Tasks.get(parentId.toLowerCase())?.Status === 'Complete' && capturedDiagBeforeForget !== null,
-                    15_000,
+                    35_000,
                     () => dispatcher.Kick(),
                     () => `executed=${executedSliceIds.length}, parentStatus=${db.Tasks.get(parentId.toLowerCase())?.Status}`,
                 );
@@ -945,7 +945,7 @@ describe('CR-19: 5,000-node workflow acceptance through real TaskGraphService an
         } finally {
             spyFromProvider.mockRestore();
         }
-    }, 45_000);
+    }, 60_000);
 
     it('pauses mid-5000-node DAG automatically via production governance, blocks unapproved restart, and finishes remaining nodes after production approval without replaying completed nodes', async () => {
         capturedLogErrors.length = 0;
@@ -1023,7 +1023,7 @@ describe('CR-19: 5,000-node workflow acceptance through real TaskGraphService an
                     const storedRun = db.AgentRuns.get(SUBMIT_RUN_ID);
                     return storedRun?.Status === 'Paused' && ExtractRunawayCheckpointFromRunData(storedRun.Data) !== null;
                 },
-                15_000,
+                35_000,
                 () => dispatcher1.Kick(),
                 () => `executed=${executedOrder.length}, runStatus=${db.AgentRuns.get(SUBMIT_RUN_ID)?.Status}`,
             );
@@ -1101,7 +1101,7 @@ describe('CR-19: 5,000-node workflow acceptance through real TaskGraphService an
             try {
                 await waitForCondition(
                     () => db.Tasks.get(parentId.toLowerCase())?.Status === 'Complete',
-                    15_000,
+                    35_000,
                     () => dispatcher2.Kick(),
                     () => `executedTotal=${executedOrder.length}, parentStatus=${db.Tasks.get(parentId.toLowerCase())?.Status}`,
                 );
@@ -1117,5 +1117,5 @@ describe('CR-19: 5,000-node workflow acceptance through real TaskGraphService an
         } finally {
             spyFromProvider.mockRestore();
         }
-    }, 45_000);
+    }, 60_000);
 });

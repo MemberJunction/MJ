@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { BaseLLM } from '@memberjunction/ai';
+import { MJGlobal } from '@memberjunction/global';
 import {
     CODE_FALLBACK_LIMITS,
     LogStatus,
@@ -17,6 +19,7 @@ import {
     FastConvergenceJudge,
     type FastConvergenceJudgeEvaluator,
 } from '../FastConvergenceJudge';
+import { AgentDecisionService } from '../AgentDecisionService';
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
@@ -337,5 +340,67 @@ describe('FastConvergenceJudge — Ambiguous-only invocation, <200ms bound, and 
         const diag = ExtractProgressDiagnosticsFromRunData(runStub.Data);
         expect(diag?.FastJudgeEntries[0].TimedOut).toBe(true);
         expect(diag?.FastJudgeEntries[0].Reason).toContain('timed out');
+    });
+
+    it('classifies genuinely progressing non-DB multi-step payload transitions as Converging without invoking FastConvergenceJudge', async () => {
+        const config = createDetectorConfig({ MinIterationsBeforeCheck: 6, WindowSize: 10 });
+        const stageDescriptions = [
+            'Director outlined narrative arc and pacing targets for intro sequence.',
+            'Art Director selected high-contrast color palette and lighting keyframe style.',
+            'Storyboard drafted six camera shot compositions with voiceover timing cues.',
+            'Pre-Production generated hero b-roll visual assets and validated audio sync.',
+            'Motion Engineer assembled scene transitions and typography overlays.',
+            'Critic reviewed final render frame continuity and approved delivery spec.',
+        ];
+        const samples: IterationProgressSample[] = stageDescriptions.map((desc, idx) => ({
+            IterationIndex: idx + 1,
+            StepType: idx % 2 === 0 ? 'Sub-Agent' : 'Actions',
+            StepSignature: `Step:Stage-${idx + 1}`,
+            RecordsCreatedOrChanged: 0,
+            TasksClosed: 0,
+            OutputText: desc.repeat((idx % 2) + 1),
+            PayloadFingerprint: JSON.stringify({ stage: idx + 1, artifacts: [`art-${idx + 1}`] }),
+            TokensSpent: 450,
+            ErrorSignature: null,
+            HeapUsedBytes: 50_000_000 + idx * 10_000,
+        }));
+
+        const result = detector.Evaluate(config, samples);
+        expect(result.Checked).toBe(true);
+        expect(result.Classification).toBe('Converging');
+        expect(result.ProgressScore).toBeGreaterThanOrEqual(config.AmbiguityHighScoreThreshold);
+    });
+
+    it('skips decision model calls in FastConvergenceJudge when a TestLLM stub is active on BaseLLM', async () => {
+        class TestLLM {
+            public constructor(_apiKey?: string) {}
+        }
+        class TestLLMRegistrationHandle extends TestLLM {}
+
+        const factory = MJGlobal.Instance.ClassFactory;
+        const prior = factory.GetRegistration(BaseLLM, 'OpenAILLM');
+        factory.Register(BaseLLM, TestLLMRegistrationHandle, 'OpenAILLM', 999);
+        const decisionService = new AgentDecisionService();
+        const askSpy = vi.spyOn(decisionService, 'Ask');
+        const stubJudge = new FastConvergenceJudge(decisionService);
+        try {
+            const ambiguousDet = detector.Evaluate(createDetectorConfig(), makeAmbiguousSamples(6));
+            const evaluated = await stubJudge.EvaluateIfAmbiguous({
+                DetectorResult: ambiguousDet,
+                Iteration: 6,
+                StateSummary: 'ambiguous under test llm',
+                Config: createDetectorConfig(),
+                ContextUser: { ID: 'user-test-llm' } as UserInfo,
+            });
+            expect(askSpy).not.toHaveBeenCalled();
+            expect(evaluated.FastJudgeInvoked).toBe(true);
+            expect(evaluated.Classification).toBe('Converging');
+            expect(evaluated.FastJudgeResult?.UsedFallback).toBe(true);
+            expect(evaluated.FastJudgeResult?.Reason).toContain('TestLLM');
+        } finally {
+            if (prior) {
+                factory.Register(BaseLLM, prior.SubClass, 'OpenAILLM', 1000);
+            }
+        }
     });
 });

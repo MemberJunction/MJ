@@ -111,7 +111,7 @@ export class DeterministicProgressDetector {
         }
 
         const hardStallReason = this.detectHardStall(signals, config);
-        const progressScore = this.computeCompositeProgressScore(signals, config);
+        const progressScore = this.computeCompositeProgressScore(signals, config, window);
 
         if (hardStallReason) {
             return {
@@ -450,6 +450,7 @@ export class DeterministicProgressDetector {
     private computeCompositeProgressScore(
         signals: ProgressSignalsBreakdown,
         config: MJLimitsProgressDetectorConfig,
+        window: readonly IterationProgressSample[],
     ): number {
         const recordScore = Math.min(1, signals.RecordsCreatedOrChangedRate);
         const taskScore = Math.min(1, signals.TasksClosedRate * 2);
@@ -458,9 +459,36 @@ export class DeterministicProgressDetector {
         const tokenScore = signals.TokenEfficiencyScore;
         const varianceScore = signals.VarianceHealthScore;
 
-        let score =
+        let hardProgressContribution =
             recordScore * SIGNAL_WEIGHT_RECORDS +
-            taskScore * SIGNAL_WEIGHT_TASKS +
+            taskScore * SIGNAL_WEIGHT_TASKS;
+
+        // Multi-step agents executing actions/sub-agents without writing MJ records or scratchpad
+        // tasks still demonstrate concrete forward progress when their payload evolves across
+        // distinct non-oscillating states without duplicate step/error patterns.
+        if (signals.RecordsCreatedOrChangedTotal === 0 && signals.TasksClosedTotal === 0 && window.length > 0) {
+            const distinctPayloads = new Set<string>();
+            for (const s of window) {
+                if (s.PayloadFingerprint !== undefined && s.PayloadFingerprint.length > 0) {
+                    distinctPayloads.add(s.PayloadFingerprint);
+                }
+            }
+            const distinctPayloadRatio = distinctPayloads.size / window.length;
+            const payloadTransitions = this.countPayloadTransitions(window);
+            if (
+                distinctPayloadRatio >= 0.5 &&
+                payloadTransitions >= Math.floor(window.length / 2) &&
+                signals.DuplicateStepRatio < 0.5 &&
+                signals.RepeatedTextSimilarity < NEAR_DUPLICATE_COSINE_THRESHOLD &&
+                signals.RepeatingErrorStreak === 0
+            ) {
+                hardProgressContribution =
+                    Math.min(1, distinctPayloadRatio) * (SIGNAL_WEIGHT_RECORDS + SIGNAL_WEIGHT_TASKS);
+            }
+        }
+
+        let score =
+            hardProgressContribution +
             distinctScore * SIGNAL_WEIGHT_DISTINCT_OUTPUTS +
             noveltyScore * SIGNAL_WEIGHT_NOVELTY +
             tokenScore * SIGNAL_WEIGHT_TOKEN_EFFICIENCY +
