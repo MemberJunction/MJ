@@ -16,7 +16,9 @@
  * @module @memberjunction/task-graph
  */
 import {
+    CODE_FALLBACK_LIMITS,
     IMetadataProvider,
+    LimitsConfigResolver,
     LogError,
     LogStatus,
     RunInEntityTransaction,
@@ -24,6 +26,7 @@ import {
     ServerOperationScopeManager,
     UserInfo,
     type EntityTransactionScope,
+    type MJLimitsOverride,
 } from '@memberjunction/core';
 import {
     MJTaskEntity,
@@ -50,6 +53,7 @@ import {
     type TaskSecurityEnvelope,
     type ForEachOperation,
     type WhileOperation,
+    type WorkflowLimitsMetadataInput,
     ConfigOf,
     IsDefaultHumanTaskProvider,
     IsHumanTaskProviderRegistered,
@@ -64,7 +68,13 @@ import { ResolveRecordsByNameOrToolName } from './resolve-by-tool-name';
 import { HeldDecisionAnswers, type DecisionTaskRow, type TaskStepConfiguration } from './decision-node';
 import { CompensationFromSpec, IsCompensationTask, type SagaExecutionState } from './saga-compensation';
 import { TaskClaimStore, type TaskGraphDebugFieldWrite } from './TaskClaimStore';
-import { ParseTaskGraphDebugState, type EdgeOverrideVerdict, type StepTarget, type TaskGraphDebugState } from './debug-state';
+import {
+    IsGovernanceDebugPause,
+    ParseTaskGraphDebugState,
+    type EdgeOverrideVerdict,
+    type StepTarget,
+    type TaskGraphDebugState,
+} from './debug-state';
 import { KickTaskGraphDispatchers } from './task-graph-kick';
 
 /**
@@ -120,6 +130,18 @@ export type TaskGraphSubmitContext = {
      * by the dispatcher on every node.
      */
     SecurityEnvelope?: TaskSecurityEnvelope;
+    /** Optional submitting agent ID used for Tier-3 `AgentOrWorkflowMetadata` and Tier-4 `UserAgentPolicy` resolution. */
+    AgentID?: string | null;
+    /** Optional routine or scheduled workstream identifier used for `PerRoutine` budget enforcement. */
+    RoutineID?: string | null;
+    /** Optional workflow metadata limits contributing to Tier-3 `AgentOrWorkflowMetadata`. */
+    WorkflowMetadata?: WorkflowLimitsMetadataInput | null;
+    /** Optional explicit Tier-4 user-agent policy limits override. */
+    UserPolicyLimitsOverride?: MJLimitsOverride;
+    /** Optional Tier-5 limits override persisted onto the parent graph for runtime budget/runaway governance. */
+    LimitsOverride?: MJLimitsOverride;
+    /** Enables (or explicitly disables when `false`) runtime budget/runaway governance evaluation on the dispatcher for this graph. */
+    EnableGovernance?: boolean;
 };
 
 /**
@@ -209,6 +231,18 @@ export type TaskGraphParentMetadata = {
      * Current saga lifecycle state when `failurePolicy === 'CompensateCompleted'`.
      */
     sagaState?: SagaExecutionState;
+    /** Optional Tier-3 submitting agent ID for 5-tier limits & policy resolution. */
+    submittedByAgentID?: string | null;
+    /** Optional routine or scheduled workstream identifier for `PerRoutine` budget enforcement. */
+    routineID?: string | null;
+    /** Optional workflow metadata limits contributing to Tier-3 `AgentOrWorkflowMetadata`. */
+    workflowMetadata?: WorkflowLimitsMetadataInput;
+    /** Optional explicit Tier-4 user-agent policy limits override. */
+    userPolicyLimitsOverride?: MJLimitsOverride;
+    /** Optional Tier-5 limits override enforced by `TaskGraphGovernanceCoordinator` on the dispatcher. */
+    limitsOverride?: MJLimitsOverride;
+    /** Explicit governance opt-in/opt-out flag persisted onto the parent graph (`false` disables governance). */
+    governanceEnabled?: boolean;
 };
 
 /**
@@ -220,7 +254,12 @@ export type TaskGraphParentMetadata = {
  * the cap the dispatcher forces `continuation: 'message'`, which ends the chain without losing the
  * results.
  */
-export const MAX_REINVOKE_DEPTH = 5;
+export const MAX_REINVOKE_DEPTH = CODE_FALLBACK_LIMITS.ResourceGuards.MaxReinvokeDepth;
+
+/** Resolves the effective reinvoke depth cap from `LimitsConfigResolver.Instance`. */
+export function GetMaxReinvokeDepth(): number {
+    return LimitsConfigResolver.Resolve().Limits.ResourceGuards.MaxReinvokeDepth;
+}
 
 /** What a parent row means when it carries no metadata, or metadata we cannot read. */
 const DEFAULT_PARENT_METADATA: TaskGraphParentMetadata = {
@@ -311,9 +350,15 @@ export function BuildTaskGraphParentInputPayload(args: {
     sagaState?: SagaExecutionState;
     submittedByAgentRunID: string | null;
     submittedByUserID: string | null;
+    submittedByAgentID?: string | null;
+    routineID?: string | null;
+    workflowMetadata?: WorkflowLimitsMetadataInput;
+    userPolicyLimitsOverride?: MJLimitsOverride;
     parentAgentHierarchy?: string[];
     invocation?: { data?: unknown; context?: unknown } | null;
     startPaused?: boolean;
+    limitsOverride?: MJLimitsOverride;
+    governanceEnabled?: boolean;
 }): Record<string, unknown> {
     const parentAgentHierarchy = Array.isArray(args.parentAgentHierarchy)
         ? args.parentAgentHierarchy
@@ -329,11 +374,19 @@ export function BuildTaskGraphParentInputPayload(args: {
         ...(args.sagaState ? { sagaState: args.sagaState } : {}),
         submittedByAgentRunID: args.submittedByAgentRunID,
         submittedByUserID: args.submittedByUserID,
+        ...(args.submittedByAgentID ? { submittedByAgentID: args.submittedByAgentID } : {}),
+        ...(args.routineID ? { routineID: args.routineID } : {}),
+        ...(args.workflowMetadata ? { workflowMetadata: args.workflowMetadata } : {}),
+        ...(args.userPolicyLimitsOverride ? { userPolicyLimitsOverride: args.userPolicyLimitsOverride } : {}),
         recordsTaint: true,
         ...(parentAgentHierarchy.length > 0 ? { parentAgentHierarchy } : {}),
         ...(args.invocation
             ? { invocation: { data: args.invocation.data, context: args.invocation.context } }
             : {}),
+        ...(args.limitsOverride ? { limitsOverride: args.limitsOverride } : {}),
+        ...(args.governanceEnabled !== undefined
+            ? { governanceEnabled: args.governanceEnabled }
+            : (args.limitsOverride ? { governanceEnabled: true } : {})),
         ...(args.startPaused
             ? {
                 debug: {
@@ -905,7 +958,7 @@ export class TaskGraphService {
         //     HERE rather than at execution because refusing to write the graph is the only point at
         //     which nothing has happened yet.
         const depth = context.ReinvokeDepth ?? 0;
-        if (depth >= MAX_REINVOKE_DEPTH) {
+        if (depth >= GetMaxReinvokeDepth()) {
             const message =
                 `"${spec.workflowName}" was not started: it is ${depth} levels deep in a chain of ` +
                 `workflows starting workflows, which is the limit. A workflow that reaches this is ` +
@@ -1151,7 +1204,7 @@ export class TaskGraphService {
         depth: number,
         visited: Set<string>,
     ): Promise<string[]> {
-        if (depth >= MAX_REINVOKE_DEPTH) {
+        if (depth >= GetMaxReinvokeDepth()) {
             LogError(
                 `[TaskGraphService] Nested cancel stopped at depth ${depth}; a deeper sub-graph chain ` +
                 `than the reinvoke cap allows may still be running.`,
@@ -1441,12 +1494,43 @@ export class TaskGraphService {
         return this.controlResult(true, Next);
     }
 
+    private async ensureNotGovernancePaused(
+        parentTaskID: string,
+        context: TaskGraphSubmitContext,
+        verb: 'pause' | 'resume' | 'step',
+    ): Promise<
+        | { Blocked: true; Result: { Success: boolean; Debug?: TaskGraphDebugState; ErrorMessage?: string } }
+        | { Blocked: false; Current: TaskGraphDebugState }
+    > {
+        const parent = await this.loadWorkflowParent(parentTaskID, context);
+        if (!parent) {
+            return {
+                Blocked: true,
+                Result: this.controlResult(false, undefined, 'Not a workflow graph this control plane can act on.'),
+            };
+        }
+        const current = ParseTaskGraphDebugState(parent.inputPayload);
+        if (IsGovernanceDebugPause(current)) {
+            return {
+                Blocked: true,
+                Result: this.controlResult(
+                    false,
+                    current,
+                    `Cannot ${verb} a workflow paused by execution governance — use ApproveAndResumePausedGraph after approval.`,
+                ),
+            };
+        }
+        return { Blocked: false, Current: current };
+    }
+
     /**
      * Pauses a graph: nothing new is claimed until it is resumed. In-flight steps finish naturally
      * and their completions land — a pause gates claiming and never touches a live claim, which is
      * why there is no "what happens to the claim" question to answer.
      */
     public async PauseGraph(parentTaskID: string, context: TaskGraphSubmitContext, pausedByUserID?: string | null) {
+        const guard = await this.ensureNotGovernancePaused(parentTaskID, context, 'pause');
+        if ('Result' in guard) return guard.Result;
         const pausedBy = pausedByUserID ?? context.ContextUser?.ID ?? null;
         return this.writeDebugFields(parentTaskID, context, (current) => ({
             // Pause owns the pause fields AND the step allowance: an allowance armed a moment ago is
@@ -1466,7 +1550,12 @@ export class TaskGraphService {
 
     /** Resumes a paused graph. Breakpoints and edge overrides survive — only the pause clears. */
     public async ResumeGraph(parentTaskID: string, context: TaskGraphSubmitContext) {
+        const guard = await this.ensureNotGovernancePaused(parentTaskID, context, 'resume');
+        if ('Result' in guard) return guard.Result;
         return this.writeDebugFields(parentTaskID, context, (current) => {
+            if (IsGovernanceDebugPause(current)) {
+                return { Fields: [], Next: current };
+            }
             const next: TaskGraphDebugState = { ...current };
             // Continue from a breakpoint must run the stopped task. Stamping it here so the next
             // poll does not re-hit the same still-eligible breakpoint without claiming.
@@ -1500,11 +1589,10 @@ export class TaskGraphService {
      * consumes the allowance CAS-style, so two instances stepping the same graph release work once.
      */
     public async StepGraph(parentTaskID: string, target: StepTarget, context: TaskGraphSubmitContext) {
-        const parent = await this.loadWorkflowParent(parentTaskID, context);
-        if (!parent) return this.controlResult(false, undefined, 'Not a workflow graph this control plane can act on.');
-        const current = ParseTaskGraphDebugState(parent.inputPayload);
-        if (!current.paused) {
-            return this.controlResult(false, current, 'Step only applies to a paused workflow — pause it first.');
+        const guard = await this.ensureNotGovernancePaused(parentTaskID, context, 'step');
+        if ('Result' in guard) return guard.Result;
+        if (!guard.Current.paused) {
+            return this.controlResult(false, guard.Current, 'Step only applies to a paused workflow — pause it first.');
         }
         return this.writeDebugFields(parentTaskID, context, (state) => ({
             Fields: [TaskClaimStore.DebugField('$.debug.step', { Kind: 'string', Value: target })],
@@ -2050,11 +2138,17 @@ export class TaskGraphService {
             failurePolicy: spec.failurePolicy ?? 'Halt',
             submittedByAgentRunID: context.AgentRunID ?? null,
             submittedByUserID: context.ContextUser?.ID ?? null,
+            submittedByAgentID: context.AgentID ?? null,
+            routineID: context.RoutineID ?? spec.routineId ?? null,
+            workflowMetadata: context.WorkflowMetadata ?? undefined,
+            userPolicyLimitsOverride: context.UserPolicyLimitsOverride,
             parentAgentHierarchy: context.ParentAgentHierarchy,
             invocation: sanitized.Envelope
                 ? { data: sanitized.Envelope.Data, context: sanitized.Envelope.Context }
                 : null,
             startPaused: context.Debug?.paused === true,
+            limitsOverride: context.LimitsOverride ?? spec.limitsOverride,
+            governanceEnabled: context.EnableGovernance,
         }));
         parent.SecurityEnvelope = SerializeTaskSecurityEnvelope(context.SecurityEnvelope);
         if (!(await this.saveAsService(parent, 'MJ: Tasks', context))) {

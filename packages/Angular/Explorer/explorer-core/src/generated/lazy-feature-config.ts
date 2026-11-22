@@ -89,7 +89,7 @@ const loadNgDashboardsComponentStudioDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/component-studio-dashboards.module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./core-dashboards.module (42 entries) ---
+// --- @memberjunction/ng-dashboards → ./core-dashboards.module (43 entries) ---
 const loadNgDashboardsCoreDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/core-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/core-dashboards.module').then(() => {})
@@ -280,6 +280,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::AdminDataSchema': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::AdminDeveloperTools': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::AdminIdentityAccess': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::AdminLimitsResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::AdminMonitoring': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::AppStateInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::ApplicationRolesResource': loadNgDashboardsCoreDashboardsModule,
@@ -408,4 +409,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 152;
+export const LAZY_FEATURE_CONFIG_COUNT = 153;

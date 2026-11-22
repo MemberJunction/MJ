@@ -33,6 +33,11 @@ export class DurableTaskGraphSubmitter extends TaskGraphSubmitter {
             ContextUser: request.ContextUser,
             Provider: request.Provider,
             AgentRunID: request.AgentRunID ?? null,
+            AgentID: request.AgentID ?? null,
+            RoutineID: request.RoutineID ?? null,
+            LimitsOverride: request.LimitsOverride,
+            UserPolicyLimitsOverride: request.UserPolicyLimitsOverride,
+            EnableGovernance: request.EnableGovernance,
             ParentAgentHierarchy: request.ParentAgentHierarchy,
             // Carried through so MAX_REINVOKE_DEPTH bounds a real chain. Without it every
             // submission was depth 0 and the cap could never trip.

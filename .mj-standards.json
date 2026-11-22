@@ -47,6 +47,17 @@
         ]
       }
     },
+    "limits-literals": {
+      "Severity": "error",
+      "Roots": [
+        "packages"
+      ],
+      "Options": {
+        "AllowedFiles": [
+          "packages/MJCore/src/generic/limitsConfig.ts"
+        ]
+      }
+    },
     "migration-existence-guards": {
       "Severity": "error",
       "Roots": [

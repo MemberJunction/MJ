@@ -18,7 +18,7 @@
  * @module @memberjunction/ai-core-plus
  */
 import { GetGlobalObjectStore, MJGlobal } from '@memberjunction/global';
-import { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { UserInfo, IMetadataProvider, type MJLimitsOverride } from '@memberjunction/core';
 import type { TaskGraphSpec } from './task-graph-spec';
 import type { TaskSecurityEnvelope } from './task-security-envelope';
 import { SanitizeForPersistence } from '../safe-persist';
@@ -32,6 +32,16 @@ export type TaskGraphSubmitRequest = {
     ConversationDetailID?: string | null;
     /** The agent run that emitted the graph, for provenance and continuation routing. */
     AgentRunID?: string | null;
+    /** Optional submitting agent ID for Tier-3 `AgentOrWorkflowMetadata` & Tier-4 `UserAgentPolicy` resolution. */
+    AgentID?: string | null;
+    /** Optional routine or scheduled job run ID for `PerRoutine` budget tracking. */
+    RoutineID?: string | null;
+    /** Optional Tier-5 limits override for the submitted graph. */
+    LimitsOverride?: MJLimitsOverride;
+    /** Optional explicit Tier-4 user-agent policy limits override. */
+    UserPolicyLimitsOverride?: MJLimitsOverride;
+    /** Optional explicit opt-in/opt-out flag for dispatcher governance evaluation. */
+    EnableGovernance?: boolean;
     /**
      * How many task-graph continuations led to the run that is submitting this graph.
      *

@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT186 - Comms V2 Compliance Gate and Jurisdiction Rollup",
+    "Name": "IT187 - Comms V2 Compliance Gate and Jurisdiction Rollup",
     "Description": "Exercises ComplianceGate, JurisdictionResolver, and CommunicationSenderPermission hierarchy inheritance against live database entities.",
     "InputDefinition": {},
     "ExpectedOutcomes": {

@@ -4,7 +4,7 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed } from '@memberjunction/core';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed, LimitsConfigResolver } from '@memberjunction/core';
 import { UserCache, resolveDbPlatformFromEnv, GenericDatabaseProvider, SummarizeSqlParameters } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, IndexByUUID, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
@@ -49,6 +49,12 @@ import { ApplyRootVariablesLoggingMiddleware, variablesLoggingMiddleware } from 
 import { auditResolversForUndecoratedArgs } from './logging/bootAudit.js';
 import { StartupLogger } from './logging/StartupLogger.js';
 import { MJServerStartupState } from './startupState.js';
+import {
+  BeginServerWakeStartupGuard,
+  CompleteServerWakeStartupGuard,
+  GetServerWakeStartupGuardStatus,
+  ResetServerWakeStartupGuard,
+} from './wakeStartupLifecycle.js';
 import { AssertEntityMetadataLoaded, ENTITY_METADATA_CHECK_PHASE } from './metadataReadiness.js';
 import { CreateStartupGate, ListenOnPort, RejectUpgradeWhileStarting } from './startupGate.js';
 import { AuthProviderFactory } from '@memberjunction/auth-providers';
@@ -90,7 +96,7 @@ import type { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { IntegrationProgressEmitter, SweepInterruptedRuns } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
-import { ClientToolRequestManager, AgentRunWatchdog, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
+import { ClientToolRequestManager, AgentRunWatchdog, InstallDefaultResumeContinuationDispatcher, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
 import { BindBridgeEngineHostInstance, SessionJanitor, SetHostInstancePort, StartBridgeOrphanReconciliation } from './agentSessions/index.js';
 import { ApplyHandoffOfferExpirySettings } from './agentSessions/HandoffOfferExpiry.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
@@ -303,6 +309,7 @@ export * from './resolvers/FileCategoryResolver.js';
 export * from './resolvers/FileResolver.js';
 export * from './rest/MediaAccessKeys.js';
 export * from './rest/MediaStreamHandler.js';
+export * from './rest/UploadTokenManager.js';
 export * from './routeRateLimitConfigUnits.js';
 export * from './rest/RealtimeRecordingHandler.js';
 export * from './resolvers/InfoResolver.js';
@@ -527,6 +534,7 @@ GetAttachmentService().BlobStore = new MJStorageBlobStore();
 export const Serve = async (resolverPaths: Array<string>, app: Application = CreateApp(), options?: MJServerOptions): Promise<void> => {
   const startup = MJServerStartupState.Instance;
   startup.Begin();
+  BeginServerWakeStartupGuard('MJServer.Serve');
   const httpServer = createServer(CreateStartupGate(app, startup));
   // Until the upgrade router is installed, every WebSocket upgrade is refused with a 503.
   httpServer.on('upgrade', (_request, socket) => {
@@ -1053,6 +1061,9 @@ const setupComplete$ = new ReplaySubject(1);
   if (configInfo.queryDialects) {
     MJGlobal.Instance.GetGlobalObjectStore()['queryDialects'] = configInfo.queryDialects;
   }
+
+  // Register optional Tier 2 (`MjConfig`) execution limits with LimitsConfigResolver
+  LimitsConfigResolver.Instance.RegisterMjConfigLimits(configInfo.limits ?? null);
 
   // Initialize server telemetry based on config
   const tm = TelemetryManager.Instance;
@@ -1856,6 +1867,8 @@ const setupComplete$ = new ReplaySubject(1);
 
   // Every role runs agents, so every role's watchdog takes the configured intervals (before any run starts).
   AgentRunWatchdog.Instance.Configure(configInfo.agentRunWatchdog);
+  // Wire default fresh-worker continuation dispatcher for checkpoint-resumed paused runs (CR-14).
+  InstallDefaultResumeContinuationDispatcher();
   // The handoff offer registry starts its own expiry sweep when it loads, on every role; apply the host's setting.
   ApplyHandoffOfferExpirySettings(configInfo.agentSessions.handoffOfferExpiry);
 
@@ -1923,6 +1936,7 @@ const setupComplete$ = new ReplaySubject(1);
 
   // The port was bound at the top of Serve; from here on requests reach the app.
   startup.MarkReady();
+  CompleteServerWakeStartupGuard();
   // The summary headline reports TRUE wall-clock since process start (see
   // StartupLogger.buildStartupLine), so we don't push a synthetic "total" phase row
   // (that double-counted the headline). Keep a verbose-only line for the serve()-scoped span.
@@ -2733,3 +2747,9 @@ export type { CommsActivityWorkPayload, CommsWebhookHandlerOptions } from './res
 
 export * from './generic/RedisClusterPubSubEngine.js';
 export { WrapSharedCacheWithL1 } from './sharedCache.js';
+export {
+  BeginServerWakeStartupGuard,
+  CompleteServerWakeStartupGuard,
+  GetServerWakeStartupGuardStatus,
+  ResetServerWakeStartupGuard,
+};

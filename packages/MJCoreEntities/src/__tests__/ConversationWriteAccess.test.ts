@@ -16,7 +16,7 @@ let grants: Array<{ ResourceRecordID: string; PermissionLevel: string }> = [];
 let grantLevel: 'View' | 'Edit' | 'Owner' | null = null;
 let folderGrantLevels: Record<string, 'View' | 'Edit' | 'Owner'> = {};
 
-import { ConversationDeleteAllowed, UserMayDeleteConversation, UserMayWriteConversation } from '../custom/ConversationWriteAccess';
+import { ConversationDeleteAllowed, UserMayDeleteConversation, UserMayWriteConversation, UserOwnsConversation } from '../custom/ConversationWriteAccess';
 
 function provider(
     ownerId: string | null,
@@ -260,5 +260,60 @@ describe('UserMayDeleteConversation', () => {
 describe('ConversationDeleteAllowed', () => {
     it('refuses when there is no user', () => {
         expect(ConversationDeleteAllowed('owner', null, 'Owner')).toBe(false);
+    });
+});
+
+describe('UserOwnsConversation', () => {
+    beforeEach(() => {
+        grants = [];
+        grantLevel = null;
+        folderGrantLevels = {};
+    });
+
+    it('is true for the owner and for an Owner-level grant, not for Edit or View', async () => {
+        expect(await UserOwnsConversation(provider('u1'), user, 'c1')).toBe(true);
+        grantLevel = 'Owner';
+        expect(await UserOwnsConversation(provider('other'), user, 'c1')).toBe(true);
+        grantLevel = 'Edit';
+        expect(await UserOwnsConversation(provider('other'), user, 'c1')).toBe(false);
+        grantLevel = 'View';
+        expect(await UserOwnsConversation(provider('other'), user, 'c1')).toBe(false);
+    });
+
+    it('is true for an inherited Owner-level folder grant only when the conversation opts into folder inheritance', async () => {
+        folderGrantLevels = { 'proj-acl': 'Owner' };
+        expect(
+            await UserOwnsConversation(
+                provider('other', true, { projectId: 'proj-acl', ownerUserId: 'other', additionalData: INHERITS }),
+                user,
+                'c1'
+            )
+        ).toBe(true);
+
+        // Folder inheritance off -> false
+        expect(
+            await UserOwnsConversation(
+                provider('other', true, { projectId: 'proj-acl', ownerUserId: 'other', additionalData: null }),
+                user,
+                'c1'
+            )
+        ).toBe(false);
+
+        // Edit grant on inherited folder -> false (Owner required)
+        folderGrantLevels = { 'proj-acl': 'Edit' };
+        expect(
+            await UserOwnsConversation(
+                provider('other', true, { projectId: 'proj-acl', ownerUserId: 'other', additionalData: INHERITS }),
+                user,
+                'c1'
+            )
+        ).toBe(false);
+    });
+
+    it('is false when nothing can be verified: no user, a client provider, or a conversation that does not load', async () => {
+        grantLevel = 'Owner';
+        expect(await UserOwnsConversation(provider('u1'), null, 'c1')).toBe(false);
+        expect(await UserOwnsConversation({ ProviderType: 'Network', GetEntityObject: vi.fn() } as never, user, 'c1')).toBe(false);
+        expect(await UserOwnsConversation(provider('u1', false), user, 'c1')).toBe(false);
     });
 });

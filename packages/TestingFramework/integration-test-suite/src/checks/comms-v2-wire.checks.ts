@@ -1,5 +1,5 @@
 /**
- * comms-v2-wire.checks.ts — the 'comms-v2-wire' bundle (CV2W1–CV2W5, IT187): the Comms V2 surfaces
+ * comms-v2-wire.checks.ts — the 'comms-v2-wire' bundle (CV2W1–CV2W5, IT190): the Comms V2 surfaces
  * that have a wire, driven over that wire against a running MJAPI.
  *
  * TRANSPORT: **client**. Nothing here calls an engine class in this process. Fixtures are saved

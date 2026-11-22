@@ -104,7 +104,30 @@ describe('derived extras', () => {
     expect(t.overlayVars['--mj-shadow-brand-sm']).toContain('rgba(');
     expect(t.overlayVars['--mj-radius-md']).toBe('8px');
     expect(t.overlayVars['--mj-radius-sm']).toBe('4px');
-    expect(t.overlayVars['--mj-font-family']).toContain('Inter');
+    expect(t.overlayVars['--mj-font-family']).toContain('Montserrat');
+    // Unset fontFamilyDisplay is omitted from overlayVars so container-scoped --mj-font-family
+    // overrides flow into headings, while resolved seeds still carry the body font fallback.
+    expect(t.overlayVars['--mj-font-family-display']).toBeUndefined();
+    expect(t.seeds.fontFamilyDisplay).toBe(t.overlayVars['--mj-font-family']);
+    expect(emitOverlayCss('default', t)).not.toContain('--mj-font-family-display:');
+  });
+
+  it('allows overriding fontFamilyDisplay independently of fontFamily', () => {
+    const custom = derive({
+      ...MJ_DEFAULT_SEEDS,
+      fontFamilyDisplay: "'Space Grotesk', 'Montserrat', sans-serif",
+    });
+    expect(custom.overlayVars['--mj-font-family']).toContain('Montserrat');
+    expect(custom.overlayVars['--mj-font-family-display']).toBe("'Space Grotesk', 'Montserrat', sans-serif");
+    expect(emitOverlayCss('custom', custom)).toContain("--mj-font-family-display: 'Space Grotesk', 'Montserrat', sans-serif;");
+  });
+
+  it('follows custom fontFamily for headings when fontFamilyDisplay is unset and merged with MJ_DEFAULT_SEEDS', () => {
+    const georgia = "'Georgia', 'Times New Roman', serif";
+    const derived = derive({ ...MJ_DEFAULT_SEEDS, fontFamily: georgia });
+    expect(derived.overlayVars['--mj-font-family']).toBe(georgia);
+    expect(derived.overlayVars['--mj-font-family-display']).toBeUndefined();
+    expect(derived.seeds.fontFamilyDisplay).toBe(georgia);
   });
 
   it('respects the shape (radius) seed', () => {

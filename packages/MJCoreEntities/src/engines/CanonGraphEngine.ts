@@ -7,10 +7,12 @@ import {
     type GraphEdgeView,
     type GraphNodeRef,
     type GraphNodeView,
+    type GraphPath,
     type GraphSubgraph,
     type GraphTraversalOptions,
 } from '../graph/BaseGraphEdgeProvider';
 import { CanUserReadEntity, ClampGraphDepth, ClampGraphMaxNodes, GraphEngine, IsCanonGraph, IsFieldReadableByAll, IsGraphConceptStatusVisible } from '../graph/GraphEngine';
+import { ProposeEntityDomains, type DomainProposal, type ProposeEntityDomainsOptions } from '../graph/DomainClustering';
 import type {
     GraphExpandedEdge,
     GraphExpandedNode,
@@ -25,6 +27,102 @@ const CONCEPT_ENTITY = 'MJ: Graph Concepts';
 const PRIMARY_CANON_GRAPH_NAME = 'MJ Canon';
 /** Concept matches used as seeds for one question. */
 const MAX_CONCEPT_SEEDS = 5;
+
+/** Score gap within which two non-exact concept matches count as tied (see {@link ClassifyConceptMatches}). */
+export const CONCEPT_AMBIGUITY_MARGIN = 0.05;
+/** Most tied candidates an ambiguous resolution reports. */
+const MAX_AMBIGUOUS_CANDIDATES = 5;
+
+/**
+ * How a concept matched the text:
+ * - `Exact`: the whole text is the concept's name or one of its synonyms.
+ * - `Mention`: the text contains the name or a synonym (a question that names the concept).
+ * - `Partial`: the text is a fragment of the name or a synonym ("AR" for "Open AR").
+ * - `Token`: only some words overlap.
+ */
+export type ConceptMatchKind = 'Exact' | 'Mention' | 'Partial' | 'Token';
+
+/** One concept that matched the text, with how and how well. */
+export interface ConceptMatch {
+    Node: GraphNodeView;
+    Score: number;
+    Kind: ConceptMatchKind;
+}
+
+/**
+ * The outcome of resolving text to concepts:
+ * - `Matched`: use `Matches` (best first). Several `Mention` matches mean the text names several
+ *   concepts, which is not ambiguity.
+ * - `Ambiguous`: the text is a fragment or a shared name that fits `Candidates` about equally well;
+ *   the caller should ask which one is meant, or pass the concept explicitly.
+ * - `NoMatch`: no concept the caller may see matched.
+ */
+export interface ConceptResolution {
+    Status: 'Matched' | 'Ambiguous' | 'NoMatch';
+    Matches: ConceptMatch[];
+    /** The tied best matches when `Status` is `Ambiguous`; empty otherwise. */
+    Candidates: ConceptMatch[];
+}
+
+/**
+ * Classify visible concept matches (best first) into a {@link ConceptResolution}. Pure.
+ *
+ * Ambiguous when two or more concepts match the whole text exactly (a name or synonym shared by
+ * several concepts), or when the best match is only `Partial` or `Token` and another concept scores
+ * within {@link CONCEPT_AMBIGUITY_MARGIN} of it. A `Mention` is never ambiguous: a question that
+ * names two concepts is asking about both.
+ */
+export function ClassifyConceptMatches(matches: readonly ConceptMatch[]): ConceptResolution {
+    if (matches.length === 0) {
+        return { Status: 'NoMatch', Matches: [], Candidates: [] };
+    }
+    const top = matches[0];
+    let tied: ConceptMatch[] = [];
+    if (top.Kind === 'Exact') {
+        tied = matches.filter((m) => m.Kind === 'Exact' && m.Score === top.Score);
+    } else if (top.Kind === 'Partial' || top.Kind === 'Token') {
+        tied = matches.filter((m) => m.Score >= top.Score - CONCEPT_AMBIGUITY_MARGIN);
+    }
+    if (tied.length >= 2) {
+        return { Status: 'Ambiguous', Matches: [...matches], Candidates: tied.slice(0, MAX_AMBIGUOUS_CANDIDATES) };
+    }
+    return { Status: 'Matched', Matches: [...matches], Candidates: [] };
+}
+
+/**
+ * One end of a path request: a record (`EntityName` + `RecordID`), or a concept (`Concept` = its name,
+ * a synonym, or its ID). A record reference wins when both are given.
+ */
+export interface GraphEndpointInput {
+    EntityName?: string;
+    RecordID?: string;
+    Concept?: string;
+}
+
+/**
+ * How a {@link GraphEndpointInput} resolved. A record reference always resolves; whether the caller
+ * may see it is decided during traversal, so an unknown record and a hidden one look the same.
+ */
+export interface GraphEndpointResolution {
+    Status: 'Resolved' | 'Ambiguous' | 'NotFound';
+    Node?: GraphNodeRef;
+    /** The tied concepts when `Status` is `Ambiguous`; empty otherwise. */
+    Candidates: ConceptMatch[];
+}
+
+/**
+ * The outcome of {@link CanonGraphEngine.FindPathBetween}:
+ * - `Found` / `NoPath`: both endpoints resolved; `Path` is the search result.
+ * - `AmbiguousEndpoint` / `EndpointNotFound`: `Endpoint` says which side; `Candidates` lists the
+ *   concepts an ambiguous one fits. No search ran.
+ * - `GraphNotFound`: the graph is unknown or not active.
+ */
+export interface GraphPathRequestResult {
+    Status: 'Found' | 'NoPath' | 'AmbiguousEndpoint' | 'EndpointNotFound' | 'GraphNotFound';
+    Path: GraphPath;
+    Endpoint?: 'From' | 'To';
+    Candidates: ConceptMatch[];
+}
 
 /**
  * Structured Canon explanation for an `MJ: Entities` record (`Get Entity Details` canon section).
@@ -96,8 +194,25 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
      * `MJ: Graph Concepts` matching `text` by `Name` and `Synonyms` (v1 lexical matching), best match
      * first, limited to concepts the caller — and every audience reader — may see, and to `Approved`
      * concepts (plus `Proposed` ones when `options.IncludeProposed`; see `IsGraphConceptStatusVisible`).
+     * Use {@link ResolveConcepts} to also learn whether the text is ambiguous.
      */
     public async FindConcepts(text: string, user: UserInfo, options: FindConceptsOptions = {}): Promise<GraphNodeView[]> {
+        const resolution = await this.ResolveConcepts(text, user, options);
+        return resolution.Matches.map((m) => m.Node);
+    }
+
+    /**
+     * {@link FindConcepts} with the score and kind of every match, classified by
+     * {@link ClassifyConceptMatches} into `Matched`, `Ambiguous` or `NoMatch`. Only concepts the
+     * caller and every audience reader may see are scored as candidates, so a hidden concept can
+     * never make visible ones look ambiguous.
+     */
+    public async ResolveConcepts(text: string, user: UserInfo, options: FindConceptsOptions = {}): Promise<ConceptResolution> {
+        const scored = await this.scoreVisibleConcepts(text, user, options);
+        return ClassifyConceptMatches(scored);
+    }
+
+    private async scoreVisibleConcepts(text: string, user: UserInfo, options: FindConceptsOptions): Promise<ConceptMatch[]> {
         const query = text?.trim().toLowerCase();
         if (!query || !user) {
             return [];
@@ -132,14 +247,124 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
             IncludeProposed: includeProposed,
             Provider: options.provider,
         });
-        const result: GraphNodeView[] = [];
+        const result: ConceptMatch[] = [];
         for (const s of scored) {
             const view = visible.get(GraphEngine.Instance.GetNodeKey({ EntityName: CONCEPT_ENTITY, RecordID: s.Concept.ID }));
             if (view) {
-                result.push(view);
+                result.push({ Node: view, Score: s.Score, Kind: s.Kind });
             }
         }
         return result;
+    }
+
+    /**
+     * Resolve one end of a path request in `graphName`. A concept given by ID resolves directly; a
+     * concept given by name or synonym goes through {@link ResolveConcepts}, so text that fits several
+     * concepts comes back `Ambiguous` with the candidates rather than as a guess.
+     */
+    public async ResolveGraphEndpoint(
+        endpoint: GraphEndpointInput,
+        graphName: string,
+        user: UserInfo,
+        options: Omit<FindConceptsOptions, 'GraphNames'> = {},
+    ): Promise<GraphEndpointResolution> {
+        const entityName = endpoint.EntityName?.trim();
+        const recordId = endpoint.RecordID?.trim();
+        if (entityName && recordId) {
+            return { Status: 'Resolved', Node: { EntityName: entityName, RecordID: recordId }, Candidates: [] };
+        }
+        const concept = endpoint.Concept?.trim();
+        if (!concept) {
+            return { Status: 'NotFound', Candidates: [] };
+        }
+        const graph = GraphEngine.Instance.GetGraph(graphName);
+        const byId = graph ? GraphEngine.Instance.Concepts.find((c) => UUIDsEqual(c.ID, concept) && UUIDsEqual(c.GraphID, graph.ID)) : undefined;
+        if (byId) {
+            if (!IsGraphConceptStatusVisible(byId.Status, options.IncludeProposed === true)) {
+                return { Status: 'NotFound', Candidates: [] };
+            }
+            const ref: GraphNodeRef = { EntityName: CONCEPT_ENTITY, RecordID: byId.ID };
+            const visible = await GraphEngine.Instance.FilterNodesForUser([ref], user, options.AudienceReaders, {
+                IncludeProposed: options.IncludeProposed === true,
+                Provider: options.provider,
+            });
+            const view = visible.get(GraphEngine.Instance.GetNodeKey(ref));
+            if (!view) {
+                return { Status: 'NotFound', Candidates: [] };
+            }
+            return { Status: 'Resolved', Node: { EntityName: view.EntityName, EntityID: view.EntityID, RecordID: view.RecordID }, Candidates: [] };
+        }
+        const resolution = await this.ResolveConcepts(concept, user, { ...options, GraphNames: [graphName] });
+        if (resolution.Status === 'Ambiguous') {
+            return { Status: 'Ambiguous', Candidates: resolution.Candidates };
+        }
+        const top = resolution.Matches[0];
+        if (!top) {
+            return { Status: 'NotFound', Candidates: [] };
+        }
+        return { Status: 'Resolved', Node: { EntityName: top.Node.EntityName, EntityID: top.Node.EntityID, RecordID: top.Node.RecordID }, Candidates: [] };
+    }
+
+    /**
+     * Resolve both ends of a path request with {@link ResolveGraphEndpoint}, then run
+     * {@link GraphEngine.FindPath} between them. An ambiguous or unknown endpoint stops before the
+     * search and says which side it was, so a caller can ask instead of guessing.
+     */
+    public async FindPathBetween(
+        graphName: string,
+        from: GraphEndpointInput,
+        to: GraphEndpointInput,
+        options: GraphTraversalOptions,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<GraphPathRequestResult> {
+        await this.EnsureConfigured(user, provider);
+        const graph = GraphEngine.Instance.GetGraph(graphName);
+        if (!graph) {
+            return { Status: 'GraphNotFound', Path: emptyPath(`Graph "${graphName}" was not found or is not active.`), Candidates: [] };
+        }
+        const endpointOptions = { IncludeProposed: options.IncludeProposed === true, AudienceReaders: options.AudienceReaders, provider };
+        const [start, end] = await Promise.all([
+            this.ResolveGraphEndpoint(from, graph.Name, user, endpointOptions),
+            this.ResolveGraphEndpoint(to, graph.Name, user, endpointOptions),
+        ]);
+        for (const [side, resolution] of [['From', start], ['To', end]] as const) {
+            if (resolution.Status !== 'Resolved' || !resolution.Node) {
+                const status = resolution.Status === 'Ambiguous' ? 'AmbiguousEndpoint' : 'EndpointNotFound';
+                return { Status: status, Path: emptyPath(undefined), Endpoint: side, Candidates: resolution.Candidates };
+            }
+        }
+        if (!start.Node || !end.Node) {
+            return { Status: 'EndpointNotFound', Path: emptyPath(undefined), Candidates: [] };
+        }
+        const path = await GraphEngine.Instance.FindPath(graph.Name, start.Node, end.Node, options, user, provider);
+        return { Status: path.Found ? 'Found' : 'NoPath', Path: path, Candidates: [] };
+    }
+
+    /**
+     * Proposed `Domain` concepts for `graphName`, from deterministic community detection over the
+     * entity foreign-key and IS-A links (see {@link ProposeEntityDomains}). Only entities `user` may
+     * read take part, and a proposal whose name is already a concept in the graph (in any status,
+     * so a rejected or renamed one is not proposed again) is left out. Read-only: persisting the
+     * proposals is the caller's job.
+     */
+    public async ProposeDomainConcepts(
+        graphName: string,
+        user: UserInfo,
+        options: ProposeEntityDomainsOptions = {},
+        provider?: IMetadataProvider,
+    ): Promise<DomainProposal[]> {
+        await this.EnsureConfigured(user, provider);
+        const graph = GraphEngine.Instance.GetGraph(graphName);
+        if (!graph) {
+            return [];
+        }
+        const md = provider ?? GraphEngine.Instance.ProviderToUse;
+        const readable = md.Entities.filter((e) => CanUserReadEntity(e, user));
+        const existing = new Set(
+            GraphEngine.Instance.Concepts.filter((c) => UUIDsEqual(c.GraphID, graph.ID)).map((c) => c.Name.trim().toLowerCase()),
+        );
+        return ProposeEntityDomains(readable, options).filter((p) => !existing.has(p.Name.trim().toLowerCase()));
     }
 
     /**
@@ -298,16 +523,17 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
         graphIds: UUIDSet,
         includeProposed: boolean,
         matchable: MatchableConceptFields,
-    ): Array<{ Concept: MJGraphConceptEntity; Score: number }> {
+    ): Array<{ Concept: MJGraphConceptEntity; Score: number; Kind: ConceptMatchKind }> {
         const queryTokens = tokenizeAlphanumeric(query);
-        const scored: Array<{ Concept: MJGraphConceptEntity; Score: number }> = [];
+        const queryWords = tokenizeAlphanumeric(query, 1);
+        const scored: Array<{ Concept: MJGraphConceptEntity; Score: number; Kind: ConceptMatchKind }> = [];
         for (const concept of GraphEngine.Instance.Concepts) {
             if (!IsGraphConceptStatusVisible(concept.Status, includeProposed) || !graphIds.Has(concept.GraphID)) {
                 continue;
             }
-            const score = scoreConceptMatch(concept, query, queryTokens, matchable);
-            if (score > 0) {
-                scored.push({ Concept: concept, Score: score });
+            const match = scoreConceptMatch(concept, query, queryWords, queryTokens, matchable);
+            if (match.Score > 0) {
+                scored.push({ Concept: concept, Score: match.Score, Kind: match.Kind });
             }
         }
         return scored.sort((a, b) => b.Score - a.Score || a.Concept.Name.localeCompare(b.Concept.Name) || compareText(a.Concept.ID, b.Concept.ID));
@@ -567,34 +793,89 @@ interface MatchableConceptFields {
     Synonyms: boolean;
 }
 
-function scoreConceptMatch(concept: MJGraphConceptEntity, queryLower: string, queryTokens: readonly string[], matchable: MatchableConceptFields): number {
+function emptyPath(message: string | undefined): GraphPath {
+    return { Found: false, Nodes: [], Edges: [], PathWeight: 0, Message: message };
+}
+
+function scoreConceptMatch(
+    concept: MJGraphConceptEntity,
+    queryLower: string,
+    queryWords: readonly string[],
+    queryTokens: readonly string[],
+    matchable: MatchableConceptFields,
+): { Score: number; Kind: ConceptMatchKind } {
     const nameLower = matchable.Name ? concept.Name.trim().toLowerCase() : '';
     if (nameLower && nameLower === queryLower) {
-        return 1.0;
-    }
-    if (nameLower && (queryLower.includes(nameLower) || nameLower.startsWith(queryLower))) {
-        return 0.9;
+        return { Score: 1.0, Kind: 'Exact' };
     }
     const synonyms = matchable.Synonyms ? parseSynonyms(concept.Synonyms).map((s) => s.toLowerCase()) : [];
-    for (const syn of synonyms) {
-        if (syn === queryLower) {
-            return 0.95;
-        }
-        if (queryLower.includes(syn) || syn.includes(queryLower)) {
-            return 0.85;
-        }
+    if (synonyms.some((syn) => syn === queryLower)) {
+        return { Score: 0.95, Kind: 'Exact' };
+    }
+    const nameWords = nameLower ? tokenizeAlphanumeric(nameLower, 1) : [];
+    if (nameWords.length > 0 && containsTokenSequence(queryWords, nameWords)) {
+        return { Score: 0.9, Kind: 'Mention' };
+    }
+    if (queryLower.length >= 2 && nameWords.length > 0 && isPrefixFragmentOf(nameWords, queryWords)) {
+        return { Score: 0.9, Kind: 'Partial' };
+    }
+    const synonymWords = synonyms.map((s) => tokenizeAlphanumeric(s, 1));
+    if (synonymWords.some((words) => containsTokenSequence(queryWords, words))) {
+        return { Score: 0.85, Kind: 'Mention' };
+    }
+    if (queryLower.length >= 2 && synonymWords.some((words) => isPrefixFragmentOf(words, queryWords))) {
+        return { Score: 0.85, Kind: 'Partial' };
     }
     if (queryTokens.length > 0) {
         const candidateTokens = new Set(tokenizeAlphanumeric([nameLower, ...synonyms].join(' ')));
         const hits = queryTokens.filter((t) => candidateTokens.has(t)).length;
         if (hits > 0) {
-            return 0.5 * (hits / queryTokens.length);
+            return { Score: 0.5 * (hits / queryTokens.length), Kind: 'Token' };
         }
     }
-    return 0;
+    return { Score: 0, Kind: 'Token' };
 }
 
-function tokenizeAlphanumeric(input: string): string[] {
+function containsTokenSequence(haystack: readonly string[], needle: readonly string[]): boolean {
+    if (needle.length === 0 || needle.length > haystack.length) {
+        return false;
+    }
+    for (let i = 0; i <= haystack.length - needle.length; i++) {
+        let allMatch = true;
+        for (let k = 0; k < needle.length; k++) {
+            if (haystack[i + k] !== needle[k]) {
+                allMatch = false;
+                break;
+            }
+        }
+        if (allMatch) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function isPrefixFragmentOf(candidate: readonly string[], query: readonly string[]): boolean {
+    if (query.length === 0 || query.length > candidate.length) {
+        return false;
+    }
+    const lastIdx = query.length - 1;
+    for (let i = 0; i <= candidate.length - query.length; i++) {
+        let prefixMatch = true;
+        for (let k = 0; k < lastIdx; k++) {
+            if (candidate[i + k] !== query[k]) {
+                prefixMatch = false;
+                break;
+            }
+        }
+        if (prefixMatch && candidate[i + lastIdx].startsWith(query[lastIdx])) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function tokenizeAlphanumeric(input: string, minLength = 2): string[] {
     const tokens: string[] = [];
     let start = -1;
     for (let i = 0; i <= input.length; i++) {
@@ -605,7 +886,7 @@ function tokenizeAlphanumeric(input: string): string[] {
                 start = i;
             }
         } else if (start !== -1) {
-            if (i - start >= 2) {
+            if (i - start >= minLength) {
                 tokens.push(input.slice(start, i));
             }
             start = -1;

@@ -71,6 +71,8 @@ export * from './custom/data/run-adhoc-query.action';
 export * from './custom/data/get-entity-details.action';
 export * from './custom/data/get-entity-list.action';
 export * from './custom/data/get-graph-context.action';
+export * from './custom/data/find-graph-path.action';
+export * from './custom/data/propose-canon-domains.action';
 export * from './custom/data/run-stored-query.action';
 export * from './custom/data/search-query-catalog.action';
 export * from './custom/data/search-entity.action';

@@ -135,6 +135,7 @@ import { SemanticGraphChecks } from '../checks/semantic-graph.checks';
 import { GraphRuntimeChecks } from '../checks/graph-runtime.checks';
 import { TaskGraphSecurityChecks } from '../checks/task-graph-security.checks';
 import { DocsSlidesSheetsLibraryChecks, DocsSlidesSheetsLibraryClientChecks } from '../checks/docs-slides-sheets-library.checks';
+import { DocsSemanticGraphChecks } from '../checks/docs-semantic-graph.checks';
 import { RunViewFeatureChecks } from '../checks/runview-features.checks';
 import { WorkBusCoreChecks } from '../checks/work-bus-core.checks';
 import { IntegrationSchemaPipelineChecks } from '../checks/integration-schema-pipeline.checks';
@@ -219,11 +220,11 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['list-refresh', ListRefreshChecks, 7], // LR1-LR7 source fingerprint, routine, approval (IT175)
         ['list-from-query', ListFromQueryChecks, 5], // LQ1-LQ5 conversation SQL saved Pending, list linked, refresh, edit stops it (IT179)
         ['open-app-local-source', OpenAppLocalSourceChecks, 11], // OLS1-OLS11 install, upgrade and remove from a local folder (IT178)
-        ['comms-v2-core', CommsV2CoreChecks, 3], // CV2C1-CV2C3 Comms V2 schema, seeds, endpoint resolution (IT185)
-        ['comms-v2-compliance', CommsV2ComplianceChecks, 4], // CV2G1-CV2G4 Comms V2 compliance gate & jurisdiction rollup (IT186)
-        ['comms-v2-send', CommsV2SendChecks, 4], // CV2S1-CV2S4 Comms V2 send pipeline, chunking, templated delivery, suppressed recipient never reaches the provider (IT187)
-        ['comms-v2-activity', CommsV2ActivityChecks, 4], // CV2A1-CV2A4 Comms V2 activity worker, soft bounce policy, GDPR erasure, verified click (IT188)
-        ['comms-v2-wire', CommsV2WireChecks, 5], // CV2W1-CV2W5 one-click unsubscribe POST, signed webhook POST, V1 RunEntityCommunication and V2 Send to a suppressed recipient, over HTTP and GraphQL (IT189)
+        ['comms-v2-core', CommsV2CoreChecks, 3], // CV2C1-CV2C3 Comms V2 schema, seeds, endpoint resolution (IT186)
+        ['comms-v2-compliance', CommsV2ComplianceChecks, 4], // CV2G1-CV2G4 Comms V2 compliance gate & jurisdiction rollup (IT187)
+        ['comms-v2-send', CommsV2SendChecks, 4], // CV2S1-CV2S4 Comms V2 send pipeline, chunking, templated delivery, suppressed recipient never reaches the provider (IT188)
+        ['comms-v2-activity', CommsV2ActivityChecks, 4], // CV2A1-CV2A4 Comms V2 activity worker, soft bounce policy, GDPR erasure, verified click (IT189)
+        ['comms-v2-wire', CommsV2WireChecks, 5], // CV2W1-CV2W5 one-click unsubscribe POST, signed webhook POST, V1 RunEntityCommunication and V2 Send to a suppressed recipient, over HTTP and GraphQL (IT190)
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 18],
         ['chief-of-staff', ChiefOfStaffChecks, 14], // COS1-COS14 ownership guards, run-now, policy cache, email approval-before-transport, extensible skills, rhythms, agent channels, two-user inter-agent round-trip, sub-agent policy ceiling (IT157)
@@ -318,10 +319,11 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['encrypted-read-client', EncryptedReadClientChecks, 4], // ER1-ER4 encrypted field plaintext over GraphQL, miss and hit (IT160)
         ['ciphertext-cache', CiphertextCacheChecks, 7], // CT0-CT4 ciphertext at rest in the RunViewCache, plaintext to the caller; CT5-CT6 a peer's cache event leaves CredentialEngine plaintext (IT161)
         ['semantic-graph', SemanticGraphChecks, 7], // SG1-SG7 Semantic Graph substrate, Content Pipeline GraphStage overlay, and Executable Canon DAG similarity & telemetry (IT162)
-        ['graph-runtime', GraphRuntimeChecks, 6], // GR1-GR6 MJ Canon traversal, per-caller query visibility, the edge approval gate on a real Save, Get Graph Context, JoinEntity and QueryEdgeProvider fixtures (IT167)
+        ['graph-runtime', GraphRuntimeChecks, 9], // GR1-GR9 MJ Canon traversal, per-caller query visibility, edge & concept approval gates on a real Save, Get Graph Context, JoinEntity and QueryEdgeProvider fixtures, FindPath + Find Graph Path, Propose Canon Domains dry run, and live concept gate lifecycle (IT167)
         ['task-graph-security', TaskGraphSecurityChecks, 10], // TGS1-TGS10 envelope on every row and immutable, one compensation per step, A2A store row boundary, dispatcher taint gate & compensation, the real action runner's taint gate, a person's review clears taint, a server-answered request clears nothing, an early settle clears nothing, only the service makes workflows, REST edits ordinary tasks (IT168)
         ['docs-slides-sheets-library', DocsSlidesSheetsLibraryChecks, 10], // DSL1-DSL10 Collaborative Docs, Slides, Sheets, Yjs working states, delegated OLE permissions, NW-2/NW-5 ACL & synthesis, and engine security guards (IT170)
         ['docs-slides-sheets-library-client', DocsSlidesSheetsLibraryClientChecks, 14], // DSLC1-DSLC14 Client-transport GraphQL, Remote Ops, Pre-auth Guest Share, Collaboration Resolver, WS meta/lock rejection, API-key scope, ClientClauseScreen, Collection ACL, Realtime IDOR, B4 default-off guest share refusal, and R1/R2 count_only + stored queries (IT171)
+        ['docs-semantic-graph', DocsSemanticGraphChecks, 6], // DSG1-DSG6 MJ Docs in the semantic graph: seeded source and graph, artifact indexing, [[links]], artifact-ACL agreement, shared concepts and redaction, evidence retraction (IT185)
         ['runview-features', RunViewFeatureChecks, 12], // RVF1-RVF12 RunView cross-feature edges and RunViewParams.Parameters wire binding (IT32)
         ['work-bus-core', WorkBusCoreChecks, 10], // WBC1-WBC10 Conversation Types, Comments IS-A Conversation, Comment Types, Field Suggestions IS-A Comment, SubtypeSelector AutoEnsureOnSave/Refuse, PostSaveHook superseding, and Workstream wakes (IT164)
         ['record-change-snapshot', RecordChangeSnapshotChecks, 4], // RCS1-RCS4 Record Change snapshots record the stored row: server-set values, another writer's change, apostrophes, ciphertext (IT169)
@@ -444,6 +446,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'diagnostics': 4,
         'docs-slides-sheets-library': 10,
         'docs-slides-sheets-library-client': 14,
+        'docs-semantic-graph': 6,
         'encrypted-read-client': 4,
         'entity-actions': 8,
         'entity-embedded': 6,
@@ -468,7 +471,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'fp-gate-c2-5': 3,
         'fp-live-jobtitle': 1,
         'gemini-decisions': 8,
-        'graph-runtime': 6,
+        'graph-runtime': 9,
         'integration-schema-pipeline': 4,
         'jsontype-live-sync': 9,
         'jsontype-live-sync-client': 9,
@@ -660,7 +663,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(259);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(260);
     });
 });
 
@@ -784,6 +787,11 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'conversation-delete-client.CD1',
         'conversation-delete-client.CD2',
         'conversation-delete-client.CD3',
+        'docs-semantic-graph.DSG2',
+        'docs-semantic-graph.DSG3',
+        'docs-semantic-graph.DSG4',
+        'docs-semantic-graph.DSG5',
+        'docs-semantic-graph.DSG6',
         'docs-slides-sheets-library.DSL3',
         'docs-slides-sheets-library.DSL8',
         'encrypted-read-client.ER1',
@@ -880,6 +888,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'fp-gate-c2-5.G3',
         'graph-runtime.GR5',
         'graph-runtime.GR6',
+        'graph-runtime.GR9',
         'jsontype-live-sync-client.JL1',
         'jsontype-live-sync-client.JL2',
         'jsontype-live-sync-client.JL3',

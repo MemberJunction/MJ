@@ -23,6 +23,7 @@ import { MJTaskEntity } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, TASK_SECURITY_ENVELOPE_VERSION } from '@memberjunction/ai-core-plus';
 import type { ActionChange, AgentExecutionProgressCallback, ExecuteAgentParams, TaskSecurityEnvelope } from '@memberjunction/ai-core-plus';
 import type { TaskAgentRunner, TaskAgentRunParams, TaskAgentRunResult } from '@memberjunction/task-graph';
+import { PickUsageMetric, SumUsageTokenPair } from './taskGraphUsageMetrics.js';
 
 /**
  * Runs a task-graph agent node. The agent run starts under the node's security envelope exactly as
@@ -145,13 +146,27 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                 }
             }
 
+            const agentRun = result?.agentRun;
+            const costUsd = PickUsageMetric([
+                agentRun?.TotalCostRollup,
+                agentRun?.TotalCost,
+            ]);
+            const tokensUsed = PickUsageMetric([
+                agentRun?.TotalTokensUsedRollup,
+                agentRun?.TotalTokensUsed,
+                SumUsageTokenPair(agentRun?.TotalPromptTokensUsedRollup, agentRun?.TotalCompletionTokensUsedRollup),
+                SumUsageTokenPair(agentRun?.TotalPromptTokensUsed, agentRun?.TotalCompletionTokensUsed),
+            ]);
+
             return {
                 Success: success,
                 Output: this.extractOutput(result),
-                ErrorMessage: success ? undefined : (result?.agentRun?.ErrorMessage ?? 'Agent execution failed'),
-                AgentRunID: result?.agentRun?.ID,
+                ErrorMessage: success ? undefined : (agentRun?.ErrorMessage ?? 'Agent execution failed'),
+                AgentRunID: agentRun?.ID,
                 // The run reports what it ingested, including the taint it was seeded with.
                 IsOutputTainted: (result?.taintedSources?.length ?? 0) > 0 || env?.IsRunTainted === true,
+                ...(costUsd !== undefined ? { CostUsd: costUsd } : {}),
+                ...(tokensUsed !== undefined ? { TokensUsed: tokensUsed } : {}),
             };
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);

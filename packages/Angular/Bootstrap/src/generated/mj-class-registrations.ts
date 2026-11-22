@@ -36,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (524 classes)
+// @memberjunction/core-entities (528 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -47,12 +47,15 @@ import {
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
+    ContentChunkProvenancePolicy,
+    ContentItemProvenancePolicy,
     DashboardPartDocumentBlock,
     DashboardPermissionProvider,
     EntityMetadataEdgeProvider,
     EntityPermissionProvider,
     EntityViewDocumentBlock,
     ForeignKeyEdgeProvider,
+    GraphConceptProvenancePolicy,
     InteractiveComponentDocumentBlock,
     JoinEntityEdgeProvider,
     MJAIActionEntity,
@@ -562,6 +565,7 @@ import {
     RecordLinkEdgeProvider,
     ResourcePermissionProvider,
     SavedQueryDocumentBlock,
+    SharedConceptEdgeProvider,
 } from '@memberjunction/core-entities';
 
 // @memberjunction/actions-base (2 classes)
@@ -795,7 +799,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (125 classes)
+// @memberjunction/ng-dashboards (126 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -807,6 +811,7 @@ import {
     AdminDataSchemaComponent,
     AdminDevToolsResourceComponent,
     AdminIdentityAccessComponent,
+    AdminLimitsResourceComponent,
     AdminMonitoringComponent,
     AgentConfigurationComponent,
     AgentRequestsResourceComponent,
@@ -974,12 +979,15 @@ const CLASS_REGISTRATIONS_0: any[] = [
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
+    ContentChunkProvenancePolicy,
+    ContentItemProvenancePolicy,
     DashboardPartDocumentBlock,
     DashboardPermissionProvider,
     EntityMetadataEdgeProvider,
     EntityPermissionProvider,
     EntityViewDocumentBlock,
     ForeignKeyEdgeProvider,
+    GraphConceptProvenancePolicy,
     InteractiveComponentDocumentBlock,
     JoinEntityEdgeProvider,
     MJAIActionEntity,
@@ -1149,13 +1157,13 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
     MJCompanyIntegrationRunEntity,
-    MJCompanyIntegrationSyncWatermarkEntity,
-    MJComponentDependencyEntity,
-    MJComponentEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCompanyIntegrationSyncWatermarkEntity,
+    MJComponentDependencyEntity,
+    MJComponentEntity,
     MJComponentEntityExtended,
     MJComponentLibraryEntity,
     MJComponentLibraryLinkEntity,
@@ -1353,13 +1361,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJProjectEntityExtended,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
-    MJQueryDependencyEntity,
-    MJQueryEntity,
-    MJQueryEntityEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJQueryDependencyEntity,
+    MJQueryEntity,
+    MJQueryEntityEntity,
     MJQueryEntityExtended,
     MJQueryFieldEntity,
     MJQueryParameterEntity,
@@ -1497,6 +1505,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RecordLinkEdgeProvider,
     ResourcePermissionProvider,
     SavedQueryDocumentBlock,
+    SharedConceptEdgeProvider,
     MJActionEntityExtended,
     MJEntityActionEntityExtended,
     MJAIAgentEntityExtended,
@@ -1556,14 +1565,14 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RealtimeMediaChannel,
     RealtimeScreenShareChannel,
     RealtimeWhiteboardChannel,
-    RecordMentionProvider,
-    RemoteBrowserChannel,
-    SkillCommandProvider,
-    WhiteboardArtifactViewerComponent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    RecordMentionProvider,
+    RemoteBrowserChannel,
+    SkillCommandProvider,
+    WhiteboardArtifactViewerComponent,
     ArtifactConfigPanelComponent,
     ArtifactPartComponent,
     ComponentConfigPanelComponent,
@@ -1666,6 +1675,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AdminDataSchemaComponent,
     AdminDevToolsResourceComponent,
     AdminIdentityAccessComponent,
+    AdminLimitsResourceComponent,
     AdminMonitoringComponent,
     AgentConfigurationComponent,
     AgentRequestsResourceComponent,
@@ -1759,15 +1769,15 @@ const CLASS_REGISTRATIONS_3: any[] = [
     TelephonyOperationsDashboardComponent,
     TestingAnalyticsResourceComponent,
     TestingDashboardComponent,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     TestingDashboardTabResourceComponent,
     TestingExplorerResourceComponent,
     TestingReviewResourceComponent,
     TestingRunsResourceComponent,
     ThemeManagerDashboardComponent,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     ThemeManagerResourceComponent,
     ThemeStudioDashboardComponent,
     ThemeStudioResourceComponent,
@@ -1815,7 +1825,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 832;
+export const CLASS_REGISTRATIONS_COUNT = 837;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

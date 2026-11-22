@@ -280,3 +280,6 @@ export * from './ChiefOfStaff/chief-of-staff-live-refresh';
 // Health & Telemetry Observatory
 export * from './HealthObservatory';
 
+// Admin Limits Governance Resource
+export * from './AdminLimits';
+

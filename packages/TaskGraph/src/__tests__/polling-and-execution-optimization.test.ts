@@ -466,7 +466,7 @@ describe('TaskGraphDispatcher polling & execution query optimizations (Items 2.1
             { CreateProvider: async () => provider },
             agentRunner,
             TEST_USER,
-            { InstanceID: 'test-disp-2', MaxConcurrentTasks: 5 },
+            { InstanceID: 'test-disp-2', MaxConcurrentTasks: 5, Governance: { Enabled: false } },
             undefined,
             undefined,
             actionRunner,

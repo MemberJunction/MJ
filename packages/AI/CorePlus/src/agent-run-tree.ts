@@ -26,6 +26,8 @@
  * @module @memberjunction/ai-core-plus
  */
 
+import { CODE_FALLBACK_LIMITS, LimitsConfigResolver } from '@memberjunction/core';
+
 /**
  * What a node in a run tree actually is.
  *
@@ -208,7 +210,12 @@ export type AgentRunTreeNode = AgentRunTreeRow & {
  * Expressed as a predicate on `Depth` inside the recursive term rather than a T-SQL `MAXRECURSION`
  * hint, so the same SQL converts mechanically to PostgreSQL, which has no such hint.
  */
-export const MAX_AGENT_RUN_TREE_DEPTH = 100;
+export const MAX_AGENT_RUN_TREE_DEPTH = CODE_FALLBACK_LIMITS.ResourceGuards.MaxAgentRunTreeDepth;
+
+/** Resolves the effective recursive tree depth ceiling from `LimitsConfigResolver.Instance`. */
+export function GetMaxAgentRunTreeDepth(): number {
+    return LimitsConfigResolver.Resolve().Limits.ResourceGuards.MaxAgentRunTreeDepth;
+}
 
 /**
  * True when the tree came back truncated at the depth cap.
@@ -220,7 +227,8 @@ export const MAX_AGENT_RUN_TREE_DEPTH = 100;
  * tailed.
  */
 export function IsAgentRunTreeTruncated(rows: readonly AgentRunTreeRow[]): boolean {
-    return rows.some((r) => r.Depth >= MAX_AGENT_RUN_TREE_DEPTH);
+    const cap = GetMaxAgentRunTreeDepth();
+    return rows.some((r) => r.Depth >= cap);
 }
 
 /**

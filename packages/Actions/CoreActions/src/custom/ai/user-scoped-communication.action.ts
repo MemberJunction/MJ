@@ -507,7 +507,7 @@ export class VerifyMyCommunicationCapabilitiesAction extends BaseUserScopedCommu
                 UserPolicy: {
                     EmailChannelMode: policy?.EmailChannelMode ?? 'DraftOnly',
                     CalendarChannelMode: policy?.CalendarChannelMode ?? 'ProposeWithApproval',
-                    PhoneChannelMode: policy?.PhoneChannelMode ?? 'OutboundWithApproval',
+                    PhoneChannelMode: policy?.PhoneChannelMode ?? 'Disabled',
                     MessagingChannelMode: policy?.MessagingChannelMode ?? 'Enabled',
                 },
                 AgentUtilityMailbox: utilityIdentity
