@@ -311,45 +311,55 @@ export function ComputeHistoricalRowDailyAttribution(
 
     const checkpoint = ExtractRunawayCheckpointFromRunData(row.Data);
     const pausedIntervals = checkpoint?.CumulativeLedger.PausedIntervals;
-    const rawEndMs = row.CompletedAt
-        ? new Date(row.CompletedAt).getTime()
-        : (row.Status === 'Paused' && checkpoint?.PausedAtMs != null
-            ? Math.max(checkpoint.PausedAtMs, nowMs)
-            : nowMs);
-    const activityEndMs = row.CompletedAt
-        ? rawEndMs
-        : (row.Status === 'Paused' ? (checkpoint?.PausedAtMs ?? nowMs) : nowMs);
-
-    if (!Number.isFinite(activityEndMs) || activityEndMs <= dayStartMs) {
+    const completedAtMs = row.CompletedAt ? new Date(row.CompletedAt).getTime() : null;
+    if (completedAtMs !== null && !Number.isFinite(completedAtMs)) {
         return { CostUsd: 0, WallClockMs: 0 };
     }
 
+    const isPausedOpen = row.Status === 'Paused' && completedAtMs === null;
     const clampedNowEndMs = Math.min(nowMs, dayEndMs);
-    const wallClockTodayMs = row.Status === 'Paused' && !row.CompletedAt
-        ? ComputeActiveWallClockOverlapMs(
+
+    let wallClockTodayMs = 0;
+    if (completedAtMs !== null) {
+        if (completedAtMs > dayStartMs) {
+            wallClockTodayMs = ComputeActiveWallClockOverlapMs(
+                startMs,
+                completedAtMs,
+                dayStartMs,
+                clampedNowEndMs,
+                pausedIntervals,
+                countPausedTime,
+            );
+        }
+    } else if (isPausedOpen) {
+        const effectivePausedIntervals = checkpoint
+            ? [
+                ...(pausedIntervals ?? []),
+                // Ensure still-open pause at PausedAtMs blocks wall-clock attribution past pause time
+                // when CountPausedTimeTowardsWallClock is false.
+                ...(pausedIntervals?.some((p) => p.ResumedAtMs == null)
+                    ? []
+                    : [{ PausedAtMs: checkpoint.PausedAtMs, ResumedAtMs: null }]),
+            ]
+            : pausedIntervals;
+        wallClockTodayMs = ComputeActiveWallClockOverlapMs(
             startMs,
             nowMs,
             dayStartMs,
             clampedNowEndMs,
-            checkpoint
-                ? [
-                    ...(pausedIntervals ?? []),
-                    // Ensure still-open pause at PausedAtMs blocks wall-clock attribution past pause time
-                    ...(pausedIntervals?.some((p) => p.ResumedAtMs == null)
-                        ? []
-                        : [{ PausedAtMs: checkpoint.PausedAtMs, ResumedAtMs: null }]),
-                ]
-                : undefined,
+            effectivePausedIntervals,
             countPausedTime,
-        )
-        : ComputeActiveWallClockOverlapMs(
+        );
+    } else {
+        wallClockTodayMs = ComputeActiveWallClockOverlapMs(
             startMs,
-            rawEndMs,
+            nowMs,
             dayStartMs,
             clampedNowEndMs,
             pausedIntervals,
             countPausedTime,
         );
+    }
 
     const safeTotalCost = Math.max(0, totalTreeCostUsd);
     if (startMs >= dayStartMs) {
@@ -357,7 +367,9 @@ export function ComputeHistoricalRowDailyAttribution(
         return { CostUsd: safeTotalCost, WallClockMs: wallClockTodayMs };
     }
 
-    // Overnight run started BEFORE today's dayStartMs: attribute exact today spend without time proration.
+    // Overnight run started BEFORE today's dayStartMs: evaluate timestamped cost events
+    // independently of CompletedAt/PausedAtMs so late-settled charges recorded after midnight
+    // on a pre-midnight paused (or finished) run are always attributed to today's bucket.
     const dataEvents = ExtractBudgetCostEventsFromRunData(row.Data);
     const costEvents = dataEvents.length > 0 ? dataEvents : (checkpoint?.CumulativeLedger.CostEvents ?? []);
     if (costEvents.length > 0) {
@@ -365,6 +377,11 @@ export function ComputeHistoricalRowDailyAttribution(
             CostUsd: ComputeCostEventsInWindow(costEvents, dayStartMs, dayEndMs),
             WallClockMs: wallClockTodayMs,
         };
+    }
+
+    // Completed strictly before today's midnight with no post-midnight cost events: zero cost today.
+    if (completedAtMs !== null && completedAtMs <= dayStartMs) {
+        return { CostUsd: 0, WallClockMs: wallClockTodayMs };
     }
 
     const dataDayBaselines = ExtractBudgetDayBaselinesFromRunData(row.Data);

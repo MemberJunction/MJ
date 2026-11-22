@@ -1068,4 +1068,141 @@ describe('BudgetEnforcementGuard — all 6 scope x dimension combinations', () =
         expect(breached.Breach?.Scope).toBe('PerUserPerDay');
         expect(breached.Ledger.UserDailyCostUsd).toBeCloseTo(1.05, 5);
     });
+
+    it('CR-OVERNIGHT-PAUSED-DAILY-ATTRIBUTION: includes post-midnight cost events and honors CountPausedTimeTowardsWallClock on overnight Paused runs', async () => {
+        const guard = new BudgetEnforcementGuard();
+        const startedAtMs = Date.UTC(2026, 10, 20, 23, 0, 0);   // 23:00 UTC day 1
+        const pausedAtMs = Date.UTC(2026, 10, 20, 23, 59, 0);   // 23:59 UTC day 1 (pre-midnight pause)
+        const dayStartMs = Date.UTC(2026, 10, 21, 0, 0, 0);     // 00:00 UTC day 2
+        const lateChargeMs = Date.UTC(2026, 10, 21, 0, 1, 0);   // 00:01 UTC day 2 (post-midnight judge charge)
+        const nowMs = Date.UTC(2026, 10, 21, 0, 3, 0);          // 00:03 UTC day 2 (3 minutes into day 2)
+        const dayEndMs = Date.UTC(2026, 10, 22, 0, 0, 0);
+
+        const overnightPausedCheckpoint: RunawayCheckpointState = {
+            SchemaVersion: 'mj-runaway-checkpoint/v1',
+            CheckpointID: 'cp-overnight-paused-1',
+            AgentRunID: '99999999-9999-4999-8999-999999999991',
+            AgentID: '11111111-1111-4111-8111-111111111119',
+            AgentName: 'OvernightPausedAgent',
+            UserID: USER_ID,
+            RoutineID: null,
+            PausedAtISO: new Date(pausedAtMs).toISOString(),
+            PausedAtMs: pausedAtMs,
+            PauseReason: 'FastJudgeStalled',
+            Summary: 'Paused before midnight',
+            CompletedStepCount: 4,
+            CompletedStepIDs: ['s1', 's2', 's3', 's4'],
+            CompletedPromptTurns: 2,
+            CompletedNodeIDs: [],
+            ConversationMessages: [],
+            InFlightPayload: {},
+            Scratchpad: { notes: '', tasks: [] },
+            NextStepSummary: 'Await human',
+            Evidence: { RecentStepSummaries: [] },
+            CumulativeLedger: {
+                RunCostUsd: 50.0,
+                RunWallClockMs: 3_540_000,
+                RunTokens: 12_000,
+                RoutineCostUsd: 0,
+                RoutineWallClockMs: 0,
+                UserDailyCostUsd: 50.0,
+                UserDailyWallClockMs: 3_540_000,
+                PausedWallClockMs: 0,
+                PausedIntervals: [{ PausedAtMs: pausedAtMs, ResumedAtMs: null }],
+                CostEvents: [{ TimestampMs: Date.UTC(2026, 10, 20, 23, 30, 0), CostUsd: 50.0 }],
+                DayBucketUTC: '2026-11-20',
+                DayBoundaryTimezone: 'UTC',
+                AsOfISO: new Date(pausedAtMs).toISOString(),
+            },
+            HumanApproval: { Status: 'Pending' },
+        };
+
+        const overnightPausedRow: AgentRunBudgetLedgerRow = {
+            ID: '99999999-9999-4999-8999-999999999991',
+            ParentRunID: null,
+            UserID: USER_ID,
+            TotalCost: 62.5,
+            TotalCostRollup: 62.5,
+            StartedAt: new Date(startedAtMs),
+            CompletedAt: null,
+            __mj_UpdatedAt: new Date(lateChargeMs),
+            ScheduledJobRunID: null,
+            Status: 'Paused',
+            Data: JSON.stringify({
+                __runawayCheckpoint: overnightPausedCheckpoint,
+                __budgetCostEvents: [
+                    { TimestampMs: Date.UTC(2026, 10, 20, 23, 30, 0), CostUsd: 50.0 },
+                    { TimestampMs: lateChargeMs, CostUsd: 12.5 },
+                ],
+            }),
+        };
+
+        // Direct attribution checks: late post-midnight charge ($12.50) is ALWAYS included;
+        // paused wall clock today is 0 when CountPausedTimeTowardsWallClock=false and 180,000ms (3m) when true.
+        const attrExcluded = ComputeHistoricalRowDailyAttribution(
+            overnightPausedRow,
+            62.5,
+            dayStartMs,
+            dayEndMs,
+            nowMs,
+            false,
+            '2026-11-21',
+        );
+        expect(attrExcluded.CostUsd).toBeCloseTo(12.5, 5);
+        expect(attrExcluded.WallClockMs).toBe(0);
+
+        const attrIncluded = ComputeHistoricalRowDailyAttribution(
+            overnightPausedRow,
+            62.5,
+            dayStartMs,
+            dayEndMs,
+            nowMs,
+            true,
+            '2026-11-21',
+        );
+        expect(attrIncluded.CostUsd).toBeCloseTo(12.5, 5);
+        expect(attrIncluded.WallClockMs).toBe(180_000);
+
+        // Concurrent/subsequent run enforcement via shared daily ledger:
+        // (1) CountPausedTimeTowardsWallClock=false -> sees $12.50 prior today spend (breaches $15 cap with $3 live cost), 0ms paused wall clock
+        const { Provider } = createMockRunViewsProvider([], [overnightPausedRow]);
+        const evalCostBreach = await guard.Evaluate({
+            Budgets: createBudgets({
+                PerRun: { MaxCostUsd: 100, MaxWallClockMs: 600_000, MaxTokens: null },
+                PerUserPerDay: { MaxCostUsd: 15.0, MaxWallClockMs: 120_000, DayBoundaryTimezone: 'UTC' },
+                CountPausedTimeTowardsWallClock: false,
+            }),
+            AgentRunID: ACTIVE_RUN_ID,
+            UserID: USER_ID,
+            CurrentRunCostUsd: 3.0,
+            CurrentRunStartedAtMs: nowMs - 10_000,
+            NowMs: nowMs,
+            Provider,
+        });
+        expect(evalCostBreach.Exceeded).toBe(true);
+        expect(evalCostBreach.Breach?.Scope).toBe('PerUserPerDay');
+        expect(evalCostBreach.Breach?.Dimension).toBe('CostUsd');
+        expect(evalCostBreach.Ledger.UserDailyCostUsd).toBeCloseTo(15.5, 5);
+        expect(evalCostBreach.Ledger.UserDailyWallClockMs).toBe(10_000);
+
+        // (2) CountPausedTimeTowardsWallClock=true -> includes today's 180,000ms paused wall clock + 10,000ms active -> breaches 120,000ms daily wall clock
+        const evalWallBreach = await guard.Evaluate({
+            Budgets: createBudgets({
+                PerRun: { MaxCostUsd: 100, MaxWallClockMs: 600_000, MaxTokens: null },
+                PerUserPerDay: { MaxCostUsd: 100.0, MaxWallClockMs: 120_000, DayBoundaryTimezone: 'UTC' },
+                CountPausedTimeTowardsWallClock: true,
+            }),
+            AgentRunID: ACTIVE_RUN_ID,
+            UserID: USER_ID,
+            CurrentRunCostUsd: 1.0,
+            CurrentRunStartedAtMs: nowMs - 10_000,
+            NowMs: nowMs,
+            Provider,
+        });
+        expect(evalWallBreach.Exceeded).toBe(true);
+        expect(evalWallBreach.Breach?.Scope).toBe('PerUserPerDay');
+        expect(evalWallBreach.Breach?.Dimension).toBe('WallClockMs');
+        expect(evalWallBreach.Ledger.UserDailyCostUsd).toBeCloseTo(13.5, 5);
+        expect(evalWallBreach.Ledger.UserDailyWallClockMs).toBe(190_000);
+    });
 });
