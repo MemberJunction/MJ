@@ -35,6 +35,7 @@ import {
 import {
     ConfigOf,
     DECISION_ANSWER_FIELDS,
+    GetMaxTasksPerGraph,
     MAX_TASKS_PER_GRAPH,
     TaskGraphSpec,
     TaskGraphSpecNode,
@@ -1022,7 +1023,8 @@ export function ValidateTaskGraphSpec(spec: TaskGraphSpec, options?: TaskGraphVa
         return { Valid: errors.length === 0, Errors: errors };
     }
 
-    const maxTasks = Math.min(options?.MaxTasks ?? MAX_TASKS_PER_GRAPH, MAX_TASKS_PER_GRAPH);
+    const ceiling = GetMaxTasksPerGraph();
+    const maxTasks = Math.min(options?.MaxTasks ?? ceiling, ceiling);
     if (tasks.length > maxTasks) {
         errors.push({
             Code: 'TooManyTasks',

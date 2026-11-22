@@ -3099,7 +3099,7 @@ A-6180-DELETE-PROC (§8.2) checks PR 4's body ⊇ `V202611101901`'s wherever a m
 **The run/model cycle (M2.3).** From M2 every trainer-path model names its run (`MLModel.TrainingRunID`) and its run
 names the model (`MLTrainingRun.ResultingModelID`). The procedure breaks the cycle on both sides before either
 `DELETE`: it nulls `MLTrainingRun.ResultingModelID` for the doomed models
-(`V202611201631__v6.3.x__PS_Honest_Serving_Schema.sql:664`) and `MLModel.TrainingRunID` for the doomed runs (`:742`),
+(`V202611220626__v6.3.x__PS_Honest_Serving_Schema.sql:664`) and `MLModel.TrainingRunID` for the doomed runs (`:742`),
 then deletes the runs (`:754`) and the models (`:755`). The TruthSuite `HarnessCleanup` mirrors that order through the
 entity layer (`harness/cleanup.ts:225`: clear and save each run's `ResultingModelID` that names a model being deleted,
 then delete the models, then the runs), pinned by its two cleanup-order tests.
@@ -6963,7 +6963,7 @@ MJ's authorization rule over a grant matrix (A-FV-AUTHZ); `ModelPredictionPanel`
 `MJ: Feature Values`, the lineage view, the "Derived values" section, nothing rendered without an authorized binding;
 the scoring binding editor ships in the model detail and the PS predictions grid and At-Risk list read
 `MJ: Latest Feature Values` for a binding's feature through their M4 output-binding rows; the daily retention sweep and
-its binding backfill (§5.8.7, D4-25, D4-28) run; the bundle "IT185 - PS Prediction Serving — Zero Schema Change" is a
+its binding backfill (§5.8.7, D4-25, D4-28) run; the bundle "IT186 - PS Prediction Serving — Zero Schema Change" is a
 member of `Integration Tests — Deterministic` (D4-47) and G5.6 is green. No materialization, no refresh and no
 CodeGenLib change exist anywhere in the milestone (D-078).
 
@@ -7264,10 +7264,10 @@ Changes records each); counts per binding in the job run's `Details`
   `SELECT COUNT(*) FROM __mj.MLModelScoringBinding WHERE ViewAuthorizationID IS NULL` → 0 (§7) and its `Details` holding
   the per-binding counts.
 
-#### Task M5b.6: The bundle "IT185 - PS Prediction Serving — Zero Schema Change" in the deterministic tier (D4-47)
+#### Task M5b.6: The bundle "IT186 - PS Prediction Serving — Zero Schema Change" in the deterministic tier (D4-47)
 
-**Files:** Create `metadata-optional/integration-test/tests/integration/.IT185-ps-prediction-serving.json` (`Name`
-"IT185 - PS Prediction Serving — Zero Schema Change", `Configuration` `{tier: "deterministic", transport: "server",
+**Files:** Create `metadata-optional/integration-test/tests/integration/.IT186-ps-prediction-serving.json` (`Name`
+"IT186 - PS Prediction Serving — Zero Schema Change", `Configuration` `{tier: "deterministic", transport: "server",
 checks: [{type: "ps-prediction-serving"}]}`, `uuidgen` key; server transport, D4-170),
 `packages/TestingFramework/integration-test-suite/src/checks/ps-prediction-serving.checks.ts`
 (`PsPredictionServingChecks: NamedCheck[]`, ids `ps-prediction-serving.Z1` … `Z8`, with a lifecycle that mints the two
@@ -7308,7 +7308,7 @@ write and the teardown removes every tagged row even when Setup failed (D4-230)
     AssertEqual(authorized.LatestFeatureValues, f.ScoredRecords, 'Z6: the authorized user reads every scored record');
   },
   ```
-- [x] Step 2: `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 pnpm mj test run "IT185 - PS Prediction Serving — Zero Schema Change"`
+- [x] Step 2: `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 pnpm mj test run "IT186 - PS Prediction Serving — Zero Schema Change"`
   with the filter's attachment to the UI role removed on a scratch copy (MJAPI restarted on it) → Z6 fails; with M5's
   `UQ_FeatureValue_ModelRow` dropped → `scoring-service.adversarial.db.test.ts › refuses a second Model row …` fails (Z7's
   same-as-of re-run is replaced by the writer's keyed upsert, not by the index, D4-186).
@@ -7369,7 +7369,7 @@ the prediction with its lineage to the authorized identity, 1 of 1, and nothing 
   `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` → exit 0 (the entity-permission `@lookup`s resolve).
 - [x] Step 4: The fresh-install proof is Step 3's outputs, taken before any CodeGen step; only then does the rest of
   the skill's sequence (its CodeGen, build and the deterministic tier) run on the fresh database →
-  `Integration Tests — Deterministic` 0 failed, IT185 among its members passing.
+  `Integration Tests — Deterministic` 0 failed, IT186 among its members passing.
 - [x] Step 5: The four outputs pasted into §11; the fresh database dropped after the milestone's checkpoint. The clean rebuild of `MJ_PS_PR4_claude` is the fresh database (no separate `_FRESH` copy, D4-232).
 
 #### Task M5b.9: The browser walk of the record panel (D-076)
@@ -7441,7 +7441,7 @@ M5b.1's file)
 - [x] Step 3: The reviewer flips the M5b guards one at a time — the filter's `Source <> 'Model'` clause; the filter on
   one role's read permission; the view's `Deny` rule and its ancestor walk; the panel's authorized-binding filter; the
   retention cutoff (off by one day); the backfill's `ViewAuthorizationID IS NULL` predicate — and names the failing case
-  of Step 2, of the Engine or forms tests or of IT185/G5.6 for each.
+  of Step 2, of the Engine or forms tests or of IT186/G5.6 for each.
 - [x] Step 4: A broken claim is fixed at the invariant and the harness re-run → 0 broken (the exemption case is the
   documented residual M6 remediates, §9.2).
 - [x] Step 5: Counts, cells, claims and each mutation's failing case written to §11.
@@ -7455,7 +7455,7 @@ M5b.1's file)
   0 failed.
 - The TruthSuite DB lanes `pnpm run test:db -- view-gate held-authorizations` → 0 failed (counts measured at M5b).
 - `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Integration Tests — Deterministic"`
-  → 0 failed, IT185 a passing member, measured in two forms: CI's PR lane form (no flag; `MJ_REST_API_ENABLED=true MJ_DISABLE_TASK_GRAPH_DISPATCHER=1`)
+  → 0 failed, IT186 a passing member, measured in two forms: CI's PR lane form (no flag; `MJ_REST_API_ENABLED=true MJ_DISABLE_TASK_GRAPH_DISPATCHER=1`)
   → 0 failed, skip gate PASSED; with RUN_MUTATION_TESTS=1 → every failure root-caused and named in §11, and 0 failures
   attributable to PR 4's changes (D4-79); `… "Predictive Studio Gates — Scoring"` → 7 passed; the §4.2 keep-list suites
   (PR 1's Feature Pipelines gates, read as the UI user's identity too) → 0 failed.
@@ -8695,7 +8695,7 @@ env loaded
   `Predictive Studio Gates — Registry and Gate` → 9, `— Scoring` → 7, `— Monitoring` → 10, `— Monitoring (statistical)`
   → 3, `— Containment` → 12, each 0 failed (31 owned gates, G0.2 in the nightly lane's suite run here on the final head);
   the keep-list suites of §4.2 (PR 1's, PR 2's and PR 3's gates by name, including `Predictive Studio Gates — Pending`'s
-  remaining member) → 0 failed; `Integration Tests — Deterministic` (D4-79's two forms) → 0 failed (IT185 a member).
+  remaining member) → 0 failed; `Integration Tests — Deterministic` (D4-79's two forms) → 0 failed (IT186 a member).
 - [x] Step 4: §7's unit tests (`cd <pkg> && pnpm test` for Core, Engine, Sidecar, TruthSuite, MJCore, dashboards,
   core-entity-forms, FeaturePipelines, CodeGenLib, RecordSetProcessor/engine, MJCoreEntitiesServer,
   integration-test-suite; `pnpm run test:python` for the sidecar and the truth suite) → each `N passed / 0 failed / K
@@ -8831,8 +8831,8 @@ merge-readiness check → `0` commits behind `next`, every check `SUCCESS`, four
   measured in two forms: CI's PR lane form (no flag; `MJ_REST_API_ENABLED=true MJ_DISABLE_TASK_GRAPH_DISPATCHER=1`)
   → 0 failed, skip gate PASSED; with RUN_MUTATION_TESTS=1 → every failure root-caused and named in §11, and 0 failures
   attributable to PR 4's changes (D4-79),
-  which includes this PR's new bundle "IT185 - PS Prediction Serving — Zero Schema Change" (M5b, D4-47; single run:
-  `pnpm mj test run "IT185 - PS Prediction Serving — Zero Schema Change"`).
+  which includes this PR's new bundle "IT186 - PS Prediction Serving — Zero Schema Change" (M5b, D4-47; single run:
+  `pnpm mj test run "IT186 - PS Prediction Serving — Zero Schema Change"`).
 - **Gates:** the 31 named tests of §4.1 (G5.6 `C1 → S7.4 #2` is D-058's acceptance gate: trained model → prediction visible on a Person, zero schema change) (G0.2 in the nightly lane) as the `MJ: Tests` rows of §4.1a, run per suite with
   `"$PLANS/tools/ps-env.sh" pnpm mj test suite "Predictive Studio Gates — <suite>"` (`MJ_INTEGRATION_TEST=1
   RUN_MUTATION_TESTS=1`), plus the keep-list gates.
@@ -9419,8 +9419,8 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   for the then-refused `predictive-studio-grid-record-names.test.ts` (OF4-4); OF4-4 is removed, M4.3 deletes every alias
   of the grid and moves that test to the current members.
 - **D4-47 · The prediction-serving bundle's file, name and number** (decided at the M5–M8 tier upgrade, 2026-11-10). The
-  bundle is `metadata-optional/integration-test/tests/integration/.IT185-ps-prediction-serving.json`, `MJ: Tests` row
-  "IT185 - PS Prediction Serving — Zero Schema Change", check type `ps-prediction-serving`, a member of
+  bundle is `metadata-optional/integration-test/tests/integration/.IT186-ps-prediction-serving.json`, `MJ: Tests` row
+  "IT186 - PS Prediction Serving — Zero Schema Change", check type `ps-prediction-serving`, a member of
   `Integration Tests — Deterministic` (client transport, sequenced after the suite's last member). Why 167: the highest
   bundle on `599c288dee` is `IT163` and #6180's head `f40161febb` adds `IT164`–`IT166` (unchanged at `0b37229bd7`)
   (`git ls-tree --name-only pr6180-live metadata-optional/integration-test/tests/integration/`), so 167 collides with
@@ -10856,11 +10856,11 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   suite), so ours is renamed `.IT183-ps-prediction-serving.json`, "IT183 - PS Prediction Serving — Zero Schema Change",
   Sequence 49 (the server-transport block; the client bundles start at 50, #3251), its suite-member row keeping its ID; the check's tags, comments and the schema-fingerprint query's
   description follow. §7, §10 and the task texts read IT183; rulings and §11 entries before this merge keep IT182.
-- **D4-270 · The prediction-serving bundle is IT185** (M8.4, the merge of next `3c94a75e53`; D4-47's rule as D4-169 and
+- **D4-270 · The prediction-serving bundle is IT186** (M8.4, the merge of next `3c94a75e53`; D4-47's rule as D4-169 and
   D4-262). `next` added "IT183 - Chief of Staff World Seed" and "IT184 - Chief of Staff Live Agent Execution", so ours
-  is renamed again: `.IT185-ps-prediction-serving.json`, "IT185 - PS Prediction Serving — Zero Schema Change", still
+  is renamed again: `.IT186-ps-prediction-serving.json`, "IT186 - PS Prediction Serving — Zero Schema Change", still
   Sequence 49 of the deterministic suite (server block), its member row keeping its ID; the check's tags and comments
-  and the schema-fingerprint query's description follow. §7, §10 and the task texts read IT185; D4-262 and the §11
+  and the schema-fingerprint query's description follow. §7, §10 and the task texts read IT186; D4-262 and the §11
   entries written before this merge keep IT183.
 - **D4-271 · The tail's guarded EntityUniqueKey inserts are removed; both databases rebuilt** (M8.4, the merge of
   next `3c94a75e53`). Next's `V202611201630` inserts, unguarded, the `EntityUniqueKey` rows of PR 3's three constraints
@@ -10871,10 +10871,10 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   reads "10 added", and both databases are rebuilt from clean (the migration's checksum changed; the brief's rule for a
   migration that touches objects we test). OF4-34 is resolved by the same migration.
 - **D4-272 · After the second merge of next, the pass re-runs only what the merge changed** (M8.4, D4-87/D-084). Next's
-  `3c94a75e53` changed no Predictive Studio code; PR 4's own changes since the M8.3 runs are the IT185 rename, the
+  `3c94a75e53` changed no Predictive Studio code; PR 4's own changes since the M8.3 runs are the IT186 rename, the
   migration's three removed (redundant) unique-key inserts and the retime. Both databases are rebuilt from clean with
   next's migration first; identity is proven (514 entities, 8029 fields, `(Entity, Field, Sequence)` identical); the root
-  build, the unit tier of the packages the merge touched, IT185 and G5.6 (the two zero-schema-change checks that read the
+  build, the unit tier of the packages the merge touched, IT186 and G5.6 (the two zero-schema-change checks that read the
   renamed fingerprint query), `Integration Tests — Deterministic` (next's new bundles are members) and G3.4 alone
   (D4-269) are re-run. The UI walks, the other gate suites and the harness are not: their inputs are unchanged.
 - **D4-273 · The last merge of next before `gh pr ready` re-runs only its own package** (M8.4, `68c3bb55f1`). Next's
@@ -10933,7 +10933,7 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   content: `GraphQLActionClient.RunAction`'s output params (`graphQLActionClient.ts`; its two PR 4 test files deleted),
   the shared tab kernel's suite isolation (`sharedTabKernel.test.ts`, D4-239), "Materialize List From View"'s
   `AuthorizesCaller` and its test (D4-184), the `primaryKey` sync wrote into IT114's metadata file, and `e2e/fixtures.ts`
-  (D4-276); IT182's MJAPI-affinity unit test is deleted (IT185 keeps its `requiresSharedServerDatabase` flag). Kept
+  (D4-276); IT182's MJAPI-affinity unit test is deleted (IT186 keeps its `requiresSharedServerDatabase` flag). Kept
   outside PS, each needed by PS behaviour or ruled by the owner: RecordSetProcessor's parallel batches (F-L3-4),
   the React runtime's PS scoring utility, FeaturePipelines' Model-row cache
   writes, the server entities, ServerBootstrapLite's `integration-engine` dependency and the generated files. The
@@ -10948,7 +10948,7 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   nothing).
 - **D4-277 · The controller's rulings on the remaining non-PS paths** (R1). MJCoreEntitiesServer's twelve non-PS test
   edits (the expected-console wiring) are reverted to `next` and `helpers/expected-console.ts` is deleted (the three PS
-  tests never used it; non-PS stderr noise is next's, accepted). `fls-client.checks.ts` is reverted to `next`; IT185
+  tests never used it; non-PS stderr noise is next's, accepted). `fls-client.checks.ts` is reverted to `next`; IT186
   mints its keys through the PS-local `PsServingKeys.MintFullAccessKeyThroughMJAPI` (the same writes through the
   system-key wire). Everything else on the remaining-paths list stays (owner-ruled or PS-owned).
 - **D4-278 · The automated-publishing switches are guarded in Predictive Studio, not in CorePlus** (owner review,
@@ -11372,11 +11372,11 @@ are monitored on real outcomes.
   automatically, and migrates their artifacts to durable storage or marks them unscorable.
 
 **Generated facts** (regenerated before every checkpoint commit by `tools/pr-body.mjs`; do not edit by hand):
-- Migration: <!-- gen:migration -->migrations/v6/V202611201631__v6.3.x__PS_Honest_Serving_Schema.sql<!-- /gen:migration -->
-- Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, PS_SEED_LIMIT, PS_SIGN_IN_URL, PS_STORAGE_PROVIDER, PW_BASE_URL, STORAGE_LOCAL_ROOT<!-- /gen:env -->
+- Migration: <!-- gen:migration -->migrations/v6/V202611220626__v6.3.x__PS_Honest_Serving_Schema.sql<!-- /gen:migration -->
+- Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, PS_SEED_LIMIT, PS_SIGN_IN_URL, PS_STORAGE_PROVIDER, PW_BASE_URL, STORAGE_LOCAL_ROOT, TZ<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->29<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->29<!-- /gen:checks -->
-- Head: <!-- gen:head -->c85a74b4b1<!-- /gen:head -->
+- Head: <!-- gen:head -->e4c7d7ad21<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,
@@ -11525,7 +11525,7 @@ an interactive user's session token can still sign off as that user, because MJS
 - OF4-3 — the Record Process form's sections are unchanged: out of scope by layering (D-062); no work is deferred, so it carries no date.
 - No compatibility shim or deprecated alias is kept (D-042, D-053), so none is listed.
 
-**Test plan:** unit (Core, Engine, Sidecar pytest, dashboards, forms), deterministic integration tier (including the new "IT185 - PS Prediction Serving — Zero Schema Change" bundle), the 31 gate tests
+**Test plan:** unit (Core, Engine, Sidecar pytest, dashboards, forms), deterministic integration tier (including the new "IT186 - PS Prediction Serving — Zero Schema Change" bundle), the 31 gate tests
 plus the keep-list, runtime verification against MJAPI and the database (§7 of the plan).
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
@@ -13533,7 +13533,7 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   `.mj-sync.json` (one config, both pull filters), check-registry 252 → 254 next, ours 282 → 284, the four class
   manifests (next's, regenerated), the MJUser form and MJServer `__mj.ts` (the form regenerated by CodeGen; `__mj.ts`, which
   host CodeGen does not write, by `git merge-file` with the one import-line conflict unioned: 461 next + 5 PS = 466
-  classes); next added IT183/IT184, ours is IT185 (D4-270).
+  classes); next added IT183/IT184, ours is IT186 (D4-270).
 - Next's `V202611201630` failed applied out of order on the dev databases (`UQ_EntityUniqueKey_EntityID_Name`): it now
   ships PR 3's unique-key rows and OF4-34's, so the tail's three guarded inserts are removed (D4-271) and both databases
   are rebuilt from clean (`196 applied`; tail check = OF4-57's one statement of next's; sync `184/60/16921/47`, 0 errors;
@@ -13574,7 +13574,7 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   Training **35/35** by member (G2.39 ✓ on `mj test run` after a 1200 s host-load timeout in the suite; alone 15/15 in
   764 s); Training (statistical) **6/6** (after regenerating the n400 sets PR 4's generator change had re-hashed);
   Pending G0.6 ✗ twice on its LLM judge (next's "raises/lowers risk" and "drivers" copy; D4-268, OF4-56; `Pending`, not
-  merge-blocking); Feature Pipelines 0/5 environment-blocked (D3-78, as since M1); IT166 ✓; IT185 ✓ (Z1–Z8).
+  merge-blocking); Feature Pipelines 0/5 environment-blocked (D3-78, as since M1); IT166 ✓; IT186 ✓ (Z1–Z8).
   `Integration Tests — Deterministic` (PR lane) on the final DB **132/162 passed, 29 skipped, skip gate PASSED**; ✗ PB7 +
   PB18 only (OF4-36); the run before the second merge also had ABV3 (OF4-54).
 - **Step 4 — unit (0 failed each):** Core 45/593 · Engine 124/1876 + test-inclusive tsc 0 · TruthSuite 27/189 ·
@@ -13590,7 +13590,7 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   0 sign-off rows not by a user; scoring runs `completed 1 · failed 1 · refused 1` (refused `leakage-unknown`, failed
   `100 of 6673 records failed … sidecar did not become ready`), 0 running > 2 h; GraphQL `UpdateMJMLModel` Status →
   `status-changed-outside-gate`; 0 Model rows missing lineage (6673 rows); 0 duplicate model-row keys; 0 bindings without
-  a view authorization; the unauthorized/authorized `RunView` pair is IT185's Z5/Z6 and the record-panel walk.
+  a view authorization; the unauthorized/authorized `RunView` pair is IT186's Z5/Z6 and the record-panel walk.
 - **Task M8.5 Step 4:** `serving-end-to-end` (MJAPI stopped) **5/5** (213.8 s; M5 × M6, M3 × M6, M5 × M5b, M5 × PR 1,
   M1 × M5 × M6), stderr 0, census equal.
 - **Self-audit** of M8's own lines: 2 findings fixed (D4-265); M1–M7's lines were audited at their exits and in
@@ -13605,6 +13605,19 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   item or carries a merge of `next`, and is recorded here as `### <date> — <agent> — R<k>`.
 - **Open deferrals:** OF4-5 (a kept incumbent-heuristic rule is recorded and not delivered) — expiry PR 6; OF4-3 out of
   scope, no deferred work. **Rulings:** D4-261…D4-273. **Flags:** OF4-55, OF4-56, OF4-57; OF4-34 resolved.
+
+### 2026-11-22 — Claude (Opus 5.5) — R4 (merge of next, 165 commits)
+
+- **Merge:** `origin/next` merged (owner directive: a conflicting PR is merged on the spot). Conflicts: the deterministic
+  suite (next added its own IT185, "MJ Docs in the Semantic Graph") → ours renamed **IT186 - PS Prediction Serving — Zero
+  Schema Change** (test file, checks, unit tests, fingerprint query, plan) at Sequence 49 (a server-transport bundle sorts
+  before every client one, suite-sequencing test); the four class-registration manifests taken from next and regenerated
+  (a fresh scan reports no change); bundle count 254 + 30 (ours) + 1 (next) = 285.
+- **Migration retimed** after next's newest (`V202611220625`, none of next's three new migrations touches a PS object):
+  `V202611220626__v6.3.x__PS_Honest_Serving_Schema.sql`; Flyway history of `MJ_PS_PR4_claude` and `MJ_PS_PR4_review`
+  updated; next's migrations applied to both (4 applied each); metadata pushed to both (0 errors).
+- **Verified:** root install + build (322/322); integration-test-suite 1132/1132; Engine 1887/1887; TruthSuite 189/189;
+  Core 593/593; the four bootstrap packages build 0.
 
 ### 2026-11-22 — Claude (Opus 5.5) — R3 (MJExplorer user walk: chat + Predictive Studio, real data)
 
@@ -13673,12 +13686,12 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   (deterministic) red only on next's `fls-closeout-client` CW7/CW8 (`API key not found`), which fails the same way on
   next's own 15:12 push (run 44917940699) and two other PRs: next's, not PR 4's (OF4-58).
 - **Controller rulings (D4-277):** MJCoreEntitiesServer's twelve non-PS test edits → next's, `expected-console.ts`
-  deleted (113/1624, 0 failed); `fls-client.checks.ts` → next's, IT185 mints through the PS-local `PsServingKeys`
+  deleted (113/1624, 0 failed); `fls-client.checks.ts` → next's, IT186 mints through the PS-local `PsServingKeys`
   (integration-test-suite 77/1129 + rigs tsc 0). Commit `862d37a5f6`.
 - **Merge of next** `b219376ecf` (16 commits, no conflicts, no migration → no retime): merge `d6c75f7fd1`; `pnpm install` 0; root
   build 352/352 + 322/322; unit (0 failed) MJCoreEntitiesServer 1624 · integration-test-suite 1129 · CoreActions 1256 ·
   Actions Engine 281 · MJServer 3878 (66 skipped) · GenericDatabaseProvider 2216 (1 skipped) · MJExportEngine 155 ·
-  TaskGraph 594 · MCPServer 241. **IT185** on the claude DB (MJAPI :4041, sidecar :64203) **✓ Z1–Z8**, census equal.
+  TaskGraph 594 · MCPServer 241. **IT186** on the claude DB (MJAPI :4041, sidecar :64203) **✓ Z1–Z8**, census equal.
   OF4-58 not fixed by next yet; its cause recorded there (next's #6817).
 
 ## 12. Refresh log (append-only)

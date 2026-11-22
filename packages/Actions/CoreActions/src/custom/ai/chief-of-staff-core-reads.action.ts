@@ -1,7 +1,7 @@
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { ActionEngineServer, BaseAction } from '@memberjunction/actions';
 import { EscapeSQLString, IndexByUUID, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
-import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LimitsConfigResolver, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     MJAIAgentRequestEntity,
     MJAIAgentSuggestionEntity,
@@ -283,7 +283,22 @@ export class AssembleMyBriefingAction extends BaseAction {
                 };
             }
 
+            const resolvedLimits = LimitsConfigResolver.Resolve().Limits;
             const horizonDays = readNumberParam(params, 'HorizonDays', 7, 1, 30);
+            const contributorTimeoutMs = readNumberParam(
+                params,
+                'ContributorTimeoutMs',
+                resolvedLimits.BriefingContributorTimeoutMs,
+                20,
+                60_000
+            );
+            const maxContributorChars = readNumberParam(
+                params,
+                'MaxContributorChars',
+                resolvedLimits.BriefingMaxContributorChars,
+                100,
+                524_288
+            );
             const includeSkillNamesRaw = readStringParam(params, 'IncludeSkillNames');
             const includeSkillSet = includeSkillNamesRaw
                 ? new Set(
@@ -318,7 +333,15 @@ export class AssembleMyBriefingAction extends BaseAction {
                 this.loadCoreBriefingState(agent.ID, contextUser, params.Context, md),
                 Promise.all(
                     briefingEntries.map((entry) =>
-                        this.runBriefingContributor(entry.skill.Name, entry.actionID, agent.ID, horizonDays, params)
+                        this.runBriefingContributor(
+                            entry.skill.Name,
+                            entry.actionID,
+                            agent.ID,
+                            horizonDays,
+                            contributorTimeoutMs,
+                            maxContributorChars,
+                            params
+                        )
                     )
                 ),
             ]);
@@ -527,6 +550,8 @@ export class AssembleMyBriefingAction extends BaseAction {
         actionId: string,
         agentId: string,
         horizonDays: number,
+        contributorTimeoutMs: number,
+        maxContributorChars: number,
         parentParams: RunActionParams
     ): Promise<Record<string, unknown>> {
         const action = ActionEngineServer.Instance.Actions.find((a) => UUIDsEqual(a.ID, actionId));
@@ -542,8 +567,10 @@ export class AssembleMyBriefingAction extends BaseAction {
             };
         }
 
+        const timeoutSentinel = Symbol('BRIEFING_CONTRIBUTOR_TIMEOUT');
+        let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
         try {
-            const result = await ActionEngineServer.Instance.RunAction({
+            const runPromise = ActionEngineServer.Instance.RunAction({
                 Action: action,
                 Params: [
                     { Name: 'HorizonDays', Type: 'Input', Value: horizonDays },
@@ -555,7 +582,27 @@ export class AssembleMyBriefingAction extends BaseAction {
                 Provider: parentParams.Provider,
                 SkipActionLog: false,
             });
+            // Prevent unhandled rejection if the action rejects after the timeout has already won the race.
+            runPromise.catch(() => undefined);
 
+            const timeoutPromise = new Promise<typeof timeoutSentinel>((resolve) => {
+                timeoutHandle = setTimeout(() => resolve(timeoutSentinel), contributorTimeoutMs);
+            });
+
+            const raced = await Promise.race([runPromise, timeoutPromise]);
+            if (raced === timeoutSentinel) {
+                return {
+                    SkillName: skillName,
+                    ActionID: action.ID,
+                    ActionName: action.Name,
+                    Success: false,
+                    ResultCode: 'TIMEOUT',
+                    Data: null,
+                    Error: `Briefing contributor "${action.Name}" timed out after ${contributorTimeoutMs}ms.`,
+                };
+            }
+
+            const result = raced;
             const parsedData =
                 result.Message && (result.Message.trim().startsWith('{') || result.Message.trim().startsWith('['))
                     ? SafeJSONParse<Record<string, unknown>>(result.Message)
@@ -576,13 +623,15 @@ export class AssembleMyBriefingAction extends BaseAction {
                 }
             }
             const hasOutputs = Object.keys(outputParams).length > 0;
-            const contributorData: unknown = parsedData
+            const rawContributorData: unknown = parsedData
                 ? hasOutputs
                     ? { ...parsedData, Outputs: outputParams }
                     : parsedData
                 : hasOutputs
                   ? { Summary: result.Message ?? null, ...outputParams }
                   : result.Message ?? null;
+
+            const contributorData = this.capContributorPayload(rawContributorData, maxContributorChars);
 
             return {
                 SkillName: skillName,
@@ -605,7 +654,26 @@ export class AssembleMyBriefingAction extends BaseAction {
                 Data: null,
                 Error: msg,
             };
+        } finally {
+            if (timeoutHandle !== null) {
+                clearTimeout(timeoutHandle);
+            }
         }
+    }
+
+    private capContributorPayload(data: unknown, maxChars: number): unknown {
+        if (data === null || data === undefined) {
+            return data;
+        }
+        const serialized = typeof data === 'string' ? data : JSON.stringify(data);
+        if (typeof serialized !== 'string' || serialized.length <= maxChars) {
+            return data;
+        }
+        return {
+            Truncated: true,
+            OriginalChars: serialized.length,
+            Preview: serialized.slice(0, maxChars),
+        };
     }
 }
 
@@ -698,6 +766,8 @@ export class ListMyAgentRoutinesAction extends BaseAction {
                     WorkstreamKey: cfg.workstreamKey ?? null,
                     WakeReason: cfg.wakeReason ?? null,
                     Description: r.Description,
+                    AgentConfigurationID: r.AgentConfigurationID ?? null,
+                    AgentConfiguration: r.AgentConfiguration ?? null,
                 };
             }).filter((row) => !workstreamFilter || (row.WorkstreamKey ?? '').toLowerCase() === workstreamFilter);
 

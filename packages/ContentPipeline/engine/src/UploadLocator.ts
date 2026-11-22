@@ -35,3 +35,19 @@ export function IsCallerOwnedUploadURL(url: string | null | undefined, fileID: s
     const locatorPart = trimmedUrl.slice(UPLOAD_URL_PREFIX.length);
     return Boolean(locatorPart) && !locatorPart.includes('#') && UUIDsEqual(locatorPart, fileID);
 }
+
+/** Prefix of the synthetic URL of a Content Item pushed as text for an entity record (`record://<entity>/<record id>`). */
+export const RECORD_TEXT_URL_PREFIX = 'record://';
+
+/**
+ * Deterministic synthetic URL for text pushed on behalf of an entity record, so re-pushing the same
+ * record finds its existing Content Item. `recordID` should be the record's compact URL segment.
+ */
+export function RecordTextItemURL(entityName: string, recordID: string): string {
+    return `${RECORD_TEXT_URL_PREFIX}${encodeURIComponent(entityName.trim())}/${encodeURIComponent(recordID.trim())}`;
+}
+
+/** True when `url` is a `record://` locator for text pushed on behalf of an entity record ({@link RecordTextItemURL}). */
+export function IsRecordTextItemURL(url: string | null | undefined): boolean {
+    return typeof url === 'string' && url.startsWith(RECORD_TEXT_URL_PREFIX);
+}

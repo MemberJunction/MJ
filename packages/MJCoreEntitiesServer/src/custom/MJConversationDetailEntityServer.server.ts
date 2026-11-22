@@ -65,7 +65,13 @@ export class MJConversationDetailEntityServer extends MJConversationDetailEntity
             await AgentChannelConversationDriver.HandleHumanMessagePosted(
                 this.ProviderToUse as unknown as IMetadataProvider,
                 this.ConversationID,
-                this.ContextCurrentUser
+                this.ContextCurrentUser,
+                new Date(),
+                {
+                    conversationDetailID: this.ID ?? null,
+                    senderUserID: this.UserID ?? this.ContextCurrentUser?.ID ?? null,
+                    messagePreview: this.Message ?? '',
+                }
             );
         }
         return saved;

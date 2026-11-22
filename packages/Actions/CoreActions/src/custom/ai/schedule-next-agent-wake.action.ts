@@ -1,13 +1,24 @@
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { EscapeSQLString, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
-import { LogError, Metadata, RunView } from '@memberjunction/core';
+import { IMetadataProvider, LogError, Metadata, RunView } from '@memberjunction/core';
 import {
+    MJAIAgentRhythmTemplateEntity,
     MJUserRoutineEntity,
     MJUserRoutineEntity_IRoutineWakeConfiguration,
 } from '@memberjunction/core-entities';
+import {
+    CheckActivePolicyForAgentAndUser,
+    LookupActiveRhythmTemplateForWorkstream,
+    ResolveAgentConfigurationIDInput,
+    ResolveRoutineSeededAgentConfigurationID,
+} from '@memberjunction/ai-agents';
 import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
+import {
+    VerifyActiveRhythmTemplate,
+    VerifyApprovedAgentRequest,
+} from './chief-of-staff-approval-helper';
 
 /**
  * Action that allows an autonomous agent (such as the Chief of Staff agent) to self-schedule
@@ -69,6 +80,22 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
                 };
             }
 
+            const md: IMetadataProvider = params.Provider ?? Metadata.Provider;
+            const policyEval = await CheckActivePolicyForAgentAndUser(
+                agentId,
+                contextUser.ID,
+                contextUser,
+                { provider: md, preferCache: true }
+            );
+            if (!policyEval.Allowed) {
+                return {
+                    Success: false,
+                    ResultCode: 'POLICY_DENIED',
+                    Message: policyEval.Reason,
+                    Params: params.Params,
+                };
+            }
+
             const fallbackWakeConfig =
                 this.parseObjectParam<Record<string, unknown>>(params, 'WakeConfigurationJSON') ?? null;
             const resumeState =
@@ -98,6 +125,48 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
                 ...(wakeGate ? { wakeGate } : {}),
             };
 
+            const rhythmTemplateId = this.getStringParam(params, 'RhythmTemplateID');
+            let verifiedTemplate: MJAIAgentRhythmTemplateEntity | null = null;
+            if (rhythmTemplateId) {
+                verifiedTemplate = await VerifyActiveRhythmTemplate(
+                    rhythmTemplateId,
+                    agentId,
+                    contextUser,
+                    md
+                );
+                if (!verifiedTemplate) {
+                    return {
+                        Success: false,
+                        ResultCode: 'VALIDATION_ERROR',
+                        Message: `RhythmTemplateID "${rhythmTemplateId}" does not match an Active MJ: AI Agent Rhythm Templates row for agent "${agentName}".`,
+                        Params: params.Params,
+                    };
+                }
+                resumeState['rhythmTemplateID'] = verifiedTemplate.ID;
+            }
+
+            const hasExplicitConfigParam = params.Params.some(
+                (p) => p.Name.trim().toLowerCase() === 'agentconfigurationid'
+            );
+            const rawAgentConfigID = hasExplicitConfigParam
+                ? (this.getStringParam(params, 'AgentConfigurationID') ?? null)
+                : undefined;
+            const rawModelTier = this.getStringParam(params, 'ModelTier');
+            const configResolution = await ResolveAgentConfigurationIDInput({
+                agentConfigurationID: rawAgentConfigID,
+                modelTier: rawModelTier,
+                contextUser,
+                metadataProvider: md,
+            });
+            if (configResolution.ErrorMessage) {
+                return {
+                    Success: false,
+                    ResultCode: 'VALIDATION_ERROR',
+                    Message: configResolution.ErrorMessage,
+                    Params: params.Params,
+                };
+            }
+
             const existingRoutine = await this.findExistingWakeRoutine(
                 contextUser.ID,
                 agentId,
@@ -105,35 +174,42 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
                 params
             );
 
-            // Code-enforced recurring routine gate: during an agent run, the agent may not
-            // unilaterally create a brand-new Recurring routine without an approved rhythm
-            // template (`RhythmTemplateID`) or explicit user confirmation (`ConfirmedByUser`).
-            // Updating an already-existing routine or creating OneShot/Adaptive wakes remains allowed.
+            // Code-enforced recurring routine gate: during an agent run, the agent may NOT
+            // unilaterally create a brand-new Recurring routine without a server-verified
+            // Approved `MJ: AI Agent Requests` record (`ConfirmedApprovalRequestID`).
+            // Self-attested `ConfirmedByUser = true` and unverified `RhythmTemplateID` strings
+            // are NEVER accepted as proof of user confirmation inside agent context.
+            // Direct human/UI calls (outside agent context) and updating existing routines or
+            // creating OneShot/Adaptive wakes remain allowed.
             const callingAgentId =
                 (params.Context as { AgentID?: string } | undefined)?.AgentID?.trim() ||
                 AgentUserPolicyEngine.Instance.GetActiveExecutingAgentID();
-            const rhythmTemplateId = this.getStringParam(params, 'RhythmTemplateID');
-            const confirmedByUser = this.getBooleanParam(params, 'ConfirmedByUser');
-            if (
-                scheduleMode === 'Recurring' &&
-                !existingRoutine &&
-                callingAgentId &&
-                !rhythmTemplateId &&
-                !confirmedByUser
-            ) {
-                return {
-                    Success: false,
-                    ResultCode: 'APPROVAL_REQUIRED',
-                    Message:
-                        'Agents cannot create new Recurring routines autonomously. Offer an available rhythm template via List Available Rhythms and enable it with Enable Agent Rhythm after explicit user confirmation.',
-                    Params: params.Params,
-                };
+            const confirmedApprovalRequestId = this.getStringParam(params, 'ConfirmedApprovalRequestID');
+            if (scheduleMode === 'Recurring' && !existingRoutine && callingAgentId) {
+                const approved = confirmedApprovalRequestId
+                    ? await VerifyApprovedAgentRequest(
+                          confirmedApprovalRequestId,
+                          contextUser.ID,
+                          agentId,
+                          contextUser,
+                          md
+                      )
+                    : false;
+                if (!approved) {
+                    return {
+                        Success: false,
+                        ResultCode: 'APPROVAL_REQUIRED',
+                        Message:
+                            'Agents cannot create new Recurring routines without a server-verified approved MJ: AI Agent Requests record (ConfirmedApprovalRequestID). Offer the rhythm or cadence to the user and re-invoke with ConfirmedApprovalRequestID after approval.',
+                        Params: params.Params,
+                    };
+                }
             }
 
-            const md = params.Provider ?? new Metadata();
+            const entityMd = params.Provider ?? new Metadata();
             const routine =
                 existingRoutine ??
-                (await md.GetEntityObject<MJUserRoutineEntity>('MJ: User Routines', contextUser));
+                (await entityMd.GetEntityObject<MJUserRoutineEntity>('MJ: User Routines', contextUser));
 
             const effectiveCronExpression = this.resolveEffectiveCronExpression(
                 params,
@@ -158,6 +234,29 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
                 resumeState,
             });
             routine.WakeConfigurationObject = wakeConfig;
+            if (!existingRoutine) {
+                let templateDefaultConfigID = verifiedTemplate?.DefaultAgentConfigurationID ?? null;
+                if (!templateDefaultConfigID && !configResolution.Provided && workstreamKey !== 'default') {
+                    const matchedTemplate = await LookupActiveRhythmTemplateForWorkstream({
+                        agentID: agentId,
+                        workstreamKey,
+                        contextUser,
+                        metadataProvider: md,
+                    });
+                    templateDefaultConfigID = matchedTemplate?.DefaultAgentConfigurationID ?? null;
+                }
+                routine.AgentConfigurationID = await ResolveRoutineSeededAgentConfigurationID({
+                    explicitAgentConfigurationID: configResolution.Provided
+                        ? configResolution.ConfigurationID
+                        : undefined,
+                    templateDefaultAgentConfigurationID: templateDefaultConfigID,
+                    workstreamKey,
+                    contextUser,
+                    metadataProvider: md,
+                });
+            } else if (configResolution.Provided) {
+                routine.AgentConfigurationID = configResolution.ConfigurationID;
+            }
             if (nextRunAt) {
                 routine.NextRunAt = nextRunAt;
             }

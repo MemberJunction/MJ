@@ -18,7 +18,7 @@
  * @module @memberjunction/task-graph
  */
 import { RegisterClass } from '@memberjunction/global';
-import { BaseRemotableOperation, IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
+import { CODE_FALLBACK_LIMITS, LimitsConfigResolver, BaseRemotableOperation, IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
 import {
     WorkflowDraftOperation,
     type WorkflowDraftInput,
@@ -27,8 +27,8 @@ import {
 import {
     AIPromptParams,
     FormatValidationErrors,
+    GetMaxTasksPerAgentGraph,
     ValidateTaskGraphSpec,
-    MAX_TASKS_PER_AGENT_GRAPH,
     type TaskGraphSpec,
 } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -45,7 +45,7 @@ export const WORKFLOW_DRAFTING_PROMPT = 'Workflow Drafting';
  * choosing between 40. Top-level agents come first — those are the ones a workflow step can actually
  * be assigned to.
  */
-export const MAX_AGENTS_OFFERED = 40;
+export const MAX_AGENTS_OFFERED = CODE_FALLBACK_LIMITS.Tuning.MaxAgentsOfferedInDraft;
 
 /** `Workflow.Draft` — draft a workflow's steps from a description. Persists nothing. */
 @RegisterClass(BaseRemotableOperation, 'Workflow.Draft')
@@ -115,7 +115,7 @@ export class WorkflowDraftServerOperation extends WorkflowDraftOperation {
         const graph: TaskGraphSpec = { ...draft, workflowName };
 
         // A draft is model output, so the model-output cap applies; the author can grow it on the canvas.
-        const validation = ValidateTaskGraphSpec(graph, { MaxTasks: MAX_TASKS_PER_AGENT_GRAPH });
+        const validation = ValidateTaskGraphSpec(graph, { MaxTasks: GetMaxTasksPerAgentGraph() });
         if (!validation.Valid) {
             return {
                 success: false,
@@ -139,7 +139,7 @@ export class WorkflowDraftServerOperation extends WorkflowDraftOperation {
                 ExtraFilter: `Status='Active' AND ParentID IS NULL`,
                 Fields: ['Name'],
                 OrderBy: 'Name ASC',
-                MaxRows: MAX_AGENTS_OFFERED,
+                MaxRows: LimitsConfigResolver.Resolve().Limits.Tuning.MaxAgentsOfferedInDraft,
                 ResultType: 'simple',
             },
             user,

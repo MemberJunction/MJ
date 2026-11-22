@@ -165,6 +165,44 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "ContributorTimeoutMs",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Per-contributor timeout in milliseconds (default 10000, range 20-60000). Timed-out contributors return TIMEOUT without stalling peer contributors.",
+            "IsRequired": false,
+            "DefaultValue": "10000"
+          },
+          "primaryKey": {
+            "ID": "B964EF37-D9EC-41C5-B54F-D644E139FA45"
+          },
+          "sync": {
+            "lastModified": "2026-11-21T15:59:12.817Z",
+            "checksum": "ead9e38babb807ea2c0e493bd718b45ded43685fb06ce5c75c03807d8e97f45c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxContributorChars",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum serialized characters per briefing contributor payload (default 32768). Oversized payloads are truncated with Truncated, OriginalChars, and Preview.",
+            "IsRequired": false,
+            "DefaultValue": "32768"
+          },
+          "primaryKey": {
+            "ID": "CE3613C3-A8A6-44D6-822F-2391CAD5C4C7"
+          },
+          "sync": {
+            "lastModified": "2026-11-21T15:59:12.857Z",
+            "checksum": "3d9102ae6a93155f7f40d7f171e73fc229400bddb6e6a8c7ca88869d3f80652d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "BriefingJSON",
             "Type": "Output",
             "ValueType": "Simple Object",
@@ -823,11 +861,39 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "AgentConfigurationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional MJ: AI Configurations UUID (or configuration name) overriding the template DefaultAgentConfigurationID for this user's routine.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9705E1CA-E205-4F62-BCE7-472589609FD5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ModelTier",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional logical model tier ('Draft', 'Standard', or 'High') resolved to Fast / Standard / High Power in MJ: AI Configurations when AgentConfigurationID is not provided.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2BB1CF15-D8BF-4F26-8B44-C88B0AB78DC2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "ConfirmedByUser",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Must be true during agent execution to confirm the user explicitly opted in.",
+            "Description": "Deprecated self-attestation flag (ignored during agent execution — pass a server-verified ConfirmedApprovalRequestID instead).",
             "IsRequired": false,
             "DefaultValue": "false"
           },
@@ -835,8 +901,26 @@
             "ID": "7861F334-120F-4FAC-987B-682CE2C388DC"
           },
           "sync": {
-            "lastModified": "2026-11-20T22:01:27.201Z",
-            "checksum": "375e403fb6708daee72bf076e42cb3c651b502438dcce42084cb3a13772ee473"
+            "lastModified": "2026-11-21T15:59:12.892Z",
+            "checksum": "0161f282d1b0debd7ecb7a47e538dc94010a5dccfc0e8b631ec864ae34b5659c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConfirmedApprovalRequestID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of a server-verified Approved MJ: AI Agent Requests row owned by the calling user and matching the target agent. Required when an executing agent enables a recurring rhythm.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "52B75B42-EA59-4D1C-8C4A-6BC70D7E2967"
+          },
+          "sync": {
+            "lastModified": "2026-11-21T15:59:12.927Z",
+            "checksum": "12b5d3d0ff49086949c5756d33d2319bc449f6a9926e4ebd698a6fe1691c7b31"
           }
         },
         {

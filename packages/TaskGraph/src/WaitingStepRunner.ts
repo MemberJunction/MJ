@@ -16,7 +16,7 @@
  *
  * @module @memberjunction/task-graph
  */
-import { IMetadataProvider, LogError, LogStatus, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LimitsConfigResolver, LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { IndexByUUID } from '@memberjunction/global';
 import type { MJTaskEntity } from '@memberjunction/core-entities';
 import { TaskClaimStore } from './TaskClaimStore';
@@ -32,9 +32,6 @@ import {
     WaitingStepKindOf,
     WaitingStepOutputTaint,
 } from './waiting-steps';
-
-/** How many times a provider's transient raise failure is retried inline before the step fails. */
-const MAX_PROVIDER_RAISE_ATTEMPTS = 3;
 
 /** Backoff between those attempts. Short: the pass is holding the graph. */
 const PROVIDER_RAISE_BACKOFF_MS = 250;
@@ -164,11 +161,12 @@ export class WaitingStepRunner {
             );
         }
 
+        const maxAttempts = LimitsConfigResolver.Resolve().Limits.ResourceGuards.MaxProviderRaiseAttempts;
         let result: HumanTaskRaiseResult = { Outcome: 'transient-failure', Message: 'not attempted' };
-        for (let attempt = 1; attempt <= MAX_PROVIDER_RAISE_ATTEMPTS; attempt++) {
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             result = await this.raiseOnce(humanProvider, task, config, step, dueAt, provider);
             if (result.Outcome !== 'transient-failure') break;
-            if (attempt < MAX_PROVIDER_RAISE_ATTEMPTS) await new Promise((r) => setTimeout(r, PROVIDER_RAISE_BACKOFF_MS * attempt));
+            if (attempt < maxAttempts) await new Promise((r) => setTimeout(r, PROVIDER_RAISE_BACKOFF_MS * attempt));
         }
         if (result.Outcome === 'raised') {
             LogStatus(`[TaskGraph] Step "${task.Name}" (${task.ID}) raised with human-task provider "${key}".`);

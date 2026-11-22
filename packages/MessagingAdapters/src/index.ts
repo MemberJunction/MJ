@@ -112,11 +112,28 @@ export type {
     InboundMailboxIngestionResult,
 } from './email/InboundUtilityMailboxIngestionService.js';
 export {
+    CommunicationProviderInboundMailboxFetcher,
+    InMemoryInboundMailboxFetcher,
+    ExtractBareEmailAddress,
+    NormalizeInboundMailProviderName,
+} from './email/CommunicationProviderInboundMailboxFetcher.js';
+export type {
+    SupportedInboundMailProviderName,
+    CommunicationProviderInboundMailboxFetcherOptions,
+} from './email/CommunicationProviderInboundMailboxFetcher.js';
+export {
     EmailUtilityMailboxExtension,
     DEFAULT_EMAIL_WEBHOOK_RATE_LIMIT,
     VerifyEmailWebhookSecret,
+    NormalizeMSGraphWebhookPayload,
+    NormalizeGmailPubSubPayload,
 } from './email/EmailUtilityMailboxExtension.js';
-export type { EmailUtilityMailboxExtensionSettings } from './email/EmailUtilityMailboxExtension.js';
+export type {
+    EmailUtilityMailboxExtensionSettings,
+    MSGraphNormalizedNotificationItem,
+    MSGraphWebhookNormalizeResult,
+    GmailPubSubNormalizeResult,
+} from './email/EmailUtilityMailboxExtension.js';
 
 /**
  * Tree-shaking prevention function.

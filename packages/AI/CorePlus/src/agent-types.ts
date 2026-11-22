@@ -13,7 +13,18 @@
 import { MJAIAgentTypeEntity,  } from '@memberjunction/core-entities';
 import { ChatMessage, ChatReasoningBlock, ChatToolCall } from '@memberjunction/ai';
 import {  } from '@memberjunction/core-entities';
-import { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { CODE_FALLBACK_LIMITS, LimitsConfigResolver, UserInfo, IMetadataProvider, type MJLimitsOverride } from '@memberjunction/core';
+import type { MJAIAgentUserPolicyEntity } from '@memberjunction/core-entities';
+import type { LimitsDiagnosticsSnapshot } from './limits-diagnostics';
+import type {
+    BudgetBreachDetail,
+    FastConvergenceJudgeResult,
+    HumanResumeApproval,
+    OwnerPauseNotificationPayload,
+    ProgressEvaluationResult,
+    RunawayCheckpointState,
+    RunawayPauseReason,
+} from './runaway-governance';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AgentScratchpad } from './agent-scratchpad';
 import { AgentDecisionRequest, AgentDecisionResult, AgentFinishIf } from './agent-decisions';
@@ -626,7 +637,12 @@ export interface AgentToolCallRequest {
  * Maximum number of agent-to-agent handoffs allowed within a single user turn.
  * Shared across `BaseAgent` handoff validation/execution and messaging adapters.
  */
-export const MAX_HANDOFF_HOPS = 3;
+export const MAX_HANDOFF_HOPS = CODE_FALLBACK_LIMITS.ResourceGuards.MaxHandoffHops;
+
+/** Resolves the effective handoff hop ceiling from `LimitsConfigResolver.Instance`. */
+export function GetMaxHandoffHops(): number {
+    return LimitsConfigResolver.Resolve().Limits.ResourceGuards.MaxHandoffHops;
+}
 
 /**
  * Request emitted by an agent to transfer the conversation turn to another agent (`step === 'Handoff'`).
@@ -1080,6 +1096,54 @@ export type ExecuteAgentResult<P = any> = {
      * Ensures `AgentRunner` and realtime delegation link these artifacts even when `payload` is empty.
      */
     touchedArtifacts?: GovernedRunArtifactSummary[];
+
+    /**
+     * Structured diagnostic snapshot of the resolved 5-tier limits and tier provenance
+     * active for this agent run.
+     */
+    limitsSnapshot?: LimitsDiagnosticsSnapshot;
+
+    /**
+     * True when the run paused non-destructively (e.g. budget exhaustion or progress stall)
+     * awaiting human approval/extension to resume.
+     */
+    paused?: boolean;
+
+    /**
+     * True when a non-destructive pause was triggered and its safe-point checkpoint is retained
+     * in memory awaiting storage recovery to persist `Status = 'Paused'`.
+     */
+    pausePersistencePending?: boolean;
+
+    /**
+     * Categorized reason the run paused non-destructively.
+     */
+    pausedReason?: RunawayPauseReason;
+
+    /**
+     * Persisted resumable checkpoint captured at pause time.
+     */
+    runawayCheckpoint?: RunawayCheckpointState;
+
+    /**
+     * Budget breach details when paused due to dollar or wall-clock budget exhaustion.
+     */
+    budgetBreach?: BudgetBreachDetail;
+
+    /**
+     * Latest deterministic progress detector (and optional fast judge) evaluation result.
+     */
+    progressEvaluation?: ProgressEvaluationResult;
+
+    /**
+     * ID of the `MJ: User Notifications` record emitted to notify the run owner of pause.
+     */
+    ownerNotificationId?: string;
+
+    /**
+     * Optional ID of the `MJ: AI Agent Requests` record created for human pause approval.
+     */
+    approvalRequestId?: string;
 }
 
 /**
@@ -2360,6 +2424,63 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * ```
      */
     compactAfterRun?: boolean | AgentPostRunCompactionConfig;
+
+    /**
+     * Optional Tier 5 (`RunOverride`) limits override for this specific agent run.
+     */
+    limitsOverride?: MJLimitsOverride;
+
+    /**
+     * Optional scheduled routine / recurring workstream identifier for `PerRoutine` budget tracking.
+     */
+    routineId?: string;
+
+    /**
+     * Optional `MJ: Scheduled Job Runs.ID` associated with this run.
+     */
+    scheduledJobRunId?: string;
+
+    /**
+     * Optional user-agent policy entity contributing Tier 4 (`UserAgentPolicy`) limits.
+     */
+    userPolicy?: MJAIAgentUserPolicyEntity | null;
+
+    /**
+     * Optional structured Tier 4 (`UserAgentPolicy`) limits override.
+     */
+    userPolicyLimitsOverride?: MJLimitsOverride | null;
+
+    /**
+     * Optional ID of a paused `MJ: AI Agent Runs` record to resume non-destructively from its
+     * persisted {@link RunawayCheckpointState}.
+     */
+    resumeCheckpointRunId?: string;
+
+    /**
+     * Optional human approval & budget extension grant authorizing resumption of a paused run.
+     */
+    humanResumeApproval?: HumanResumeApproval;
+
+    /**
+     * Optional custom evaluator callback for the sub-200ms `FastConvergenceJudge` when
+     * `DeterministicProgressDetector` classifies a window as `Ambiguous`.
+     */
+    fastConvergenceJudgeEvaluator?: (input: {
+        StateSummary: string;
+        Iteration: number;
+        Signal?: AbortSignal;
+    }) => Promise<FastConvergenceJudgeResult>;
+
+    /**
+     * Optional callback invoked when a run pauses non-destructively and emits an owner notification.
+     */
+    onOwnerPauseNotification?: (payload: OwnerPauseNotificationPayload) => Promise<void> | void;
+
+    /**
+     * Explicit switch enabling or disabling Slice 3 non-destructive runaway governance pause
+     * for agent-level limits (`MaxCostPerRun`, `MaxTimePerRun`) in addition to 5-tier `Budgets`.
+     */
+    enableRunawayGovernance?: boolean;
 
 }
 

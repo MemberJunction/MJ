@@ -8,8 +8,18 @@ import {
     MJUserRoutineEntity,
     MJUserRoutineEntity_IRoutineWakeConfiguration,
 } from '@memberjunction/core-entities';
-import { MJAIAgentEntityExtended, TypedActionPolicyGuard } from '@memberjunction/ai-core-plus';
+import { AgentUserPolicyEngine, MJAIAgentEntityExtended, TypedActionPolicyGuard } from '@memberjunction/ai-core-plus';
+import {
+    CheckActivePolicyForAgentAndUser,
+    ResolveAgentConfigurationIDInput,
+    ResolveDefaultTierForWorkstreamKey,
+    ResolveRoutineSeededAgentConfigurationID,
+} from '@memberjunction/ai-agents';
 import { AIEngine } from '@memberjunction/aiengine';
+import {
+    VerifyActiveRhythmTemplate,
+    VerifyApprovedAgentRequest,
+} from './chief-of-staff-approval-helper';
 
 const DEFAULT_AGENT_NAME = 'Chief of Staff';
 
@@ -188,7 +198,7 @@ export class ListAvailableRhythmsAction extends BaseAction {
                 }
             }
 
-            const rows = templatesRes.Results.filter((t) => {
+            const filteredTemplates = templatesRes.Results.filter((t) => {
                 // Only offer skill-contributed rhythms whose skill is granted to the agent
                 if (t.SkillID && !grantedSkillIds.has(t.SkillID.toLowerCase())) {
                     return false;
@@ -210,10 +220,44 @@ export class ListAvailableRhythmsAction extends BaseAction {
                     return false;
                 }
                 return true;
-            }).map((t) => {
+            });
+
+            // Lazily resolve catalog fallback configuration IDs only when any filtered template
+            // has a null DefaultAgentConfigurationID in DB.
+            const fallbackConfigIdByTierName = new Map<string, string | null>();
+            const needsCatalogLookup = filteredTemplates.some(
+                (t) => !t.DefaultAgentConfigurationID && Boolean(ResolveDefaultTierForWorkstreamKey(t.WorkstreamKey))
+            );
+            if (needsCatalogLookup) {
+                const cfgRes = await rv.RunView<{ ID: string; Name: string; Status: string }>(
+                    {
+                        EntityName: 'MJ: AI Configurations',
+                        ExtraFilter: "Name IN ('Fast', 'Standard', 'High Power')",
+                        Fields: ['ID', 'Name', 'Status'],
+                        OrderBy: 'Status ASC, Name ASC',
+                        MaxRows: 20,
+                        ResultType: 'simple',
+                    },
+                    contextUser
+                );
+                if (cfgRes.Success) {
+                    for (const row of cfgRes.Results) {
+                        const normalizedName = row.Name.trim().toLowerCase();
+                        if (!fallbackConfigIdByTierName.has(normalizedName) || row.Status === 'Active') {
+                            fallbackConfigIdByTierName.set(normalizedName, row.ID);
+                        }
+                    }
+                }
+            }
+
+            const rows = filteredTemplates.map((t) => {
                 const key = t.WorkstreamKey.trim().toLowerCase();
                 const routine = routineByWorkstream.get(key);
                 const suggestion = suggestionByKey.get(key);
+                const tierSpec = ResolveDefaultTierForWorkstreamKey(t.WorkstreamKey);
+                const catalogFallbackId = tierSpec
+                    ? (fallbackConfigIdByTierName.get(tierSpec.DefaultConfigurationName.toLowerCase()) ?? null)
+                    : null;
                 return {
                     RhythmTemplateID: t.ID,
                     Name: t.Name,
@@ -224,9 +268,13 @@ export class ListAvailableRhythmsAction extends BaseAction {
                     OfferAt: t.OfferAt,
                     SkillID: t.SkillID,
                     SkillName: t.Skill,
+                    DefaultAgentConfigurationID: t.DefaultAgentConfigurationID ?? catalogFallbackId,
+                    DefaultAgentConfiguration: t.DefaultAgentConfiguration ?? tierSpec?.DefaultConfigurationName ?? null,
+                    DefaultModelTier: tierSpec?.Tier ?? null,
                     EnabledForUser: routine?.Status === 'Active',
                     UserRoutineID: routine?.ID ?? null,
                     UserRoutineStatus: routine?.Status ?? null,
+                    AgentConfigurationID: routine?.AgentConfigurationID ?? null,
                     PriorSuggestionStatus: suggestion?.Status ?? null,
                 };
             });
@@ -278,18 +326,6 @@ export class EnableAgentRhythmAction extends BaseAction {
                 };
             }
 
-            const confirmed = readBooleanParam(params, 'ConfirmedByUser', false);
-            const isAgentCall = Boolean(extractContextAgentId(params.Context));
-            if (isAgentCall && !confirmed) {
-                return {
-                    Success: false,
-                    ResultCode: 'APPROVAL_REQUIRED',
-                    Message:
-                        'Enabling a recurring agent rhythm requires explicit user confirmation (ConfirmedByUser = true) before materializing the routine.',
-                    Params: params.Params,
-                };
-            }
-
             const routineGuard = await TypedActionPolicyGuard.CheckEntityAccess({
                 entityName: 'MJ: User Routines',
                 operation: 'Create',
@@ -318,30 +354,76 @@ export class EnableAgentRhythmAction extends BaseAction {
             }
 
             const md: IMetadataProvider = params.Provider ?? Metadata.Provider;
+            const callingAgentId =
+                extractContextAgentId(params.Context) ||
+                AgentUserPolicyEngine.Instance.GetActiveExecutingAgentID();
+            if (callingAgentId) {
+                const confirmedApprovalRequestId = readStringParam(params, 'ConfirmedApprovalRequestID');
+                const approved = confirmedApprovalRequestId
+                    ? await VerifyApprovedAgentRequest(
+                          confirmedApprovalRequestId,
+                          contextUser.ID,
+                          agent.ID,
+                          contextUser,
+                          md
+                      )
+                    : false;
+                if (!approved) {
+                    return {
+                        Success: false,
+                        ResultCode: 'APPROVAL_REQUIRED',
+                        Message:
+                            'Enabling a recurring agent rhythm during agent execution requires a server-verified approved MJ: AI Agent Requests record (ConfirmedApprovalRequestID). Self-attested ConfirmedByUser is not sufficient.',
+                        Params: params.Params,
+                    };
+                }
+            }
+
             const rv = RunView.FromMetadataProvider(md);
 
-            const tplFilter = rhythmTemplateId
-                ? `ID='${EscapeSQLString(rhythmTemplateId)}' AND Status='Active'`
-                : `AgentID='${EscapeSQLString(agent.ID)}' AND LOWER(WorkstreamKey)='${EscapeSQLString(
-                      workstreamKey!.toLowerCase()
-                  )}' AND Status='Active'`;
-            const tplRes = await rv.RunView<MJAIAgentRhythmTemplateEntity>(
-                {
-                    EntityName: 'MJ: AI Agent Rhythm Templates',
-                    ExtraFilter: tplFilter,
-                    MaxRows: 1,
-                    ResultType: 'entity_object',
-                },
-                contextUser
-            );
-            const template = tplRes.Success ? tplRes.Results[0] ?? null : null;
+            let template: MJAIAgentRhythmTemplateEntity | null = null;
+            if (rhythmTemplateId) {
+                template = await VerifyActiveRhythmTemplate(rhythmTemplateId, agent.ID, contextUser, md);
+            } else {
+                const tplFilter = `AgentID='${EscapeSQLString(agent.ID)}' AND LOWER(WorkstreamKey)='${EscapeSQLString(
+                    workstreamKey!.toLowerCase()
+                )}' AND Status='Active'`;
+                const tplRes = await rv.RunView<MJAIAgentRhythmTemplateEntity>(
+                    {
+                        EntityName: 'MJ: AI Agent Rhythm Templates',
+                        ExtraFilter: tplFilter,
+                        MaxRows: 1,
+                        ResultType: 'entity_object',
+                    },
+                    contextUser
+                );
+                const candidate = tplRes.Success ? tplRes.Results[0] ?? null : null;
+                if (candidate && candidate.Status === 'Active' && UUIDsEqual(candidate.AgentID, agent.ID)) {
+                    template = candidate;
+                }
+            }
             if (!template) {
                 return {
                     Success: false,
                     ResultCode: 'NOT_FOUND',
-                    Message: `No active rhythm template found for ${
+                    Message: `No active rhythm template found for agent "${agent.Name}" matching ${
                         rhythmTemplateId ? `ID "${rhythmTemplateId}"` : `WorkstreamKey "${workstreamKey}"`
                     }.`,
+                    Params: params.Params,
+                };
+            }
+
+            const policyEval = await CheckActivePolicyForAgentAndUser(
+                template.AgentID,
+                contextUser.ID,
+                contextUser,
+                { provider: md, preferCache: true }
+            );
+            if (!policyEval.Allowed) {
+                return {
+                    Success: false,
+                    ResultCode: 'POLICY_DENIED',
+                    Message: policyEval.Reason,
                     Params: params.Params,
                 };
             }
@@ -351,6 +433,28 @@ export class EnableAgentRhythmAction extends BaseAction {
             const parsedGate = template.DefaultWakeGate
                 ? SafeJSONParse<Partial<MJUserRoutineEntity_IRoutineWakeConfiguration>>(template.DefaultWakeGate) ?? {}
                 : {};
+
+            const hasExplicitConfigParam = params.Params.some(
+                (p) => p.Name.trim().toLowerCase() === 'agentconfigurationid'
+            );
+            const rawAgentConfigID = hasExplicitConfigParam
+                ? (readStringParam(params, 'AgentConfigurationID') ?? null)
+                : undefined;
+            const rawModelTier = readStringParam(params, 'ModelTier');
+            const configResolution = await ResolveAgentConfigurationIDInput({
+                agentConfigurationID: rawAgentConfigID,
+                modelTier: rawModelTier,
+                contextUser,
+                metadataProvider: md,
+            });
+            if (configResolution.ErrorMessage) {
+                return {
+                    Success: false,
+                    ResultCode: 'VALIDATION_ERROR',
+                    Message: configResolution.ErrorMessage,
+                    Params: params.Params,
+                };
+            }
 
             // Upsert user's routine for (UserID, AgentID, WorkstreamKey)
             const existingRes = await rv.RunView<MJUserRoutineEntity>(
@@ -371,6 +475,7 @@ export class EnableAgentRhythmAction extends BaseAction {
                         template.WorkstreamKey.toLowerCase()
                 ) ?? null;
 
+            const isNewRoutine = !routine;
             if (!routine) {
                 routine = await md.GetEntityObject<MJUserRoutineEntity>('MJ: User Routines', contextUser);
                 routine.NewRecord();
@@ -378,6 +483,20 @@ export class EnableAgentRhythmAction extends BaseAction {
                 routine.RoutineType = 'AgentWake';
                 routine.TargetType = 'Agent';
                 routine.TargetID = template.AgentID;
+            }
+
+            if (isNewRoutine) {
+                routine.AgentConfigurationID = await ResolveRoutineSeededAgentConfigurationID({
+                    explicitAgentConfigurationID: configResolution.Provided
+                        ? configResolution.ConfigurationID
+                        : undefined,
+                    templateDefaultAgentConfigurationID: template.DefaultAgentConfigurationID ?? null,
+                    workstreamKey: template.WorkstreamKey,
+                    contextUser,
+                    metadataProvider: md,
+                });
+            } else if (configResolution.Provided) {
+                routine.AgentConfigurationID = configResolution.ConfigurationID;
             }
 
             const wakeConfig: MJUserRoutineEntity_IRoutineWakeConfiguration = {
@@ -439,6 +558,7 @@ export class EnableAgentRhythmAction extends BaseAction {
                 CronExpression: routine.CronExpression,
                 Timezone: routine.Timezone,
                 Status: routine.Status,
+                AgentConfigurationID: routine.AgentConfigurationID ?? null,
             };
             return {
                 Success: true,

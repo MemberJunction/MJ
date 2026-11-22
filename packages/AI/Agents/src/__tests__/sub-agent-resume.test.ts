@@ -55,6 +55,12 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
         IsVerboseLoggingEnabled: vi.fn(() => false),
         RunView: class {
             RunView = mockRunView;
+            static FromMetadataProvider(p: { RunView?: typeof mockRunView }) {
+                return {
+                    RunView: p?.RunView ?? mockRunView,
+                    RunViews: async () => [],
+                };
+            }
         },
     };
 });
@@ -298,6 +304,8 @@ class ResumeLoopHarness {
             }
             throw new Error(`ResumeLoopHarness: unexpected GetEntityObject('${entityName}')`);
         },
+        RunView: async () => ({ Success: true, Results: [] }),
+        RunViews: async () => [],
     };
 }
 
