@@ -2,6 +2,7 @@ import '@angular/compiler';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChangeDetectorRef } from '@angular/core';
 import type {
+  MJCommunicationEndpointEntity,
   MJCommunicationPrincipalEntity,
   MJCommunicationSenderEntity,
   MJCommunicationSendingDomainEntity,
