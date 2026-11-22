@@ -10,6 +10,7 @@ import {
 } from '@memberjunction/core-entities';
 import { AgentUserPolicyEngine, MJAIAgentEntityExtended, TypedActionPolicyGuard } from '@memberjunction/ai-core-plus';
 import {
+    CheckActivePolicyForAgentAndUser,
     ResolveAgentConfigurationIDInput,
     ResolveDefaultTierForWorkstreamKey,
     ResolveSeededRoutineAgentConfigurationID,
@@ -375,6 +376,21 @@ export class EnableAgentRhythmAction extends BaseAction {
                     Message: `No active rhythm template found for agent "${agent.Name}" matching ${
                         rhythmTemplateId ? `ID "${rhythmTemplateId}"` : `WorkstreamKey "${workstreamKey}"`
                     }.`,
+                    Params: params.Params,
+                };
+            }
+
+            const policyEval = await CheckActivePolicyForAgentAndUser(
+                template.AgentID,
+                contextUser.ID,
+                contextUser,
+                { provider: md, preferCache: true }
+            );
+            if (!policyEval.Allowed) {
+                return {
+                    Success: false,
+                    ResultCode: 'POLICY_DENIED',
+                    Message: policyEval.Reason,
                     Params: params.Params,
                 };
             }

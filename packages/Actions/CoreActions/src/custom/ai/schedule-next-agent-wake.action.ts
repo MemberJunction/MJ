@@ -8,6 +8,7 @@ import {
     MJUserRoutineEntity_IRoutineWakeConfiguration,
 } from '@memberjunction/core-entities';
 import {
+    CheckActivePolicyForAgentAndUser,
     LookupActiveRhythmTemplateForWorkstream,
     ResolveAgentConfigurationIDInput,
     ResolveSeededRoutineAgentConfigurationID,
@@ -79,6 +80,22 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
                 };
             }
 
+            const md: IMetadataProvider = params.Provider ?? Metadata.Provider;
+            const policyEval = await CheckActivePolicyForAgentAndUser(
+                agentId,
+                contextUser.ID,
+                contextUser,
+                { provider: md, preferCache: true }
+            );
+            if (!policyEval.Allowed) {
+                return {
+                    Success: false,
+                    ResultCode: 'POLICY_DENIED',
+                    Message: policyEval.Reason,
+                    Params: params.Params,
+                };
+            }
+
             const fallbackWakeConfig =
                 this.parseObjectParam<Record<string, unknown>>(params, 'WakeConfigurationJSON') ?? null;
             const resumeState =
@@ -108,7 +125,6 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
                 ...(wakeGate ? { wakeGate } : {}),
             };
 
-            const md: IMetadataProvider = params.Provider ?? Metadata.Provider;
             const rhythmTemplateId = this.getStringParam(params, 'RhythmTemplateID');
             let verifiedTemplate: MJAIAgentRhythmTemplateEntity | null = null;
             if (rhythmTemplateId) {

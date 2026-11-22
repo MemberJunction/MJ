@@ -36,7 +36,16 @@ import {
     MentionContent,
     SpecialContentToken,
 } from '@memberjunction/ai-core-plus';
-import { AgentRunner, ResolveWakeAgentConfigurationID } from '@memberjunction/ai-agents';
+import {
+    AgentRunner,
+    BuildPolicyPairKey,
+    CheckActivePoliciesForBatch,
+    CheckActivePolicyForAgentAndUser,
+    EventWakeCoalescer,
+    PolicyPairLookupKey,
+    ResolveWakeAgentConfigurationID,
+    WakeStartupGuard,
+} from '@memberjunction/ai-agents';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionParam } from '@memberjunction/actions-base';
@@ -231,6 +240,8 @@ export interface RoutineRunContext {
     heartbeat?: ScheduledJobExecutionContext['heartbeat'];
     /** True for a run the user asked for by hand: the wake gate is not consulted. */
     BypassWakeGate?: boolean;
+    /** True when `Execute()` already verified active policy via batched `RunView` for this sweep. */
+    PreVerifiedActivePolicy?: boolean;
 }
 
 /**
@@ -284,6 +295,25 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
     }
 
     public async Execute(context: ScheduledJobExecutionContext): Promise<ScheduledJobResult> {
+        if (WakeStartupGuard.Instance.IsStartupInProgress()) {
+            this.log(
+                'UserRoutineDispatcher sweep suppressed while WakeStartupGuard is active during AIDP deployment/startup initialization.',
+                true
+            );
+            return {
+                Success: true,
+                Details: {
+                    RoutinesEvaluated: 0,
+                    RoutinesSeeded: 0,
+                    RoutinesRun: 0,
+                    Succeeded: 0,
+                    Failed: 0,
+                    Notified: 0,
+                    StartupSuppressed: true,
+                },
+            };
+        }
+
         const config = this.parseDispatcherConfiguration(context.Schedule);
         const maxConcurrent = config.MaxConcurrentRoutines ?? DEFAULT_MAX_CONCURRENT_ROUTINES;
         const now = new Date();
@@ -298,12 +328,24 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             void context.heartbeat?.();
         }
 
+        // Batch-check active coordination policies (ResultType: 'simple', bypassCache: true)
+        // before claiming or executing any Agent / AgentWake routine so deactivated or missing
+        // policies yield zero agent runs without N+1 entity loads.
+        const due = candidates.filter(r => IsRoutineDue(r, now));
+        const policyPairs: PolicyPairLookupKey[] = due
+            .filter((r) => this.requiresAgentCoordinationPolicy(r) && Boolean(r.TargetID) && Boolean(r.UserID))
+            .map((r) => ({ AgentID: r.TargetID!, UserID: r.UserID! }));
+        const policyEvaluations = await CheckActivePoliciesForBatch(
+            policyPairs,
+            context.ContextUser,
+            { bypassCache: true }
+        );
+
         // Resolve each due routine's owner user BEFORE claiming NextRunAt so a transient UserCache
         // miss never burns a OneShot routine's NextRunAt=null without executing it. Cap consecutive
         // failures at MAX_OWNER_RESOLVE_RETRIES so a permanently missing/inactive owner does not
         // retry on every sweep forever.
-        const due = candidates.filter(r => IsRoutineDue(r, now));
-        const claimed: Array<{ routine: MJUserRoutineEntity; ownerUser: UserInfo }> = [];
+        const claimed: Array<{ routine: MJUserRoutineEntity; ownerUser: UserInfo; preVerifiedPolicy: boolean }> = [];
         for (const routine of due) {
             const routineKey = NormalizeUUID(routine.ID);
             let ownerUser: UserInfo;
@@ -339,15 +381,40 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
                 }
                 continue;
             }
+
+            let preVerifiedPolicy = false;
+            if (this.requiresAgentCoordinationPolicy(routine)) {
+                if (!routine.TargetID || !routine.UserID) {
+                    this.log(
+                        `Skipping wake for routine "${routine.Name}" (${routine.ID}): TargetID or UserID missing for policy verification.`,
+                        true
+                    );
+                    continue;
+                }
+                const policyEval = policyEvaluations.get(BuildPolicyPairKey(routine.TargetID, routine.UserID));
+                if (!policyEval?.Allowed) {
+                    this.log(
+                        `Skipping wake for routine "${routine.Name}" (${routine.ID}): ${policyEval?.Reason ?? 'Active coordination policy required.'}`,
+                        true
+                    );
+                    continue;
+                }
+                preVerifiedPolicy = true;
+            }
+
             if (await this.claimRoutine(routine, now)) {
-                claimed.push({ routine, ownerUser });
+                claimed.push({ routine, ownerUser, preVerifiedPolicy });
             }
         }
 
-        const summaries = await RunWithBoundedConcurrency(claimed, maxConcurrent, async ({ routine, ownerUser }) => {
+        const summaries = await RunWithBoundedConcurrency(claimed, maxConcurrent, async ({ routine, ownerUser, preVerifiedPolicy }) => {
             // Per-routine error isolation: one routine failing must never kill the sweep.
             try {
-                return await this.executeRoutine(routine, context, ownerUser);
+                return await this.executeRoutine(
+                    routine,
+                    { ...context, PreVerifiedActivePolicy: preVerifiedPolicy },
+                    ownerUser
+                );
             } catch (error) {
                 this.logError(`Routine "${routine.Name}" (${routine.ID}) failed outside run tracking`, error);
                 return { RoutineID: routine.ID, RunStatus: 'Failed', Notified: false } satisfies RoutineExecutionSummary;
@@ -631,12 +698,44 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
      * sweep reports success, and the routine looks like it is still executing long after the
      * process that owned it exited. A run row that outlives its executor has to say so.
      */
+    private requiresAgentCoordinationPolicy(routine: MJUserRoutineEntity): boolean {
+        return routine.RoutineType === 'AgentWake' || routine.TargetType === 'Agent';
+    }
+
+    private extractRoutineApplicationID(routine: MJUserRoutineEntity): string | null {
+        const parsedConfig =
+            routine.WakeConfigurationObject ??
+            (routine.WakeConfiguration
+                ? SafeJSONParse<MJUserRoutineEntity_IRoutineWakeConfiguration>(routine.WakeConfiguration)
+                : null);
+        const resumeState = parsedConfig?.resumeState as Record<string, unknown> | undefined;
+        const appID = resumeState?.['applicationID'];
+        return typeof appID === 'string' && appID.trim().length > 0 ? appID.trim() : null;
+    }
+
     private async executeRoutine(
         routine: MJUserRoutineEntity,
         context: RoutineRunContext,
         preResolvedOwnerUser?: UserInfo
     ): Promise<RoutineExecutionSummary> {
         const contextUser = context.ContextUser;
+        if (!context.PreVerifiedActivePolicy && this.requiresAgentCoordinationPolicy(routine)) {
+            if (!routine.TargetID || !routine.UserID) {
+                this.log(`Routine "${routine.Name}" (${routine.ID}) skipped: TargetID or UserID missing for policy gate.`, true);
+                return { RoutineID: routine.ID, RunStatus: 'Skipped', Notified: false };
+            }
+            const policyEval = await CheckActivePolicyForAgentAndUser(
+                routine.TargetID,
+                routine.UserID,
+                contextUser,
+                { bypassCache: true }
+            );
+            if (!policyEval.Allowed) {
+                this.log(`Routine "${routine.Name}" (${routine.ID}) blocked by active policy gate: ${policyEval.Reason}`, true);
+                return { RoutineID: routine.ID, RunStatus: 'Skipped', Notified: false };
+            }
+        }
+
         const ownerUser = preResolvedOwnerUser ?? (await this.resolveRoutineOwnerUser(routine, contextUser));
 
         let gateResult: WakeGateEvaluationResult | undefined;
@@ -650,6 +749,14 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
                 }
                 return { RoutineID: routine.ID, RunStatus: 'Skipped', Notified: false };
             }
+        }
+
+        if (routine.RoutineType === 'AgentWake') {
+            EventWakeCoalescer.Instance.RecordWakeDispatched(
+                routine.UserID,
+                this.extractRoutineApplicationID(routine),
+                new Date()
+            );
         }
 
         const run = await this.createRunRow(routine, contextUser);
