@@ -21777,6 +21777,33 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateCommunicationConsentAuditLog
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateCommunicationConsentAuditLog] TO [cdp_Developer], [cdp_Integration];
 
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the CommunicationConsentAuditLog table
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateCommunicationConsentAuditLog]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateCommunicationConsentAuditLog];
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateCommunicationConsentAuditLog
+ON [${flyway:defaultSchema}].[CommunicationConsentAuditLog]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF NOT UPDATE([__mj_UpdatedAt])
+    BEGIN
+        UPDATE
+            [${flyway:defaultSchema}].[CommunicationConsentAuditLog]
+        SET
+            __mj_UpdatedAt = GETUTCDATE()
+        FROM
+            [${flyway:defaultSchema}].[CommunicationConsentAuditLog] AS _organicTable
+        INNER JOIN
+            INSERTED AS I ON
+            _organicTable.[ID] = I.[ID];
+    END
+END;
+GO
+
 /* Index for Foreign Keys for CommunicationEndpointPrincipal */
 -----------------------------------------------------------------
 -- SQL Code Generation

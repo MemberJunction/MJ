@@ -59,8 +59,12 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
             const entityInfo = this.EntityLookupFor(provider).Entities.find(e => UUIDsEqual(e.ID, params.EntityID));
             if (!entityInfo)
                 throw new Error(`Entity ${params.EntityID} not found`);
-            if (!this.EntitySupportsCommunication(params.EntityID))
-                throw new Error(`Entity ${params.EntityID} does not support communication`);
+            if (!this.EntitySupportsCommunication(params.EntityID)) {
+                // Refresh once in case an entity communication mapping was just created at runtime
+                await this.Config(true, contextUser, provider);
+                if (!this.EntitySupportsCommunication(params.EntityID))
+                    throw new Error(`Entity ${params.EntityID} does not support communication`);
+            }
 
             await CommunicationEngine.Instance.Config(false, contextUser);
             const entityMessageType = this.ResolveEntityMessageType(params);

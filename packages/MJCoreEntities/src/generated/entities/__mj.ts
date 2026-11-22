@@ -41636,6 +41636,18 @@ export class MJCommunicationConsentAuditLogEntity extends BaseEntity<MJCommunica
     }
 
     /**
+    * MJ: Communication Consent Audit Logs - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJCommunicationConsentAuditLogEntity
+    * @throws {Error} - Delete is not allowed for MJ: Communication Consent Audit Logs, to enable it set AllowDeleteAPI to 1 in the database.
+    */
+    public override async Delete(): Promise<boolean> {
+        throw new Error('Delete is not allowed for MJ: Communication Consent Audit Logs, to enable it set AllowDeleteAPI to 1 in the database.');
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier

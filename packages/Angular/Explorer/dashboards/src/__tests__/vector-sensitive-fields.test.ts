@@ -351,10 +351,10 @@ describe('calibration against MJ core entity field names', () => {
         //
         // Raised again for the Action saga compensation fields (`CompensationAction`,
         // `CompensationActionID`, `CompensationInputMapping`, which match `auth` inside
-        // `Compensation`): no credential either.
+        // `Compensation`), and for Comms V2 entities: no credential either.
         const refused = FIELDS.filter((f) => IsSensitiveFieldName(f));
         expect(refused.length).toBeGreaterThanOrEqual(30);
-        expect(refused.length).toBeLessThanOrEqual(65);
+        expect(refused.length).toBeLessThanOrEqual(70);
         // And as a rate, so the bracket keeps its meaning if the fixture doubles in size.
         // 40/2111 is 1.9%; 3% leaves room for real additions and none for a broad one.
         expect(refused.length / FIELDS.length).toBeLessThan(0.03);
