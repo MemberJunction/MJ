@@ -292,6 +292,8 @@ class GovernanceInMemoryDb {
             },
             get SecurityEnvelope() { return backing.SecurityEnvelope ?? null; },
             set SecurityEnvelope(v: string | null) { backing.SecurityEnvelope = v; },
+            get __mj_UpdatedAt() { return backing.__mj_UpdatedAt; },
+            set __mj_UpdatedAt(v: Date) { backing.__mj_UpdatedAt = v; },
             LatestResult: { CompleteMessage: '' },
             NewRecord: () => true,
             Load: async (id: string) => {
@@ -749,6 +751,8 @@ class GovernanceInMemoryDb {
                             ID: c.ID,
                             Status: c.Status,
                             StartedAt: c.StartedAt,
+                            CompletedAt: c.CompletedAt,
+                            __mj_UpdatedAt: c.__mj_UpdatedAt,
                             Configuration: c.Configuration,
                         }))
                         : children.map((c) => this.wrapTask(c)),
@@ -3589,5 +3593,601 @@ describe('TaskGraphGovernanceCoordinator — default opt-in, 5-tier policy scope
             BudgetExtension: { NewPerRunMaxCostUsd: 1.0 },
         });
         expect(allowedRes.Success).toBe(true);
+    });
+
+    it('CR-STANDALONE-SHARED-LEDGER (overnight paused loop): attributes post-midnight Pending loop cursor spend to today while excluding pre-midnight completed child, pauses second standalone graph at daily ceiling, and reconciles on resume/complete without cost loss or double-counting', async () => {
+        const db = new GovernanceInMemoryDb();
+        const provider = db.CreateProvider();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation((p) => p as Partial<RunView> as RunView);
+
+        const overnightUser: UserInfo = {
+            ...TEST_USER,
+            ID: '10000000-0000-4000-8000-000000000091',
+            Name: 'Overnight User',
+            Email: 'overnight@example.com',
+        } as UserInfo;
+
+        const beforeMidnightMs = Date.UTC(2026, 10, 21, 23, 30, 0);
+        const afterMidnightMs = Date.UTC(2026, 10, 22, 1, 0, 0);
+        const laterTodayMs = Date.UTC(2026, 10, 22, 2, 0, 0);
+
+        // Use performance.now() for polling deadlines since vi.setSystemTime advances Date.now() across midnight.
+        const waitUntilRealTime = async (predicate: () => boolean, timeoutMs: number, kickFn?: () => void): Promise<void> => {
+            const deadline = performance.now() + timeoutMs;
+            while (performance.now() < deadline) {
+                if (predicate()) return;
+                kickFn?.();
+                await new Promise((r) => setTimeout(r, 15));
+            }
+            throw new Error(`Timed out after ${timeoutMs}ms waiting for TaskGraph condition; errors=[${capturedErrors.slice(0, 5).join(' | ')}]`);
+        };
+
+        vi.useFakeTimers({ toFake: ['Date'] });
+        try {
+            vi.setSystemTime(beforeMidnightMs);
+            LimitsConfigResolver.Instance.RegisterMjConfigLimits({
+                Budgets: {
+                    PerRun: { MaxCostUsd: 0.85, MaxWallClockMs: 86_400_000 },
+                    PerUserPerDay: { MaxCostUsd: 1.0, MaxWallClockMs: 86_400_000, DayBoundaryTimezone: 'UTC' },
+                    AllowedInFlightOvershootUsd: 0,
+                },
+            });
+
+            const g1Spec: TaskGraphSpec = {
+                workflowName: 'Overnight Standalone Graph 1',
+                tasks: [
+                    {
+                        tempId: 'pre-midnight-step',
+                        name: 'Pre-Midnight Child',
+                        description: 'Completes before midnight for $0.10',
+                        kind: 'Action',
+                        configuration: {
+                            actionName: 'StepAction',
+                        },
+                    },
+                    {
+                        tempId: 'post-midnight-loop',
+                        name: 'Post-Midnight Loop',
+                        description: 'ForEach loop incurring $0.80 after midnight before governance pause',
+                        kind: 'ForEach',
+                        dependsOn: ['pre-midnight-step'],
+                        configuration: {
+                            collectionPath: 'static:["I0","I1","I2","I3","I4"]',
+                            itemVariable: 'item',
+                            indexVariable: 'idx',
+                            action: {
+                                name: 'StepAction',
+                                params: { val: 'item' },
+                            },
+                        },
+                    },
+                ],
+            };
+
+            const seenDisp1LoopItems: string[] = [];
+            let ranPreMidnightStep = false;
+            const disp1 = new TaskGraphDispatcher(
+                { CreateProvider: async () => provider },
+                { RunAgentForTask: async () => ({ Success: true }) },
+                overnightUser,
+                {
+                    InstanceID: 'overnight-disp-1',
+                    MaxConcurrentTasks: 1,
+                    PollIntervalSeconds: 0.01,
+                    HeartbeatIntervalSeconds: 60,
+                    ReconciliationIntervalSeconds: 60,
+                },
+                undefined,
+                undefined,
+                {
+                    RunActionForTask: async (ctx) => {
+                        const p = ctx.InputPayload as LoopTestActionInput;
+                        if (!ranPreMidnightStep) {
+                            ranPreMidnightStep = true;
+                            return { Success: true, Output: { done: true }, CostUsd: 0.10, TokensUsed: 25 };
+                        }
+                        // Advance clock across midnight when the loop begins executing
+                        vi.setSystemTime(afterMidnightMs);
+                        seenDisp1LoopItems.push(p.val ?? '');
+                        return { Success: true, Output: { item: p.val }, CostUsd: 0.20, TokensUsed: 50 };
+                    },
+                },
+            );
+
+            const service = new TaskGraphService();
+            let g1ParentId = '';
+            let g1FirstChildId = '';
+            let g1LoopChildId = '';
+            await disp1.Start();
+            try {
+                const sub1 = await service.Submit(g1Spec, {
+                    EnvironmentID: 'env-1',
+                    Provider: provider,
+                    ContextUser: overnightUser,
+                });
+                expect(sub1.Success).toBe(true);
+                g1ParentId = sub1.ParentTaskID!;
+                const g1Children = db.TasksByParent.get(g1ParentId.toLowerCase()) ?? [];
+                expect(g1Children).toHaveLength(2);
+                g1FirstChildId = g1Children.find((c) => c.Name === 'Pre-Midnight Child')!.ID;
+                g1LoopChildId = g1Children.find((c) => c.Name === 'Post-Midnight Loop')!.ID;
+
+                await waitUntilRealTime(
+                    () =>
+                        disp1.Governance.GetGraphDiagnostics(g1ParentId)?.PausedByGovernance === true &&
+                        db.Tasks.get(g1LoopChildId.toLowerCase())?.Status === 'Pending',
+                    5_000,
+                    () => disp1.Kick(),
+                );
+
+                // First child completed before midnight ($0.10); loop paused after 4 iterations ($0.80) after midnight
+                expect(seenDisp1LoopItems).toEqual(['I0', 'I1', 'I2', 'I3']);
+                const firstChild = db.Tasks.get(g1FirstChildId.toLowerCase())!;
+                expect(firstChild.Status).toBe('Complete');
+                expect(firstChild.CompletedAt!.getTime()).toBeLessThan(Date.UTC(2026, 10, 22, 0, 0, 0));
+
+                const pausedLoopRow = db.Tasks.get(g1LoopChildId.toLowerCase())!;
+                expect(pausedLoopRow.Status).toBe('Pending');
+                const pausedLoopCfg = JSON.parse(pausedLoopRow.Configuration!) as TaskStepConfiguration;
+                expect(pausedLoopCfg.runtime?.loopCursor?.AccumulatedCostUsd).toBeCloseTo(0.80, 5);
+                expect(pausedLoopCfg.runtime?.loopCursor?.CostEvents).toHaveLength(4);
+            } finally {
+                await disp1.Stop();
+            }
+
+            // Now after midnight on a fresh dispatcher, Graph 2 runs for the same user.
+            // Step 1 ($0.15) + $0.80 paused loop = $0.95 < $1.00 (proves yesterday's $0.10 was excluded!).
+            // Step 2 ($0.15) + $0.95 = $1.10 >= $1.00 -> breaches PerUserPerDay and pauses Graph 2!
+            vi.setSystemTime(laterTodayMs);
+            const g2StepsExecuted: number[] = [];
+            const disp2 = new TaskGraphDispatcher(
+                { CreateProvider: async () => provider },
+                { RunAgentForTask: async () => ({ Success: true }) },
+                overnightUser,
+                {
+                    InstanceID: 'overnight-disp-2',
+                    MaxConcurrentTasks: 1,
+                    PollIntervalSeconds: 0.01,
+                    HeartbeatIntervalSeconds: 60,
+                    ReconciliationIntervalSeconds: 60,
+                },
+                undefined,
+                undefined,
+                {
+                    RunActionForTask: async () => {
+                        g2StepsExecuted.push(g2StepsExecuted.length + 1);
+                        return { Success: true, Output: { ok: true }, CostUsd: 0.15, TokensUsed: 30 };
+                    },
+                },
+            );
+
+            let g2ParentId = '';
+            await disp2.Start();
+            try {
+                const sub2 = await service.Submit(buildLinearSpec(3, 'Next-Day Standalone Graph 2'), {
+                    EnvironmentID: 'env-1',
+                    Provider: provider,
+                    ContextUser: overnightUser,
+                });
+                expect(sub2.Success).toBe(true);
+                g2ParentId = sub2.ParentTaskID!;
+
+                await waitUntilRealTime(
+                    () => disp2.Governance.GetGraphDiagnostics(g2ParentId)?.PausedByGovernance === true,
+                    5_000,
+                    () => disp2.Kick(),
+                );
+
+                // Step 1 did NOT trip ($0.80 + $0.15 = $0.95 < $1.00), Step 2 tripped ($0.80 + $0.30 = $1.10 >= $1.00)
+                expect(g2StepsExecuted).toEqual([1, 2]);
+                const g2Diag = disp2.Governance.GetGraphDiagnostics(g2ParentId)!;
+                expect(g2Diag.LastBudgetResult?.Exceeded).toBe(true);
+                expect(g2Diag.LastBudgetResult?.Breach?.Scope).toBe('PerUserPerDay');
+                expect(g2Diag.LastBudgetResult?.Breach?.Dimension).toBe('CostUsd');
+                expect(g2Diag.LastBudgetResult?.Ledger.RunCostUsd).toBeCloseTo(0.30, 5);
+                expect(g2Diag.LastBudgetResult?.Ledger.UserDailyCostUsd).toBeCloseTo(1.10, 5);
+            } finally {
+                await disp2.Stop();
+            }
+
+            // Replacement dispatcher (disp3) approves/resumes Graph 1 with higher ceiling and completes the loop (I4 for $0.20)
+            const seenDisp3LoopItems: string[] = [];
+            const disp3 = new TaskGraphDispatcher(
+                { CreateProvider: async () => provider },
+                { RunAgentForTask: async () => ({ Success: true }) },
+                overnightUser,
+                {
+                    InstanceID: 'overnight-disp-3',
+                    MaxConcurrentTasks: 1,
+                    PollIntervalSeconds: 0.01,
+                    HeartbeatIntervalSeconds: 60,
+                    ReconciliationIntervalSeconds: 60,
+                },
+                undefined,
+                undefined,
+                {
+                    RunActionForTask: async (ctx) => {
+                        const p = ctx.InputPayload as LoopTestActionInput;
+                        seenDisp3LoopItems.push(p.val ?? '');
+                        return { Success: true, Output: { item: p.val }, CostUsd: 0.20, TokensUsed: 50 };
+                    },
+                },
+            );
+
+            const g1SettlementSpy = vi.spyOn(disp3.Governance, 'RecordNodeSettlementAndEvaluate');
+            await disp3.Start();
+            try {
+                const approveRes = await disp3.Governance.ApproveAndResumePausedGraph({
+                    ParentTaskID: g1ParentId,
+                    Provider: provider,
+                    ContextUser: overnightUser,
+                    BudgetExtension: {
+                        NewPerRunMaxCostUsd: 5.0,
+                        NewPerUserDailyMaxCostUsd: 5.0,
+                    },
+                });
+                expect(approveRes.Success).toBe(true);
+
+                await waitUntilRealTime(
+                    () => db.Tasks.get(g1ParentId.toLowerCase())?.Status === 'Complete',
+                    5_000,
+                    () => disp3.Kick(),
+                );
+
+                // Only remaining iteration I4 ran; loop completed cleanly with $1.00 total loop spend ($1.10 graph total)
+                expect(seenDisp3LoopItems).toEqual(['I4']);
+                const completedLoop = db.Tasks.get(g1LoopChildId.toLowerCase())!;
+                expect(completedLoop.Status).toBe('Complete');
+                const completedCfg = JSON.parse(completedLoop.Configuration!) as TaskStepConfiguration;
+                expect(completedCfg.runtime?.loopCursor).toBeUndefined();
+                expect(completedCfg.runtime?.governanceCostUsd).toBeCloseTo(1.00, 5);
+                expect(completedCfg.runtime?.governanceCostEvents).toHaveLength(5);
+
+                const settledEval = await g1SettlementSpy.mock.results[0]?.value;
+                expect(settledEval?.Ledger?.RunCostUsd).toBeCloseTo(1.10, 5);
+                expect(settledEval?.Ledger?.UserDailyCostUsd).toBeCloseTo(1.30, 5); // $1.00 (G1 today) + $0.30 (G2 today)
+            } finally {
+                await disp3.Stop();
+            }
+
+            // Fresh replacement coordinator (disp4) evaluates Graph 3 for the same user today:
+            // Must include $1.00 (completed G1 loop today, excluding yesterday's $0.10) + $0.30 (G2) + $0.10 (G3) = $1.40
+            LimitsConfigResolver.Instance.RegisterMjConfigLimits({
+                Budgets: {
+                    PerRun: { MaxCostUsd: 5.0, MaxWallClockMs: 86_400_000 },
+                    PerUserPerDay: { MaxCostUsd: 1.35, MaxWallClockMs: 86_400_000, DayBoundaryTimezone: 'UTC' },
+                    AllowedInFlightOvershootUsd: 0,
+                },
+            });
+
+            const disp4 = new TaskGraphDispatcher(
+                { CreateProvider: async () => provider },
+                { RunAgentForTask: async () => ({ Success: true }) },
+                overnightUser,
+                {
+                    InstanceID: 'overnight-disp-4',
+                    MaxConcurrentTasks: 1,
+                    PollIntervalSeconds: 0.01,
+                    HeartbeatIntervalSeconds: 60,
+                    ReconciliationIntervalSeconds: 60,
+                },
+                undefined,
+                undefined,
+                {
+                    RunActionForTask: async () => ({ Success: true, Output: { ok: true }, CostUsd: 0.10, TokensUsed: 20 }),
+                },
+            );
+
+            await disp4.Start();
+            try {
+                const sub3 = await service.Submit(buildLinearSpec(2, 'Post-Completion Verification Graph 3'), {
+                    EnvironmentID: 'env-1',
+                    Provider: provider,
+                    ContextUser: overnightUser,
+                });
+                expect(sub3.Success).toBe(true);
+                const g3ParentId = sub3.ParentTaskID!;
+
+                await waitUntilRealTime(
+                    () => disp4.Governance.GetGraphDiagnostics(g3ParentId)?.PausedByGovernance === true,
+                    5_000,
+                    () => disp4.Kick(),
+                );
+
+                const g3Diag = disp4.Governance.GetGraphDiagnostics(g3ParentId)!;
+                expect(g3Diag.LastBudgetResult?.Exceeded).toBe(true);
+                expect(g3Diag.LastBudgetResult?.Breach?.Scope).toBe('PerUserPerDay');
+                expect(g3Diag.LastBudgetResult?.Ledger.RunCostUsd).toBeCloseTo(0.10, 5);
+                expect(g3Diag.LastBudgetResult?.Ledger.UserDailyCostUsd).toBeCloseTo(1.40, 5);
+            } finally {
+                await disp4.Stop();
+            }
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('CR-STANDALONE-SHARED-LEDGER (cursor without CostEvents fallback): replacement coordinator attributes Pending and In Progress loop cursor spend via task/cursor timestamps without dropping or double-counting', async () => {
+        const db = new GovernanceInMemoryDb();
+        const provider = db.CreateProvider();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation((p) => p as Partial<RunView> as RunView);
+
+        const fallbackUser: UserInfo = {
+            ...TEST_USER,
+            ID: '10000000-0000-4000-8000-000000000092',
+            Name: 'Overnight Fallback User',
+            Email: 'overnight-fallback@example.com',
+        } as UserInfo;
+
+        const yesterdayMs = Date.UTC(2026, 10, 21, 22, 0, 0);
+        const afterMidnightMs = Date.UTC(2026, 10, 22, 1, 30, 0);
+        const nowMs = Date.UTC(2026, 10, 22, 3, 0, 0);
+        const dateNowSpy = vi.spyOn(Date, 'now').mockImplementation(() => nowMs);
+        try {
+            LimitsConfigResolver.Instance.RegisterMjConfigLimits({
+                Budgets: {
+                    PerRun: { MaxCostUsd: 5.0 },
+                    PerUserPerDay: { MaxCostUsd: 0.90, DayBoundaryTimezone: 'UTC' },
+                    AllowedInFlightOvershootUsd: 0,
+                },
+            });
+
+            // Overnight graph with:
+            // - Completed child yesterday ($0.10, no governanceCostEvents)
+            // - Pending paused loop today ($0.80 in loopCursor.AccumulatedCostUsd, no CostEvents on cursor or cp)
+            const overnightParentId = randomUUID();
+            const yesterdayChildId = randomUUID();
+            const pausedLoopId = randomUUID();
+
+            db.Tasks.set(overnightParentId.toLowerCase(), {
+                ID: overnightParentId,
+                ParentID: null,
+                TypeID: WORKFLOW_TYPE_ID,
+                Name: 'Overnight Legacy Cursor Graph',
+                Description: null,
+                Status: 'In Progress',
+                StepType: 'Action',
+                ActionID: null,
+                AgentID: null,
+                PromptID: null,
+                UserID: fallbackUser.ID,
+                AgentRunID: null,
+                ConversationDetailID: null,
+                ClaimedBy: null,
+                ClaimExpiresAt: null,
+                StartedAt: new Date(yesterdayMs),
+                CompletedAt: null,
+                PercentComplete: 50,
+                ErrorMessage: null,
+                InputPayload: JSON.stringify({
+                    continuation: 'message',
+                    reinvokeDepth: 0,
+                    failureSemantics: 'block',
+                    submittedByAgentRunID: null,
+                    submittedByUserID: fallbackUser.ID,
+                }),
+                Configuration: JSON.stringify({
+                    governanceCheckpoint: {
+                        CheckpointID: randomUUID(),
+                        Status: 'Paused',
+                        PauseReason: 'BudgetExceeded',
+                        Summary: 'Loop paused after midnight',
+                        PausedAtISO: new Date(afterMidnightMs).toISOString(),
+                        CompletedNodeCount: 1,
+                        CompletedNodeIDs: [yesterdayChildId],
+                        CumulativeLedger: {
+                            RunCostUsd: 0.90,
+                            RunWallClockMs: 50_000,
+                            RunTokens: 200,
+                            RoutineCostUsd: 0,
+                            RoutineWallClockMs: 0,
+                            UserDailyCostUsd: 0.80,
+                            UserDailyWallClockMs: 50_000,
+                            PausedWallClockMs: 0,
+                            PausedIntervals: [{ PausedAtMs: afterMidnightMs, ResumedAtMs: null }],
+                            DayBucketUTC: '2026-11-22',
+                            DayBoundaryTimezone: 'UTC',
+                            AsOfISO: new Date(afterMidnightMs).toISOString(),
+                        },
+                    },
+                }),
+                __mj_UpdatedAt: new Date(afterMidnightMs),
+            });
+
+            const yesterdayChildRow: StoredTaskRow = {
+                ID: yesterdayChildId,
+                ParentID: overnightParentId,
+                TypeID: WORKFLOW_TYPE_ID,
+                Name: 'Yesterday Child',
+                Description: null,
+                Status: 'Complete',
+                StepType: 'Action',
+                ActionID: ACTION_ID,
+                AgentID: null,
+                PromptID: null,
+                UserID: null,
+                AgentRunID: null,
+                ConversationDetailID: null,
+                ClaimedBy: null,
+                ClaimExpiresAt: null,
+                StartedAt: new Date(yesterdayMs),
+                CompletedAt: new Date(yesterdayMs + 60_000),
+                PercentComplete: 100,
+                ErrorMessage: null,
+                InputPayload: null,
+                OutputPayload: null,
+                Configuration: JSON.stringify({ runtime: { governanceCostUsd: 0.10, governanceTokensUsed: 20 } }),
+                __mj_UpdatedAt: new Date(yesterdayMs + 60_000),
+            };
+            const pausedLoopRow: StoredTaskRow = {
+                ID: pausedLoopId,
+                ParentID: overnightParentId,
+                TypeID: WORKFLOW_TYPE_ID,
+                Name: 'Pending Paused Loop Without Events',
+                Description: null,
+                Status: 'Pending',
+                StepType: 'ForEach',
+                ActionID: ACTION_ID,
+                AgentID: null,
+                PromptID: null,
+                UserID: null,
+                AgentRunID: null,
+                ConversationDetailID: null,
+                ClaimedBy: null,
+                ClaimExpiresAt: null,
+                StartedAt: new Date(afterMidnightMs - 60_000),
+                CompletedAt: null,
+                PercentComplete: 0,
+                ErrorMessage: null,
+                InputPayload: null,
+                OutputPayload: null,
+                Configuration: JSON.stringify({
+                    runtime: {
+                        loopCursor: {
+                            Cursor: {
+                                LoopType: 'ForEach',
+                                NextIterationIndex: 4,
+                                CompletedIndices: [0, 1, 2, 3],
+                                PartialResults: [],
+                                SucceededCount: 4,
+                                FailedCount: 0,
+                            },
+                            LivePayload: {},
+                            IterationTrace: [],
+                            AccumulatedCostUsd: 0.80,
+                            AccumulatedTokensUsed: 160,
+                            IsOutputTainted: false,
+                        },
+                    },
+                }),
+                __mj_UpdatedAt: new Date(afterMidnightMs),
+            };
+            db.Tasks.set(yesterdayChildId.toLowerCase(), yesterdayChildRow);
+            db.Tasks.set(pausedLoopId.toLowerCase(), pausedLoopRow);
+            db.TasksByParent.set(overnightParentId.toLowerCase(), [yesterdayChildRow, pausedLoopRow]);
+
+            // Current standalone Graph B incurs $0.15 today -> $0.80 (paused loop today) + $0.15 = $0.95 >= $0.90!
+            const graphBParentId = randomUUID();
+            const graphBParentRow: StoredTaskRow = {
+                ID: graphBParentId,
+                ParentID: null,
+                TypeID: WORKFLOW_TYPE_ID,
+                Name: 'Current Standalone Graph B',
+                Description: null,
+                Status: 'In Progress',
+                StepType: 'Action',
+                ActionID: null,
+                AgentID: null,
+                PromptID: null,
+                UserID: fallbackUser.ID,
+                AgentRunID: null,
+                ConversationDetailID: null,
+                ClaimedBy: null,
+                ClaimExpiresAt: null,
+                StartedAt: new Date(nowMs - 5_000),
+                CompletedAt: null,
+                PercentComplete: 0,
+                ErrorMessage: null,
+                InputPayload: JSON.stringify({
+                    continuation: 'message',
+                    reinvokeDepth: 0,
+                    failureSemantics: 'block',
+                    submittedByAgentRunID: null,
+                    submittedByUserID: fallbackUser.ID,
+                }),
+                Configuration: null,
+                __mj_UpdatedAt: new Date(nowMs),
+            };
+            const graphBChildId = randomUUID();
+            const graphBChildRow: StoredTaskRow = {
+                ID: graphBChildId,
+                ParentID: graphBParentId,
+                TypeID: WORKFLOW_TYPE_ID,
+                Name: 'Graph B Step 1',
+                Description: null,
+                Status: 'Complete',
+                StepType: 'Action',
+                ActionID: ACTION_ID,
+                AgentID: null,
+                PromptID: null,
+                UserID: null,
+                AgentRunID: null,
+                ConversationDetailID: null,
+                ClaimedBy: null,
+                ClaimExpiresAt: null,
+                StartedAt: new Date(nowMs - 5_000),
+                CompletedAt: new Date(nowMs),
+                PercentComplete: 100,
+                ErrorMessage: null,
+                InputPayload: null,
+                OutputPayload: null,
+                Configuration: JSON.stringify({ runtime: { governanceCostUsd: 0.15, governanceTokensUsed: 30 } }),
+                __mj_UpdatedAt: new Date(nowMs),
+            };
+            db.Tasks.set(graphBParentId.toLowerCase(), graphBParentRow);
+            db.Tasks.set(graphBChildId.toLowerCase(), graphBChildRow);
+            db.TasksByParent.set(graphBParentId.toLowerCase(), [graphBChildRow]);
+
+            // Replacement coordinator 1 checks Pending loop cursor
+            const coord1 = new TaskGraphGovernanceCoordinator(new TaskClaimStore('fallback-coord-1', 60));
+            const evalPending = await coord1.RecordNodeSettlementAndEvaluate({
+                Provider: provider,
+                ContextUser: fallbackUser,
+                Parent: db.wrapTaskPublic(graphBParentRow),
+                Task: db.wrapTaskPublic(graphBChildRow),
+                Success: true,
+                CostUsd: 0.15,
+                TokensUsed: 30,
+            });
+            expect(evalPending?.Exceeded).toBe(true);
+            expect(evalPending?.Breach?.Scope).toBe('PerUserPerDay');
+            expect(evalPending?.Ledger.UserDailyCostUsd).toBeCloseTo(0.95, 5);
+
+            // Also verify In Progress resumed loop cursor is included without double-counting
+            db.Tasks.delete(graphBParentId.toLowerCase());
+            db.Tasks.delete(graphBChildId.toLowerCase());
+            db.TasksByParent.delete(graphBParentId.toLowerCase());
+
+            pausedLoopRow.Status = 'In Progress';
+            const graphCParentId = randomUUID();
+            const graphCParentRow: StoredTaskRow = {
+                ...graphBParentRow,
+                ID: graphCParentId,
+                Name: 'Current Standalone Graph C',
+                InputPayload: JSON.stringify({
+                    continuation: 'message',
+                    reinvokeDepth: 0,
+                    failureSemantics: 'block',
+                    submittedByAgentRunID: null,
+                    submittedByUserID: fallbackUser.ID,
+                }),
+                Configuration: null,
+            };
+            const graphCChildId = randomUUID();
+            const graphCChildRow: StoredTaskRow = {
+                ...graphBChildRow,
+                ID: graphCChildId,
+                ParentID: graphCParentId,
+                Name: 'Graph C Step 1',
+            };
+            db.Tasks.set(graphCParentId.toLowerCase(), graphCParentRow);
+            db.Tasks.set(graphCChildId.toLowerCase(), graphCChildRow);
+            db.TasksByParent.set(graphCParentId.toLowerCase(), [graphCChildRow]);
+
+            const coord2 = new TaskGraphGovernanceCoordinator(new TaskClaimStore('fallback-coord-2', 60));
+            const evalInProgress = await coord2.RecordNodeSettlementAndEvaluate({
+                Provider: provider,
+                ContextUser: fallbackUser,
+                Parent: db.wrapTaskPublic(graphCParentRow),
+                Task: db.wrapTaskPublic(graphCChildRow),
+                Success: true,
+                CostUsd: 0.15,
+                TokensUsed: 30,
+            });
+            expect(evalInProgress?.Exceeded).toBe(true);
+            expect(evalInProgress?.Ledger.UserDailyCostUsd).toBeCloseTo(0.95, 5);
+        } finally {
+            dateNowSpy.mockRestore();
+        }
     });
 });

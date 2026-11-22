@@ -40,6 +40,7 @@ import {
     ExtractRunawayCheckpointFromRunData,
     ResolveAgentRunLimits,
     type BudgetBreachDetail,
+    type BudgetCostEvent,
     type BudgetEnforcementResult,
     type BudgetExtensionGrant,
     type BudgetPausedInterval,
@@ -82,6 +83,13 @@ import type { TaskGraphGovernanceConfig, TaskGraphObserver } from './types';
 interface SettledNodeMetrics {
     CostUsd: number;
     TokensUsed: number;
+}
+
+interface PausedLoopDetails {
+    CostUsd: number;
+    TokensUsed: number;
+    CostEvents: BudgetCostEvent[] | null;
+    UpdatedAtMs: number | null;
 }
 
 interface ProjectedTaskSettlementRow {
@@ -152,6 +160,9 @@ interface GraphGovernanceState {
     CheckpointBaselineTokens: number;
     CheckpointBaselineNodeIDs: string[];
     CheckpointBaselineLoopCosts: Map<string, number>;
+    CheckpointBaselinePausedAtMs: number | null;
+    CheckpointBaselineCostEvents: BudgetCostEvent[];
+    NodeCostEvents: Map<string, BudgetCostEvent[]>;
     PausedIntervals: BudgetPausedInterval[];
     IncrementalCostUsd: number;
     TokensUsed: number;
@@ -228,6 +239,8 @@ export interface StandaloneGraphGovernanceCheckpointState {
     PausedAtISO: string;
     CompletedNodeCount: number;
     CompletedNodeIDs: string[];
+    /** Pre-pause accumulated loop node costs so resumed/completed loops are never double-counted on restart. */
+    PausedLoopNodeCosts?: Record<string, number>;
     CumulativeLedger: CumulativeBudgetLedger;
     BudgetBreach?: BudgetBreachDetail;
     ApprovedAtISO?: string;
@@ -610,6 +623,7 @@ export class TaskGraphGovernanceCoordinator {
         Success: boolean;
         CostUsd?: number;
         TokensUsed?: number;
+        CostEvents?: readonly BudgetCostEvent[];
         Observer?: TaskGraphObserver;
         DebugStateCache?: Map<string, TaskGraphDebugState>;
     }): Promise<BudgetEnforcementResult | null> {
@@ -636,9 +650,11 @@ export class TaskGraphGovernanceCoordinator {
             CostUsd: 0,
             TokensUsed: 0,
         };
+        const settledAtMs = this.parseEpochMs(args.Task.CompletedAt) ?? Date.now();
         const nodeKey = this.normId(args.Task.ID);
         if (nodeKey) {
             state.SettledNodeAccounting.set(nodeKey, metrics);
+            this.recordSettledNodeCostEvents(state, nodeKey, metrics.CostUsd, args.CostEvents, settledAtMs);
             if (!state.CompletedNodeSet.has(nodeKey)) {
                 state.CompletedNodeSet.add(nodeKey);
                 state.CompletedNodeIDs.push(args.Task.ID);
@@ -668,6 +684,7 @@ export class TaskGraphGovernanceCoordinator {
             return state.LastBudgetResult;
         }
 
+        const stateCostEvents = this.buildStateCostEvents(state, totals);
         const evalResult = await this.budgetGuard.Evaluate({
             Budgets: effectiveBudgets,
             AgentRunID: state.SubmittingAgentRunID,
@@ -679,6 +696,7 @@ export class TaskGraphGovernanceCoordinator {
             PriorRunWallClockMs: state.PausedIntervals.length > 0 ? 0 : state.CheckpointBaselineWallClockMs,
             PausedIntervals: state.PausedIntervals,
             CurrentRunTokens: totals.TotalTokens,
+            ...(stateCostEvents ? { CostEvents: stateCostEvents } : {}),
             NowMs: Date.now(),
             Provider: args.Provider,
             ContextUser: args.ContextUser,
@@ -746,6 +764,7 @@ export class TaskGraphGovernanceCoordinator {
         CompletedIterations: number;
         AccumulatedLoopCostUsd: number;
         AccumulatedLoopTokensUsed: number;
+        CostEvents?: readonly BudgetCostEvent[];
         LivePayload: Record<string, LoopIterationOutcome['Output']>;
         LastOutcome?: LoopIterationOutcome;
         BatchOutcomes?: readonly LoopIterationBatchOutcome[];
@@ -773,10 +792,12 @@ export class TaskGraphGovernanceCoordinator {
 
         const nodeKey = this.normId(args.Task.ID);
         if (nodeKey) {
+            const loopCostUsd = Math.max(0, args.AccumulatedLoopCostUsd);
             state.SettledNodeAccounting.set(nodeKey, {
-                CostUsd: Math.max(0, args.AccumulatedLoopCostUsd),
+                CostUsd: loopCostUsd,
                 TokensUsed: Math.max(0, args.AccumulatedLoopTokensUsed),
             });
+            this.recordLoopCostEvents(state, nodeKey, loopCostUsd, args.CostEvents);
         }
 
         if (state.PausePersistencePending) {
@@ -809,6 +830,7 @@ export class TaskGraphGovernanceCoordinator {
         state.LastResolvedLimits = resolvedLimits;
         const effectiveBudgets = state.ExtendedBudgets ?? resolvedLimits.Budgets;
 
+        const stateCostEvents = this.buildStateCostEvents(state, totals);
         const evalResult = await this.budgetGuard.Evaluate({
             Budgets: effectiveBudgets,
             AgentRunID: state.SubmittingAgentRunID,
@@ -820,6 +842,7 @@ export class TaskGraphGovernanceCoordinator {
             PriorRunWallClockMs: state.PausedIntervals.length > 0 ? 0 : state.CheckpointBaselineWallClockMs,
             PausedIntervals: state.PausedIntervals,
             CurrentRunTokens: totals.TotalTokens,
+            ...(stateCostEvents ? { CostEvents: stateCostEvents } : {}),
             NowMs: Date.now(),
             Provider: args.Provider,
             ContextUser: args.ContextUser,
@@ -1429,6 +1452,9 @@ export class TaskGraphGovernanceCoordinator {
             CheckpointBaselineTokens: 0,
             CheckpointBaselineNodeIDs: [],
             CheckpointBaselineLoopCosts: new Map<string, number>(),
+            CheckpointBaselinePausedAtMs: null,
+            CheckpointBaselineCostEvents: [],
+            NodeCostEvents: new Map<string, BudgetCostEvent[]>(),
             PausedIntervals: [],
             IncrementalCostUsd: 0,
             TokensUsed: 0,
@@ -1763,6 +1789,24 @@ export class TaskGraphGovernanceCoordinator {
                     cp.CumulativeLedger.RunWallClockMs,
                 );
                 state.CheckpointBaselineTokens = Math.max(state.CheckpointBaselineTokens, cp.CumulativeLedger.RunTokens);
+                const cpPausedMs = Date.parse(cp.PausedAtISO);
+                if (Number.isFinite(cpPausedMs)) {
+                    state.CheckpointBaselinePausedAtMs = cpPausedMs;
+                }
+                if (cp.CumulativeLedger.CostEvents && cp.CumulativeLedger.CostEvents.length > 0) {
+                    state.CheckpointBaselineCostEvents = cp.CumulativeLedger.CostEvents.map((e) => ({
+                        TimestampMs: e.TimestampMs,
+                        CostUsd: e.CostUsd,
+                    }));
+                }
+                if (cp.PausedLoopNodeCosts) {
+                    for (const [nodeKey, costUsd] of Object.entries(cp.PausedLoopNodeCosts)) {
+                        const norm = this.normId(nodeKey);
+                        if (norm && !state.CheckpointBaselineLoopCosts.has(norm)) {
+                            state.CheckpointBaselineLoopCosts.set(norm, costUsd);
+                        }
+                    }
+                }
                 if (cp.CumulativeLedger.PausedIntervals.length > 0) {
                     state.PausedIntervals = cp.CumulativeLedger.PausedIntervals.map((p) => ({ ...p }));
                 }
@@ -1834,6 +1878,15 @@ export class TaskGraphGovernanceCoordinator {
                 cp.CumulativeLedger.RunWallClockMs,
             );
             state.CheckpointBaselineTokens = Math.max(state.CheckpointBaselineTokens, cp.CumulativeLedger.RunTokens);
+            if (Number.isFinite(cp.PausedAtMs)) {
+                state.CheckpointBaselinePausedAtMs = cp.PausedAtMs;
+            }
+            if (cp.CumulativeLedger.CostEvents && cp.CumulativeLedger.CostEvents.length > 0) {
+                state.CheckpointBaselineCostEvents = cp.CumulativeLedger.CostEvents.map((e) => ({
+                    TimestampMs: e.TimestampMs,
+                    CostUsd: e.CostUsd,
+                }));
+            }
             if (cp.CumulativeLedger.PausedIntervals.length > 0) {
                 state.PausedIntervals = cp.CumulativeLedger.PausedIntervals.map((p) => ({ ...p }));
             }
@@ -1980,7 +2033,7 @@ export class TaskGraphGovernanceCoordinator {
                 {
                     EntityName: 'MJ: Tasks',
                     ExtraFilter: `ParentID='${EscapeSQLString(state.GraphID)}'`,
-                    Fields: ['ID', 'Status', 'StartedAt', 'Configuration'],
+                    Fields: ['ID', 'Status', 'StartedAt', 'CompletedAt', '__mj_UpdatedAt', 'Configuration'],
                     ResultType: 'simple',
                     BypassCache: true,
                     IgnoreMaxRows: true,
@@ -1999,7 +2052,7 @@ export class TaskGraphGovernanceCoordinator {
 
     private ingestNodeRows(
         state: GraphGovernanceState,
-        rows: readonly Pick<ProjectedTaskSettlementRow, 'ID' | 'Status' | 'StartedAt' | 'Configuration'>[],
+        rows: readonly Pick<ProjectedTaskSettlementRow, 'ID' | 'Status' | 'StartedAt' | 'CompletedAt' | '__mj_UpdatedAt' | 'Configuration'>[],
     ): void {
         for (const row of rows) {
             if (!row?.ID) {
@@ -2015,14 +2068,24 @@ export class TaskGraphGovernanceCoordinator {
             if (!nodeKey) {
                 continue;
             }
-            if (row.Status === 'Pending') {
-                const pausedLoopMetrics = this.extractPausedLoopMetrics(row.Configuration);
-                if (pausedLoopMetrics) {
+            if (this.isActiveOrPausedLoopStatus(row.Status)) {
+                const pausedLoop = this.extractPausedLoopDetails(row.Configuration);
+                if (pausedLoop) {
                     if (!state.SettledNodeAccounting.has(nodeKey)) {
-                        state.SettledNodeAccounting.set(nodeKey, pausedLoopMetrics);
+                        state.SettledNodeAccounting.set(nodeKey, {
+                            CostUsd: pausedLoop.CostUsd,
+                            TokensUsed: pausedLoop.TokensUsed,
+                        });
                     }
                     if (!state.CheckpointBaselineLoopCosts.has(nodeKey)) {
-                        state.CheckpointBaselineLoopCosts.set(nodeKey, pausedLoopMetrics.CostUsd);
+                        state.CheckpointBaselineLoopCosts.set(nodeKey, pausedLoop.CostUsd);
+                    }
+                    if (!state.NodeCostEvents.has(nodeKey) && pausedLoop.CostUsd > 0) {
+                        const fallbackMs = pausedLoop.UpdatedAtMs ?? this.parseEpochMs(row.__mj_UpdatedAt);
+                        const events = this.buildAttributedEventsForCost(pausedLoop.CostUsd, pausedLoop.CostEvents, fallbackMs);
+                        if (events.length > 0) {
+                            state.NodeCostEvents.set(nodeKey, events);
+                        }
                     }
                 }
                 continue;
@@ -2035,13 +2098,22 @@ export class TaskGraphGovernanceCoordinator {
                 state.CompletedNodeIDs.push(row.ID);
             }
             const persisted = this.extractPersistedNodeMetrics(row.Configuration);
+            const resolvedMetrics: SettledNodeMetrics = persisted ?? {
+                CostUsd: this.config?.DefaultNodeCostUsd ?? 0,
+                TokensUsed: this.config?.DefaultNodeTokens ?? 0,
+            };
             if (persisted) {
                 state.SettledNodeAccounting.set(nodeKey, persisted);
             } else if (!state.SettledNodeAccounting.has(nodeKey)) {
-                state.SettledNodeAccounting.set(nodeKey, {
-                    CostUsd: this.config?.DefaultNodeCostUsd ?? 0,
-                    TokensUsed: this.config?.DefaultNodeTokens ?? 0,
-                });
+                state.SettledNodeAccounting.set(nodeKey, resolvedMetrics);
+            }
+            if (!state.NodeCostEvents.has(nodeKey) && resolvedMetrics.CostUsd > 0) {
+                const nodeEvents = this.extractNodeCostEvents(row.Configuration);
+                const fallbackMs = this.parseEpochMs(row.CompletedAt) ?? this.parseEpochMs(row.__mj_UpdatedAt);
+                const events = this.buildAttributedEventsForCost(resolvedMetrics.CostUsd, nodeEvents, fallbackMs);
+                if (events.length > 0) {
+                    state.NodeCostEvents.set(nodeKey, events);
+                }
             }
         }
         state.CompletedNodeCount = state.CompletedNodeSet.size;
@@ -2050,7 +2122,11 @@ export class TaskGraphGovernanceCoordinator {
         state.TokensUsed = totals.TotalTokens;
     }
 
-    private extractPausedLoopMetrics(configurationJson: string | null | undefined): SettledNodeMetrics | null {
+    private isActiveOrPausedLoopStatus(status: string): boolean {
+        return status === 'Pending' || status === 'In Progress' || status === 'InProgress';
+    }
+
+    private parseRuntimeObject(configurationJson: string | null | undefined): Record<string, RunawayJsonValue> | null {
         if (typeof configurationJson !== 'string' || configurationJson.trim().length === 0) {
             return null;
         }
@@ -2059,7 +2135,42 @@ export class TaskGraphGovernanceCoordinator {
             return null;
         }
         const runtime = parsed['runtime'];
-        if (!IsPlainObject(runtime) || !IsPlainObject(runtime['loopCursor'])) {
+        return IsPlainObject(runtime) ? runtime : null;
+    }
+
+    private parseBudgetCostEventsArray(raw: RunawayJsonValue | undefined): BudgetCostEvent[] | null {
+        if (!Array.isArray(raw) || raw.length === 0) {
+            return null;
+        }
+        const events: BudgetCostEvent[] = [];
+        for (const item of raw) {
+            if (
+                IsPlainObject(item) &&
+                typeof item['TimestampMs'] === 'number' &&
+                Number.isFinite(item['TimestampMs']) &&
+                typeof item['CostUsd'] === 'number' &&
+                Number.isFinite(item['CostUsd'])
+            ) {
+                events.push({
+                    TimestampMs: item['TimestampMs'],
+                    CostUsd: Math.max(0, item['CostUsd']),
+                });
+            }
+        }
+        return events.length > 0 ? events : null;
+    }
+
+    private extractNodeCostEvents(configurationJson: string | null | undefined): BudgetCostEvent[] | null {
+        const runtime = this.parseRuntimeObject(configurationJson);
+        if (!runtime) {
+            return null;
+        }
+        return this.parseBudgetCostEventsArray(runtime['governanceCostEvents']);
+    }
+
+    private extractPausedLoopDetails(configurationJson: string | null | undefined): PausedLoopDetails | null {
+        const runtime = this.parseRuntimeObject(configurationJson);
+        if (!runtime || !IsPlainObject(runtime['loopCursor'])) {
             return null;
         }
         const cursor = runtime['loopCursor'];
@@ -2067,7 +2178,144 @@ export class TaskGraphGovernanceCoordinator {
         const tokensRaw = cursor['AccumulatedTokensUsed'] ?? runtime['governanceTokensUsed'];
         const cost = typeof costRaw === 'number' && Number.isFinite(costRaw) ? Math.max(0, costRaw) : 0;
         const tokens = typeof tokensRaw === 'number' && Number.isFinite(tokensRaw) ? Math.max(0, tokensRaw) : 0;
-        return { CostUsd: cost, TokensUsed: tokens };
+        const cursorEvents =
+            this.parseBudgetCostEventsArray(cursor['CostEvents']) ??
+            this.parseBudgetCostEventsArray(runtime['governanceCostEvents']);
+        const updatedAtMs =
+            typeof cursor['UpdatedAtMs'] === 'number' && Number.isFinite(cursor['UpdatedAtMs'])
+                ? cursor['UpdatedAtMs']
+                : null;
+        return {
+            CostUsd: cost,
+            TokensUsed: tokens,
+            CostEvents: cursorEvents,
+            UpdatedAtMs: updatedAtMs,
+        };
+    }
+
+    private buildAttributedEventsForCost(
+        totalCostUsd: number,
+        events: readonly BudgetCostEvent[] | null,
+        fallbackTimestampMs: number | null,
+    ): BudgetCostEvent[] {
+        if (totalCostUsd <= 0) {
+            return [];
+        }
+        const out: BudgetCostEvent[] = [];
+        let eventsSum = 0;
+        if (events && events.length > 0) {
+            for (const ev of events) {
+                if (ev.CostUsd > 0 && Number.isFinite(ev.TimestampMs)) {
+                    out.push({ TimestampMs: ev.TimestampMs, CostUsd: ev.CostUsd });
+                    eventsSum += ev.CostUsd;
+                }
+            }
+        }
+        const remainder = Math.max(0, totalCostUsd - eventsSum);
+        if (remainder > 1e-6 && fallbackTimestampMs !== null && Number.isFinite(fallbackTimestampMs)) {
+            out.push({ TimestampMs: fallbackTimestampMs, CostUsd: remainder });
+        }
+        return out;
+    }
+
+    private recordSettledNodeCostEvents(
+        state: GraphGovernanceState,
+        nodeKey: string,
+        costUsd: number,
+        explicitEvents: readonly BudgetCostEvent[] | undefined,
+        settledAtMs: number,
+    ): void {
+        if (costUsd <= 0) {
+            state.NodeCostEvents.delete(nodeKey);
+            return;
+        }
+        if (explicitEvents && explicitEvents.length > 0) {
+            const events = this.buildAttributedEventsForCost(costUsd, explicitEvents, settledAtMs);
+            if (events.length > 0) {
+                state.NodeCostEvents.set(nodeKey, events);
+            }
+            return;
+        }
+        const existing = state.NodeCostEvents.get(nodeKey);
+        const existingSum = existing ? existing.reduce((s, e) => s + e.CostUsd, 0) : 0;
+        if (existing && existing.length > 0 && Math.abs(existingSum - costUsd) <= 1e-6) {
+            return;
+        }
+        if (existing && existing.length > 0 && costUsd > existingSum) {
+            state.NodeCostEvents.set(nodeKey, [
+                ...existing,
+                { TimestampMs: settledAtMs, CostUsd: costUsd - existingSum },
+            ]);
+            return;
+        }
+        state.NodeCostEvents.set(nodeKey, [{ TimestampMs: settledAtMs, CostUsd: costUsd }]);
+    }
+
+    private recordLoopCostEvents(
+        state: GraphGovernanceState,
+        nodeKey: string,
+        loopCostUsd: number,
+        explicitEvents: readonly BudgetCostEvent[] | undefined,
+    ): void {
+        if (loopCostUsd <= 0) {
+            return;
+        }
+        const nowMs = Date.now();
+        if (explicitEvents && explicitEvents.length > 0) {
+            const events = this.buildAttributedEventsForCost(loopCostUsd, explicitEvents, nowMs);
+            if (events.length > 0) {
+                state.NodeCostEvents.set(nodeKey, events);
+            }
+            return;
+        }
+        const existing = state.NodeCostEvents.get(nodeKey) ?? [];
+        const existingSum = existing.reduce((s, e) => s + e.CostUsd, 0);
+        const delta = loopCostUsd - existingSum;
+        if (delta > 1e-6) {
+            state.NodeCostEvents.set(nodeKey, [
+                ...existing,
+                { TimestampMs: nowMs, CostUsd: delta },
+            ]);
+        }
+    }
+
+    private buildStateCostEvents(
+        state: GraphGovernanceState,
+        totals: { SettledCostUsd: number; UnattributedPriorCostUsd: number; TotalCostUsd: number },
+    ): BudgetCostEvent[] | undefined {
+        if (totals.TotalCostUsd <= 0) {
+            return undefined;
+        }
+        const events: BudgetCostEvent[] = [];
+        let eventsSum = 0;
+        for (const nodeEvents of state.NodeCostEvents.values()) {
+            for (const ev of nodeEvents) {
+                if (ev.CostUsd > 0 && Number.isFinite(ev.TimestampMs)) {
+                    events.push({ TimestampMs: ev.TimestampMs, CostUsd: ev.CostUsd });
+                    eventsSum += ev.CostUsd;
+                }
+            }
+        }
+        if (totals.UnattributedPriorCostUsd > 1e-6) {
+            if (events.length === 0 && state.CheckpointBaselineCostEvents.length > 0) {
+                return state.CheckpointBaselineCostEvents.map((e) => ({
+                    TimestampMs: e.TimestampMs,
+                    CostUsd: e.CostUsd,
+                }));
+            }
+            if (state.CheckpointBaselinePausedAtMs !== null && Number.isFinite(state.CheckpointBaselinePausedAtMs)) {
+                events.push({
+                    TimestampMs: state.CheckpointBaselinePausedAtMs,
+                    CostUsd: totals.UnattributedPriorCostUsd,
+                });
+                eventsSum += totals.UnattributedPriorCostUsd;
+            }
+        }
+        // Only pass CostEvents when 100% of known run cost is accounted for so unattributed spend is never dropped.
+        if (events.length > 0 && Math.abs(eventsSum - totals.TotalCostUsd) <= 1e-6) {
+            return events;
+        }
+        return undefined;
     }
 
     private extractPersistedNodeMetrics(configurationJson: string | null | undefined): SettledNodeMetrics | null {
@@ -2455,6 +2703,17 @@ export class TaskGraphGovernanceCoordinator {
             CompletedNodeIDs: completedIds,
             CumulativeLedger: ledger,
         };
+        if (IsPlainObject(rawCp['PausedLoopNodeCosts'])) {
+            const loopCosts: Record<string, number> = {};
+            for (const [k, v] of Object.entries(rawCp['PausedLoopNodeCosts'])) {
+                if (typeof v === 'number' && Number.isFinite(v)) {
+                    loopCosts[k] = Math.max(0, v);
+                }
+            }
+            if (Object.keys(loopCosts).length > 0) {
+                out.PausedLoopNodeCosts = loopCosts;
+            }
+        }
         if (IsPlainObject(rawCp['BudgetBreach'])) {
             out.BudgetBreach = rawCp['BudgetBreach'] as Partial<BudgetBreachDetail> as BudgetBreachDetail;
         }
@@ -2511,6 +2770,16 @@ export class TaskGraphGovernanceCoordinator {
             )
                 ? pending.BudgetResult.Ledger.PausedIntervals.map((p) => ({ ...p }))
                 : [...pending.BudgetResult.Ledger.PausedIntervals.map((p) => ({ ...p })), { PausedAtMs: nowMs, ResumedAtMs: null }];
+            const pausedLoopNodeCosts: Record<string, number> = {};
+            for (const [nodeKey, metrics] of state.SettledNodeAccounting.entries()) {
+                if (!state.CompletedNodeSet.has(nodeKey) && metrics.CostUsd > 0) {
+                    pausedLoopNodeCosts[nodeKey] = metrics.CostUsd;
+                }
+            }
+            const ledgerCostEvents =
+                pending.BudgetResult.Ledger.CostEvents && pending.BudgetResult.Ledger.CostEvents.length > 0
+                    ? pending.BudgetResult.Ledger.CostEvents
+                    : this.buildStateCostEvents(state, this.computeSettlementTotals(state));
             const checkpoint: StandaloneGraphGovernanceCheckpointState = {
                 CheckpointID: randomUUID(),
                 Status: 'Paused',
@@ -2519,8 +2788,10 @@ export class TaskGraphGovernanceCoordinator {
                 PausedAtISO: pending.BudgetResult.Ledger.AsOfISO || new Date(nowMs).toISOString(),
                 CompletedNodeCount: state.CompletedNodeCount,
                 CompletedNodeIDs: [...state.CompletedNodeIDs],
+                ...(Object.keys(pausedLoopNodeCosts).length > 0 ? { PausedLoopNodeCosts: pausedLoopNodeCosts } : {}),
                 CumulativeLedger: {
                     ...pending.BudgetResult.Ledger,
+                    ...(ledgerCostEvents && ledgerCostEvents.length > 0 ? { CostEvents: ledgerCostEvents } : {}),
                     PausedIntervals: openIntervals,
                     PausedWallClockMs: ComputeTotalPausedMs(openIntervals, nowMs),
                     DayBucketUTC: dayWin.DayBucketUTC,
@@ -2619,6 +2890,7 @@ export class TaskGraphGovernanceCoordinator {
                 PausedAtISO: existingCp?.PausedAtISO ?? pendingDebugContext?.pausedAtIso ?? new Date(resumeNowMs).toISOString(),
                 CompletedNodeCount: existingCp?.CompletedNodeCount ?? pendingDebugContext?.pausedAtIteration ?? 0,
                 CompletedNodeIDs: existingCp?.CompletedNodeIDs ?? pendingDebugContext?.completedTaskIds ?? [],
+                ...(existingCp?.PausedLoopNodeCosts ? { PausedLoopNodeCosts: existingCp.PausedLoopNodeCosts } : {}),
                 CumulativeLedger: {
                     ...baseLedger,
                     PausedIntervals: nextIntervals,
@@ -3289,6 +3561,7 @@ export class TaskGraphGovernanceCoordinator {
         const dailyCostUsd = this.computeStandaloneDailyCostUsd(
             children,
             cp,
+            settledCostUsd,
             totalCostUsd,
             startMs,
             dayStartMs,
@@ -3303,8 +3576,8 @@ export class TaskGraphGovernanceCoordinator {
             if (child.Status === 'Complete' || child.Status === 'Failed') {
                 const persisted = this.extractPersistedNodeMetrics(child.Configuration);
                 total += persisted ? persisted.CostUsd : (this.config?.DefaultNodeCostUsd ?? 0);
-            } else if (child.Status === 'Pending') {
-                const pausedLoop = this.extractPausedLoopMetrics(child.Configuration);
+            } else if (this.isActiveOrPausedLoopStatus(child.Status)) {
+                const pausedLoop = this.extractPausedLoopDetails(child.Configuration);
                 if (pausedLoop) {
                     total += pausedLoop.CostUsd;
                 }
@@ -3387,6 +3660,7 @@ export class TaskGraphGovernanceCoordinator {
     private computeStandaloneDailyCostUsd(
         children: readonly ProjectedTaskSettlementRow[],
         cp: StandaloneGraphGovernanceCheckpointState | null,
+        settledCostUsd: number,
         totalCostUsd: number,
         startMs: number,
         dayStartMs: number,
@@ -3395,26 +3669,83 @@ export class TaskGraphGovernanceCoordinator {
         if (startMs >= dayStartMs) {
             return totalCostUsd;
         }
-        if (cp?.CumulativeLedger.CostEvents && cp.CumulativeLedger.CostEvents.length > 0) {
-            return ComputeCostEventsInWindow(cp.CumulativeLedger.CostEvents, dayStartMs, dayEndMs);
+        const cpEvents = cp?.CumulativeLedger.CostEvents;
+        if (cpEvents && cpEvents.length > 0) {
+            const cpEventsTotal = cpEvents.reduce(
+                (sum, ev) => sum + (Number.isFinite(ev.CostUsd) ? Math.max(0, ev.CostUsd) : 0),
+                0,
+            );
+            if (settledCostUsd === 0 || cpEventsTotal >= totalCostUsd - 1e-6) {
+                return ComputeCostEventsInWindow(cpEvents, dayStartMs, dayEndMs);
+            }
         }
-        let hasChildTimestamps = false;
-        let todayChildCost = 0;
+
+        let hasTimestampedEvidence = false;
+        let todayAttributedCost = 0;
+        let unattributedChildCost = 0;
+
         for (const child of children) {
-            if (child.Status !== 'Complete' && child.Status !== 'Failed') {
-                continue;
-            }
-            const completedMs = this.parseEpochMs(child.CompletedAt);
-            if (completedMs !== null) {
-                hasChildTimestamps = true;
-                if (completedMs >= dayStartMs && completedMs < dayEndMs) {
-                    const persisted = this.extractPersistedNodeMetrics(child.Configuration);
-                    todayChildCost += persisted ? persisted.CostUsd : (this.config?.DefaultNodeCostUsd ?? 0);
+            if (child.Status === 'Complete' || child.Status === 'Failed') {
+                const persisted = this.extractPersistedNodeMetrics(child.Configuration);
+                const childCost = persisted ? persisted.CostUsd : (this.config?.DefaultNodeCostUsd ?? 0);
+                if (childCost <= 0) {
+                    continue;
                 }
+                const nodeEvents = this.extractNodeCostEvents(child.Configuration);
+                const fallbackMs = this.parseEpochMs(child.CompletedAt) ?? this.parseEpochMs(child.__mj_UpdatedAt);
+                const attributed = this.attributeCostToDayWindow(
+                    childCost,
+                    nodeEvents,
+                    fallbackMs,
+                    dayStartMs,
+                    dayEndMs,
+                );
+                if (attributed.HasTimestamp) {
+                    hasTimestampedEvidence = true;
+                }
+                todayAttributedCost += attributed.TodayCostUsd;
+                unattributedChildCost += attributed.UnattributedCostUsd;
+            } else if (this.isActiveOrPausedLoopStatus(child.Status)) {
+                const pausedLoop = this.extractPausedLoopDetails(child.Configuration);
+                if (!pausedLoop || pausedLoop.CostUsd <= 0) {
+                    continue;
+                }
+                const cpPausedMs = cp?.PausedAtISO ? Date.parse(cp.PausedAtISO) : Number.NaN;
+                const fallbackMs =
+                    pausedLoop.UpdatedAtMs ??
+                    this.parseEpochMs(child.__mj_UpdatedAt) ??
+                    (Number.isFinite(cpPausedMs) ? cpPausedMs : null);
+                const attributed = this.attributeCostToDayWindow(
+                    pausedLoop.CostUsd,
+                    pausedLoop.CostEvents,
+                    fallbackMs,
+                    dayStartMs,
+                    dayEndMs,
+                );
+                if (attributed.HasTimestamp) {
+                    hasTimestampedEvidence = true;
+                }
+                todayAttributedCost += attributed.TodayCostUsd;
+                unattributedChildCost += attributed.UnattributedCostUsd;
             }
         }
-        if (hasChildTimestamps) {
-            return todayChildCost;
+
+        const extraCpCost = Math.max(0, totalCostUsd - settledCostUsd);
+        if (extraCpCost > 1e-6) {
+            const cpMs = cp?.PausedAtISO ? Date.parse(cp.PausedAtISO) : Number.NaN;
+            if (Number.isFinite(cpMs)) {
+                hasTimestampedEvidence = true;
+                if (cpMs >= dayStartMs && cpMs < dayEndMs) {
+                    todayAttributedCost += extraCpCost;
+                }
+            } else {
+                unattributedChildCost += extraCpCost;
+            }
+        }
+
+        if (hasTimestampedEvidence) {
+            // Fail-safe include any unattributed spend rather than silently dropping it.
+            return todayAttributedCost + unattributedChildCost;
         }
         if (cp?.PausedAtISO) {
             const cpMs = Date.parse(cp.PausedAtISO);
@@ -3423,6 +3754,43 @@ export class TaskGraphGovernanceCoordinator {
             }
         }
         return totalCostUsd;
+    }
+
+    private attributeCostToDayWindow(
+        totalChildCostUsd: number,
+        events: readonly BudgetCostEvent[] | null,
+        fallbackTimestampMs: number | null,
+        dayStartMs: number,
+        dayEndMs: number,
+    ): { HasTimestamp: boolean; TodayCostUsd: number; UnattributedCostUsd: number } {
+        let hasTimestamp = false;
+        let todayCostUsd = 0;
+        let eventsSum = 0;
+
+        if (events && events.length > 0) {
+            hasTimestamp = true;
+            todayCostUsd += ComputeCostEventsInWindow(events, dayStartMs, dayEndMs);
+            for (const ev of events) {
+                if (Number.isFinite(ev.TimestampMs) && Number.isFinite(ev.CostUsd)) {
+                    eventsSum += Math.max(0, ev.CostUsd);
+                }
+            }
+        }
+
+        const remainder = Math.max(0, totalChildCostUsd - eventsSum);
+        if (remainder <= 1e-6) {
+            return { HasTimestamp: hasTimestamp, TodayCostUsd: todayCostUsd, UnattributedCostUsd: 0 };
+        }
+
+        if (fallbackTimestampMs !== null && Number.isFinite(fallbackTimestampMs)) {
+            hasTimestamp = true;
+            if (fallbackTimestampMs >= dayStartMs && fallbackTimestampMs < dayEndMs) {
+                todayCostUsd += remainder;
+            }
+            return { HasTimestamp: hasTimestamp, TodayCostUsd: todayCostUsd, UnattributedCostUsd: 0 };
+        }
+
+        return { HasTimestamp: hasTimestamp, TodayCostUsd: todayCostUsd, UnattributedCostUsd: remainder };
     }
 
     private async runBatchedViews<T>(

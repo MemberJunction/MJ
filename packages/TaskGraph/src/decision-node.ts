@@ -11,6 +11,7 @@
 import {
     DecisionReferencesIn,
     ResolveDecisionStepAnswers,
+    type BudgetCostEvent,
     type EdgeConditionOutcome,
     type GraphDecisions,
     type HeldDecisionAnswer,
@@ -82,6 +83,8 @@ export type TaskStepConfiguration = MJTaskEntity_ITaskStepConfiguration & {
         governanceCostUsd?: number;
         /** Durable token count recorded at node settlement for governance budget reconstruction. */
         governanceTokensUsed?: number;
+        /** Timestamped USD spend deltas recorded at node/iteration settlement for cross-day accounting. */
+        governanceCostEvents?: BudgetCostEvent[];
         /** Durable loop cursor state persisted on the Task row when a loop pauses mid-execution under governance. */
         loopCursor?: {
             Cursor: LoopCursorSnapshot;
@@ -90,6 +93,10 @@ export type TaskStepConfiguration = MJTaskEntity_ITaskStepConfiguration & {
             AccumulatedCostUsd: number;
             AccumulatedTokensUsed: number;
             IsOutputTainted: boolean;
+            /** Timestamped USD spend deltas incurred across loop iterations before pause. */
+            CostEvents?: BudgetCostEvent[];
+            /** Epoch ms when the loop cursor was last persisted/updated. */
+            UpdatedAtMs?: number;
         };
     };
 };

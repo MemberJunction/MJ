@@ -58,6 +58,7 @@ import {
     SerializeTaskSecurityEnvelope,
     TAINTED_EGRESS_BLOCKED,
     TASK_GRAPH_RUNTIME_SECURITY_OPERATION,
+    type BudgetCostEvent,
     type TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
 import { DatabaseProviderBase, IMetadataProvider, IRunQueryProvider, LimitsConfigResolver, LogError, LogStatus, LogWarning, RunView, ServerOperationScopeManager, UserInfo } from '@memberjunction/core';
@@ -333,6 +334,8 @@ type TaskBodyOutcome = {
     CostUsd?: number;
     /** Optional token count consumed by executing this task body. */
     TokensUsed?: number;
+    /** Optional timestamped USD spend deltas incurred across loop iterations. */
+    CostEvents?: BudgetCostEvent[];
 };
 
 interface GlobalUserCacheLookup {
@@ -1440,6 +1443,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                         governanceMetrics?.CostUsd,
                         governanceMetrics?.TokensUsed,
                         null,
+                        result.CostEvents,
                     ),
                 },
                 this.contextUser,
@@ -1478,6 +1482,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     Success: result.Success,
                     CostUsd: result.CostUsd,
                     TokensUsed: result.TokensUsed,
+                    CostEvents: result.CostEvents,
                     Observer: this.observer,
                     DebugStateCache: this.debugStateByGraph,
                 });
@@ -5188,6 +5193,16 @@ export class TaskGraphDispatcher implements IShutdownable {
         const graphID = task.ParentID ?? task.ID;
         let accumulatedCostUsd = savedCursor?.AccumulatedCostUsd ?? 0;
         let accumulatedTokensUsed = savedCursor?.AccumulatedTokensUsed ?? 0;
+        const loopCostEvents: BudgetCostEvent[] = savedCursor?.CostEvents
+            ? savedCursor.CostEvents.map((e) => ({ TimestampMs: e.TimestampMs, CostUsd: Math.max(0, e.CostUsd) }))
+            : savedCursor && savedCursor.AccumulatedCostUsd > 0
+                ? (() => {
+                    const priorTs = savedCursor.UpdatedAtMs ?? (task.__mj_UpdatedAt ? new Date(task.__mj_UpdatedAt).getTime() : Number.NaN);
+                    return Number.isFinite(priorTs)
+                        ? [{ TimestampMs: priorTs, CostUsd: savedCursor.AccumulatedCostUsd }]
+                        : [];
+                })()
+                : [];
 
         // Bounds what the trace's payloads may cost. The pointers are never budgeted — those are the
         // durable record of the work and must survive whatever the payloads do.
@@ -5207,6 +5222,9 @@ export class TaskGraphDispatcher implements IShutdownable {
             const iterTokens = resolvedMetrics?.TokensUsed ?? outcome.TokensUsed ?? 0;
             accumulatedCostUsd += iterCost;
             accumulatedTokensUsed += iterTokens;
+            if (iterCost > 0) {
+                loopCostEvents.push({ TimestampMs: Date.now(), CostUsd: iterCost });
+            }
             return { CostUsd: iterCost, TokensUsed: iterTokens };
         };
 
@@ -5413,6 +5431,9 @@ export class TaskGraphDispatcher implements IShutdownable {
                     CompletedIterations: info.CompletedIterations,
                     AccumulatedLoopCostUsd: accumulatedCostUsd,
                     AccumulatedLoopTokensUsed: accumulatedTokensUsed,
+                    CostEvents: loopCostEvents.length > 0
+                        ? loopCostEvents.map((e) => ({ TimestampMs: e.TimestampMs, CostUsd: e.CostUsd }))
+                        : undefined,
                     LivePayload: livePayload,
                     LastOutcome: info.LastOutcome,
                     BatchOutcomes: info.BatchOutcomes,
@@ -5453,6 +5474,7 @@ export class TaskGraphDispatcher implements IShutdownable {
 
         if (outcome.Paused && outcome.LoopCursorSnapshot) {
             iterationTrace.sort((a, b) => a.index - b.index);
+            const cursorUpdatedAtMs = Date.now();
             return {
                 Success: false,
                 Paused: true,
@@ -5463,6 +5485,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 IsOutputTainted: loopEnvelope?.IsRunTainted === true,
                 CostUsd: accumulatedCostUsd,
                 TokensUsed: accumulatedTokensUsed,
+                ...(loopCostEvents.length > 0 ? { CostEvents: loopCostEvents } : {}),
                 LoopCursorState: {
                     Cursor: outcome.LoopCursorSnapshot,
                     LivePayload: livePayload,
@@ -5470,6 +5493,8 @@ export class TaskGraphDispatcher implements IShutdownable {
                     AccumulatedCostUsd: accumulatedCostUsd,
                     AccumulatedTokensUsed: accumulatedTokensUsed,
                     IsOutputTainted: loopEnvelope?.IsRunTainted === true,
+                    ...(loopCostEvents.length > 0 ? { CostEvents: loopCostEvents } : {}),
+                    UpdatedAtMs: cursorUpdatedAtMs,
                 },
             };
         }
@@ -5490,6 +5515,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             IsOutputTainted: loopEnvelope?.IsRunTainted === true,
             CostUsd: accumulatedCostUsd,
             TokensUsed: accumulatedTokensUsed,
+            ...(loopCostEvents.length > 0 ? { CostEvents: loopCostEvents } : {}),
         };
     }
 
@@ -6547,6 +6573,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             metrics?.CostUsd ?? result.CostUsd,
             metrics?.TokensUsed ?? result.TokensUsed,
             result.LoopCursorState ?? null,
+            result.CostEvents,
         );
         freshTask.Status = 'Pending';
         freshTask.ClaimedBy = null;
@@ -6571,6 +6598,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         governanceCostUsd?: number,
         governanceTokensUsed?: number,
         loopCursor?: NonNullable<TaskStepConfiguration['runtime']>['loopCursor'] | null,
+        governanceCostEvents?: BudgetCostEvent[],
     ): string | undefined {
         const existing = this.parseConfiguration(task) as TaskStepConfiguration | undefined;
         const clearingCursor = loopCursor === null && Boolean(existing?.runtime?.loopCursor);
@@ -6584,7 +6612,8 @@ export class TaskGraphDispatcher implements IShutdownable {
             governanceCostUsd === undefined &&
             governanceTokensUsed === undefined &&
             !loopCursor &&
-            !clearingCursor
+            !clearingCursor &&
+            !governanceCostEvents?.length
         ) return undefined;
 
         const baseRuntime = existing?.runtime ? { ...existing.runtime } : {};
@@ -6611,6 +6640,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 ...(actionInput ? { actionInput } : {}),
                 ...(governanceCostUsd !== undefined ? { governanceCostUsd } : {}),
                 ...(governanceTokensUsed !== undefined ? { governanceTokensUsed } : {}),
+                ...(governanceCostEvents?.length ? { governanceCostEvents } : {}),
                 ...(loopCursor ? { loopCursor } : {}),
             },
         };
