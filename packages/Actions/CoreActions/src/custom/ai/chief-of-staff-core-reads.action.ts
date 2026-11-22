@@ -1,7 +1,7 @@
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { ActionEngineServer, BaseAction } from '@memberjunction/actions';
 import { EscapeSQLString, IndexByUUID, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
-import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LimitsConfigResolver, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     MJAIAgentRequestEntity,
     MJAIAgentSuggestionEntity,
@@ -22,8 +22,6 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { UserCache } from '@memberjunction/generic-database-provider';
 
 const DEFAULT_AGENT_NAME = 'Chief of Staff';
-const DEFAULT_BRIEFING_CONTRIBUTOR_TIMEOUT_MS = 10_000;
-const DEFAULT_BRIEFING_MAX_CONTRIBUTOR_CHARS = 32_768;
 
 function readStringParam(params: RunActionParams, name: string): string | undefined {
     const found = params.Params.find((p) => p.Name.trim().toLowerCase() === name.toLowerCase());
@@ -285,18 +283,19 @@ export class AssembleMyBriefingAction extends BaseAction {
                 };
             }
 
+            const resolvedLimits = LimitsConfigResolver.Resolve().Limits;
             const horizonDays = readNumberParam(params, 'HorizonDays', 7, 1, 30);
             const contributorTimeoutMs = readNumberParam(
                 params,
                 'ContributorTimeoutMs',
-                DEFAULT_BRIEFING_CONTRIBUTOR_TIMEOUT_MS,
+                resolvedLimits.BriefingContributorTimeoutMs,
                 20,
                 60_000
             );
             const maxContributorChars = readNumberParam(
                 params,
                 'MaxContributorChars',
-                DEFAULT_BRIEFING_MAX_CONTRIBUTOR_CHARS,
+                resolvedLimits.BriefingMaxContributorChars,
                 100,
                 524_288
             );

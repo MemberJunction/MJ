@@ -1,7 +1,7 @@
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { EscapeSQLString, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
-import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, Metadata, type MJLimitsOverride, RunView, UserInfo } from '@memberjunction/core';
 import {
     BUILT_IN_CONVERSATION_TYPE_IDS,
     CONVERSATION_TYPE_CODES,
@@ -16,6 +16,7 @@ import {
 import {
     AgentUserPolicyEngine,
     MJAIAgentEntityExtended,
+    ResolveAgentRunLimits,
     TypedActionPolicyGuard,
 } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -43,6 +44,18 @@ function readNumberParam(params: RunActionParams, name: string, fallback: number
         return fallback;
     }
     return Math.min(max, Math.max(min, Math.trunc(parsed)));
+}
+
+function readOptionalPositiveIntParam(params: RunActionParams, name: string): number | undefined {
+    const raw = readStringParam(params, name);
+    if (!raw) {
+        return undefined;
+    }
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) {
+        return undefined;
+    }
+    return Math.max(1, Math.trunc(parsed));
 }
 
 function readBooleanParam(params: RunActionParams, name: string, fallback: boolean): boolean {
@@ -295,8 +308,29 @@ export class OpenAgentChannelAction extends BaseAction {
                 };
             }
 
-            const maxTurns = readNumberParam(params, 'MaxConsecutiveAgentTurns', 10, 1, 50);
-            const maxHourlyWakes = readNumberParam(params, 'MaxHourlyWakes', 6, 1, 30);
+            const requestedMaxTurns = readOptionalPositiveIntParam(params, 'MaxConsecutiveAgentTurns');
+            const requestedMaxHourlyWakes = readOptionalPositiveIntParam(params, 'MaxHourlyWakes');
+            const channelRunOverride: MJLimitsOverride = {};
+            if (requestedMaxTurns !== undefined) {
+                channelRunOverride.AgentChannelConsecutiveTurns = requestedMaxTurns;
+            }
+            if (requestedMaxHourlyWakes !== undefined) {
+                channelRunOverride.AgentChannelWakesPerHour = requestedMaxHourlyWakes;
+            }
+            const limitsResolution = ResolveAgentRunLimits({
+                Agent: senderAgent,
+                UserPolicy: senderPolicy,
+                RunOverride: Object.keys(channelRunOverride).length > 0 ? channelRunOverride : null,
+                ContextUser: contextUser,
+                Provider: md,
+                Options: {
+                    EnforceUserPolicyAsCeiling: Boolean(senderPolicy),
+                    EnforceConfiguredCeilings: true,
+                    AllowAuthorizedCeilingOverride: true,
+                },
+            });
+            const maxTurns = limitsResolution.Limits.AgentChannelConsecutiveTurns;
+            const maxHourlyWakes = limitsResolution.Limits.AgentChannelWakesPerHour;
             const replyByRaw = readStringParam(params, 'ReplyByISO');
             const replyByDate = replyByRaw ? new Date(replyByRaw) : null;
             if (replyByDate && Number.isNaN(replyByDate.getTime())) {

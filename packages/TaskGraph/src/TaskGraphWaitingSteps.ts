@@ -12,7 +12,7 @@
  *
  * @module @memberjunction/task-graph
  */
-import { IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
+import { CODE_FALLBACK_LIMITS, IMetadataProvider, LimitsConfigResolver, LogError, RunView, UserInfo } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 import type { MJTaskEntity } from '@memberjunction/core-entities';
 import { TaskClaimStore } from './TaskClaimStore';
@@ -64,7 +64,7 @@ export type CompleteWaitingStepResult = {
 export type WaitingStepAuthorizer = (task: MJTaskEntity) => Promise<string | null>;
 
 /** Cap on steps one correlation-key signal completes. Bounds a runaway key; real fan-outs are far smaller. */
-export const MAX_STEPS_PER_SIGNAL = 1000;
+export const MAX_STEPS_PER_SIGNAL = CODE_FALLBACK_LIMITS.Tuning.MaxStepsPerSignal;
 
 export class TaskGraphWaitingSteps {
     /**
@@ -134,7 +134,7 @@ async function loadTargets(
             EntityName: 'MJ: Tasks',
             ExtraFilter: `CorrelationKey='${EscapeSQLString(key)}' AND StepType='External' AND Status='Pending'`,
             OrderBy: '__mj_CreatedAt ASC',
-            MaxRows: MAX_STEPS_PER_SIGNAL,
+            MaxRows: LimitsConfigResolver.Resolve().Limits.Tuning.MaxStepsPerSignal,
             ResultType: 'entity_object',
             BypassCache: true,
         },

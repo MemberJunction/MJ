@@ -11,6 +11,7 @@ export * from './resolve-by-tool-name';
 export * from './debug-state';
 export * from './TaskGraphService';
 export * from './TaskClaimStore';
+export * from './TaskGraphGovernanceCoordinator';
 export * from './settlement-rescue';
 export * from './condition-gate';
 export * from './decision-node';

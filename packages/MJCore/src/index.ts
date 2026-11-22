@@ -93,6 +93,7 @@ export * from "./generic/queryTemplateContext";
 export * from "./generic/JSONType-interfaces/IFileStorageProviderConfiguration";
 export * from "./generic/JSONType-interfaces/IEntitySubtypeSelectorConfig";
 export * from "./generic/JSONType-interfaces/IQueryConfiguration";
+export * from "./generic/limitsConfig";
 
 export function SetProvider(provider) {
     Metadata.Provider = provider; // global-provider-ok: this IS the global provider setter

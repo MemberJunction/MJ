@@ -22,6 +22,7 @@
  * @module @memberjunction/ai-agents
  */
 
+import { CODE_FALLBACK_LIMITS, LimitsConfigResolver } from '@memberjunction/core';
 import type { ChatMessage, DecisionAnswer, DecisionQuestion } from '@memberjunction/ai';
 import type { AgentChatMessage } from '@memberjunction/ai-core-plus';
 import { NormalizeUUID } from '@memberjunction/global';
@@ -68,7 +69,7 @@ export const CATALOG_NARROWING_REQUEST_MAX_CHARS = 8000;
  * Maximum number of unpinned skill candidates sent to `AgentDecisionService` in Stage 2 after
  * Stage 1 hybrid pre-ranking ({@link PreFilterSkillCandidatesForDecision}).
  */
-export const DEFAULT_MAX_SKILL_DECISION_CANDIDATES = 30;
+export const DEFAULT_MAX_SKILL_DECISION_CANDIDATES = CODE_FALLBACK_LIMITS.Tuning.MaxSkillDecisionCandidates;
 
 /**
  * Maximum number of hidden skill names listed inline in {@link CatalogNarrowingNote} before
@@ -549,11 +550,11 @@ export interface SkillCandidatePreFilterResult {
 export function PreFilterSkillCandidatesForDecision(
     candidates: CatalogNarrowingCandidate[],
     queryText: string,
-    maxSkillDecisionCandidates: number = DEFAULT_MAX_SKILL_DECISION_CANDIDATES,
+    maxSkillDecisionCandidates: number = LimitsConfigResolver.Resolve().Limits.Tuning.MaxSkillDecisionCandidates,
     telemetryBySkillId?: ReadonlyMap<string, Partial<SkillPrioritizationSignal>>,
     rankingOptions?: HybridSkillRankingOptions
 ): SkillCandidatePreFilterResult {
-    const cap = positiveLimit(maxSkillDecisionCandidates) || DEFAULT_MAX_SKILL_DECISION_CANDIDATES;
+    const cap = positiveLimit(maxSkillDecisionCandidates) || LimitsConfigResolver.Resolve().Limits.Tuning.MaxSkillDecisionCandidates;
     const unpinnedSkills = candidates.filter(c => c.Kind === 'skill' && !c.Pinned);
     if (unpinnedSkills.length <= cap) {
         return { FilteredCandidates: candidates, PreHiddenSkillIDs: new Set<string>() };

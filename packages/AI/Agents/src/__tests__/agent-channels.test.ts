@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
+import { AuthorizationInfo, IMetadataProvider, LimitsConfigResolver, RunView, UserInfo } from '@memberjunction/core';
 import {
+    MJAIAgentUserPolicyEntity,
     MJAgentChannelEntity,
     MJAgentChannelParticipantEntity,
     MJUserRoutineEntity,
@@ -32,6 +33,7 @@ describe('AgentWakeTriggerService.TriggerWakeOnAgentChannelMessage', () => {
 
     beforeEach(() => {
         vi.restoreAllMocks();
+        LimitsConfigResolver.Instance.ClearMjConfigLimits();
         vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(systemUser);
     });
 
@@ -277,5 +279,111 @@ describe('AgentWakeTriggerService.TriggerWakeOnAgentChannelMessage', () => {
             senderUserID: alice.ID,
             senderAgentID: null,
         });
+    });
+
+    it('CR-CHANNEL-CEILING-BYPASS: reconciles persisted channel limits against deployment and user-policy ceilings at enforcement time', async () => {
+        const adminAuth: Partial<AuthorizationInfo> = {
+            ID: 'auth-manage-agents',
+            Name: 'AI: Manage Agents',
+            ParentID: null,
+            UserCanExecute: (u: UserInfo) => u.UserRoles.some((r) => r.RoleID === 'role-manage-agents'),
+        };
+
+        // 1) Existing row has MaxConsecutiveAgentTurns=5000, MaxHourlyWakes=5000, but MjConfig tightens to 4 turns / 3 wakes
+        LimitsConfigResolver.Instance.RegisterMjConfigLimits({
+            AgentChannelConsecutiveTurns: 4,
+            AgentChannelWakesPerHour: 3,
+        });
+        const fixture1 = buildChannelFixture({
+            ConsecutiveAgentTurns: 4,
+            MaxConsecutiveAgentTurns: 5000,
+            MaxHourlyWakes: 5000,
+        });
+        const outcome1 = await AgentWakeTriggerService.Instance.TriggerWakeOnAgentChannelMessage({
+            channelID: 'chan-1',
+            senderUserID: alice.ID,
+            senderAgentID: 'agent-cos',
+            messagePreview: '5th turn should pause under clamped deployment ceiling',
+            contextUser: alice,
+            metadataProvider: fixture1.md,
+        });
+        expect(outcome1.pausedByGuard).toBe(true);
+        expect(outcome1.results[0].resultCode).toBe('CHANNEL_PAUSED_LOOP_GUARD');
+
+        // 2) Tighter UserAgentPolicy (MaxHourlyWakes: 2) clamps persisted MaxHourlyWakes=5000 for ordinary user
+        LimitsConfigResolver.Instance.ClearMjConfigLimits();
+        const fixture2 = buildChannelFixture({
+            ConsecutiveAgentTurns: 1,
+            MaxConsecutiveAgentTurns: 5000,
+            HourlyWakeCount: 2,
+            HourlyWakeWindowStart: new Date('2026-11-20T16:00:00Z'),
+            MaxHourlyWakes: 5000,
+        });
+        vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockResolvedValue({
+            status: 'found',
+            policy: {
+                Status: 'Active',
+                AllowInterAgentCoordination: true,
+                Agent: 'Chief of Staff',
+                InstructionsOverride: '<!-- mj-limits: {"AgentChannelConsecutiveTurns": 50, "AgentChannelWakesPerHour": 2} -->',
+            } as Partial<MJAIAgentUserPolicyEntity> as MJAIAgentUserPolicyEntity,
+        });
+        const outcome2 = await AgentWakeTriggerService.Instance.TriggerWakeOnAgentChannelMessage({
+            channelID: 'chan-1',
+            senderUserID: alice.ID,
+            senderAgentID: 'agent-cos',
+            messagePreview: '3rd wake should pause under clamped policy ceiling',
+            contextUser: alice,
+            metadataProvider: fixture2.md,
+            now: new Date('2026-11-20T16:15:00Z'),
+        });
+        expect(outcome2.pausedByGuard).toBe(true);
+        expect(outcome2.results[0].resultCode).toBe('CHANNEL_PAUSED_RATE_LIMIT');
+
+        // 3) Tightening below policy/default on the channel row (MaxConsecutiveAgentTurns: 2) remains effective
+        const fixture3 = buildChannelFixture({
+            ConsecutiveAgentTurns: 2,
+            MaxConsecutiveAgentTurns: 2,
+            MaxHourlyWakes: 10,
+        });
+        const outcome3 = await AgentWakeTriggerService.Instance.TriggerWakeOnAgentChannelMessage({
+            channelID: 'chan-1',
+            senderUserID: alice.ID,
+            senderAgentID: 'agent-cos',
+            messagePreview: '3rd turn hits tighter channel backstop 2',
+            contextUser: alice,
+            metadataProvider: fixture3.md,
+        });
+        expect(outcome3.pausedByGuard).toBe(true);
+        expect(outcome3.results[0].resultCode).toBe('CHANNEL_PAUSED_LOOP_GUARD');
+
+        // 4) Explicitly authorized caller ('AI: Manage Agents') respects persisted channel override above policy ceiling
+        const authorizedAlice: UserInfo = {
+            ...alice,
+            UserRoles: [{ RoleID: 'role-manage-agents', Role: 'AI Manager' } as UserInfo['UserRoles'][number]],
+        } as UserInfo;
+        const fixture4 = buildChannelFixture({
+            ConsecutiveAgentTurns: 5,
+            MaxConsecutiveAgentTurns: 10,
+            HourlyWakeCount: 2,
+            HourlyWakeWindowStart: new Date('2026-11-20T16:00:00Z'),
+            MaxHourlyWakes: 8,
+        });
+        const mdWithAuth = {
+            ...fixture4.md,
+            Authorizations: [adminAuth as AuthorizationInfo],
+        } as IMetadataProvider;
+        const outcome4 = await AgentWakeTriggerService.Instance.TriggerWakeOnAgentChannelMessage({
+            channelID: 'chan-1',
+            senderUserID: authorizedAlice.ID,
+            senderAgentID: 'agent-cos',
+            messagePreview: 'Authorized override above policy wake limit 2',
+            contextUser: authorizedAlice,
+            metadataProvider: mdWithAuth,
+            now: new Date('2026-11-20T16:15:00Z'),
+        });
+        expect(outcome4.pausedByGuard).toBe(false);
+        expect(outcome4.channelStatus).toBe('Open');
+        expect(outcome4.results[0].triggered).toBe(true);
     });
 });
