@@ -3,8 +3,13 @@ import { createRequire } from 'node:module';
 import * as path from 'node:path';
 import {
     CODE_FALLBACK_LIMITS,
+    CanUserRaiseEnforcedLimitsCeilings,
     DEFAULT_MJ_LIMITS_CONFIG,
+    GetLimitsKeyRole,
+    IsPolicyCeilingKey,
+    LIMITS_CEILING_OVERRIDE_AUTHORIZATIONS,
     LIMITS_KEY_PATHS,
+    LIMITS_KEY_ROLES,
     LIMITS_TIER_PRECEDENCE,
     LimitsConfigResolver,
     NormalizeLimitsInput,
@@ -12,6 +17,8 @@ import {
     type MJLimitsConfig,
     type MJLimitsOverride,
 } from '../generic/limitsConfig';
+import type { IMetadataProvider } from '../generic/interfaces';
+import type { AuthorizationInfo, UserInfo } from '../generic/securityInfo';
 
 const require = createRequire(import.meta.url);
 
@@ -363,5 +370,142 @@ describe('LimitsConfigResolver & CODE_FALLBACK_LIMITS', () => {
         expect(resolved.Limits.Tuning.QueryCacheDefaultTtlMinutes).toBe(30);
         expect(resolved.Provenance['Tuning.QueryCacheDefaultTtlMinutes'].SourceTier).toBe('MjConfig');
         expect(resolved.Limits.Tuning.MaxAgentsOfferedInDraft).toBe(25);
+    });
+
+    it('classifies every key path as PolicyCeiling vs OverridableDefault', () => {
+        for (const key of LIMITS_KEY_PATHS) {
+            const role = GetLimitsKeyRole(key);
+            expect(role === 'PolicyCeiling' || role === 'OverridableDefault').toBe(true);
+            expect(LIMITS_KEY_ROLES[key]).toBe(role);
+            expect(IsPolicyCeilingKey(key)).toBe(role === 'PolicyCeiling');
+        }
+
+        expect(GetLimitsKeyRole('AgentAbsoluteIterations')).toBe('PolicyCeiling');
+        expect(GetLimitsKeyRole('Budgets.PerRun.MaxCostUsd')).toBe('PolicyCeiling');
+        expect(GetLimitsKeyRole('ResourceGuards.MaxValidationRetries')).toBe('PolicyCeiling');
+        expect(GetLimitsKeyRole('ProgressDetector.FastJudgeMaxInputChars')).toBe('PolicyCeiling');
+
+        expect(GetLimitsKeyRole('Budgets.PerUserPerDay.DayBoundaryTimezone')).toBe('OverridableDefault');
+        expect(GetLimitsKeyRole('Budgets.CountPausedTimeTowardsWallClock')).toBe('OverridableDefault');
+        expect(GetLimitsKeyRole('ProgressDetector.WindowSize')).toBe('OverridableDefault');
+        expect(GetLimitsKeyRole('Tuning.QueryCacheDefaultMaxSize')).toBe('OverridableDefault');
+
+        const resolved = LimitsConfigResolver.Resolve();
+        expect(resolved.Provenance.AgentAbsoluteIterations.KeyRole).toBe('PolicyCeiling');
+        expect(resolved.Provenance['Tuning.QueryCacheDefaultMaxSize'].KeyRole).toBe('OverridableDefault');
+    });
+
+    it('enforces server-side ContextUser authorization when raising PolicyCeiling values', () => {
+        const standardUser = {
+            ID: 'user-standard',
+            Name: 'Standard User',
+            Type: 'User',
+            UserRoles: [{ RoleID: 'role-user', Role: 'UI User' }],
+        } as Partial<UserInfo> as UserInfo;
+
+        const ownerUser = {
+            ID: 'user-owner',
+            Name: 'Org Owner',
+            Type: 'Owner',
+            UserRoles: [],
+        } as Partial<UserInfo> as UserInfo;
+
+        const agentAdminAuth = {
+            ID: 'auth-ai-manage',
+            Name: LIMITS_CEILING_OVERRIDE_AUTHORIZATIONS[1],
+            ParentID: null,
+            UserCanExecute: (u: UserInfo) => u.UserRoles.some((r) => r.RoleID === 'role-ai-admin'),
+        } as Partial<AuthorizationInfo> as AuthorizationInfo;
+
+        const diagnosticsReadAuth = {
+            ID: 'auth-diag-read',
+            Name: 'Diagnostics: Run Sessions',
+            ParentID: null,
+            UserCanExecute: () => true,
+        } as Partial<AuthorizationInfo> as AuthorizationInfo;
+
+        const provider = {
+            Authorizations: [agentAdminAuth, diagnosticsReadAuth],
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+
+        const agentAdminUser = {
+            ID: 'user-ai-admin',
+            Name: 'Agent Admin',
+            Type: 'User',
+            UserRoles: [{ RoleID: 'role-ai-admin', Role: 'AI Admin' }],
+        } as Partial<UserInfo> as UserInfo;
+
+        // Fail-closed helper checks
+        expect(CanUserRaiseEnforcedLimitsCeilings(null, provider)).toBe(false);
+        expect(CanUserRaiseEnforcedLimitsCeilings(standardUser, provider)).toBe(false);
+        expect(CanUserRaiseEnforcedLimitsCeilings(ownerUser, provider)).toBe(true);
+        expect(CanUserRaiseEnforcedLimitsCeilings(agentAdminUser, provider)).toBe(true);
+
+        const layers = {
+            MjConfig: {
+                Budgets: { PerRun: { MaxCostUsd: 25 } },
+                MaxTasksPerGraph: 50_000,
+            },
+            AgentOrWorkflowMetadata: {
+                MaxTasksPerAgentGraph: 5_000,
+            },
+            UserAgentPolicy: {
+                Budgets: { PerRun: { MaxCostUsd: 10 } },
+            },
+            RunOverride: {
+                // Attempts to raise PolicyCeilings across UserPolicy, Agent, MjConfig, and CodeFallback
+                Budgets: { PerRun: { MaxCostUsd: 100 } },
+                MaxTasksPerAgentGraph: 9_000,
+                MaxTasksPerGraph: 80_000,
+                AgentAbsoluteIterations: 250_000,
+                // Tightening a PolicyCeiling is always allowed even for standard users
+                WhileLoopMaxIterations: 1_000,
+                // OverridableDefault changes are allowed without ceiling-raise privileges
+                ProgressDetector: { WindowSize: 12 },
+                Tuning: { QueryCacheDefaultMaxSize: 500 },
+            },
+        };
+
+        // 1. Unauthorized standard user: widening PolicyCeilings clamps fail-closed, tightening & OverridableDefaults apply
+        const denied = LimitsConfigResolver.Resolve(layers, {
+            EnforceUserPolicyAsCeiling: true,
+            EnforceConfiguredCeilings: true,
+            AllowAuthorizedCeilingOverride: true,
+            ContextUser: standardUser,
+            Provider: provider,
+        });
+        expect(denied.Limits.Budgets.PerRun.MaxCostUsd).toBe(10);
+        expect(denied.Provenance['Budgets.PerRun.MaxCostUsd'].WasClampedByPolicyCeiling).toBe(true);
+        expect(denied.Limits.MaxTasksPerAgentGraph).toBe(5_000);
+        expect(denied.Provenance.MaxTasksPerAgentGraph.SourceTier).toBe('AgentOrWorkflowMetadata');
+        expect(denied.Provenance.MaxTasksPerAgentGraph.WasClampedByPolicyCeiling).toBe(true);
+        expect(denied.Limits.MaxTasksPerGraph).toBe(50_000);
+        expect(denied.Provenance.MaxTasksPerGraph.SourceTier).toBe('MjConfig');
+        expect(denied.Limits.AgentAbsoluteIterations).toBe(100_000);
+        expect(denied.Provenance.AgentAbsoluteIterations.SourceTier).toBe('CodeFallback');
+        expect(denied.Limits.WhileLoopMaxIterations).toBe(1_000);
+        expect(denied.Provenance.WhileLoopMaxIterations.WasClampedByPolicyCeiling).toBe(false);
+        expect(denied.Limits.ProgressDetector.WindowSize).toBe(12);
+        expect(denied.Limits.Tuning.QueryCacheDefaultMaxSize).toBe(500);
+        expect(denied.ClampedKeys).toEqual([
+            'AgentAbsoluteIterations',
+            'MaxTasksPerAgentGraph',
+            'MaxTasksPerGraph',
+            'Budgets.PerRun.MaxCostUsd',
+        ]);
+
+        // 2. Authorized ContextUser (Owner or AI: Manage Agents): allowed to raise enforced ceilings
+        const approved = LimitsConfigResolver.Resolve(layers, {
+            EnforceUserPolicyAsCeiling: true,
+            EnforceConfiguredCeilings: true,
+            AllowAuthorizedCeilingOverride: true,
+            ContextUser: agentAdminUser,
+            Provider: provider,
+        });
+        expect(approved.Limits.Budgets.PerRun.MaxCostUsd).toBe(100);
+        expect(approved.Limits.MaxTasksPerAgentGraph).toBe(9_000);
+        expect(approved.Limits.MaxTasksPerGraph).toBe(80_000);
+        expect(approved.Limits.AgentAbsoluteIterations).toBe(250_000);
+        expect(approved.ClampedKeys).toEqual([]);
     });
 });

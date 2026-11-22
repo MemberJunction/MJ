@@ -12,9 +12,9 @@ import {
     AuthorizationEvaluator,
     BaseRemotableOperation,
     CODE_FALLBACK_LIMITS,
+    CanUserRaiseEnforcedLimitsCeilings,
     LIMITS_KEY_PATHS,
     LIMITS_TIER_PRECEDENCE,
-    LimitsConfigResolver,
     RunView,
     type IMetadataProvider,
     type LimitsKeyPath,
@@ -115,22 +115,7 @@ function authorizeLimitsRead(user?: UserInfo, provider?: IMetadataProvider): boo
 }
 
 function authorizeLimitsWrite(user?: UserInfo, provider?: IMetadataProvider): boolean {
-    if (!user) {
-        return false;
-    }
-    const userType = typeof user.Type === 'string' ? user.Type.trim().toLowerCase() : '';
-    if (userType === 'owner') {
-        return true;
-    }
-    const authorizations = provider?.Authorizations ?? [];
-    const matched = authorizations.find((a) => {
-        const name = a.Name?.trim().toLowerCase();
-        return name === 'system administrator' || name === 'ai: manage agents';
-    });
-    if (!matched) {
-        return false;
-    }
-    return new AuthorizationEvaluator().UserCanExecuteWithAncestors(matched, user, authorizations);
+    return CanUserRaiseEnforcedLimitsCeilings(user, provider);
 }
 
 function buildApprovedBackstops(

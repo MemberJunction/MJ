@@ -805,8 +805,12 @@ export class BaseAgent {
                 maxTreeDurationMs: params.maxTreeDurationMs,
                 limitsOverride: params.limitsOverride,
             } : null,
+            ContextUser: params?.contextUser ?? null,
+            Provider: this.ProviderToUse,
             Options: {
                 EnforceUserPolicyAsCeiling: Boolean(effectiveUserPolicy || params?.userPolicyLimitsOverride),
+                EnforceConfiguredCeilings: Boolean(params?.contextUser),
+                AllowAuthorizedCeilingOverride: Boolean(params?.contextUser),
             },
         });
     }

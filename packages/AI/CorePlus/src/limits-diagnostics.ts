@@ -13,11 +13,13 @@
 
 import {
     CODE_FALLBACK_LIMITS,
+    GetLimitsKeyRole,
     LIMITS_KEY_PATHS,
     LIMITS_TIER_PRECEDENCE,
     LimitsConfigResolver,
     NormalizeLimitsInput,
     ValidateLimitsConfig,
+    type IMetadataProvider,
     type LimitsKeyPath,
     type LimitsKeyProvenance,
     type LimitsResolveOptions,
@@ -26,6 +28,7 @@ import {
     type MJLimitsConfig,
     type MJLimitsOverride,
     type MJLimitsResolutionResult,
+    type UserInfo,
 } from '@memberjunction/core';
 import type { MJAIAgentEntity, MJAIAgentUserPolicyEntity } from '@memberjunction/core-entities';
 import { IsPlainObject, SafeJSONParse } from '@memberjunction/global';
@@ -128,6 +131,10 @@ export interface ResolveAgentRunLimitsInput {
         'absoluteMaxIterations' | 'maxExecutionTimeMs' | 'maxTreeCost' | 'maxTreeTokens' | 'maxTreeDurationMs' | 'limitsOverride'
     > | null;
     RunOverride?: MJLimitsOverride | null;
+    /** Server-side execution user checked when `RunOverride` attempts to raise enforced ceilings. */
+    ContextUser?: UserInfo | null;
+    /** Metadata provider supplying `Authorizations` for `ContextUser` ceiling checks. */
+    Provider?: IMetadataProvider | null;
     Options?: LimitsResolveOptions;
 }
 
@@ -487,9 +494,16 @@ export function ResolveAgentRunLimits(input: ResolveAgentRunLimitsInput): MJLimi
     const userPolicy = ExtractUserPolicyLimitsOverride(input.UserPolicy, input.UserPolicyLimitsOverride);
     const runOverride = ExtractRunOverrideLimits(input.RunParams, input.RunOverride);
     const hasActiveUserPolicyLimits = Object.keys(userPolicy).length > 0;
+    const contextUser = input.ContextUser ?? input.Options?.ContextUser ?? null;
+    const provider = input.Provider ?? input.Options?.Provider ?? null;
+    const hasCallerContext = contextUser !== null;
     const effectiveOptions: LimitsResolveOptions = {
         ...input.Options,
         EnforceUserPolicyAsCeiling: input.Options?.EnforceUserPolicyAsCeiling ?? hasActiveUserPolicyLimits,
+        EnforceConfiguredCeilings: input.Options?.EnforceConfiguredCeilings ?? hasCallerContext,
+        AllowAuthorizedCeilingOverride: input.Options?.AllowAuthorizedCeilingOverride ?? hasCallerContext,
+        ...(contextUser ? { ContextUser: contextUser } : {}),
+        ...(provider ? { Provider: provider } : {}),
     };
 
     return LimitsConfigResolver.Instance.Resolve(
@@ -589,6 +603,7 @@ function parseKeyProvenance(
     }
     return {
         Key: key,
+        KeyRole: GetLimitsKeyRole(key),
         Value: value,
         SourceTier: rawTier,
         IsOverridden: rawEntry['IsOverridden'] === true,

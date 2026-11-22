@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { LimitsConfigResolver } from '@memberjunction/core';
+import {
+    LimitsConfigResolver,
+    type AuthorizationInfo,
+    type IMetadataProvider,
+    type UserInfo,
+} from '@memberjunction/core';
 import { MJAIAgentRunEntityExtended } from '../MJAIAgentRunEntityExtended';
 import {
     AttachLimitsDiagnosticsToAgentRun,
@@ -327,5 +332,62 @@ describe('limitsDiagnosticsSnapshot & 5-tier AI agent resolution', () => {
         } finally {
             parseSpy.mockRestore();
         }
+    });
+
+    it('enforces server-side ContextUser ceiling authorization in ResolveAgentRunLimits', () => {
+        const standardUser = {
+            ID: 'u-std',
+            Name: 'Standard User',
+            Type: 'User',
+            UserRoles: [],
+        } as Partial<UserInfo> as UserInfo;
+
+        const adminAuth = {
+            ID: 'auth-sys-admin',
+            Name: 'System Administrator',
+            ParentID: null,
+            UserCanExecute: (u: UserInfo) => u.UserRoles.some((r) => r.RoleID === 'role-sys-admin'),
+        } as Partial<AuthorizationInfo> as AuthorizationInfo;
+
+        const provider = {
+            Authorizations: [adminAuth],
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+
+        const adminUser = {
+            ID: 'u-admin',
+            Name: 'Sys Admin',
+            Type: 'User',
+            UserRoles: [{ RoleID: 'role-sys-admin', Role: 'Admin' }],
+        } as Partial<UserInfo> as UserInfo;
+
+        const agent = makeAgentStub({ MaxCostPerRun: 12 });
+
+        // Unauthorized user trying to raise Agent MaxCostPerRun and CodeFallback AgentAbsoluteIterations is clamped
+        const denied = ResolveAgentRunLimits({
+            Agent: agent,
+            RunParams: {
+                maxTreeCost: 500,
+                absoluteMaxIterations: 250_000,
+            },
+            ContextUser: standardUser,
+            Provider: provider,
+        });
+        expect(denied.Limits.Budgets.PerRun.MaxCostUsd).toBe(12);
+        expect(denied.Limits.AgentAbsoluteIterations).toBe(100_000);
+        expect(denied.ClampedKeys).toEqual(['AgentAbsoluteIterations', 'Budgets.PerRun.MaxCostUsd']);
+
+        // Authorized System Administrator user is permitted to raise the enforced ceiling
+        const allowed = ResolveAgentRunLimits({
+            Agent: agent,
+            RunParams: {
+                maxTreeCost: 500,
+                absoluteMaxIterations: 250_000,
+            },
+            ContextUser: adminUser,
+            Provider: provider,
+        });
+        expect(allowed.Limits.Budgets.PerRun.MaxCostUsd).toBe(500);
+        expect(allowed.Limits.AgentAbsoluteIterations).toBe(250_000);
+        expect(allowed.ClampedKeys).toEqual([]);
     });
 });

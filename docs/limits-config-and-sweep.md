@@ -16,7 +16,13 @@ MemberJunction centralizes all execution limits, safety backstops, multi-scope b
 | 4 | `UserAgentPolicy` | `MJ: AI Agent User Policies` (`Status = 'Active'`) | User-scoped policy overrides; supports `EnforceUserPolicyAsCeiling: true` so `RunOverride` cannot raise finite ceilings above user policy bounds. |
 | 5 | `RunOverride` | `ExecuteAgentParams` (`absoluteMaxIterations`, `maxExecutionTimeMs`, `maxTreeCost`, `maxTreeTokens`, `limitsOverride`) | Per-run override (highest precedence; clamped when policy ceiling enforcement is enabled). |
 
-Every resolved key carries full per-key provenance (`SourceTier`, `IsOverridden`, `TierValues`, `WasClampedByPolicyCeiling`) serialized into `AIAgentRun.Data.__limitsDiagnostics` (`LimitsDiagnosticsSnapshot`).
+Every resolved key carries full per-key provenance (`KeyRole`, `SourceTier`, `IsOverridden`, `TierValues`, `WasClampedByPolicyCeiling`) serialized into `AIAgentRun.Data.__limitsDiagnostics` (`LimitsDiagnosticsSnapshot`).
+
+### Overridable Defaults vs. Policy Ceilings & Override Authorization
+
+`LIMITS_KEY_ROLES` (`GetLimitsKeyRole`, `IsPolicyCeilingKey`) distinguishes every limit key into two governance roles:
+- **`PolicyCeiling`**: Numeric safety backstops, briefing caps, dollar/wall-clock/token budget caps (`Budgets.*` numeric fields), `ProgressDetector.FastJudgeMaxInputChars`, and `ResourceGuards.*`. Any user/caller may **tighten** a ceiling (`RunOverride <= ceiling`), but **raising** a configured ceiling (`RunOverride > ceiling` or `null` over a finite bound) requires server-side `ContextUser` authorization via `CanUserRaiseEnforcedLimitsCeilings(user, provider)` (`Owner` user type or `'System Administrator'` / `'AI: Manage Agents'` authorization). Missing or unauthorized callers fail closed and clamp down to the enforced ceiling (`WasClampedByPolicyCeiling = true`).
+- **`OverridableDefault`**: Operational defaults and tuning parameters (`Budgets.PerUserPerDay.DayBoundaryTimezone`, `Budgets.CountPausedTimeTowardsWallClock`, `ProgressDetector.*` tuning/threshold flags, and `Tuning.*`) that callers may tune without ceiling-raise privileges.
 
 ### Example `mj.config.cjs` `limits` Block
 

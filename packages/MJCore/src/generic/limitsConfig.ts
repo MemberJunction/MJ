@@ -17,6 +17,9 @@
  */
 
 import { BaseSingleton, IsPlainObject } from '@memberjunction/global';
+import { AuthorizationEvaluator } from './authEvaluator';
+import type { IMetadataProvider } from './interfaces';
+import type { UserInfo } from './securityInfo';
 
 /**
  * Precedence tier identifiers for limits resolution, ordered from lowest (`CodeFallback`)
@@ -554,11 +557,19 @@ export const LIMITS_KEY_PATHS: readonly LimitsKeyPath[] = [
 export type LimitsScalarValue = number | string | boolean | null;
 
 /**
+ * Governance role distinguishing hard safety/quota ceilings (`PolicyCeiling`) from
+ * operational defaults/tuning knobs (`OverridableDefault`).
+ */
+export type LimitsKeyRole = 'PolicyCeiling' | 'OverridableDefault';
+
+/**
  * Per-key resolution provenance record showing the winning value, winning tier, and every tier's input.
  */
 export interface LimitsKeyProvenance {
     /** Canonical key path. */
     Key: LimitsKeyPath;
+    /** Whether this key acts as an enforced policy ceiling or an overridable operational default. */
+    KeyRole: LimitsKeyRole;
     /** Effective resolved value after precedence merging. */
     Value: LimitsScalarValue;
     /** Highest-precedence tier that supplied the effective value. */
@@ -567,7 +578,7 @@ export interface LimitsKeyProvenance {
     IsOverridden: boolean;
     /** Values supplied at each tier that explicitly specified this key. */
     TierValues: Partial<Record<LimitsSourceTier, LimitsScalarValue>>;
-    /** True when `EnforceUserPolicyAsCeiling` clamped a `RunOverride` down to the policy ceiling. */
+    /** True when ceiling enforcement clamped a `RunOverride` down to an enforced lower-tier ceiling. */
     WasClampedByPolicyCeiling: boolean;
 }
 
@@ -593,9 +604,32 @@ export interface LimitsResolutionInput {
 export interface LimitsResolveOptions {
     /**
      * When true, `RunOverride` cannot raise a numeric ceiling above a tighter finite ceiling set
-     * in `UserAgentPolicy` (or replace a finite `UserAgentPolicy` limit with `null`).
+     * in `UserAgentPolicy` (or replace a finite `UserAgentPolicy` limit with `null`) unless
+     * `AllowAuthorizedCeilingOverride` is also true and `ContextUser` passes
+     * {@link CanUserRaiseEnforcedLimitsCeilings}.
      */
     EnforceUserPolicyAsCeiling?: boolean;
+    /**
+     * When true, enforces lower-tier finite `PolicyCeiling` bounds (`CodeFallback`, `MjConfig`,
+     * `AgentOrWorkflowMetadata`, `UserAgentPolicy`) against widening by `RunOverride` unless
+     * `AllowAuthorizedCeilingOverride` is true and `ContextUser` passes
+     * {@link CanUserRaiseEnforcedLimitsCeilings}.
+     */
+    EnforceConfiguredCeilings?: boolean;
+    /**
+     * Server-side execution user evaluated when `RunOverride` attempts to raise an enforced
+     * `PolicyCeiling`. Missing or unauthorized users fail closed and are clamped to the ceiling.
+     */
+    ContextUser?: UserInfo | null;
+    /**
+     * Metadata provider supplying `Authorizations` for {@link CanUserRaiseEnforcedLimitsCeilings}.
+     */
+    Provider?: IMetadataProvider | null;
+    /**
+     * When true, allows an authorized `ContextUser` (`Owner`, `System Administrator`, or
+     * `AI: Manage Agents`) to raise enforced `PolicyCeiling` values via `RunOverride`.
+     */
+    AllowAuthorizedCeilingOverride?: boolean;
     /** Optional deterministic timestamp override (ISO-8601) for repeatable snapshots/tests. */
     ResolvedAtISO?: string;
 }
@@ -650,6 +684,70 @@ const NUMERIC_CEILING_KEYS: ReadonlySet<LimitsKeyPath> = new Set<LimitsKeyPath>(
     'ProgressDetector.FastJudgeMaxInputChars',
     ...RESOURCE_GUARD_KEYS.map((k): ResourceGuardKeyPath => `ResourceGuards.${k}`),
 ]);
+
+/**
+ * Explicit classification of every {@link LimitsKeyPath} into `'PolicyCeiling'` (cannot be raised
+ * above an enforced ceiling without authorization) vs `'OverridableDefault'` (operational default
+ * or tuning setting).
+ */
+export const LIMITS_KEY_ROLES: Readonly<Record<LimitsKeyPath, LimitsKeyRole>> = Object.fromEntries(
+    LIMITS_KEY_PATHS.map((key): [LimitsKeyPath, LimitsKeyRole] => [
+        key,
+        NUMERIC_CEILING_KEYS.has(key) ? 'PolicyCeiling' : 'OverridableDefault',
+    ]),
+) as Readonly<Record<LimitsKeyPath, LimitsKeyRole>>;
+
+/**
+ * Returns the governance role (`'PolicyCeiling'` vs `'OverridableDefault'`) for a canonical limit key.
+ */
+export function GetLimitsKeyRole(key: LimitsKeyPath): LimitsKeyRole {
+    return LIMITS_KEY_ROLES[key];
+}
+
+/**
+ * Returns `true` when {@link key} is a numeric policy ceiling that requires authorization to raise
+ * above an enforced lower-tier ceiling.
+ */
+export function IsPolicyCeilingKey(key: LimitsKeyPath): boolean {
+    return LIMITS_KEY_ROLES[key] === 'PolicyCeiling';
+}
+
+/**
+ * Named MJ Authorizations permitted to raise enforced `PolicyCeiling` limits or approve
+ * governance pause overrides.
+ */
+export const LIMITS_CEILING_OVERRIDE_AUTHORIZATIONS: readonly string[] = [
+    'System Administrator',
+    'AI: Manage Agents',
+] as const;
+
+/**
+ * Evaluates whether a server-side `ContextUser` is authorized to raise enforced limits ceilings
+ * (`Owner` user type or holding `'System Administrator'` / `'AI: Manage Agents'` authorization).
+ * Fails closed (`false`) when `user` is missing or lacks required authorization.
+ */
+export function CanUserRaiseEnforcedLimitsCeilings(
+    user?: UserInfo | null,
+    provider?: IMetadataProvider | null,
+): boolean {
+    if (!user) {
+        return false;
+    }
+    const userType = typeof user.Type === 'string' ? user.Type.trim().toLowerCase() : '';
+    if (userType === 'owner') {
+        return true;
+    }
+    const authorizations = provider?.Authorizations ?? [];
+    const allowedSet = new Set(LIMITS_CEILING_OVERRIDE_AUTHORIZATIONS.map((name) => name.toLowerCase()));
+    const evaluator = new AuthorizationEvaluator();
+    for (const auth of authorizations) {
+        const name = auth.Name?.trim().toLowerCase();
+        if (name && allowedSet.has(name) && evaluator.UserCanExecuteWithAncestors(auth, user, authorizations)) {
+            return true;
+        }
+    }
+    return false;
+}
 
 /** Scalar input value accepted by {@link NormalizeLimitsInput}. */
 export type LimitsInputScalar = string | number | boolean | null | undefined;
@@ -1033,16 +1131,21 @@ function resolveSingleKey(
     key: LimitsKeyPath,
     defaults: MJLimitsConfig,
     tiers: Record<LimitsSourceTier, MJLimitsOverride | null>,
-    enforcePolicyCeiling: boolean,
+    enforceUserPolicyCeiling: boolean,
+    enforceConfiguredCeilings: boolean,
+    callerCanRaiseCeilings: boolean,
 ): LimitsKeyProvenance {
     const codeFallbackBase = extractTierValue(defaults, key) ?? null;
     const tierValues: Partial<Record<LimitsSourceTier, LimitsScalarValue>> = {
         CodeFallback: codeFallbackBase,
     };
-    let winningValue: LimitsScalarValue = codeFallbackBase;
-    let sourceTier: LimitsSourceTier = 'CodeFallback';
+    let preRunValue: LimitsScalarValue = codeFallbackBase;
+    let preRunTier: LimitsSourceTier = 'CodeFallback';
 
     for (const tier of LIMITS_TIER_PRECEDENCE) {
+        if (tier === 'RunOverride') {
+            continue;
+        }
         const layer = tiers[tier];
         if (!layer) {
             continue;
@@ -1050,23 +1153,39 @@ function resolveSingleKey(
         const candidate = extractTierValue(layer, key);
         if (candidate !== undefined) {
             tierValues[tier] = candidate;
-            winningValue = candidate;
-            sourceTier = tier;
+            preRunValue = candidate;
+            preRunTier = tier;
         }
     }
 
+    let winningValue: LimitsScalarValue = preRunValue;
+    let sourceTier: LimitsSourceTier = preRunTier;
     let wasClamped = false;
-    if (enforcePolicyCeiling && sourceTier === 'RunOverride') {
-        const policyVal = tierValues.UserAgentPolicy;
-        if (shouldClampToPolicyCeiling(key, winningValue, policyVal)) {
-            winningValue = policyVal;
-            sourceTier = 'UserAgentPolicy';
-            wasClamped = true;
+
+    const runLayer = tiers.RunOverride;
+    const runCandidate = runLayer ? extractTierValue(runLayer, key) : undefined;
+    if (runCandidate !== undefined) {
+        tierValues.RunOverride = runCandidate;
+        winningValue = runCandidate;
+        sourceTier = 'RunOverride';
+
+        if (!callerCanRaiseCeilings) {
+            const policyVal = tierValues.UserAgentPolicy;
+            if (enforceUserPolicyCeiling && shouldClampToPolicyCeiling(key, winningValue, policyVal)) {
+                winningValue = policyVal;
+                sourceTier = 'UserAgentPolicy';
+                wasClamped = true;
+            } else if (enforceConfiguredCeilings && shouldClampToPolicyCeiling(key, winningValue, preRunValue)) {
+                winningValue = preRunValue;
+                sourceTier = preRunTier;
+                wasClamped = true;
+            }
         }
     }
 
     return {
         Key: key,
+        KeyRole: GetLimitsKeyRole(key),
         Value: winningValue,
         SourceTier: sourceTier,
         IsOverridden: sourceTier !== 'CodeFallback',
@@ -1196,10 +1315,21 @@ export class LimitsConfigResolver extends BaseSingleton<LimitsConfigResolver> {
         const provenanceEntries: Array<[LimitsKeyPath, LimitsKeyProvenance]> = [];
         const overriddenKeys: LimitsKeyPath[] = [];
         const clampedKeys: LimitsKeyPath[] = [];
-        const enforceCeiling = options.EnforceUserPolicyAsCeiling === true;
+        const enforceUserPolicyCeiling = options.EnforceUserPolicyAsCeiling === true;
+        const enforceConfiguredCeilings = options.EnforceConfiguredCeilings === true;
+        const callerCanRaiseCeilings =
+            options.AllowAuthorizedCeilingOverride === true &&
+            CanUserRaiseEnforcedLimitsCeilings(options.ContextUser, options.Provider);
 
         for (const key of LIMITS_KEY_PATHS) {
-            const keyProvenance = resolveSingleKey(key, defaults, tiers, enforceCeiling);
+            const keyProvenance = resolveSingleKey(
+                key,
+                defaults,
+                tiers,
+                enforceUserPolicyCeiling,
+                enforceConfiguredCeilings,
+                callerCanRaiseCeilings,
+            );
             assignResolvedValue(resolvedLimits, key, keyProvenance.Value);
             provenanceEntries.push([key, keyProvenance]);
             if (keyProvenance.IsOverridden) {
