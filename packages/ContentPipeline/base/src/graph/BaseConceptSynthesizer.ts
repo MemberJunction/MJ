@@ -13,6 +13,7 @@ import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { ConceptSeedCluster } from './ConceptSeedClustering.js';
 import type {
     GraphAuthorityTier,
+    GraphAuthorityTierDescriptor,
     GraphConceptType,
     ResolvedGraphOverlayConfig,
 } from './GraphOverlay.types.js';
@@ -22,7 +23,8 @@ export interface ConceptChunkCitation {
     readonly ChunkID: string;
     readonly ContentItemID: string;
     readonly HeadingPath?: string | null;
-    readonly AuthorityTier: GraphAuthorityTier;
+    /** Tier name of the cited chunk, or `null` when unranked. */
+    readonly AuthorityTier: GraphAuthorityTier | null;
     readonly Excerpt?: string | null;
 }
 
@@ -42,7 +44,8 @@ export interface SynthesizedGraphConcept {
     readonly Specification: string;
     readonly Synonyms: readonly string[];
     readonly ParentConceptName?: string | null;
-    readonly AuthorityTier: GraphAuthorityTier;
+    /** Tier name of the concept's highest-authority source, or `null` when unranked. */
+    readonly AuthorityTier: GraphAuthorityTier | null;
     /** Optional foreign key to `MJ: Graph Authority Tiers` (`__mj.GraphAuthorityTier.ID`). */
     readonly AuthorityTierID?: string | null;
     readonly Confidence: number;
@@ -54,7 +57,8 @@ export interface SynthesizedGraphEdge {
     readonly EdgeTypeName:
         | 'SourcedFrom'
         | 'Mentions'
-        | 'Broader Than'
+        | 'BroaderThan'
+        | 'NarrowerThan'
         | 'Describes'
         | 'Defines'
         | 'Measures'
@@ -62,7 +66,6 @@ export interface SynthesizedGraphEdge {
         | 'Governs'
         | 'Contradicts'
         | 'RelatedTo'
-        | 'Related To'
         | (string & {});
     readonly SourceEntityName: string;
     /** Record ID (or concept name placeholder when referencing the newly synthesized concept). */
@@ -82,6 +85,8 @@ export interface SynthesizeConceptRequest {
     readonly GraphID: string;
     readonly OverlayConfig: ResolvedGraphOverlayConfig;
     readonly SeedCluster: ConceptSeedCluster;
+    /** Active `MJ: Graph Authority Tiers` rows, for ranking chunks. Empty means every chunk ranks equally. */
+    readonly AuthorityTiers?: readonly GraphAuthorityTierDescriptor[];
     readonly ContextUser: UserInfo;
     readonly Provider: IMetadataProvider;
     readonly Signal: AbortSignal;

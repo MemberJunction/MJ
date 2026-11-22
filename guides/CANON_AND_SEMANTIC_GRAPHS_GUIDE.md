@@ -4,7 +4,7 @@
 
 - **Packages**:
   - [`@memberjunction/core-entities`](../packages/MJCoreEntities/package.json) — Generated entity classes for `MJ: Graph Types`, `MJ: Graph Concept Types`, `MJ: Graph Authority Tiers`, `MJ: Graphs`, `MJ: Graph Concepts`, `MJ: Graph Edge Types`, `MJ: Graph Edge Type Endpoints`, `MJ: Graph Edge Providers`, `MJ: Graph Edges`, and `MJ: Content Sources` (`GraphID`, `Configuration.GraphOverlay`)
-  - [`@memberjunction/content-pipeline-base`](../packages/ContentPipeline/base/README.md) — `ContentSourceGraphOverlayConfig`, `ResolveGraphOverlayConfig`, `GraphTypeDescriptor`, `GraphConceptTypeDescriptor`, `GraphAuthorityTierDescriptor`, `ClusterContentIntoConceptSeeds`, `BaseConceptSynthesizer`, `AuthorityTierPrecedence`
+  - [`@memberjunction/content-pipeline-base`](../packages/ContentPipeline/base/README.md) — `ContentSourceGraphOverlayConfig`, `ResolveGraphOverlayConfig`, `GraphTypeDescriptor`, `GraphConceptTypeDescriptor`, `GraphAuthorityTierDescriptor`, `ClusterContentIntoConceptSeeds`, `BaseConceptSynthesizer`, `GetAuthorityTierRank`
   - [`@memberjunction/content-pipeline`](../packages/ContentPipeline/engine/README.md) — `GraphStage` (`@RegisterClass(BasePipelineStage, 'Graph')`), `EntityGraphOverlayStore`, and `DeterministicConceptSynthesizer`
   - [`@memberjunction/ai-core-plus`](../packages/AI/CorePlus/README.md) — Deterministic `TaskGraph` DAG fingerprinting, Weisfeiler-Lehman similarity, clustering, promotion discovery (`dag-similarity.ts`), and saved-workflow health telemetry (`workflow-telemetry.ts`)
 - **Companion Guides**:
@@ -18,21 +18,21 @@
 
 In MemberJunction, **Canon** is the governed, machine-readable representation of how an organization defines its concepts, computes its metrics, enforces its policies, and executes its recurring processes.
 
-Rather than building a separate, siloed schema just for Canon, MemberJunction provides a **general-purpose Semantic Graph substrate** (`MJ:Graph Types` + `MJ: Graphs` + `MJ: Graph Concept Types` + `MJ: Graph Concepts` + `MJ: Graph Edges`) where **Canon graph types are marked by `MJ: Graph Types` (`IsCanon = 1`)**. How `GraphStage` treats a source's concepts comes from that source's `GraphOverlay` configuration (see the note below the table):
+Rather than building a separate, siloed schema just for Canon, MemberJunction provides a **general-purpose Semantic Graph substrate** (`MJ:Graph Types` + `MJ: Graphs` + `MJ: Graph Concept Types` + `MJ: Graph Concepts` + `MJ: Graph Edges`) where **Canon graph types are marked by `MJ: Graph Types` (`IsCanon = 1`)**. `GraphStage` reads the target graph's type, so that flag and the type's default columns decide how a source's concepts are treated (see the note below the table):
 
 ### Seeded `MJ: Graph Types` (`/metadata/graph-types/.graph-types.json`)
 
-Organizations can add custom graph types via metadata or UI and toggle `IsCanon = 1` on any graph type that should feed organizational Canon. The flag classifies the graph type; a content source gets Canon behaviour from its own `GraphOverlay` settings (see the note below):
+Organizations can add custom graph types via metadata or UI and toggle `IsCanon = 1` on any graph type that should feed organizational Canon:
 
 | `GraphType.Name` | `IsCanon` | `Rank` | Primary Purpose | Default `ConceptTaxonomyMode` | Default `GroundingMode` | Default `AuthorityTier` |
 |---|---|---|---|---|---|---|
 | `'Canon'` | `true` | `10` | Governed organizational definitions, bylaws, policies, metrics, and processes anchored to live MJ schema, queries, actions, and workflows | `'propose-only'` (creates `Status = 'Proposed'` for human/steward approval) | `'full-canon'` (grounds concepts to `Entities`, `Alternate Base Views`, `Queries`, `Actions`, and `AI Skills`) | `'ExecutiveSOP'` |
 | `'Knowledge'` | `false` | `20` | Document / RAG topic & concept overlay across one or more `MJ: Content Sources` (GraphRAG) | `'auto-grow'` (creates `Status = 'Approved'` automatically) | `'none'` (or `'schema-and-queries'` when opted in) | `'Reference'` |
-| `'Network'` | `false` | `30` | Entity-to-entity relationship networks (e.g., people, organizations, chapters, committees) | `'auto-grow'` | `'none'` | `'Reference'` |
+| `'Network'` | `false` | `30` | Entity-to-entity relationship networks (e.g., people, organizations, chapters, committees) | `'constrained'` | `'none'` | `'Reference'` |
 | `'Custom'` | `false` | `100` | Application-specific semantic graphs (or custom canonical graphs when `IsCanon = true`) | `'auto-grow'` unless overridden per source | `'none'` unless overridden | `'Reference'` unless overridden |
 
 > [!NOTE]
-> `GraphStage` does not read the target graph's `MJ: Graph Types` row. `ResolveGraphOverlayConfig` takes `TargetGraphType` (default `'Knowledge'`) and `IsCanon` from the `GraphOverlay` configuration (the Content Source's `Configuration`, overridden by the run's), and `IsCanon` defaults to `true` only when `TargetGraphType` is `'Canon'`. Every non-Canon type therefore gets the Knowledge defaults above (`'auto-grow'`, `'none'`, `'Reference'`). To get propose-only Canon behaviour, set `TargetGraphType: "Canon"` or `IsCanon: true` in the source's `GraphOverlay`, or set `ConceptTaxonomyMode` explicitly.
+> `GraphStage` reads the target graph's `MJ: Graph Types` row through the graph's `GraphTypeID`. The type's `IsCanon` decides whether the graph is Canon, and its `DefaultConceptTaxonomyMode`, `DefaultGroundingMode` and `DefaultAuthorityTierID` columns supply the defaults in the table. A source's `GraphOverlay` (the Content Source's `Configuration`, overridden by the run's) can still set `ConceptTaxonomyMode`, `GroundingMode` and `AuthorityTier` / `AuthorityTierID`. Its `IsCanon` and `TargetGraphType` are used only when the graph has no type row, and then `IsCanon` defaults to `false`; it is never inferred from a type name.
 
 ### Seeded `MJ: Graph Concept Types` (`/metadata/graph-concept-types/.graph-concept-types.json`)
 
@@ -63,7 +63,7 @@ flowchart TB
         GCT["MJ: Graph Concept Types<br/>(Policy [10], Metric [20], Process [30],<br/>Role [40], Domain [50], Term [60])"]
         G["MJ: Graphs<br/>(GraphTypeID → MJ: Graph Types)"]
         GC["MJ: Graph Concepts<br/>(ConceptTypeID → MJ: Graph Concept Types)<br/>+ Specification & AuthorityTier"]
-        GE["MJ: Graph Edges<br/>(SourcedFrom, Mentions, Broader Than,<br/>Describes, Defines, Measures, Implements, Contradicts)"]
+        GE["MJ: Graph Edges<br/>(SourcedFrom, Mentions, BroaderThan,<br/>Describes, Defines, Measures, Implements, Contradicts)"]
         GT --> G
         G --> GC
         GCT --> GC
@@ -98,7 +98,7 @@ All nine Semantic Graph tables live in `__mj` and are created in [`V202611022300
 | `MJ: Graph Authority Tiers` | `GraphAuthorityTier` / `vwGraphAuthorityTiers` | Configurable lookup table of authority tiers (`Name`, `Description`, `Rank` precedence order, `Status` = `'Active' \| 'Inactive'`). Seeded via [`metadata/graph-authority-tiers/.graph-authority-tiers.json`](../metadata/graph-authority-tiers/.graph-authority-tiers.json). |
 | `MJ: Graphs` | `Graph` / `vwGraphs` | Named graph partition (`Name`, `Description`, `GraphTypeID` FK to `MJ: Graph Types`, `LoadMode` = `'Preload' \| 'OnDemand'`, `Status` = `'Active' \| 'Disabled'`). |
 | `MJ: Graph Concepts` | `GraphConcept` / `vwGraphConcepts` | Higher-level concept node scoped to a `GraphID`, with self-referencing `ParentID` hierarchy, `ConceptTypeID` FK to `MJ: Graph Concept Types`, `AuthorityTierID` FK to `MJ: Graph Authority Tiers`, short `Description`, structured Markdown `Specification`, JSON `Synonyms`, `AuthorityTier` (`'Bylaws' \| 'BoardPolicy' \| 'ExecutiveSOP' \| 'DepartmentPractice' \| 'Reference' \| 'Inferred'`), and `Status` (`'Draft' \| 'Proposed' \| 'Approved' \| 'Deprecated'`). |
-| `MJ: Graph Edge Types` | `GraphEdgeType` / `vwGraphEdgeTypes` | Global (`GraphID IS NULL`) or graph-scoped relationship definitions (`Name`, `InverseName`, `IsDirected`, `DefaultWeight`, `AllowStored`). Standard edge types include `Broader Than`, `SourcedFrom`, `Mentions`, `Describes`, `Defines`, `Measures`, `Implements`, `Governs`, `Contradicts`, and `Related To`. |
+| `MJ: Graph Edge Types` | `GraphEdgeType` / `vwGraphEdgeTypes` | Global (`GraphID IS NULL`) or graph-scoped relationship definitions (`Name`, `InverseName`, `IsDirected`, `DefaultWeight`, `AllowStored`). Standard edge types include `BroaderThan`, `SourcedFrom`, `Mentions`, `Describes`, `Defines`, `Measures`, `Implements`, `Governs`, `Contradicts`, and `RelatedTo`. Edge type names are compared ignoring case and whitespace, so `Related To` and `RelatedTo` name the same type. |
 | `MJ: Graph Edge Type Endpoints` | `GraphEdgeTypeEndpoint` / `vwGraphEdgeTypeEndpoints` | Optional schema constraints restricting which `MJ: Entities` may appear on the `Source` or `Target` side of an edge type. |
 | `MJ: Graph Edge Providers` | `GraphEdgeProvider` / `vwGraphEdgeProviders` | Pluggable derived-edge providers (`DriverClass`, `Configuration`, `Sequence`, `IsActive`) that project edges from existing relational FKs (`QueryEntity`, `EntityRelationship`, `TaggedItem`) at read time without duplicating rows. |
 | `MJ: Graph Edges` | `GraphEdge` / `vwGraphEdges` | Polymorphic stored edges connecting `(SourceEntityID, SourceRecordID)` to `(TargetEntityID, TargetRecordID)` with `Weight` (`0..1`), `Confidence` (`0..1`), `Origin` (`'Declared' \| 'Inferred'`), `Status` (`'Proposed' \| 'Approved' \| 'Rejected'`), and JSON `Attributes`. Both `SourceRecordID` and `TargetRecordID` are decorated with `EntityField.EntityIDFieldName` in [`metadata/entities/.polymorphic-fk-entity-fields.json`](../metadata/entities/.polymorphic-fk-entity-fields.json) so Explorer forms and grids render clickable polymorphic record links. |
@@ -134,10 +134,10 @@ A cornerstone of the Canon-First methodology is **using `GraphConcept`s for dura
      - Normalized leaf section headings (`ExtractLeafTopicFromHeading`, stripping section numbers like `Article IV > §4.2.1` and boilerplate headers like `Overview` or `Introduction`).
      - Governed `TagStage` tags (`MJ: Content Item Tags`).
      - Stemmed lexical + synonym similarity (`ScoreConceptNameSimilarity`) against existing `MJ: Graph Concepts` in the target `GraphID`.
-   - Within each `ConceptSeedCluster`, chunks are sorted by **`AuthorityTierPrecedence`** (`Bylaws` [100] > `BoardPolicy` [80] > `ExecutiveSOP` [60] > `DepartmentPractice` [40] > `Reference` [20] > `Inferred` [10]) and scanned for numeric/threshold conflicts (`detectPotentialChunkConflicts`, e.g., `"60 days"` in one section vs. `"90 days"` in another, or `"$500"` vs. `"$1,000"`). Pairs of chunks from the same item under the same heading are skipped, and because each run clusters a single content item, conflicts between two different documents or sources are not detected. With the shipped stages, every chunk of an item has the same heading: `SegmentStage` copies the item's `Decorator` onto each chunk, and `GraphStage` uses that value (or the item's decorator) whether it reads in-memory chunks or persisted `MJ: Content Item Chunks`. So the scan finds no conflicts and `GraphStage` writes no `Contradicts` edges over real content today. The scan compares sections only when chunks arrive with distinct headings, for example from a custom `IGraphOverlayStore.LoadItemChunks` that supplies per-section heading paths, as MJ's semantic-graph integration check does. Until then, a `Contradicts` edge exists only if someone adds it to `MJ: Graph Edges` directly.
+   - Within each `ConceptSeedCluster`, chunks are sorted by their source's authority tier, using the `Rank` of its `MJ: Graph Authority Tiers` row (`GetAuthorityTierRank`; higher wins, a missing tier ranks 0), and scanned for numeric/threshold conflicts (`detectPotentialChunkConflicts`, e.g., `"60 days"` in one section vs. `"90 days"` in another, or `"$500"` vs. `"$1,000"`). Pairs of chunks from the same item under the same heading are skipped, and because each run clusters a single content item, conflicts between two different documents or sources are not detected. With the shipped stages, every chunk of an item has the same heading: `SegmentStage` copies the item's `Decorator` onto each chunk, and `GraphStage` uses that value (or the item's decorator) whether it reads in-memory chunks or persisted `MJ: Content Item Chunks`. So the scan finds no conflicts and `GraphStage` writes no `Contradicts` edges over real content today. The scan compares sections only when chunks arrive with distinct headings, for example from a custom `IGraphOverlayStore.LoadItemChunks` that supplies per-section heading paths, as MJ's semantic-graph integration check does. Until then, a `Contradicts` edge exists only if someone adds it to `MJ: Graph Edges` directly.
 3. **Concept & Edge Synthesis (`BaseConceptSynthesizer` / `DeterministicConceptSynthesizer`)**:
    - Synthesizes one `SynthesizedGraphConcept` per cluster (preserving existing `Description`/`Specification` when enriching an existing concept, and extracting `ParentConceptName` from multi-level heading breadcrumbs).
-   - Emits provenance edges (`SourcedFrom` to `MJ: Content Item Chunks`, `Mentions` from `MJ: Content Items`), hierarchy edges (`Broader Than` from parent concept), schema/operational grounding edges (`Describes`, `Defines`, `Measures`, `Implements`), and `Contradicts` edges for any conflicts step 2 reports (none with the shipped stages, as step 2 explains).
+   - Emits provenance edges (`SourcedFrom` to `MJ: Content Item Chunks`, `Mentions` from `MJ: Content Items`), hierarchy edges (`BroaderThan` from parent concept), schema/operational grounding edges (`Describes`, `Defines`, `Measures`, `Implements`), and `Contradicts` edges for any conflicts step 2 reports (none with the shipped stages, as step 2 explains).
 
 ### Single-Source vs. Multi-Source Shared Graphs
 
@@ -235,8 +235,74 @@ for (const report of healthReports) {
 
 - **Unit Tests**:
   - [`packages/ContentPipeline/base/src/__tests__/ConceptSeedClustering.test.ts`](../packages/ContentPipeline/base/src/__tests__/ConceptSeedClustering.test.ts) — `ResolveGraphOverlayConfig`, `ExtractLeafTopicFromHeading`, `ScoreConceptNameSimilarity`, `InferConceptTypeFromSignals`, `ClusterContentIntoConceptSeeds`, authority-tier sorting, day/currency conflict detection, and schema/query/action grounding.
-  - [`packages/ContentPipeline/engine/src/__tests__/GraphStage.test.ts`](../packages/ContentPipeline/engine/src/__tests__/GraphStage.test.ts) — `GraphStage` registration, `Canon` vs. `Knowledge` mode execution, `ManagedPromptConceptSynthesizer`, `Broader Than` hierarchy edges, `Contradicts` edges, `constrained` mode, dry-run (`IsTest: true`), and `AbortSignal` handling.
+  - [`packages/ContentPipeline/engine/src/__tests__/GraphStage.test.ts`](../packages/ContentPipeline/engine/src/__tests__/GraphStage.test.ts) — `GraphStage` registration, `Canon` vs. `Knowledge` mode execution, `ManagedPromptConceptSynthesizer`, `BroaderThan` hierarchy edges, `Contradicts` edges, `constrained` mode, dry-run (`IsTest: true`), and `AbortSignal` handling.
   - [`packages/AI/CorePlus/src/__tests__/dag-similarity.test.ts`](../packages/AI/CorePlus/src/__tests__/dag-similarity.test.ts) — Node signature canonicalization across all 8 `TaskGraphNodeKind` variants, WL isomorphism invariance, diamond/fan-out/fan-in topologies, 2-hop transitive reachability, complete-linkage clustering, and `DiscoverWorkflowPromotionCandidates`.
   - [`packages/AI/CorePlus/src/__tests__/workflow-telemetry.test.ts`](../packages/AI/CorePlus/src/__tests__/workflow-telemetry.test.ts) — `Dormant`, `UsageDecay` vs. seasonal domain slowdown (`DomainAdjustedVelocityRatio`), `ExceptionSpike` + `HotspotNodes`, `OutcomeDrift`, and `ShadowBypassed` correlation.
 - **Integration Tests (`@memberjunction/integration-test-suite`)**:
   - [`packages/TestingFramework/integration-test-suite/src/checks/semantic-graph.checks.ts`](../packages/TestingFramework/integration-test-suite/src/checks/semantic-graph.checks.ts) (`IT162`, checks `SG1`–`SG7`) — Verifies live metadata coherence, polymorphic `EntityIDFieldName` links, physical SQL catalog constraints, `RunView` execution across all 8 Semantic Graph views (`MJ: Graph Types`, `MJ: Graph Concept Types`, `MJ: Graphs`, `MJ: Graph Concepts`, `MJ: Graph Edge Types`, `MJ: Graph Edge Type Endpoints`, `MJ: Graph Edge Providers`, `MJ: Graph Edges`), live DB CRUD + CHECK constraint rejection (`RequiresMutation: true`), end-to-end `GraphStage` execution with live `Provider.Entities`, and deterministic DAG similarity & workflow health telemetry.
+
+---
+
+## 7. MJ Docs in the Graph
+
+MJ Docs (`Markdown Document` artifacts) join a graph as they are saved. Nothing in code names the
+artifact type or the graph; both come from metadata, and the plan with its design record is
+[`plans/docs-semantic-graph.md`](../plans/docs-semantic-graph.md).
+
+### The path
+
+1. **Indexing.** `ArtifactGraphIndexer` (`@memberjunction/content-pipeline`, started by
+   `ContentPipelineStartup`) listens to artifact and artifact-version saves and deletes. For every
+   push-only Content Source whose `Configuration.Artifacts.ArtifactTypes` names the artifact's type, it
+   pushes the latest version's text with `ContentUploadIngestor.IngestText`: one Content Item per
+   artifact at `record://MJ: Artifacts/<id>`, debounced per artifact (`DebounceMs`). Unchanged text is a
+   no-op; changed text replaces the item; a deleted or emptied artifact is removed.
+2. **Pipeline.** The item runs Segment, Tag, Embed and Graph like any other item. The Graph stage
+   writes concepts with `Origin = 'Inferred'` and `SourcedFrom` / `Mentions` edges.
+3. **Links.** `[[Name]]` in a doc becomes a `LinksTo` row in `MJ: Record Links` to the artifact of that
+   name (same environment; the author's own artifact wins a tie), reconciled on every save. A graph's
+   `RecordLinkEdgeProvider` with `LinkTypes: ["LinksTo"]` projects it.
+4. **Relatedness.** `SharedConceptEdgeProvider` relates two records that were sources of the same
+   concept (`SharesConceptWith`). It is derived on read as the viewer and stores nothing; the edge's
+   `Attributes.SharedConceptIDs` explain it.
+5. **Retraction.** Deleting an item or chunk deletes the `Inferred` edges the Graph stage wrote for it,
+   inside the pipeline retraction scope that `MJGraphEdgeEntityServer` accepts for `Inferred` edges
+   only. A synthesized concept left with no source is deleted unless it is `Approved` in a Canon graph,
+   has children, or carries a `Declared` edge.
+
+### Seeded
+
+| Record | Name |
+|---|---|
+| Content Source | "MJ Docs" (Upload, MD, `MJ: Artifacts`, `Artifacts.ArtifactTypes: ["Markdown Document"]`, deterministic synthesizer, `DetectContradictions: false`) |
+| Content Type | "MJ Docs" |
+| Entity Document | "Artifacts Content" (`templates/mj-artifacts-content.njk`) |
+| Graph | "Library Knowledge" (Knowledge, OnDemand), providers "Document Links" and "Shared Concepts" |
+| Edge Types | `LinksTo`, `SharesConceptWith` (not stored) |
+
+To index another artifact type, add it to `ArtifactTypes`, or seed a second push-only source with its
+own graph. To turn indexing off without deleting the source, set `Artifacts.Enabled: false`.
+
+### Who sees what
+
+Every node and edge goes through the graph's per-viewer checks. The provenance policy covers the
+derived nodes: a content item or chunk is visible exactly when the viewer can read the artifact behind
+it (the artifact read hooks decide, so there is no second copy of the sharing rules). A synthesized
+concept is visible when the viewer can read all of its sources, redacted when only some, hidden when
+none or when every source was retracted. An `Approved` concept in a Canon graph is visible to anyone who
+can read the concept: approval is publication.
+
+### Reading relations
+
+`LoadRecordRelations(engine, record, user, options)` in `@memberjunction/core-entities` returns
+`{ Links, Backlinks, Related }` for one record as one viewer, from every active graph with a Record Link
+or Shared Concept provider (`RelationGraphNames`). The artifact viewer's Related tab renders it; any
+other surface or agent tool can call it the same way.
+
+### Tests
+
+- IT185 `docs-semantic-graph` (DSG1–DSG6): indexing, links, artifact-ACL agreement, retraction and
+  clean teardown against a live database.
+- Unit: `ArtifactGraphIndexer.test.ts`, `GraphEvidenceRetractor.test.ts`, `ContentUploadIngestor.test.ts`
+  (content-pipeline engine), `SharedConceptEdgeProvider.test.ts`, `RecordRelations.test.ts`,
+  `GraphAccessPolicy.test.ts` (core-entities), `artifact-related-panel.test.ts` (ng-artifacts).

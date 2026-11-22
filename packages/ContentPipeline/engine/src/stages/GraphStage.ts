@@ -38,8 +38,11 @@ import {
     GraphAuthorityTierDescriptor,
     GraphConceptTypeDescriptor,
     Outcome,
+    ContentSourceGraphOverlayConfig,
+    FinalizeGraphOverlayConfig,
+    GraphTypeDescriptor,
+    MergeGraphOverlayConfig,
     ResolvedGraphOverlayConfig,
-    ResolveGraphOverlayConfig,
     SchemaGroundingTarget,
     StageContext,
     StageDeclaration,
@@ -47,6 +50,7 @@ import {
     SynthesizeConceptResult,
     SynthesizedGraphConcept,
     SynthesizedGraphEdge,
+    UnknownAuthorityTierError,
     WorkingRecord,
     WorkingRecordEntity,
 } from '@memberjunction/content-pipeline-base';
@@ -61,6 +65,12 @@ import { TAG_STAGE } from './TagStage.js';
 
 void DeterministicConceptSynthesizer;
 void ManagedPromptConceptSynthesizer;
+
+/** The authority tier a content source resolved to: name and ID, both `null` when the source is unranked. */
+interface SourceAuthorityTier {
+    readonly Name: GraphAuthorityTier | null;
+    readonly ID: string | null;
+}
 
 /** Stage registration key for the Graph overlay stage. */
 export const GRAPH_STAGE = 'Graph';
@@ -97,6 +107,13 @@ export interface IGraphOverlayStore {
         provider: IMetadataProvider,
     ): Promise<GraphAuthorityTierDescriptor[]>;
 
+    /** Optional loader for the target graph's `MJ: Graph Types` row, whose defaults fill in what a source leaves unset. */
+    LoadGraphType?(
+        graphID: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<GraphTypeDescriptor | null>;
+
     /** Load candidate MJ schema/operational targets for grounding edges (`Describes`, `Defines`, `Measures`, `Implements`). */
     LoadGroundingTargets?(
         groundingMode: ResolvedGraphOverlayConfig['GroundingMode'],
@@ -110,7 +127,7 @@ export interface IGraphOverlayStore {
         contentSourceID: string,
         contentItemTitle: string | null,
         tags: readonly string[],
-        authorityTier: GraphAuthorityTier,
+        authorityTier: GraphAuthorityTier | null,
         contextUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<ContentChunkSeedInput[]>;
@@ -198,30 +215,36 @@ export class GraphStage extends BasePipelineStage {
 
         const sourceID = record.GetExtension<string>('Pipeline', 'contentSourceID') ?? null;
         const { explicitGraphID, sourceConfig } = await this.resolveSourceConfiguration(sourceID, context);
-        const overlayConfig = ResolveGraphOverlayConfig(explicitGraphID, sourceConfig, context.Configuration);
+        const mergedConfig = MergeGraphOverlayConfig(explicitGraphID, sourceConfig, context.Configuration);
+        const enabled = mergedConfig.EnableGraphOverlay ?? mergedConfig.GraphID != null;
 
-        if (!overlayConfig.EnableGraphOverlay) {
+        if (!enabled) {
             return Outcome.Skipped('Graph overlay is disabled for this content source');
         }
 
-        if (!overlayConfig.GraphID) {
+        if (!mergedConfig.GraphID) {
             return Outcome.Skipped('Graph overlay is enabled but no GraphID is configured');
         }
 
-        const targetGraphID = overlayConfig.GraphID;
+        const store = this.resolveStore(context.Configuration, context.IsTest);
+        const authorityTiers = store?.LoadAuthorityTiers
+            ? await store.LoadAuthorityTiers(context.ContextUser, context.Provider)
+            : [];
+        const overlayConfig = await this.finalizeOverlayConfig(mergedConfig, mergedConfig.GraphID, authorityTiers, store, context);
+
+        const targetGraphID = mergedConfig.GraphID;
         const synthesizerKey = overlayConfig.SynthesizerKey || DETERMINISTIC_CONCEPT_SYNTHESIZER;
         const synthesizer = BaseConceptSynthesizer.Resolve(synthesizerKey);
         if (!synthesizer) {
             throw new FatalStageError(`Concept synthesizer '${synthesizerKey}' is not registered`);
         }
 
-        const store = this.resolveStore(context.Configuration, context.IsTest);
         const tagNames = await this.loadTagsForRecord(record, store, context);
         const chunks = await this.loadChunksForRecord(
             record,
             sourceID ?? 'unscoped-source',
             tagNames,
-            overlayConfig.AuthorityTier,
+            { Name: overlayConfig.AuthorityTier, ID: overlayConfig.AuthorityTierID },
             store,
             context,
         );
@@ -234,9 +257,6 @@ export class GraphStage extends BasePipelineStage {
             : [];
         const conceptTypes = store?.LoadConceptTypes
             ? await store.LoadConceptTypes(context.ContextUser, context.Provider)
-            : [];
-        const authorityTiers = store?.LoadAuthorityTiers
-            ? await store.LoadAuthorityTiers(context.ContextUser, context.Provider)
             : [];
         const groundingTargets =
             store?.LoadGroundingTargets && overlayConfig.GroundingMode !== 'none'
@@ -276,6 +296,7 @@ export class GraphStage extends BasePipelineStage {
                 GraphID: targetGraphID,
                 OverlayConfig: overlayConfig,
                 SeedCluster: cluster,
+                AuthorityTiers: authorityTiers,
                 ContextUser: context.ContextUser,
                 Provider: context.Provider,
                 Signal: context.Signal,
@@ -350,6 +371,31 @@ export class GraphStage extends BasePipelineStage {
         );
     }
 
+    /**
+     * Fills in the overlay settings the source left unset from the target graph's `MJ: Graph Types` row
+     * and the active authority tiers. A source naming a tier that does not exist is a configuration
+     * error, so it fails the stage instead of silently ranking the source as something else.
+     */
+    private async finalizeOverlayConfig(
+        merged: ContentSourceGraphOverlayConfig,
+        graphID: string,
+        authorityTiers: readonly GraphAuthorityTierDescriptor[],
+        store: IGraphOverlayStore | null,
+        context: StageContext,
+    ): Promise<ResolvedGraphOverlayConfig> {
+        const graphType = store?.LoadGraphType
+            ? await store.LoadGraphType(graphID, context.ContextUser, context.Provider)
+            : null;
+        try {
+            return FinalizeGraphOverlayConfig(merged, { GraphType: graphType, AuthorityTiers: authorityTiers });
+        } catch (err) {
+            if (err instanceof UnknownAuthorityTierError) {
+                throw new FatalStageError(err.message);
+            }
+            throw err;
+        }
+    }
+
     private resolveStore(configuration: Record<string, unknown>, isTest: boolean): IGraphOverlayStore | null {
         const configStore = configuration['GraphOverlayStore'];
         if (configStore && typeof configStore === 'object' && 'UpsertConcept' in configStore) {
@@ -397,10 +443,11 @@ export class GraphStage extends BasePipelineStage {
         record: WorkingRecord,
         contentSourceID: string,
         tags: readonly string[],
-        authorityTier: GraphAuthorityTier,
+        tier: SourceAuthorityTier,
         store: IGraphOverlayStore | null,
         context: StageContext,
     ): Promise<ContentChunkSeedInput[]> {
+        const tierFields = { AuthorityTier: tier.Name ?? undefined, AuthorityTierID: tier.ID };
         const itemID = record.Identity.RecordID ?? record.Identity.EphemeralID;
         const itemTitle = (record.Get('Title') as string | null) ?? null;
         const itemDecorator = (record.Get('Decorator') as string | null) ?? itemTitle;
@@ -423,7 +470,7 @@ export class GraphStage extends BasePipelineStage {
                         HeadingPath: decorator,
                         Sequence: seq,
                         Tags: tags,
-                        AuthorityTier: authorityTier,
+                        ...tierFields,
                     };
                 })
                 .filter((c) => c.Text.trim().length > 0);
@@ -436,7 +483,7 @@ export class GraphStage extends BasePipelineStage {
                 contentSourceID,
                 itemTitle,
                 tags,
-                authorityTier,
+                tier.Name,
                 context.ContextUser,
                 context.Provider,
             );
@@ -465,7 +512,7 @@ export class GraphStage extends BasePipelineStage {
                     HeadingPath: itemDecorator,
                     Sequence: typeof row.Sequence === 'number' ? row.Sequence : idx,
                     Tags: tags,
-                    AuthorityTier: authorityTier,
+                    ...tierFields,
                 }));
             }
         }
@@ -483,7 +530,7 @@ export class GraphStage extends BasePipelineStage {
                     HeadingPath: itemDecorator,
                     Sequence: 0,
                     Tags: tags,
-                    AuthorityTier: authorityTier,
+                    ...tierFields,
                 },
             ];
         }

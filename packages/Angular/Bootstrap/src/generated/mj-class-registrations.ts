@@ -36,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (504 classes)
+// @memberjunction/core-entities (508 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -47,12 +47,15 @@ import {
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
+    ContentChunkProvenancePolicy,
+    ContentItemProvenancePolicy,
     DashboardPartDocumentBlock,
     DashboardPermissionProvider,
     EntityMetadataEdgeProvider,
     EntityPermissionProvider,
     EntityViewDocumentBlock,
     ForeignKeyEdgeProvider,
+    GraphConceptProvenancePolicy,
     InteractiveComponentDocumentBlock,
     JoinEntityEdgeProvider,
     MJAIActionEntity,
@@ -542,6 +545,7 @@ import {
     RecordLinkEdgeProvider,
     ResourcePermissionProvider,
     SavedQueryDocumentBlock,
+    SharedConceptEdgeProvider,
 } from '@memberjunction/core-entities';
 
 // @memberjunction/actions-base (2 classes)
@@ -952,12 +956,15 @@ const CLASS_REGISTRATIONS_0: any[] = [
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
+    ContentChunkProvenancePolicy,
+    ContentItemProvenancePolicy,
     DashboardPartDocumentBlock,
     DashboardPermissionProvider,
     EntityMetadataEdgeProvider,
     EntityPermissionProvider,
     EntityViewDocumentBlock,
     ForeignKeyEdgeProvider,
+    GraphConceptProvenancePolicy,
     InteractiveComponentDocumentBlock,
     JoinEntityEdgeProvider,
     MJAIActionEntity,
@@ -1127,13 +1134,13 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJContentProcessRunPromptRunEntity,
     MJContentSourceEntity,
     MJContentSourceParamEntity,
-    MJContentSourceTypeEntity,
-    MJContentSourceTypeParamEntity,
-    MJContentTypeAttributeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJContentSourceTypeEntity,
+    MJContentSourceTypeParamEntity,
+    MJContentTypeAttributeEntity,
     MJContentTypeEntity,
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
@@ -1331,13 +1338,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordChangeReplayRunEntity,
     MJRecordCloneLogEntity,
     MJRecordCloneLogItemEntity,
-    MJRecordGeoCodeEntity,
-    MJRecordLinkEntity,
-    MJRecordMergeDeletionLogEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecordGeoCodeEntity,
+    MJRecordLinkEntity,
+    MJRecordMergeDeletionLogEntity,
     MJRecordMergeLogEntity,
     MJRecordProcessCategoryEntity,
     MJRecordProcessEntity,
@@ -1455,6 +1462,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RecordLinkEdgeProvider,
     ResourcePermissionProvider,
     SavedQueryDocumentBlock,
+    SharedConceptEdgeProvider,
     MJActionEntityExtended,
     MJEntityActionEntityExtended,
     MJAIAgentEntityExtended,
@@ -1534,14 +1542,14 @@ const CLASS_REGISTRATIONS_2: any[] = [
     SettingsComponent,
     SqlLoggingComponent,
     UserManagementComponent,
-    RubricEngineBase,
-    AIAgentCategoryHeaderPanel,
-    AIAgentCategoryHierarchyPanel,
-    AIAgentCategoryOverviewPanel,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    RubricEngineBase,
+    AIAgentCategoryHeaderPanel,
+    AIAgentCategoryHierarchyPanel,
+    AIAgentCategoryOverviewPanel,
     AIPromptCategoryHierarchyPanel,
     ActionCategoryHierarchyPanel,
     BrandKitAssetsPanelComponent,
@@ -1738,14 +1746,14 @@ const CLASS_REGISTRATIONS_3: any[] = [
     WorkflowsDashboardComponent,
     WorkflowsResourceComponent,
     ArtifactResource,
-    ChatCollectionsResource,
-    ChatConversationsResource,
-    ConversationFeedbackResource,
-    DashboardResource,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    ChatCollectionsResource,
+    ChatConversationsResource,
+    ConversationFeedbackResource,
+    DashboardResource,
     EntityRecordResource,
     LibraryResource,
     ListDetailResource,
@@ -1771,7 +1779,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 810;
+export const CLASS_REGISTRATIONS_COUNT = 814;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
