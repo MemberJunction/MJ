@@ -125,6 +125,7 @@ Schema Files/
 !/docs/telemetry-shareable-schema.md
 !/docs/opentelemetry-setup.md
 !/docs/limits-sweep-inventory.csv
+!/docs/limits-config-and-sweep.md
 SQL Scripts/generated/
 **/SQL Scripts/generated/
 *.old

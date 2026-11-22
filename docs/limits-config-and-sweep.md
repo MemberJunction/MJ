@@ -1,0 +1,151 @@
+# Execution Limits Configuration, Literal Sweep, Approved Backstops & Runaway Governance
+
+MemberJunction centralizes all execution limits, safety backstops, multi-scope budgets, deterministic progress detection, and operational tuning knobs in **`LimitsConfigResolver`** (`packages/MJCore/src/generic/limitsConfig.ts`) with a uniform 5-tier precedence chain and zero unapproved `RunawayGuard` numeric literals anywhere else in the codebase.
+
+---
+
+## 1. The 5-Tier `limits` Configuration Surface
+
+`LimitsConfigResolver.Instance.Resolve(layers?, options?)` merges five tiers from lowest to highest precedence:
+
+| Rank | Tier | Source | Notes |
+|---|---|---|---|
+| 1 | `CodeFallback` | `CODE_FALLBACK_LIMITS` / `DEFAULT_MJ_LIMITS_CONFIG` | Built-in approved defaults in `@memberjunction/core`. |
+| 2 | `MjConfig` | `mj.config.cjs` `limits` block | Loaded at startup by `packages/MJServer/src/config.ts` and registered via `LimitsConfigResolver.Instance.RegisterMjConfigLimits(config.limits)`. |
+| 3 | `AgentOrWorkflowMetadata` | `MJ: AI Agents` (`MaxCostPerRun`, `MaxTimePerRun`, `MaxTokensPerRun`, `TypeConfiguration.limits`) & workflow/channel metadata | Resolved per run via `ResolveAgentRunLimits()` (`@memberjunction/ai-core-plus`). |
+| 4 | `UserAgentPolicy` | `MJ: AI Agent User Policies` (`Status = 'Active'`) | User-scoped policy overrides; supports `EnforceUserPolicyAsCeiling: true` so `RunOverride` cannot raise finite ceilings above user policy bounds. |
+| 5 | `RunOverride` | `ExecuteAgentParams` (`absoluteMaxIterations`, `maxExecutionTimeMs`, `maxTreeCost`, `maxTreeTokens`, `limitsOverride`) | Per-run override (highest precedence; clamped when policy ceiling enforcement is enabled). |
+
+Every resolved key carries full per-key provenance (`SourceTier`, `IsOverridden`, `TierValues`, `WasClampedByPolicyCeiling`) serialized into `AIAgentRun.Data.__limitsDiagnostics` (`LimitsDiagnosticsSnapshot`).
+
+### Example `mj.config.cjs` `limits` Block
+
+```js
+module.exports = {
+  // ...existing DB / GraphQL config...
+  limits: {
+    AgentChannelConsecutiveTurns: 1000,
+    AgentChannelWakesPerHour: 600,
+    AgentAbsoluteIterations: 100_000,
+    MaxTasksPerAgentGraph: 10_000,
+    WhileLoopMaxIterations: 1_000_000,
+    ForEachMaxIterations: 1_000_000,
+    MaxTasksPerGraph: 100_000,
+    BriefingContributorTimeoutMs: 10_000,
+    BriefingMaxContributorChars: 32_768,
+    Budgets: {
+      PerRun: { MaxCostUsd: 25.0, MaxWallClockMs: 7_200_000, MaxTokens: null },
+      PerRoutine: { MaxCostUsd: 100.0, MaxWallClockMs: null },
+      PerUserPerDay: { MaxCostUsd: 250.0, MaxWallClockMs: null, DayBoundaryTimezone: 'UTC' },
+      CountPausedTimeTowardsWallClock: false,
+      AllowedInFlightOvershootUsd: 0.05,
+      AllowedInFlightOvershootMs: 5_000,
+    },
+    ProgressDetector: {
+      Enabled: true,
+      WindowSize: 10,
+      MinIterationsBeforeCheck: 6,
+      DuplicateStepRatioThreshold: 0.75,
+      NoPayloadDeltaWindowCount: 5,
+      RepeatingErrorWindowCount: 4,
+      AmbiguityLowScoreThreshold: 0.25,
+      AmbiguityHighScoreThreshold: 0.65,
+      FastJudgeEnabled: true,
+      FastJudgeTimeoutMs: 200,
+      FastJudgeMinIntervalIterations: 5,
+      FastJudgeMaxInputChars: 8192,
+      FastJudgeFailureFallback: 'ContinueWithWarning',
+    },
+  },
+};
+```
+
+---
+
+## 2. Approved Safety Backstops & Briefing Limits
+
+| Key Path | Approved Default | Scope / Purpose |
+|---|---|---|
+| `AgentChannelConsecutiveTurns` | `1,000` | Maximum consecutive agent turns in an Agent Channel before pausing for human reply (`CHANNEL_PAUSED_LOOP_GUARD`). |
+| `AgentChannelWakesPerHour` | `600` | Maximum peer-agent wakes per hour in an Agent Channel (`CHANNEL_PAUSED_RATE_LIMIT`). |
+| `AgentAbsoluteIterations` | `100,000` | System-wide safety net on prompt iterations per agent run. |
+| `MaxTasksPerAgentGraph` | `10,000` | Maximum nodes permitted in a model-authored task graph (`ValidateTaskGraphSpec` / `WorkflowDraftOperation`). |
+| `WhileLoopMaxIterations` | `1,000,000` | Default ceiling for durable `While` loop steps (`TaskLoopExecutor`). |
+| `ForEachMaxIterations` | `1,000,000` | Default ceiling for durable `ForEach` loop steps (`TaskLoopExecutor`). |
+| `MaxTasksPerGraph` | `100,000` | Blast-radius ceiling on nodes in any submitted workflow or task graph. |
+| `BriefingContributorTimeoutMs` | `10,000` ms | Timeout per briefing skill contributor execution. |
+| `BriefingMaxContributorChars` | `32,768` chars | Maximum serialized character length retained per briefing skill contributor. |
+
+---
+
+## 3. Mechanical Literal Sweep & Standards Enforcement
+
+All numeric bounds across `packages/` were mechanically swept and categorized into `docs/limits-sweep-inventory.csv` using `.github/scripts/sweep-limits-literals.mjs`:
+
+- **`RunawayGuard`**: Work/iteration/turn/wake/graph-size backstops — must live **strictly** inside `packages/MJCore/src/generic/limitsConfig.ts`.
+- **`ResourceGuard`**: Bounded retry/depth/concurrency/timeout guards (e.g. `MaxValidationRetries`, `MaxHandoffHops`, `ClientToolTimeoutMs`) — exposed under `Limits.ResourceGuards` and annotated `// ResourceGuard: ...` where retained locally.
+- **`Tuning`**: Cache sizes, TTLs, compaction thresholds, candidate caps — exposed under `Limits.Tuning` or annotated `// Tuning: ...`.
+- **`ProtocolLimit`**: External specification or wire-protocol bounds — annotated `// ProtocolLimit: ...`.
+- **`UX`**: UI pagination/preview truncation limits — annotated `// UX: ...`.
+
+CI and local gates fail immediately if any unapproved `RunawayGuard` literal is introduced outside `limitsConfig.ts`:
+
+```bash
+node .github/scripts/sweep-limits-literals.mjs --check-standards
+npm run check:standards
+npm run check:guards
+```
+
+---
+
+## 4. Multi-Scope Budgets (`BudgetEnforcementGuard`)
+
+`BudgetEnforcementGuard` (`packages/AI/Agents/src/BudgetEnforcementGuard.ts`) enforces **both** dollar spend (`CostUsd`) and active wall-clock time (`WallClockMs`) across all three scopes:
+
+1. **`PerRun`** — single run spend, active wall-clock time, and optional token ceiling.
+2. **`PerRoutine`** — cumulative spend and active wall-clock time across runs sharing a `RoutineID`.
+3. **`PerUserPerDay`** — cumulative daily spend and active wall-clock time per user within `DayBoundaryTimezone` (default `'UTC'`).
+
+When `CountPausedTimeTowardsWallClock` is `false` (default), time spent in `Paused` awaiting human approval is subtracted from elapsed wall-clock time via `PausedIntervals`. Bounded in-flight tolerance (`AllowedInFlightOvershootUsd`, `AllowedInFlightOvershootMs`) prevents interrupting already-dispatched billable calls prematurely.
+
+---
+
+## 5. Deterministic Progress Detection & Sub-200ms Fast Convergence Judge
+
+Before an unproductive loop ever approaches the 100,000 / 1,000,000 backstops, `DeterministicProgressDetector` (`packages/AI/Agents/src/DeterministicProgressDetector.ts`) evaluates a sliding window (`WindowSize`, after `MinIterationsBeforeCheck` warmup iterations) across **6 zero-LLM deterministic signals**:
+
+1. **Records created or changed** (`RecordsCreatedOrChangedRate`)
+2. **Tasks closed / completed** (`TasksClosedRate`)
+3. **Distinct outputs** (`DistinctOutputRatio`)
+4. **Repeated text similarity** (`RepeatedTextSimilarity` via character trigram or embedding cosine similarity)
+5. **Tokens spent per unit of progress** (`TokensPerProgressUnit`, `TokenEfficiencyScore`)
+6. **Heap growth & output-length variance** (`OutputLengthVariance`, `HeapGrowthRatio`, `VarianceHealthScore`)
+
+Classification outcomes:
+- **`Converging`** (`ProgressScore >= AmbiguityHighScoreThreshold`): continues uninterrupted with zero judge overhead.
+- **`Stalled`** (hard-stall streak or `ProgressScore < AmbiguityLowScoreThreshold`): immediately pauses non-destructively (`PauseReason = 'ProgressStalled'`).
+- **`Ambiguous`**: invokes `FastConvergenceJudge` (`packages/AI/Agents/src/FastConvergenceJudge.ts`), strictly bounded by `FastJudgeTimeoutMs` (default `200ms`) and `FastJudgeMinIntervalIterations` cooldown, applying `FastJudgeFailureFallback` (`'ContinueWithWarning'` or `'PauseForHuman'`) on timeout/error and logging its short reason to `AIAgentRun.Data.__progressDiagnostics`.
+
+---
+
+## 6. Non-Destructive Pause, Persisted Checkpoint & Resume (`RunawayCheckpointManager`)
+
+When `BudgetEnforcementGuard`, `DeterministicProgressDetector`, or `FastConvergenceJudge` triggers a pause:
+
+1. `BaseAgent` flushes pending steps/prompt saves and calls `RunawayCheckpointManager.PauseRunWithCheckpoint()`.
+2. The run transitions cleanly to `Status = 'Paused'` (`CompletedAt = null`, `ErrorMessage = null`) — completed work is **never** discarded.
+3. A versioned `RunawayCheckpointState` (`mj-runaway-checkpoint/v1`) is persisted under `AIAgentRun.Data.__runawayCheckpoint` capturing completed steps/turns/nodes, conversation messages, in-flight payload, scratchpad, cumulative budget ledger, and pause evidence.
+4. An owner notification (`MJ: User Notifications`) and approval request (`MJ: AI Agent Requests`) are emitted.
+5. `PrepareResumeFromCheckpoint()` **fails closed** until `HumanApproval.Status === 'Approved'`. Once approved (with optional `BudgetExtensionGrant`), `BaseAgent.ResumePausedRun()` restores payload, scratchpad, message history, and cumulative USD + active wall-clock accounting without re-executing already-completed turns.
+
+---
+
+## 7. Explorer Admin Limits Panel & `BaseRemotableOperation` API
+
+Three `BaseRemotableOperation` classes in `packages/AI/Agents/src/operations/LimitsOperations.ts` expose typed server access without bespoke GraphQL resolvers:
+
+- **`Limits.GetDiagnostics`** (`LimitsGetDiagnosticsServerOperation`): returns resolved 5-tier config, per-key provenance, approved backstops, multi-scope budget utilization, active/paused runs, deterministic progress classifications, and fast judge logs.
+- **`Limits.ResumePausedRun`** (`LimitsResumePausedRunServerOperation`): records human approval + optional budget extension and transitions the paused run back to `Running`.
+- **`Limits.PauseRun`** (`LimitsPauseRunServerOperation`): non-destructively pauses an active `Running` run with a persisted checkpoint.
+
+In MJ Explorer, **`AdminLimitsResourceComponent`** (`@RegisterClass(BaseResourceComponent, 'AdminLimitsResource')`, wired into `metadata/applications/.admin-application.json` as **Execution Limits**) provides four interactive views (`Hierarchy & Backstops`, `Tier Provenance`, `Budget Utilization`, and `Active & Paused Runs` with inspect drawer and Approve & Resume modal).
