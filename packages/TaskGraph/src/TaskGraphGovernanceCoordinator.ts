@@ -84,11 +84,27 @@ import {
     type TaskGraphDebugState,
 } from './debug-state';
 import type { LoopIterationBatchOutcome, LoopIterationGovernanceVerdict, LoopIterationOutcome } from './TaskLoopExecutor';
+import type { TaskRuntimeAttemptBilling } from './decision-node';
 import type { TaskGraphGovernanceConfig, TaskGraphObserver } from './types';
 
 interface SettledNodeMetrics {
     CostUsd: number;
     TokensUsed: number;
+}
+
+interface ParsedAttemptEntry {
+    RecordedAtMs: number | null;
+    CostUsd: number;
+    Refs: ExtractedRowRunRefs;
+}
+
+interface ParsedAttemptSummary {
+    AttemptCount: number;
+    CostUsd: number;
+    TokensUsed: number;
+    CostEvents: BudgetCostEvent[];
+    HasUnpricedRunRef: boolean;
+    Attempts: ParsedAttemptEntry[];
 }
 
 interface PausedLoopDetails {
@@ -895,6 +911,115 @@ export class TaskGraphGovernanceCoordinator {
     }
 
     /**
+     * Records a billable (potentially retryable) task attempt's cumulative metrics and cost events
+     * on the governance ledger and evaluates 5-tier budgets BEFORE releasing the task's claim for retry.
+     *
+     * Unlike {@link RecordNodeSettlementAndEvaluate}, this keeps the node out of `CompletedNodeSet`
+     * while the task remains retryable (`Pending`), while durably pausing the graph at a resumable
+     * checkpoint if the failed attempt exhausted `PerRun`, `PerRoutine`, or `PerUserPerDay` budgets.
+     */
+    public async RecordAttemptAndEvaluate(args: {
+        Provider: IMetadataProvider;
+        ContextUser: UserInfo;
+        SubmittingUser?: UserInfo | null;
+        Parent: MJTaskEntity | null;
+        Task: MJTaskEntity;
+        Attempt: TaskRuntimeAttemptBilling;
+        CumulativeCostUsd: number;
+        CumulativeTokensUsed: number;
+        CumulativeCostEvents?: readonly BudgetCostEvent[];
+        Observer?: TaskGraphObserver;
+        DebugStateCache?: Map<string, TaskGraphDebugState>;
+    }): Promise<BudgetEnforcementResult | null> {
+        const graphID = args.Task.ParentID ?? args.Task.ID;
+        const state = this.getOrCreateState(graphID, args.Parent);
+        state.LastProvider = args.Provider;
+        if (!state.GovernanceEnabled) {
+            return null;
+        }
+        if (args.Task.StartedAt) {
+            const taskStartMs = new Date(args.Task.StartedAt).getTime();
+            if (Number.isFinite(taskStartMs) && taskStartMs < state.StartedAtMs) {
+                state.StartedAtMs = taskStartMs;
+            }
+        }
+
+        const shouldSyncNodes =
+            !state.HydratedFromCheckpoint ||
+            state.KnownChildCount <= TaskGraphGovernanceCoordinator.FULL_SYNC_SMALL_GRAPH_THRESHOLD ||
+            Date.now() - state.LastNodeSyncAtMs >= TaskGraphGovernanceCoordinator.CONCURRENT_SYNC_MIN_INTERVAL_MS;
+        await this.ensureHydratedFromDurableState(args.Provider, state, args.ContextUser, shouldSyncNodes, args.SubmittingUser);
+
+        const attemptAgentIds: string[] = [];
+        if (args.Attempt.agentRunID) {
+            attemptAgentIds.push(args.Attempt.agentRunID);
+        }
+        if (args.Attempt.loopAgentRunIDs) {
+            attemptAgentIds.push(...args.Attempt.loopAgentRunIDs);
+        }
+        if (attemptAgentIds.length > 0) {
+            this.recordKnownChildAgentRunIds(state, attemptAgentIds);
+        }
+
+        const nodeKey = this.normId(args.Task.ID);
+        const cumulativeCostUsd = Math.max(0, args.CumulativeCostUsd);
+        const cumulativeTokensUsed = Math.max(0, args.CumulativeTokensUsed);
+        if (nodeKey) {
+            this.setSettledNodeAccounting(state, nodeKey, {
+                CostUsd: cumulativeCostUsd,
+                TokensUsed: cumulativeTokensUsed,
+            });
+            this.recordSettledNodeCostEvents(
+                state,
+                nodeKey,
+                cumulativeCostUsd,
+                args.CumulativeCostEvents,
+                args.Attempt.recordedAtMs,
+            );
+        }
+
+        const totals = this.computeSettlementTotals(state);
+        state.IncrementalCostUsd = totals.SettledCostUsd;
+        state.TokensUsed = totals.TotalTokens;
+
+        const resolvedLimits = this.resolveStateLimits(state, args.Provider);
+        state.LastResolvedLimits = resolvedLimits;
+        const effectiveBudgets = state.ExtendedBudgets ?? resolvedLimits.Budgets;
+
+        if (state.PausePersistencePending) {
+            await this.FlushPendingPausePersistence(
+                args.Provider,
+                graphID,
+                args.ContextUser,
+                args.Observer,
+                args.DebugStateCache,
+            );
+            return state.LastBudgetResult;
+        }
+        if (state.PausedByGovernance) {
+            return state.LastBudgetResult;
+        }
+
+        const evalResult = await this.evaluateBudgetWithState(args.Provider, args.ContextUser, state, effectiveBudgets);
+        if (!evalResult.Exceeded || !evalResult.Breach) {
+            return evalResult;
+        }
+
+        const pauseReason: RunawayPauseReason = evalResult.LedgerUnavailable ? 'LedgerUnavailable' : 'BudgetExceeded';
+        await this.pauseGraphAndPersistCheckpoint({
+            Provider: args.Provider,
+            ContextUser: args.ContextUser,
+            State: state,
+            PauseReason: pauseReason,
+            Summary: evalResult.Breach.Reason,
+            BudgetResult: evalResult,
+            Observer: args.Observer,
+            DebugStateCache: args.DebugStateCache,
+        });
+        return evalResult;
+    }
+
+    /**
      * Evaluates inter-iteration / inter-batch budget and deterministic progress governance for an
      * in-flight `ForEach` or `While` loop node. When a budget ceiling or stall triggers, durably
      * pauses the graph and returns `{ ShouldPause: true, Reason }` so the loop stops cleanly at a
@@ -937,14 +1062,25 @@ export class TaskGraphGovernanceCoordinator {
             Date.now() - state.LastNodeSyncAtMs >= TaskGraphGovernanceCoordinator.CONCURRENT_SYNC_MIN_INTERVAL_MS;
         await this.ensureHydratedFromDurableState(args.Provider, state, args.ContextUser, shouldSyncNodes, args.SubmittingUser);
 
+        const priorAttempts = this.extractPersistedAttemptsSummary(args.Task.Configuration);
         const nodeKey = this.normId(args.Task.ID);
         if (nodeKey) {
-            const loopCostUsd = Math.max(0, args.AccumulatedLoopCostUsd);
+            const loopCostUsd = (priorAttempts?.CostUsd ?? 0) + Math.max(0, args.AccumulatedLoopCostUsd);
+            const loopTokensUsed = (priorAttempts?.TokensUsed ?? 0) + Math.max(0, args.AccumulatedLoopTokensUsed);
+            const combinedCostEvents: BudgetCostEvent[] = [
+                ...(priorAttempts?.CostEvents ?? []),
+                ...(args.CostEvents ?? []),
+            ];
             this.setSettledNodeAccounting(state, nodeKey, {
                 CostUsd: loopCostUsd,
-                TokensUsed: Math.max(0, args.AccumulatedLoopTokensUsed),
+                TokensUsed: loopTokensUsed,
             });
-            this.recordLoopCostEvents(state, nodeKey, loopCostUsd, args.CostEvents);
+            this.recordLoopCostEvents(
+                state,
+                nodeKey,
+                loopCostUsd,
+                combinedCostEvents.length > 0 ? combinedCostEvents : undefined,
+            );
         }
 
         if (state.PausePersistencePending) {
@@ -2427,19 +2563,67 @@ export class TaskGraphGovernanceCoordinator {
             }
             if (this.isActiveOrPausedLoopStatus(row.Status)) {
                 const pausedLoop = this.extractPausedLoopDetails(row.Configuration);
+                const attemptsSummary = this.extractPersistedAttemptsSummary(row.Configuration);
                 if (pausedLoop) {
-                    if (!state.SettledNodeAccounting.has(nodeKey)) {
+                    const totalCost = (attemptsSummary?.CostUsd ?? 0) + pausedLoop.CostUsd;
+                    const totalTokens = (attemptsSummary?.TokensUsed ?? 0) + pausedLoop.TokensUsed;
+                    const existing = state.SettledNodeAccounting.get(nodeKey);
+                    if (!existing || existing.CostUsd < totalCost || existing.TokensUsed < totalTokens) {
                         this.setSettledNodeAccounting(state, nodeKey, {
-                            CostUsd: pausedLoop.CostUsd,
-                            TokensUsed: pausedLoop.TokensUsed,
+                            CostUsd: totalCost,
+                            TokensUsed: totalTokens,
                         });
                     }
-                    this.addCheckpointBaselineLoopCost(state, nodeKey, pausedLoop.CostUsd);
-                    if (!state.NodeCostEvents.has(nodeKey) && pausedLoop.CostUsd > 0) {
+                    const prePauseCost = this.computePrePauseAttemptAndLoopCost(
+                        state.CheckpointBaselinePausedAtMs,
+                        attemptsSummary,
+                        pausedLoop,
+                    );
+                    if (prePauseCost > 0) {
+                        this.addCheckpointBaselineLoopCost(state, nodeKey, prePauseCost);
+                    }
+                    if (!state.NodeCostEvents.has(nodeKey) && totalCost > 0) {
                         const fallbackMs = pausedLoop.UpdatedAtMs ?? this.parseEpochMs(row.__mj_UpdatedAt);
-                        const events = this.buildAttributedEventsForCost(pausedLoop.CostUsd, pausedLoop.CostEvents, fallbackMs);
+                        const combinedEvents: BudgetCostEvent[] = [
+                            ...(attemptsSummary?.CostEvents ?? []),
+                            ...(pausedLoop.CostEvents ?? []),
+                        ];
+                        const events = this.buildAttributedEventsForCost(
+                            totalCost,
+                            combinedEvents.length > 0 ? combinedEvents : null,
+                            fallbackMs,
+                        );
                         if (events.length > 0) {
                             state.NodeCostEvents.set(nodeKey, events);
+                        }
+                    }
+                } else {
+                    const persisted = this.extractPersistedNodeMetrics(row.Configuration);
+                    if (persisted && (persisted.CostUsd > 0 || persisted.TokensUsed > 0 || (attemptsSummary?.AttemptCount ?? 0) > 0)) {
+                        const existing = state.SettledNodeAccounting.get(nodeKey);
+                        if (!existing || existing.CostUsd < persisted.CostUsd || existing.TokensUsed < persisted.TokensUsed) {
+                            this.setSettledNodeAccounting(state, nodeKey, persisted);
+                        }
+                        const prePauseCost = this.computePrePauseAttemptAndLoopCost(
+                            state.CheckpointBaselinePausedAtMs,
+                            attemptsSummary,
+                            null,
+                            persisted.CostUsd,
+                            this.parseEpochMs(row.__mj_UpdatedAt),
+                        );
+                        if (prePauseCost > 0) {
+                            this.addCheckpointBaselineLoopCost(state, nodeKey, prePauseCost);
+                        }
+                        if (!state.NodeCostEvents.has(nodeKey) && persisted.CostUsd > 0) {
+                            const fallbackMs = this.parseEpochMs(row.__mj_UpdatedAt);
+                            const nodeEvents =
+                                (attemptsSummary && attemptsSummary.CostEvents.length > 0
+                                    ? attemptsSummary.CostEvents
+                                    : null) ?? this.extractNodeCostEvents(row.Configuration);
+                            const events = this.buildAttributedEventsForCost(persisted.CostUsd, nodeEvents, fallbackMs);
+                            if (events.length > 0) {
+                                state.NodeCostEvents.set(nodeKey, events);
+                            }
                         }
                     }
                 }
@@ -2456,6 +2640,7 @@ export class TaskGraphGovernanceCoordinator {
                 state.CompletedNodeIDs.push(row.ID);
             }
             const persisted = this.extractPersistedNodeMetrics(row.Configuration);
+            const attemptsSummary = this.extractPersistedAttemptsSummary(row.Configuration);
             const resolvedMetrics: SettledNodeMetrics = persisted ?? {
                 CostUsd: this.config?.DefaultNodeCostUsd ?? 0,
                 TokensUsed: this.config?.DefaultNodeTokens ?? 0,
@@ -2465,8 +2650,31 @@ export class TaskGraphGovernanceCoordinator {
             } else if (!state.SettledNodeAccounting.has(nodeKey)) {
                 this.setSettledNodeAccounting(state, nodeKey, resolvedMetrics);
             }
+            if (!state.CheckpointBaselineNodeSet.has(nodeKey) && state.CheckpointBaselinePausedAtMs !== null) {
+                const prePauseCost = this.computePrePauseAttemptAndLoopCost(
+                    state.CheckpointBaselinePausedAtMs,
+                    attemptsSummary,
+                    null,
+                );
+                if (prePauseCost > 0) {
+                    this.addCheckpointBaselineLoopCost(state, nodeKey, prePauseCost);
+                } else if (!attemptsSummary) {
+                    const nodeEvents = this.extractNodeCostEvents(row.Configuration);
+                    if (nodeEvents && nodeEvents.length > 0) {
+                        const prePauseEventsCost = nodeEvents
+                            .filter((ev) => ev.TimestampMs <= state.CheckpointBaselinePausedAtMs!)
+                            .reduce((sum, ev) => sum + Math.max(0, ev.CostUsd), 0);
+                        if (prePauseEventsCost > 0) {
+                            this.addCheckpointBaselineLoopCost(state, nodeKey, prePauseEventsCost);
+                        }
+                    }
+                }
+            }
             if (!state.NodeCostEvents.has(nodeKey) && resolvedMetrics.CostUsd > 0) {
-                const nodeEvents = this.extractNodeCostEvents(row.Configuration);
+                const nodeEvents =
+                    (attemptsSummary && attemptsSummary.CostEvents.length > 0
+                        ? attemptsSummary.CostEvents
+                        : null) ?? this.extractNodeCostEvents(row.Configuration);
                 const fallbackMs = this.parseEpochMs(row.CompletedAt) ?? this.parseEpochMs(row.__mj_UpdatedAt);
                 const events = this.buildAttributedEventsForCost(resolvedMetrics.CostUsd, nodeEvents, fallbackMs);
                 if (events.length > 0) {
@@ -2536,6 +2744,50 @@ export class TaskGraphGovernanceCoordinator {
             if (typeof runtimePromptId === 'string' && !input.AgentRunID) {
                 addPrompt(runtimePromptId);
             }
+            const priorPromptIds = runtime['priorPromptRunIDs'];
+            if (Array.isArray(priorPromptIds)) {
+                for (const id of priorPromptIds) {
+                    if (typeof id === 'string') {
+                        addPrompt(id);
+                    }
+                }
+            }
+            const priorAgentIds = runtime['priorAgentRunIDs'];
+            if (Array.isArray(priorAgentIds)) {
+                for (const id of priorAgentIds) {
+                    if (typeof id === 'string') {
+                        addAgent(id);
+                    }
+                }
+            }
+            const runtimeAttempts = runtime['attempts'];
+            if (Array.isArray(runtimeAttempts)) {
+                for (const attempt of runtimeAttempts) {
+                    if (!IsPlainObject(attempt)) {
+                        continue;
+                    }
+                    if (typeof attempt['agentRunID'] === 'string') {
+                        addAgent(attempt['agentRunID']);
+                    }
+                    if (typeof attempt['promptRunID'] === 'string') {
+                        addPrompt(attempt['promptRunID']);
+                    }
+                    if (Array.isArray(attempt['loopAgentRunIDs'])) {
+                        for (const id of attempt['loopAgentRunIDs']) {
+                            if (typeof id === 'string') {
+                                addAgent(id);
+                            }
+                        }
+                    }
+                    if (Array.isArray(attempt['loopPromptRunIDs'])) {
+                        for (const id of attempt['loopPromptRunIDs']) {
+                            if (typeof id === 'string') {
+                                addPrompt(id);
+                            }
+                        }
+                    }
+                }
+            }
             const runtimeIters = runtime['iterations'];
             if (Array.isArray(runtimeIters)) {
                 for (const iter of runtimeIters) {
@@ -2587,12 +2839,13 @@ export class TaskGraphGovernanceCoordinator {
             if (!isLoop && !isTerminal) {
                 continue;
             }
+            const attemptsSummary = this.extractPersistedAttemptsSummary(row.Configuration);
             const existing = state.SettledNodeAccounting.get(nodeKey);
-            if (existing && (existing.CostUsd > 0 || existing.TokensUsed > 0)) {
+            if (existing && (existing.CostUsd > 0 || existing.TokensUsed > 0) && !attemptsSummary?.HasUnpricedRunRef) {
                 continue;
             }
             const persisted = isLoop ? null : this.extractPersistedNodeMetrics(row.Configuration);
-            if (persisted && (persisted.CostUsd > 0 || persisted.TokensUsed > 0)) {
+            if (persisted && (persisted.CostUsd > 0 || persisted.TokensUsed > 0) && !attemptsSummary?.HasUnpricedRunRef) {
                 continue;
             }
             const refs = this.collectRunRefs({
@@ -2618,16 +2871,60 @@ export class TaskGraphGovernanceCoordinator {
             if (!recovered || (recovered.CostUsd <= 0 && recovered.TokensUsed <= 0)) {
                 continue;
             }
-            this.setSettledNodeAccounting(state, cand.NodeKey, recovered);
-            if (cand.IsLoop) {
-                this.addCheckpointBaselineLoopCost(state, cand.NodeKey, recovered.CostUsd);
+            const existing = state.SettledNodeAccounting.get(cand.NodeKey);
+            const nextMetrics: SettledNodeMetrics = existing
+                ? {
+                    CostUsd: Math.max(existing.CostUsd, recovered.CostUsd),
+                    TokensUsed: Math.max(existing.TokensUsed, recovered.TokensUsed),
+                }
+                : recovered;
+            this.setSettledNodeAccounting(state, cand.NodeKey, nextMetrics);
+            const attemptsSummary = this.extractPersistedAttemptsSummary(cand.Row.Configuration);
+            if (state.CheckpointBaselinePausedAtMs !== null && !state.CheckpointBaselineNodeSet.has(cand.NodeKey)) {
+                const pausedLoop = cand.IsLoop ? this.extractPausedLoopDetails(cand.Row.Configuration) : null;
+                const fallbackTs = pausedLoop?.UpdatedAtMs ?? this.parseEpochMs(cand.Row.__mj_UpdatedAt);
+                if (attemptsSummary && attemptsSummary.Attempts.length > 0) {
+                    const prePause = this.computePrePauseAttemptAndLoopCost(
+                        state.CheckpointBaselinePausedAtMs,
+                        attemptsSummary,
+                        pausedLoop,
+                        nextMetrics.CostUsd,
+                        fallbackTs,
+                        lookup,
+                    );
+                    if (prePause > 0) {
+                        this.addCheckpointBaselineLoopCost(state, cand.NodeKey, prePause);
+                    }
+                } else if (cand.IsLoop) {
+                    if (pausedLoop) {
+                        const prePause = this.computePrePauseAttemptAndLoopCost(
+                            state.CheckpointBaselinePausedAtMs,
+                            null,
+                            pausedLoop,
+                            nextMetrics.CostUsd,
+                            fallbackTs,
+                            lookup,
+                        );
+                        if (prePause > 0) {
+                            this.addCheckpointBaselineLoopCost(state, cand.NodeKey, prePause);
+                        }
+                    } else if (fallbackTs !== null && fallbackTs <= state.CheckpointBaselinePausedAtMs) {
+                        this.addCheckpointBaselineLoopCost(state, cand.NodeKey, nextMetrics.CostUsd);
+                    }
+                }
+            } else if (cand.IsLoop && this.extractPausedLoopDetails(cand.Row.Configuration)) {
+                this.addCheckpointBaselineLoopCost(state, cand.NodeKey, nextMetrics.CostUsd);
             }
-            if (recovered.CostUsd > 0) {
+            if (nextMetrics.CostUsd > 0) {
                 const fallbackMs = cand.IsLoop
                     ? (this.extractPausedLoopDetails(cand.Row.Configuration)?.UpdatedAtMs ?? this.parseEpochMs(cand.Row.__mj_UpdatedAt))
                     : (this.parseEpochMs(cand.Row.CompletedAt) ?? this.parseEpochMs(cand.Row.__mj_UpdatedAt));
-                const nodeEvents = this.extractNodeCostEvents(cand.Row.Configuration);
-                const events = this.buildAttributedEventsForCost(recovered.CostUsd, nodeEvents, fallbackMs);
+                const attemptsSummary = this.extractPersistedAttemptsSummary(cand.Row.Configuration);
+                const nodeEvents =
+                    (attemptsSummary && attemptsSummary.CostEvents.length > 0
+                        ? attemptsSummary.CostEvents
+                        : null) ?? this.extractNodeCostEvents(cand.Row.Configuration);
+                const events = this.buildAttributedEventsForCost(nextMetrics.CostUsd, nodeEvents, fallbackMs);
                 if (events.length > 0) {
                     state.NodeCostEvents.set(cand.NodeKey, events);
                 }
@@ -3016,28 +3313,150 @@ export class TaskGraphGovernanceCoordinator {
         return undefined;
     }
 
-    private extractPersistedNodeMetrics(configurationJson: string | null | undefined): SettledNodeMetrics | null {
-        if (typeof configurationJson !== 'string' || configurationJson.trim().length === 0) {
+    private extractPersistedAttemptsSummary(configurationJson: string | null | undefined): ParsedAttemptSummary | null {
+        const runtime = this.parseRuntimeObject(configurationJson);
+        if (!runtime) {
             return null;
         }
-        const parsed = SafeJSONParse<Record<string, RunawayJsonValue>>(configurationJson);
-        if (!IsPlainObject(parsed)) {
+        const rawAttempts = runtime['attempts'];
+        if (!Array.isArray(rawAttempts) || rawAttempts.length === 0) {
             return null;
         }
-        const runtime = parsed['runtime'];
-        if (!IsPlainObject(runtime)) {
-            return null;
+        const seenIds = new Set<string>();
+        let costUsd = 0;
+        let tokensUsed = 0;
+        let hasUnpricedRunRef = false;
+        const costEvents: BudgetCostEvent[] = [];
+        const attempts: ParsedAttemptEntry[] = [];
+
+        for (let idx = 0; idx < rawAttempts.length; idx++) {
+            const entry = rawAttempts[idx];
+            if (!IsPlainObject(entry)) {
+                continue;
+            }
+            const rawId = typeof entry['attemptId'] === 'string' && entry['attemptId'].trim().length > 0
+                ? entry['attemptId'].trim()
+                : `idx:${idx}`;
+            if (seenIds.has(rawId)) {
+                continue;
+            }
+            seenIds.add(rawId);
+
+            const entryCost = typeof entry['costUsd'] === 'number' && Number.isFinite(entry['costUsd'])
+                ? Math.max(0, entry['costUsd'])
+                : 0;
+            const entryTokens = typeof entry['tokensUsed'] === 'number' && Number.isFinite(entry['tokensUsed'])
+                ? Math.max(0, entry['tokensUsed'])
+                : 0;
+            const recordedAtMs = typeof entry['recordedAtMs'] === 'number' && Number.isFinite(entry['recordedAtMs'])
+                ? entry['recordedAtMs']
+                : null;
+            const entryPromptIds: string[] = [];
+            const entryAgentIds: string[] = [];
+            if (typeof entry['promptRunID'] === 'string' && entry['promptRunID'].trim().length > 0) {
+                entryPromptIds.push(entry['promptRunID'].trim());
+            }
+            if (typeof entry['agentRunID'] === 'string' && entry['agentRunID'].trim().length > 0) {
+                entryAgentIds.push(entry['agentRunID'].trim());
+            }
+            if (Array.isArray(entry['loopPromptRunIDs'])) {
+                for (const id of entry['loopPromptRunIDs']) {
+                    if (typeof id === 'string' && id.trim().length > 0) {
+                        entryPromptIds.push(id.trim());
+                    }
+                }
+            }
+            if (Array.isArray(entry['loopAgentRunIDs'])) {
+                for (const id of entry['loopAgentRunIDs']) {
+                    if (typeof id === 'string' && id.trim().length > 0) {
+                        entryAgentIds.push(id.trim());
+                    }
+                }
+            }
+            const hasPromptOrAgentRef = entryPromptIds.length > 0 || entryAgentIds.length > 0;
+            if (entryCost <= 0 && entryTokens <= 0 && hasPromptOrAgentRef) {
+                hasUnpricedRunRef = true;
+            }
+            costUsd += entryCost;
+            tokensUsed += entryTokens;
+            attempts.push({
+                RecordedAtMs: recordedAtMs,
+                CostUsd: entryCost,
+                Refs: { AgentRunIDs: entryAgentIds, PromptRunIDs: entryPromptIds },
+            });
+
+            const entryEvents = this.parseBudgetCostEventsArray(entry['costEvents']);
+            if (entryEvents && entryEvents.length > 0) {
+                costEvents.push(...entryEvents);
+            } else if (entryCost > 0 && recordedAtMs !== null) {
+                costEvents.push({ TimestampMs: recordedAtMs, CostUsd: entryCost });
+            }
         }
-        const costRaw = runtime['governanceCostUsd'];
-        const tokensRaw = runtime['governanceTokensUsed'];
-        const hasCost = typeof costRaw === 'number' && Number.isFinite(costRaw);
-        const hasTokens = typeof tokensRaw === 'number' && Number.isFinite(tokensRaw);
-        if (!hasCost && !hasTokens) {
+        if (seenIds.size === 0) {
             return null;
         }
         return {
-            CostUsd: hasCost ? Math.max(0, costRaw) : 0,
-            TokensUsed: hasTokens ? Math.max(0, tokensRaw) : 0,
+            AttemptCount: seenIds.size,
+            CostUsd: costUsd,
+            TokensUsed: tokensUsed,
+            CostEvents: costEvents,
+            HasUnpricedRunRef: hasUnpricedRunRef,
+            Attempts: attempts,
+        };
+    }
+
+    private computePrePauseAttemptAndLoopCost(
+        pausedAtMs: number | null,
+        attemptsSummary: ParsedAttemptSummary | null,
+        pausedLoop: PausedLoopDetails | null,
+        fallbackTotalCost?: number,
+        fallbackUpdatedAtMs?: number | null,
+        lookup?: RunMetricsLookup,
+    ): number {
+        if (pausedAtMs === null || !Number.isFinite(pausedAtMs)) {
+            // Standalone checkpoints store PausedLoopNodeCosts explicitly; without a paused timestamp
+            // only paused loops without attempt records fall back to loop cost.
+            return !attemptsSummary && pausedLoop ? pausedLoop.CostUsd : 0;
+        }
+        let prePause = 0;
+        if (attemptsSummary) {
+            for (const att of attemptsSummary.Attempts) {
+                if (att.RecordedAtMs !== null && att.RecordedAtMs <= pausedAtMs) {
+                    if (att.CostUsd > 0) {
+                        prePause += att.CostUsd;
+                    } else if (lookup) {
+                        prePause += this.sumMetricsFromLookup(att.Refs, lookup)?.CostUsd ?? 0;
+                    }
+                }
+            }
+        }
+        if (pausedLoop) {
+            if (pausedLoop.UpdatedAtMs === null || pausedLoop.UpdatedAtMs <= pausedAtMs) {
+                prePause += pausedLoop.CostUsd;
+            }
+        } else if (!attemptsSummary && fallbackTotalCost && fallbackTotalCost > 0) {
+            if (fallbackUpdatedAtMs !== undefined && fallbackUpdatedAtMs !== null && fallbackUpdatedAtMs <= pausedAtMs) {
+                prePause += fallbackTotalCost;
+            }
+        }
+        return prePause;
+    }
+
+    private extractPersistedNodeMetrics(configurationJson: string | null | undefined): SettledNodeMetrics | null {
+        const attemptsSummary = this.extractPersistedAttemptsSummary(configurationJson);
+        const runtime = this.parseRuntimeObject(configurationJson);
+        const costRaw = runtime ? runtime['governanceCostUsd'] : undefined;
+        const tokensRaw = runtime ? runtime['governanceTokensUsed'] : undefined;
+        const hasCost = typeof costRaw === 'number' && Number.isFinite(costRaw);
+        const hasTokens = typeof tokensRaw === 'number' && Number.isFinite(tokensRaw);
+        if (!hasCost && !hasTokens && !attemptsSummary) {
+            return null;
+        }
+        const directCost = hasCost ? Math.max(0, costRaw) : 0;
+        const directTokens = hasTokens ? Math.max(0, tokensRaw) : 0;
+        return {
+            CostUsd: Math.max(directCost, attemptsSummary?.CostUsd ?? 0),
+            TokensUsed: Math.max(directTokens, attemptsSummary?.TokensUsed ?? 0),
         };
     }
 
@@ -4211,24 +4630,8 @@ export class TaskGraphGovernanceCoordinator {
     }
 
     private extractLoopIterationAgentRunIds(configurationJson: string | null | undefined): string[] {
-        if (typeof configurationJson !== 'string' || configurationJson.trim().length === 0) {
-            return [];
-        }
-        const parsed = SafeJSONParse<Record<string, RunawayJsonValue>>(configurationJson);
-        if (!IsPlainObject(parsed)) {
-            return [];
-        }
-        const runtime = parsed['runtime'];
-        if (!IsPlainObject(runtime) || !Array.isArray(runtime['iterations'])) {
-            return [];
-        }
-        const ids: string[] = [];
-        for (const iter of runtime['iterations']) {
-            if (IsPlainObject(iter) && typeof iter['agentRunID'] === 'string' && iter['agentRunID'].trim().length > 0) {
-                ids.push(iter['agentRunID'].trim().toLowerCase());
-            }
-        }
-        return ids;
+        const refs = this.collectRunRefs({ Configuration: configurationJson });
+        return refs.AgentRunIDs.map((id) => id.toLowerCase());
     }
 
     private async loadStandaloneChildRunMetricsLookup(
@@ -4245,10 +4648,11 @@ export class TaskGraphGovernanceCoordinator {
                 if (!isLoop && !isTerminal) {
                     continue;
                 }
+                const attemptsSummary = this.extractPersistedAttemptsSummary(child.Configuration);
                 const persisted = isLoop
-                    ? this.extractPausedLoopDetails(child.Configuration)
+                    ? (this.extractPausedLoopDetails(child.Configuration) ?? this.extractPersistedNodeMetrics(child.Configuration))
                     : this.extractPersistedNodeMetrics(child.Configuration);
-                if (persisted && persisted.CostUsd > 0) {
+                if (persisted && persisted.CostUsd > 0 && !attemptsSummary?.HasUnpricedRunRef) {
                     continue;
                 }
                 const refs = this.collectRunRefs({
@@ -4387,17 +4791,19 @@ export class TaskGraphGovernanceCoordinator {
                 total += this.resolveStandaloneChildCost(child, runLookup);
             } else if (this.isActiveOrPausedLoopStatus(child.Status)) {
                 const pausedLoop = this.extractPausedLoopDetails(child.Configuration);
-                if (pausedLoop && pausedLoop.CostUsd > 0) {
-                    total += pausedLoop.CostUsd;
+                const persistedAttempts = this.extractPersistedNodeMetrics(child.Configuration);
+                const inlineCost = pausedLoop
+                    ? Math.max(pausedLoop.CostUsd, persistedAttempts?.CostUsd ?? 0)
+                    : (persistedAttempts?.CostUsd ?? 0);
+                if (inlineCost > 0) {
+                    total += inlineCost;
                 } else if (runLookup) {
                     const refs = this.collectRunRefs({
                         AgentRunID: child.AgentRunID,
                         Configuration: child.Configuration,
                     });
                     const recovered = this.sumMetricsFromLookup(refs, runLookup);
-                    total += recovered?.CostUsd ?? pausedLoop?.CostUsd ?? 0;
-                } else if (pausedLoop) {
-                    total += pausedLoop.CostUsd;
+                    total += recovered?.CostUsd ?? inlineCost;
                 }
             }
         }
@@ -4525,17 +4931,33 @@ export class TaskGraphGovernanceCoordinator {
                 unattributedChildCost += attributed.UnattributedCostUsd;
             } else if (this.isActiveOrPausedLoopStatus(child.Status)) {
                 const pausedLoop = this.extractPausedLoopDetails(child.Configuration);
-                if (!pausedLoop || pausedLoop.CostUsd <= 0) {
+                const attemptsSummary = this.extractPersistedAttemptsSummary(child.Configuration);
+                const persisted = this.extractPersistedNodeMetrics(child.Configuration);
+                let inFlightCost = pausedLoop
+                    ? Math.max(pausedLoop.CostUsd, persisted?.CostUsd ?? 0)
+                    : (persisted?.CostUsd ?? 0);
+                if (inFlightCost <= 0 && runLookup) {
+                    const refs = this.collectRunRefs({
+                        AgentRunID: child.AgentRunID,
+                        Configuration: child.Configuration,
+                    });
+                    inFlightCost = this.sumMetricsFromLookup(refs, runLookup)?.CostUsd ?? 0;
+                }
+                if (inFlightCost <= 0) {
                     continue;
                 }
                 const cpPausedMs = cp?.PausedAtISO ? Date.parse(cp.PausedAtISO) : Number.NaN;
                 const fallbackMs =
-                    pausedLoop.UpdatedAtMs ??
+                    pausedLoop?.UpdatedAtMs ??
                     this.parseEpochMs(child.__mj_UpdatedAt) ??
                     (Number.isFinite(cpPausedMs) ? cpPausedMs : null);
+                const combinedEvents = [
+                    ...(attemptsSummary?.CostEvents ?? []),
+                    ...(pausedLoop?.CostEvents ?? []),
+                ];
                 const attributed = this.attributeCostToDayWindow(
-                    pausedLoop.CostUsd,
-                    pausedLoop.CostEvents,
+                    inFlightCost,
+                    combinedEvents.length > 0 ? combinedEvents : this.extractNodeCostEvents(child.Configuration),
                     fallbackMs,
                     dayStartMs,
                     dayEndMs,

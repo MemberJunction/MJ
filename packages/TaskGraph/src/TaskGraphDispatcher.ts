@@ -89,6 +89,7 @@ import {
     ResolveGraphDecisions,
     StillHoldingDecisionOutput,
     type TaskDecisionStepConfiguration,
+    type TaskRuntimeAttemptBilling,
     type TaskStepConfiguration,
 } from './decision-node';
 import { ResolveRecordsByNameOrToolName } from './resolve-by-tool-name';
@@ -1420,25 +1421,35 @@ export class TaskGraphDispatcher implements IShutdownable {
                 await this.persistPausedLoopTask(provider, taskID, result);
                 return;
             }
-            if (!result.Success && await this.scheduleRetryIfAllowed(provider, task, result, ownerUserID)) {
-                return;
-            }
-            const governanceMetrics = await this.governance.ResolveOrRecoverNodeSettlementMetrics(
+            const attemptAccounting = await this.buildAttemptAccounting(
                 provider,
                 graphID,
                 hydrated?.parentTask ?? null,
-                this.contextUser,
-                {
-                    CostUsd: result.CostUsd,
-                    TokensUsed: result.TokensUsed,
-                    AgentRunID: result.AgentRunID ?? task.AgentRunID ?? null,
-                    PromptRunID: result.PromptRunID ?? null,
-                    Iterations: result.Iterations,
-                    Configuration: task.Configuration,
-                },
+                task,
+                result,
             );
-            const settledCostUsd = result.CostUsd ?? governanceMetrics?.CostUsd;
-            const settledTokensUsed = result.TokensUsed ?? governanceMetrics?.TokensUsed;
+            if (!result.Success) {
+                const retryOutcome = await this.scheduleRetryWithBillingAndGovernance(
+                    provider,
+                    task,
+                    hydrated?.parentTask ?? null,
+                    result,
+                    ownerUserID,
+                    attemptAccounting,
+                );
+                if (retryOutcome === 'scheduled' || retryOutcome === 'lost-ownership') {
+                    return;
+                }
+            }
+            const settledCostUsd = attemptAccounting.ShouldPersistGovernanceMetrics
+                ? attemptAccounting.CumulativeCostUsd
+                : undefined;
+            const settledTokensUsed = attemptAccounting.ShouldPersistGovernanceMetrics
+                ? attemptAccounting.CumulativeTokensUsed
+                : undefined;
+            const settledCostEvents = attemptAccounting.CumulativeCostEvents.length > 0
+                ? attemptAccounting.CumulativeCostEvents
+                : result.CostEvents;
             const recorded = await this.claims.CompleteClaimed(
                 provider,
                 taskID,
@@ -1450,10 +1461,13 @@ export class TaskGraphDispatcher implements IShutdownable {
                     Configuration: this.configurationWithRuntime(
                         task, result.PromptRunID, result.ActionLogID, result.Iterations, result.PayloadAtStart, result.IsOutputTainted,
                         result.ActionInput,
-                        governanceMetrics?.CostUsd,
-                        governanceMetrics?.TokensUsed,
+                        settledCostUsd,
+                        settledTokensUsed,
                         null,
-                        result.CostEvents,
+                        settledCostEvents,
+                        attemptAccounting.ShouldPersistAttempts ? attemptAccounting.UpdatedAttempts : undefined,
+                        attemptAccounting.PriorPromptRunIDs,
+                        attemptAccounting.PriorAgentRunIDs,
                     ),
                 },
                 this.contextUser,
@@ -1495,7 +1509,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     AgentRunID: result.AgentRunID ?? task.AgentRunID ?? null,
                     PromptRunID: result.PromptRunID ?? null,
                     Iterations: result.Iterations,
-                    CostEvents: result.CostEvents,
+                    CostEvents: settledCostEvents,
                     Observer: this.observer,
                     DebugStateCache: this.debugStateByGraph,
                 });
@@ -4483,26 +4497,287 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
-     * Schedules a failed run for another attempt when its step allows one.
-     *
-     * Retryable means: the step's policy asks for retries, attempts remain, the failure is not a
-     * security refusal, and running the step again is safe — an Action step only when its action is
-     * idempotent (see {@link allowedRetries}), a Prompt or Decision step always (a model call has no
-     * side effects), an Agent step never (its run may have called actions that must not run twice,
-     * and an agent carries no idempotency flag to say otherwise).
-     *
-     * @returns true when the retry was scheduled and the caller must NOT record a final outcome
+     * Resolves this attempt's billable usage and merges it idempotently with any prior attempts on the
+     * task row so retryable failures, pauses, and final settlements preserve cumulative billing and
+     * all `PromptRunID` / `AgentRunID` references without double-counting.
      */
-    private async scheduleRetryIfAllowed(
+    private async buildAttemptAccounting(
+        provider: IMetadataProvider,
+        graphID: string,
+        parentTask: MJTaskEntity | null,
+        task: MJTaskEntity,
+        result: TaskBodyOutcome,
+    ): Promise<{
+        Attempt: TaskRuntimeAttemptBilling;
+        UpdatedAttempts: TaskRuntimeAttemptBilling[];
+        CumulativeCostUsd: number;
+        CumulativeTokensUsed: number;
+        CumulativeCostEvents: BudgetCostEvent[];
+        PriorPromptRunIDs: string[];
+        PriorAgentRunIDs: string[];
+        ShouldPersistAttempts: boolean;
+        ShouldPersistGovernanceMetrics: boolean;
+    }> {
+        const existingConfig = this.parseConfiguration(task) as TaskStepConfiguration | undefined;
+        const existingAttempts: TaskRuntimeAttemptBilling[] = Array.isArray(existingConfig?.runtime?.attempts)
+            ? existingConfig.runtime.attempts.map((a) => ({ ...a }))
+            : [];
+        const attemptIndex = task.AttemptCount ?? 0;
+
+        const attemptMetrics = await this.governance.ResolveOrRecoverNodeSettlementMetrics(
+            provider,
+            graphID,
+            parentTask,
+            this.contextUser,
+            {
+                CostUsd: result.CostUsd,
+                TokensUsed: result.TokensUsed,
+                AgentRunID: result.AgentRunID ?? (existingAttempts.length === 0 ? task.AgentRunID : null) ?? null,
+                PromptRunID: result.PromptRunID ?? null,
+                Iterations: result.Iterations,
+                Configuration: undefined,
+            },
+        );
+        const attemptCostUsd = result.CostUsd ?? attemptMetrics?.CostUsd ?? 0;
+        const attemptTokensUsed = result.TokensUsed ?? attemptMetrics?.TokensUsed ?? 0;
+        const recordedAtMs = Date.now();
+
+        const loopPromptRunIDs = (result.Iterations ?? [])
+            .map((it) => it.promptRunID)
+            .filter((id): id is string => typeof id === 'string' && id.trim().length > 0);
+        const loopAgentRunIDs = (result.Iterations ?? [])
+            .map((it) => it.agentRunID)
+            .filter((id): id is string => typeof id === 'string' && id.trim().length > 0);
+        const attemptCostEvents: BudgetCostEvent[] | undefined =
+            result.CostEvents && result.CostEvents.length > 0
+                ? result.CostEvents.map((e) => ({ TimestampMs: e.TimestampMs, CostUsd: Math.max(0, e.CostUsd) }))
+                : attemptCostUsd > 0
+                    ? [{ TimestampMs: recordedAtMs, CostUsd: attemptCostUsd }]
+                    : undefined;
+
+        const attemptId = this.resolveIdempotentAttemptId(
+            task.ID,
+            attemptIndex,
+            result.PromptRunID,
+            result.AgentRunID,
+            loopPromptRunIDs,
+            loopAgentRunIDs,
+            existingAttempts,
+        );
+        const attempt: TaskRuntimeAttemptBilling = {
+            attemptId,
+            attemptIndex,
+            ...(result.PromptRunID ? { promptRunID: result.PromptRunID } : {}),
+            ...(result.AgentRunID ? { agentRunID: result.AgentRunID } : {}),
+            ...(result.ActionLogID ? { actionLogID: result.ActionLogID } : {}),
+            ...(loopPromptRunIDs.length > 0 ? { loopPromptRunIDs } : {}),
+            ...(loopAgentRunIDs.length > 0 ? { loopAgentRunIDs } : {}),
+            success: result.Success,
+            costUsd: attemptCostUsd,
+            tokensUsed: attemptTokensUsed,
+            recordedAtMs,
+            ...(attemptCostEvents ? { costEvents: attemptCostEvents } : {}),
+        };
+
+        const existingPos = existingAttempts.findIndex((a) => a.attemptId === attemptId);
+        const updatedAttempts = [...existingAttempts];
+        if (existingPos >= 0) {
+            updatedAttempts[existingPos] = attempt;
+        } else {
+            updatedAttempts.push(attempt);
+        }
+
+        const cumulativeCostUsd = updatedAttempts.reduce((sum, a) => sum + Math.max(0, a.costUsd), 0);
+        const cumulativeTokensUsed = updatedAttempts.reduce((sum, a) => sum + Math.max(0, a.tokensUsed), 0);
+        const cumulativeCostEvents: BudgetCostEvent[] = [];
+        for (const entry of updatedAttempts) {
+            if (entry.costEvents && entry.costEvents.length > 0) {
+                for (const ev of entry.costEvents) {
+                    if (ev.CostUsd > 0 && Number.isFinite(ev.TimestampMs)) {
+                        cumulativeCostEvents.push({ TimestampMs: ev.TimestampMs, CostUsd: ev.CostUsd });
+                    }
+                }
+            } else if (entry.costUsd > 0 && Number.isFinite(entry.recordedAtMs)) {
+                cumulativeCostEvents.push({ TimestampMs: entry.recordedAtMs, CostUsd: entry.costUsd });
+            }
+        }
+
+        const priorPromptRunIDs = this.collectUniqueRunIDs([
+            ...(existingConfig?.runtime?.priorPromptRunIDs ?? []),
+            ...updatedAttempts.flatMap((a) => [a.promptRunID, ...(a.loopPromptRunIDs ?? [])]),
+        ]);
+        const priorAgentRunIDs = this.collectUniqueRunIDs([
+            ...(existingConfig?.runtime?.priorAgentRunIDs ?? []),
+            ...updatedAttempts.flatMap((a) => [a.agentRunID, ...(a.loopAgentRunIDs ?? [])]),
+        ]);
+
+        const hasPriorOrCurrentRunRefs =
+            existingAttempts.length > 0 ||
+            Boolean(result.PromptRunID) ||
+            Boolean(result.AgentRunID) ||
+            loopPromptRunIDs.length > 0 ||
+            loopAgentRunIDs.length > 0 ||
+            attemptCostUsd > 0 ||
+            attemptTokensUsed > 0;
+        const shouldPersistGovernanceMetrics =
+            attemptMetrics !== undefined ||
+            result.CostUsd !== undefined ||
+            result.TokensUsed !== undefined ||
+            existingAttempts.length > 0;
+
+        return {
+            Attempt: attempt,
+            UpdatedAttempts: updatedAttempts,
+            CumulativeCostUsd: cumulativeCostUsd,
+            CumulativeTokensUsed: cumulativeTokensUsed,
+            CumulativeCostEvents: cumulativeCostEvents,
+            PriorPromptRunIDs: priorPromptRunIDs,
+            PriorAgentRunIDs: priorAgentRunIDs,
+            ShouldPersistAttempts: hasPriorOrCurrentRunRefs || !result.Success,
+            ShouldPersistGovernanceMetrics: shouldPersistGovernanceMetrics,
+        };
+    }
+
+    private resolveIdempotentAttemptId(
+        taskID: string,
+        attemptIndex: number,
+        promptRunID: string | undefined,
+        agentRunID: string | undefined,
+        loopPromptRunIDs: readonly string[],
+        loopAgentRunIDs: readonly string[],
+        existingAttempts: readonly TaskRuntimeAttemptBilling[],
+    ): string {
+        if (promptRunID) {
+            const byPrompt = existingAttempts.find((a) => a.promptRunID === promptRunID);
+            if (byPrompt) return byPrompt.attemptId;
+        }
+        if (agentRunID) {
+            const byAgent = existingAttempts.find((a) => a.agentRunID === agentRunID);
+            if (byAgent) return byAgent.attemptId;
+        }
+        const baseId = `${taskID}:${attemptIndex}`;
+        const existingAtBase = existingAttempts.find((a) => a.attemptId === baseId);
+        if (!existingAtBase) {
+            return baseId;
+        }
+        const samePrompt = !promptRunID || !existingAtBase.promptRunID || existingAtBase.promptRunID === promptRunID;
+        const sameAgent = !agentRunID || !existingAtBase.agentRunID || existingAtBase.agentRunID === agentRunID;
+        const sameLoopPrompts =
+            loopPromptRunIDs.length === 0 ||
+            !existingAtBase.loopPromptRunIDs?.length ||
+            existingAtBase.loopPromptRunIDs.join(',') === loopPromptRunIDs.join(',');
+        const sameLoopAgents =
+            loopAgentRunIDs.length === 0 ||
+            !existingAtBase.loopAgentRunIDs?.length ||
+            existingAtBase.loopAgentRunIDs.join(',') === loopAgentRunIDs.join(',');
+        if (samePrompt && sameAgent && sameLoopPrompts && sameLoopAgents) {
+            return baseId;
+        }
+        const disambiguator = promptRunID ?? agentRunID ?? loopPromptRunIDs[0] ?? loopAgentRunIDs[0] ?? String(existingAttempts.length);
+        return `${baseId}:${disambiguator}`;
+    }
+
+    private collectUniqueRunIDs(rawIds: ReadonlyArray<string | undefined>): string[] {
+        const seen = new Set<string>();
+        const out: string[] = [];
+        for (const raw of rawIds) {
+            const trimmed = typeof raw === 'string' ? raw.trim() : '';
+            const norm = trimmed.toLowerCase();
+            if (norm && !seen.has(norm)) {
+                seen.add(norm);
+                out.push(trimmed);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Persists updated `Configuration.runtime` onto the claimed task while this instance still holds
+     * `Status = 'In Progress'` and `ClaimedBy = InstanceID`. Returns `false` only if ownership was lost
+     * or saving the claimed row failed.
+     */
+    private async persistAttemptRuntimeWhileClaimed(
         provider: IMetadataProvider,
         task: MJTaskEntity,
-        result: { Success: boolean; ErrorMessage?: string; ResultCode?: string },
-        ownerUserID: string | null | undefined,
+        updatedConfig: string | undefined,
     ): Promise<boolean> {
-        if (result.ResultCode === TAINTED_EGRESS_BLOCKED) return false;
+        if (updatedConfig === undefined) {
+            return true;
+        }
+        if (typeof provider.GetEntityObject !== 'function') {
+            task.Configuration = updatedConfig;
+            return true;
+        }
+        const freshTask = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+        const loaded = await freshTask.Load(task.ID);
+        if (!loaded) {
+            task.Configuration = updatedConfig;
+            return true;
+        }
+        if (freshTask.Status !== 'In Progress' || freshTask.ClaimedBy !== this.config.InstanceID) {
+            return false;
+        }
+        freshTask.Configuration = updatedConfig;
+        const saved = await this.saveWithRuntimeAuthority(freshTask);
+        if (!saved) {
+            return false;
+        }
+        task.Configuration = updatedConfig;
+        return true;
+    }
+
+    /**
+     * Accounts for a failed retryable attempt's billing references and usage, evaluates governance
+     * budgets (pausing non-destructively at a resumable checkpoint if exhausted), and then schedules
+     * the task back to `Pending` with incremented `AttemptCount` so the node stays retryable upon approval.
+     */
+    private async scheduleRetryWithBillingAndGovernance(
+        provider: IMetadataProvider,
+        task: MJTaskEntity,
+        parentTask: MJTaskEntity | null,
+        result: TaskBodyOutcome,
+        ownerUserID: string | null | undefined,
+        attemptAccounting: Awaited<ReturnType<TaskGraphDispatcher['buildAttemptAccounting']>>,
+    ): Promise<'scheduled' | 'not-retryable' | 'lost-ownership'> {
+        if (result.ResultCode === TAINTED_EGRESS_BLOCKED) return 'not-retryable';
         const maxAttempts = await this.allowedRetries(provider, task);
         const attemptsSoFar = task.AttemptCount ?? 0;
-        if (attemptsSoFar >= maxAttempts) return false;
+        if (attemptsSoFar >= maxAttempts) return 'not-retryable';
+
+        const retryConfig = this.configurationWithRuntime(
+            task,
+            result.PromptRunID,
+            result.ActionLogID,
+            result.Iterations,
+            result.PayloadAtStart,
+            result.IsOutputTainted,
+            result.ActionInput,
+            attemptAccounting.ShouldPersistGovernanceMetrics ? attemptAccounting.CumulativeCostUsd : undefined,
+            attemptAccounting.ShouldPersistGovernanceMetrics ? attemptAccounting.CumulativeTokensUsed : undefined,
+            null,
+            attemptAccounting.CumulativeCostEvents.length > 0 ? attemptAccounting.CumulativeCostEvents : result.CostEvents,
+            attemptAccounting.ShouldPersistAttempts ? attemptAccounting.UpdatedAttempts : undefined,
+            attemptAccounting.PriorPromptRunIDs,
+            attemptAccounting.PriorAgentRunIDs,
+        );
+        const persisted = await this.persistAttemptRuntimeWhileClaimed(provider, task, retryConfig);
+        if (!persisted) {
+            LogError(`[TaskGraphDispatcher] Lost ownership on task ${task.ID} before recording failed attempt billing.`);
+            return 'lost-ownership';
+        }
+
+        await this.governance.RecordAttemptAndEvaluate({
+            Provider: provider,
+            ContextUser: this.contextUser,
+            Parent: parentTask,
+            Task: task,
+            Attempt: attemptAccounting.Attempt,
+            CumulativeCostUsd: attemptAccounting.CumulativeCostUsd,
+            CumulativeTokensUsed: attemptAccounting.CumulativeTokensUsed,
+            CumulativeCostEvents: attemptAccounting.CumulativeCostEvents,
+            Observer: this.observer,
+            DebugStateCache: this.debugStateByGraph,
+        });
 
         const nextAttempt = attemptsSoFar + 1;
         const delay = RetryBackoffMs(nextAttempt, this.config.RetryBackoffBaseMs);
@@ -4512,7 +4787,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         if (!scheduled) {
             // Refused: the step moved under us, or the count on the row is already at the cap. Either
             // way the caller records the outcome as it would have without a retry policy.
-            return false;
+            return 'not-retryable';
         }
         LogStatus(
             `[TaskGraphDispatcher] '${task.Name}' (${task.ID}) failed; retry ${nextAttempt}/${maxAttempts} ` +
@@ -4525,7 +4800,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             NextAttemptAt: new Date(Date.now() + delay).toISOString(),
             ErrorMessage: result.ErrorMessage,
         });
-        return true;
+        return 'scheduled';
     }
 
     /**
@@ -6601,6 +6876,23 @@ export class TaskGraphDispatcher implements IShutdownable {
                 Configuration: freshTask.Configuration,
             },
         );
+        const existingPausedConfig = this.parseConfiguration(freshTask) as TaskStepConfiguration | undefined;
+        const priorAttempts = Array.isArray(existingPausedConfig?.runtime?.attempts)
+            ? existingPausedConfig.runtime.attempts
+            : [];
+        const priorCostUsd = priorAttempts.reduce((sum, a) => sum + Math.max(0, a.costUsd), 0);
+        const priorTokensUsed = priorAttempts.reduce((sum, a) => sum + Math.max(0, a.tokensUsed), 0);
+        const priorEvents: BudgetCostEvent[] = [];
+        for (const att of priorAttempts) {
+            if (att.costEvents && att.costEvents.length > 0) {
+                priorEvents.push(...att.costEvents);
+            } else if (att.costUsd > 0 && Number.isFinite(att.recordedAtMs)) {
+                priorEvents.push({ TimestampMs: att.recordedAtMs, CostUsd: att.costUsd });
+            }
+        }
+        const combinedLoopCostUsd = priorCostUsd + (metrics?.CostUsd ?? result.CostUsd ?? 0);
+        const combinedLoopTokensUsed = priorTokensUsed + (metrics?.TokensUsed ?? result.TokensUsed ?? 0);
+        const combinedLoopEvents = [...priorEvents, ...(result.CostEvents ?? [])];
         const updatedConfig = this.configurationWithRuntime(
             freshTask,
             result.PromptRunID,
@@ -6609,10 +6901,10 @@ export class TaskGraphDispatcher implements IShutdownable {
             result.PayloadAtStart,
             result.IsOutputTainted,
             result.ActionInput,
-            metrics?.CostUsd ?? result.CostUsd,
-            metrics?.TokensUsed ?? result.TokensUsed,
+            combinedLoopCostUsd,
+            combinedLoopTokensUsed,
             result.LoopCursorState ?? null,
-            result.CostEvents,
+            combinedLoopEvents.length > 0 ? combinedLoopEvents : undefined,
         );
         freshTask.Status = 'Pending';
         freshTask.ClaimedBy = null;
@@ -6638,6 +6930,9 @@ export class TaskGraphDispatcher implements IShutdownable {
         governanceTokensUsed?: number,
         loopCursor?: NonNullable<TaskStepConfiguration['runtime']>['loopCursor'] | null,
         governanceCostEvents?: BudgetCostEvent[],
+        attempts?: TaskRuntimeAttemptBilling[],
+        priorPromptRunIDs?: string[],
+        priorAgentRunIDs?: string[],
     ): string | undefined {
         const existing = this.parseConfiguration(task) as TaskStepConfiguration | undefined;
         const clearingCursor = loopCursor === null && Boolean(existing?.runtime?.loopCursor);
@@ -6652,7 +6947,10 @@ export class TaskGraphDispatcher implements IShutdownable {
             governanceTokensUsed === undefined &&
             !loopCursor &&
             !clearingCursor &&
-            !governanceCostEvents?.length
+            !governanceCostEvents?.length &&
+            !attempts?.length &&
+            !priorPromptRunIDs?.length &&
+            !priorAgentRunIDs?.length
         ) return undefined;
 
         const baseRuntime = existing?.runtime ? { ...existing.runtime } : {};
@@ -6680,6 +6978,9 @@ export class TaskGraphDispatcher implements IShutdownable {
                 ...(governanceCostUsd !== undefined ? { governanceCostUsd } : {}),
                 ...(governanceTokensUsed !== undefined ? { governanceTokensUsed } : {}),
                 ...(governanceCostEvents?.length ? { governanceCostEvents } : {}),
+                ...(attempts?.length ? { attempts } : {}),
+                ...(priorPromptRunIDs?.length ? { priorPromptRunIDs } : {}),
+                ...(priorAgentRunIDs?.length ? { priorAgentRunIDs } : {}),
                 ...(loopCursor ? { loopCursor } : {}),
             },
         };

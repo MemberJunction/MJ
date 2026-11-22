@@ -153,6 +153,8 @@ interface StoredTaskRow {
     OutputPayload: string | null;
     Configuration: string | null;
     SecurityEnvelope?: string | null;
+    AttemptCount?: number;
+    NextAttemptAt?: Date | null;
     __mj_UpdatedAt: Date;
 }
 
@@ -252,6 +254,8 @@ class GovernanceInMemoryDb {
                   OutputPayload: null,
                   Configuration: null,
                   SecurityEnvelope: null,
+                  AttemptCount: 0,
+                  NextAttemptAt: null,
                   __mj_UpdatedAt: new Date(),
               };
         const db = this;
@@ -313,6 +317,10 @@ class GovernanceInMemoryDb {
             },
             get SecurityEnvelope() { return backing.SecurityEnvelope ?? null; },
             set SecurityEnvelope(v: string | null) { backing.SecurityEnvelope = v; },
+            get AttemptCount() { return backing.AttemptCount ?? 0; },
+            set AttemptCount(v: number) { backing.AttemptCount = v; },
+            get NextAttemptAt() { return backing.NextAttemptAt ?? null; },
+            set NextAttemptAt(v: Date | null) { backing.NextAttemptAt = v; },
             get __mj_UpdatedAt() { return backing.__mj_UpdatedAt; },
             set __mj_UpdatedAt(v: Date) { backing.__mj_UpdatedAt = v; },
             LatestResult: { CompleteMessage: '' },
@@ -508,10 +516,28 @@ class GovernanceInMemoryDb {
                     const [taskId, claimedBy, ttlSec] = args as [string, string, number];
                     const row = db.Tasks.get(taskId.toLowerCase());
                     if (!row || row.Status !== 'Pending') return [{ AffectedRows: 0 }];
+                    if (row.NextAttemptAt && row.NextAttemptAt.getTime() > Date.now()) return [{ AffectedRows: 0 }];
                     row.Status = 'In Progress';
                     row.ClaimedBy = claimedBy;
                     row.ClaimExpiresAt = new Date(Date.now() + Number(ttlSec || 60) * 1000);
                     row.StartedAt = row.StartedAt ?? new Date();
+                    return [{ AffectedRows: 1 }];
+                }
+                if (sql.includes('spTaskGraphScheduleRetry')) {
+                    const [taskId, claimedBy, maxAttempts, delayMs, errorMessage] =
+                        args as [string, string, number, number, string | null];
+                    const row = db.Tasks.get(taskId.toLowerCase());
+                    const currentAttempt = row?.AttemptCount ?? 0;
+                    if (!row || row.Status !== 'In Progress' || row.ClaimedBy !== claimedBy || currentAttempt >= maxAttempts) {
+                        return [{ AffectedRows: 0 }];
+                    }
+                    row.Status = 'Pending';
+                    row.ClaimedBy = null;
+                    row.ClaimExpiresAt = null;
+                    row.AttemptCount = currentAttempt + 1;
+                    row.NextAttemptAt = new Date(Date.now() + Math.max(0, Number(delayMs || 0)));
+                    row.ErrorMessage = errorMessage;
+                    row.__mj_UpdatedAt = new Date();
                     return [{ AffectedRows: 1 }];
                 }
                 if (sql.includes('spTaskGraphCompleteClaimed')) {
@@ -5356,5 +5382,555 @@ describe('CR-WORKFLOW-AMBIGUOUS-JUDGE: FastConvergenceJudge integration in TaskG
         expect(invalidVerdict.ShouldPause).toBe(false);
         expect(coord.GetGraphDiagnostics(parentId)?.LastProgressResult?.FastJudgeResult?.UsedFallback).toBe(true);
         expect(coord.GetGraphDiagnostics(parentId)?.LastProgressResult?.FastJudgeResult?.Reason).toContain('invalid response');
+    });
+});
+
+describe('CR-PRODUCTION-WORKFLOW-USAGE: failed retryable attempt billing, budget pause before retry, and durable recovery', () => {
+    const PROMPT_ID = '70000000-0000-4000-8000-000000000099';
+
+    beforeEach(() => {
+        capturedErrors.length = 0;
+        vi.clearAllMocks();
+        LimitsConfigResolver.Instance.ClearMjConfigLimits();
+        AgentUserPolicyEngine.Instance.ClearCache();
+    });
+
+    it('pauses non-destructively before retrying a paid prompt failure exceeding PerRun budget, survives dispatcher replacement, and settles with exact sum of all attempts', async () => {
+        const db = new GovernanceInMemoryDb();
+        db.Agents.push({ ID: AGENT_ID, Name: 'Retry Budget Agent', Status: 'Active' });
+        db.Prompts.push({ ID: PROMPT_ID, Name: 'RetryablePrompt' });
+        const provider = db.CreateProvider();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation((p) => p as Partial<RunView> as RunView);
+
+        const runId = '50000000-0000-4000-8000-000000000091';
+        const submitRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', TEST_USER);
+        submitRun.ID = runId;
+        submitRun.AgentID = AGENT_ID;
+        submitRun.UserID = TEST_USER.ID;
+        submitRun.Status = 'Running';
+        await submitRun.Save();
+
+        let promptAttempts = 0;
+        const attempt1PromptRunId = '80000000-0000-4000-8000-000000000001';
+        const attempt2PromptRunId = '80000000-0000-4000-8000-000000000002';
+        const makePromptRunner = (): TaskPromptRunner => ({
+            RunPromptForTask: async () => {
+                promptAttempts++;
+                if (promptAttempts === 1) {
+                    db.PromptRuns.set(attempt1PromptRunId, {
+                        ID: attempt1PromptRunId,
+                        PromptID: PROMPT_ID,
+                        TotalCost: 0.30,
+                        TokensUsed: 1000,
+                        Success: false,
+                    });
+                    return {
+                        Success: false,
+                        ErrorMessage: 'Transient provider timeout',
+                        PromptRunID: attempt1PromptRunId,
+                        CostUsd: 0.30,
+                        TokensUsed: 1000,
+                    };
+                }
+                db.PromptRuns.set(attempt2PromptRunId, {
+                    ID: attempt2PromptRunId,
+                    PromptID: PROMPT_ID,
+                    TotalCost: 0.20,
+                    TokensUsed: 700,
+                    Success: true,
+                });
+                return {
+                    Success: true,
+                    Output: { summary: 'Recovered on attempt 2' },
+                    PromptRunID: attempt2PromptRunId,
+                    CostUsd: 0.20,
+                    TokensUsed: 700,
+                };
+            },
+        });
+
+        const disp1 = new TaskGraphDispatcher(
+            { CreateProvider: async () => provider },
+            { RunAgentForTask: async () => ({ Success: true }) },
+            TEST_USER,
+            {
+                InstanceID: 'retry-budget-disp-1',
+                MaxConcurrentTasks: 1,
+                PollIntervalSeconds: 0.01,
+                HeartbeatIntervalSeconds: 60,
+                ReconciliationIntervalSeconds: 60,
+                RetryBackoffBaseMs: 5,
+            },
+            undefined,
+            undefined,
+            undefined,
+            makePromptRunner(),
+        );
+
+        let parentId = '';
+        let promptTaskId = '';
+        await disp1.Start();
+        try {
+            const service = new TaskGraphService();
+            const subRes = await service.Submit(
+                {
+                    workflowName: 'Retry Budget Graph',
+                    tasks: [
+                        {
+                            tempId: 'p1',
+                            name: 'Retryable Prompt Step',
+                            description: 'Fails once expensively then succeeds',
+                            kind: 'Prompt',
+                            configuration: { promptName: 'RetryablePrompt' },
+                            policy: { retryCount: 2 },
+                        },
+                    ],
+                },
+                {
+                    EnvironmentID: 'env-1',
+                    Provider: provider,
+                    ContextUser: TEST_USER,
+                    AgentID: AGENT_ID,
+                    AgentRunID: runId,
+                    LimitsOverride: { Budgets: { PerRun: { MaxCostUsd: 0.25 } } },
+                },
+            );
+            expect(subRes.Success).toBe(true);
+            parentId = subRes.ParentTaskID!;
+            promptTaskId = (db.TasksByParent.get(parentId.toLowerCase()) ?? [])[0].ID;
+
+            await waitUntil(
+                () =>
+                    disp1.Governance.GetGraphDiagnostics(parentId)?.PausedByGovernance === true &&
+                    db.Tasks.get(promptTaskId.toLowerCase())?.Status === 'Pending' &&
+                    (db.Tasks.get(promptTaskId.toLowerCase())?.AttemptCount ?? 0) === 1,
+                5_000,
+                () => disp1.Kick(),
+            );
+            // Retry MUST NOT execute before approval
+            await new Promise((r) => setTimeout(r, 40));
+            expect(promptAttempts).toBe(1);
+
+            const pausedTask = db.Tasks.get(promptTaskId.toLowerCase())!;
+            expect(pausedTask.Status).toBe('Pending');
+            expect(pausedTask.AttemptCount).toBe(1);
+            const pausedCfg = JSON.parse(pausedTask.Configuration!) as TaskStepConfiguration;
+            expect(pausedCfg.runtime?.governanceCostUsd).toBeCloseTo(0.30, 5);
+            expect(pausedCfg.runtime?.governanceTokensUsed).toBe(1000);
+            expect(pausedCfg.runtime?.priorPromptRunIDs).toEqual([attempt1PromptRunId]);
+            expect(pausedCfg.runtime?.attempts).toHaveLength(1);
+            expect(pausedCfg.runtime?.attempts?.[0]).toMatchObject({
+                attemptId: `${promptTaskId}:0`,
+                attemptIndex: 0,
+                promptRunID: attempt1PromptRunId,
+                success: false,
+                costUsd: 0.30,
+                tokensUsed: 1000,
+            });
+            expect(db.AgentRuns.get(runId.toLowerCase())?.Status).toBe('Paused');
+        } finally {
+            await disp1.Stop();
+        }
+
+        // Replacement dispatcher hydrates durable failed attempt billing & stays paused until approval
+        const disp2 = new TaskGraphDispatcher(
+            { CreateProvider: async () => provider },
+            { RunAgentForTask: async () => ({ Success: true }) },
+            TEST_USER,
+            {
+                InstanceID: 'retry-budget-disp-2',
+                MaxConcurrentTasks: 1,
+                PollIntervalSeconds: 0.01,
+                HeartbeatIntervalSeconds: 60,
+                ReconciliationIntervalSeconds: 60,
+                RetryBackoffBaseMs: 5,
+            },
+            undefined,
+            undefined,
+            undefined,
+            makePromptRunner(),
+        );
+        await disp2.Start();
+        try {
+            for (let i = 0; i < 3; i++) {
+                disp2.Kick();
+                await new Promise((r) => setTimeout(r, 20));
+            }
+            expect(promptAttempts).toBe(1);
+            const hydratedDiag = disp2.Governance.GetGraphDiagnostics(parentId);
+            expect(hydratedDiag?.PausedByGovernance).toBe(true);
+            expect(hydratedDiag?.CumulativeCostUsd).toBeCloseTo(0.30, 5);
+            expect(hydratedDiag?.TokensUsed).toBe(1000);
+
+            const approveRes = await disp2.Governance.ApproveAndResumePausedGraph({
+                ParentTaskID: parentId,
+                Provider: provider,
+                ContextUser: TEST_USER,
+                BudgetExtension: { NewPerRunMaxCostUsd: 1.00 },
+            });
+            expect(approveRes.Success).toBe(true);
+
+            await waitUntil(
+                () => db.Tasks.get(parentId.toLowerCase())?.Status === 'Complete',
+                5_000,
+                () => disp2.Kick(),
+            );
+            expect(promptAttempts).toBe(2);
+
+            const settledTask = db.Tasks.get(promptTaskId.toLowerCase())!;
+            const settledCfg = JSON.parse(settledTask.Configuration!) as TaskStepConfiguration;
+            expect(settledCfg.runtime?.governanceCostUsd).toBeCloseTo(0.50, 5);
+            expect(settledCfg.runtime?.governanceTokensUsed).toBe(1700);
+            expect(settledCfg.runtime?.priorPromptRunIDs).toEqual([attempt1PromptRunId, attempt2PromptRunId]);
+            expect(settledCfg.runtime?.attempts).toHaveLength(2);
+            expect(settledCfg.runtime?.attempts?.[0]).toMatchObject({
+                attemptId: `${promptTaskId}:0`,
+                attemptIndex: 0,
+                promptRunID: attempt1PromptRunId,
+                success: false,
+                costUsd: 0.30,
+                tokensUsed: 1000,
+            });
+            expect(settledCfg.runtime?.attempts?.[1]).toMatchObject({
+                attemptId: `${promptTaskId}:1`,
+                attemptIndex: 1,
+                promptRunID: attempt2PromptRunId,
+                success: true,
+                costUsd: 0.20,
+                tokensUsed: 700,
+            });
+
+            // Fresh coordinator hydrating from durable database sees exact sum (0.30 + 0.20 = 0.50) once
+            const coord3 = new TaskGraphGovernanceCoordinator(new TaskClaimStore('hydrate-verify', 60));
+            await coord3.HydrateGraphIfNeeded(provider, parentId, {}, db.wrapTaskPublic(db.Tasks.get(parentId.toLowerCase())!), TEST_USER);
+            const coord3Diag = coord3.GetGraphDiagnostics(parentId);
+            expect(coord3Diag?.CumulativeCostUsd).toBeCloseTo(0.50, 5);
+            expect(coord3Diag?.TokensUsed).toBe(1700);
+        } finally {
+            await disp2.Stop();
+        }
+    });
+
+    it('accounts for repeated paid retryable failures under PerRoutine ceiling and recovers missing metrics across all PromptRunIDs', async () => {
+        const db = new GovernanceInMemoryDb();
+        db.Agents.push({ ID: AGENT_ID, Name: 'Repeated Retry Agent', Status: 'Active' });
+        db.Prompts.push({ ID: PROMPT_ID, Name: 'RepeatedPrompt' });
+        const provider = db.CreateProvider();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation((p) => p as Partial<RunView> as RunView);
+
+        const routineRunId = '50000000-0000-4000-8000-000000000092';
+        const routineRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', TEST_USER);
+        routineRun.ID = routineRunId;
+        routineRun.AgentID = AGENT_ID;
+        routineRun.UserID = TEST_USER.ID;
+        routineRun.ScheduledJobRunID = ROUTINE_ID;
+        routineRun.Status = 'Running';
+        await routineRun.Save();
+
+        let callNum = 0;
+        const promptRunIds = [
+            '80000000-0000-4000-8000-000000000011',
+            '80000000-0000-4000-8000-000000000012',
+            '80000000-0000-4000-8000-000000000013',
+        ];
+        const attemptCosts = [0.15, 0.25, 0.10];
+        const attemptTokens = [400, 600, 300];
+        const promptRunner: TaskPromptRunner = {
+            RunPromptForTask: async () => {
+                const idx = callNum++;
+                const prId = promptRunIds[idx];
+                const cost = attemptCosts[idx];
+                const tokens = attemptTokens[idx];
+                const ok = idx === 2;
+                db.PromptRuns.set(prId, {
+                    ID: prId,
+                    PromptID: PROMPT_ID,
+                    TotalCost: cost,
+                    TokensUsed: tokens,
+                    Success: ok,
+                });
+                return {
+                    Success: ok,
+                    ...(ok ? { Output: { step: 'ok' } } : { ErrorMessage: `Transient failure #${idx + 1}` }),
+                    PromptRunID: prId,
+                    CostUsd: cost,
+                    TokensUsed: tokens,
+                };
+            },
+        };
+
+        const disp = new TaskGraphDispatcher(
+            { CreateProvider: async () => provider },
+            { RunAgentForTask: async () => ({ Success: true }) },
+            TEST_USER,
+            {
+                InstanceID: 'repeated-retry-disp',
+                MaxConcurrentTasks: 1,
+                PollIntervalSeconds: 0.01,
+                HeartbeatIntervalSeconds: 60,
+                ReconciliationIntervalSeconds: 60,
+                RetryBackoffBaseMs: 5,
+            },
+            undefined,
+            undefined,
+            undefined,
+            promptRunner,
+        );
+
+        let parentId = '';
+        let childTaskId = '';
+        await disp.Start();
+        try {
+            const service = new TaskGraphService();
+            const subRes = await service.Submit(
+                {
+                    workflowName: 'Repeated Retry Graph',
+                    tasks: [
+                        {
+                            tempId: 'rep',
+                            name: 'Repeated Retry Prompt',
+                            description: 'Fails twice then succeeds',
+                            kind: 'Prompt',
+                            configuration: { promptName: 'RepeatedPrompt' },
+                            policy: { retryCount: 3 },
+                        },
+                    ],
+                },
+                {
+                    EnvironmentID: 'env-1',
+                    Provider: provider,
+                    ContextUser: TEST_USER,
+                    AgentID: AGENT_ID,
+                    AgentRunID: routineRunId,
+                    RoutineID: ROUTINE_ID,
+                    LimitsOverride: {
+                        Budgets: {
+                            PerRun: { MaxCostUsd: 5.0 },
+                            PerRoutine: { MaxCostUsd: 0.35 },
+                        },
+                    },
+                },
+            );
+            expect(subRes.Success).toBe(true);
+            parentId = subRes.ParentTaskID!;
+            childTaskId = (db.TasksByParent.get(parentId.toLowerCase()) ?? [])[0].ID;
+
+            // Attempt 0 ($0.15) is under $0.35 -> auto-retries; Attempt 1 ($0.25 -> $0.40 total) breaches PerRoutine ($0.35) -> pauses before Attempt 2
+            await waitUntil(
+                () =>
+                    disp.Governance.GetGraphDiagnostics(parentId)?.PausedByGovernance === true &&
+                    (db.Tasks.get(childTaskId.toLowerCase())?.AttemptCount ?? 0) === 2,
+                5_000,
+                () => disp.Kick(),
+            );
+            await new Promise((r) => setTimeout(r, 30));
+            expect(callNum).toBe(2);
+            expect(disp.Governance.GetGraphDiagnostics(parentId)?.LastBudgetResult?.Breach?.Scope).toBe('PerRoutine');
+            expect(disp.Governance.GetGraphDiagnostics(parentId)?.CumulativeCostUsd).toBeCloseTo(0.40, 5);
+            expect(db.Tasks.get(childTaskId.toLowerCase())?.Status).toBe('Pending');
+
+            const approveRes = await disp.Governance.ApproveAndResumePausedGraph({
+                ParentTaskID: parentId,
+                Provider: provider,
+                ContextUser: TEST_USER,
+                BudgetExtension: { NewPerRoutineMaxCostUsd: 2.00 },
+            });
+            expect(approveRes.Success).toBe(true);
+
+            await waitUntil(
+                () => db.Tasks.get(parentId.toLowerCase())?.Status === 'Complete',
+                5_000,
+                () => disp.Kick(),
+            );
+            expect(callNum).toBe(3);
+
+            const storedChild = db.Tasks.get(childTaskId.toLowerCase())!;
+            const settledCfg = JSON.parse(storedChild.Configuration!) as TaskStepConfiguration;
+            expect(settledCfg.runtime?.governanceCostUsd).toBeCloseTo(0.50, 5);
+            expect(settledCfg.runtime?.governanceTokensUsed).toBe(1300);
+            expect(settledCfg.runtime?.attempts).toHaveLength(3);
+            expect(settledCfg.runtime?.priorPromptRunIDs).toEqual(promptRunIds);
+
+            const hydratedCoord = new TaskGraphGovernanceCoordinator(new TaskClaimStore('settled-hydrate-verify', 60));
+            await hydratedCoord.HydrateGraphIfNeeded(provider, parentId, {}, db.wrapTaskPublic(db.Tasks.get(parentId.toLowerCase())!), TEST_USER);
+            expect(hydratedCoord.GetGraphDiagnostics(parentId)?.CumulativeCostUsd).toBeCloseTo(0.50, 5);
+            expect(hydratedCoord.GetGraphDiagnostics(parentId)?.TokensUsed).toBe(1300);
+
+            // Verify durable DB recovery from MJ: AI Prompt Runs across ALL 3 attempts when inline governanceCostUsd is cleared
+            const strippedCfg = JSON.parse(storedChild.Configuration!) as TaskStepConfiguration;
+            delete strippedCfg.runtime!.governanceCostUsd;
+            delete strippedCfg.runtime!.governanceTokensUsed;
+            for (const att of strippedCfg.runtime!.attempts ?? []) {
+                att.costUsd = 0;
+                att.tokensUsed = 0;
+            }
+            storedChild.Configuration = JSON.stringify(strippedCfg);
+
+            const recoveryCoord = new TaskGraphGovernanceCoordinator(new TaskClaimStore('recovery-verify', 60));
+            await recoveryCoord.HydrateGraphIfNeeded(provider, parentId, {}, db.wrapTaskPublic(db.Tasks.get(parentId.toLowerCase())!), TEST_USER);
+            const recoveredDiag = recoveryCoord.GetGraphDiagnostics(parentId);
+            expect(recoveredDiag?.CumulativeCostUsd).toBeCloseTo(0.50, 5);
+            expect(recoveredDiag?.TokensUsed).toBe(1300);
+        } finally {
+            await disp.Stop();
+        }
+    });
+
+    it('accounts for prompt-bodied ForEach loop retry attempts, pauses before loop retry on budget breach, and sums all loop iterations across retries', async () => {
+        const db = new GovernanceInMemoryDb();
+        db.Agents.push({ ID: AGENT_ID, Name: 'Loop Retry Agent', Status: 'Active' });
+        db.Prompts.push({ ID: PROMPT_ID, Name: 'LoopRetryPrompt' });
+        const provider = db.CreateProvider();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation((p) => p as Partial<RunView> as RunView);
+
+        let loopPromptCalls = 0;
+        const loopPromptRunner: TaskPromptRunner = {
+            RunPromptForTask: async (params) => {
+                loopPromptCalls++;
+                const prId = randomUUID();
+                // Call 1 ("a") succeeds ($0.15), Call 2 ("b") fails ($0.15) -> Attempt 0 total $0.30 (> $0.25)
+                // Calls 3 & 4 (Attempt 1 after approval) both succeed ($0.15 each) -> Attempt 1 total $0.30
+                const shouldFail = loopPromptCalls === 2;
+                db.PromptRuns.set(prId.toLowerCase(), {
+                    ID: prId,
+                    PromptID: PROMPT_ID,
+                    TotalCost: 0.15,
+                    TokensUsed: 300,
+                    Success: !shouldFail,
+                });
+                return {
+                    Success: !shouldFail,
+                    ...(shouldFail
+                        ? { ErrorMessage: 'Transient failure on item b' }
+                        : { Output: { item: params.TemplateParameters?.item ?? 'ok', call: loopPromptCalls } }),
+                    PromptRunID: prId,
+                    CostUsd: 0.15,
+                    TokensUsed: 300,
+                };
+            },
+        };
+
+        const disp1 = new TaskGraphDispatcher(
+            { CreateProvider: async () => provider },
+            { RunAgentForTask: async () => ({ Success: true }) },
+            TEST_USER,
+            {
+                InstanceID: 'loop-retry-disp-1',
+                MaxConcurrentTasks: 1,
+                PollIntervalSeconds: 0.01,
+                HeartbeatIntervalSeconds: 60,
+                ReconciliationIntervalSeconds: 60,
+                RetryBackoffBaseMs: 5,
+            },
+            undefined,
+            undefined,
+            undefined,
+            loopPromptRunner,
+        );
+
+        let parentId = '';
+        let loopTaskId = '';
+        await disp1.Start();
+        try {
+            const service = new TaskGraphService();
+            const subRes = await service.Submit(
+                {
+                    workflowName: 'Prompt Loop Retry Graph',
+                    tasks: [
+                        {
+                            tempId: 'fe-retry',
+                            name: 'Retryable Prompt ForEach',
+                            description: 'Prompt-bodied loop with retryCount',
+                            kind: 'ForEach',
+                            configuration: {
+                                collectionPath: 'static:["a","b"]',
+                                prompt: { name: 'LoopRetryPrompt' },
+                            },
+                            policy: { retryCount: 1 },
+                        },
+                    ],
+                },
+                {
+                    EnvironmentID: 'env-1',
+                    Provider: provider,
+                    ContextUser: TEST_USER,
+                    AgentID: AGENT_ID,
+                    LimitsOverride: { Budgets: { PerRun: { MaxCostUsd: 0.25 } } },
+                },
+            );
+            expect(subRes.Success).toBe(true);
+            parentId = subRes.ParentTaskID!;
+            loopTaskId = (db.TasksByParent.get(parentId.toLowerCase()) ?? [])[0].ID;
+
+            await waitUntil(
+                () =>
+                    disp1.Governance.GetGraphDiagnostics(parentId)?.PausedByGovernance === true &&
+                    db.Tasks.get(loopTaskId.toLowerCase())?.Status === 'Pending' &&
+                    (db.Tasks.get(loopTaskId.toLowerCase())?.AttemptCount ?? 0) === 1,
+                5_000,
+                () => disp1.Kick(),
+            );
+            await new Promise((r) => setTimeout(r, 40));
+            expect(loopPromptCalls).toBe(2);
+            expect(disp1.Governance.GetGraphDiagnostics(parentId)?.CumulativeCostUsd).toBeCloseTo(0.30, 5);
+        } finally {
+            await disp1.Stop();
+        }
+
+        const disp2 = new TaskGraphDispatcher(
+            { CreateProvider: async () => provider },
+            { RunAgentForTask: async () => ({ Success: true }) },
+            TEST_USER,
+            {
+                InstanceID: 'loop-retry-disp-2',
+                MaxConcurrentTasks: 1,
+                PollIntervalSeconds: 0.01,
+                HeartbeatIntervalSeconds: 60,
+                ReconciliationIntervalSeconds: 60,
+                RetryBackoffBaseMs: 5,
+            },
+            undefined,
+            undefined,
+            undefined,
+            loopPromptRunner,
+        );
+        await disp2.Start();
+        try {
+            for (let i = 0; i < 3; i++) {
+                disp2.Kick();
+                await new Promise((r) => setTimeout(r, 20));
+            }
+            expect(loopPromptCalls).toBe(2);
+            expect(disp2.Governance.GetGraphDiagnostics(parentId)?.CumulativeCostUsd).toBeCloseTo(0.30, 5);
+
+            const approveRes = await disp2.Governance.ApproveAndResumePausedGraph({
+                ParentTaskID: parentId,
+                Provider: provider,
+                ContextUser: TEST_USER,
+                BudgetExtension: { NewPerRunMaxCostUsd: 2.00 },
+            });
+            expect(approveRes.Success).toBe(true);
+
+            await waitUntil(
+                () => db.Tasks.get(parentId.toLowerCase())?.Status === 'Complete',
+                5_000,
+                () => disp2.Kick(),
+            );
+            expect(loopPromptCalls).toBe(4);
+
+            const settledLoop = db.Tasks.get(loopTaskId.toLowerCase())!;
+            const settledCfg = JSON.parse(settledLoop.Configuration!) as TaskStepConfiguration;
+            expect(settledCfg.runtime?.governanceCostUsd).toBeCloseTo(0.60, 5);
+            expect(settledCfg.runtime?.governanceTokensUsed).toBe(1200);
+            expect(settledCfg.runtime?.attempts).toHaveLength(2);
+            expect(settledCfg.runtime?.priorPromptRunIDs).toHaveLength(4);
+
+            const hydratedLoopCoord = new TaskGraphGovernanceCoordinator(new TaskClaimStore('loop-hydrate-verify', 60));
+            await hydratedLoopCoord.HydrateGraphIfNeeded(provider, parentId, {}, db.wrapTaskPublic(db.Tasks.get(parentId.toLowerCase())!), TEST_USER);
+            expect(hydratedLoopCoord.GetGraphDiagnostics(parentId)?.CumulativeCostUsd).toBeCloseTo(0.60, 5);
+            expect(hydratedLoopCoord.GetGraphDiagnostics(parentId)?.TokensUsed).toBe(1200);
+        } finally {
+            await disp2.Stop();
+        }
     });
 });

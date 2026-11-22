@@ -5,7 +5,11 @@
 import 'reflect-metadata';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { AIPromptParams, AIPromptRunResult, MJAIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
+import type { AIPromptRunner } from '@memberjunction/ai-prompts';
 import type { TaskPromptRunParams } from '@memberjunction/task-graph';
+
+type PromptTestResultValue = Record<string, string | number | boolean> | string;
 
 const {
     executePrompt,
@@ -13,9 +17,9 @@ const {
     mockPrompts,
     mockLogError,
 } = vi.hoisted(() => ({
-    executePrompt: vi.fn(),
-    mockEngineConfig: vi.fn().mockResolvedValue(undefined),
-    mockPrompts: [{ ID: 'prompt-1', Name: 'SummarizeStep' }],
+    executePrompt: vi.fn<(params: AIPromptParams) => Promise<AIPromptRunResult<PromptTestResultValue>>>(),
+    mockEngineConfig: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    mockPrompts: [{ ID: 'prompt-1', Name: 'SummarizeStep' }] as Array<Partial<AIPromptParams['prompt']>>,
     mockLogError: vi.fn(),
 }));
 
@@ -23,7 +27,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
     return {
         ...actual,
-        LogError: (...args: unknown[]) => mockLogError(...args),
+        LogError: (...args: Parameters<typeof actual.LogError>) => mockLogError(...args),
     };
 });
 
@@ -38,21 +42,21 @@ vi.mock('@memberjunction/aiengine', () => ({
     },
 }));
 
-vi.mock('@memberjunction/ai-core-plus', () => ({
-    AIPromptParams: class {
-        public prompt: unknown;
-        public contextUser: unknown;
-        public data: unknown;
-    },
-}));
-
 vi.mock('@memberjunction/ai-prompts', () => ({
     AIPromptRunner: class {
-        ExecutePrompt = executePrompt;
+        public ExecutePrompt: AIPromptRunner['ExecutePrompt'] = executePrompt as AIPromptRunner['ExecutePrompt'];
     },
 }));
 
 import { TaskGraphPromptRunner } from '../services/TaskGraphPromptRunner';
+
+function makePromptRunResult(
+    overrides: Partial<Omit<AIPromptRunResult<PromptTestResultValue>, 'promptRun'>> & {
+        promptRun?: Partial<MJAIPromptRunEntityExtended>;
+    },
+): AIPromptRunResult<PromptTestResultValue> {
+    return overrides as Partial<AIPromptRunResult<PromptTestResultValue>> as AIPromptRunResult<PromptTestResultValue>;
+}
 
 function makeParams(overrides: Partial<TaskPromptRunParams> = {}): TaskPromptRunParams {
     return {
@@ -60,8 +64,8 @@ function makeParams(overrides: Partial<TaskPromptRunParams> = {}): TaskPromptRun
         PromptID: 'prompt-1',
         InputPayload: { topic: 'quarterly report' },
         DependencyOutputs: new Map(),
-        Provider: {} as IMetadataProvider,
-        ContextUser: { ID: 'user-1' } as UserInfo,
+        Provider: {} as Partial<IMetadataProvider> as IMetadataProvider,
+        ContextUser: { ID: 'user-1' } as Partial<UserInfo> as UserInfo,
         ...overrides,
     };
 }
@@ -72,7 +76,7 @@ describe('CR-PRODUCTION-WORKFLOW-USAGE: TaskGraphPromptRunner cost and token pro
     });
 
     it('propagates authoritative CostUsd and TokensUsed from promptRun on successful execution', async () => {
-        executePrompt.mockResolvedValue({
+        executePrompt.mockResolvedValue(makePromptRunResult({
             success: true,
             result: { summary: 'Done' },
             promptRun: {
@@ -84,7 +88,7 @@ describe('CR-PRODUCTION-WORKFLOW-USAGE: TaskGraphPromptRunner cost and token pro
             },
             cost: 0.1,
             tokensUsed: 1200,
-        });
+        }));
 
         const runner = new TaskGraphPromptRunner();
         const outcome = await runner.RunPromptForTask(makeParams());
@@ -96,7 +100,7 @@ describe('CR-PRODUCTION-WORKFLOW-USAGE: TaskGraphPromptRunner cost and token pro
     });
 
     it('propagates authoritative CostUsd and TokensUsed on paid prompt failure', async () => {
-        executePrompt.mockResolvedValue({
+        executePrompt.mockResolvedValue(makePromptRunResult({
             success: false,
             errorMessage: 'Validation failed after retry',
             promptRun: {
@@ -106,7 +110,7 @@ describe('CR-PRODUCTION-WORKFLOW-USAGE: TaskGraphPromptRunner cost and token pro
             },
             cost: 0.085,
             tokensUsed: 940,
-        });
+        }));
 
         const runner = new TaskGraphPromptRunner();
         const outcome = await runner.RunPromptForTask(makeParams());
@@ -119,7 +123,7 @@ describe('CR-PRODUCTION-WORKFLOW-USAGE: TaskGraphPromptRunner cost and token pro
     });
 
     it('falls back to combinedCost / combinedTokensUsed when promptRun fields are null', async () => {
-        executePrompt.mockResolvedValue({
+        executePrompt.mockResolvedValue(makePromptRunResult({
             success: true,
             result: '{"ok":true}',
             promptRun: {
@@ -129,7 +133,7 @@ describe('CR-PRODUCTION-WORKFLOW-USAGE: TaskGraphPromptRunner cost and token pro
             },
             combinedCost: 0.22,
             combinedTokensUsed: 2200,
-        });
+        }));
 
         const runner = new TaskGraphPromptRunner();
         const outcome = await runner.RunPromptForTask(makeParams());
