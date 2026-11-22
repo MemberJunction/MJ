@@ -2,6 +2,16 @@ import { BaseEntity, BaseEntityResult, CompositeKey, EntitySaveOptions, IEntityD
 import { MJAIAgentRunEntity, ConversationEngine, UserOwnsConversation, type ConversationBranchRow } from "@memberjunction/core-entities";
 import { EscapeSQLString, RegisterClass, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { MJAIAgentRunStepEntityExtended } from "./MJAIAgentRunStepEntityExtended";
+import {
+    AttachLimitsDiagnosticsToRunData,
+    ExtractLimitsDiagnosticsFromRunData,
+    type LimitsDiagnosticsSnapshot,
+} from "./limits-diagnostics";
+import {
+    AttachRunawayCheckpointToRunData,
+    ExtractRunawayCheckpointFromRunData,
+    type RunawayCheckpointState,
+} from "./runaway-governance";
 
 /**
  * Trusted in-process server cancellations marked via {@link MJAIAgentRunEntityExtended.MarkServerCancellation}.
@@ -306,6 +316,50 @@ export class MJAIAgentRunEntityExtended extends MJAIAgentRunEntity {
     }
     public get FinalPayloadObject(): any {
         return this._finalPayloadObject;
+    }
+
+    private _limitsDiagnosticsSnapshot: LimitsDiagnosticsSnapshot | null = null;
+    /**
+     * Structured diagnostic snapshot of resolved limits and tier provenance recorded for this run.
+     * Setting this property also persists the snapshot under `__limitsDiagnostics` in `this.Data`.
+     */
+    public get LimitsDiagnosticsSnapshot(): LimitsDiagnosticsSnapshot | null {
+        if (this._limitsDiagnosticsSnapshot) {
+            return this._limitsDiagnosticsSnapshot;
+        }
+        const extracted = ExtractLimitsDiagnosticsFromRunData(this.Data);
+        if (extracted) {
+            this._limitsDiagnosticsSnapshot = extracted;
+        }
+        return extracted;
+    }
+    public set LimitsDiagnosticsSnapshot(value: LimitsDiagnosticsSnapshot | null) {
+        this._limitsDiagnosticsSnapshot = value;
+        if (value) {
+            this.Data = AttachLimitsDiagnosticsToRunData(this.Data, value);
+        }
+    }
+
+    private _runawayCheckpoint: RunawayCheckpointState | null = null;
+    /**
+     * Persisted non-destructive runaway pause/resume checkpoint recorded for this run.
+     * Setting this property also persists the checkpoint under `__runawayCheckpoint` in `this.Data`.
+     */
+    public get RunawayCheckpoint(): RunawayCheckpointState | null {
+        if (this._runawayCheckpoint) {
+            return this._runawayCheckpoint;
+        }
+        const extracted = ExtractRunawayCheckpointFromRunData(this.Data);
+        if (extracted) {
+            this._runawayCheckpoint = extracted;
+        }
+        return extracted;
+    }
+    public set RunawayCheckpoint(value: RunawayCheckpointState | null) {
+        this._runawayCheckpoint = value;
+        if (value) {
+            this.Data = AttachRunawayCheckpointToRunData(this.Data, value);
+        }
     }
     
     /**

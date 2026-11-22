@@ -13,11 +13,17 @@
  * @module @memberjunction/ai-agents
  */
 
+import { CODE_FALLBACK_LIMITS, LimitsConfigResolver } from '@memberjunction/core';
 import type { BaseAgentNextStep } from '@memberjunction/ai-core-plus';
 import type { ActionResultSummary } from './base-agent';
 
 /** How many times in a row the same decision may fail before the run ends. */
-export const MAX_REPEATED_FAILING_STEP = 3;
+export const MAX_REPEATED_FAILING_STEP = CODE_FALLBACK_LIMITS.ResourceGuards.MaxRepeatedFailingStep;
+
+/** Resolves the effective repeated-failing-step ceiling from `LimitsConfigResolver.Instance`. */
+export function GetMaxRepeatedFailingStep(): number {
+    return LimitsConfigResolver.Resolve().Limits.ResourceGuards.MaxRepeatedFailingStep;
+}
 
 /**
  * Steps the loop answers with a prompt rather than by running something: a retry, a non-terminal

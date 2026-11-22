@@ -11,6 +11,7 @@
 import {
     DecisionReferencesIn,
     ResolveDecisionStepAnswers,
+    type BudgetCostEvent,
     type EdgeConditionOutcome,
     type GraphDecisions,
     type HeldDecisionAnswer,
@@ -18,7 +19,8 @@ import {
     type TaskGraphDecisionQuestion,
     type TaskGraphNodeConfigMap,
 } from '@memberjunction/ai-core-plus';
-import type { MJTaskEntity_ITaskStepConfiguration } from '@memberjunction/core-entities';
+import type { MJTaskEntity_ITaskLoopIteration, MJTaskEntity_ITaskStepConfiguration } from '@memberjunction/core-entities';
+import type { LoopCursorSnapshot, LoopIterationOutcome } from './TaskLoopExecutor';
 import { ParseConditionOutput } from './condition-gate';
 import type { TaskCompensationStepMetadata } from './saga-compensation';
 
@@ -35,6 +37,34 @@ export type TaskDecisionStepConfiguration = TaskGraphNodeConfigMap['Decision'] &
      */
     nodeId: string;
 };
+
+/** Durable billing and run-reference record for one execution attempt of a task node. */
+export interface TaskRuntimeAttemptBilling {
+    /** Idempotent attempt identity (`${taskID}:${attemptIndex}`, disambiguated if a manual retry resets AttemptCount). */
+    attemptId: string;
+    /** Task `AttemptCount` value when this attempt executed (0 for first run, 1 for first retry, etc.). */
+    attemptIndex: number;
+    /** `MJ: AI Prompt Runs` ID produced by this attempt (Prompt or Decision node). */
+    promptRunID?: string;
+    /** `MJ: AI Agent Runs` ID produced by this attempt (Agent node). */
+    agentRunID?: string;
+    /** `MJ: Action Execution Logs` ID produced by this attempt (Action node). */
+    actionLogID?: string;
+    /** `MJ: AI Prompt Runs` IDs produced by loop iterations in this attempt. */
+    loopPromptRunIDs?: string[];
+    /** `MJ: AI Agent Runs` IDs produced by loop iterations in this attempt. */
+    loopAgentRunIDs?: string[];
+    /** Whether this attempt succeeded. */
+    success: boolean;
+    /** Resolved USD cost of this attempt. */
+    costUsd: number;
+    /** Resolved tokens used by this attempt. */
+    tokensUsed: number;
+    /** Epoch milliseconds when this attempt finished. */
+    recordedAtMs: number;
+    /** Timestamped USD spend events incurred during this attempt. */
+    costEvents?: BudgetCostEvent[];
+}
 
 /**
  * `Task.Configuration` as this package writes it: the generated bag, plus a Decision step's settings.
@@ -77,6 +107,31 @@ export type TaskStepConfiguration = MJTaskEntity_ITaskStepConfiguration & {
         actionInput?: Record<string, unknown>;
         /** Who completed a Human step, recorded server-side (see `HumanReviewClearsTaint`). */
         completedByUserID?: string;
+        /** Durable USD cost recorded at node settlement for governance budget reconstruction. */
+        governanceCostUsd?: number;
+        /** Durable token count recorded at node settlement for governance budget reconstruction. */
+        governanceTokensUsed?: number;
+        /** Timestamped USD spend deltas recorded at node/iteration settlement for cross-day accounting. */
+        governanceCostEvents?: BudgetCostEvent[];
+        /** Durable per-attempt billing ledger retained across retryable failures and governance pauses. */
+        attempts?: TaskRuntimeAttemptBilling[];
+        /** Retained PromptRunIDs across prior failed/retried attempts for durable billing recovery. */
+        priorPromptRunIDs?: string[];
+        /** Retained AgentRunIDs across prior failed/retried attempts for durable billing recovery. */
+        priorAgentRunIDs?: string[];
+        /** Durable loop cursor state persisted on the Task row when a loop pauses mid-execution under governance. */
+        loopCursor?: {
+            Cursor: LoopCursorSnapshot;
+            LivePayload: Record<string, LoopIterationOutcome['Output']>;
+            IterationTrace: MJTaskEntity_ITaskLoopIteration[];
+            AccumulatedCostUsd: number;
+            AccumulatedTokensUsed: number;
+            IsOutputTainted: boolean;
+            /** Timestamped USD spend deltas incurred across loop iterations before pause. */
+            CostEvents?: BudgetCostEvent[];
+            /** Epoch ms when the loop cursor was last persisted/updated. */
+            UpdatedAtMs?: number;
+        };
     };
 };
 

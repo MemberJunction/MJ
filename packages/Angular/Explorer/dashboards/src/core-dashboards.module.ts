@@ -58,6 +58,7 @@ import { ActionPinRunnerDialogComponent } from './Home/action-pin-runner-dialog.
 import { HomeApplication } from './Home/home-application';
 import { SystemDiagnosticsComponent } from './SystemDiagnostics/system-diagnostics.component';
 import { HealthObservatoryComponent } from './HealthObservatory/health-observatory.component';
+import { AdminLimitsResourceComponent } from './AdminLimits/admin-limits-resource.component';
 import { ThemeStudioDashboardComponent } from './ThemeStudio/theme-studio-dashboard.component';
 import { ThemeStudioResourceComponent } from './ThemeStudio/theme-studio-resource.component';
 import { ThemeManagerDashboardComponent } from './ThemeStudio/theme-manager-dashboard.component';
@@ -131,6 +132,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     ActionPinRunnerDialogComponent,
     SystemDiagnosticsComponent,
     HealthObservatoryComponent,
+    AdminLimitsResourceComponent,
     AppStateInspectorComponent,
     LayoutInspectorComponent,
     ClassRegistryInspectorComponent,
@@ -237,6 +239,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     ThemeManagerResourceComponent,
     SystemDiagnosticsComponent,
     HealthObservatoryComponent,
+    AdminLimitsResourceComponent,
     AppStateInspectorComponent,
     LayoutInspectorComponent,
     ClassRegistryInspectorComponent,

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { CleanAndParseJSON, EscapeSQLString, GetGlobalObjectStore, IndexByUUID, IsValidUUID, MJEventType, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import { CompositeKey, IMetadataProvider, IRunViewProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
+import { CompositeKey, IMetadataProvider, IRunViewProvider, LimitsConfigResolver, LogError, RunView, UserInfo } from '@memberjunction/core';
 import {
   ArtifactMetadataEngine,
   ArtifactPermissionEngine,
@@ -61,7 +61,6 @@ export { SetArtifactLiveMutationHook, GetArtifactLiveMutationHook };
 
 const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const GLOBAL_KEY_TRUSTED_AGENT_DRAFT = '__MJ_TRUSTED_AGENT_DRAFT_VERSION_ENTITIES__';
-const MAX_INITIAL_OPERATIONS = 100;
 
 /**
  * Optional persistence and execution context passed to {@link ArtifactToolManager.Initialize} (`A4`).
@@ -2676,9 +2675,10 @@ export class ArtifactToolManager {
         errorMessage: 'initialOperations must be an array of { tool: string, input?: object } items.',
       };
     }
-    if (rawOps.length > MAX_INITIAL_OPERATIONS) {
+    const maxInitialOperations = LimitsConfigResolver.Resolve().Limits.Tuning.MaxInitialArtifactOperations;
+    if (rawOps.length > maxInitialOperations) {
       return {
-        errorMessage: `initialOperations exceeds the maximum allowed ${MAX_INITIAL_OPERATIONS} operations per request.`,
+        errorMessage: `initialOperations exceeds the maximum allowed ${maxInitialOperations} operations per request.`,
       };
     }
 

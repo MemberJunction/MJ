@@ -273,6 +273,8 @@ class ConsultLoopHarness {
             }
             throw new Error(`ConsultLoopHarness: unexpected GetEntityObject('${entityName}')`);
         },
+        RunView: async () => ({ Success: true, Results: [] }),
+        RunViews: async () => [],
     };
 }
 
