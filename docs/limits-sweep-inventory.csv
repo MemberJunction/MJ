@@ -2754,9 +2754,9 @@ packages/Standards/src/runner.ts,157,DISPLAY_LIMIT,50,<module>,UX,retained-ux-lo
 packages/TaskGraph/src/TaskGraphDispatcher.ts,159,STOP_DRAIN_TIMEOUT_MS,30000,<module>,ResourceGuard,local-resource-guard
 packages/TaskGraph/src/TaskGraphDispatcher.ts,175,SAGA_ROW_WRITE_ATTEMPTS,3,<module>,ResourceGuard,local-resource-guard
 packages/TaskGraph/src/TaskGraphDispatcher.ts,682,NODE_PROGRESS_MIN_INTERVAL_MS,1000,TaskGraphDispatcher,Tuning,local-tuning-default
-packages/TaskGraph/src/TaskGraphDispatcher.ts,2666,MaxRows,2,TaskGraphDispatcher.workflowTaskTypeID,ResourceGuard,local-resource-guard
-packages/TaskGraph/src/TaskGraphDispatcher.ts,4970,MaxRows,50,TaskGraphDispatcher.loadCorrelatedRecordChanges,ResourceGuard,local-resource-guard
-packages/TaskGraph/src/TaskGraphGovernanceCoordinator.ts,178,CONCURRENT_SYNC_MIN_INTERVAL_MS,150,TaskGraphGovernanceCoordinator,Tuning,local-tuning-default
+packages/TaskGraph/src/TaskGraphDispatcher.ts,2673,MaxRows,2,TaskGraphDispatcher.workflowTaskTypeID,ResourceGuard,local-resource-guard
+packages/TaskGraph/src/TaskGraphDispatcher.ts,4988,MaxRows,50,TaskGraphDispatcher.loadCorrelatedRecordChanges,ResourceGuard,local-resource-guard
+packages/TaskGraph/src/TaskGraphGovernanceCoordinator.ts,187,CONCURRENT_SYNC_MIN_INTERVAL_MS,150,TaskGraphGovernanceCoordinator,Tuning,local-tuning-default
 packages/TaskGraph/src/TaskGraphService.ts,2017,MaxRows,2,TaskGraphService.findTaskTypeID,ResourceGuard,local-resource-guard
 packages/TaskGraph/src/types.ts,618,RetryBackoffBaseMs,1000,<module>,ResourceGuard,local-resource-guard
 packages/TaskGraph/src/types.ts,621,MaxConcurrentTasks,5,<module>,Tuning,local-tuning-default

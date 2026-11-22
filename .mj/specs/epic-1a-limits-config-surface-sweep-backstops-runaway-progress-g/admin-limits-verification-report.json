@@ -1,24 +1,35 @@
 {
-  "verifiedAtISO": "2026-11-22T04:38:08.651Z",
+  "verifiedAtISO": "2026-11-22T05:03:25.058Z",
+  "gitRevision": {
+    "branch": "factory/bac5fc6c-8417-4c82-a5d0-28742cbeff8f-epic-1a-limits-config",
+    "headSha": "98258684a36cd032d66f71526f4ed23d3808f1f1",
+    "componentSource": "packages/Angular/Explorer/dashboards/src/AdminLimits/admin-limits-resource.component.ts",
+    "serverOperationsSource": "packages/AI/Agents/src/operations/LimitsOperations.ts"
+  },
+  "renderedMode": "Real Angular AdminLimitsResourceComponent + ExplorerAdminShell via Vite",
   "chromiumVersion": "145.0.7632.6",
-  "baseUrl": "http://127.0.0.1:52729/",
+  "baseUrl": "http://127.0.0.1:53331/",
   "pageErrorsCount": 0,
   "consoleErrorsCount": 0,
   "brokenImagesCount": 0,
   "rawMarkdownLeaks": false,
   "computedTokens": {
     "bodyBg": "rgb(248, 250, 252)",
-    "brandPrimary": "#264faf"
+    "brandPrimary": "#0076b6"
   },
   "assertions": {
+    "explorerDefaultNavItemsCount": 5,
+    "shellRouteBadge": "AdminLimitsResource",
+    "realComponentMounted": true,
     "tierCardsRendered": 5,
     "backstopCardsRendered": 9,
-    "clampedBudgetRowsFiltered": 1,
-    "clampedRowContainsBadge": true,
+    "clampedBudgetRowsFiltered": 2,
+    "overriddenBudgetContainsUserPolicyTier": true,
+    "drawerContainsClampedPolicy": true,
     "budgetScopeCardsRendered": 3,
     "drawerContainsFastJudgeVerdict": true,
-    "resumeSuccessBanner": "Run 33333333-3333-4333-8333-333333333333 approved and transitioned back to Running preserving 6 completed step(s). Continuation dispatched for 33333333-3333-4333-8333-333333333333.",
-    "pauseSuccessBanner": "Run 44444444-4444-4444-8444-444444444444 cooperatively paused at safe boundary (checkpoint cp-browser-paused-active-2)."
+    "resumeSuccessBanner": "Run 33333333-3333-4333-8333-333333333333 approved and transitioned back to Running preserving 0 completed step(s). Fresh worker (ResearchPlanner) dispatched for run 33333333-3333-4333-8333-333333333333.",
+    "pauseSuccessBanner": "Run 44444444-4444-4444-8444-444444444444 cooperatively paused at safe boundary (checkpoint f60d87b0-20d4-41d6-ad56-ce3eddc4fb84)."
   },
   "screenshots": [
     "admin-limits-overview.png",
