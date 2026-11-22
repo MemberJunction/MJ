@@ -29,7 +29,9 @@ vi.mock('../auth/index.js', () => ({
 
 vi.mock('@memberjunction/auth-providers', () => ({
   TokenExpiredError: class extends Error {},
-  AuthProviderFactory: { Instance: { getByIssuer: vi.fn(() => ({})) } },
+  CheckEmailVerified: vi.fn(() => ({ Allowed: true })),
+  DescribeEmailVerifiedRefusal: vi.fn(() => ''),
+  AuthProviderFactory: { Instance: { getByIssuer: vi.fn(() => ({})), RequiresEmailVerified: vi.fn(() => false) } },
 }));
 
 vi.mock('../logging/StartupLogger.js', () => ({

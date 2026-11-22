@@ -2,6 +2,7 @@ export { IAuthProvider } from './IAuthProvider.js';
 export { BaseAuthProvider } from './BaseAuthProvider.js';
 export { AuthProviderFactory } from './AuthProviderFactory.js';
 export { TokenExpiredError } from './tokenExpiredError.js';
+export { CheckEmailVerified, ReadEmailVerifiedClaim, DescribeEmailVerifiedRefusal, type EmailVerifiedCheck, type EmailVerifiedRefusalReason } from './emailVerified.js';
 export { type IEnvironmentConfigurableProvider, IsEnvironmentConfigurable, isEnvironmentConfigurable } from './IEnvironmentConfigurableProvider.js';
 export { MagicLinkProvider } from './providers/MagicLinkProvider.js';
 export { LocalDevProvider } from './providers/LocalDevProvider.js';
