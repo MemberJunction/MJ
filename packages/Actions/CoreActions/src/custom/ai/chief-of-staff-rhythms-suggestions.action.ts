@@ -13,7 +13,7 @@ import {
     CheckActivePolicyForAgentAndUser,
     ResolveAgentConfigurationIDInput,
     ResolveDefaultTierForWorkstreamKey,
-    ResolveSeededRoutineAgentConfigurationID,
+    ResolveRoutineSeededAgentConfigurationID,
 } from '@memberjunction/ai-agents';
 import { AIEngine } from '@memberjunction/aiengine';
 import {
@@ -198,7 +198,7 @@ export class ListAvailableRhythmsAction extends BaseAction {
                 }
             }
 
-            const rows = templatesRes.Results.filter((t) => {
+            const filteredTemplates = templatesRes.Results.filter((t) => {
                 // Only offer skill-contributed rhythms whose skill is granted to the agent
                 if (t.SkillID && !grantedSkillIds.has(t.SkillID.toLowerCase())) {
                     return false;
@@ -220,11 +220,44 @@ export class ListAvailableRhythmsAction extends BaseAction {
                     return false;
                 }
                 return true;
-            }).map((t) => {
+            });
+
+            // Lazily resolve catalog fallback configuration IDs only when any filtered template
+            // has a null DefaultAgentConfigurationID in DB.
+            const fallbackConfigIdByTierName = new Map<string, string | null>();
+            const needsCatalogLookup = filteredTemplates.some(
+                (t) => !t.DefaultAgentConfigurationID && Boolean(ResolveDefaultTierForWorkstreamKey(t.WorkstreamKey))
+            );
+            if (needsCatalogLookup) {
+                const cfgRes = await rv.RunView<{ ID: string; Name: string; Status: string }>(
+                    {
+                        EntityName: 'MJ: AI Configurations',
+                        ExtraFilter: "Name IN ('Fast', 'Standard', 'High Power')",
+                        Fields: ['ID', 'Name', 'Status'],
+                        OrderBy: 'Status ASC, Name ASC',
+                        MaxRows: 20,
+                        ResultType: 'simple',
+                    },
+                    contextUser
+                );
+                if (cfgRes.Success) {
+                    for (const row of cfgRes.Results) {
+                        const normalizedName = row.Name.trim().toLowerCase();
+                        if (!fallbackConfigIdByTierName.has(normalizedName) || row.Status === 'Active') {
+                            fallbackConfigIdByTierName.set(normalizedName, row.ID);
+                        }
+                    }
+                }
+            }
+
+            const rows = filteredTemplates.map((t) => {
                 const key = t.WorkstreamKey.trim().toLowerCase();
                 const routine = routineByWorkstream.get(key);
                 const suggestion = suggestionByKey.get(key);
                 const tierSpec = ResolveDefaultTierForWorkstreamKey(t.WorkstreamKey);
+                const catalogFallbackId = tierSpec
+                    ? (fallbackConfigIdByTierName.get(tierSpec.DefaultConfigurationName.toLowerCase()) ?? null)
+                    : null;
                 return {
                     RhythmTemplateID: t.ID,
                     Name: t.Name,
@@ -235,7 +268,7 @@ export class ListAvailableRhythmsAction extends BaseAction {
                     OfferAt: t.OfferAt,
                     SkillID: t.SkillID,
                     SkillName: t.Skill,
-                    DefaultAgentConfigurationID: t.DefaultAgentConfigurationID ?? null,
+                    DefaultAgentConfigurationID: t.DefaultAgentConfigurationID ?? catalogFallbackId,
                     DefaultAgentConfiguration: t.DefaultAgentConfiguration ?? tierSpec?.DefaultConfigurationName ?? null,
                     DefaultModelTier: tierSpec?.Tier ?? null,
                     EnabledForUser: routine?.Status === 'Active',
@@ -453,11 +486,14 @@ export class EnableAgentRhythmAction extends BaseAction {
             }
 
             if (isNewRoutine) {
-                routine.AgentConfigurationID = ResolveSeededRoutineAgentConfigurationID({
+                routine.AgentConfigurationID = await ResolveRoutineSeededAgentConfigurationID({
                     explicitAgentConfigurationID: configResolution.Provided
                         ? configResolution.ConfigurationID
                         : undefined,
                     templateDefaultAgentConfigurationID: template.DefaultAgentConfigurationID ?? null,
+                    workstreamKey: template.WorkstreamKey,
+                    contextUser,
+                    metadataProvider: md,
                 });
             } else if (configResolution.Provided) {
                 routine.AgentConfigurationID = configResolution.ConfigurationID;

@@ -269,6 +269,95 @@ export type RhythmTemplateTierRow = Pick<
 >;
 
 /**
+ * Looks up a canonical `MJ: AI Configurations` ID by exact configuration name (`Fast`,
+ * `Standard`, `High Power`), preferring `Status = 'Active'` rows.
+ */
+async function lookupConfigurationIDByName(params: {
+    configurationName: string;
+    contextUser: UserInfo;
+    metadataProvider?: IMetadataProvider;
+}): Promise<string | null> {
+    const cleanName = normalizeOptionalID(params.configurationName);
+    if (!cleanName) {
+        return null;
+    }
+
+    try {
+        const rv = createRunView(params.metadataProvider);
+        const byName = await rv.RunView<AIConfigurationLookupRow>(
+            {
+                EntityName: 'MJ: AI Configurations',
+                ExtraFilter: `Name='${EscapeSQLString(cleanName)}'`,
+                Fields: ['ID', 'Name', 'Status'],
+                OrderBy: 'Status ASC, Name ASC',
+                MaxRows: 5,
+                ResultType: 'simple',
+            },
+            params.contextUser
+        );
+        if (!byName.Success || byName.Results.length === 0) {
+            return null;
+        }
+        const activeMatch =
+            byName.Results.find((row) => row.Status === 'Active') ?? byName.Results[0];
+        return normalizeOptionalID(activeMatch?.ID);
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Resolves the canonical `MJ: AI Configurations.ID` from {@link RHYTHM_DEFAULT_TIER_CATALOG}
+ * for a given `workstreamKey` when `DefaultAgentConfigurationID` is null in the database.
+ */
+export async function ResolveCatalogDefaultAgentConfigurationID(params: {
+    workstreamKey: string | null | undefined;
+    contextUser: UserInfo;
+    metadataProvider?: IMetadataProvider;
+}): Promise<string | null> {
+    const tierSpec = ResolveDefaultTierForWorkstreamKey(params.workstreamKey);
+    if (!tierSpec) {
+        return null;
+    }
+    return lookupConfigurationIDByName({
+        configurationName: tierSpec.DefaultConfigurationName,
+        contextUser: params.contextUser,
+        metadataProvider: params.metadataProvider,
+    });
+}
+
+/**
+ * Resolves the `AgentConfigurationID` to seed onto a new `MJ: User Routines` record:
+ * 1. Explicit override (including explicit `null` to clear) wins.
+ * 2. Template's persisted `DefaultAgentConfigurationID`.
+ * 3. Canonical `RHYTHM_DEFAULT_TIER_CATALOG` lookup via `MJ: AI Configurations` when
+ *    `templateDefaultAgentConfigurationID` is null in DB.
+ */
+export async function ResolveRoutineSeededAgentConfigurationID(params: {
+    explicitAgentConfigurationID?: string | null;
+    templateDefaultAgentConfigurationID?: string | null;
+    workstreamKey?: string | null;
+    contextUser: UserInfo;
+    metadataProvider?: IMetadataProvider;
+}): Promise<string | null> {
+    if (params.explicitAgentConfigurationID !== undefined) {
+        return normalizeOptionalID(params.explicitAgentConfigurationID);
+    }
+    const fromTemplate = normalizeOptionalID(params.templateDefaultAgentConfigurationID);
+    if (fromTemplate) {
+        return fromTemplate;
+    }
+    if (params.workstreamKey) {
+        return ResolveCatalogDefaultAgentConfigurationID({
+            workstreamKey: params.workstreamKey,
+            contextUser: params.contextUser,
+            metadataProvider: params.metadataProvider,
+        });
+    }
+    return null;
+}
+
+/**
  * Looks up the active `MJ: AI Agent Rhythm Templates` row for `(agentID, workstreamKey)`,
  * returning `null` cleanly if none exists or if the query fails.
  */
@@ -318,10 +407,11 @@ export interface ResolveWakeAgentConfigurationParams {
 
 /**
  * Resolves the effective AI Configuration ID for a waking user routine using:
- * `routine.AgentConfigurationID ?? template.DefaultAgentConfigurationID`.
+ * `routine.AgentConfigurationID ?? template.DefaultAgentConfigurationID ?? catalogFallback`.
  * When `routine.AgentConfigurationID` is unset and `template` is not preloaded,
  * looks up the linked rhythm template by `wakeConfig.resumeState.rhythmTemplateID`
- * or `(routine.TargetID, wakeConfig.workstreamKey)`.
+ * or `(routine.TargetID, wakeConfig.workstreamKey)`, falling back to the canonical
+ * {@link RHYTHM_DEFAULT_TIER_CATALOG} configuration when `DefaultAgentConfigurationID` is null.
  */
 export async function ResolveWakeAgentConfigurationID(
     params: ResolveWakeAgentConfigurationParams
@@ -331,11 +421,25 @@ export async function ResolveWakeAgentConfigurationID(
         return routineConfigID;
     }
 
+    const wakeConfig = parseRoutineWakeConfig(params.routine, params.wakeConfig);
+    const workstreamKey = wakeConfig?.workstreamKey;
+
     if (params.template !== undefined) {
-        return normalizeOptionalID(params.template?.DefaultAgentConfigurationID) ?? undefined;
+        const fromPreloaded = normalizeOptionalID(params.template?.DefaultAgentConfigurationID);
+        if (fromPreloaded) {
+            return fromPreloaded;
+        }
+        if (workstreamKey) {
+            const fromCatalog = await ResolveCatalogDefaultAgentConfigurationID({
+                workstreamKey,
+                contextUser: params.contextUser,
+                metadataProvider: params.metadataProvider,
+            });
+            return fromCatalog ?? undefined;
+        }
+        return undefined;
     }
 
-    const wakeConfig = parseRoutineWakeConfig(params.routine, params.wakeConfig);
     const templateID = extractRhythmTemplateIDFromWakeConfig(wakeConfig);
 
     if (templateID) {
@@ -362,7 +466,6 @@ export async function ResolveWakeAgentConfigurationID(
         }
     }
 
-    const workstreamKey = wakeConfig?.workstreamKey;
     const targetID = normalizeOptionalID(params.routine.TargetID);
     if (workstreamKey && targetID) {
         const byWorkstream = await LookupActiveRhythmTemplateForWorkstream({
@@ -374,6 +477,17 @@ export async function ResolveWakeAgentConfigurationID(
         const fromWorkstream = normalizeOptionalID(byWorkstream?.DefaultAgentConfigurationID);
         if (fromWorkstream) {
             return fromWorkstream;
+        }
+    }
+
+    if (workstreamKey) {
+        const fromCatalog = await ResolveCatalogDefaultAgentConfigurationID({
+            workstreamKey,
+            contextUser: params.contextUser,
+            metadataProvider: params.metadataProvider,
+        });
+        if (fromCatalog) {
+            return fromCatalog;
         }
     }
 

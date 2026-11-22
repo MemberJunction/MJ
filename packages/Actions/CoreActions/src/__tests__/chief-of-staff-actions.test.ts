@@ -160,6 +160,14 @@ vi.mock('@memberjunction/ai-agents', () => ({
         p.explicitAgentConfigurationID !== undefined
             ? (p.explicitAgentConfigurationID ?? null)
             : (p.templateDefaultAgentConfigurationID ?? null),
+    ResolveRoutineSeededAgentConfigurationID: vi.fn(async (p: {
+        explicitAgentConfigurationID?: string | null;
+        templateDefaultAgentConfigurationID?: string | null;
+    }) =>
+        p.explicitAgentConfigurationID !== undefined
+            ? (p.explicitAgentConfigurationID ?? null)
+            : (p.templateDefaultAgentConfigurationID ?? null)
+    ),
     ResolveAgentConfigurationIDInput: vi.fn(
         async (p: { agentConfigurationID?: string | null; modelTier?: string | null }) => {
             if (p.agentConfigurationID === undefined && (!p.modelTier || !p.modelTier.trim())) {

@@ -8,8 +8,10 @@ import {
     RHYTHM_DEFAULT_TIER_CATALOG,
     RHYTHM_TIER_TO_CONFIGURATION_NAME,
     ResolveAgentConfigurationIDInput,
+    ResolveCatalogDefaultAgentConfigurationID,
     ResolveConfigurationNameForTier,
     ResolveDefaultTierForWorkstreamKey,
+    ResolveRoutineSeededAgentConfigurationID,
     ResolveSeededRoutineAgentConfigurationID,
     ResolveWakeAgentConfigurationID,
 } from '../rhythm-model-tiers';
@@ -113,7 +115,7 @@ describe('Rhythm Model Tiers (Slice 1)', () => {
         expect(NormalizeModelTierName('unrecognized-tier')).toBeNull();
     });
 
-    it('seeds core Chief of Staff rhythm template metadata with valid AI Configuration lookups', () => {
+    it('seeds all 10 contracted rhythm templates and core CoS templates in metadata with valid AI Configuration lookups', () => {
         const repoRoot = path.resolve(__dirname, '../../../../..');
         const templatePath = path.join(repoRoot, 'metadata/rhythm-templates/.chief-of-staff-rhythm-templates.json');
         const configPath = path.join(repoRoot, 'metadata/ai-configurations/.ai-configurations.json');
@@ -123,15 +125,29 @@ describe('Rhythm Model Tiers (Slice 1)', () => {
         const configNames = new Set(configs.map((c) => c.fields.Name));
 
         const byKey = new Map(templates.map((t) => [t.fields.WorkstreamKey, t]));
-        expect(byKey.get('calendar-daily-review')?.fields.DefaultAgentConfigurationID).toBe(
-            '@lookup:MJ: AI Configurations.Name=Fast'
-        );
-        expect(byKey.get('calendar-weekly-review')?.fields.DefaultAgentConfigurationID).toBe(
-            '@lookup:MJ: AI Configurations.Name=Standard'
-        );
-        expect(byKey.get('capability-review')?.fields.DefaultAgentConfigurationID).toBe(
-            '@lookup:MJ: AI Configurations.Name=Standard'
-        );
+
+        // Draft tier (Fast): Daily triage, calendar guard, huddle prep, 15Five draft
+        for (const key of ['tasks-daily-triage', 'calendar-daily-review', 'planning-huddle-prep', 'daily-15five']) {
+            expect(byKey.get(key)?.fields.DefaultAgentConfigurationID).toBe('@lookup:MJ: AI Configurations.Name=Fast');
+        }
+
+        // Standard tier (Standard): Weekly review, weekly OKR review, period close (+ weekly calendar & capability review)
+        for (const key of [
+            'tasks-weekly-review',
+            'planning-weekly-okr-review',
+            'planning-period-close',
+            'calendar-weekly-review',
+            'capability-review',
+        ]) {
+            expect(byKey.get(key)?.fields.DefaultAgentConfigurationID).toBe('@lookup:MJ: AI Configurations.Name=Standard');
+        }
+
+        // High tier (High Power): Mid-quarter checkpoint, growth coaching, project risk review
+        for (const key of ['planning-midquarter-checkpoint', 'growth-coaching', 'project-risk-review']) {
+            expect(byKey.get(key)?.fields.DefaultAgentConfigurationID).toBe('@lookup:MJ: AI Configurations.Name=High Power');
+        }
+
+        expect(templates.length).toBeGreaterThanOrEqual(12);
 
         for (const tmpl of templates) {
             const lookup = tmpl.fields.DefaultAgentConfigurationID;
@@ -139,6 +155,77 @@ describe('Rhythm Model Tiers (Slice 1)', () => {
             const matchedName = lookup?.replace('@lookup:MJ: AI Configurations.Name=', '') ?? '';
             expect(configNames.has(matchedName)).toBe(true);
         }
+    });
+
+    it('falls back to resolving canonical configuration ID from RHYTHM_DEFAULT_TIER_CATALOG when DB template DefaultAgentConfigurationID is null', async () => {
+        const runViewMock = vi.fn().mockImplementation(async (params: { EntityName: string; ExtraFilter?: string }) => {
+            if (params.EntityName === 'MJ: AI Agent Rhythm Templates') {
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: '84586912-01F6-467A-B870-529D8D64AD26',
+                            AgentID: '22222222-2222-2222-2222-222222222222',
+                            WorkstreamKey: 'planning-midquarter-checkpoint',
+                            DefaultAgentConfigurationID: null,
+                        },
+                    ],
+                };
+            }
+            if (params.EntityName === 'MJ: AI Configurations') {
+                if (params.ExtraFilter?.includes("Name='High Power'")) {
+                    return { Success: true, Results: [{ ID: HIGH_POWER_CONFIG_ID, Name: 'High Power', Status: 'Active' }] };
+                }
+                if (params.ExtraFilter?.includes("Name='Fast'")) {
+                    return { Success: true, Results: [{ ID: FAST_CONFIG_ID, Name: 'Fast', Status: 'Active' }] };
+                }
+                if (params.ExtraFilter?.includes("Name='Standard'")) {
+                    return { Success: true, Results: [{ ID: STANDARD_CONFIG_ID, Name: 'Standard', Status: 'Active' }] };
+                }
+            }
+            return { Success: true, Results: [] };
+        });
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(new StubRunView(runViewMock));
+
+        // 1. Direct catalog resolution
+        const catalogHigh = await ResolveCatalogDefaultAgentConfigurationID({
+            workstreamKey: 'project-risk-review',
+            contextUser: TEST_USER,
+            metadataProvider: STUB_METADATA_PROVIDER,
+        });
+        expect(catalogHigh).toBe(HIGH_POWER_CONFIG_ID);
+
+        // 2. Seeded routine creation fallback when templateDefaultAgentConfigurationID is null
+        const seededFallback = await ResolveRoutineSeededAgentConfigurationID({
+            templateDefaultAgentConfigurationID: null,
+            workstreamKey: 'tasks-daily-triage',
+            contextUser: TEST_USER,
+            metadataProvider: STUB_METADATA_PROVIDER,
+        });
+        expect(seededFallback).toBe(FAST_CONFIG_ID);
+
+        // Explicit null still wins when user clears configuration
+        const explicitCleared = await ResolveRoutineSeededAgentConfigurationID({
+            explicitAgentConfigurationID: null,
+            templateDefaultAgentConfigurationID: STANDARD_CONFIG_ID,
+            workstreamKey: 'tasks-weekly-review',
+            contextUser: TEST_USER,
+            metadataProvider: STUB_METADATA_PROVIDER,
+        });
+        expect(explicitCleared).toBeNull();
+
+        // 3. Wake-time resolution falls back to catalog when both routine & DB template have null config
+        const wakeResolved = await ResolveWakeAgentConfigurationID({
+            routine: {
+                AgentConfigurationID: null,
+                TargetID: '22222222-2222-2222-2222-222222222222',
+                WakeConfiguration: null,
+                WakeConfigurationObject: { workstreamKey: 'planning-midquarter-checkpoint' },
+            },
+            contextUser: TEST_USER,
+            metadataProvider: STUB_METADATA_PROVIDER,
+        });
+        expect(wakeResolved).toBe(HIGH_POWER_CONFIG_ID);
     });
 
     it('ships additive migration SQL adding DefaultAgentConfigurationID and AgentConfigurationID FKs', () => {

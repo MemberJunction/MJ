@@ -11,7 +11,7 @@ import {
     CheckActivePolicyForAgentAndUser,
     LookupActiveRhythmTemplateForWorkstream,
     ResolveAgentConfigurationIDInput,
-    ResolveSeededRoutineAgentConfigurationID,
+    ResolveRoutineSeededAgentConfigurationID,
 } from '@memberjunction/ai-agents';
 import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -245,11 +245,14 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
                     });
                     templateDefaultConfigID = matchedTemplate?.DefaultAgentConfigurationID ?? null;
                 }
-                routine.AgentConfigurationID = ResolveSeededRoutineAgentConfigurationID({
+                routine.AgentConfigurationID = await ResolveRoutineSeededAgentConfigurationID({
                     explicitAgentConfigurationID: configResolution.Provided
                         ? configResolution.ConfigurationID
                         : undefined,
                     templateDefaultAgentConfigurationID: templateDefaultConfigID,
+                    workstreamKey,
+                    contextUser,
+                    metadataProvider: md,
                 });
             } else if (configResolution.Provided) {
                 routine.AgentConfigurationID = configResolution.ConfigurationID;

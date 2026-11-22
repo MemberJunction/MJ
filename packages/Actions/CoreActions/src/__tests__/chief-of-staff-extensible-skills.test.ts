@@ -907,4 +907,90 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
         expect(JSON.parse(overrideRes.Message!).AgentConfigurationID).toBe(highPowerCfgID);
         expect(savedRoutines).toHaveLength(2);
     });
+
+    it('EnableAgentRhythmAction and ListAvailableRhythmsAction fall back to catalog configuration when template DefaultAgentConfigurationID is null in DB', async () => {
+        const highPowerCfgID = 'B6B9D780-52B2-431B-93AB-AC83FEF78553';
+        const unseededTemplate = {
+            ID: 'tpl-unseeded-growth',
+            AgentID: cosAgent.ID,
+            SkillID: null,
+            Name: 'Growth Coaching & Career Development Review',
+            WorkstreamKey: 'growth-coaching',
+            Description: 'Coaching review',
+            DefaultCronExpression: '0 10 15 * *',
+            DefaultWakeGate: null,
+            WakeReason: 'Run growth coaching review',
+            OfferAt: 'Both',
+            Status: 'Active',
+            DefaultAgentConfigurationID: null,
+            DefaultAgentConfiguration: null,
+            Skill: null,
+        };
+
+        const routineStub = {
+            ID: 'routine-growth-1',
+            UserID: alice.ID,
+            TargetID: cosAgent.ID,
+            RoutineType: 'AgentWake',
+            AgentConfigurationID: null as string | null,
+            NewRecord: vi.fn(),
+            Save: vi.fn(async () => true),
+            WakeConfigurationObject: null as MJUserRoutineEntity['WakeConfigurationObject'],
+        };
+
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn(async (p: { EntityName: string }) => {
+                if (p.EntityName === 'MJ: AI Agent Rhythm Templates') {
+                    return { Success: true, Results: [unseededTemplate] };
+                }
+                if (p.EntityName === 'MJ: AI Configurations') {
+                    return { Success: true, Results: [{ ID: highPowerCfgID, Name: 'High Power', Status: 'Active' }] };
+                }
+                if (p.EntityName === 'MJ: AI Agent User Policies') {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: 'pol-alice-cos',
+                                AgentID: cosAgent.ID,
+                                UserID: alice.ID,
+                                Status: 'Active',
+                                AllowInterAgentCoordination: true,
+                                EmailChannelMode: 'DraftOnly',
+                                Agent: 'Chief of Staff',
+                            },
+                        ],
+                    };
+                }
+                return { Success: true, Results: [] };
+            }),
+        } as unknown as RunView);
+
+        const listRes = await callAction(new ListAvailableRhythmsAction() as never, {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: alice,
+            Filters: [],
+            Params: [],
+        });
+        expect(listRes.Success).toBe(true);
+        const listed = JSON.parse(listRes.Message!);
+        expect(listed.Rhythms[0].DefaultAgentConfigurationID).toBe(highPowerCfgID);
+        expect(listed.Rhythms[0].DefaultAgentConfiguration).toBe('High Power');
+        expect(listed.Rhythms[0].DefaultModelTier).toBe('High');
+
+        const md = {
+            GetEntityObject: vi.fn().mockResolvedValue(routineStub),
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+
+        const enabledRes = await callAction(new EnableAgentRhythmAction() as never, {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: alice,
+            Provider: md,
+            Filters: [],
+            Params: [{ Name: 'WorkstreamKey', Type: 'Input', Value: 'growth-coaching' }],
+        });
+        expect(enabledRes.Success).toBe(true);
+        expect(routineStub.AgentConfigurationID).toBe(highPowerCfgID);
+        expect(JSON.parse(enabledRes.Message!).AgentConfigurationID).toBe(highPowerCfgID);
+    });
 });
