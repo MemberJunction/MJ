@@ -10293,6 +10293,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Unlike {@link MetadataMemberRefreshMustWait} (which defers a local member-entity write until
+     * that transaction commits), a peer metadata notice comes from another server whose write has
+     * already committed and persisted its snapshot to the shared cache. Because
+     * {@link datasetReadsOnPool} runs `MJ_Metadata` status and dataset reads on the connection pool
+     * (`ignoreAmbientTransaction: true`) whenever {@link MetadataReadsJoinTransaction} is false, an
+     * unrelated local transaction on the global provider (such as a scheduled job saving
+     * `MJ: Entity Record Documents`) must not defer adopting a peer's metadata update.
+     */
+    protected override get PeerMetadataNoticeMustWait(): boolean {
+        return this.MetadataReadsJoinTransaction && this.MetadataMemberRefreshMustWait;
+    }
+
+    /**
      * Throw if a statement from a member of the ambient transaction would run on the pool while its
      * frames are still open after a server abort. Keyed on `_doomed`, not "depth > 0 with no handle"
      * — outermost begin has depth 1 before the handle is published, and concurrent reads on SQL
