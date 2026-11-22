@@ -266,6 +266,7 @@ export * from './services/TaskGraphAgentRunner.js';
 export * from './services/StartTaskGraphDispatcher.js';
 export * from './services/TaskGraphPromptRunner.js';
 export * from './services/TaskGraphContinuationDeliverer.js';
+export * from './services/isolation/index.js';
 export * from './resolvers/TaskGraphFrameResolver.js';
 export * from './resolvers/TestQuerySQLResolver.js';
 export * from './resolvers/SqlLoggingConfigResolver.js';

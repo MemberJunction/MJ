@@ -85,6 +85,7 @@ const result = await ai.ChatCompletion({
 ### Communication & Automation
 - **Multi-channel messaging** — Email (SendGrid, Gmail, MSGraph), SMS (Twilio)
 - **Actions framework** — Metadata-driven business logic for workflows and agents
+- **Durable work queues & isolated workflows** — [TaskGraph](./packages/TaskGraph/README.md) (`InProcess`/`Worker`/`Process`/`Container` isolation, queued dispatch, `Enqueue` fan-out) and [WorkQueue](./packages/WorkQueue/README.md) across Database, AWS SQS, Azure Service Bus, and Google Cloud Pub/Sub ([spec](./.mj/specs/epic-2-task-graph-isolation-and-workqueue/spec.md))
 - **Scheduled jobs** — Cron-based scheduling with distributed locking
 - **Template engine** — Nunjucks templates with AI-powered content generation
 
@@ -721,7 +722,9 @@ Packages at the top level of the `packages/` directory, not part of a multi-pack
 | [MJExportEngine](./packages/MJExportEngine/README.md) | `@memberjunction/export-engine` | Export engine for Excel, CSV, and JSON with sampling and formatting |
 | [MJQueue](./packages/MJQueue/README.md) | `@memberjunction/queue` | Server-side queue management |
 | [QueryGen](./packages/QueryGen/README.md) | `@memberjunction/query-gen` | AI-powered SQL query template generation with automatic testing and refinement |
+| [TaskGraph](./packages/TaskGraph/README.md) | `@memberjunction/task-graph` | DAG workflow orchestration with per-graph isolation runners, queued dispatch, and durable `Enqueue` steps |
 | [VersionHistory](./packages/VersionHistory/README.md) | `@memberjunction/version-history` | Label-based versioning, dependency-graph snapshots, cross-entity diffs, and point-in-time restore |
+| [WorkQueue](./packages/WorkQueue/README.md) | `@memberjunction/work-queue-engine` | Durable work queue across Database, AWS SNS/SQS (`work-queue-aws`), Azure Service Bus (`work-queue-azure`), and GCP Pub/Sub (`work-queue-gcp`) |
 
 ---
 

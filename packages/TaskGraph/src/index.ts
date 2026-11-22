@@ -32,3 +32,6 @@ export * from './operations/TaskGraphWaitingStepOperations';
 export * from './waiting-steps';
 export * from './WaitingStepRunner';
 export * from './TaskGraphWaitingSteps';
+export * from './isolation';
+export * from './queue-dispatch';
+export * from './enqueue-fanout';

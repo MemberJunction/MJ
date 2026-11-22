@@ -5008,6 +5008,18 @@ if this limit is exceeded.`),
         * * Display Name: Max Sub Agent Consult Rounds
         * * SQL Data Type: int
         * * Description: Maximum number of Consult rounds this agent answers for a sub-agent before that sub-agent's question propagates to this agent's caller. NULL uses the framework default (3).`),
+    Isolation: z.union([z.literal('Container'), z.literal('InProcess'), z.literal('Process'), z.literal('Worker')]).describe(`
+        * * Field Name: Isolation
+        * * Display Name: Isolation
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: InProcess
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Container
+    *   * InProcess
+    *   * Process
+    *   * Worker
+        * * Description: Execution isolation level for workflows and graphs backed by this agent: InProcess (default for existing/upgraded rows), Worker (worker_threads with V8 heap limits - default for Workflow.Draft), Process (child_process OS containment), or Container (container runtime isolation).`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent

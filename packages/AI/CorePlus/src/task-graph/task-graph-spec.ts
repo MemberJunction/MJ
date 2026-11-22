@@ -26,7 +26,14 @@
  *
  * @module @memberjunction/ai-core-plus
  */
-import { CODE_FALLBACK_LIMITS, LimitsConfigResolver, type MJLimitsOverride } from '@memberjunction/core';
+import {
+    CODE_FALLBACK_LIMITS,
+    IsTaskGraphIsolationLevel,
+    LimitsConfigResolver,
+    TASK_GRAPH_ISOLATION_LEVELS,
+    type MJLimitsOverride,
+    type TaskGraphIsolationLevel,
+} from '@memberjunction/core';
 import type { AgentDecisionAnswerSummary, AgentDecisionQuestion } from '../agent-decisions';
 import type { ForEachOperation } from '../foreach-operation';
 import type { WhileOperation } from '../while-operation';
@@ -140,7 +147,25 @@ export function NormalizeDependency(dep: string | TaskGraphDependency): TaskGrap
  * Adding a kind is one entry in {@link TaskGraphNodeConfigMap} plus one runner — the compiler then
  * forces every exhaustive `switch` over kinds to be updated, which is the point of the union.
  */
-export type TaskGraphNodeKind = 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision' | 'Wait';
+export type TaskGraphNodeKind = 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Enqueue' | 'Decision' | 'Wait';
+
+/** Execution dispatch mode when submitting a task graph (`'Inline'` default or `'Queue'`). */
+export type TaskGraphDispatchMode = 'Inline' | 'Queue';
+
+/**
+ * Builds a deterministic correlation key tying a queued message and `CompleteWaitingStep`
+ * back to a specific graph run, step invocation, and optional fan-out item key.
+ */
+export function BuildEnqueueCorrelationKey(
+    graphRunId: string,
+    stepInvocationId: string,
+    correlationKey?: string,
+    itemKey?: string | number,
+): string {
+    const trimmed = correlationKey?.trim();
+    const base = trimmed && trimmed.length > 0 ? trimmed : `${graphRunId}:${stepInvocationId}`;
+    return itemKey !== undefined ? `${base}:item:${String(itemKey)}` : base;
+}
 
 /**
  * One question a `Decision` node asks: the LLM-facing shape agents already use for decisions, plus
@@ -283,6 +308,29 @@ export type TaskGraphNodeConfigMap = {
         correlationKey?: string;
         /** Hours to wait before the step fails. Omitted means no deadline. */
         expiresInHours?: number;
+    };
+    /**
+     * A node that durably registers waiting state, publishes a work item onto a WorkQueue topic
+     * with a deterministic correlation key (`graphRunId`, `stepInvocationId`, `correlationKey`),
+     * and pauses as an `External` step until an external worker settles it via `CompleteWaitingStep`.
+     */
+    Enqueue: {
+        /** Destination WorkQueue topic name (defaults to `Limits.TaskGraphQueue.DefaultEnqueueTopicName`). */
+        topic?: string;
+        /** Logical domain label for filtering/diagnostics (defaults to `'work-queue'`). */
+        domain?: string;
+        /** WorkQueue `BaseWorkHandler` key or worker routing identifier. */
+        handlerKey?: string;
+        /** Optional action name executed by the default queue item worker. */
+        actionName?: string;
+        /** Optional payload merged with upstream payload and sent in the WorkQueue message. */
+        payload?: Record<string, unknown>;
+        /** Optional correlation key literal or `payload.<path>` expression; omitted derives `<graphRunId>:<stepInvocationId>`. */
+        correlationKey?: string;
+        /** Hours to wait before expiring if never completed. Omitted means no deadline. */
+        expiresInHours?: number;
+        /** Maximum redelivery/retry attempts before terminal failure propagates. */
+        maxRetries?: number;
     };
     /**
      * A node that waits for a moment in time, then completes. Exactly one of the two is set.
@@ -467,6 +515,19 @@ export type TaskGraphSpec = {
 
     /** Optional Tier-5 limits override carried on the workflow spec. */
     limitsOverride?: MJLimitsOverride;
+
+    /**
+     * Per-graph execution isolation level (`'InProcess' | 'Worker' | 'Process' | 'Container'`).
+     * Derived from the owning workflow entity or `LimitsConfigResolver` (`'InProcess'` default for
+     * upgraded workflows/graphs; `'Worker'` default for newly drafted `Workflow.Draft` graphs).
+     */
+    isolation?: TaskGraphIsolationLevel;
+
+    /** Optional default dispatch mode (`'Inline'` or `'Queue'`) when submitted. */
+    dispatch?: TaskGraphDispatchMode;
+
+    /** Optional override destination WorkQueue topic when `dispatch === 'Queue'`. */
+    queueTopic?: string;
 };
 
 /**
@@ -491,6 +552,8 @@ export const TaskNode = {
         ({ ...base, kind: 'While', configuration }),
     External: (base: TaskNodeBase, configuration: TaskGraphNodeConfigMap['External']): TaskGraphSpecNode<'External'> =>
         ({ ...base, kind: 'External', configuration }),
+    Enqueue: (base: TaskNodeBase, configuration: TaskGraphNodeConfigMap['Enqueue']): TaskGraphSpecNode<'Enqueue'> =>
+        ({ ...base, kind: 'Enqueue', configuration }),
     Wait: (base: TaskNodeBase, configuration: TaskGraphNodeConfigMap['Wait']): TaskGraphSpecNode<'Wait'> =>
         ({ ...base, kind: 'Wait', configuration }),
     Decision: (base: TaskNodeBase, configuration: TaskGraphNodeConfigMap['Decision']): TaskGraphSpecNode<'Decision'> =>
@@ -552,7 +615,9 @@ export type TaskGraphValidationError = {
          * so whether `payload.x` resolves is a question about a run that has not happened yet;
          * whether `payload.x >` parses is not.
          */
-        | 'InvalidCondition';
+        | 'InvalidCondition'
+        /** `spec.isolation` was supplied with a value outside `InProcess | Worker | Process | Container`. */
+        | 'InvalidIsolation';
     Message: string;
     /** The offending node, when the error is attributable to one. */
     TempId?: string;
