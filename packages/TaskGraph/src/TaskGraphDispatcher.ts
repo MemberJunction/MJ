@@ -1398,6 +1398,12 @@ export class TaskGraphDispatcher implements IShutdownable {
             if (!result.Success && await this.scheduleRetryIfAllowed(provider, task, result, ownerUserID)) {
                 return;
             }
+            const governanceMetrics = this.governance.ResolveNodeSettlementMetrics(
+                graphID,
+                hydrated?.parentTask ?? null,
+                result.CostUsd,
+                result.TokensUsed,
+            );
             const recorded = await this.claims.CompleteClaimed(
                 provider,
                 taskID,
@@ -1409,6 +1415,8 @@ export class TaskGraphDispatcher implements IShutdownable {
                     Configuration: this.configurationWithRuntime(
                         task, result.PromptRunID, result.ActionLogID, result.Iterations, result.PayloadAtStart, result.IsOutputTainted,
                         result.ActionInput,
+                        governanceMetrics?.CostUsd,
+                        governanceMetrics?.TokensUsed,
                     ),
                 },
                 this.contextUser,
@@ -2856,7 +2864,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             // keep notifying assignees — a notification is starting something.
             const gate = DecideClaimGate(debug, eligible.map((n) => n.id));
             if (gate.mode === 'closed') continue;
-            if (await this.governance.IsGraphBlockedByGovernance(provider, parentID, debug, graph.parent, this.contextUser)) {
+            if (await this.governance.IsGraphBlockedByGovernance(provider, parentID, debug, graph.parent, this.contextUser, [...graph.entityById.values()])) {
                 continue;
             }
             let allowedTaskIDs: Set<string> | null = null;
@@ -6337,8 +6345,19 @@ export class TaskGraphDispatcher implements IShutdownable {
         payloadAtStart?: Record<string, unknown>,
         isOutputTainted?: boolean,
         actionInput?: Record<string, unknown>,
+        governanceCostUsd?: number,
+        governanceTokensUsed?: number,
     ): string | undefined {
-        if (!promptRunID && !actionLogID && !iterations?.length && !payloadAtStart && isOutputTainted === undefined && !actionInput) return undefined;
+        if (
+            !promptRunID &&
+            !actionLogID &&
+            !iterations?.length &&
+            !payloadAtStart &&
+            isOutputTainted === undefined &&
+            !actionInput &&
+            governanceCostUsd === undefined &&
+            governanceTokensUsed === undefined
+        ) return undefined;
 
         const existing = this.parseConfiguration(task);
         const merged: TaskStepConfiguration = {
@@ -6359,6 +6378,8 @@ export class TaskGraphDispatcher implements IShutdownable {
                 ...(isOutputTainted !== undefined ? { isOutputTainted } : {}),
                 // What the action was actually given, which its compensation's `input.*` reads.
                 ...(actionInput ? { actionInput } : {}),
+                ...(governanceCostUsd !== undefined ? { governanceCostUsd } : {}),
+                ...(governanceTokensUsed !== undefined ? { governanceTokensUsed } : {}),
             },
         };
         return JSON.stringify(merged);

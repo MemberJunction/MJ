@@ -695,13 +695,43 @@ class InMemoryTaskGraphDatabase {
                 const children = this.TasksByParent.get(parentMatch[1].toLowerCase()) ?? [];
                 return {
                     Success: true,
-                    Results: children.map((row) => this.wrapTaskEntity(row)),
+                    Results: params.ResultType === 'simple'
+                        ? children.map((row) => ({
+                            ID: row.ID,
+                            TypeID: row.TypeID,
+                            AgentRunID: row.AgentRunID,
+                            AgentID: row.AgentID,
+                            UserID: row.UserID,
+                            Status: row.Status,
+                            InputPayload: row.InputPayload,
+                            Configuration: row.Configuration,
+                        }))
+                        : children.map((row) => this.wrapTaskEntity(row)),
                 };
             }
             const idMatch = /\bID='([^']+)'/.exec(filter);
             if (idMatch?.[1]) {
                 const single = this.getTask(idMatch[1]);
-                return { Success: true, Results: single ? [this.wrapTaskEntity(single)] : [] };
+                if (!single) {
+                    return { Success: true, Results: [] };
+                }
+                return {
+                    Success: true,
+                    Results: [
+                        params.ResultType === 'simple'
+                            ? {
+                                ID: single.ID,
+                                TypeID: single.TypeID,
+                                AgentRunID: single.AgentRunID,
+                                AgentID: single.AgentID,
+                                UserID: single.UserID,
+                                Status: single.Status,
+                                InputPayload: single.InputPayload,
+                                Configuration: single.Configuration,
+                            }
+                            : this.wrapTaskEntity(single),
+                    ],
+                };
             }
             return { Success: true, Results: [] };
         }
@@ -807,12 +837,6 @@ describe('CR-19: 5,000-node workflow acceptance through real TaskGraphService an
             expect(validation.Valid).toBe(true);
 
             const executedSliceIds: string[] = [];
-            const detector = new DeterministicProgressDetector();
-            const budgetGuard = new BudgetEnforcementGuard();
-            const progressConfig = LimitsConfigResolver.Resolve().Limits.ProgressDetector;
-            const budgets = LimitsConfigResolver.Resolve().Limits.Budgets;
-            const startedAtMs = Date.UTC(2026, 10, 21, 10, 0, 0);
-            let runCostUsd = 0;
 
             const actionRunner: TaskActionRunner = {
                 RunActionForTask: async (ctx) => {
@@ -821,35 +845,11 @@ describe('CR-19: 5,000-node workflow acceptance through real TaskGraphService an
                         : {};
                     const sliceId = String(inputObj['sliceId'] ?? ctx.TaskID);
                     executedSliceIds.push(sliceId);
-                    runCostUsd += 0.0001;
-                    const idx = executedSliceIds.length;
-                    detector.RecordSample({
-                        IterationIndex: idx,
-                        StepType: 'Action',
-                        StepSignature: `Action:${sliceId}`,
-                        RecordsCreatedOrChanged: 1,
-                        TasksClosed: 1,
-                        OutputText: `Completed ${sliceId}`,
-                        PayloadFingerprint: `done=${idx}:last=${sliceId}`,
-                        TokensSpent: 50,
-                        ErrorSignature: null,
-                        HeapUsedBytes: 64_000_000,
-                    });
-                    if (idx % 250 === 0 || idx === 5_000) {
-                        const evalProg = detector.Evaluate(progressConfig);
-                        expect(evalProg.Classification).toBe('Converging');
-                        const budgetRes = await budgetGuard.Evaluate({
-                            Budgets: budgets,
-                            AgentRunID: SUBMIT_RUN_ID,
-                            CurrentRunCostUsd: runCostUsd,
-                            CurrentRunStartedAtMs: startedAtMs,
-                            NowMs: startedAtMs + idx * 10,
-                        });
-                        expect(budgetRes.Exceeded).toBe(false);
-                    }
                     return {
                         Success: true,
                         Output: { sliceId, ok: true },
+                        CostUsd: 0.0001,
+                        TokensUsed: 50,
                     };
                 },
             };
@@ -857,6 +857,7 @@ describe('CR-19: 5,000-node workflow acceptance through real TaskGraphService an
                 RunAgentForTask: async () => ({ Success: true, Output: {} }),
             };
 
+            // Omit Governance.Enabled & EnableGovernance to prove production governance is enabled by default.
             const dispatcher = new TaskGraphDispatcher(
                 { CreateProvider: async () => provider },
                 agentRunner,
@@ -872,9 +873,23 @@ describe('CR-19: 5,000-node workflow acceptance through real TaskGraphService an
                 undefined,
                 actionRunner,
             );
+            const recordSpy = vi.spyOn(dispatcher.Governance, 'RecordNodeSettlementAndEvaluate');
+            let capturedDiagBeforeForget: ReturnType<typeof dispatcher.Governance.GetGraphDiagnostics> = null;
+            const forgetOrig = dispatcher.Governance.ForgetGraph.bind(dispatcher.Governance);
+            vi.spyOn(dispatcher.Governance, 'ForgetGraph').mockImplementation((gid: string) => {
+                if (!capturedDiagBeforeForget) {
+                    capturedDiagBeforeForget = dispatcher.Governance.GetGraphDiagnostics(gid);
+                }
+                forgetOrig(gid);
+            });
 
             await dispatcher.Start();
             try {
+                const submitRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', TEST_USER);
+                submitRun.ID = SUBMIT_RUN_ID;
+                submitRun.Status = 'Paused';
+                await submitRun.Save();
+
                 const service = new TaskGraphService();
                 const submitRes = await service.Submit(spec, {
                     Provider: provider,
@@ -888,7 +903,7 @@ describe('CR-19: 5,000-node workflow acceptance through real TaskGraphService an
                 const parentId = submitRes.ParentTaskID!;
 
                 await waitForCondition(
-                    () => db.Tasks.get(parentId.toLowerCase())?.Status === 'Complete',
+                    () => db.Tasks.get(parentId.toLowerCase())?.Status === 'Complete' && capturedDiagBeforeForget !== null,
                     15_000,
                     () => dispatcher.Kick(),
                     () => `executed=${executedSliceIds.length}, parentStatus=${db.Tasks.get(parentId.toLowerCase())?.Status}`,
@@ -896,6 +911,16 @@ describe('CR-19: 5,000-node workflow acceptance through real TaskGraphService an
 
                 expect(executedSliceIds).toHaveLength(5_000);
                 expect(new Set(executedSliceIds).size).toBe(5_000);
+                expect(recordSpy).toHaveBeenCalledTimes(5_000);
+                expect(capturedDiagBeforeForget).not.toBeNull();
+                expect(capturedDiagBeforeForget?.GovernanceEnabled).toBe(true);
+                expect(capturedDiagBeforeForget?.EvaluationCount).toBe(5_000);
+                expect(capturedDiagBeforeForget?.CompletedNodeCount).toBe(5_000);
+                expect(capturedDiagBeforeForget?.CumulativeCostUsd).toBeCloseTo(0.5, 4);
+                expect(capturedDiagBeforeForget?.TokensUsed).toBe(250_000);
+                expect(capturedDiagBeforeForget?.LastBudgetResult?.Exceeded).toBe(false);
+                expect(capturedDiagBeforeForget?.LastProgressResult?.Classification).toBe('Converging');
+                expect(capturedDiagBeforeForget?.LastResolvedLimits?.MaxTasksPerGraph).toBe(100_000);
                 const parentRow = db.Tasks.get(parentId.toLowerCase());
                 expect(parentRow?.Status).toBe('Complete');
                 expect(parentRow?.PercentComplete).toBe(100);

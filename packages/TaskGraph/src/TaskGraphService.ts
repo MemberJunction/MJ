@@ -53,6 +53,7 @@ import {
     type TaskSecurityEnvelope,
     type ForEachOperation,
     type WhileOperation,
+    type WorkflowLimitsMetadataInput,
     ConfigOf,
     IsDefaultHumanTaskProvider,
     IsHumanTaskProviderRegistered,
@@ -123,9 +124,17 @@ export type TaskGraphSubmitContext = {
      * by the dispatcher on every node.
      */
     SecurityEnvelope?: TaskSecurityEnvelope;
+    /** Optional submitting agent ID used for Tier-3 `AgentOrWorkflowMetadata` and Tier-4 `UserAgentPolicy` resolution. */
+    AgentID?: string | null;
+    /** Optional routine or scheduled workstream identifier used for `PerRoutine` budget enforcement. */
+    RoutineID?: string | null;
+    /** Optional workflow metadata limits contributing to Tier-3 `AgentOrWorkflowMetadata`. */
+    WorkflowMetadata?: WorkflowLimitsMetadataInput | null;
+    /** Optional explicit Tier-4 user-agent policy limits override. */
+    UserPolicyLimitsOverride?: MJLimitsOverride;
     /** Optional Tier-5 limits override persisted onto the parent graph for runtime budget/runaway governance. */
     LimitsOverride?: MJLimitsOverride;
-    /** Enables runtime budget/runaway governance evaluation on the dispatcher for this graph. */
+    /** Enables (or explicitly disables when `false`) runtime budget/runaway governance evaluation on the dispatcher for this graph. */
     EnableGovernance?: boolean;
 };
 
@@ -216,9 +225,17 @@ export type TaskGraphParentMetadata = {
      * Current saga lifecycle state when `failurePolicy === 'CompensateCompleted'`.
      */
     sagaState?: SagaExecutionState;
+    /** Optional Tier-3 submitting agent ID for 5-tier limits & policy resolution. */
+    submittedByAgentID?: string | null;
+    /** Optional routine or scheduled workstream identifier for `PerRoutine` budget enforcement. */
+    routineID?: string | null;
+    /** Optional workflow metadata limits contributing to Tier-3 `AgentOrWorkflowMetadata`. */
+    workflowMetadata?: WorkflowLimitsMetadataInput;
+    /** Optional explicit Tier-4 user-agent policy limits override. */
+    userPolicyLimitsOverride?: MJLimitsOverride;
     /** Optional Tier-5 limits override enforced by `TaskGraphGovernanceCoordinator` on the dispatcher. */
     limitsOverride?: MJLimitsOverride;
-    /** True when production budget/runaway governance is enabled for this graph. */
+    /** Explicit governance opt-in/opt-out flag persisted onto the parent graph (`false` disables governance). */
     governanceEnabled?: boolean;
 };
 
@@ -327,6 +344,10 @@ export function BuildTaskGraphParentInputPayload(args: {
     sagaState?: SagaExecutionState;
     submittedByAgentRunID: string | null;
     submittedByUserID: string | null;
+    submittedByAgentID?: string | null;
+    routineID?: string | null;
+    workflowMetadata?: WorkflowLimitsMetadataInput;
+    userPolicyLimitsOverride?: MJLimitsOverride;
     parentAgentHierarchy?: string[];
     invocation?: { data?: unknown; context?: unknown } | null;
     startPaused?: boolean;
@@ -347,13 +368,19 @@ export function BuildTaskGraphParentInputPayload(args: {
         ...(args.sagaState ? { sagaState: args.sagaState } : {}),
         submittedByAgentRunID: args.submittedByAgentRunID,
         submittedByUserID: args.submittedByUserID,
+        ...(args.submittedByAgentID ? { submittedByAgentID: args.submittedByAgentID } : {}),
+        ...(args.routineID ? { routineID: args.routineID } : {}),
+        ...(args.workflowMetadata ? { workflowMetadata: args.workflowMetadata } : {}),
+        ...(args.userPolicyLimitsOverride ? { userPolicyLimitsOverride: args.userPolicyLimitsOverride } : {}),
         recordsTaint: true,
         ...(parentAgentHierarchy.length > 0 ? { parentAgentHierarchy } : {}),
         ...(args.invocation
             ? { invocation: { data: args.invocation.data, context: args.invocation.context } }
             : {}),
         ...(args.limitsOverride ? { limitsOverride: args.limitsOverride } : {}),
-        ...(args.governanceEnabled || args.limitsOverride ? { governanceEnabled: true } : {}),
+        ...(args.governanceEnabled !== undefined
+            ? { governanceEnabled: args.governanceEnabled }
+            : (args.limitsOverride ? { governanceEnabled: true } : {})),
         ...(args.startPaused
             ? {
                 debug: {
@@ -2070,12 +2097,16 @@ export class TaskGraphService {
             failurePolicy: spec.failurePolicy ?? 'Halt',
             submittedByAgentRunID: context.AgentRunID ?? null,
             submittedByUserID: context.ContextUser?.ID ?? null,
+            submittedByAgentID: context.AgentID ?? null,
+            routineID: context.RoutineID ?? spec.routineId ?? null,
+            workflowMetadata: context.WorkflowMetadata ?? undefined,
+            userPolicyLimitsOverride: context.UserPolicyLimitsOverride,
             parentAgentHierarchy: context.ParentAgentHierarchy,
             invocation: sanitized.Envelope
                 ? { data: sanitized.Envelope.Data, context: sanitized.Envelope.Context }
                 : null,
             startPaused: context.Debug?.paused === true,
-            limitsOverride: context.LimitsOverride,
+            limitsOverride: context.LimitsOverride ?? spec.limitsOverride,
             governanceEnabled: context.EnableGovernance,
         }));
         parent.SecurityEnvelope = SerializeTaskSecurityEnvelope(context.SecurityEnvelope);

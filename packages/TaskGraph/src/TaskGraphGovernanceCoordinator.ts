@@ -1,32 +1,47 @@
 /**
  * @fileoverview Production budget and runaway governance coordinator for `TaskGraphDispatcher`.
  *
- * Evaluates resolved 5-tier budgets (and optional deterministic progress signals) as DAG nodes
- * settle, durably pauses the graph (`$.debug.paused = true`) and persists a
- * {@link RunawayCheckpointState} on the submitting `MJ: AI Agent Runs` row when a budget or stall
- * threshold is breached, blocks further node claims across dispatcher restarts while unapproved,
- * and resumes remaining pending nodes with extended budgets once human approval is granted.
+ * Evaluates resolved 5-tier budgets (`CodeFallback` -> `MjConfig` -> `AgentOrWorkflowMetadata` ->
+ * `UserAgentPolicy` -> `RunOverride` with `EnforceUserPolicyAsCeiling: true`) and deterministic
+ * progress signals as DAG nodes settle, reconstructs cumulative node settlements durably across
+ * worker restarts and concurrent dispatchers, durably pauses the graph (`$.debug.paused = true`)
+ * and persists a {@link RunawayCheckpointState} on the submitting `MJ: AI Agent Runs` row when a
+ * budget or stall threshold is breached, blocks further node claims across dispatcher restarts while
+ * unapproved, and resumes remaining pending nodes with extended budgets once human approval is granted.
  *
  * @module @memberjunction/task-graph
  */
 import {
     IMetadataProvider,
+    IRunViewProvider,
     LimitsConfigResolver,
     LogError,
     LogStatus,
     RunView,
     UserInfo,
     type MJLimitsBudgetsConfig,
+    type MJLimitsConfig,
     type MJLimitsOverride,
 } from '@memberjunction/core';
-import type { MJTaskEntity } from '@memberjunction/core-entities';
+import type {
+    MJAIAgentEntity,
+    MJAIAgentUserPolicyEntity,
+    MJTaskEntity,
+} from '@memberjunction/core-entities';
+import { EscapeSQLString, IsPlainObject, IsValidUUID, SafeJSONParse } from '@memberjunction/global';
 import {
+    AgentUserPolicyEngine,
+    ExtractLimitsDiagnosticsFromRunData,
     ExtractRunawayCheckpointFromAgentRun,
+    ExtractRunawayCheckpointFromRunData,
+    ResolveAgentRunLimits,
     type BudgetEnforcementResult,
     type BudgetExtensionGrant,
     type MJAIAgentRunEntityExtended,
+    type ProgressEvaluationResult,
     type RunawayJsonValue,
     type RunawayPauseReason,
+    type WorkflowLimitsMetadataInput,
 } from '@memberjunction/ai-core-plus';
 import {
     ApplyBudgetExtensionToBudgets,
@@ -41,25 +56,69 @@ import { KickTaskGraphDispatchers } from './task-graph-kick';
 import type { TaskGraphDebugState } from './debug-state';
 import type { TaskGraphGovernanceConfig, TaskGraphObserver } from './types';
 
+interface SettledNodeMetrics {
+    CostUsd: number;
+    TokensUsed: number;
+}
+
+interface ProjectedTaskSettlementRow {
+    ID: string;
+    Status: string;
+    Configuration: string | null;
+}
+
 interface GraphGovernanceState {
     GraphID: string;
     GovernanceEnabled: boolean;
     LimitsOverride?: MJLimitsOverride;
+    WorkflowMetadata: WorkflowLimitsMetadataInput | null;
+    UserPolicyLimitsOverride: MJLimitsOverride | null;
     SubmittingAgentRunID: string | null;
     AgentID: string;
     UserID: string | null;
+    RoutineID: string | null;
+    AgentEntity: MJAIAgentEntity | null;
+    UserPolicyEntity: MJAIAgentUserPolicyEntity | null;
+    PolicyScopeHydrated: boolean;
+    PolicyLookupError: string | null;
     StartedAtMs: number;
-    PriorCumulativeCostUsd: number;
-    PriorCumulativeWallClockMs: number;
+    CheckpointBaselineCostUsd: number;
+    CheckpointBaselineWallClockMs: number;
+    CheckpointBaselineTokens: number;
+    CheckpointBaselineNodeIDs: string[];
     IncrementalCostUsd: number;
     TokensUsed: number;
     CompletedNodeCount: number;
     CompletedNodeIDs: string[];
     CompletedNodeSet: Set<string>;
+    SettledNodeAccounting: Map<string, SettledNodeMetrics>;
+    KnownChildCount: number;
+    LastNodeSyncAtMs: number;
     ExtendedBudgets: MJLimitsBudgetsConfig | null;
     PausedByGovernance: boolean;
     HydratedFromCheckpoint: boolean;
+    EvaluationCount: number;
+    LastBudgetResult: BudgetEnforcementResult | null;
+    LastProgressResult: ProgressEvaluationResult | null;
+    LastResolvedLimits: MJLimitsConfig | null;
     ProgressDetector: DeterministicProgressDetector;
+}
+
+/** Snapshot of governance evaluation counters and last verdicts for a graph. */
+export interface TaskGraphGovernanceDiagnostics {
+    GraphID: string;
+    GovernanceEnabled: boolean;
+    RoutineID: string | null;
+    AgentID: string;
+    UserID: string | null;
+    EvaluationCount: number;
+    CompletedNodeCount: number;
+    CumulativeCostUsd: number;
+    TokensUsed: number;
+    PausedByGovernance: boolean;
+    LastBudgetResult: BudgetEnforcementResult | null;
+    LastProgressResult: ProgressEvaluationResult | null;
+    LastResolvedLimits: MJLimitsConfig | null;
 }
 
 /** Input for approving and resuming a governance-paused task graph. */
@@ -84,9 +143,12 @@ export interface ApproveAndResumePausedGraphResult {
 }
 
 /**
- * Coordinates durable budget/runaway governance for `TaskGraphDispatcher` instances.
+ * Coordinates durable 5-tier budget and runaway governance for `TaskGraphDispatcher` instances.
  */
 export class TaskGraphGovernanceCoordinator {
+    private static readonly CONCURRENT_SYNC_MIN_INTERVAL_MS = 150;
+    private static readonly FULL_SYNC_SMALL_GRAPH_THRESHOLD = 500;
+
     private readonly states = new Map<string, GraphGovernanceState>();
     private readonly budgetGuard = new BudgetEnforcementGuard();
     private readonly checkpointManager = new RunawayCheckpointManager();
@@ -103,6 +165,60 @@ export class TaskGraphGovernanceCoordinator {
         return key ? this.states.get(key)?.PausedByGovernance === true : false;
     }
 
+    /** Returns true when governance is enabled for the given graph under dispatcher & graph settings. */
+    public IsEnabledForGraph(graphID: string, parent: MJTaskEntity | null): boolean {
+        if (!graphID) {
+            return this.config?.Enabled !== false;
+        }
+        return this.getOrCreateState(graphID, parent).GovernanceEnabled;
+    }
+
+    /** Resolves concrete node settlement cost and token metrics using configured defaults when absent. */
+    public ResolveNodeSettlementMetrics(
+        graphID: string,
+        parent: MJTaskEntity | null,
+        costUsd?: number,
+        tokensUsed?: number,
+    ): SettledNodeMetrics | undefined {
+        const enabled = this.IsEnabledForGraph(graphID, parent);
+        const hasExplicit = costUsd !== undefined || tokensUsed !== undefined;
+        if (!enabled && !hasExplicit) {
+            return undefined;
+        }
+        const resolvedCost = typeof costUsd === 'number' && Number.isFinite(costUsd)
+            ? Math.max(0, costUsd)
+            : (this.config?.DefaultNodeCostUsd ?? 0);
+        const resolvedTokens = typeof tokensUsed === 'number' && Number.isFinite(tokensUsed)
+            ? Math.max(0, tokensUsed)
+            : (this.config?.DefaultNodeTokens ?? 0);
+        return { CostUsd: resolvedCost, TokensUsed: resolvedTokens };
+    }
+
+    /** Returns current governance diagnostics and evaluation counters for a tracked graph. */
+    public GetGraphDiagnostics(graphID: string): TaskGraphGovernanceDiagnostics | null {
+        const key = this.normId(graphID);
+        const state = key ? this.states.get(key) : undefined;
+        if (!state) {
+            return null;
+        }
+        const totals = this.computeSettlementTotals(state);
+        return {
+            GraphID: state.GraphID,
+            GovernanceEnabled: state.GovernanceEnabled,
+            RoutineID: state.RoutineID,
+            AgentID: state.AgentID,
+            UserID: state.UserID,
+            EvaluationCount: state.EvaluationCount,
+            CompletedNodeCount: state.CompletedNodeCount,
+            CumulativeCostUsd: totals.TotalCostUsd,
+            TokensUsed: totals.TotalTokens,
+            PausedByGovernance: state.PausedByGovernance,
+            LastBudgetResult: state.LastBudgetResult,
+            LastProgressResult: state.LastProgressResult,
+            LastResolvedLimits: state.LastResolvedLimits,
+        };
+    }
+
     /** Clears in-memory governance state for a settled graph. */
     public ForgetGraph(graphID: string): void {
         const key = this.normId(graphID);
@@ -112,10 +228,10 @@ export class TaskGraphGovernanceCoordinator {
     }
 
     /**
-     * Returns true when `graphID` must not claim any new nodes (either `$.debug.paused` is set
-     * or the submitting agent run carries an unapproved governance pause checkpoint).
-     * When a fresh dispatcher starts after approval, hydrates `ExtendedBudgets` and prior
-     * cumulative cost from the approved checkpoint automatically.
+     * Returns true when `graphID` must not claim any new nodes (either `$.debug.paused` is set,
+     * policy lookup failed closed, or the submitting agent run carries an unapproved governance pause checkpoint).
+     * When a fresh dispatcher starts after approval, hydrates `ExtendedBudgets`, settled nodes, and
+     * 5-tier policy scope automatically.
      */
     public async IsGraphBlockedByGovernance(
         provider: IMetadataProvider,
@@ -123,6 +239,7 @@ export class TaskGraphGovernanceCoordinator {
         debug: TaskGraphDebugState,
         parent: MJTaskEntity | null,
         contextUser: UserInfo,
+        graphNodes?: readonly MJTaskEntity[],
     ): Promise<boolean> {
         if (debug.paused) {
             const state = this.getOrCreateState(graphID, parent);
@@ -133,13 +250,18 @@ export class TaskGraphGovernanceCoordinator {
         if (!state.GovernanceEnabled) {
             return false;
         }
-        await this.ensureHydratedFromCheckpoint(provider, state, contextUser);
+        if (graphNodes) {
+            state.KnownChildCount = graphNodes.length;
+            this.ingestNodeRows(state, graphNodes);
+        }
+        await this.ensureHydratedFromDurableState(provider, state, contextUser, false);
         return state.PausedByGovernance;
     }
 
     /**
-     * Records a settled node's cost/tokens/progress, evaluates `BudgetEnforcementGuard` (and optional
-     * `DeterministicProgressDetector`), and durably pauses both the task graph and submitting
+     * Records a settled node's cost/tokens/progress durably, evaluates 5-tier `BudgetEnforcementGuard`
+     * (including `AgentOrWorkflowMetadata`, `UserAgentPolicy` ceiling clamping, and `PerRoutine`) and
+     * `DeterministicProgressDetector`, and durably pauses both the task graph and submitting
      * `MJ: AI Agent Runs` checkpoint when breached.
      */
     public async RecordNodeSettlementAndEvaluate(args: {
@@ -159,53 +281,61 @@ export class TaskGraphGovernanceCoordinator {
             return null;
         }
 
-        await this.ensureHydratedFromCheckpoint(args.Provider, state, args.ContextUser);
+        const shouldSyncNodes =
+            !state.HydratedFromCheckpoint ||
+            state.KnownChildCount <= TaskGraphGovernanceCoordinator.FULL_SYNC_SMALL_GRAPH_THRESHOLD ||
+            Date.now() - state.LastNodeSyncAtMs >= TaskGraphGovernanceCoordinator.CONCURRENT_SYNC_MIN_INTERVAL_MS;
+        await this.ensureHydratedFromDurableState(args.Provider, state, args.ContextUser, shouldSyncNodes);
 
+        const metrics = this.ResolveNodeSettlementMetrics(graphID, args.Parent, args.CostUsd, args.TokensUsed) ?? {
+            CostUsd: 0,
+            TokensUsed: 0,
+        };
         const nodeKey = this.normId(args.Task.ID);
-        if (!state.CompletedNodeSet.has(nodeKey)) {
-            state.CompletedNodeSet.add(nodeKey);
-            state.CompletedNodeIDs.push(args.Task.ID);
-            state.CompletedNodeCount++;
+        if (nodeKey) {
+            state.SettledNodeAccounting.set(nodeKey, metrics);
+            if (!state.CompletedNodeSet.has(nodeKey)) {
+                state.CompletedNodeSet.add(nodeKey);
+                state.CompletedNodeIDs.push(args.Task.ID);
+            }
+            state.CompletedNodeCount = state.CompletedNodeSet.size;
         }
 
-        const deltaCost = typeof args.CostUsd === 'number' && Number.isFinite(args.CostUsd)
-            ? Math.max(0, args.CostUsd)
-            : (this.config?.DefaultNodeCostUsd ?? 0);
-        const deltaTokens = typeof args.TokensUsed === 'number' && Number.isFinite(args.TokensUsed)
-            ? Math.max(0, args.TokensUsed)
-            : (this.config?.DefaultNodeTokens ?? 0);
-        state.IncrementalCostUsd += deltaCost;
-        state.TokensUsed += deltaTokens;
+        const totals = this.computeSettlementTotals(state);
+        state.IncrementalCostUsd = totals.SettledCostUsd;
+        state.TokensUsed = totals.TotalTokens;
 
-        const resolvedLimits = LimitsConfigResolver.Resolve({
-            RunOverride: state.LimitsOverride ?? this.config?.LimitsOverride,
-        }).Limits;
+        const resolvedLimits = this.resolveStateLimits(state);
+        state.LastResolvedLimits = resolvedLimits;
         const effectiveBudgets = state.ExtendedBudgets ?? resolvedLimits.Budgets;
 
         if (state.PausedByGovernance) {
-            return null;
+            return state.LastBudgetResult;
         }
 
         const evalResult = await this.budgetGuard.Evaluate({
             Budgets: effectiveBudgets,
             AgentRunID: state.SubmittingAgentRunID,
             UserID: state.UserID,
-            CurrentRunCostUsd: state.IncrementalCostUsd,
-            PriorRunCostUsd: state.PriorCumulativeCostUsd,
+            RoutineID: state.RoutineID,
+            CurrentRunCostUsd: totals.SettledCostUsd,
+            PriorRunCostUsd: totals.UnattributedPriorCostUsd,
             CurrentRunStartedAtMs: state.StartedAtMs,
-            PriorRunWallClockMs: state.PriorCumulativeWallClockMs,
-            CurrentRunTokens: state.TokensUsed,
+            PriorRunWallClockMs: state.CheckpointBaselineWallClockMs,
+            CurrentRunTokens: totals.TotalTokens,
             NowMs: Date.now(),
             Provider: args.Provider,
             ContextUser: args.ContextUser,
         });
+        state.EvaluationCount++;
+        state.LastBudgetResult = evalResult;
 
         let pauseReason: RunawayPauseReason | null = null;
         let pauseSummary = '';
         if (evalResult.Exceeded && evalResult.Breach) {
             pauseReason = evalResult.LedgerUnavailable ? 'LedgerUnavailable' : 'BudgetExceeded';
             pauseSummary = evalResult.Breach.Reason;
-        } else if (this.config?.EvaluateProgress) {
+        } else if (this.shouldEvaluateProgress(resolvedLimits)) {
             state.ProgressDetector.RecordSample({
                 IterationIndex: state.CompletedNodeCount,
                 StepType: args.Task.StepType || 'Action',
@@ -214,10 +344,11 @@ export class TaskGraphGovernanceCoordinator {
                 TasksClosed: args.Success ? 1 : 0,
                 OutputText: args.Task.OutputPayload ?? args.Task.Name,
                 PayloadFingerprint: `${state.CompletedNodeCount}:${args.Task.ID}`,
-                TokensSpent: deltaTokens,
+                TokensSpent: metrics.TokensUsed,
                 ErrorSignature: args.Success ? null : (args.Task.ErrorMessage ?? 'node-failed'),
             });
             const prog = state.ProgressDetector.Evaluate(resolvedLimits.ProgressDetector);
+            state.LastProgressResult = prog;
             if (prog.Checked && prog.Classification === 'Stalled') {
                 pauseReason = 'ProgressStalled';
                 pauseSummary = prog.Reason;
@@ -253,12 +384,14 @@ export class TaskGraphGovernanceCoordinator {
             ID: string;
             TypeID: string;
             AgentRunID: string | null;
+            AgentID: string | null;
+            UserID: string | null;
             InputPayload: string | null;
         }>(
             {
                 EntityName: 'MJ: Tasks',
-                ExtraFilter: `ID='${input.ParentTaskID.replace(/'/g, "''")}'`,
-                Fields: ['ID', 'TypeID', 'AgentRunID', 'InputPayload'],
+                ExtraFilter: `ID='${EscapeSQLString(input.ParentTaskID)}'`,
+                Fields: ['ID', 'TypeID', 'AgentRunID', 'AgentID', 'UserID', 'InputPayload'],
                 ResultType: 'simple',
                 BypassCache: true,
             },
@@ -279,20 +412,13 @@ export class TaskGraphGovernanceCoordinator {
 
         const meta = ParseTaskGraphParentMetadata(parentRow.InputPayload);
         const agentRunId = parentRow.AgentRunID ?? meta.submittedByAgentRunID ?? null;
-        const baseBudgets = LimitsConfigResolver.Resolve({
-            RunOverride: meta.limitsOverride ?? this.config?.LimitsOverride,
-        }).Limits.Budgets;
-
-        let checkpointId: string | null = null;
-        let extendedBudgets: MJLimitsBudgetsConfig | null = baseBudgets;
-        let priorCostUsd = 0;
-
+        let agentRun: MJAIAgentRunEntityExtended | null = null;
         if (agentRunId) {
-            const agentRun = await input.Provider.GetEntityObject<MJAIAgentRunEntityExtended>(
+            const loadedRun = await input.Provider.GetEntityObject<MJAIAgentRunEntityExtended>(
                 'MJ: AI Agent Runs',
                 input.ContextUser,
             );
-            if (!(await agentRun.Load(agentRunId))) {
+            if (!(await loadedRun.Load(agentRunId))) {
                 return {
                     Success: false,
                     ParentTaskID: input.ParentTaskID,
@@ -303,6 +429,31 @@ export class TaskGraphGovernanceCoordinator {
                     Message: `Submitting agent run '${agentRunId}' could not be loaded.`,
                 };
             }
+            agentRun = loadedRun;
+        }
+
+        const effectiveAgentId = meta.submittedByAgentID || agentRun?.AgentID || parentRow.AgentID || '';
+        const effectiveUserId = meta.submittedByUserID ?? agentRun?.UserID ?? parentRow.UserID ?? null;
+        const { agentEntity, userPolicyEntity } = await this.loadPolicyScopeEntities(
+            input.Provider,
+            effectiveAgentId,
+            effectiveUserId,
+            input.ContextUser,
+        );
+        const baseBudgets = ResolveAgentRunLimits({
+            Agent: agentEntity,
+            WorkflowMetadata: meta.workflowMetadata ?? null,
+            UserPolicy: userPolicyEntity,
+            UserPolicyLimitsOverride: meta.userPolicyLimitsOverride ?? null,
+            RunOverride: meta.limitsOverride ?? this.config?.LimitsOverride ?? null,
+            Options: { EnforceUserPolicyAsCeiling: true },
+        }).Limits.Budgets;
+
+        let checkpointId: string | null = null;
+        let extendedBudgets: MJLimitsBudgetsConfig | null = baseBudgets;
+        let priorCostUsd = 0;
+
+        if (agentRun) {
             const existingCp = ExtractRunawayCheckpointFromAgentRun(agentRun);
             const approvedCp = existingCp?.HumanApproval.Status === 'Approved' && !input.BudgetExtension && !input.DecisionNotes
                 ? existingCp
@@ -352,6 +503,9 @@ export class TaskGraphGovernanceCoordinator {
             existingState.PausedByGovernance = false;
             existingState.ExtendedBudgets = extendedBudgets;
             existingState.HydratedFromCheckpoint = true;
+            existingState.AgentEntity = agentEntity;
+            existingState.UserPolicyEntity = userPolicyEntity;
+            existingState.PolicyScopeHydrated = true;
         }
 
         KickTaskGraphDispatchers();
@@ -367,70 +521,210 @@ export class TaskGraphGovernanceCoordinator {
         };
     }
 
+    private shouldEvaluateProgress(resolvedLimits: MJLimitsConfig): boolean {
+        if (this.config?.EvaluateProgress === false) {
+            return false;
+        }
+        return this.config?.EvaluateProgress === true || resolvedLimits.ProgressDetector.Enabled;
+    }
+
+    private resolveStateLimits(state: GraphGovernanceState): MJLimitsConfig {
+        return ResolveAgentRunLimits({
+            Agent: state.AgentEntity,
+            WorkflowMetadata: state.WorkflowMetadata,
+            UserPolicy: state.UserPolicyEntity,
+            UserPolicyLimitsOverride: state.UserPolicyLimitsOverride,
+            RunOverride: state.LimitsOverride ?? this.config?.LimitsOverride ?? null,
+            Options: {
+                EnforceUserPolicyAsCeiling: true,
+            },
+        }).Limits;
+    }
+
+    private computeSettlementTotals(state: GraphGovernanceState): {
+        SettledCostUsd: number;
+        UnattributedPriorCostUsd: number;
+        TotalCostUsd: number;
+        TotalTokens: number;
+    } {
+        let settledCostUsd = 0;
+        let settledTokens = 0;
+        for (const entry of state.SettledNodeAccounting.values()) {
+            settledCostUsd += entry.CostUsd;
+            settledTokens += entry.TokensUsed;
+        }
+        let checkpointedNodesCost = 0;
+        for (const nodeId of state.CheckpointBaselineNodeIDs) {
+            const entry = state.SettledNodeAccounting.get(this.normId(nodeId));
+            if (entry) {
+                checkpointedNodesCost += entry.CostUsd;
+            }
+        }
+        const unattributedPriorCostUsd = Math.max(0, state.CheckpointBaselineCostUsd - checkpointedNodesCost);
+        return {
+            SettledCostUsd: settledCostUsd,
+            UnattributedPriorCostUsd: unattributedPriorCostUsd,
+            TotalCostUsd: settledCostUsd + unattributedPriorCostUsd,
+            TotalTokens: Math.max(settledTokens, state.CheckpointBaselineTokens),
+        };
+    }
+
     private getOrCreateState(graphID: string, parent: MJTaskEntity | null): GraphGovernanceState {
         const key = this.normId(graphID);
         const existing = this.states.get(key);
         const meta: TaskGraphParentMetadata | null = parent ? ParseTaskGraphParentMetadata(parent.InputPayload) : null;
         if (existing) {
-            if (meta && (meta.governanceEnabled || meta.limitsOverride)) {
-                existing.GovernanceEnabled = true;
-                if (meta.limitsOverride) {
-                    existing.LimitsOverride = meta.limitsOverride;
-                }
-            }
-            if (parent?.AgentRunID && !existing.SubmittingAgentRunID) {
-                existing.SubmittingAgentRunID = parent.AgentRunID;
-            }
+            this.mergeParentMetadataIntoState(existing, meta, parent);
             return existing;
         }
 
-        const enabled = Boolean(
-            this.config?.Enabled ||
-            meta?.governanceEnabled ||
-            meta?.limitsOverride,
-        );
+        const graphDisabled = meta?.governanceEnabled === false;
+        const dispatcherDisabled = this.config?.Enabled === false;
+        const graphExplicitlyEnabled = Boolean(meta?.governanceEnabled || meta?.limitsOverride);
+        const enabled = !graphDisabled && (!dispatcherDisabled || graphExplicitlyEnabled);
+
         const created: GraphGovernanceState = {
             GraphID: graphID,
             GovernanceEnabled: enabled,
             LimitsOverride: meta?.limitsOverride ?? this.config?.LimitsOverride,
+            WorkflowMetadata: meta?.workflowMetadata ?? null,
+            UserPolicyLimitsOverride: meta?.userPolicyLimitsOverride ?? null,
             SubmittingAgentRunID: parent?.AgentRunID ?? meta?.submittedByAgentRunID ?? null,
-            AgentID: parent?.AgentID ?? '',
+            AgentID: meta?.submittedByAgentID || parent?.AgentID || '',
             UserID: meta?.submittedByUserID ?? parent?.UserID ?? null,
+            RoutineID: meta?.routineID ?? null,
+            AgentEntity: null,
+            UserPolicyEntity: null,
+            PolicyScopeHydrated: false,
+            PolicyLookupError: null,
             StartedAtMs: parent?.StartedAt ? new Date(parent.StartedAt).getTime() : Date.now(),
-            PriorCumulativeCostUsd: 0,
-            PriorCumulativeWallClockMs: 0,
+            CheckpointBaselineCostUsd: 0,
+            CheckpointBaselineWallClockMs: 0,
+            CheckpointBaselineTokens: 0,
+            CheckpointBaselineNodeIDs: [],
             IncrementalCostUsd: 0,
             TokensUsed: 0,
             CompletedNodeCount: 0,
             CompletedNodeIDs: [],
             CompletedNodeSet: new Set<string>(),
+            SettledNodeAccounting: new Map<string, SettledNodeMetrics>(),
+            KnownChildCount: 0,
+            LastNodeSyncAtMs: 0,
             ExtendedBudgets: null,
             PausedByGovernance: false,
             HydratedFromCheckpoint: false,
+            EvaluationCount: 0,
+            LastBudgetResult: null,
+            LastProgressResult: null,
+            LastResolvedLimits: null,
             ProgressDetector: new DeterministicProgressDetector(),
         };
         this.states.set(key, created);
         return created;
     }
 
-    private async ensureHydratedFromCheckpoint(
+    private mergeParentMetadataIntoState(
+        existing: GraphGovernanceState,
+        meta: TaskGraphParentMetadata | null,
+        parent: MJTaskEntity | null,
+    ): void {
+        if (meta) {
+            if (meta.governanceEnabled === false) {
+                existing.GovernanceEnabled = false;
+            } else if (meta.governanceEnabled || meta.limitsOverride) {
+                existing.GovernanceEnabled = true;
+            }
+            if (meta.limitsOverride && !existing.LimitsOverride) {
+                existing.LimitsOverride = meta.limitsOverride;
+            }
+            if (meta.workflowMetadata && !existing.WorkflowMetadata) {
+                existing.WorkflowMetadata = meta.workflowMetadata;
+            }
+            if (meta.userPolicyLimitsOverride && !existing.UserPolicyLimitsOverride) {
+                existing.UserPolicyLimitsOverride = meta.userPolicyLimitsOverride;
+            }
+            if (meta.submittedByAgentID && !existing.AgentID) {
+                existing.AgentID = meta.submittedByAgentID;
+            }
+            if (meta.routineID && !existing.RoutineID) {
+                existing.RoutineID = meta.routineID;
+            }
+            if (meta.submittedByUserID && !existing.UserID) {
+                existing.UserID = meta.submittedByUserID;
+            }
+        }
+        if (parent?.AgentRunID && !existing.SubmittingAgentRunID) {
+            existing.SubmittingAgentRunID = parent.AgentRunID;
+        }
+        if (parent?.AgentID && !existing.AgentID) {
+            existing.AgentID = parent.AgentID;
+        }
+    }
+
+    private async ensureHydratedFromDurableState(
+        provider: IMetadataProvider,
+        state: GraphGovernanceState,
+        contextUser: UserInfo,
+        syncNodesFromStore: boolean,
+    ): Promise<void> {
+        const isInitialHydration = !state.HydratedFromCheckpoint;
+        if (isInitialHydration) {
+            state.HydratedFromCheckpoint = true;
+            await this.hydrateSubmittingRunAndCheckpoint(provider, state, contextUser);
+        }
+
+        if (!state.PolicyScopeHydrated) {
+            state.PolicyScopeHydrated = true;
+            const scope = await this.loadPolicyScopeEntities(provider, state.AgentID, state.UserID, contextUser);
+            state.AgentEntity = scope.agentEntity;
+            state.UserPolicyEntity = scope.userPolicyEntity;
+            if (scope.policyLookupError) {
+                state.PolicyLookupError = scope.policyLookupError;
+                state.PausedByGovernance = true;
+            }
+        }
+
+        if (isInitialHydration && state.ExtendedBudgets === null && state.SubmittingAgentRunID) {
+            const approvedCp = await this.tryLoadApprovedCheckpoint(provider, state.SubmittingAgentRunID, contextUser);
+            if (approvedCp) {
+                const baseBudgets = this.resolveStateLimits(state).Budgets;
+                state.ExtendedBudgets = ApplyBudgetExtensionToBudgets(baseBudgets, approvedCp.HumanApproval.BudgetExtension);
+            }
+        }
+
+        if (isInitialHydration || syncNodesFromStore) {
+            await this.syncSettledNodesFromStore(provider, state, contextUser);
+        }
+    }
+
+    private async hydrateSubmittingRunAndCheckpoint(
         provider: IMetadataProvider,
         state: GraphGovernanceState,
         contextUser: UserInfo,
     ): Promise<void> {
-        if (state.HydratedFromCheckpoint || !state.SubmittingAgentRunID) {
-            state.HydratedFromCheckpoint = true;
+        if (!state.SubmittingAgentRunID) {
             return;
         }
-        state.HydratedFromCheckpoint = true;
         try {
             const run = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
             if (!(await run.Load(state.SubmittingAgentRunID))) {
                 return;
             }
+            if (!state.AgentID && run.AgentID) {
+                state.AgentID = run.AgentID;
+            }
+            if (!state.UserID && run.UserID) {
+                state.UserID = run.UserID;
+            }
+            if (!state.RoutineID) {
+                state.RoutineID = this.extractRoutineIdFromAgentRun(run);
+            }
             const cp = ExtractRunawayCheckpointFromAgentRun(run);
             if (!cp) {
                 return;
+            }
+            if (!state.RoutineID && cp.RoutineID) {
+                state.RoutineID = cp.RoutineID;
             }
             for (const nodeId of cp.CompletedNodeIDs) {
                 const norm = this.normId(nodeId);
@@ -439,13 +733,14 @@ export class TaskGraphGovernanceCoordinator {
                     state.CompletedNodeIDs.push(nodeId);
                 }
             }
-            state.CompletedNodeCount = Math.max(state.CompletedNodeCount, state.CompletedNodeIDs.length);
-            state.PriorCumulativeCostUsd = Math.max(state.PriorCumulativeCostUsd, cp.CumulativeLedger.RunCostUsd);
-            state.PriorCumulativeWallClockMs = Math.max(
-                state.PriorCumulativeWallClockMs,
+            state.CompletedNodeCount = Math.max(state.CompletedNodeCount, state.CompletedNodeSet.size);
+            state.CheckpointBaselineNodeIDs = [...cp.CompletedNodeIDs];
+            state.CheckpointBaselineCostUsd = Math.max(state.CheckpointBaselineCostUsd, cp.CumulativeLedger.RunCostUsd);
+            state.CheckpointBaselineWallClockMs = Math.max(
+                state.CheckpointBaselineWallClockMs,
                 cp.CumulativeLedger.RunWallClockMs,
             );
-            state.TokensUsed = Math.max(state.TokensUsed, cp.CumulativeLedger.RunTokens);
+            state.CheckpointBaselineTokens = Math.max(state.CheckpointBaselineTokens, cp.CumulativeLedger.RunTokens);
 
             if (run.Status === 'Paused' && cp.HumanApproval.Status !== 'Approved') {
                 // Fail closed across restarts: an unapproved paused checkpoint blocks dispatch even if debug flag cleared.
@@ -453,10 +748,6 @@ export class TaskGraphGovernanceCoordinator {
                 return;
             }
             if (cp.HumanApproval.Status === 'Approved') {
-                const baseBudgets = LimitsConfigResolver.Resolve({
-                    RunOverride: state.LimitsOverride ?? this.config?.LimitsOverride,
-                }).Limits.Budgets;
-                state.ExtendedBudgets = ApplyBudgetExtensionToBudgets(baseBudgets, cp.HumanApproval.BudgetExtension);
                 state.PausedByGovernance = false;
             }
         } catch (err) {
@@ -466,6 +757,197 @@ export class TaskGraphGovernanceCoordinator {
                 }`,
             );
         }
+    }
+
+    private async tryLoadApprovedCheckpoint(
+        provider: IMetadataProvider,
+        agentRunId: string,
+        contextUser: UserInfo,
+    ) {
+        try {
+            const run = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
+            if (!(await run.Load(agentRunId))) {
+                return null;
+            }
+            const cp = ExtractRunawayCheckpointFromAgentRun(run);
+            return cp && cp.HumanApproval.Status === 'Approved' ? cp : null;
+        } catch {
+            return null;
+        }
+    }
+
+    private extractRoutineIdFromAgentRun(run: MJAIAgentRunEntityExtended): string | null {
+        if (typeof run.ScheduledJobRunID === 'string' && run.ScheduledJobRunID.trim().length > 0) {
+            return run.ScheduledJobRunID.trim();
+        }
+        const diag = ExtractLimitsDiagnosticsFromRunData(run.Data);
+        if (diag?.Context.RoutineID) {
+            return diag.Context.RoutineID;
+        }
+        const cp = ExtractRunawayCheckpointFromRunData(run.Data);
+        if (cp?.RoutineID) {
+            return cp.RoutineID;
+        }
+        return null;
+    }
+
+    private async loadPolicyScopeEntities(
+        provider: IMetadataProvider,
+        agentId: string,
+        userId: string | null,
+        contextUser: UserInfo,
+    ): Promise<{
+        agentEntity: MJAIAgentEntity | null;
+        userPolicyEntity: MJAIAgentUserPolicyEntity | null;
+        policyLookupError: string | null;
+    }> {
+        let agentEntity: MJAIAgentEntity | null = null;
+        let userPolicyEntity: MJAIAgentUserPolicyEntity | null = null;
+        let policyLookupError: string | null = null;
+
+        const hasRunView = typeof (provider as Partial<IRunViewProvider>).RunView === 'function';
+        if (hasRunView && agentId && IsValidUUID(agentId)) {
+            try {
+                const agentRes = await RunView.FromMetadataProvider(provider).RunView<MJAIAgentEntity>(
+                    {
+                        EntityName: 'MJ: AI Agents',
+                        ExtraFilter: `ID='${EscapeSQLString(agentId)}'`,
+                        ResultType: 'entity_object',
+                        MaxRows: 1,
+                    },
+                    contextUser,
+                );
+                if (agentRes?.Success && agentRes.Results.length > 0) {
+                    agentEntity = agentRes.Results[0];
+                }
+            } catch {
+                // Offline harnesses without MJ: AI Agents view continue with WorkflowMetadata/RunOverride
+            }
+        }
+
+        if (userId && IsValidUUID(userId) && agentId && IsValidUUID(agentId)) {
+            const lookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
+                agentId,
+                userId,
+                contextUser,
+                { provider },
+            );
+            if (lookup.status === 'found') {
+                userPolicyEntity = lookup.policy;
+            } else if (lookup.status === 'error' && !lookup.missingRunViewProvider) {
+                policyLookupError = lookup.errorMessage;
+                LogError(
+                    `[TaskGraphGovernanceCoordinator] User policy lookup failed closed for agent=${agentId}, user=${userId}: ${lookup.errorMessage}`,
+                );
+            }
+        } else if (hasRunView && userId && IsValidUUID(userId)) {
+            try {
+                const policyRes = await RunView.FromMetadataProvider(provider).RunView<MJAIAgentUserPolicyEntity>(
+                    {
+                        EntityName: 'MJ: AI Agent User Policies',
+                        ExtraFilter: `UserID='${EscapeSQLString(userId)}' AND Status='Active'`,
+                        ResultType: 'entity_object',
+                        MaxRows: 1,
+                    },
+                    contextUser,
+                );
+                if (policyRes?.Success && policyRes.Results.length > 0) {
+                    userPolicyEntity = policyRes.Results[0];
+                }
+            } catch {
+                // Graceful fallback in offline mocks without MJ: AI Agent User Policies
+            }
+        }
+
+        return { agentEntity, userPolicyEntity, policyLookupError };
+    }
+
+    private async syncSettledNodesFromStore(
+        provider: IMetadataProvider,
+        state: GraphGovernanceState,
+        contextUser: UserInfo,
+    ): Promise<void> {
+        state.LastNodeSyncAtMs = Date.now();
+        if (typeof (provider as Partial<IRunViewProvider>).RunView !== 'function') {
+            return;
+        }
+        try {
+            const res = await RunView.FromMetadataProvider(provider).RunView<ProjectedTaskSettlementRow>(
+                {
+                    EntityName: 'MJ: Tasks',
+                    ExtraFilter: `ParentID='${EscapeSQLString(state.GraphID)}'`,
+                    Fields: ['ID', 'Status', 'Configuration'],
+                    ResultType: 'simple',
+                    BypassCache: true,
+                    IgnoreMaxRows: true,
+                },
+                contextUser,
+            );
+            if (!res?.Success || !Array.isArray(res.Results)) {
+                return;
+            }
+            state.KnownChildCount = res.Results.length;
+            this.ingestNodeRows(state, res.Results);
+        } catch {
+            // Best-effort sync in offline harnesses
+        }
+    }
+
+    private ingestNodeRows(
+        state: GraphGovernanceState,
+        rows: readonly Pick<ProjectedTaskSettlementRow, 'ID' | 'Status' | 'Configuration'>[],
+    ): void {
+        for (const row of rows) {
+            if (!row?.ID || (row.Status !== 'Complete' && row.Status !== 'Failed')) {
+                continue;
+            }
+            const nodeKey = this.normId(row.ID);
+            if (!nodeKey) {
+                continue;
+            }
+            if (!state.CompletedNodeSet.has(nodeKey)) {
+                state.CompletedNodeSet.add(nodeKey);
+                state.CompletedNodeIDs.push(row.ID);
+            }
+            const persisted = this.extractPersistedNodeMetrics(row.Configuration);
+            if (persisted) {
+                state.SettledNodeAccounting.set(nodeKey, persisted);
+            } else if (!state.SettledNodeAccounting.has(nodeKey)) {
+                state.SettledNodeAccounting.set(nodeKey, {
+                    CostUsd: this.config?.DefaultNodeCostUsd ?? 0,
+                    TokensUsed: this.config?.DefaultNodeTokens ?? 0,
+                });
+            }
+        }
+        state.CompletedNodeCount = state.CompletedNodeSet.size;
+        const totals = this.computeSettlementTotals(state);
+        state.IncrementalCostUsd = totals.SettledCostUsd;
+        state.TokensUsed = totals.TotalTokens;
+    }
+
+    private extractPersistedNodeMetrics(configurationJson: string | null | undefined): SettledNodeMetrics | null {
+        if (typeof configurationJson !== 'string' || configurationJson.trim().length === 0) {
+            return null;
+        }
+        const parsed = SafeJSONParse<Record<string, RunawayJsonValue>>(configurationJson);
+        if (!IsPlainObject(parsed)) {
+            return null;
+        }
+        const runtime = parsed['runtime'];
+        if (!IsPlainObject(runtime)) {
+            return null;
+        }
+        const costRaw = runtime['governanceCostUsd'];
+        const tokensRaw = runtime['governanceTokensUsed'];
+        const hasCost = typeof costRaw === 'number' && Number.isFinite(costRaw);
+        const hasTokens = typeof tokensRaw === 'number' && Number.isFinite(tokensRaw);
+        if (!hasCost && !hasTokens) {
+            return null;
+        }
+        return {
+            CostUsd: hasCost ? Math.max(0, costRaw) : 0,
+            TokensUsed: hasTokens ? Math.max(0, tokensRaw) : 0,
+        };
     }
 
     private async pauseGraphAndPersistCheckpoint(args: {
@@ -528,7 +1010,7 @@ export class TaskGraphGovernanceCoordinator {
                         AgentID: submitRun.AgentID || State.AgentID,
                         AgentName: submitRun.Agent || 'WorkflowOrchestrator',
                         UserID: submitRun.UserID ?? State.UserID,
-                        RoutineID: null,
+                        RoutineID: State.RoutineID,
                         PauseReason: args.PauseReason,
                         Summary: `TaskGraph ${State.GraphID} paused after ${State.CompletedNodeCount} node(s): ${args.Summary}`,
                         CompletedPromptTurns: 1,

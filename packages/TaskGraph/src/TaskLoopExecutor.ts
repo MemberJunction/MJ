@@ -64,14 +64,14 @@ export type LoopIterationGovernanceHook = (info: {
     LoopType: 'ForEach' | 'While';
     NextIterationIndex: number;
     CompletedIterations: number;
-    ResultsSoFar: readonly unknown[];
+    ResultsSoFar: readonly LoopIterationOutcome['Output'][];
     LastOutcome?: LoopIterationOutcome;
 }) => Promise<LoopIterationGovernanceVerdict>;
 
 /** Execution options supporting resume cursors and inter-iteration governance checks. */
 export interface LoopExecutionOptions {
     StartIndex?: number;
-    InitialResults?: readonly unknown[];
+    InitialResults?: readonly LoopIterationOutcome['Output'][];
     OnIterationGovernance?: LoopIterationGovernanceHook;
 }
 

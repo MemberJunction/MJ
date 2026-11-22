@@ -77,6 +77,10 @@ export type TaskStepConfiguration = MJTaskEntity_ITaskStepConfiguration & {
         actionInput?: Record<string, unknown>;
         /** Who completed a Human step, recorded server-side (see `HumanReviewClearsTaint`). */
         completedByUserID?: string;
+        /** Durable USD cost recorded at node settlement for governance budget reconstruction. */
+        governanceCostUsd?: number;
+        /** Durable token count recorded at node settlement for governance budget reconstruction. */
+        governanceTokensUsed?: number;
     };
 };
 
