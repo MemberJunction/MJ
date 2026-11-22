@@ -58,7 +58,10 @@ import type { ChatMessage } from '@memberjunction/ai';
 import { ActiveRunGovernanceRegistry, type ResumeContinuationDispatchResult } from '../ActiveRunGovernanceRegistry';
 import { InstallDefaultResumeContinuationDispatcher } from '../DefaultResumeContinuationDispatcher';
 import { ComputeActiveWallClockOverlapMs, ComputeDayBoundaryWindow } from '../BudgetEnforcementGuard';
-import { RunawayCheckpointManager } from '../RunawayCheckpointManager';
+import {
+    RunawayCheckpointManager,
+    type RunawayResumePreparation,
+} from '../RunawayCheckpointManager';
 
 const DEFAULT_INSPECTED_RUNS_LIMIT = 25; // Tuning: default page size for admin limits diagnostics inspection
 const MAX_INSPECTED_RUNS_LIMIT = 100; // Tuning: upper bound for admin limits diagnostics query
@@ -625,12 +628,18 @@ export class LimitsResumePausedRunServerOperation extends LimitsResumePausedRunO
         const priorSuccess = agentRun.Success;
         const priorErrorMessage = agentRun.ErrorMessage;
 
-        // Idempotent resume: if run was already resumed & approved for the current checkpoint, dispatch idempotently
-        const alreadyApprovedRunning =
-            agentRun.Status === 'Running' && existingCheckpoint?.HumanApproval.Status === 'Approved';
+        const alreadyApproved = existingCheckpoint?.HumanApproval.Status === 'Approved';
+        const isAlreadyActivelyRunning =
+            agentRun.Status === 'Running' &&
+            alreadyApproved &&
+            (Boolean(ActiveRunGovernanceRegistry.Instance.GetActiveRun(runId, provider)) ||
+                existingCheckpoint?.HumanApproval.ResumeClaim?.Status === 'Started');
+        const hasNewApprovalInputs =
+            input.BudgetExtension !== undefined ||
+            (typeof input.DecisionNotes === 'string' && input.DecisionNotes.trim().length > 0);
 
         if (input.PrepareResume === false) {
-            const approvedCheckpoint = alreadyApprovedRunning
+            const approvedCheckpoint = alreadyApproved && !hasNewApprovalInputs
                 ? existingCheckpoint!
                 : await checkpointManager.ApproveCheckpoint({
                     AgentRun: agentRun,
@@ -672,18 +681,29 @@ export class LimitsResumePausedRunServerOperation extends LimitsResumePausedRunO
         }
 
         const baseBudgets = await this.resolvePausedRunBaseBudgets(agentRun, provider, user);
-        const approvedCheckpoint = alreadyApprovedRunning
-            ? existingCheckpoint!
-            : await checkpointManager.ApproveCheckpoint({
+        const needPersistApproval =
+            agentRun.Status === 'Paused' && (!alreadyApproved || hasNewApprovalInputs);
+        const approvedCheckpoint = needPersistApproval
+            ? await checkpointManager.ApproveCheckpoint({
                 AgentRun: agentRun,
                 ApprovedByUserID: user.ID,
                 BudgetExtension: input.BudgetExtension,
                 DecisionNotes: input.DecisionNotes ?? null,
                 Provider: provider,
                 ContextUser: user,
-            });
+            })
+            : existingCheckpoint;
 
-        const restored = await checkpointManager.PrepareResumeFromCheckpoint({
+        if (!approvedCheckpoint || approvedCheckpoint.HumanApproval.Status !== 'Approved') {
+            throw new Error(
+                `Cannot resume run ${runId}: no approved RunawayCheckpoint is persisted on status '${agentRun.Status}'.`,
+            );
+        }
+
+        // CR-14: Build preparation WITHOUT mutating agentRun.Status to 'Running' or calling Save().
+        // Persisted Status remains 'Paused' (unless already in crash-recovery on an unstarted 'Running' claim)
+        // throughout DispatchContinuation until the dispatcher explicitly accepts ownership.
+        const preparation: RunawayResumePreparation = await checkpointManager.BuildResumePreparation({
             AgentRun: agentRun,
             BaseBudgets: baseBudgets,
             Provider: provider,
@@ -695,11 +715,11 @@ export class LimitsResumePausedRunServerOperation extends LimitsResumePausedRunO
         try {
             dispatchResult = await ActiveRunGovernanceRegistry.Instance.DispatchContinuation({
                 AgentRunID: runId,
-                AgentID: restored.Checkpoint.AgentID || agentRun.AgentID,
-                UserID: restored.Checkpoint.UserID ?? agentRun.UserID ?? null,
-                RoutineID: restored.Checkpoint.RoutineID,
+                AgentID: preparation.Checkpoint.AgentID || agentRun.AgentID,
+                UserID: preparation.Checkpoint.UserID ?? agentRun.UserID ?? null,
+                RoutineID: preparation.Checkpoint.RoutineID,
                 CheckpointID: approvedCheckpoint.CheckpointID,
-                RestoredContext: restored,
+                RestoredContext: preparation,
                 Provider: provider,
                 ContextUser: user,
             });
@@ -708,14 +728,40 @@ export class LimitsResumePausedRunServerOperation extends LimitsResumePausedRunO
         }
 
         if (dispatchError || !dispatchResult || !dispatchResult.Dispatched) {
-            agentRun.Status = priorStatus;
-            agentRun.Data = priorData;
-            agentRun.Message = priorMessage;
-            agentRun.CompletedAt = priorCompletedAt;
-            agentRun.Success = priorSuccess;
-            agentRun.ErrorMessage = priorErrorMessage;
-            await agentRun.Save();
             const reason = dispatchError ?? dispatchResult?.Message ?? 'Continuation dispatcher declined execution.';
+            if (needPersistApproval || agentRun.Status !== priorStatus || agentRun.Data !== priorData) {
+                agentRun.Status = priorStatus;
+                agentRun.Data = priorData;
+                agentRun.Message = priorMessage;
+                agentRun.CompletedAt = priorCompletedAt;
+                agentRun.Success = priorSuccess;
+                agentRun.ErrorMessage = priorErrorMessage;
+                let rollbackSaved = false;
+                let rollbackErr: string | null = null;
+                try {
+                    rollbackSaved = await agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+                    if (!rollbackSaved) {
+                        rollbackErr = agentRun.LatestResult?.CompleteMessage || 'agentRun.Save() returned false';
+                    }
+                } catch (saveErr) {
+                    rollbackErr = saveErr instanceof Error ? saveErr.message : String(saveErr);
+                }
+                if (!rollbackSaved) {
+                    return {
+                        Success: false,
+                        AgentRunID: runId,
+                        Status: agentRun.Status,
+                        CheckpointID: approvedCheckpoint.CheckpointID,
+                        ApprovalStatus: existingCheckpoint?.HumanApproval.Status ?? approvedCheckpoint.HumanApproval.Status,
+                        ExtendedBudgets: null,
+                        PriorCumulativeCostUsd: preparation.PriorCumulativeCostUsd,
+                        PriorCumulativeActiveWallClockMs: preparation.PriorCumulativeActiveWallClockMs,
+                        StartingStepCount: preparation.StartingStepCount,
+                        StartingPromptTurns: preparation.StartingPromptTurns,
+                        Message: `Failed closed resuming run ${runId}: ${reason} Rollback persistence failed (${rollbackErr ?? 'unknown error'}).`,
+                    };
+                }
+            }
             return {
                 Success: false,
                 AgentRunID: runId,
@@ -723,31 +769,86 @@ export class LimitsResumePausedRunServerOperation extends LimitsResumePausedRunO
                 CheckpointID: approvedCheckpoint.CheckpointID,
                 ApprovalStatus: existingCheckpoint?.HumanApproval.Status ?? approvedCheckpoint.HumanApproval.Status,
                 ExtendedBudgets: null,
-                PriorCumulativeCostUsd: restored.PriorCumulativeCostUsd,
-                PriorCumulativeActiveWallClockMs: restored.PriorCumulativeActiveWallClockMs,
-                StartingStepCount: restored.StartingStepCount,
-                StartingPromptTurns: restored.StartingPromptTurns,
-                Message: `Failed to resume run ${runId}: ${reason} Run rolled back to ${agentRun.Status}.`,
+                PriorCumulativeCostUsd: preparation.PriorCumulativeCostUsd,
+                PriorCumulativeActiveWallClockMs: preparation.PriorCumulativeActiveWallClockMs,
+                StartingStepCount: preparation.StartingStepCount,
+                StartingPromptTurns: preparation.StartingPromptTurns,
+                Message: `Failed to resume run ${runId}: ${reason} Run remains ${agentRun.Status}.`,
             };
         }
 
-        const effectiveStatus = dispatchResult.Status ?? restored.AgentRun.Status;
+        // Only commit 'Running' after DispatchContinuation accepted ownership (and did not already complete synchronously).
+        if (!isAlreadyActivelyRunning && !dispatchResult.Completed && agentRun.Status === 'Paused') {
+            await checkpointManager.CommitResumeRunningState({
+                AgentRun: agentRun,
+                Preparation: preparation,
+            });
+        }
+
+        const effectiveStatus = dispatchResult.Status ?? agentRun.Status;
         const dispatchSuffix = dispatchResult.Message ? ` ${dispatchResult.Message}` : '';
         return {
             Success: true,
             AgentRunID: runId,
             Status: effectiveStatus,
-            CheckpointID: restored.Checkpoint.CheckpointID,
-            ApprovalStatus: restored.Checkpoint.HumanApproval.Status,
-            ExtendedBudgets: restored.ExtendedBudgets,
-            PriorCumulativeCostUsd: restored.PriorCumulativeCostUsd,
-            PriorCumulativeActiveWallClockMs: restored.PriorCumulativeActiveWallClockMs,
-            StartingStepCount: restored.StartingStepCount,
-            StartingPromptTurns: restored.StartingPromptTurns,
+            CheckpointID: preparation.Checkpoint.CheckpointID,
+            ApprovalStatus: preparation.Checkpoint.HumanApproval.Status,
+            ExtendedBudgets: preparation.ExtendedBudgets,
+            PriorCumulativeCostUsd: preparation.PriorCumulativeCostUsd,
+            PriorCumulativeActiveWallClockMs: preparation.PriorCumulativeActiveWallClockMs,
+            StartingStepCount: preparation.StartingStepCount,
+            StartingPromptTurns: preparation.StartingPromptTurns,
             Message:
-                `Run ${runId} approved and transitioned back to ${effectiveStatus} preserving ${restored.StartingStepCount} completed step(s).` +
+                `Run ${runId} approved and transitioned back to ${effectiveStatus} preserving ${preparation.StartingStepCount} completed step(s).` +
                 dispatchSuffix,
         };
+    }
+
+    /**
+     * Recovers approved-but-unstarted checkpoint resumes after a process crash/restart (CR-14).
+     * Scans `Paused` and `Running` runs whose persisted checkpoint carries `HumanApproval.Status === 'Approved'`
+     * without `ResumeClaim.Status === 'Started'` (and with no live in-process run handle).
+     */
+    public static async RecoverApprovedUnstartedResumes(input: {
+        Provider: IMetadataProvider;
+        ContextUser: UserInfo;
+        MaxRuns?: number;
+    }): Promise<LimitsResumePausedRunOutput[]> {
+        if (!ActiveRunGovernanceRegistry.Instance.HasContinuationDispatcher()) {
+            return [];
+        }
+        const rv = RunView.FromMetadataProvider(input.Provider);
+        const res = await rv.RunView<Pick<MJAIAgentRunEntity, 'ID' | 'Status' | 'Data'>>(
+            {
+                EntityName: 'MJ: AI Agent Runs',
+                ExtraFilter: `Status IN ('Paused', 'Running') AND Data LIKE '%__runawayCheckpoint%'`,
+                Fields: ['ID', 'Status', 'Data'],
+                MaxRows: input.MaxRuns ?? 50,
+                ResultType: 'simple',
+            },
+            input.ContextUser,
+        );
+        if (!res?.Success || !Array.isArray(res.Results)) {
+            return [];
+        }
+
+        const operation = new LimitsResumePausedRunServerOperation();
+        const recovered: LimitsResumePausedRunOutput[] = [];
+        for (const row of res.Results) {
+            if (!row?.ID) continue;
+            const cp = ExtractRunawayCheckpointFromRunData(row.Data);
+            if (!cp || cp.HumanApproval.Status !== 'Approved') continue;
+            if (cp.HumanApproval.ResumeClaim?.Status === 'Started') continue;
+            if (ActiveRunGovernanceRegistry.Instance.GetActiveRun(row.ID, input.Provider)) continue;
+
+            const outcome = await operation.InternalExecute(
+                { AgentRunID: row.ID, PrepareResume: true },
+                input.Provider,
+                input.ContextUser,
+            );
+            recovered.push(outcome);
+        }
+        return recovered;
     }
 
     private async resolvePausedRunBaseBudgets(

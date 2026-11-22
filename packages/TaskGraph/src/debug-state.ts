@@ -41,8 +41,8 @@ export type TaskGraphDebugState = {
     paused?: boolean;
     /** Who paused it — informational, for the console and the frame. */
     pausedBy?: string | null;
-    /** Whether a person paused it or a breakpoint did. */
-    pausedReason?: 'user' | 'breakpoint';
+    /** Whether a person paused it, a breakpoint did, or budget/runaway governance did. */
+    pausedReason?: 'user' | 'breakpoint' | 'governance';
     /** The task whose breakpoint fired, when `pausedReason` is `'breakpoint'`. */
     pausedAtTaskID?: string | null;
     /** Task IDs the dispatcher pauses the graph on, before claiming them. */
@@ -108,7 +108,9 @@ export function ParseTaskGraphDebugState(raw: string | null | undefined): TaskGr
         const state: TaskGraphDebugState = {};
         if (readBool(d.paused)) state.paused = true;
         if (typeof d.pausedBy === 'string') state.pausedBy = d.pausedBy;
-        if (d.pausedReason === 'user' || d.pausedReason === 'breakpoint') state.pausedReason = d.pausedReason;
+        if (d.pausedReason === 'user' || d.pausedReason === 'breakpoint' || d.pausedReason === 'governance') {
+            state.pausedReason = d.pausedReason;
+        }
         if (typeof d.pausedAtTaskID === 'string') state.pausedAtTaskID = d.pausedAtTaskID;
         if (typeof d.skipBreakpointTaskID === 'string') state.skipBreakpointTaskID = d.skipBreakpointTaskID;
         if (Array.isArray(d.breakpoints)) {

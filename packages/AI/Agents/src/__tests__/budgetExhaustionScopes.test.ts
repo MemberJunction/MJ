@@ -779,4 +779,105 @@ describe('BudgetEnforcementGuard — all 6 scope x dimension combinations', () =
         expect(restored.PriorDayCostBaselineUsd).toBe(2.0);
         expect(restored.PriorDayWallClockBaselineMs).toBe(1_500_000);
     });
+
+    it('CR-20: never prorates USD spend by wall-clock duration for asymmetric overnight spend (60m pre-midnight / 1m post-midnight)', async () => {
+        const guard = new BudgetEnforcementGuard();
+        const budgets = createBudgets({
+            PerRun: { MaxCostUsd: 500, MaxWallClockMs: 10_000_000, MaxTokens: null },
+            PerUserPerDay: { MaxCostUsd: 50, MaxWallClockMs: null, DayBoundaryTimezone: 'UTC' },
+        });
+
+        const startedBeforeMidnightMs = Date.UTC(2026, 10, 20, 23, 0, 0); // 23:00 UTC (60m before midnight)
+        const dayStartMs = Date.UTC(2026, 10, 21, 0, 0, 0);              // 00:00 UTC
+        const dayEndMs = Date.UTC(2026, 10, 22, 0, 0, 0);
+        const nowMs = Date.UTC(2026, 10, 21, 0, 1, 0);                   // 00:01 UTC (1m after midnight)
+
+        const { Provider: emptyProvider } = createMockRunViewsProvider([], []);
+
+        // (a) Active 60m before midnight ($0) and 1m after midnight ($100) -> MUST charge $100 to today (NOT ~$1.64!)
+        const postMidnightSpendEvents = [
+            { TimestampMs: Date.UTC(2026, 10, 20, 23, 30, 0), CostUsd: 0 },
+            { TimestampMs: Date.UTC(2026, 10, 21, 0, 0, 30), CostUsd: 100 },
+        ];
+        const evalPostMidnight = await guard.Evaluate({
+            Budgets: budgets,
+            AgentRunID: ACTIVE_RUN_ID,
+            UserID: USER_ID,
+            CurrentRunCostUsd: 100,
+            CurrentRunStartedAtMs: startedBeforeMidnightMs,
+            CostEvents: postMidnightSpendEvents,
+            NowMs: nowMs,
+            Provider: emptyProvider,
+        });
+        expect(evalPostMidnight.Ledger.UserDailyCostUsd).toBe(100);
+        expect(evalPostMidnight.Exceeded).toBe(true);
+        expect(evalPostMidnight.Breach?.Scope).toBe('PerUserPerDay');
+        expect(evalPostMidnight.Breach?.Dimension).toBe('CostUsd');
+
+        const historicalPostMidnight = ComputeHistoricalRowDailyAttribution(
+            {
+                StartedAt: new Date(startedBeforeMidnightMs),
+                CompletedAt: new Date(nowMs),
+                Status: 'Completed',
+                Data: JSON.stringify({ __budgetCostEvents: postMidnightSpendEvents }),
+            },
+            100,
+            dayStartMs,
+            dayEndMs,
+            nowMs,
+            false,
+        );
+        expect(historicalPostMidnight.CostUsd).toBe(100);
+        expect(historicalPostMidnight.WallClockMs).toBe(60_000);
+
+        // (b) Active 60m before midnight ($100) and 1m after midnight ($0) -> MUST charge $0 to today!
+        const preMidnightSpendEvents = [
+            { TimestampMs: Date.UTC(2026, 10, 20, 23, 15, 0), CostUsd: 100 },
+            { TimestampMs: Date.UTC(2026, 10, 21, 0, 0, 30), CostUsd: 0 },
+        ];
+        const evalPreMidnight = await guard.Evaluate({
+            Budgets: budgets,
+            AgentRunID: ACTIVE_RUN_ID,
+            UserID: USER_ID,
+            CurrentRunCostUsd: 100,
+            CurrentRunStartedAtMs: startedBeforeMidnightMs,
+            CostEvents: preMidnightSpendEvents,
+            NowMs: nowMs,
+            Provider: emptyProvider,
+        });
+        expect(evalPreMidnight.Ledger.UserDailyCostUsd).toBe(0);
+        expect(evalPreMidnight.Exceeded).toBe(false);
+
+        const historicalPreMidnight = ComputeHistoricalRowDailyAttribution(
+            {
+                StartedAt: new Date(startedBeforeMidnightMs),
+                CompletedAt: new Date(nowMs),
+                Status: 'Completed',
+                Data: JSON.stringify({ __budgetCostEvents: preMidnightSpendEvents }),
+            },
+            100,
+            dayStartMs,
+            dayEndMs,
+            nowMs,
+            false,
+        );
+        expect(historicalPreMidnight.CostUsd).toBe(0);
+        expect(historicalPreMidnight.WallClockMs).toBe(60_000);
+
+        // (c) No timestamped events or baseline on an overlapping overnight run: conservative fail-safe (charges $100, never $1.64 proration)
+        const unattributed = ComputeHistoricalRowDailyAttribution(
+            {
+                StartedAt: new Date(startedBeforeMidnightMs),
+                CompletedAt: new Date(nowMs),
+                Status: 'Completed',
+                Data: null,
+            },
+            100,
+            dayStartMs,
+            dayEndMs,
+            nowMs,
+            false,
+        );
+        expect(unattributed.CostUsd).toBe(100);
+    });
 });

@@ -84,14 +84,14 @@
 
     <mj-page-body>
         @if (LoadError) {
-            <div class="alert-banner alert-error">
+            <div class="alert-banner alert-error" data-testid="admin-limits-error-banner">
                 <i class="fa-solid fa-triangle-exclamation"></i>
                 <span>{{ LoadError }}</span>
             </div>
         }
 
         @if (ActionFeedback) {
-            <div class="alert-banner alert-success">
+            <div class="alert-banner alert-success" data-testid="admin-limits-success-banner">
                 <i class="fa-solid fa-circle-check"></i>
                 <span>{{ ActionFeedback }}</span>
             </div>
@@ -501,6 +501,12 @@
                         </button>
                     </div>
                     <p class="modal-summary">{{ ResumeModalRun.PauseSummary }}</p>
+                    @if (LoadError) {
+                        <div class="alert-banner alert-error" data-testid="resume-modal-error-banner">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <span>{{ LoadError }}</span>
+                        </div>
+                    }
 
                     <div class="form-field">
                         <label for="ext-cost">Additional Dollar Budget (USD, optional)</label>

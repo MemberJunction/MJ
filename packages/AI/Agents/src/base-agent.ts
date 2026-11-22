@@ -282,7 +282,7 @@ import {
     formatFinalOutput,
     summarizePipelineStages,
 } from './pipeline';
-import { AgentPayloadChangeRequest, BuildTaskGraphStartDebug } from '@memberjunction/ai-core-plus';
+import { AgentPayloadChangeRequest, AttachBudgetAttributionToRunData, BuildTaskGraphStartDebug, ExtractBudgetCostEventsFromRunData, ExtractBudgetDayBaselinesFromRunData, type BudgetCostEvent } from '@memberjunction/ai-core-plus';
 import type { AgentTaintedSource } from '@memberjunction/ai-core-plus';
 // The ONE payload-mapping dialect. Loop agents and the task-graph dispatcher read the same authored
 // mapping strings, so these must be the same functions rather than two copies that agree today.
@@ -904,6 +904,9 @@ export class BaseAgent {
     private _priorDayCostBaselineUsd: number | undefined = undefined;
     private _priorDayWallClockBaselineMs: number | undefined = undefined;
     private _lastObservedDaySnapshot: { DayBucketUTC: string; CostUsd: number; WallClockMs: number } | null = null;
+    private _budgetCostEvents: BudgetCostEvent[] = [];
+    private _budgetDayBaselines: Record<string, number> = {};
+    private _lastRecordedCostUsd: number = 0;
     private _pausedRunOutcome: {
         PauseResult: PauseRunWithCheckpointResult;
         PauseReason: RunawayPauseReason;
@@ -2978,7 +2981,7 @@ export class BaseAgent {
             if (lookup.status === 'found') {
                 return { status: 'ok', policy: lookup.policy };
             }
-            if (lookup.status === 'none' || lookup.missingRunViewProvider) {
+            if (lookup.status === 'none') {
                 return { status: 'ok', policy: null };
             }
             return {
@@ -3006,6 +3009,9 @@ export class BaseAgent {
         this._priorDayCostBaselineUsd = undefined;
         this._priorDayWallClockBaselineMs = undefined;
         this._lastObservedDaySnapshot = null;
+        this._budgetCostEvents = [];
+        this._budgetDayBaselines = {};
+        this._lastRecordedCostUsd = 0;
         this._progressDetector.Reset();
         this._fastConvergenceJudge.ResetCooldown();
         const policyResolution = await this.resolveServerUserPolicy(params);
@@ -5618,10 +5624,23 @@ export class BaseAgent {
             : 0;
         const startedAtMs = this._agentRun?.StartedAt ? new Date(this._agentRun.StartedAt).getTime() : Date.now();
         const nowMs = Date.now();
+        const currentTotalRunCostUsd = nonStepPriorCost + Math.max(0, tokenStats.TotalCost);
+        const costDeltaUsd = currentTotalRunCostUsd - this._lastRecordedCostUsd;
+        if (costDeltaUsd > 0) {
+            this._budgetCostEvents.push({ TimestampMs: nowMs, CostUsd: costDeltaUsd });
+            this._lastRecordedCostUsd = currentTotalRunCostUsd;
+        }
         const currentDay = ComputeDayBoundaryWindow(nowMs, budgets.PerUserPerDay.DayBoundaryTimezone);
         if (this._lastObservedDaySnapshot && this._lastObservedDaySnapshot.DayBucketUTC !== currentDay.DayBucketUTC) {
             this._priorDayCostBaselineUsd = this._lastObservedDaySnapshot.CostUsd;
             this._priorDayWallClockBaselineMs = this._lastObservedDaySnapshot.WallClockMs;
+            this._budgetDayBaselines[currentDay.DayBucketUTC] = this._lastObservedDaySnapshot.CostUsd;
+        }
+        if (this._agentRun && (costDeltaUsd > 0 || Object.keys(this._budgetDayBaselines).length > 0)) {
+            this._agentRun.Data = AttachBudgetAttributionToRunData(this._agentRun.Data, {
+                CostEvents: this._budgetCostEvents,
+                DayCostBaselines: this._budgetDayBaselines,
+            });
         }
         return {
             Budgets: budgets,
@@ -5634,6 +5653,8 @@ export class BaseAgent {
             PriorRunCostUsd: nonStepPriorCost,
             PriorDayCostBaselineUsd: this._priorDayCostBaselineUsd,
             PriorDayWallClockBaselineMs: this._priorDayWallClockBaselineMs,
+            CostEvents: this._budgetCostEvents,
+            DayCostBaselines: this._budgetDayBaselines,
             PausedIntervals: this._resumedCheckpointContext?.PausedIntervals,
             NowMs: nowMs,
             Provider: params.provider || this._activeProvider,
@@ -16287,6 +16308,16 @@ The context is now within limits. Please retry your request with the recovered c
             CostUsd: restored.PriorCumulativeCostUsd,
             WallClockMs: restored.PriorCumulativeActiveWallClockMs,
         };
+        const storedEvents = ExtractBudgetCostEventsFromRunData(this._agentRun.Data);
+        this._budgetCostEvents = storedEvents.length > 0
+            ? storedEvents
+            : [...(restored.Checkpoint.CumulativeLedger.CostEvents ?? [])];
+        const storedBaselines = ExtractBudgetDayBaselinesFromRunData(this._agentRun.Data);
+        this._budgetDayBaselines = Object.keys(storedBaselines).length > 0
+            ? storedBaselines
+            : { ...(restored.Checkpoint.CumulativeLedger.DayCostBaselines ?? {}) };
+        this._lastRecordedCostUsd = restored.PriorCumulativeCostUsd;
+        await this._checkpointManager.MarkResumeStarted(this._agentRun);
         this._promptTurnCount = restored.StartingPromptTurns;
 
         this._scratchpadManager.Clear();

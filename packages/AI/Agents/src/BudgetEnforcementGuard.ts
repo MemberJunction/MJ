@@ -23,9 +23,12 @@ import {
 } from '@memberjunction/core';
 import type { MJAIAgentRunEntity } from '@memberjunction/core-entities';
 import {
+    ExtractBudgetCostEventsFromRunData,
+    ExtractBudgetDayBaselinesFromRunData,
     ExtractLimitsDiagnosticsFromRunData,
     ExtractRunawayCheckpointFromRunData,
     type BudgetBreachDetail,
+    type BudgetCostEvent,
     type BudgetEnforcementResult,
     type BudgetExtensionGrant,
     type BudgetPausedInterval,
@@ -93,6 +96,10 @@ export interface BudgetEnforcementInput {
     PriorDayCostBaselineUsd?: number;
     /** Prior-day active wall-clock baseline already elapsed before today's day boundary (CR-20). */
     PriorDayWallClockBaselineMs?: number;
+    /** Timestamped USD spend deltas for exact day-window attribution without wall-clock proration (CR-20). */
+    CostEvents?: readonly BudgetCostEvent[];
+    /** Per-day cumulative cost baselines keyed by `DayBucketUTC` (CR-20). */
+    DayCostBaselines?: Record<string, number>;
     PausedIntervals?: readonly BudgetPausedInterval[];
     NowMs?: number;
     Provider?: IMetadataProvider;
@@ -254,9 +261,34 @@ export function ComputeActiveWallClockOverlapMs(
 }
 
 /**
+ * Sums USD spend from timestamped {@link BudgetCostEvent} entries strictly inside `[windowStartMs, windowEndMs)`.
+ */
+export function ComputeCostEventsInWindow(
+    events: readonly BudgetCostEvent[] | undefined,
+    windowStartMs: number,
+    windowEndMs: number,
+): number {
+    if (!events || events.length === 0) {
+        return 0;
+    }
+    let total = 0;
+    for (const ev of events) {
+        if (
+            Number.isFinite(ev.TimestampMs) &&
+            Number.isFinite(ev.CostUsd) &&
+            ev.TimestampMs >= windowStartMs &&
+            ev.TimestampMs < windowEndMs
+        ) {
+            total += Math.max(0, ev.CostUsd);
+        }
+    }
+    return total;
+}
+
+/**
  * Attributes only the `[dayStartMs, dayEndMs)` day-bucket delta for a historical/concurrent row
- * so overnight runs started prior to midnight neither disappear nor dump pre-midnight spend/time
- * into today's `PerUserPerDay` budget (CR-20).
+ * using exact timestamped cost events or persisted day baselines (never wall-clock proration),
+ * defaulting conservatively when an overlapping overnight run has no prior-day baseline (CR-20).
  */
 export function ComputeHistoricalRowDailyAttribution(
     row: Pick<AgentRunBudgetLedgerRow, 'StartedAt' | 'CompletedAt' | 'Status' | 'Data'>,
@@ -265,6 +297,7 @@ export function ComputeHistoricalRowDailyAttribution(
     dayEndMs: number,
     nowMs: number,
     countPausedTime: boolean,
+    dayBucketUTC?: string,
 ): { CostUsd: number; WallClockMs: number } {
     if (!row.StartedAt) {
         return { CostUsd: 0, WallClockMs: 0 };
@@ -322,7 +355,28 @@ export function ComputeHistoricalRowDailyAttribution(
         return { CostUsd: safeTotalCost, WallClockMs: wallClockTodayMs };
     }
 
-    // Overnight run started BEFORE today's dayStartMs: attribute only today's delta.
+    // Overnight run started BEFORE today's dayStartMs: attribute exact today spend without time proration.
+    const dataEvents = ExtractBudgetCostEventsFromRunData(row.Data);
+    const costEvents = dataEvents.length > 0 ? dataEvents : (checkpoint?.CumulativeLedger.CostEvents ?? []);
+    if (costEvents.length > 0) {
+        return {
+            CostUsd: ComputeCostEventsInWindow(costEvents, dayStartMs, dayEndMs),
+            WallClockMs: wallClockTodayMs,
+        };
+    }
+
+    const dataDayBaselines = ExtractBudgetDayBaselinesFromRunData(row.Data);
+    const dayBaselines = Object.keys(dataDayBaselines).length > 0
+        ? dataDayBaselines
+        : checkpoint?.CumulativeLedger.DayCostBaselines;
+    const resolvedBucket = dayBucketUTC ?? new Date(dayStartMs).toISOString().slice(0, 10);
+    if (dayBaselines && typeof dayBaselines[resolvedBucket] === 'number' && Number.isFinite(dayBaselines[resolvedBucket])) {
+        return {
+            CostUsd: Math.max(0, safeTotalCost - dayBaselines[resolvedBucket]),
+            WallClockMs: wallClockTodayMs,
+        };
+    }
+
     const priorDayCostBaseline = checkpoint?.CumulativeLedger.PriorDayCostBaselineUsd;
     if (typeof priorDayCostBaseline === 'number' && Number.isFinite(priorDayCostBaseline)) {
         return {
@@ -339,21 +393,10 @@ export function ComputeHistoricalRowDailyAttribution(
         };
     }
 
-    // Continuous overnight run without prior-day baseline: pro-rate by today's active time share.
-    const totalActiveMs = ComputeActiveWallClockOverlapMs(
-        startMs,
-        activityEndMs,
-        startMs,
-        activityEndMs,
-        pausedIntervals,
-        countPausedTime,
-    );
-    if (totalActiveMs <= 0 || wallClockTodayMs <= 0) {
-        return { CostUsd: 0, WallClockMs: wallClockTodayMs };
-    }
-    const todayFraction = Math.min(1, wallClockTodayMs / totalActiveMs);
+    // No timestamped cost events or pre-midnight baseline available: fail-safe conservatively to charging
+    // the full unattributed cost rather than prorating USD dollars by wall-clock duration.
     return {
-        CostUsd: safeTotalCost * todayFraction,
+        CostUsd: safeTotalCost,
         WallClockMs: wallClockTodayMs,
     };
 }
@@ -480,13 +523,13 @@ export class BudgetEnforcementGuard {
                     input.Budgets.CountPausedTimeTowardsWallClock,
                 );
 
-        const currentRunTodayCostUsd = typeof input.PriorDayCostBaselineUsd === 'number'
-            ? Math.max(0, runCostUsd - input.PriorDayCostBaselineUsd)
-            : input.CurrentRunStartedAtMs >= dayStartMs && input.CurrentRunStartedAtMs < dayEndMs
-                ? runCostUsd
-                : runWallClockMs > 0
-                    ? runCostUsd * Math.min(1, currentRunTodayWallMs / runWallClockMs)
-                    : 0;
+        const currentRunTodayCostUsd = this.computeActiveRunTodayCostUsd(
+            input,
+            runCostUsd,
+            dayWindow.DayBucketUTC,
+            dayStartMs,
+            dayEndMs,
+        );
 
         const routineCostUsd = scopedHistorical.Routine.CostUsd + runCostUsd;
         const routineWallClockMs = scopedHistorical.Routine.WallClockMs + runWallClockMs;
@@ -507,6 +550,10 @@ export class BudgetEnforcementGuard {
             DayBoundaryTimezone: input.Budgets.PerUserPerDay.DayBoundaryTimezone,
             ...(typeof input.PriorDayCostBaselineUsd === 'number' ? { PriorDayCostBaselineUsd: input.PriorDayCostBaselineUsd } : {}),
             ...(typeof input.PriorDayWallClockBaselineMs === 'number' ? { PriorDayWallClockBaselineMs: input.PriorDayWallClockBaselineMs } : {}),
+            ...(input.CostEvents && input.CostEvents.length > 0 ? { CostEvents: [...input.CostEvents] } : {}),
+            ...(input.DayCostBaselines && Object.keys(input.DayCostBaselines).length > 0
+                ? { DayCostBaselines: { ...input.DayCostBaselines } }
+                : {}),
             AsOfISO: new Date(nowMs).toISOString(),
         };
 
@@ -521,6 +568,37 @@ export class BudgetEnforcementGuard {
         }
 
         return this.buildEnforcementResult(input.Budgets, ledger, input.RoutineID ?? null, input.UserID ?? null);
+    }
+
+    private computeActiveRunTodayCostUsd(
+        input: BudgetEnforcementInput,
+        runCostUsd: number,
+        dayBucketUTC: string,
+        dayStartMs: number,
+        dayEndMs: number,
+    ): number {
+        if (input.CostEvents && input.CostEvents.length > 0 && input.CurrentRunStartedAtMs < dayStartMs) {
+            return ComputeCostEventsInWindow(input.CostEvents, dayStartMs, dayEndMs);
+        }
+        if (typeof input.PriorDayCostBaselineUsd === 'number' && Number.isFinite(input.PriorDayCostBaselineUsd)) {
+            return Math.max(0, runCostUsd - input.PriorDayCostBaselineUsd);
+        }
+        if (
+            input.DayCostBaselines &&
+            typeof input.DayCostBaselines[dayBucketUTC] === 'number' &&
+            Number.isFinite(input.DayCostBaselines[dayBucketUTC])
+        ) {
+            return Math.max(0, runCostUsd - input.DayCostBaselines[dayBucketUTC]);
+        }
+        if (input.CurrentRunStartedAtMs >= dayStartMs && input.CurrentRunStartedAtMs < dayEndMs) {
+            return runCostUsd;
+        }
+        if (input.CostEvents && input.CostEvents.length > 0) {
+            return ComputeCostEventsInWindow(input.CostEvents, dayStartMs, dayEndMs);
+        }
+        // Conservative fail-safe when an overlapping overnight run has neither cost events nor a prior-day baseline:
+        // never prorate USD spend by wall-clock duration.
+        return runCostUsd;
     }
 
     private async loadHistoricalScopeUsage(
@@ -692,11 +770,13 @@ export class BudgetEnforcementGuard {
             };
         }
 
+        const dayWindow = ComputeDayBoundaryWindow(args.NowMs);
         return {
             Routine: this.aggregateLedgerRows(routineRows, args.ExcludeRunID, args.CountPausedTimeTowardsWallClock, args.NowMs),
             UserDaily: this.aggregateLedgerRows(userDailyRows, args.ExcludeRunID, args.CountPausedTimeTowardsWallClock, args.NowMs, {
                 DayStartMs: Date.parse(args.DayStartISO),
                 DayEndMs: Date.parse(args.DayEndISO),
+                DayBucketUTC: dayWindow.DayBucketUTC,
             }),
         };
     }
@@ -737,7 +817,7 @@ export class BudgetEnforcementGuard {
         excludeRunId: string | null,
         countPausedTime: boolean,
         nowMs: number,
-        dailyWindow?: { DayStartMs: number; DayEndMs: number },
+        dailyWindow?: { DayStartMs: number; DayEndMs: number; DayBucketUTC?: string },
     ): ScopeHistoricalUsage {
         const rowById = new Map<string, AgentRunBudgetLedgerRow>();
         const childrenByParentId = new Map<string, string[]>();
@@ -822,6 +902,7 @@ export class BudgetEnforcementGuard {
                     dailyWindow.DayEndMs,
                     nowMs,
                     countPausedTime,
+                    dailyWindow.DayBucketUTC,
                 );
                 costUsd += dailyAttr.CostUsd;
                 wallClockMs += dailyAttr.WallClockMs;

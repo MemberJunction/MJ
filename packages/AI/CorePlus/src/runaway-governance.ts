@@ -28,6 +28,12 @@ export const RUNAWAY_CHECKPOINT_DATA_KEY = '__runawayCheckpoint' as const;
 /** Reserved property key under `AIAgentRun.Data` JSON where progress & fast-judge diagnostics live. */
 export const PROGRESS_DIAGNOSTICS_DATA_KEY = '__progressDiagnostics' as const;
 
+/** Reserved property key under `AIAgentRun.Data` JSON where timestamped cost events live (CR-20). */
+export const BUDGET_COST_EVENTS_DATA_KEY = '__budgetCostEvents' as const;
+
+/** Reserved property key under `AIAgentRun.Data` JSON where per-day cost baselines live (CR-20). */
+export const BUDGET_DAY_BASELINES_DATA_KEY = '__budgetDayBaselines' as const;
+
 /** JSON-compatible scalar value used for strongly-typed checkpoint payloads. */
 export type RunawayJsonScalar = string | number | boolean | null;
 
@@ -78,6 +84,12 @@ export interface BudgetBreachDetail {
     Reason: string;
 }
 
+/** Timestamped USD spend delta recorded for exact day-bucket attribution without time-ratio proration (CR-20). */
+export interface BudgetCostEvent {
+    TimestampMs: number;
+    CostUsd: number;
+}
+
 /** A single pause/resume interval recorded for wall-clock accounting. */
 export interface BudgetPausedInterval {
     PausedAtMs: number;
@@ -101,6 +113,10 @@ export interface CumulativeBudgetLedger {
     PriorDayCostBaselineUsd?: number;
     /** Prior-day active wall-clock ms already reflected before today's UTC boundary (CR-20). */
     PriorDayWallClockBaselineMs?: number;
+    /** Timestamped USD spend deltas recorded for exact day-window attribution (CR-20). */
+    CostEvents?: BudgetCostEvent[];
+    /** Cumulative run cost snapshot at the start of each `DayBucketUTC` (CR-20). */
+    DayCostBaselines?: Record<string, number>;
     AsOfISO: string;
 }
 
@@ -299,6 +315,15 @@ export interface BudgetExtensionGrant {
     ResetProgressDetectorWindow?: boolean;
 }
 
+/** Durable continuation claim metadata supporting crash/restart recovery for approved resumes (CR-14). */
+export interface HumanResumeClaim {
+    ClaimID: string;
+    Status: 'PendingDispatch' | 'Dispatched' | 'Started';
+    ClaimedAtISO: string;
+    DispatchedAtISO?: string | null;
+    StartedAtISO?: string | null;
+}
+
 /** Human approval record attached to a paused checkpoint prior to resume. */
 export interface HumanResumeApproval {
     Status: 'Pending' | 'Approved' | 'Rejected';
@@ -308,6 +333,7 @@ export interface HumanResumeApproval {
     OwnerNotificationID?: string | null;
     DecisionNotes?: string | null;
     BudgetExtension?: BudgetExtensionGrant;
+    ResumeClaim?: HumanResumeClaim;
 }
 
 /** Serialized checkpoint conversation message preserving turn history without re-execution. */
@@ -435,10 +461,47 @@ function parsePausedIntervals(raw: RunawayJsonValue | undefined): BudgetPausedIn
     return intervals;
 }
 
+function parseBudgetCostEvents(raw: RunawayJsonValue | undefined): BudgetCostEvent[] | undefined {
+    if (!Array.isArray(raw)) {
+        return undefined;
+    }
+    const events: BudgetCostEvent[] = [];
+    for (const item of raw) {
+        if (
+            isRunawayObject(item) &&
+            typeof item['TimestampMs'] === 'number' &&
+            Number.isFinite(item['TimestampMs']) &&
+            typeof item['CostUsd'] === 'number' &&
+            Number.isFinite(item['CostUsd'])
+        ) {
+            events.push({
+                TimestampMs: item['TimestampMs'],
+                CostUsd: Math.max(0, item['CostUsd']),
+            });
+        }
+    }
+    return events.length > 0 ? events : undefined;
+}
+
+function parseDayCostBaselines(raw: RunawayJsonValue | undefined): Record<string, number> | undefined {
+    if (!isRunawayObject(raw)) {
+        return undefined;
+    }
+    const out: Record<string, number> = {};
+    for (const [k, v] of Object.entries(raw)) {
+        if (typeof v === 'number' && Number.isFinite(v)) {
+            out[k] = Math.max(0, v);
+        }
+    }
+    return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function parseCumulativeBudgetLedger(raw: RunawayJsonValue | undefined): CumulativeBudgetLedger | null {
     if (!isRunawayObject(raw)) {
         return null;
     }
+    const costEvents = parseBudgetCostEvents(raw['CostEvents']);
+    const dayBaselines = parseDayCostBaselines(raw['DayCostBaselines']);
     return {
         RunCostUsd: typeof raw['RunCostUsd'] === 'number' ? raw['RunCostUsd'] : 0,
         RunWallClockMs: typeof raw['RunWallClockMs'] === 'number' ? raw['RunWallClockMs'] : 0,
@@ -457,6 +520,8 @@ function parseCumulativeBudgetLedger(raw: RunawayJsonValue | undefined): Cumulat
         ...(typeof raw['PriorDayWallClockBaselineMs'] === 'number' && Number.isFinite(raw['PriorDayWallClockBaselineMs'])
             ? { PriorDayWallClockBaselineMs: raw['PriorDayWallClockBaselineMs'] }
             : {}),
+        ...(costEvents ? { CostEvents: costEvents } : {}),
+        ...(dayBaselines ? { DayCostBaselines: dayBaselines } : {}),
         AsOfISO: typeof raw['AsOfISO'] === 'string' ? raw['AsOfISO'] : new Date(0).toISOString(),
     };
 }
@@ -490,6 +555,24 @@ function parseBudgetExtensionGrant(raw: RunawayJsonValue | undefined): BudgetExt
     return out;
 }
 
+function parseHumanResumeClaim(raw: RunawayJsonValue | undefined): HumanResumeClaim | undefined {
+    if (!isRunawayObject(raw) || typeof raw['ClaimID'] !== 'string' || typeof raw['ClaimedAtISO'] !== 'string') {
+        return undefined;
+    }
+    const rawStatus = raw['Status'];
+    const status: HumanResumeClaim['Status'] =
+        rawStatus === 'PendingDispatch' || rawStatus === 'Dispatched' || rawStatus === 'Started'
+            ? rawStatus
+            : 'PendingDispatch';
+    return {
+        ClaimID: raw['ClaimID'],
+        Status: status,
+        ClaimedAtISO: raw['ClaimedAtISO'],
+        DispatchedAtISO: typeof raw['DispatchedAtISO'] === 'string' ? raw['DispatchedAtISO'] : null,
+        StartedAtISO: typeof raw['StartedAtISO'] === 'string' ? raw['StartedAtISO'] : null,
+    };
+}
+
 function parseHumanResumeApproval(raw: RunawayJsonValue | undefined): HumanResumeApproval | null {
     if (!isRunawayObject(raw)) {
         return null;
@@ -499,6 +582,7 @@ function parseHumanResumeApproval(raw: RunawayJsonValue | undefined): HumanResum
         rawStatus === 'Approved' || rawStatus === 'Rejected' || rawStatus === 'Pending'
             ? rawStatus
             : 'Pending';
+    const resumeClaim = parseHumanResumeClaim(raw['ResumeClaim']);
     return {
         Status: status,
         ApprovedByUserID: typeof raw['ApprovedByUserID'] === 'string' ? raw['ApprovedByUserID'] : null,
@@ -507,6 +591,7 @@ function parseHumanResumeApproval(raw: RunawayJsonValue | undefined): HumanResum
         OwnerNotificationID: typeof raw['OwnerNotificationID'] === 'string' ? raw['OwnerNotificationID'] : null,
         DecisionNotes: typeof raw['DecisionNotes'] === 'string' ? raw['DecisionNotes'] : null,
         BudgetExtension: parseBudgetExtensionGrant(raw['BudgetExtension']),
+        ...(resumeClaim ? { ResumeClaim: resumeClaim } : {}),
     };
 }
 
@@ -997,6 +1082,65 @@ export function AppendProgressDiagnosticToRunData(
     };
     baseData[PROGRESS_DIAGNOSTICS_DATA_KEY] = ToRunawayJsonValue(diagnostics);
     return JSON.stringify(baseData);
+}
+
+/**
+ * Attaches timestamped cost events and/or per-day cost baselines to `AIAgentRun.Data` JSON
+ * without clobbering existing keys (CR-20).
+ */
+export function AttachBudgetAttributionToRunData(
+    existingDataJson: string | null | undefined,
+    attribution: {
+        CostEvents?: readonly BudgetCostEvent[];
+        DayCostBaselines?: Record<string, number>;
+    },
+): string {
+    let baseData: Record<string, RunawayJsonValue> = {};
+    if (typeof existingDataJson === 'string' && existingDataJson.trim().length > 0) {
+        const parsed = SafeJSONParse<Record<string, RunawayJsonValue>>(existingDataJson);
+        if (IsPlainObject(parsed)) {
+            baseData = { ...parsed };
+        }
+    }
+    if (attribution.CostEvents) {
+        baseData[BUDGET_COST_EVENTS_DATA_KEY] = ToRunawayJsonValue(attribution.CostEvents);
+    }
+    if (attribution.DayCostBaselines) {
+        baseData[BUDGET_DAY_BASELINES_DATA_KEY] = ToRunawayJsonValue(attribution.DayCostBaselines);
+    }
+    return JSON.stringify(baseData);
+}
+
+/**
+ * Extracts timestamped {@link BudgetCostEvent} records from `AIAgentRun.Data` JSON (CR-20).
+ */
+export function ExtractBudgetCostEventsFromRunData(
+    dataJson: string | null | undefined,
+): BudgetCostEvent[] {
+    if (typeof dataJson !== 'string' || dataJson.trim().length === 0) {
+        return [];
+    }
+    const parsed = SafeJSONParse<Record<string, RunawayJsonValue>>(dataJson);
+    if (!IsPlainObject(parsed)) {
+        return [];
+    }
+    return parseBudgetCostEvents(parsed[BUDGET_COST_EVENTS_DATA_KEY]) ?? [];
+}
+
+/**
+ * Extracts per-day cumulative cost baselines from `AIAgentRun.Data` JSON (CR-20).
+ */
+export function ExtractBudgetDayBaselinesFromRunData(
+    dataJson: string | null | undefined,
+): Record<string, number> {
+    if (typeof dataJson !== 'string' || dataJson.trim().length === 0) {
+        return {};
+    }
+    const parsed = SafeJSONParse<Record<string, RunawayJsonValue>>(dataJson);
+    if (!IsPlainObject(parsed)) {
+        return {};
+    }
+    return parseDayCostBaselines(parsed[BUDGET_DAY_BASELINES_DATA_KEY]) ?? {};
 }
 
 /**

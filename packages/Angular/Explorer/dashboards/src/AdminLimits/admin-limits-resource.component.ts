@@ -162,14 +162,18 @@ export class AdminLimitsResourceComponent
     }
 
     /** Loads diagnostics from `Limits.GetDiagnostics` using the component's bound provider. */
-    public async RefreshDiagnostics(contextOverride?: { AgentID?: string; UserID?: string }): Promise<void> {
+    public async RefreshDiagnostics(
+        contextOverride?: { AgentID?: string; UserID?: string; PreserveError?: boolean },
+    ): Promise<void> {
         const initialLoad = this.Diagnostics === null;
         if (initialLoad) {
             this.IsLoading = true;
         } else {
             this.IsRefreshing = true;
         }
-        this.LoadError = null;
+        if (!contextOverride?.PreserveError) {
+            this.LoadError = null;
+        }
         this.cdr.markForCheck();
 
         try {
@@ -333,10 +337,11 @@ export class AdminLimitsResourceComponent
             if (result.Success) {
                 this.ActionFeedback = result.Message;
                 this.ResumeModalRun = null;
+                await this.RefreshDiagnostics();
             } else {
                 this.LoadError = result.Message;
+                await this.RefreshDiagnostics({ PreserveError: true });
             }
-            await this.RefreshDiagnostics();
         } catch (err) {
             this.LoadError = err instanceof Error ? err.message : String(err);
         } finally {
@@ -363,10 +368,11 @@ export class AdminLimitsResourceComponent
             );
             if (result.Success) {
                 this.ActionFeedback = result.Message;
+                await this.RefreshDiagnostics();
             } else {
                 this.LoadError = result.Message;
+                await this.RefreshDiagnostics({ PreserveError: true });
             }
-            await this.RefreshDiagnostics();
         } catch (err) {
             this.LoadError = err instanceof Error ? err.message : String(err);
         } finally {

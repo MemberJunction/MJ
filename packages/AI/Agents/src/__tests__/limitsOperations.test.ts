@@ -13,6 +13,7 @@ import {
     AttachRunawayCheckpointToRunData,
     AppendProgressDiagnosticToRunData,
     BuildLimitsDiagnosticsSnapshot,
+    ExtractRunawayCheckpointFromRunData,
     LIMITS_GET_DIAGNOSTICS_OPERATION_KEY,
     LIMITS_PAUSE_RUN_OPERATION_KEY,
     LIMITS_RESUME_PAUSED_RUN_OPERATION_KEY,
@@ -953,5 +954,197 @@ describe('Limits.* BaseRemotableOperation implementations', () => {
         expect(continuationOutcome?.Completed).toBe(true);
         expect(continuationOutcome?.Status).toBe('Completed');
         expect(resumeSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('CR-14: keeps persisted Status="Paused" during DispatchContinuation, fails closed on rollback-save failure, and supports restart recovery', async () => {
+        ActiveRunGovernanceRegistry.Instance.ClearDispatchedClaims();
+        ActiveRunGovernanceRegistry.Instance.RegisterContinuationDispatcher(null);
+
+        const checkpoint: RunawayCheckpointState = {
+            SchemaVersion: 'mj-runaway-checkpoint/v1',
+            CheckpointID: 'cp-cr14-phase-check',
+            AgentRunID: RUN_ID_PAUSED,
+            AgentID: AGENT_ID,
+            AgentName: 'PhaseCheckAgent',
+            UserID: OWNER_USER.ID,
+            RoutineID: null,
+            PausedAtISO: '2026-11-21T10:00:00.000Z',
+            PausedAtMs: Date.UTC(2026, 10, 21, 10, 0, 0),
+            PauseReason: 'BudgetExceeded',
+            Summary: 'Paused cleanly',
+            CompletedStepCount: 5,
+            CompletedStepIDs: ['s1', 's2'],
+            CompletedPromptTurns: 2,
+            CompletedNodeIDs: [],
+            ConversationMessages: [],
+            InFlightPayload: { count: 5 },
+            Scratchpad: { notes: '', tasks: [] },
+            NextStepSummary: 'Actions',
+            Evidence: {},
+            CumulativeLedger: {
+                RunCostUsd: 1.0,
+                RunWallClockMs: 5_000,
+                RunTokens: 200,
+                RoutineCostUsd: 1.0,
+                RoutineWallClockMs: 5_000,
+                UserDailyCostUsd: 1.0,
+                UserDailyWallClockMs: 5_000,
+                PausedWallClockMs: 0,
+                PausedIntervals: [{ PausedAtMs: Date.UTC(2026, 10, 21, 10, 0, 0), ResumedAtMs: null }],
+                DayBucketUTC: '2026-11-21',
+                DayBoundaryTimezone: 'UTC',
+                AsOfISO: '2026-11-21T10:00:00.000Z',
+            },
+            HumanApproval: { Status: 'Pending' },
+        };
+
+        let persistedStatus = 'Paused';
+        let persistedData = AttachRunawayCheckpointToRunData(null, checkpoint);
+        let runStatus = persistedStatus;
+        let dataJson = persistedData;
+        let checkpointObj: RunawayCheckpointState | null = checkpoint;
+        let failRollbackSave = false;
+        let saveCounter = 0;
+
+        const runEntity = {
+            ID: RUN_ID_PAUSED,
+            AgentID: AGENT_ID,
+            Agent: 'PhaseCheckAgent',
+            UserID: OWNER_USER.ID,
+            get Status() {
+                return runStatus;
+            },
+            set Status(v: string) {
+                runStatus = v;
+            },
+            CompletedAt: null as Date | null,
+            Success: null as boolean | null,
+            ErrorMessage: null as string | null,
+            Message: null as string | null,
+            get Data() {
+                return dataJson;
+            },
+            set Data(v: string | null) {
+                dataJson = v ?? '';
+            },
+            get RunawayCheckpoint() {
+                return checkpointObj;
+            },
+            set RunawayCheckpoint(v: RunawayCheckpointState | null) {
+                checkpointObj = v;
+            },
+            LatestResult: { CompleteMessage: 'Simulated rollback write failure' },
+            Load: vi.fn(async () => {
+                runStatus = persistedStatus;
+                dataJson = persistedData;
+                checkpointObj = ExtractRunawayCheckpointFromRunData(persistedData);
+                return true;
+            }),
+            Save: vi.fn(async () => {
+                saveCounter++;
+                // Fail the rollback save (second save during declined dispatch) when injected
+                if (failRollbackSave && runStatus === 'Paused' && saveCounter % 2 === 0) {
+                    return false;
+                }
+                persistedStatus = runStatus;
+                persistedData = dataJson;
+                return true;
+            }),
+        } as Partial<MJAIAgentRunEntityExtended> as MJAIAgentRunEntityExtended;
+
+        const provider = {
+            Authorizations: [],
+            GetEntityObject: vi.fn(async () => runEntity),
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+
+        const resumeOp = new LimitsResumePausedRunServerOperation();
+        try {
+            // 1) Inspect persisted Status *during* DispatchContinuation -> MUST STILL BE 'Paused' when declined
+            let observedPersistedStatusDuringDispatch = '';
+            ActiveRunGovernanceRegistry.Instance.RegisterContinuationDispatcher(async () => {
+                observedPersistedStatusDuringDispatch = persistedStatus;
+                return {
+                    Dispatched: false,
+                    Claimed: false,
+                    Status: 'Paused',
+                    Message: 'Worker pool declined',
+                };
+            });
+
+            const declined = await resumeOp.ExecuteServer(
+                { AgentRunID: RUN_ID_PAUSED, BudgetExtension: { AdditionalCostUsd: 2 } },
+                { provider, user: OWNER_USER, emitProgress: () => undefined },
+            );
+            expect(observedPersistedStatusDuringDispatch).toBe('Paused');
+            expect(declined.Output?.Success).toBe(false);
+            expect(persistedStatus).toBe('Paused');
+            expect(ExtractRunawayCheckpointFromRunData(persistedData)?.HumanApproval.Status).toBe('Pending');
+
+            // 2) Inject rollback-save failure when DispatchContinuation throws -> MUST fail closed explicitly
+            saveCounter = 0;
+            failRollbackSave = true;
+            ActiveRunGovernanceRegistry.Instance.RegisterContinuationDispatcher(async () => {
+                expect(persistedStatus).toBe('Paused');
+                throw new Error('Dispatcher transport error');
+            });
+            const rollbackFailRes = await resumeOp.ExecuteServer(
+                { AgentRunID: RUN_ID_PAUSED, BudgetExtension: { AdditionalCostUsd: 2 } },
+                { provider, user: OWNER_USER, emitProgress: () => undefined },
+            );
+            expect(rollbackFailRes.Output?.Success).toBe(false);
+            expect(rollbackFailRes.Output?.Message).toContain('Rollback persistence failed');
+            expect(persistedStatus).toBe('Paused');
+            failRollbackSave = false;
+
+            // 3) Restart recovery for approved-but-unstarted checkpoint claim (approved via PrepareResume: false, then server restarts)
+            const approveOnly = await resumeOp.ExecuteServer(
+                {
+                    AgentRunID: RUN_ID_PAUSED,
+                    PrepareResume: false,
+                    BudgetExtension: { NewPerRunMaxCostUsd: 10 },
+                    DecisionNotes: 'Approved prior to restart',
+                },
+                { provider, user: OWNER_USER, emitProgress: () => undefined },
+            );
+            expect(approveOnly.Output?.Success).toBe(true);
+            expect(persistedStatus).toBe('Paused');
+            expect(ExtractRunawayCheckpointFromRunData(persistedData)?.HumanApproval.Status).toBe('Approved');
+
+            // Simulate process restart clearing in-memory dispatched claims
+            ActiveRunGovernanceRegistry.Instance.ClearDispatchedClaims();
+            const recoveredCalls: string[] = [];
+            ActiveRunGovernanceRegistry.Instance.RegisterContinuationDispatcher(async (dispatchInput) => {
+                // Even during recovery dispatch, persisted Status is STILL 'Paused' until accepted
+                expect(persistedStatus).toBe('Paused');
+                recoveredCalls.push(dispatchInput.AgentRunID);
+                return {
+                    Dispatched: true,
+                    Claimed: true,
+                    Status: 'Running',
+                    Message: 'Recovered after restart',
+                };
+            });
+
+            vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+                RunView: vi.fn(async () => ({
+                    Success: true,
+                    Results: [{ ID: RUN_ID_PAUSED, Status: persistedStatus, Data: persistedData }],
+                })),
+            } as Partial<RunView> as RunView);
+
+            const recovered = await LimitsResumePausedRunServerOperation.RecoverApprovedUnstartedResumes({
+                Provider: provider,
+                ContextUser: OWNER_USER,
+            });
+            expect(recovered).toHaveLength(1);
+            expect(recovered[0].Success).toBe(true);
+            expect(recovered[0].Status).toBe('Running');
+            expect(recoveredCalls).toEqual([RUN_ID_PAUSED]);
+            expect(persistedStatus).toBe('Running');
+        } finally {
+            ActiveRunGovernanceRegistry.Instance.RegisterContinuationDispatcher(null);
+            LoadLimitsOperations();
+            ActiveRunGovernanceRegistry.Instance.ClearDispatchedClaims();
+        }
     });
 });

@@ -117,7 +117,7 @@ export interface PrepareResumeFromCheckpointInput {
     NowMs?: number;
 }
 
-/** Hydrated context restored by {@link RunawayCheckpointManager.PrepareResumeFromCheckpoint}. */
+/** Hydrated context restored by {@link RunawayCheckpointManager.BuildResumePreparation}. */
 export interface RestoredCheckpointContext {
     AgentRun: MJAIAgentRunEntityExtended;
     Checkpoint: RunawayCheckpointState;
@@ -138,6 +138,9 @@ export interface RestoredCheckpointContext {
     PausedIntervals: BudgetPausedInterval[];
     ResetProgressDetectorWindow: boolean;
 }
+
+/** Alias representing a non-mutating checkpoint resume preparation built prior to continuation acceptance (CR-14). */
+export type RunawayResumePreparation = RestoredCheckpointContext;
 
 /**
  * Coordinates non-destructive runaway pause, checkpoint persistence, owner notification,
@@ -240,17 +243,27 @@ export class RunawayCheckpointManager {
     }
 
     /**
-     * Validates human approval, closes any open pause interval, transitions the run back to
-     * `Running`, and restores all completed work and cumulative budget accounting for resume.
+     * Validates human approval, closes any open pause interval, computes extended budgets and
+     * day-boundary baselines, and builds a {@link RunawayResumePreparation} WITHOUT mutating
+     * `agentRun.Status` to `'Running'` or calling `agentRun.Save()` (CR-14).
      */
-    public async PrepareResumeFromCheckpoint(
+    public async BuildResumePreparation(
         input: PrepareResumeFromCheckpointInput,
-    ): Promise<RestoredCheckpointContext> {
+    ): Promise<RunawayResumePreparation> {
         const agentRun = await this.resolveAgentRun(input.AgentRun, input.AgentRunID, input.Provider, input.ContextUser);
-        const checkpoint = ExtractRunawayCheckpointFromAgentRun(agentRun);
-        if (!checkpoint) {
+        const extracted = ExtractRunawayCheckpointFromAgentRun(agentRun);
+        if (!extracted) {
             throw new Error(`Run ${agentRun.ID} has no persisted RunawayCheckpoint to resume from`);
         }
+
+        const checkpoint: RunawayCheckpointState = {
+            ...extracted,
+            HumanApproval: { ...extracted.HumanApproval },
+            CumulativeLedger: {
+                ...extracted.CumulativeLedger,
+                PausedIntervals: extracted.CumulativeLedger.PausedIntervals.map((p) => ({ ...p })),
+            },
+        };
 
         const effectiveApproval = input.HumanApprovalOverride ?? checkpoint.HumanApproval;
         if (effectiveApproval.Status !== 'Approved') {
@@ -260,6 +273,7 @@ export class RunawayCheckpointManager {
         }
 
         const nowMs = input.NowMs ?? Date.now();
+        const nowISO = new Date(nowMs).toISOString();
         const closedIntervals = this.closeOpenPauseInterval(checkpoint.CumulativeLedger.PausedIntervals, nowMs);
         const resumeDay = ComputeDayBoundaryWindow(nowMs, checkpoint.CumulativeLedger.DayBoundaryTimezone || 'UTC');
         const resumeDayStartMs = Date.parse(resumeDay.DayStartISO);
@@ -272,7 +286,16 @@ export class RunawayCheckpointManager {
         const priorDayWallBaseline = crossedDayBoundary
             ? checkpoint.CumulativeLedger.RunWallClockMs
             : checkpoint.CumulativeLedger.PriorDayWallClockBaselineMs;
-        checkpoint.HumanApproval = { ...checkpoint.HumanApproval, ...effectiveApproval };
+        const existingClaim = effectiveApproval.ResumeClaim ?? checkpoint.HumanApproval.ResumeClaim;
+        checkpoint.HumanApproval = {
+            ...checkpoint.HumanApproval,
+            ...effectiveApproval,
+            ResumeClaim: existingClaim ?? {
+                ClaimID: randomUUID(),
+                Status: 'PendingDispatch',
+                ClaimedAtISO: nowISO,
+            },
+        };
         checkpoint.CumulativeLedger = {
             ...checkpoint.CumulativeLedger,
             PausedIntervals: closedIntervals,
@@ -280,23 +303,13 @@ export class RunawayCheckpointManager {
             DayBucketUTC: resumeDay.DayBucketUTC,
             ...(typeof priorDayCostBaseline === 'number' ? { PriorDayCostBaselineUsd: priorDayCostBaseline } : {}),
             ...(typeof priorDayWallBaseline === 'number' ? { PriorDayWallClockBaselineMs: priorDayWallBaseline } : {}),
-            AsOfISO: new Date(nowMs).toISOString(),
+            AsOfISO: nowISO,
         };
 
         const extendedBudgets = ApplyBudgetExtensionToBudgets(
             input.BaseBudgets,
             effectiveApproval.BudgetExtension,
         );
-
-        agentRun.Status = 'Running';
-        agentRun.CompletedAt = null;
-        agentRun.ErrorMessage = null;
-        AttachRunawayCheckpointToAgentRun(agentRun, checkpoint);
-
-        const saved = await agentRun.Save({ SaveReturnMode: 'datestamps_only' });
-        if (!saved) {
-            throw new Error(`Failed to save resumed run ${agentRun.ID}: ${agentRun.LatestResult?.CompleteMessage ?? 'unspecified error'}`);
-        }
 
         return {
             AgentRun: agentRun,
@@ -319,6 +332,90 @@ export class RunawayCheckpointManager {
             PausedIntervals: closedIntervals,
             ResetProgressDetectorWindow: effectiveApproval.BudgetExtension?.ResetProgressDetectorWindow !== false,
         };
+    }
+
+    /**
+     * Persists `Status = 'Running'` and attaches the prepared checkpoint after the continuation
+     * dispatcher has accepted ownership (CR-14).
+     */
+    public async CommitResumeRunningState(input: {
+        AgentRun: MJAIAgentRunEntityExtended;
+        Preparation: RunawayResumePreparation;
+        MarkStarted?: boolean;
+        NowMs?: number;
+    }): Promise<MJAIAgentRunEntityExtended> {
+        const nowISO = new Date(input.NowMs ?? Date.now()).toISOString();
+        const existingClaim = input.Preparation.Checkpoint.HumanApproval.ResumeClaim;
+        input.Preparation.Checkpoint.HumanApproval = {
+            ...input.Preparation.Checkpoint.HumanApproval,
+            ResumeClaim: {
+                ClaimID: existingClaim?.ClaimID ?? randomUUID(),
+                Status: input.MarkStarted ? 'Started' : 'Dispatched',
+                ClaimedAtISO: existingClaim?.ClaimedAtISO ?? nowISO,
+                DispatchedAtISO: existingClaim?.DispatchedAtISO ?? nowISO,
+                ...(input.MarkStarted ? { StartedAtISO: nowISO } : {}),
+            },
+        };
+
+        input.AgentRun.Status = 'Running';
+        input.AgentRun.CompletedAt = null;
+        input.AgentRun.ErrorMessage = null;
+        AttachRunawayCheckpointToAgentRun(input.AgentRun, input.Preparation.Checkpoint);
+
+        const saved = await input.AgentRun.Save({ SaveReturnMode: 'datestamps_only' });
+        if (!saved) {
+            throw new Error(
+                `Failed to save resumed run ${input.AgentRun.ID}: ${input.AgentRun.LatestResult?.CompleteMessage ?? 'unspecified error'}`,
+            );
+        }
+        return input.AgentRun;
+    }
+
+    /**
+     * Marks an approved checkpoint's resume claim as `Started` once the worker begins executing,
+     * distinguishing in-flight execution from crash-orphaned `PendingDispatch` / `Dispatched` claims (CR-14).
+     */
+    public async MarkResumeStarted(
+        agentRun: MJAIAgentRunEntityExtended,
+        nowMs: number = Date.now(),
+    ): Promise<void> {
+        const checkpoint = ExtractRunawayCheckpointFromAgentRun(agentRun);
+        if (!checkpoint || checkpoint.HumanApproval.Status !== 'Approved') {
+            return;
+        }
+        if (checkpoint.HumanApproval.ResumeClaim?.Status === 'Started') {
+            return;
+        }
+        const nowISO = new Date(nowMs).toISOString();
+        const existingClaim = checkpoint.HumanApproval.ResumeClaim;
+        checkpoint.HumanApproval = {
+            ...checkpoint.HumanApproval,
+            ResumeClaim: {
+                ClaimID: existingClaim?.ClaimID ?? randomUUID(),
+                Status: 'Started',
+                ClaimedAtISO: existingClaim?.ClaimedAtISO ?? nowISO,
+                DispatchedAtISO: existingClaim?.DispatchedAtISO ?? nowISO,
+                StartedAtISO: nowISO,
+            },
+        };
+        AttachRunawayCheckpointToAgentRun(agentRun, checkpoint);
+        await agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+    }
+
+    /**
+     * Validates human approval, closes any open pause interval, transitions the run back to
+     * `Running`, and restores all completed work and cumulative budget accounting for resume.
+     */
+    public async PrepareResumeFromCheckpoint(
+        input: PrepareResumeFromCheckpointInput,
+    ): Promise<RestoredCheckpointContext> {
+        const preparation = await this.BuildResumePreparation(input);
+        await this.CommitResumeRunningState({
+            AgentRun: preparation.AgentRun,
+            Preparation: preparation,
+            NowMs: input.NowMs,
+        });
+        return preparation;
     }
 
     private toTemplateParamsRecord(raw?: RunawayJsonObject): Record<string, string> | undefined {

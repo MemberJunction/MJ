@@ -180,7 +180,8 @@ function extractAgentTypeConfigLimits(typeConfigJson: string | null | undefined)
     return NormalizeLimitsInput(rawLimits);
 }
 
-const MAX_ENVELOPE_SCAN_CHARS = 65_536;
+/** Maximum character prefix scanned when extracting limits envelopes (CR-21). */
+export const MAX_DIAGNOSTICS_ENVELOPE_SCAN_CHARS = 65_536;
 
 function tryParseJsonObjectCandidate(candidate: string): RunawayJsonObject | null {
     const trimmed = candidate.trim();
@@ -208,14 +209,22 @@ function scanCommentEnvelope(bounded: string, lower: string): RunawayJsonObject 
         }
         const afterOpen = skipWhitespace(lower, openIdx + 4);
         if (lower.startsWith('mj-limits:', afterOpen)) {
-            const closeIdx = lower.indexOf('-->', afterOpen + 10);
+            const bodyStart = afterOpen + 10;
+            const closeIdx = lower.indexOf('-->', bodyStart);
             if (closeIdx === -1) {
                 return null;
             }
-            const parsed = tryParseJsonObjectCandidate(bounded.slice(afterOpen + 10, closeIdx));
+            const nextOpenIdx = lower.indexOf('<!--', bodyStart);
+            if (nextOpenIdx !== -1 && nextOpenIdx < closeIdx) {
+                pos = nextOpenIdx;
+                continue;
+            }
+            const parsed = tryParseJsonObjectCandidate(bounded.slice(bodyStart, closeIdx));
             if (parsed) {
                 return parsed;
             }
+            pos = closeIdx + 3;
+            continue;
         }
         pos = openIdx + 4;
     }
@@ -237,16 +246,24 @@ function scanTagEnvelope(bounded: string, lower: string): RunawayJsonObject | nu
         }
         cursor = skipWhitespace(lower, cursor);
         if (lower[cursor] === '>') {
-            const closeIdx = lower.indexOf(closeTag, cursor + 1);
+            const bodyStart = cursor + 1;
+            const closeIdx = lower.indexOf(closeTag, bodyStart);
             if (closeIdx === -1) {
                 return null;
             }
-            const parsed = tryParseJsonObjectCandidate(bounded.slice(cursor + 1, closeIdx));
+            const nextOpenIdx = lower.indexOf('<limits', bodyStart);
+            if (nextOpenIdx !== -1 && nextOpenIdx < closeIdx) {
+                pos = nextOpenIdx;
+                continue;
+            }
+            const parsed = tryParseJsonObjectCandidate(bounded.slice(bodyStart, closeIdx));
             if (parsed) {
                 return parsed;
             }
+            pos = closeIdx + closeTag.length;
+            continue;
         }
-        pos = openIdx + 7;
+        pos = cursor > openIdx + 7 ? cursor : openIdx + 7;
     }
     return null;
 }
@@ -284,7 +301,10 @@ function scanFencedEnvelope(bounded: string, lower: string): RunawayJsonObject |
 }
 
 function parseEnvelopeObject(text: string): RunawayJsonObject | null {
-    const trimmed = text.trim();
+    const bounded = text.length > MAX_DIAGNOSTICS_ENVELOPE_SCAN_CHARS
+        ? text.slice(0, MAX_DIAGNOSTICS_ENVELOPE_SCAN_CHARS)
+        : text;
+    const trimmed = bounded.trim();
     if (!trimmed) {
         return null;
     }
@@ -294,7 +314,6 @@ function parseEnvelopeObject(text: string): RunawayJsonObject | null {
             return direct;
         }
     }
-    const bounded = text.length > MAX_ENVELOPE_SCAN_CHARS ? text.slice(0, MAX_ENVELOPE_SCAN_CHARS) : text;
     const lower = bounded.toLowerCase();
     return (
         scanCommentEnvelope(bounded, lower) ??

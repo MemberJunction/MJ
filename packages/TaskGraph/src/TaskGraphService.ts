@@ -26,6 +26,7 @@ import {
     ServerOperationScopeManager,
     UserInfo,
     type EntityTransactionScope,
+    type MJLimitsOverride,
 } from '@memberjunction/core';
 import {
     MJTaskEntity,
@@ -122,6 +123,10 @@ export type TaskGraphSubmitContext = {
      * by the dispatcher on every node.
      */
     SecurityEnvelope?: TaskSecurityEnvelope;
+    /** Optional Tier-5 limits override persisted onto the parent graph for runtime budget/runaway governance. */
+    LimitsOverride?: MJLimitsOverride;
+    /** Enables runtime budget/runaway governance evaluation on the dispatcher for this graph. */
+    EnableGovernance?: boolean;
 };
 
 /**
@@ -211,6 +216,10 @@ export type TaskGraphParentMetadata = {
      * Current saga lifecycle state when `failurePolicy === 'CompensateCompleted'`.
      */
     sagaState?: SagaExecutionState;
+    /** Optional Tier-5 limits override enforced by `TaskGraphGovernanceCoordinator` on the dispatcher. */
+    limitsOverride?: MJLimitsOverride;
+    /** True when production budget/runaway governance is enabled for this graph. */
+    governanceEnabled?: boolean;
 };
 
 /**
@@ -321,6 +330,8 @@ export function BuildTaskGraphParentInputPayload(args: {
     parentAgentHierarchy?: string[];
     invocation?: { data?: unknown; context?: unknown } | null;
     startPaused?: boolean;
+    limitsOverride?: MJLimitsOverride;
+    governanceEnabled?: boolean;
 }): Record<string, unknown> {
     const parentAgentHierarchy = Array.isArray(args.parentAgentHierarchy)
         ? args.parentAgentHierarchy
@@ -341,6 +352,8 @@ export function BuildTaskGraphParentInputPayload(args: {
         ...(args.invocation
             ? { invocation: { data: args.invocation.data, context: args.invocation.context } }
             : {}),
+        ...(args.limitsOverride ? { limitsOverride: args.limitsOverride } : {}),
+        ...(args.governanceEnabled || args.limitsOverride ? { governanceEnabled: true } : {}),
         ...(args.startPaused
             ? {
                 debug: {
@@ -2062,6 +2075,8 @@ export class TaskGraphService {
                 ? { data: sanitized.Envelope.Data, context: sanitized.Envelope.Context }
                 : null,
             startPaused: context.Debug?.paused === true,
+            limitsOverride: context.LimitsOverride,
+            governanceEnabled: context.EnableGovernance,
         }));
         parent.SecurityEnvelope = SerializeTaskSecurityEnvelope(context.SecurityEnvelope);
         if (!(await this.saveAsService(parent, 'MJ: Tasks', context))) {

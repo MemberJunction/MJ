@@ -5,9 +5,11 @@
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type {
     AgentDecisionQuestion,
+    OwnerPauseNotificationPayload,
     TaskGraphDecisionAnswer,
     TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
+import type { MJLimitsOverride } from '@memberjunction/core';
 
 /**
  * Mints a fresh metadata/data provider.
@@ -93,6 +95,10 @@ export type TaskActionRunResult = {
      * nodes downstream inherit it until a completed Human step reviews it.
      */
     IsOutputTainted?: boolean;
+    /** Optional USD cost incurred by executing this action node for budget governance accounting. */
+    CostUsd?: number;
+    /** Optional token count consumed by executing this action node. */
+    TokensUsed?: number;
 };
 
 /**
@@ -156,6 +162,10 @@ export type TaskPromptRunResult = {
     ChatMessage?: string;
     /** True when the prompt's own output is untrusted. The dispatcher always adds the node's input taint. */
     IsOutputTainted?: boolean;
+    /** Optional USD cost incurred by executing this prompt node for budget governance accounting. */
+    CostUsd?: number;
+    /** Optional token count consumed by executing this prompt node. */
+    TokensUsed?: number;
 };
 
 /**
@@ -460,6 +470,10 @@ export type TaskAgentRunResult = {
     AgentRunID?: string;
     /** True when the run ingested untrusted content (`taintedSources`), including any it started with. */
     IsOutputTainted?: boolean;
+    /** Optional USD cost incurred by executing this agent node for budget governance accounting. */
+    CostUsd?: number;
+    /** Optional token count consumed by executing this agent node. */
+    TokensUsed?: number;
 };
 
 /**
@@ -578,6 +592,25 @@ export type TaskGraphDispatcherConfig = {
 
     /** How often the reconciliation sweep runs. */
     ReconciliationIntervalSeconds: number;
+
+    /** Optional production budget and runaway governance configuration evaluated on node settlement. */
+    Governance?: TaskGraphGovernanceConfig;
+};
+
+/** Optional production budget and runaway governance configuration for {@link TaskGraphDispatcher}. */
+export type TaskGraphGovernanceConfig = {
+    /** Enables budget/runaway evaluation across all graphs dispatched by this instance (even without per-graph LimitsOverride). */
+    Enabled?: boolean;
+    /** Default Tier-5 limits override applied when the graph itself does not specify `limitsOverride`. */
+    LimitsOverride?: MJLimitsOverride;
+    /** Default cost per settled node (USD) when a runner does not return `CostUsd`. */
+    DefaultNodeCostUsd?: number;
+    /** Default tokens per settled node when a runner does not return `TokensUsed`. */
+    DefaultNodeTokens?: number;
+    /** Enables deterministic progress stall evaluation on settled nodes. */
+    EvaluateProgress?: boolean;
+    /** Optional callback invoked when a governance pause emits an owner notification. */
+    OnOwnerNotification?: (payload: OwnerPauseNotificationPayload) => Promise<void> | void;
 };
 
 /** Defaults chosen so a heartbeat has several chances to land before a claim lapses. */

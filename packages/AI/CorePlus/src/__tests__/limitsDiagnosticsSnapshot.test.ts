@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { LimitsConfigResolver } from '@memberjunction/core';
 import { MJAIAgentRunEntityExtended } from '../MJAIAgentRunEntityExtended';
 import {
@@ -12,6 +12,7 @@ import {
     ExtractUserPolicyLimitsOverride,
     LIMITS_DIAGNOSTICS_DATA_KEY,
     LIMITS_DIAGNOSTICS_SCHEMA_VERSION,
+    MAX_DIAGNOSTICS_ENVELOPE_SCAN_CHARS,
     ParseLimitsDiagnosticsSnapshot,
     ResolveAgentRunLimits,
     SerializeLimitsDiagnosticsSnapshot,
@@ -293,5 +294,38 @@ describe('limitsDiagnosticsSnapshot & 5-tier AI agent resolution', () => {
             Notes: '<!-- mj-limits: broken\n<!-- mj-limits: { "AgentAbsoluteIterations": 321 } -->',
         });
         expect(ExtractUserPolicyLimitsOverride(mixedPolicy).AgentAbsoluteIterations).toBe(321);
+    });
+
+    it('CR-21: guarantees O(n) scan and bounded JSON.parse attempts on 2,000 nested/shared-closer openers and >64KB raw input', () => {
+        const parseSpy = vi.spyOn(JSON, 'parse');
+        try {
+            const repeatedCommentSharedCloser = '<!--mj-limits:{'.repeat(2_000) + '}-->';
+            const repeatedTagSharedCloser = '<limits>{'.repeat(2_000) + '}</limits>';
+            const repeatedJsonTagSharedCloser = '<limits_json>{'.repeat(2_000) + '}</limits_json>';
+
+            const t0 = Date.now();
+            const extracted = ExtractUserPolicyLimitsOverride(
+                makePolicyStub({
+                    Notes: repeatedCommentSharedCloser,
+                    InstructionsOverride: repeatedTagSharedCloser,
+                    Configuration: repeatedJsonTagSharedCloser,
+                }),
+            );
+            const elapsedMs = Date.now() - t0;
+
+            expect(extracted).toEqual({});
+            expect(elapsedMs).toBeLessThan(100);
+            // At most 1 parse attempt per shared closer (3 fields x 1 = 3, never 6,000!)
+            expect(parseSpy.mock.calls.length).toBeLessThanOrEqual(6);
+
+            // Size bound enforced BEFORE trim()/direct JSON.parse
+            parseSpy.mockClear();
+            const oversizedDirectJson =
+                '   {' + ' '.repeat(MAX_DIAGNOSTICS_ENVELOPE_SCAN_CHARS + 500) + '"AgentAbsoluteIterations": 999 }';
+            expect(ExtractUserPolicyLimitsOverride(makePolicyStub({ Notes: oversizedDirectJson }))).toEqual({});
+            expect(parseSpy.mock.calls.length).toBeLessThanOrEqual(1);
+        } finally {
+            parseSpy.mockRestore();
+        }
     });
 });

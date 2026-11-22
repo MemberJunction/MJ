@@ -1464,6 +1464,52 @@ describe('Non-destructive pause, persisted checkpoint, owner notification, and h
         expect(throwRes.errorMessage).toContain('Simulated policy query timeout');
         expect(agentOnThrow.PromptCalls).toHaveLength(0);
         expect(actionSpy).not.toHaveBeenCalled();
+
+        // 3) missingRunViewProvider: true error variant MUST fail closed with zero prompt/action dispatch (never stripped to null)
+        vi.spyOn(AgentUserPolicyEngine.Instance, 'ResolvePolicyForAgentAndUser').mockResolvedValueOnce({
+            status: 'error',
+            policy: null,
+            errorMessage: 'Provider lacks RunView capability',
+            missingRunViewProvider: true,
+        });
+
+        const agentOnMissingRunView = new TestableCheckpointAgent([
+            () => makePromptResult({ taskComplete: true, message: 'MUST NOT RUN' }, 0.01, 50),
+        ]);
+        const missingRvRes = await agentOnMissingRunView.Execute({
+            agent: agentEntity,
+            conversationMessages: [{ role: 'user', content: 'Should fail closed on missingRunViewProvider' }],
+            contextUser,
+            provider,
+            userId: USER_ID,
+        });
+        expect(missingRvRes.success).toBe(false);
+        expect(missingRvRes.errorMessage).toContain('Fail-closed');
+        expect(missingRvRes.errorMessage).toContain('Provider lacks RunView capability');
+        expect(agentOnMissingRunView.PromptCalls).toHaveLength(0);
+        expect(actionSpy).not.toHaveBeenCalled();
+
+        // 4) Real incapable provider (lacking RunView) evaluated through AgentUserPolicyEngine also fails closed
+        const incapableProvider = {
+            Entities: [],
+            EntityByName: vi.fn(() => undefined),
+            GetEntityObject: baseProvider.GetEntityObject,
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+        AgentUserPolicyEngine.Instance.ClearCache(AGENT_ID, USER_ID, incapableProvider);
+        const agentIncapable = new TestableCheckpointAgent([
+            () => makePromptResult({ taskComplete: true, message: 'MUST NOT RUN' }, 0.01, 50),
+        ]);
+        const incapableRes = await agentIncapable.Execute({
+            agent: agentEntity,
+            conversationMessages: [{ role: 'user', content: 'Should fail closed with incapable provider' }],
+            contextUser,
+            provider: incapableProvider,
+            userId: USER_ID,
+        });
+        expect(incapableRes.success).toBe(false);
+        expect(incapableRes.errorMessage).toContain('Fail-closed');
+        expect(agentIncapable.PromptCalls).toHaveLength(0);
+        expect(actionSpy).not.toHaveBeenCalled();
     });
 
     it('CR-17: preserves steps[], prompt, and subAgent ForEach/While loop bodies across JSON-only persistence on fresh entities and fresh workers', async () => {

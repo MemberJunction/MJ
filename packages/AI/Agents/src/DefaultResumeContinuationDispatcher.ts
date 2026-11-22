@@ -132,7 +132,11 @@ export function CreateDefaultResumeContinuationDispatcher(): ResumeContinuationD
             };
         }
 
-        const continuationPromise = runFreshWorkerContinuation(worker, agentEntity, input);
+        // Launch continuation on the next microtask so Limits.ResumePausedRun commits Running state
+        // cleanly after DispatchContinuation accepts, while keeping Status === 'Paused' during dispatch (CR-14).
+        const continuationPromise = Promise.resolve().then(() =>
+            runFreshWorkerContinuation(worker, agentEntity, input),
+        );
         ActiveRunGovernanceRegistry.Instance.TrackContinuationExecution(
             input.AgentRunID,
             continuationPromise,

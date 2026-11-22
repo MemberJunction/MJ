@@ -66,6 +66,7 @@ import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity, MJAIAgentRequ
 import type { MJActionExecutionLogEntity, MJRecordChangeEntity } from '@memberjunction/core-entities';
 import type { MJTaskEntity_ITaskStepConfiguration, MJTaskEntity_ITaskLoopIteration } from '@memberjunction/core-entities';
 import { TaskClaimStore, TERMINAL_PARENT_STATUSES, TERMINAL_PARENT_STATUS_SQL } from './TaskClaimStore';
+import { TaskGraphGovernanceCoordinator } from './TaskGraphGovernanceCoordinator';
 import {
     BuildConditionContext,
     DecideGate,
@@ -317,6 +318,10 @@ type TaskBodyOutcome = {
     IsOutputTainted?: boolean;
     /** The parameters an Action step's action was given, recorded as `runtime.actionInput` for its compensation. */
     ActionInput?: Record<string, unknown>;
+    /** Optional USD cost incurred by executing this task body for budget governance accounting. */
+    CostUsd?: number;
+    /** Optional token count consumed by executing this task body. */
+    TokensUsed?: number;
 };
 
 interface GlobalUserCacheLookup {
@@ -543,6 +548,8 @@ export type ClaimedTaskCandidate = {
 export class TaskGraphDispatcher implements IShutdownable {
     private readonly config: TaskGraphDispatcherConfig;
     private readonly claims: TaskClaimStore;
+    /** Production budget and runaway governance coordinator evaluated during dispatch and settlement. */
+    private readonly governance: TaskGraphGovernanceCoordinator;
     /** Reaches and settles External, Wait and provider-Human steps — the steps no runner executes. */
     private readonly waitingSteps: WaitingStepRunner;
 
@@ -709,8 +716,14 @@ export class TaskGraphDispatcher implements IShutdownable {
     ) {
         this.config = { ...DEFAULT_DISPATCHER_CONFIG, ...config };
         this.claims = new TaskClaimStore(this.config.InstanceID, this.config.ClaimTTLSeconds);
+        this.governance = new TaskGraphGovernanceCoordinator(this.claims, this.config.Governance);
         this.waitingSteps = new WaitingStepRunner(this.claims, () => this.contextUser);
         this.conditionEvaluator = new DispatcherConditionEvaluator();
+    }
+
+    /** Exposes this dispatcher's production {@link TaskGraphGovernanceCoordinator}. */
+    public get Governance(): TaskGraphGovernanceCoordinator {
+        return this.governance;
     }
 
     /**
@@ -1227,6 +1240,8 @@ export class TaskGraphDispatcher implements IShutdownable {
                 // manufacturing the orphaned claims reconciliation exists to clean up.
                 if (!this.running) break;
                 if (this.inFlight.size >= this.config.MaxConcurrentTasks) break;
+                const candidateGraphID = task.ParentID ?? task.ID;
+                if (this.governance.IsLocallyPaused(candidateGraphID)) continue;
                 if (!(await this.claims.TryClaim(provider, task.ID, this.contextUser))) {
                     // A write that was REFUSED is not a lost race (#4575). Both return false, and
                     // reading the first as the second is what let a dispatcher skip every task in
@@ -1423,6 +1438,18 @@ export class TaskGraphDispatcher implements IShutdownable {
                 if (result.ChatMessage) {
                     await this.endGraphEarly(provider, task, result.ChatMessage);
                 }
+
+                await this.governance.RecordNodeSettlementAndEvaluate({
+                    Provider: provider,
+                    ContextUser: this.contextUser,
+                    Parent: hydrated?.parentTask ?? null,
+                    Task: task,
+                    Success: result.Success,
+                    CostUsd: result.CostUsd,
+                    TokensUsed: result.TokensUsed,
+                    Observer: this.observer,
+                    DebugStateCache: this.debugStateByGraph,
+                });
             }
         } catch (e) {
             LogError(`[TaskGraphDispatcher] Execution failed for ${taskID}: ${e instanceof Error ? e.message : String(e)}`);
@@ -2829,6 +2856,9 @@ export class TaskGraphDispatcher implements IShutdownable {
             // keep notifying assignees — a notification is starting something.
             const gate = DecideClaimGate(debug, eligible.map((n) => n.id));
             if (gate.mode === 'closed') continue;
+            if (await this.governance.IsGraphBlockedByGovernance(provider, parentID, debug, graph.parent, this.contextUser)) {
+                continue;
+            }
             let allowedTaskIDs: Set<string> | null = null;
             if (gate.mode === 'breakpoint') {
                 const typeID = await this.workflowTaskTypeID(provider);
@@ -2985,6 +3015,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         this.nodeProgressLastEmit.delete(parentTaskID);
         this.announcedPaused.delete(parentTaskID);
         this.debugStateByGraph.delete(parentTaskID);
+        this.governance.ForgetGraph(parentTaskID);
     }
 
     /**
@@ -4299,6 +4330,8 @@ export class TaskGraphDispatcher implements IShutdownable {
                 PromptRunID: promptResult.PromptRunID,
                 // Monotonic: a prompt fed tainted input writes tainted output.
                 IsOutputTainted: inputTainted || promptResult.IsOutputTainted === true,
+                CostUsd: promptResult.CostUsd,
+                TokensUsed: promptResult.TokensUsed,
             };
         }
 

@@ -572,6 +572,64 @@ class InMemoryTaskGraphDatabase {
                     row.__mj_UpdatedAt = new Date();
                     return [{ AffectedRows: 1 }];
                 }
+                if (sql.includes('spTaskGraphWriteDebugFields')) {
+                    const [parentId, _typeId, _containersJson, fieldsJson] = args as [string, string, string, string];
+                    const row = store.getTask(parentId);
+                    if (!row) {
+                        return [{ AffectedRows: 0 }];
+                    }
+                    const payload = row.InputPayload ? (JSON.parse(row.InputPayload) as Record<string, unknown>) : {};
+                    const debugBag = (payload['debug'] && typeof payload['debug'] === 'object'
+                        ? { ...(payload['debug'] as Record<string, unknown>) }
+                        : {}) as Record<string, unknown>;
+                    const fields = JSON.parse(fieldsJson) as Array<{ Path: string; Kind: string; Value: unknown }>;
+                    for (const field of fields) {
+                        const prefix = '$.debug.';
+                        if (!field.Path.startsWith(prefix)) continue;
+                        const prop = field.Path.slice(prefix.length);
+                        if (field.Kind === 'null') {
+                            delete debugBag[prop];
+                        } else {
+                            debugBag[prop] = field.Value;
+                        }
+                    }
+                    payload['debug'] = debugBag;
+                    row.InputPayload = JSON.stringify(payload);
+                    row.__mj_UpdatedAt = new Date();
+                    return [{ AffectedRows: 1 }];
+                }
+                if (sql.includes('spTaskGraphSetRunCostRollup')) {
+                    const [runId, cost, tokens, promptTokens, completionTokens] = args as [
+                        string,
+                        number,
+                        number,
+                        number,
+                        number,
+                    ];
+                    const run = store.AgentRuns.get(runId);
+                    if (!run) {
+                        return [{ AffectedRows: 0 }];
+                    }
+                    run.TotalCostRollup = cost;
+                    run.TotalTokensUsedRollup = tokens;
+                    run.TotalPromptTokensUsedRollup = promptTokens;
+                    run.TotalCompletionTokensUsedRollup = completionTokens;
+                    run.__mj_UpdatedAt = new Date();
+                    return [{ AffectedRows: 1 }];
+                }
+                if (sql.includes('spTaskGraphSettleRun')) {
+                    const [runId, succeeded, errorMessage] = args as [string, boolean, string | null];
+                    const run = store.AgentRuns.get(runId);
+                    if (!run || run.Status !== 'Paused') {
+                        return [{ AffectedRows: 0 }];
+                    }
+                    run.Status = succeeded ? 'Completed' : 'Failed';
+                    run.Success = succeeded;
+                    run.ErrorMessage = errorMessage;
+                    run.CompletedAt = new Date();
+                    run.__mj_UpdatedAt = new Date();
+                    return [{ AffectedRows: 1 }];
+                }
                 if (sql.includes('spTaskGraphReleaseExpiredClaims') || sql.includes('spTaskGraphExpireWaitingSteps')) {
                     return [];
                 }
@@ -849,7 +907,7 @@ describe('CR-19: 5,000-node workflow acceptance through real TaskGraphService an
         }
     }, 45_000);
 
-    it('pauses mid-5000-node DAG on budget breach, persists checkpoint, and finishes remaining nodes on a fresh TaskGraphDispatcher without replaying completed nodes', async () => {
+    it('pauses mid-5000-node DAG automatically via production governance, blocks unapproved restart, and finishes remaining nodes after production approval without replaying completed nodes', async () => {
         capturedLogErrors.length = 0;
         LimitsConfigResolver.Instance.ClearMjConfigLimits();
         const db = new InMemoryTaskGraphDatabase();
@@ -872,42 +930,17 @@ describe('CR-19: 5,000-node workflow acceptance through real TaskGraphService an
             await submitRun.Save();
 
             const executedOrder: string[] = [];
-            const executedSet = new Set<string>();
-            let budgetCapUsd = 0.25; // Breaches right at node #2500 ($0.0001 * 2500 = $0.25)
-            let pausedRequested = false;
-            let parentId = '';
-            const startedAtMs = Date.UTC(2026, 10, 21, 11, 0, 0);
-            const budgetGuard = new BudgetEnforcementGuard();
-            const baseBudgets = LimitsConfigResolver.Resolve({
-                RunOverride: { Budgets: { PerRun: { MaxCostUsd: budgetCapUsd } } },
-            }).Limits.Budgets;
-
-            const createRunner = (onBreach: (count: number) => void): TaskActionRunner => ({
+            const actionRunner: TaskActionRunner = {
                 RunActionForTask: async (ctx) => {
                     const inputObj = ctx.InputPayload && typeof ctx.InputPayload === 'object'
                         ? (ctx.InputPayload as Record<string, unknown>)
                         : {};
                     const sliceId = String(inputObj['sliceId'] ?? ctx.TaskID);
                     executedOrder.push(sliceId);
-                    executedSet.add(sliceId);
-                    const totalCost = executedOrder.length * 0.0001;
-                    const activeBudgets = {
-                        ...baseBudgets,
-                        PerRun: { ...baseBudgets.PerRun, MaxCostUsd: budgetCapUsd },
-                    };
-                    const res = await budgetGuard.Evaluate({
-                        Budgets: activeBudgets,
-                        AgentRunID: SUBMIT_RUN_ID,
-                        CurrentRunCostUsd: totalCost,
-                        CurrentRunStartedAtMs: startedAtMs,
-                        NowMs: startedAtMs + executedOrder.length * 5,
-                    });
-                    if (res.Exceeded && !pausedRequested) {
-                        onBreach(executedOrder.length);
-                    }
-                    return { Success: true, Output: { sliceId } };
+                    // External action execution only — reports per-node cost/tokens; governance lives in TaskGraphDispatcher.
+                    return { Success: true, Output: { sliceId }, CostUsd: 0.0001, TokensUsed: 50 };
                 },
-            });
+            };
             const agentRunner: TaskAgentRunner = {
                 RunAgentForTask: async () => ({ Success: true, Output: {} }),
             };
@@ -922,12 +955,11 @@ describe('CR-19: 5,000-node workflow acceptance through real TaskGraphService an
                     PollIntervalSeconds: 0.01,
                     HeartbeatIntervalSeconds: 60,
                     ReconciliationIntervalSeconds: 60,
+                    Governance: { Enabled: true },
                 },
                 undefined,
                 undefined,
-                createRunner(() => {
-                    pausedRequested = true;
-                }),
+                actionRunner,
             );
 
             await dispatcher1.Start();
@@ -937,16 +969,23 @@ describe('CR-19: 5,000-node workflow acceptance through real TaskGraphService an
                 ContextUser: TEST_USER,
                 AgentID: AGENT_ID,
                 AgentRunID: SUBMIT_RUN_ID,
+                EnableGovernance: true,
+                LimitsOverride: { Budgets: { PerRun: { MaxCostUsd: 0.25 } } },
             });
             expect(submitRes.ErrorMessage).toBeUndefined();
             expect(submitRes.Success).toBe(true);
-            parentId = submitRes.ParentTaskID!;
+            const parentId = submitRes.ParentTaskID!;
 
+            // Production TaskGraphGovernanceCoordinator automatically breaches at >= 2500 nodes ($0.25),
+            // writes $.debug.paused=true, and persists RunawayCheckpoint onto submitRun.
             await waitForCondition(
-                () => pausedRequested,
-                10_000,
+                () => {
+                    const storedRun = db.AgentRuns.get(SUBMIT_RUN_ID);
+                    return storedRun?.Status === 'Paused' && ExtractRunawayCheckpointFromRunData(storedRun.Data) !== null;
+                },
+                15_000,
                 () => dispatcher1.Kick(),
-                () => `executedBeforePause=${executedOrder.length}`,
+                () => `executed=${executedOrder.length}, runStatus=${db.AgentRuns.get(SUBMIT_RUN_ID)?.Status}`,
             );
             await dispatcher1.Stop();
 
@@ -959,58 +998,49 @@ describe('CR-19: 5,000-node workflow acceptance through real TaskGraphService an
             expect(completedCountAfterPause).toBe(executedBeforePause);
             expect(completedCountAfterPause + pendingCountAfterPause).toBe(5_000);
 
-            // Persist durable checkpoint on submitting agent run, approve with budget extension, and resume
-            const cpManager = new RunawayCheckpointManager();
-            const pauseRes = await cpManager.PauseRunWithCheckpoint({
-                AgentRun: submitRun,
-                AgentID: AGENT_ID,
-                AgentName: 'WorkflowOrchestrator',
-                UserID: TEST_USER.ID,
-                RoutineID: null,
-                PauseReason: 'BudgetExceeded',
-                Summary: `Paused 5000-node DAG after ${completedCountAfterPause} completed nodes`,
-                CompletedPromptTurns: 1,
-                CompletedNodeIDs: [...executedSet],
-                ConversationMessages: [],
-                InFlightPayload: { parentTaskId: parentId },
-                Scratchpad: { notes: `Completed ${completedCountAfterPause}`, tasks: [] },
-                CumulativeLedger: {
-                    RunCostUsd: executedBeforePause * 0.0001,
-                    RunWallClockMs: executedBeforePause * 5,
-                    RunTokens: executedBeforePause * 50,
-                    RoutineCostUsd: 0,
-                    RoutineWallClockMs: 0,
-                    UserDailyCostUsd: 0,
-                    UserDailyWallClockMs: 0,
-                    PausedWallClockMs: 0,
-                    PausedIntervals: [],
-                    DayBucketUTC: '2026-11-21',
-                    DayBoundaryTimezone: 'UTC',
-                    AsOfISO: '2026-11-21T11:05:00.000Z',
+            const pausedRunRow = db.AgentRuns.get(SUBMIT_RUN_ID)!;
+            const persistedCp = ExtractRunawayCheckpointFromRunData(pausedRunRow.Data);
+            expect(persistedCp).not.toBeNull();
+            expect(persistedCp?.PauseReason).toBe('BudgetExceeded');
+            expect(persistedCp?.HumanApproval.Status).toBe('Pending');
+            expect(persistedCp?.CompletedNodeIDs.length).toBeGreaterThanOrEqual(2_500);
+
+            // Restarting a fresh TaskGraphDispatcher BEFORE human approval MUST block all remaining pending nodes
+            const unapprovedRestartDisp = new TaskGraphDispatcher(
+                { CreateProvider: async () => provider },
+                agentRunner,
+                TEST_USER,
+                {
+                    InstanceID: 'cr19-disp-unapproved-restart',
+                    MaxConcurrentTasks: 100,
+                    PollIntervalSeconds: 0.01,
+                    HeartbeatIntervalSeconds: 60,
+                    ReconciliationIntervalSeconds: 60,
+                    Governance: { Enabled: true },
                 },
+                undefined,
+                undefined,
+                actionRunner,
+            );
+            await unapprovedRestartDisp.Start();
+            unapprovedRestartDisp.Kick();
+            await new Promise((r) => setTimeout(r, 80));
+            await unapprovedRestartDisp.Stop();
+            expect(executedOrder.length).toBe(executedBeforePause);
+
+            // Invoke production governance approval & resume with extended $1.00 budget
+            const resumeRes = await dispatcher1.Governance.ApproveAndResumePausedGraph({
+                ParentTaskID: parentId,
                 Provider: provider,
                 ContextUser: TEST_USER,
-            });
-            expect(pauseRes.Saved).toBe(true);
-            expect(ExtractRunawayCheckpointFromRunData(submitRun.Data)?.CompletedNodeIDs).toHaveLength(executedBeforePause);
-
-            await cpManager.ApproveCheckpoint({
-                AgentRunID: SUBMIT_RUN_ID,
                 ApprovedByUserID: TEST_USER.ID,
                 BudgetExtension: { NewPerRunMaxCostUsd: 1.0 },
-                Provider: provider,
-                ContextUser: TEST_USER,
+                DecisionNotes: 'Approved extended $1.00 budget for remaining DAG waves',
             });
-            const restored = await cpManager.PrepareResumeFromCheckpoint({
-                AgentRunID: SUBMIT_RUN_ID,
-                BaseBudgets: baseBudgets,
-                Provider: provider,
-                ContextUser: TEST_USER,
-            });
-            expect(restored.ExtendedBudgets.PerRun.MaxCostUsd).toBe(1.0);
-            budgetCapUsd = 1.0;
+            expect(resumeRes.Success).toBe(true);
+            expect(resumeRes.ExtendedBudgets?.PerRun.MaxCostUsd).toBe(1.0);
 
-            // Fresh TaskGraphDispatcher resumes remaining Pending nodes without replaying any completed nodes
+            // Fresh TaskGraphDispatcher hydrates approved checkpoint automatically and finishes remaining Pending nodes
             const dispatcher2 = new TaskGraphDispatcher(
                 { CreateProvider: async () => provider },
                 agentRunner,
@@ -1021,10 +1051,11 @@ describe('CR-19: 5,000-node workflow acceptance through real TaskGraphService an
                     PollIntervalSeconds: 0.01,
                     HeartbeatIntervalSeconds: 60,
                     ReconciliationIntervalSeconds: 60,
+                    Governance: { Enabled: true },
                 },
                 undefined,
                 undefined,
-                createRunner(() => undefined),
+                actionRunner,
             );
             await dispatcher2.Start();
             try {
@@ -1042,6 +1073,7 @@ describe('CR-19: 5,000-node workflow acceptance through real TaskGraphService an
             expect(new Set(executedOrder).size).toBe(5_000);
             expect(db.Tasks.get(parentId.toLowerCase())?.Status).toBe('Complete');
             expect(db.Tasks.get(parentId.toLowerCase())?.PercentComplete).toBe(100);
+            expect(db.AgentRuns.get(SUBMIT_RUN_ID)?.Status).toBe('Completed');
         } finally {
             spyFromProvider.mockRestore();
         }
