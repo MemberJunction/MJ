@@ -185,13 +185,23 @@ interface GlobalUserCacheLookup {
 }
 
 /**
- * Minimal async-local store contract (satisfied by Node's `AsyncLocalStorage<string>`) so
- * `@memberjunction/ai-core-plus` remains browser-safe without importing `node:async_hooks`
+ * Async-local frame tracking the currently executing agent and any ancestor agents
+ * whose narrowed `MJ: AI Agent User Policies` apply as ceilings (e.g. Chief of Staff
+ * delegating to a specialist sub-agent).
+ */
+export interface ExecutingAgentFrame {
+    agentId: string;
+    policyCeilingAgentIds: readonly string[];
+}
+
+/**
+ * Minimal async-local store contract (satisfied by Node's `AsyncLocalStorage<string | ExecutingAgentFrame>`)
+ * so `@memberjunction/ai-core-plus` remains browser-safe without importing `node:async_hooks`
  * while isolating concurrent agent turns and human saves on the server.
  */
 export interface ExecutingAgentContextStore {
-    getStore(): string | undefined;
-    run<T>(store: string, callback: () => Promise<T>): Promise<T>;
+    getStore(): string | ExecutingAgentFrame | undefined;
+    run<T>(store: string | ExecutingAgentFrame, callback: () => Promise<T>): Promise<T>;
 }
 
 interface NodeProcessWithBuiltinModule {
@@ -298,20 +308,82 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
      * saves never bleed across async execution contexts.
      */
     public GetActiveExecutingAgentID(): string | null {
-        return this.executingAgentStore?.getStore() ?? null;
+        const stored = this.executingAgentStore?.getStore();
+        if (!stored) {
+            return null;
+        }
+        return typeof stored === 'string' ? stored : stored.agentId;
+    }
+
+    /**
+     * Returns any ancestor agent IDs whose narrowed user policies act as policy ceilings for
+     * the currently executing sub-agent (outermost to innermost, excluding the active agent itself).
+     */
+    public GetActivePolicyCeilingAgentIDs(): readonly string[] {
+        const stored = this.executingAgentStore?.getStore();
+        if (!stored || typeof stored === 'string') {
+            return [];
+        }
+        return stored.policyCeilingAgentIds;
+    }
+
+    /**
+     * Returns the deduplicated ordered list of all agent IDs whose policies govern the current
+     * execution: the active executing agent (or `explicitAgentId`) followed by any inherited
+     * parent policy ceiling agent IDs.
+     */
+    public GetEffectivePolicyAgentChain(explicitAgentId?: string | null): string[] {
+        const seen = new Set<string>();
+        const chain: string[] = [];
+        const add = (id: string | null | undefined): void => {
+            const trimmed = id?.trim();
+            if (!trimmed) {
+                return;
+            }
+            const lower = trimmed.toLowerCase();
+            if (!seen.has(lower)) {
+                seen.add(lower);
+                chain.push(trimmed);
+            }
+        };
+        add(explicitAgentId);
+        add(this.GetActiveExecutingAgentID());
+        for (const ceilingId of this.GetActivePolicyCeilingAgentIDs()) {
+            add(ceilingId);
+        }
+        return chain;
     }
 
     /**
      * Executes `fn` inside an async-local executing-agent context so entity subclasses
-     * (such as `MJAIAgentUserPolicyEntityServer`) can enforce self-only and non-widening rules
-     * without interfering with concurrent human saves or sibling agent runs.
+     * (such as `MJAIAgentUserPolicyEntityServer`) and typed actions (`TypedActionPolicyGuard`)
+     * can enforce self-only, non-widening, and parent-policy-ceiling rules without interfering
+     * with concurrent human saves or sibling agent runs.
      */
-    public async RunWithExecutingAgentContext<T>(agentId: string, fn: () => Promise<T>): Promise<T> {
+    public async RunWithExecutingAgentContext<T>(
+        agentId: string,
+        fn: () => Promise<T>,
+        policyCeilingAgentIds?: readonly string[]
+    ): Promise<T> {
         const trimmed = agentId.trim();
         if (!trimmed || !this.executingAgentStore) {
             return fn();
         }
-        return this.executingAgentStore.run(trimmed, fn);
+        const inherited = this.GetActivePolicyCeilingAgentIDs();
+        const combinedSet = new Set<string>();
+        const combined: string[] = [];
+        for (const id of [...inherited, ...(policyCeilingAgentIds ?? [])]) {
+            const clean = id.trim();
+            if (clean && !UUIDsEqual(clean, trimmed) && !combinedSet.has(clean.toLowerCase())) {
+                combinedSet.add(clean.toLowerCase());
+                combined.push(clean);
+            }
+        }
+        const frame: ExecutingAgentFrame = {
+            agentId: trimmed,
+            policyCeilingAgentIds: combined,
+        };
+        return this.executingAgentStore.run(frame, fn);
     }
 
     private getProviderScopePrefix(provider?: object | null): string {

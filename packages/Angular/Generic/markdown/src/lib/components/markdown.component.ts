@@ -17,6 +17,7 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { MarkdownService } from '../services/markdown.service';
 import { MarkdownConfig, DEFAULT_MARKDOWN_CONFIG, MarkdownRenderEvent, HeadingInfo } from '@memberjunction/markdown-core';
 import { MountDiagramViewer, type DiagramViewerInstance } from '@memberjunction/ai-diagrams/viewer';
+import { UpgradeInlineMediaElements } from '../extensions/inline-media.extension';
 
 /** A rendered image the reader clicked or activated: what a host needs to show it full size. */
 export class ImageClickedEventArgs {
@@ -50,6 +51,8 @@ const RERENDER_INPUTS = new Set([
   'mermaidTheme',
   'sanitize',
   'openLinksInNewTab',
+  'enableInlineMedia',
+  'inlineMediaAllowedOrigins',
 ]);
 
 /**
@@ -480,6 +483,20 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
    * Mermaid on every chunk (which otherwise flickers between partial SVGs and error banners).
    */
   @Input() IsStreaming: boolean = false;
+
+  /**
+   * Upgrade `/media/:fileId` video markdown tags (`kind=video` or video filename extension) into
+   * inline HTML5 `<video>` players with optional WebVTT captions and a lazy click-to-seek
+   * transcript drawer. Default `false` (opt-in until validated across downstream hosts).
+   */
+  @Input() EnableInlineMedia: boolean = false;
+
+  /**
+   * Optional cross-origin API origin allowlist for `/media/:fileId` video upgrades when the media
+   * route lives on a separate API host. Relative `/media/...` and same-origin URLs are allowed
+   * whenever `EnableInlineMedia` is `true`.
+   */
+  @Input() InlineMediaAllowedOrigins?: string | readonly string[];
 
   /**
    * Emitted when rendering is complete
@@ -1083,6 +1100,11 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     // Open external/inline links in a new tab when opted in
     if (this.OpenLinksInNewTab) {
       this.applyLinkTargets(container as HTMLElement);
+    }
+
+    // Upgrade /media/:fileId video images into inline HTML5 <video> + synced transcript drawer
+    if (this.EnableInlineMedia) {
+      UpgradeInlineMediaElements(container as HTMLElement, this.InlineMediaAllowedOrigins);
     }
 
     // Add copy buttons to code blocks

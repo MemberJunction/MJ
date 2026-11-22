@@ -108,4 +108,23 @@ describe('MJCardGridComponent & MJCardComponent DOM Tests', () => {
         expect(host.maximizedCard).toBeNull();
         expect(cards[1].classList.contains('mj-card--maximized')).toBe(false);
     });
+
+    it('keeps card-grid styles in card-grid.scss with semantic tokens only and no duplicated TS copy', async () => {
+        const { readFileSync } = await import('node:fs');
+        const { join } = await import('node:path');
+        const scss = readFileSync(join(__dirname, 'card-grid.scss'), 'utf8');
+        const tsSource = readFileSync(join(__dirname, 'card-grid.component.ts'), 'utf8');
+
+        expect(scss).not.toMatch(/#[0-9a-fA-F]{3,8}\b|\brgba?\(/);
+        expect(tsSource).not.toContain('CARD_GRID_CSS');
+        // Global stylesheet must target the mj-card-grid tag (not :host) with box-sizing: border-box
+        expect(scss).not.toContain(':host');
+        expect(scss).toMatch(/mj-card-grid\s*\{[^}]*display:\s*flex;[^}]*box-sizing:\s*border-box;/s);
+        // Header/title/actions layout blocks must not use !important so host overrides work cleanly
+        for (const block of ['&__header', '&__title-group', '&__title-row', '&__actions']) {
+            const match = scss.match(new RegExp(`${block}\\s*\\{([^}]*)\\}`));
+            expect(match, `expected ${block} block`).not.toBeNull();
+            expect(match![1]).not.toContain('!important');
+        }
+    });
 });

@@ -43,6 +43,10 @@ describe('UploadTokenManager', () => {
       userId: 'user-authorized',
     });
 
+    // Reject empty claiming user ID without consuming token
+    expect(UploadTokenManager.Instance.Consume(token, '')).toBeNull();
+    expect(UploadTokenManager.Instance.ActiveCount).toBe(1);
+
     // Claim attempt by attacker
     const result = UploadTokenManager.Instance.Consume(token, 'user-attacker');
     expect(result).toBeNull();

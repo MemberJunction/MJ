@@ -18,3 +18,5 @@ export * from './lib/services/markdown.service';
 export * from './lib/extensions/collapsible-headings.extension';
 export * from './lib/extensions/code-copy.extension';
 export * from './lib/extensions/svg-renderer.extension';
+export * from './lib/extensions/inline-media.extension';
+

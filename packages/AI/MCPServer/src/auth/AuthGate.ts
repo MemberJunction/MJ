@@ -31,7 +31,7 @@ interface ExtractedCredentials {
   /** Bearer token from Authorization header */
   bearerToken?: string;
   /** Source of API key if found */
-  apiKeySource?: 'x-api-key' | 'x-mj-api-key' | 'authorization' | 'query';
+  apiKeySource?: 'x-api-key' | 'x-mj-api-key' | 'authorization';
 }
 
 /**
@@ -60,7 +60,8 @@ export interface AuthGateConfig {
  * 1. x-api-key header
  * 2. x-mj-api-key header
  * 3. Authorization: Bearer header (could be API key or OAuth token)
- * 4. Query parameters (apiKey, api_key)
+ *
+ * Query parameters are deliberately not a source (see the note at the end of the function).
  *
  * @param request - The incoming HTTP request
  * @returns Extracted credentials
@@ -100,19 +101,10 @@ export function ExtractCredentials(request: Request | http.IncomingMessage): Ext
     }
   }
 
-  // Check query parameters as fallback for API key
-  if (!result.apiKey && request.url) {
-    try {
-      const url = new URL(request.url, `http://${request.headers.host}`);
-      const queryKey = url.searchParams.get('apiKey') || url.searchParams.get('api_key');
-      if (queryKey) {
-        result.apiKey = queryKey;
-        result.apiKeySource = 'query';
-      }
-    } catch {
-      // URL parsing failed, skip query params
-    }
-  }
+  // SECURITY: API keys are deliberately NOT accepted from query parameters. A credential in the
+  // URL persists in access logs, proxies, browser history and Referer headers — and the key this
+  // gate accepts can be the system key. MJServer applies the same rule (ArtifactCollaborationServer
+  // rejects ?token=/?apiKey=). Clients must send `x-mj-api-key` or `Authorization: Bearer`.
 
   return result;
 }

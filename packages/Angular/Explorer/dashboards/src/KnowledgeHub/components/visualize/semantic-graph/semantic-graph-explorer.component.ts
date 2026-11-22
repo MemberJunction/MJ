@@ -20,13 +20,15 @@ import {
 import { IMetadataProvider, RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import type {
-    MJGraphTypeEntity,
-    MJGraphConceptTypeEntity,
-    MJGraphAuthorityTierEntity,
-    MJGraphEntity,
-    MJGraphConceptEntity,
-    MJGraphEdgeEntity,
+import {
+    CanUserApproveGraph,
+    GRAPH_APPROVE_EDGES_AUTHORIZATION,
+    type MJGraphTypeEntity,
+    type MJGraphConceptTypeEntity,
+    type MJGraphAuthorityTierEntity,
+    type MJGraphEntity,
+    type MJGraphConceptEntity,
+    type MJGraphEdgeEntity,
 } from '@memberjunction/core-entities';
 import {
     DEFAULT_GRAPH_CATEGORIES,
@@ -109,6 +111,10 @@ const CONCEPT_TYPE_COLORS: Record<string, string> = {
     term: '#06b6d4',
 };
 
+
+/** Shown for a concept with no authority tier. Tiers are metadata; no tier name is assumed here. */
+const UNRANKED_TIER_LABEL = 'Unranked';
+
 @Component({
     standalone: false,
     selector: 'app-kh-semantic-graph',
@@ -177,6 +183,11 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
         return this.GraphOptions.find(g => UUIDsEqual(g.ID, this.SelectedGraphID));
     }
 
+    /** True for local sample previews or when the current user holds `Graph: Approve Edges`. */
+    public get CanApproveSelectedGraph(): boolean {
+        return Boolean(this.SelectedGraph?.IsSample) || CanUserApproveGraph(this.ProviderToUse?.CurrentUser, this.ProviderToUse?.Authorizations);
+    }
+
     public async SelectGraph(graphId: string): Promise<void> {
         if (UUIDsEqual(this.SelectedGraphID, graphId)) {
             return;
@@ -233,7 +244,7 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
             Label: node.Label,
             ConceptType: String(node.Category),
             Status: String(node.Status ?? 'Approved'),
-            AuthorityTier: String(node.AuthorityTier ?? 'Reference'),
+            AuthorityTier: String(node.AuthorityTier ?? UNRANKED_TIER_LABEL),
             ConnectedChunkCount: node.ProvenanceChunks?.length ?? 0,
             ConflictCount: node.Conflicts?.length ?? 0,
         });
@@ -257,8 +268,13 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
                 this.cdr.detectChanges();
                 return;
             }
+            const provider = this.ProviderToUse;
+            if (!CanUserApproveGraph(provider?.CurrentUser, provider?.Authorizations)) {
+                this.ActionError = `Approving a concept into Canon requires the "${GRAPH_APPROVE_EDGES_AUTHORIZATION}" authorization.`;
+                this.cdr.detectChanges();
+                return;
+            }
             try {
-                const provider = this.ProviderToUse;
                 const conceptEntity = await provider.GetEntityObject<MJGraphConceptEntity>(
                     'MJ: Graph Concepts',
                     provider.CurrentUser,
@@ -502,11 +518,11 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
                 const typeName = c.ConceptType || 'Term';
                 const rank = rankByTypeName.get(typeName.toLowerCase()) ?? 60;
                 const tierEntity = c.AuthorityTierID ? this.authorityTiersById.get(NormalizeUUID(c.AuthorityTierID)) : undefined;
-                const tierLabel = tierEntity ? `${tierEntity.Name} (${tierEntity.Rank})` : (c.AuthorityTier || 'Reference');
+                const tierLabel = tierEntity ? `${tierEntity.Name} (${tierEntity.Rank})` : (c.AuthorityTier || UNRANKED_TIER_LABEL);
                 return {
                     ID: c.ID,
                     Label: c.Name,
-                    Sublabel: `${typeName} · ${tierEntity?.Name ?? c.AuthorityTier ?? 'Reference'}`,
+                    Sublabel: `${typeName} · ${tierEntity?.Name ?? c.AuthorityTier ?? UNRANKED_TIER_LABEL}`,
                     Category: typeName,
                     Rank: rank,
                     Badge: `#${rank}`,
@@ -534,7 +550,7 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
             let conflictCount = 0;
 
             for (const e of edges) {
-                const edgeLabel = e.EdgeType || 'Related To';
+                const edgeLabel = e.EdgeType || 'RelatedTo';
                 const isConflict = edgeLabel.toLowerCase().includes('contradict');
                 if (isConflict) {
                     conflictCount++;
@@ -911,9 +927,9 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
         ];
 
         this.rawEdges = [
-            { ID: 'e-1', SourceID: ID_DOMAIN_GOV, TargetID: ID_POLICY_GRACE, Label: 'Broader Than', Direction: 'directed' },
-            { ID: 'e-2', SourceID: ID_DOMAIN_GOV, TargetID: ID_METRIC_NRR, Label: 'Broader Than', Direction: 'directed' },
-            { ID: 'e-3', SourceID: ID_DOMAIN_GOV, TargetID: ID_PROCESS_RENEWAL, Label: 'Broader Than', Direction: 'directed' },
+            { ID: 'e-1', SourceID: ID_DOMAIN_GOV, TargetID: ID_POLICY_GRACE, Label: 'BroaderThan', Direction: 'directed' },
+            { ID: 'e-2', SourceID: ID_DOMAIN_GOV, TargetID: ID_METRIC_NRR, Label: 'BroaderThan', Direction: 'directed' },
+            { ID: 'e-3', SourceID: ID_DOMAIN_GOV, TargetID: ID_PROCESS_RENEWAL, Label: 'BroaderThan', Direction: 'directed' },
             { ID: 'e-4', SourceID: ID_ROLE_STEWARD, TargetID: ID_POLICY_GRACE, Label: 'Governs', Direction: 'directed' },
             { ID: 'e-5', SourceID: ID_METRIC_NRR, TargetID: ID_ABV_ACTIVE, Label: 'Defines', Direction: 'directed' },
             { ID: 'e-6', SourceID: ID_METRIC_NRR, TargetID: ID_QUERY_RETENTION, Label: 'Measures', Direction: 'directed' },

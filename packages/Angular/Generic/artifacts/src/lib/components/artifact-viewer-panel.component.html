@@ -403,8 +403,17 @@
             }
           </div>
 
+          <!-- Related Tab - rendered only while active, so it loads on first open -->
+          @if (!IsCompareMode && activeTab === 'related') {
+            <mj-artifact-related-panel
+              [Provider]="Provider"
+              [ArtifactId]="artifactId"
+              (OpenArtifact)="OnRelatedArtifactOpen($event)"
+              (OpenRecord)="OnRelatedRecordOpen($event)" />
+          }
+
           <!-- Dynamic Plugin Tabs and Base Tabs (JSON, etc.) -->
-          @if (!IsCompareMode && activeTab !== 'display' && activeTab !== 'details' && activeTab !== 'links') {
+          @if (!IsCompareMode && activeTab !== 'display' && activeTab !== 'details' && activeTab !== 'links' && activeTab !== 'related') {
             <!-- Check if this is a component tab -->
             @if (GetComponentTabType(activeTab); as componentType) {
               <div class="component-tab-content">

@@ -38,17 +38,25 @@ export class SearchEnricher {
     }
 
     /**
-     * Apply full enrichment to search results: entity icons, record names, and tags.
+     * Apply enrichment to search results: entity icons, entity display names, and
+     * (unless `options.SkipNameEnrichment` is true) batched record name resolution.
      *
      * @param results - The search results to enrich (mutated in place)
      * @param contextUser - The user performing the search
+     * @param options - Optional enrichment flags
      */
-    public async Enrich(results: SearchResultItem[], contextUser: UserInfo): Promise<void> {
+    public async Enrich(
+        results: SearchResultItem[],
+        contextUser: UserInfo,
+        options?: { SkipNameEnrichment?: boolean }
+    ): Promise<void> {
         if (results.length === 0) return;
 
         const md = this.Provider;
         this.addEntityMetadata(results, md);
-        await this.resolveRecordNames(results, md, contextUser);
+        if (!options?.SkipNameEnrichment) {
+            await this.resolveRecordNames(results, md, contextUser);
+        }
     }
 
     /**
@@ -130,7 +138,9 @@ export class SearchEnricher {
         const unpromotableItemIDs = new Set<string>();
 
         // Step 1: Check if RawMetadata on vector results already specifies Entity and RecordID,
-        // or identifies an entity source
+        // or identifies an entity source. Non-Entity sources (such as Upload-sourced items) can
+        // still carry an EntityRecordDocumentID and must keep the DB lookup whenever vector
+        // metadata does not already settle the origin record.
         const itemsNeedingDbLookup: string[] = [];
 
         for (const r of contentItemResults) {

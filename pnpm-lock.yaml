@@ -63,7 +63,7 @@ importers:
     devDependencies:
       '@analogjs/vite-plugin-angular':
         specifier: ^2.6.1
-        version: 2.6.1(@angular-devkit/build-angular@21.2.23(061189147d646cd08baae584544b98f0))(@angular/build@21.2.23(d603c30a83d2109f43c82a26d28f6676))(vite@7.3.1(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
+        version: 2.6.1(@angular-devkit/build-angular@21.2.23(061189147d646cd08baae584544b98f0))(@angular/build@21.2.23(d603c30a83d2109f43c82a26d28f6676))(vite@7.3.6(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
       '@angular/build':
         specifier: 21.2.23
         version: 21.2.23(d603c30a83d2109f43c82a26d28f6676)
@@ -177,7 +177,7 @@ importers:
         version: 5.9.3
       vite-tsconfig-paths:
         specifier: ^5.1.4
-        version: 5.1.4(typescript@5.9.3)(vite@7.3.1(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
+        version: 5.1.4(typescript@5.9.3)(vite@7.3.6(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@opentelemetry/api@1.10.0)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
@@ -5521,6 +5521,9 @@ importers:
       '@angular/router':
         specifier: ^21.2.22
         version: 21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
+      '@fortawesome/fontawesome-free':
+        specifier: 6.7.2
+        version: 6.7.2
       '@memberjunction/ai-agent-client':
         specifier: 6.3.0-edge.1
         version: link:../../../AI/AgentsClient
@@ -11511,6 +11514,9 @@ importers:
       '@memberjunction/document-parsing':
         specifier: 6.3.0-edge.1
         version: link:../../DocumentParsing
+      '@memberjunction/generic-database-provider':
+        specifier: 6.3.0-edge.1
+        version: link:../../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.3.0-edge.1
         version: link:../../MJGlobal
@@ -14498,6 +14504,12 @@ importers:
       '@memberjunction/ai-core-plus':
         specifier: 6.3.0-edge.1
         version: link:../AI/CorePlus
+      '@memberjunction/communication-engine':
+        specifier: 6.3.0-edge.1
+        version: link:../Communication/engine
+      '@memberjunction/communication-types':
+        specifier: 6.3.0-edge.1
+        version: link:../Communication/base-types
       '@memberjunction/core':
         specifier: 6.3.0-edge.1
         version: link:../MJCore
@@ -33486,7 +33498,7 @@ snapshots:
       '@jridgewell/gen-mapping': 0.3.13
       '@jridgewell/trace-mapping': 0.3.31
 
-  '@analogjs/vite-plugin-angular@2.6.1(@angular-devkit/build-angular@21.2.23(061189147d646cd08baae584544b98f0))(@angular/build@21.2.23(d603c30a83d2109f43c82a26d28f6676))(vite@7.3.1(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))':
+  '@analogjs/vite-plugin-angular@2.6.1(@angular-devkit/build-angular@21.2.23(061189147d646cd08baae584544b98f0))(@angular/build@21.2.23(d603c30a83d2109f43c82a26d28f6676))(vite@7.3.6(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))':
     dependencies:
       magic-string: 0.30.21
       obug: 2.1.1
@@ -33496,7 +33508,7 @@ snapshots:
     optionalDependencies:
       '@angular-devkit/build-angular': 21.2.23(1139b1f1ad04c64c163c3f402691d59d)
       '@angular/build': 21.2.23(d603c30a83d2109f43c82a26d28f6676)
-      vite: 7.3.1(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+      vite: 7.3.6(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
   '@angular-devkit/architect@0.2102.23(chokidar@5.0.0)':
     dependencies:
@@ -52189,17 +52201,6 @@ snapshots:
       - terser
       - tsx
       - yaml
-
-  vite-tsconfig-paths@5.1.4(typescript@5.9.3)(vite@7.3.1(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)):
-    dependencies:
-      debug: 4.4.3(supports-color@5.5.0)
-      globrex: 0.1.2
-      tsconfck: 3.1.6(typescript@5.9.3)
-    optionalDependencies:
-      vite: 7.3.1(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
-    transitivePeerDependencies:
-      - supports-color
-      - typescript
 
   vite-tsconfig-paths@5.1.4(typescript@5.9.3)(vite@7.3.6(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)):
     dependencies:

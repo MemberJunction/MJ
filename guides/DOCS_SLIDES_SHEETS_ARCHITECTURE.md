@@ -282,3 +282,23 @@ For binary artifacts (`ContentMode = 'File'`), `packages/MJServer/src/resolvers/
 | **Angular UI, Guest Route & Channel Tests** | `packages/Angular/Generic/artifacts`, `packages/Angular/Generic/conversations`, `packages/Angular/Explorer/explorer-core`, `packages/Angular/Explorer/dashboards` | Word-level Suggesting redlines, 6 visual diffs, `<mj-context-menu>`, `Y.UndoManager` scoped undo, `ArtifactWorkspaceChannel` (`navigate_to_anchor`, `set_view_mode`, `EmitSelectionDelta`), `PublicArtifactGuestComponent` (`/guest/artifact` Magic Link flow), Living Report toolbar & schedule modal, `ArtifactShareModalComponent`, `LibraryWorkspaceComponent`, Linked Drive sync, and live-sheet client tools |
 | **Playwright Explorer Browser E2E** | `e2e/specs/library-docs-slides-sheets.spec.ts` | Live MJ Explorer journeys: Hub/Navigator/Full-Canvas Library, 2-context Yjs convergence + isolated Undo/Redo, Sheets formulas/merges/named-ranges/fill-handle/resize/TSV-paste/IMPORTRANGE, Slides filmstrip drag-reorder, Cross-Artifact `Update from Source Workbook`, Living Reports refresh & scheduling, External Guest Share + revocation, and Multi-Artifact AI Synthesis |
 | **Tier-2 Live DB & Wire Integration Suites** | `packages/TestingFramework/integration-test-suite/src/checks/docs-slides-sheets-library.checks.ts` | Live SQL Server / PostgreSQL constraints, API lockdown enforcement, live permission cascades, tool library execution, and GraphQL + WebSocket ACL enforcement |
+
+---
+
+## 13. Docs in the Semantic Graph
+
+A saved MJ Doc is indexed into the Content Pipeline and the "Library Knowledge" graph with no extra
+step: its passages attach to concepts, `[[Name]]` links become `LinksTo` Record Links, and docs that
+share concepts become related. Visibility follows the doc's own sharing; nothing in the graph shows a
+reader text from a doc they cannot open. Full path, seeds and access rules:
+[Canon & Semantic Graphs §7](CANON_AND_SEMANTIC_GRAPHS_GUIDE.md#7-mj-docs-in-the-graph).
+
+**In the viewer.** `<mj-artifact-viewer-panel>` shows a **Related** tab when an active graph projects
+document relations. The tab hosts `<mj-artifact-related-panel>` (standalone, L2, in
+`@memberjunction/ng-artifacts`), which lists *Links to*, *Linked from* and *Related by concepts*, and
+loads on first open. Picking a related artifact emits `OpenArtifactRequested` from the viewer panel; if
+nothing subscribes, the viewer switches to that artifact in place. Picking any other record emits
+`OpenEntityRecord`.
+
+Not built yet: the `[[` autocomplete (waits for the editor replacement), links to entity records or
+concepts, inline Canon-check comments, and a Library inbox of unconnected docs.
