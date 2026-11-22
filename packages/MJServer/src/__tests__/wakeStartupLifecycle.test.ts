@@ -4,7 +4,7 @@ import {
     EventWakeCoalescer,
     WakeStartupGuard,
 } from '@memberjunction/ai-agents';
-import type { UserInfo } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/core';
 import {
     BeginServerWakeStartupGuard,
     CompleteServerWakeStartupGuard,
@@ -13,14 +13,13 @@ import {
 } from '../wakeStartupLifecycle.js';
 
 describe('MJServer Wake Startup Lifecycle Guard', () => {
-    const fakeSystemUser = {
+    const fakeSystemUser = new UserInfo(null, {
         ID: '00000000-0000-0000-0000-0000000005E5',
         Name: 'System',
         Email: 'system@mj.local',
         Type: 'Owner',
         IsActive: true,
-        UserRoles: [],
-    } as unknown as UserInfo;
+    });
 
     beforeEach(() => {
         ResetServerWakeStartupGuard();

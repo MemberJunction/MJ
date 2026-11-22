@@ -2,13 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EntityInfo, RunView, UserInfo } from '@memberjunction/core';
 import type { IMetadataProvider } from '@memberjunction/core';
 import {
-    MJAIAgentRhythmTemplateEntity,
     MJAIAgentUserPolicyEntity,
     MJAIBridgeAgentIdentityEntity,
     MJAgentChannelEntity,
     MJAgentChannelParticipantEntity,
+    MJScheduledJobEntity,
     MJUserRoutineEntity,
     MJUserRoutineEntity_IRoutineWakeConfiguration,
+    MJUserRoutineRunEntity,
 } from '@memberjunction/core-entities';
 import {
     AgentUserPolicyEngine,
@@ -20,12 +21,45 @@ import {
     AgentWakeTriggerService,
     BuildUserAppWakeKey,
     CheckActivePoliciesForBatch,
+    CoalescedWakeEventPayload,
+    CoalescedWakeResumeState,
     EventWakeCoalescer,
     ResolveAgentConfigurationIDInput,
     ResolveSeededRoutineAgentConfigurationID,
-    ResolveWakeAgentConfigurationID,
     WakeStartupGuard,
 } from '../index';
+
+vi.mock('@memberjunction/ai-prompts', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/ai-prompts')>();
+    return {
+        ...actual,
+        AIPromptRunner: class MockAIPromptRunner {},
+    };
+});
+vi.mock('@memberjunction/actions', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/actions')>();
+    return {
+        ...actual,
+        ActionEngineServer: { Instance: { Config: vi.fn(), RunAction: vi.fn() } },
+    };
+});
+vi.mock('@memberjunction/templates', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/templates')>();
+    return {
+        ...actual,
+        TemplateEngineServer: { Instance: { Config: vi.fn(), Templates: [], FindTemplate: vi.fn() } },
+    };
+});
+vi.mock('@memberjunction/notifications', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/notifications')>();
+    return {
+        ...actual,
+        NotificationEngine: { Instance: { Config: vi.fn(), SendNotification: vi.fn() } },
+    };
+});
+
+import { UserRoutineDispatcherDriver } from '../../../../Scheduling/engine/src/drivers/UserRoutineDispatcherDriver';
+import type { ScheduledJobExecutionContext } from '../../../../Scheduling/engine/src/BaseScheduledJob';
 
 const COS_AGENT_ID = '00000000-0000-0000-0000-00000000C051';
 const USER_ALICE_ID = '00000000-0000-0000-0000-00000000A11C';
@@ -105,6 +139,39 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
             }
             public override async RunView(params: Parameters<RunView['RunView']>[0], user?: UserInfo) {
                 return runViewMock(params, user);
+            }
+        },
+        Metadata: class MockMetadata extends actual.Metadata {
+            public override async GetEntityObject<T extends actual.BaseEntity>(entityName: string): Promise<T> {
+                if (entityName === 'MJ: AI Agents') {
+                    const agentStub: Pick<MJAIAgentEntityExtended, 'ID' | 'Name' | 'Load'> = {
+                        ID: COS_AGENT_ID,
+                        Name: 'Chief of Staff',
+                        Load: vi.fn(async () => true),
+                    };
+                    return agentStub as T;
+                }
+                if (entityName === 'MJ: User Routine Runs') {
+                    const runStub: Partial<MJUserRoutineRunEntity> = {
+                        ID: `run-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
+                        RoutineID: '',
+                        Status: 'Running',
+                        StartedAt: new Date(),
+                        CompletedAt: null,
+                        ResultSummary: null,
+                        ResultHash: null,
+                        ErrorMessage: null,
+                        AgentRunID: null,
+                        PromptRunID: null,
+                        ActionExecutionLogID: null,
+                        NotificationSent: false,
+                        NewRecord: vi.fn(() => true),
+                        GetFieldByName: vi.fn(() => undefined),
+                        Save: vi.fn(async () => true),
+                    };
+                    return runStub as T;
+                }
+                return super.GetEntityObject<T>(entityName);
             }
         },
     };
@@ -261,6 +328,10 @@ class InMemoryRoutineEntity extends MJUserRoutineEntity {
         return true;
     }
 
+    public override async Load(id: string): Promise<boolean> {
+        return id === this.backingID;
+    }
+
     public override async Save(): Promise<boolean> {
         this.onSave(this);
         return true;
@@ -329,12 +400,36 @@ function createProviderWithStore() {
     return { provider, routinesByID };
 }
 
+function createDispatcherContext(): ScheduledJobExecutionContext {
+    const schedule: Pick<MJScheduledJobEntity, 'ID' | 'Name' | 'Configuration'> = {
+        ID: 'sched-epic3-1',
+        Name: 'User Routine Dispatcher',
+        Configuration: '{}',
+    };
+    return {
+        Schedule: schedule as MJScheduledJobEntity,
+        Run: { ID: 'jrun-epic3-1' },
+        ContextUser: systemUser,
+    } as ScheduledJobExecutionContext;
+}
+
 describe('Epic 3 Acceptance Suite (Rhythms Model Tiers, Policy Gating, Burst Coalescing, Autonomous Defaults)', () => {
+    const globalRef = globalThis as {
+        ___SINGLETON__UserCache?: {
+            Users: UserInfo[];
+            FindUser(criteria: { ID?: string; Email?: string }): Promise<UserInfo | undefined>;
+        };
+    };
+    let prevUserCache: typeof globalRef.___SINGLETON__UserCache;
+
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(FIXED_NOW);
         AgentUserPolicyEngine.Instance.ClearCache();
         EventWakeCoalescer.Instance.Reset();
         WakeStartupGuard.Instance.Reset();
+        UserRoutineDispatcherDriver.ClearOwnerResolveFailures();
         delete process.env.AIDP_DEPLOYMENT_IN_PROGRESS;
         delete process.env.MJ_SKIP_STARTUP_WAKES;
 
@@ -348,26 +443,96 @@ describe('Epic 3 Acceptance Suite (Rhythms Model Tiers, Policy Gating, Burst Coa
             }
             return undefined;
         });
+        prevUserCache = globalRef.___SINGLETON__UserCache;
+        globalRef.___SINGLETON__UserCache = {
+            Users: users,
+            FindUser: async (criteria) => findUserMock(criteria),
+        };
     });
 
     afterEach(() => {
+        vi.useRealTimers();
+        globalRef.___SINGLETON__UserCache = prevUserCache;
         WakeStartupGuard.Instance.Reset();
         EventWakeCoalescer.Instance.Reset();
         vi.restoreAllMocks();
     });
 
-    it('AT-1: Two users executing the same rhythm configured on different tiers (Draft vs High) execute agent runs on their respective tier models', async () => {
-        runViewMock.mockImplementation(async (params: { EntityName: string; ExtraFilter?: string }) => {
-            if (params.EntityName === 'MJ: AI Configurations') {
-                if (params.ExtraFilter?.includes("Name='Fast'")) {
-                    return { Success: true, Results: [{ ID: FAST_CONFIG_ID, Name: 'Fast', Status: 'Active' }] };
-                }
-                if (params.ExtraFilter?.includes("Name='High Power'")) {
+    it('AT-1: Two users executing the same rhythm configured on different tiers (Draft vs High) execute agent runs on their respective tier models via production dispatcher', async () => {
+        const highTierInput = await (async () => {
+            runViewMock.mockImplementation(async (params: { EntityName: string; ExtraFilter?: string }) => {
+                if (params.EntityName === 'MJ: AI Configurations' && params.ExtraFilter?.includes("Name='High Power'")) {
                     return { Success: true, Results: [{ ID: HIGH_POWER_CONFIG_ID, Name: 'High Power', Status: 'Active' }] };
                 }
-                if (params.ExtraFilter?.includes("Name='Standard'")) {
-                    return { Success: true, Results: [{ ID: STANDARD_CONFIG_ID, Name: 'Standard', Status: 'Active' }] };
-                }
+                return { Success: true, Results: [] };
+            });
+            return ResolveAgentConfigurationIDInput({ modelTier: 'High', contextUser: bobUser });
+        })();
+        expect(highTierInput).toEqual({ Provided: true, ConfigurationID: HIGH_POWER_CONFIG_ID });
+
+        // User Alice uses template default (Draft -> Fast, AgentConfigurationID = null falling back to template)
+        const aliceRoutine = new InMemoryRoutineEntity('routine-alice-cal', () => undefined);
+        aliceRoutine.UserID = USER_ALICE_ID;
+        aliceRoutine.TargetID = COS_AGENT_ID;
+        aliceRoutine.RoutineType = 'Scheduled';
+        aliceRoutine.ScheduleMode = 'OneShot';
+        aliceRoutine.Status = 'Active';
+        aliceRoutine.NextRunAt = new Date(FIXED_NOW.getTime() - 10_000);
+        aliceRoutine.NotifyViaInApp = false;
+        aliceRoutine.NotifyViaEmail = false;
+        aliceRoutine.AgentConfigurationID = null;
+        aliceRoutine.WakeConfigurationObject = {
+            workstreamKey: 'calendar-daily-review',
+            resumeState: { rhythmTemplateID: DAILY_CAL_TEMPLATE_ID },
+        };
+
+        // User Bob customizes the same rhythm to High (High Power)
+        const bobRoutine = new InMemoryRoutineEntity('routine-bob-cal', () => undefined);
+        bobRoutine.UserID = USER_BOB_ID;
+        bobRoutine.TargetID = COS_AGENT_ID;
+        bobRoutine.RoutineType = 'Scheduled';
+        bobRoutine.ScheduleMode = 'OneShot';
+        bobRoutine.Status = 'Active';
+        bobRoutine.NextRunAt = new Date(FIXED_NOW.getTime() - 10_000);
+        bobRoutine.NotifyViaInApp = false;
+        bobRoutine.NotifyViaEmail = false;
+        bobRoutine.AgentConfigurationID = ResolveSeededRoutineAgentConfigurationID({
+            explicitAgentConfigurationID: highTierInput.ConfigurationID,
+            templateDefaultAgentConfigurationID: FAST_CONFIG_ID,
+        });
+        bobRoutine.WakeConfigurationObject = {
+            workstreamKey: 'calendar-daily-review',
+            resumeState: { rhythmTemplateID: DAILY_CAL_TEMPLATE_ID },
+        };
+
+        runViewMock.mockImplementation(async (params: { EntityName: string; ExtraFilter?: string }) => {
+            if (params.EntityName === 'MJ: User Routines') {
+                return { Success: true, Results: [aliceRoutine, bobRoutine] };
+            }
+            if (params.EntityName === 'MJ: AI Agent User Policies') {
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: 'pol-alice',
+                            AgentID: COS_AGENT_ID,
+                            UserID: USER_ALICE_ID,
+                            Status: 'Active',
+                            AllowInterAgentCoordination: true,
+                            EmailChannelMode: 'DraftOnly',
+                            Agent: 'Chief of Staff',
+                        },
+                        {
+                            ID: 'pol-bob',
+                            AgentID: COS_AGENT_ID,
+                            UserID: USER_BOB_ID,
+                            Status: 'Active',
+                            AllowInterAgentCoordination: true,
+                            EmailChannelMode: 'DraftOnly',
+                            Agent: 'Chief of Staff',
+                        },
+                    ],
+                };
             }
             if (params.EntityName === 'MJ: AI Agent Rhythm Templates') {
                 return {
@@ -385,86 +550,36 @@ describe('Epic 3 Acceptance Suite (Rhythms Model Tiers, Policy Gating, Burst Coa
             return { Success: true, Results: [] };
         });
 
-        const draftTierInput = await ResolveAgentConfigurationIDInput({
-            modelTier: 'Draft',
-            contextUser: aliceUser,
-        });
-        const highTierInput = await ResolveAgentConfigurationIDInput({
-            modelTier: 'High',
-            contextUser: bobUser,
-        });
-        expect(draftTierInput).toEqual({ Provided: true, ConfigurationID: FAST_CONFIG_ID });
-        expect(highTierInput).toEqual({ Provided: true, ConfigurationID: HIGH_POWER_CONFIG_ID });
-
-        // User Alice uses template default (Draft -> Fast)
-        const aliceRoutine = new InMemoryRoutineEntity('routine-alice-cal', () => undefined);
-        aliceRoutine.UserID = USER_ALICE_ID;
-        aliceRoutine.TargetID = COS_AGENT_ID;
-        aliceRoutine.AgentConfigurationID = ResolveSeededRoutineAgentConfigurationID({
-            templateDefaultAgentConfigurationID: FAST_CONFIG_ID,
-        });
-        aliceRoutine.WakeConfigurationObject = {
-            workstreamKey: 'calendar-daily-review',
-            resumeState: { rhythmTemplateID: DAILY_CAL_TEMPLATE_ID },
-        };
-
-        // User Bob customizes the same rhythm to High (High Power)
-        const bobRoutine = new InMemoryRoutineEntity('routine-bob-cal', () => undefined);
-        bobRoutine.UserID = USER_BOB_ID;
-        bobRoutine.TargetID = COS_AGENT_ID;
-        bobRoutine.AgentConfigurationID = ResolveSeededRoutineAgentConfigurationID({
-            explicitAgentConfigurationID: highTierInput.ConfigurationID,
-            templateDefaultAgentConfigurationID: FAST_CONFIG_ID,
-        });
-        bobRoutine.WakeConfigurationObject = {
-            workstreamKey: 'calendar-daily-review',
-            resumeState: { rhythmTemplateID: DAILY_CAL_TEMPLATE_ID },
-        };
-
-        const aliceConfigId = await ResolveWakeAgentConfigurationID({
-            routine: aliceRoutine,
-            contextUser: aliceUser,
-        });
-        const bobConfigId = await ResolveWakeAgentConfigurationID({
-            routine: bobRoutine,
-            contextUser: bobUser,
-        });
-
-        expect(aliceConfigId).toBe(FAST_CONFIG_ID);
-        expect(bobConfigId).toBe(HIGH_POWER_CONFIG_ID);
-
-        // Verify AgentRunner forwards each user's resolved tier configurationId
         const capturedConfigs: Array<{ userId: string; configurationId?: string }> = [];
-        const runner = new AgentRunner();
-        vi.spyOn(runner, 'RunAgent').mockImplementation(async (params) => {
+        const runAgentSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockImplementation(async (params) => {
             capturedConfigs.push({
                 userId: params.contextUser.ID,
                 configurationId: params.configurationId,
             });
-            return { success: true, payload: { ok: true } } as Awaited<ReturnType<AgentRunner['RunAgent']>>;
+            return {
+                success: true,
+                payload: { ok: true },
+                agentRun: { ID: `agent-run-${params.contextUser.ID}`, Message: 'Completed' },
+            } as Awaited<ReturnType<AgentRunner['RunAgent']>>;
         });
 
-        const cosAgent = { ID: COS_AGENT_ID, Name: 'Chief of Staff' } as MJAIAgentEntityExtended;
-        await runner.RunAgent({
-            agent: cosAgent,
-            conversationMessages: [{ role: 'user', content: 'Daily calendar guard' }],
-            contextUser: aliceUser,
-            configurationId: aliceConfigId,
-        });
-        await runner.RunAgent({
-            agent: cosAgent,
-            conversationMessages: [{ role: 'user', content: 'Daily calendar guard' }],
-            contextUser: bobUser,
-            configurationId: bobConfigId,
-        });
+        // Execute through the real UserRoutineDispatcherDriver -> executeAgentTarget -> AgentRunner boundary
+        const dispatcher = new UserRoutineDispatcherDriver();
+        const sweepResult = await dispatcher.Execute(createDispatcherContext());
 
-        expect(capturedConfigs).toEqual([
-            { userId: USER_ALICE_ID, configurationId: FAST_CONFIG_ID },
-            { userId: USER_BOB_ID, configurationId: HIGH_POWER_CONFIG_ID },
-        ]);
+        expect(sweepResult.Success).toBe(true);
+        expect(sweepResult.Details?.RoutinesRun).toBe(2);
+        expect(runAgentSpy).toHaveBeenCalledTimes(2);
+        expect(capturedConfigs).toHaveLength(2);
+        expect(capturedConfigs).toEqual(
+            expect.arrayContaining([
+                { userId: USER_ALICE_ID, configurationId: FAST_CONFIG_ID },
+                { userId: USER_BOB_ID, configurationId: HIGH_POWER_CONFIG_ID },
+            ])
+        );
     });
 
-    it('AT-2: Assigning 20 tasks to one onboarded user within one minute coalesces into a single wake', async () => {
+    it('AT-2: Assigning 20 tasks to one onboarded user within one minute with interleaved dispatcher sweeps executes ONE wake with all 20 events', async () => {
         const { provider, routinesByID } = createProviderWithStore();
         const alicePolicy = ApplyDefaultAgentUserPolicyValues(
             new InMemoryPolicyEntity({ ID: 'pol-alice', UserID: USER_ALICE_ID, OnboardingStatus: 'Completed' })
@@ -499,9 +614,25 @@ describe('Epic 3 Acceptance Suite (Rhythms Model Tiers, Policy Gating, Burst Coa
             return { Success: true, Results: [] };
         });
 
+        const deliveredBatches: Array<string[]> = [];
+        const runAgentSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockImplementation(async (params) => {
+            const payload = params.payload as {
+                _wakeContext?: { resumeState?: CoalescedWakeResumeState };
+            };
+            const events = payload?._wakeContext?.resumeState?.pendingEvents ?? [];
+            deliveredBatches.push(events.map((e) => e.taskID ?? e.eventID ?? ''));
+            return {
+                success: true,
+                payload: { ok: true },
+                agentRun: { ID: 'agent-run-burst', Message: 'Triaged 20 tasks' },
+            } as Awaited<ReturnType<AgentRunner['RunAgent']>>;
+        });
+
+        const dispatcher = new UserRoutineDispatcherDriver();
         const results = [];
         for (let i = 1; i <= 20; i++) {
             const eventAt = new Date(FIXED_NOW.getTime() + (i - 1) * 2_500); // 0s .. 47.5s (< 60s window)
+            vi.setSystemTime(eventAt);
             results.push(
                 await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
                     targetUserID: USER_ALICE_ID,
@@ -519,19 +650,35 @@ describe('Epic 3 Acceptance Suite (Rhythms Model Tiers, Policy Gating, Burst Coa
                     now: eventAt,
                 })
             );
+            // Interleave dispatcher sweeps during the active 60-second burst window
+            if (i % 4 === 0) {
+                await dispatcher.Execute(createDispatcherContext());
+            }
         }
 
         expect(results.every((r) => r.triggered && r.resultCode === 'WAKE_SCHEDULED')).toBe(true);
         expect(routinesByID.size).toBe(1);
+        expect(runAgentSpy).toHaveBeenCalledTimes(0);
 
         const singleRoutine = Array.from(routinesByID.values())[0];
-        const resumeState = singleRoutine.WakeConfigurationObject?.resumeState;
-        const pendingEvents = resumeState?.['pendingEvents'] as Array<Record<string, unknown>>;
+        const resumeState = singleRoutine.WakeConfigurationObject?.resumeState as CoalescedWakeResumeState | undefined;
+        const pendingEvents: CoalescedWakeEventPayload[] = resumeState?.pendingEvents ?? [];
         expect(pendingEvents).toHaveLength(20);
-        expect(resumeState?.['coalescedEventCount']).toBe(20);
-        expect(resumeState?.['coalesceKey']).toBe(BuildUserAppWakeKey(USER_ALICE_ID, APP_TASKS_ID));
+        expect(resumeState?.coalescedEventCount).toBe(20);
+        expect(resumeState?.coalesceKey).toBe(BuildUserAppWakeKey(USER_ALICE_ID, APP_TASKS_ID));
         expect(results[19].coalesced).toBe(true);
         expect(results[19].coalescedCount).toBe(20);
+
+        // Advance past the 60s collection window deadline -> dispatcher executes ONE wake with all 20 events
+        vi.setSystemTime(new Date(FIXED_NOW.getTime() + 61_000));
+        const finalSweep = await dispatcher.Execute(createDispatcherContext());
+        expect(finalSweep.Success).toBe(true);
+        expect(finalSweep.Details?.RoutinesRun).toBe(1);
+        expect(runAgentSpy).toHaveBeenCalledTimes(1);
+        expect(deliveredBatches).toHaveLength(1);
+        expect(deliveredBatches[0]).toHaveLength(20);
+        expect(deliveredBatches[0][0]).toBe('epic3-1');
+        expect(deliveredBatches[0][19]).toBe('epic3-20');
 
         // Separate application bucket produces a distinct wake key and routine
         const planningWake = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
@@ -543,7 +690,7 @@ describe('Epic 3 Acceptance Suite (Rhythms Model Tiers, Policy Gating, Burst Coa
             resumeState: { triggerType: 'OKRUpdated', eventID: 'okr-1' },
             contextUser: systemUser,
             metadataProvider: provider,
-            now: FIXED_NOW,
+            now: new Date(FIXED_NOW.getTime() + 62_000),
         });
         expect(planningWake.triggered).toBe(true);
         expect(routinesByID.size).toBe(2);
@@ -558,10 +705,20 @@ describe('Epic 3 Acceptance Suite (Rhythms Model Tiers, Policy Gating, Burst Coa
             new InMemoryPolicyEntity({ ID: 'pol-bob', UserID: USER_BOB_ID, Status: 'Disabled' })
         );
 
+        interface PolicyProjectionRow {
+            ID: string;
+            AgentID: string;
+            UserID: string;
+            Status: MJAIAgentUserPolicyEntity['Status'];
+            AllowInterAgentCoordination: boolean;
+            EmailChannelMode: MJAIAgentUserPolicyEntity['EmailChannelMode'];
+            Agent: string;
+        }
+
         runViewMock.mockImplementation(async (params: { EntityName: string; ExtraFilter?: string }) => {
             if (params.EntityName === 'MJ: AI Agent User Policies') {
                 const filter = params.ExtraFilter ?? '';
-                const matched: Array<Record<string, unknown>> = [];
+                const matched: PolicyProjectionRow[] = [];
                 if (filter.includes(USER_CAROL_ID)) {
                     matched.push({
                         ID: carolPaused.ID,

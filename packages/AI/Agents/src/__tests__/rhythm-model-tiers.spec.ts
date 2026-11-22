@@ -1,11 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { RunView, UserInfo } from '@memberjunction/core';
-import {
-    MJAIAgentRhythmTemplateEntity,
-    MJUserRoutineEntity,
-} from '@memberjunction/core-entities';
+import { IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
+import { MJUserRoutineEntity } from '@memberjunction/core-entities';
 import {
     NormalizeModelTierName,
     RHYTHM_DEFAULT_TIER_CATALOG,
@@ -44,6 +41,21 @@ interface AIConfigMetadataRecord {
         ID: string;
     };
 }
+
+class StubRunView extends RunView {
+    private readonly handler: RunView['RunView'];
+
+    public constructor(handler: RunView['RunView']) {
+        super();
+        this.handler = handler;
+    }
+
+    public override RunView: RunView['RunView'] = (params, contextUser) => this.handler(params, contextUser);
+}
+
+const STUB_METADATA_PROVIDER: IMetadataProvider = {
+    GetEntityObject: vi.fn(),
+} as Partial<IMetadataProvider> as IMetadataProvider;
 
 describe('Rhythm Model Tiers (Slice 1)', () => {
     beforeEach(() => {
@@ -98,7 +110,7 @@ describe('Rhythm Model Tiers (Slice 1)', () => {
         expect(NormalizeModelTierName('High')).toBe('High');
         expect(NormalizeModelTierName('High Power')).toBe('High');
         expect(NormalizeModelTierName('high-power')).toBe('High');
-        expect(NormalizeModelTierName('unknown-tier')).toBeNull();
+        expect(NormalizeModelTierName('unrecognized-tier')).toBeNull();
     });
 
     it('seeds core Chief of Staff rhythm template metadata with valid AI Configuration lookups', () => {
@@ -186,10 +198,13 @@ describe('Rhythm Model Tiers (Slice 1)', () => {
             }
             return { Success: true, Results: [] };
         });
-        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({ RunView: runViewMock } as unknown as RunView);
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(new StubRunView(runViewMock));
 
         // User 1 uses template default (AgentConfigurationID null -> falls back to template Fast/Draft tier)
-        const user1Routine = {
+        const user1Routine: Pick<
+            MJUserRoutineEntity,
+            'AgentConfigurationID' | 'TargetID' | 'WakeConfiguration' | 'WakeConfigurationObject'
+        > = {
             AgentConfigurationID: null,
             TargetID: cosAgentID,
             WakeConfiguration: null,
@@ -197,10 +212,13 @@ describe('Rhythm Model Tiers (Slice 1)', () => {
                 workstreamKey: 'calendar-daily-review',
                 resumeState: { rhythmTemplateID: templateID },
             },
-        } as unknown as MJUserRoutineEntity;
+        };
 
         // User 2 overrides their routine to High Power without affecting User 1 or template
-        const user2Routine = {
+        const user2Routine: Pick<
+            MJUserRoutineEntity,
+            'AgentConfigurationID' | 'TargetID' | 'WakeConfiguration' | 'WakeConfigurationObject'
+        > = {
             AgentConfigurationID: HIGH_POWER_CONFIG_ID,
             TargetID: cosAgentID,
             WakeConfiguration: null,
@@ -208,17 +226,17 @@ describe('Rhythm Model Tiers (Slice 1)', () => {
                 workstreamKey: 'calendar-daily-review',
                 resumeState: { rhythmTemplateID: templateID },
             },
-        } as unknown as MJUserRoutineEntity;
+        };
 
         const user1Resolved = await ResolveWakeAgentConfigurationID({
             routine: user1Routine,
             contextUser: TEST_USER,
-            metadataProvider: {} as MJAIAgentRhythmTemplateEntity['ContextUser'] & NonNullable<unknown>,
+            metadataProvider: STUB_METADATA_PROVIDER,
         });
         const user2Resolved = await ResolveWakeAgentConfigurationID({
             routine: user2Routine,
             contextUser: TEST_USER,
-            metadataProvider: {} as MJAIAgentRhythmTemplateEntity['ContextUser'] & NonNullable<unknown>,
+            metadataProvider: STUB_METADATA_PROVIDER,
         });
 
         expect(user1Resolved).toBe(FAST_CONFIG_ID);
@@ -238,19 +256,22 @@ describe('Rhythm Model Tiers (Slice 1)', () => {
                 },
             ],
         });
-        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({ RunView: runViewMock } as unknown as RunView);
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(new StubRunView(runViewMock));
 
-        const routine = {
+        const routine: Pick<
+            MJUserRoutineEntity,
+            'AgentConfigurationID' | 'TargetID' | 'WakeConfiguration' | 'WakeConfigurationObject'
+        > = {
             AgentConfigurationID: null,
             TargetID: cosAgentID,
             WakeConfiguration: JSON.stringify({ workstreamKey: 'calendar-weekly-review' }),
             WakeConfigurationObject: null,
-        } as unknown as MJUserRoutineEntity;
+        };
 
         const resolved = await ResolveWakeAgentConfigurationID({
             routine,
             contextUser: TEST_USER,
-            metadataProvider: {} as NonNullable<unknown>,
+            metadataProvider: STUB_METADATA_PROVIDER,
         });
         expect(resolved).toBe(STANDARD_CONFIG_ID);
     });
@@ -271,26 +292,26 @@ describe('Rhythm Model Tiers (Slice 1)', () => {
             }
             return { Success: true, Results: [] };
         });
-        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({ RunView: runViewMock } as unknown as RunView);
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(new StubRunView(runViewMock));
 
         const byTier = await ResolveAgentConfigurationIDInput({
             modelTier: 'High',
             contextUser: TEST_USER,
-            metadataProvider: {} as NonNullable<unknown>,
+            metadataProvider: STUB_METADATA_PROVIDER,
         });
         expect(byTier).toEqual({ Provided: true, ConfigurationID: HIGH_POWER_CONFIG_ID });
 
         const byID = await ResolveAgentConfigurationIDInput({
             agentConfigurationID: FAST_CONFIG_ID,
             contextUser: TEST_USER,
-            metadataProvider: {} as NonNullable<unknown>,
+            metadataProvider: STUB_METADATA_PROVIDER,
         });
         expect(byID).toEqual({ Provided: true, ConfigurationID: FAST_CONFIG_ID });
 
         const missing = await ResolveAgentConfigurationIDInput({
             agentConfigurationID: '99999999-9999-9999-9999-999999999999',
             contextUser: TEST_USER,
-            metadataProvider: {} as NonNullable<unknown>,
+            metadataProvider: STUB_METADATA_PROVIDER,
         });
         expect(missing.Provided).toBe(true);
         expect(missing.ConfigurationID).toBeNull();
@@ -298,7 +319,7 @@ describe('Rhythm Model Tiers (Slice 1)', () => {
 
         const omitted = await ResolveAgentConfigurationIDInput({
             contextUser: TEST_USER,
-            metadataProvider: {} as NonNullable<unknown>,
+            metadataProvider: STUB_METADATA_PROVIDER,
         });
         expect(omitted).toEqual({ Provided: false, ConfigurationID: null });
     });

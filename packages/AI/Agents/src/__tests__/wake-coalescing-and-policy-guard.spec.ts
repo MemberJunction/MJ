@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import type {
+import { EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import {
     MJAIAgentRequestEntity,
     MJAIAgentUserPolicyEntity,
     MJAIBridgeAgentIdentityEntity,
@@ -17,6 +17,8 @@ import {
     BuildUserAppWakeKey,
     CheckActivePoliciesForBatch,
     CheckActivePolicyForAgentAndUser,
+    CoalescedWakeEventPayload,
+    CoalescedWakeResumeState,
     EventWakeCoalescer,
     WakeStartupGuard,
 } from '../index';
@@ -33,23 +35,21 @@ const APP_TASKS_ID = '11111111-1111-1111-1111-111111111111';
 const APP_CRM_ID = '22222222-2222-2222-2222-222222222222';
 const FIXED_NOW = new Date('2026-11-22T12:00:00.000Z');
 
-const systemUser = {
+const systemUser = new UserInfo(null, {
     ID: SYSTEM_USER_ID,
     Name: 'System',
     Email: 'system@mj.local',
     Type: 'Owner',
     IsActive: true,
-    UserRoles: [],
-} as unknown as UserInfo;
+});
 
-const aliceUser = {
+const aliceUser = new UserInfo(null, {
     ID: USER_ALICE_ID,
     Name: 'Alice',
     Email: 'alice@example.com',
     Type: 'User',
     IsActive: true,
-    UserRoles: [],
-} as unknown as UserInfo;
+});
 
 vi.mock('@memberjunction/generic-database-provider', () => ({
     UserCache: {
@@ -70,81 +70,266 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     };
 });
 
-interface MockRoutineRow {
-    ID: string;
-    UserID: string;
-    Name: string;
-    Description: string | null;
-    Status: MJUserRoutineEntity['Status'];
-    RoutineType: MJUserRoutineEntity['RoutineType'];
-    ScheduleMode: MJUserRoutineEntity['ScheduleMode'];
-    TargetType: MJUserRoutineEntity['TargetType'];
-    TargetID: string;
-    CronExpression: string | null;
-    Timezone: string | null;
-    InitialMessage: string | null;
-    StartingPayload: string | null;
-    NextRunAt: Date | null;
-    LastRunAt: Date | null;
-    WakeConfiguration: string | null;
-    WakeConfigurationObject: MJUserRoutineEntity_IRoutineWakeConfiguration | null;
-    AgentConfigurationID: string | null;
-    LatestResult: { CompleteMessage: string };
-    NewRecord: () => void;
-    Save: () => Promise<boolean>;
+class InMemoryRoutineEntity extends MJUserRoutineEntity {
+    private backingID: string;
+    private backingUserID = '';
+    private backingName = '';
+    private backingDescription: string | null = null;
+    private backingStatus: MJUserRoutineEntity['Status'] = 'Active';
+    private backingRoutineType: MJUserRoutineEntity['RoutineType'] = 'AgentWake';
+    private backingScheduleMode: MJUserRoutineEntity['ScheduleMode'] = 'OneShot';
+    private backingTargetType: MJUserRoutineEntity['TargetType'] = 'Agent';
+    private backingTargetID = '';
+    private backingCronExpression: string | null = null;
+    private backingTimezone: string | null = 'UTC';
+    private backingInitialMessage: string | null = null;
+    private backingStartingPayload: string | null = null;
+    private backingNextRunAt: Date | null = null;
+    private backingLastRunAt: Date | null = null;
+    private backingWakeConfig: string | null = null;
+    private backingWakeConfigObj: MJUserRoutineEntity_IRoutineWakeConfiguration | null = null;
+    private backingAgentConfigID: string | null = null;
+    private readonly onSave: (entity: InMemoryRoutineEntity) => void;
+
+    public constructor(id: string, onSave: (entity: InMemoryRoutineEntity) => void) {
+        super(new EntityInfo({ Name: 'MJ: User Routines', Status: 'Active', Fields: [] }));
+        this.backingID = id;
+        this.onSave = onSave;
+    }
+
+    public override get ID() { return this.backingID; }
+    public override set ID(v: string) { this.backingID = v; }
+    public override get UserID() { return this.backingUserID; }
+    public override set UserID(v: string) { this.backingUserID = v; }
+    public override get Name() { return this.backingName; }
+    public override set Name(v: string) { this.backingName = v; }
+    public override get Description() { return this.backingDescription; }
+    public override set Description(v: string | null) { this.backingDescription = v; }
+    public override get Status() { return this.backingStatus; }
+    public override set Status(v: MJUserRoutineEntity['Status']) { this.backingStatus = v; }
+    public override get RoutineType() { return this.backingRoutineType; }
+    public override set RoutineType(v: MJUserRoutineEntity['RoutineType']) { this.backingRoutineType = v; }
+    public override get ScheduleMode() { return this.backingScheduleMode; }
+    public override set ScheduleMode(v: MJUserRoutineEntity['ScheduleMode']) { this.backingScheduleMode = v; }
+    public override get TargetType() { return this.backingTargetType; }
+    public override set TargetType(v: MJUserRoutineEntity['TargetType']) { this.backingTargetType = v; }
+    public override get TargetID() { return this.backingTargetID; }
+    public override set TargetID(v: string) { this.backingTargetID = v; }
+    public override get CronExpression() { return this.backingCronExpression; }
+    public override set CronExpression(v: string | null) { this.backingCronExpression = v; }
+    public override get Timezone() { return this.backingTimezone; }
+    public override set Timezone(v: string | null) { this.backingTimezone = v; }
+    public override get InitialMessage() { return this.backingInitialMessage; }
+    public override set InitialMessage(v: string | null) { this.backingInitialMessage = v; }
+    public override get StartingPayload() { return this.backingStartingPayload; }
+    public override set StartingPayload(v: string | null) { this.backingStartingPayload = v; }
+    public override get NextRunAt() { return this.backingNextRunAt; }
+    public override set NextRunAt(v: Date | null) { this.backingNextRunAt = v; }
+    public override get LastRunAt() { return this.backingLastRunAt; }
+    public override set LastRunAt(v: Date | null) { this.backingLastRunAt = v; }
+    public override get WakeConfiguration() { return this.backingWakeConfig; }
+    public override set WakeConfiguration(v: string | null) { this.backingWakeConfig = v; }
+    public override get WakeConfigurationObject() { return this.backingWakeConfigObj; }
+    public override set WakeConfigurationObject(v: MJUserRoutineEntity_IRoutineWakeConfiguration | null) {
+        this.backingWakeConfigObj = v;
+        this.backingWakeConfig = v ? JSON.stringify(v) : null;
+    }
+    public override get AgentConfigurationID() { return this.backingAgentConfigID; }
+    public override set AgentConfigurationID(v: string | null) { this.backingAgentConfigID = v; }
+
+    public override NewRecord(): boolean {
+        return true;
+    }
+
+    public override async Save(): Promise<boolean> {
+        this.onSave(this);
+        return true;
+    }
+}
+
+class InMemoryAgentChannelEntity extends MJAgentChannelEntity {
+    private backingID = 'chan-guard-1';
+    private backingTopic = 'Cross-org sync';
+    private backingStatus: MJAgentChannelEntity['ChannelStatus'] = 'Open';
+    private backingTurns = 0;
+    private backingMaxTurns = 5;
+    private backingHourly = 0;
+    private backingMaxHourly = 10;
+    private backingHourlyStart: Date | null = null;
+
+    public constructor() {
+        super(new EntityInfo({ Name: 'MJ: Agent Channels', Status: 'Active', Fields: [] }));
+    }
+
+    public override get ID() { return this.backingID; }
+    public override set ID(v: string) { this.backingID = v; }
+    public override get Topic() { return this.backingTopic; }
+    public override set Topic(v: string) { this.backingTopic = v; }
+    public override get ChannelStatus() { return this.backingStatus; }
+    public override set ChannelStatus(v: MJAgentChannelEntity['ChannelStatus']) { this.backingStatus = v; }
+    public override get ConsecutiveAgentTurns() { return this.backingTurns; }
+    public override set ConsecutiveAgentTurns(v: number) { this.backingTurns = v; }
+    public override get MaxConsecutiveAgentTurns() { return this.backingMaxTurns; }
+    public override set MaxConsecutiveAgentTurns(v: number) { this.backingMaxTurns = v; }
+    public override get HourlyWakeCount() { return this.backingHourly; }
+    public override set HourlyWakeCount(v: number) { this.backingHourly = v; }
+    public override get MaxHourlyWakes() { return this.backingMaxHourly; }
+    public override set MaxHourlyWakes(v: number) { this.backingMaxHourly = v; }
+    public override get HourlyWakeWindowStart() { return this.backingHourlyStart; }
+    public override set HourlyWakeWindowStart(v: Date | null) { this.backingHourlyStart = v; }
+
+    public override async Load(id: string): Promise<boolean> {
+        this.backingID = id;
+        return true;
+    }
+
+    public override async Save(): Promise<boolean> {
+        return true;
+    }
+}
+
+class InMemoryChannelParticipantEntity extends MJAgentChannelParticipantEntity {
+    private backingChannelID: string;
+    private backingUserID: string;
+    private backingAgentID: string;
+    private backingStatus: MJAgentChannelParticipantEntity['Status'];
+
+    public constructor(channelID: string, userID: string, agentID: string, status: MJAgentChannelParticipantEntity['Status'] = 'Active') {
+        super(new EntityInfo({ Name: 'MJ: Agent Channel Participants', Status: 'Active', Fields: [] }));
+        this.backingChannelID = channelID;
+        this.backingUserID = userID;
+        this.backingAgentID = agentID;
+        this.backingStatus = status;
+    }
+
+    public override get AgentChannelID() { return this.backingChannelID; }
+    public override get UserID() { return this.backingUserID; }
+    public override get AgentID() { return this.backingAgentID; }
+    public override get Status() { return this.backingStatus; }
+}
+
+class InMemoryAgentRequestEntity extends MJAIAgentRequestEntity {
+    private backingID: string;
+    private backingAgentID: string;
+    private backingRequestForUserID: string;
+    private backingStatus: MJAIAgentRequestEntity['Status'];
+    private backingRequest: string;
+    private backingRespondedAt: Date | null;
+    private backingOrigRunID: string | null = null;
+    private backingOrigTaskID: string | null = null;
+    private backingComments: string | null = null;
+
+    public constructor(opts: {
+        ID: string;
+        AgentID: string;
+        RequestForUserID: string;
+        Status: MJAIAgentRequestEntity['Status'];
+        Request: string;
+        RespondedAt: Date | null;
+    }) {
+        super(new EntityInfo({ Name: 'MJ: AI Agent Requests', Status: 'Active', Fields: [] }));
+        this.backingID = opts.ID;
+        this.backingAgentID = opts.AgentID;
+        this.backingRequestForUserID = opts.RequestForUserID;
+        this.backingStatus = opts.Status;
+        this.backingRequest = opts.Request;
+        this.backingRespondedAt = opts.RespondedAt;
+    }
+
+    public override get ID() { return this.backingID; }
+    public override get AgentID() { return this.backingAgentID; }
+    public override get RequestForUserID() { return this.backingRequestForUserID; }
+    public override get Status() { return this.backingStatus; }
+    public override get Request() { return this.backingRequest; }
+    public override get RespondedAt() { return this.backingRespondedAt; }
+    public override get OriginatingAgentRunID() { return this.backingOrigRunID; }
+    public override get OriginatingTaskID() { return this.backingOrigTaskID; }
+    public override get Comments() { return this.backingComments; }
+}
+
+class InMemoryPolicyEntity extends MJAIAgentUserPolicyEntity {
+    private backingID: string;
+    private backingAgentID: string;
+    private backingUserID: string;
+    private backingStatus: MJAIAgentUserPolicyEntity['Status'];
+    private backingAllowInterAgent: boolean;
+    private backingEmailMode: MJAIAgentUserPolicyEntity['EmailChannelMode'];
+
+    public constructor(opts: {
+        ID: string;
+        AgentID: string;
+        UserID: string;
+        Status: MJAIAgentUserPolicyEntity['Status'];
+        AllowInterAgentCoordination: boolean;
+        EmailChannelMode: MJAIAgentUserPolicyEntity['EmailChannelMode'];
+    }) {
+        super(new EntityInfo({ Name: 'MJ: AI Agent User Policies', Status: 'Active', Fields: [] }));
+        this.backingID = opts.ID;
+        this.backingAgentID = opts.AgentID;
+        this.backingUserID = opts.UserID;
+        this.backingStatus = opts.Status;
+        this.backingAllowInterAgent = opts.AllowInterAgentCoordination;
+        this.backingEmailMode = opts.EmailChannelMode;
+    }
+
+    public override get ID() { return this.backingID; }
+    public override get AgentID() { return this.backingAgentID; }
+    public override get UserID() { return this.backingUserID; }
+    public override get Status() { return this.backingStatus; }
+    public override get AllowInterAgentCoordination() { return this.backingAllowInterAgent; }
+    public override get EmailChannelMode() { return this.backingEmailMode; }
+}
+
+class InMemoryBridgeIdentityEntity extends MJAIBridgeAgentIdentityEntity {
+    private backingID: string;
+    private backingAgentID: string;
+    private backingIdentityType: MJAIBridgeAgentIdentityEntity['IdentityType'];
+    private backingIdentityValue: string;
+    private backingIsActive: boolean;
+    private backingConfig: string | null;
+
+    public constructor(opts: {
+        ID: string;
+        AgentID: string;
+        IdentityType: MJAIBridgeAgentIdentityEntity['IdentityType'];
+        IdentityValue: string;
+        IsActive: boolean;
+        Configuration: string | null;
+    }) {
+        super(new EntityInfo({ Name: 'MJ: AI Bridge Agent Identities', Status: 'Active', Fields: [] }));
+        this.backingID = opts.ID;
+        this.backingAgentID = opts.AgentID;
+        this.backingIdentityType = opts.IdentityType;
+        this.backingIdentityValue = opts.IdentityValue;
+        this.backingIsActive = opts.IsActive;
+        this.backingConfig = opts.Configuration;
+    }
+
+    public override get ID() { return this.backingID; }
+    public override get AgentID() { return this.backingAgentID; }
+    public override get IdentityType() { return this.backingIdentityType; }
+    public override get IdentityValue() { return this.backingIdentityValue; }
+    public override get IsActive() { return this.backingIsActive; }
+    public override get Configuration() { return this.backingConfig; }
 }
 
 function createInMemoryRoutineStore() {
-    const routinesByID = new Map<string, MockRoutineRow>();
-    const saveCalls: MockRoutineRow[] = [];
+    const routinesByID = new Map<string, InMemoryRoutineEntity>();
+    const saveCalls: InMemoryRoutineEntity[] = [];
     let seq = 0;
 
     const provider = {
         GetEntityObject: vi.fn(async (entityName: string) => {
             if (entityName === 'MJ: Agent Channels') {
-                return {
-                    ID: 'chan-guard-1',
-                    Topic: 'Cross-org sync',
-                    ChannelStatus: 'Open',
-                    ConsecutiveAgentTurns: 0,
-                    MaxConsecutiveAgentTurns: 5,
-                    HourlyWakeCount: 0,
-                    MaxHourlyWakes: 10,
-                    HourlyWindowStartedAt: null,
-                    Save: vi.fn().mockResolvedValue(true),
-                    Load: vi.fn().mockResolvedValue(true),
-                } as unknown as MJAgentChannelEntity;
+                return new InMemoryAgentChannelEntity();
             }
-            const routine: MockRoutineRow = {
-                ID: `routine-${++seq}`,
-                UserID: '',
-                Name: '',
-                Description: null,
-                Status: 'Active',
-                RoutineType: 'AgentWake',
-                ScheduleMode: 'OneShot',
-                TargetType: 'Agent',
-                TargetID: '',
-                CronExpression: null,
-                Timezone: 'UTC',
-                InitialMessage: null,
-                StartingPayload: null,
-                NextRunAt: null,
-                LastRunAt: null,
-                WakeConfiguration: null,
-                WakeConfigurationObject: null,
-                AgentConfigurationID: null,
-                LatestResult: { CompleteMessage: '' },
-                NewRecord: vi.fn(),
-                Save: vi.fn(async () => {
-                    routinesByID.set(routine.ID, routine);
-                    saveCalls.push(routine);
-                    return true;
-                }),
-            };
+            const routine = new InMemoryRoutineEntity(`routine-${++seq}`, (saved) => {
+                routinesByID.set(saved.ID, saved);
+                saveCalls.push(saved);
+            });
             return routine;
         }),
-    } as unknown as IMetadataProvider;
+    } as Partial<IMetadataProvider> as IMetadataProvider;
 
     return {
         provider,
@@ -288,9 +473,9 @@ describe('Slice 2: Active-Policy Gating, (UserID, ApplicationID) Coalescing, and
                     return {
                         Success: true,
                         Results: [
-                            { AgentChannelID: 'chan-guard-1', UserID: USER_ALICE_ID, AgentID: COS_AGENT_ID, Status: 'Active' },
-                            { AgentChannelID: 'chan-guard-1', UserID: USER_BOB_ID, AgentID: COS_AGENT_ID, Status: 'Active' },
-                        ] as unknown as MJAgentChannelParticipantEntity[],
+                            new InMemoryChannelParticipantEntity('chan-guard-1', USER_ALICE_ID, COS_AGENT_ID, 'Active'),
+                            new InMemoryChannelParticipantEntity('chan-guard-1', USER_BOB_ID, COS_AGENT_ID, 'Active'),
+                        ],
                     };
                 }
                 return { Success: true, Results: [] };
@@ -311,17 +496,14 @@ describe('Slice 2: Active-Policy Gating, (UserID, ApplicationID) Coalescing, and
             expect(workstreamNoPolicy.resultCode).toBe('POLICY_DENIED');
 
             // 2. Request resolution with no policy -> POLICY_DENIED
-            const approvalReq = {
+            const approvalReq = new InMemoryAgentRequestEntity({
                 ID: 'req-1',
                 AgentID: COS_AGENT_ID,
                 RequestForUserID: USER_ALICE_ID,
                 Status: 'Approved',
                 Request: 'Send note',
                 RespondedAt: FIXED_NOW,
-                OriginatingAgentRunID: null,
-                OriginatingTaskID: null,
-                Comments: null,
-            } as unknown as MJAIAgentRequestEntity;
+            });
             const reqNoPolicy = await AgentWakeTriggerService.Instance.TriggerWakeOnAgentRequestResolution(
                 approvalReq,
                 aliceUser,
@@ -347,28 +529,30 @@ describe('Slice 2: Active-Policy Gating, (UserID, ApplicationID) Coalescing, and
             expect(chanOutcome.results[0].resultCode).toBe('POLICY_DENIED');
 
             // 4. Utility mailbox with Paused policy -> POLICY_DENIED
-            AgentUserPolicyEngine.Instance.SetCachedPolicy({
-                ID: 'pol-paused',
-                AgentID: COS_AGENT_ID,
-                UserID: USER_ALICE_ID,
-                Status: 'Paused',
-                AllowInterAgentCoordination: true,
-                EmailChannelMode: 'DraftOnly',
-            } as unknown as MJAIAgentUserPolicyEntity);
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(
+                new InMemoryPolicyEntity({
+                    ID: 'pol-paused',
+                    AgentID: COS_AGENT_ID,
+                    UserID: USER_ALICE_ID,
+                    Status: 'Paused',
+                    AllowInterAgentCoordination: true,
+                    EmailChannelMode: 'DraftOnly',
+                })
+            );
             const mailboxPaused = await AgentWakeTriggerService.Instance.RouteInboundUtilityMailboxWake({
                 toAddress: 'cos@company.com',
                 fromAddress: 'alice@example.com',
                 subject: 'Morning',
                 bodyPreview: 'Checking in',
                 identities: [
-                    {
+                    new InMemoryBridgeIdentityEntity({
                         ID: 'id-mail-1',
                         AgentID: COS_AGENT_ID,
                         IdentityType: 'Email',
                         IdentityValue: 'cos@company.com',
                         IsActive: true,
                         Configuration: null,
-                    } as unknown as MJAIBridgeAgentIdentityEntity,
+                    }),
                 ],
                 users: [aliceUser],
                 systemContextUser: systemUser,
@@ -438,17 +622,21 @@ describe('Slice 2: Active-Policy Gating, (UserID, ApplicationID) Coalescing, and
                 taskResults.push(res);
             }
 
+            const expectedDeadlineISO = new Date(FIXED_NOW.getTime() + 1_000 + 60_000).toISOString();
             expect(saveCalls).toHaveLength(20);
             // All 20 assignments resolved onto the exact SAME routine ID and app workstream key
             expect(routinesByID.size).toBe(1);
             const singleRoutine = Array.from(routinesByID.values())[0];
             expect(singleRoutine.Status).toBe('Active');
             expect(singleRoutine.WakeConfigurationObject?.workstreamKey).toBe(expectedWorkstreamKey);
+            // Initial event holds NextRunAt at firstEventAt + windowMs so bursts don't dispatch early
+            expect(singleRoutine.NextRunAt?.toISOString()).toBe(expectedDeadlineISO);
 
-            const pending = singleRoutine.WakeConfigurationObject?.resumeState?.['pendingEvents'] as Array<Record<string, unknown>>;
+            const resumeState = singleRoutine.WakeConfigurationObject?.resumeState as CoalescedWakeResumeState | undefined;
+            const pending: CoalescedWakeEventPayload[] = resumeState?.pendingEvents ?? [];
             expect(pending).toHaveLength(20);
-            expect(pending[0]['taskID']).toBe('task-1');
-            expect(pending[19]['taskID']).toBe('task-20');
+            expect(pending[0].taskID).toBe('task-1');
+            expect(pending[19].taskID).toBe('task-20');
 
             const lastResult = taskResults[taskResults.length - 1];
             expect(lastResult.triggered).toBe(true);
@@ -456,6 +644,7 @@ describe('Slice 2: Active-Policy Gating, (UserID, ApplicationID) Coalescing, and
             expect(lastResult.coalesced).toBe(true);
             expect(lastResult.coalescedCount).toBe(20);
             expect(lastResult.coalesceKey).toBe(expectedCoalesceKey);
+            expect(lastResult.nextRunAtISO).toBe(expectedDeadlineISO);
         });
 
         it('keeps pendingEvents bounded on massive bursts (500 events) while tracking total counts and overflow summary', async () => {
@@ -507,17 +696,17 @@ describe('Slice 2: Active-Policy Gating, (UserID, ApplicationID) Coalescing, and
 
             expect(routinesByID.size).toBe(1);
             const singleRoutine = Array.from(routinesByID.values())[0];
-            const resumeState = singleRoutine.WakeConfigurationObject?.resumeState as Record<string, unknown>;
-            const pending = resumeState['pendingEvents'] as Array<Record<string, unknown>>;
+            const resumeState = singleRoutine.WakeConfigurationObject?.resumeState as CoalescedWakeResumeState;
+            const pending: CoalescedWakeEventPayload[] = resumeState.pendingEvents ?? [];
             expect(pending).toHaveLength(25);
-            expect(pending[24]['taskID']).toBe('burst-60');
-            expect(resumeState['coalescedEventCount']).toBe(60);
-            expect(resumeState['overflowEventCount']).toBe(35);
-            expect(typeof resumeState['coalescedSummary']).toBe('string');
+            expect(pending[24].taskID).toBe('burst-60');
+            expect(resumeState.coalescedEventCount).toBe(60);
+            expect(resumeState.overflowEventCount).toBe(35);
+            expect(typeof resumeState.coalescedSummary).toBe('string');
             expect(lastResult?.coalescedCount).toBe(60);
         });
 
-        it('keeps separate applications distinct and defers post-dispatch bursts within the 60s window', async () => {
+        it('keeps separate applications distinct and starts a fresh single-event batch when event B arrives during cooldown after wake A is consumed', async () => {
             const { provider, routinesByID } = createInMemoryRoutineStore();
 
             runViewMock.mockImplementation(async (params: { EntityName: string }) => {
@@ -554,7 +743,7 @@ describe('Slice 2: Active-Policy Gating, (UserID, ApplicationID) Coalescing, and
                 targetAgentID: COS_AGENT_ID,
                 workstreamKey: 'task:a1',
                 applicationID: APP_TASKS_ID,
-                wakeReason: 'Tasks app event',
+                wakeReason: 'Tasks app event A',
                 resumeState: { triggerType: 'TaskAssigned', taskID: 'a1' },
                 contextUser: systemUser,
                 metadataProvider: provider,
@@ -575,24 +764,25 @@ describe('Slice 2: Active-Policy Gating, (UserID, ApplicationID) Coalescing, and
             expect(resAppA.routineID).not.toBe(resAppB.routineID);
             expect(routinesByID.size).toBe(2);
 
-            // Simulate App A routine being claimed/dispatched at T0+5s
-            const dispatchedAt = new Date(FIXED_NOW.getTime() + 5_000);
+            // Simulate App A routine being claimed/dispatched at T0+60s
+            const dispatchedAt = new Date(FIXED_NOW.getTime() + 60_000);
             const routineA = routinesByID.get(resAppA.routineID!)!;
             routineA.Status = 'Disabled';
             routineA.NextRunAt = null;
             routineA.LastRunAt = dispatchedAt;
             EventWakeCoalescer.Instance.RecordWakeDispatched(USER_ALICE_ID, APP_TASKS_ID, dispatchedAt);
 
-            // A new event for App A arriving at T0+15s (within 60s window of T0+5s) defers to T0+65s
-            const followUpAt = new Date(FIXED_NOW.getTime() + 15_000);
+            // Event B arrives at T0+75s (15s after dispatch, inside 60s cooldown) -> defers to T0+120s
+            // AND starts a fresh batch containing ONLY [B] (never retaining consumed event A)
+            const followUpAt = new Date(FIXED_NOW.getTime() + 75_000);
             const expectedDeferredAt = new Date(dispatchedAt.getTime() + 60_000);
             const resFollowUp = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
                 targetUserID: USER_ALICE_ID,
                 targetAgentID: COS_AGENT_ID,
-                workstreamKey: 'task:a2',
+                workstreamKey: 'task:b2',
                 applicationID: APP_TASKS_ID,
-                wakeReason: 'Second wave task',
-                resumeState: { triggerType: 'TaskAssigned', taskID: 'a2' },
+                wakeReason: 'Second wave task B',
+                resumeState: { triggerType: 'TaskAssigned', taskID: 'b2' },
                 contextUser: systemUser,
                 metadataProvider: provider,
                 now: followUpAt,
@@ -600,6 +790,13 @@ describe('Slice 2: Active-Policy Gating, (UserID, ApplicationID) Coalescing, and
 
             expect(resFollowUp.triggered).toBe(true);
             expect(resFollowUp.nextRunAtISO).toBe(expectedDeferredAt.toISOString());
+            expect(resFollowUp.coalescedCount).toBe(1);
+
+            const followUpResume = routineA.WakeConfigurationObject?.resumeState as CoalescedWakeResumeState;
+            expect(followUpResume.coalescedEventCount).toBe(1);
+            expect(followUpResume.batchConsumed).toBe(false);
+            expect(followUpResume.pendingEvents).toHaveLength(1);
+            expect(followUpResume.pendingEvents?.[0].taskID).toBe('b2');
 
             // Cleanup after window expires frees memory
             const cleaned = EventWakeCoalescer.Instance.CleanupExpiredEntries(

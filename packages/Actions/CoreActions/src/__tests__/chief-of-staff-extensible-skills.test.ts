@@ -781,7 +781,23 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
         const fastCfgID = '3A1C5A15-8DAA-44E5-A098-F20085E6C93F';
         const highPowerCfgID = 'B6B9D780-52B2-431B-93AB-AC83FEF78553';
 
-        const template = {
+        interface RhythmTemplateStub {
+            ID: string;
+            AgentID: string;
+            SkillID: string | null;
+            Name: string;
+            WorkstreamKey: string;
+            Description: string;
+            DefaultCronExpression: string;
+            DefaultWakeGate: string | null;
+            WakeReason: string;
+            OfferAt: MJAIAgentRhythmTemplateEntity['OfferAt'];
+            Status: MJAIAgentRhythmTemplateEntity['Status'];
+            DefaultAgentConfigurationID: string | null;
+            DefaultAgentConfiguration: string | null;
+            Skill: string | null;
+        }
+        const template: RhythmTemplateStub = {
             ID: 'tpl-tier-1',
             AgentID: cosAgent.ID,
             SkillID: null,
@@ -796,9 +812,9 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
             DefaultAgentConfigurationID: fastCfgID,
             DefaultAgentConfiguration: 'Fast',
             Skill: null,
-        } as unknown as MJAIAgentRhythmTemplateEntity;
+        };
 
-        const savedRoutines: Array<Record<string, unknown>> = [];
+        const savedRoutines: Array<{ AgentConfigurationID: string | null }> = [];
         const routineStub = {
             ID: 'routine-tier-1',
             UserID: alice.ID,
@@ -812,12 +828,12 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
                 });
                 return true;
             }),
-            WakeConfigurationObject: null as Record<string, unknown> | null,
+            WakeConfigurationObject: null as MJUserRoutineEntity['WakeConfigurationObject'],
         };
 
         let routineExists = false;
-        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
-            RunView: vi.fn(async (p: { EntityName: string; ExtraFilter?: string }) => {
+        class TierStubRunView extends RunView {
+            public override RunView = vi.fn(async (p: { EntityName: string; ExtraFilter?: string }) => {
                 if (p.EntityName === 'MJ: AI Agent Rhythm Templates') {
                     return { Success: true, Results: [template] };
                 }
@@ -853,12 +869,13 @@ describe('Chief of Staff Extensible Skills — Typed Core Actions, Rhythms, Sugg
                     };
                 }
                 return { Success: true, Results: [] };
-            }),
-        } as unknown as RunView);
+            }) as RunView['RunView'];
+        }
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(new TierStubRunView());
 
         const md = {
             GetEntityObject: vi.fn().mockResolvedValue(routineStub),
-        } as unknown as IMetadataProvider;
+        } as Partial<IMetadataProvider> as IMetadataProvider;
 
         // First call: creation seeds AgentConfigurationID from template.DefaultAgentConfigurationID
         const seededRes = await callAction(new EnableAgentRhythmAction() as never, {

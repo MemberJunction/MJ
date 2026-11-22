@@ -228,7 +228,7 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
                 ID: 'req-no-policy-1', AgentID: COS_AGENT_ID, RequestForUserID: USER_ALICE_ID,
                 Status: 'Approved', Request: 'Send the update', Response: null, ResponseData: null,
                 ResponseByUserID: USER_ALICE_ID, RespondedAt: FIXED_NOW, Comments: null,
-            } as unknown as MJAIAgentRequestEntity;
+            } as Partial<MJAIAgentRequestEntity> as MJAIAgentRequestEntity;
 
             const result = await AgentWakeTriggerService.Instance.TriggerWakeOnAgentRequestResolution(
                 approvalRequest,
@@ -446,7 +446,7 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
                 Request: text,
                 Comments: null,
                 ResponseByUserID: USER_ALICE_ID,
-            } as unknown as MJAIAgentRequestEntity;
+            } as Partial<MJAIAgentRequestEntity> as MJAIAgentRequestEntity;
         }
 
         /** Second and later lookups return the routine the first call created, as the database would. */

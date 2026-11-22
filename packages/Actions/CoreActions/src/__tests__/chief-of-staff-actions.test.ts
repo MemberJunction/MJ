@@ -775,10 +775,11 @@ describe('Chief of Staff Actions Suite', () => {
         });
 
         it('defaults missing PhoneChannelMode to Disabled (Off) and denies outbound call preparation', async () => {
-            getPolicyMock.mockResolvedValueOnce({
+            const policyWithoutPhoneMode: Partial<MJAIAgentUserPolicyEntity> = {
                 Status: 'Active',
-                PhoneChannelMode: null as unknown as MJAIAgentUserPolicyEntity['PhoneChannelMode'],
-            });
+                PhoneChannelMode: undefined,
+            };
+            getPolicyMock.mockResolvedValueOnce(policyWithoutPhoneMode);
 
             const params: RunActionParams = {
                 Action: {} as RunActionParams['Action'],
