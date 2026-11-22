@@ -19,7 +19,7 @@ import { BaseDashboard, ThemeService } from '@memberjunction/ng-shared';
 import { MJThemeEntity, ResourceData } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
-import { MJ_DEFAULT_SEEDS, ThemeSeeds } from '@memberjunction/theme-engine';
+import { MJ_DEFAULT_SEEDS, SanitizeThemeSeeds, ThemeSeeds } from '@memberjunction/theme-engine';
 import { IsBuiltInTheme } from './theme-studio.constants';
 import { BuildThemeManagerAgentContext, ResolveThemeByIDOrName, ThemeSummaryRow } from './theme-agent-context';
 
@@ -200,7 +200,8 @@ export class ThemeManagerDashboardComponent extends BaseDashboard implements OnD
       }
       let seeds: ThemeSeeds;
       try {
-        seeds = { ...MJ_DEFAULT_SEEDS, ...(JSON.parse(entity.Seeds) as ThemeSeeds) };
+        const parsed = JSON.parse(entity.Seeds) as ThemeSeeds;
+        seeds = { ...MJ_DEFAULT_SEEDS, ...(SanitizeThemeSeeds(parsed) ?? parsed) };
       } catch {
         seeds = { ...MJ_DEFAULT_SEEDS };
       }

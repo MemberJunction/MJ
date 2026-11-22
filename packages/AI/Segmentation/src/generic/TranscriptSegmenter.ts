@@ -6,6 +6,7 @@
 
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSegmenter } from './BaseSegmenter';
+import { ParseCaptionCues } from './CaptionCueParser';
 import {
     ContentModality,
     RawSegment,
@@ -59,6 +60,7 @@ interface CueGroup {
  *
  * Cues come from any ASR source, including MemberJunction's realtime session
  * capture, which already records per-turn text with speaker labels and timings.
+ * When no cues are passed, `Text` is parsed as a WebVTT or SRT caption file.
  */
 @RegisterClass(BaseSegmenter, TRANSCRIPT_SEGMENTER_KEY)
 export class TranscriptSegmenter extends BaseSegmenter {
@@ -71,7 +73,7 @@ export class TranscriptSegmenter extends BaseSegmenter {
     }
 
     protected SegmentCore(params: SegmentationParams<TranscriptSegmentationOptions>): RawSegment[] {
-        const cues = this.sortCues(params.Cues ?? []);
+        const cues = this.sortCues(params.Cues?.length ? params.Cues : ParseCaptionCues(params.Text ?? ''));
         if (cues.length === 0) {
             return [];
         }

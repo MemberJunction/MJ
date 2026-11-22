@@ -1,5 +1,5 @@
 {
-  "verifiedAtISO": "2026-11-22T09:01:37.795Z",
+  "verifiedAtISO": "2026-11-22T09:44:38.549Z",
   "revisionIdentity": {
     "branch": "factory/bac5fc6c-8417-4c82-a5d0-28742cbeff8f-epic-1a-limits-config",
     "compiledComponentJsSha256": {
@@ -29,7 +29,7 @@
   },
   "renderedMode": "Real Angular AdminLimitsResourceComponent + ExplorerAdminShell via Vite",
   "chromiumVersion": "145.0.7632.6",
-  "baseUrl": "http://127.0.0.1:60964/",
+  "baseUrl": "http://127.0.0.1:62750/",
   "pageErrorsCount": 0,
   "consoleErrorsCount": 0,
   "brokenImagesCount": 0,
@@ -50,7 +50,7 @@
     "budgetScopeCardsRendered": 3,
     "drawerContainsFastJudgeVerdict": true,
     "resumeSuccessBanner": "Run 33333333-3333-4333-8333-333333333333 approved and transitioned back to Running preserving 0 completed step(s). Fresh worker (ResearchPlanner) dispatched for run 33333333-3333-4333-8333-333333333333.",
-    "pauseSuccessBanner": "Run 44444444-4444-4444-8444-444444444444 cooperatively paused at safe boundary (checkpoint e4db675b-13af-4cb1-8a91-bf08cc61495f)."
+    "pauseSuccessBanner": "Run 44444444-4444-4444-8444-444444444444 cooperatively paused at safe boundary (checkpoint 83440155-57a6-4c38-b351-84c0bd45f69f)."
   },
   "screenshots": [
     "admin-limits-overview.png",

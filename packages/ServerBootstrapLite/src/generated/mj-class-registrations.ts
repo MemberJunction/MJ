@@ -1232,7 +1232,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (92 classes)
+// @memberjunction/core-entities-server (93 classes)
 import {
     AgentChannelConversationDriver,
     FieldSuggestionCommentDriver,
@@ -1284,6 +1284,7 @@ import {
     MJEntityFormOverrideEntityServer,
     MJFieldSuggestionEntityServer,
     MJFileEntityServer,
+    MJGraphConceptEntityServer,
     MJGraphEdgeEntityServer,
     MJGraphEdgeProviderEntityServer,
     MJGraphEdgeTypeEntityServer,
@@ -2590,6 +2591,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJEntityFormOverrideEntityServer,
     MJFieldSuggestionEntityServer,
     MJFileEntityServer,
+    MJGraphConceptEntityServer,
     MJGraphEdgeEntityServer,
     MJGraphEdgeProviderEntityServer,
     MJGraphEdgeTypeEntityServer,
@@ -2626,11 +2628,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJTaskEntityServer,
     MJTemplateContentEntityServer,
     MJUserEntityServer,
-    MJUserRoleEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJUserRoleEntityServer,
     MJUserRoutineEntityServer,
     MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
@@ -2830,11 +2832,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     URLLinkValidatorAction,
     URLMetadataExtractorAction,
     UnitConverterAction,
-    UnshareListAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    UnshareListAction,
     UpdateListItemStatusAction,
     UpdateRecordAction,
     ValidateAddressAction,
@@ -2903,7 +2905,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1251;
+export const CLASS_REGISTRATIONS_COUNT = 1252;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

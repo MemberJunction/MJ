@@ -301,6 +301,7 @@ export * from './resolvers/FileCategoryResolver.js';
 export * from './resolvers/FileResolver.js';
 export * from './rest/MediaAccessKeys.js';
 export * from './rest/MediaStreamHandler.js';
+export * from './rest/UploadTokenManager.js';
 export * from './routeRateLimitConfigUnits.js';
 export * from './rest/RealtimeRecordingHandler.js';
 export * from './resolvers/InfoResolver.js';

@@ -518,6 +518,12 @@ export class AgentRunner {
 
         let agentResponseDetail: MJConversationDetailEntityExtended | undefined;
         let saveGeneratedName: (() => Promise<void>) | undefined;
+        // Declared outside try so both the normal final-status update and the error-status catch
+        // path can stop queued progress writes and await any in-flight save before writing final status.
+        let agentExecutionCompleted = false;
+        let progressSaves: Promise<void> = Promise.resolve();
+        let pendingProgressMessage: string | null = null;
+        let progressSaveInFlight = false;
 
         try {
             let conversationId: string;
@@ -667,41 +673,25 @@ export class AgentRunner {
             // Step 4: Execute the agent with conversation context
             LogStatus(`Executing agent ${params.agent.Name} in conversation context`);
 
-            // Flag to prevent late progress callbacks from overwriting final status
-            // Progress callbacks fire async and may complete AFTER agent returns
-            let agentExecutionCompleted = false;
-            // Progress saves run one at a time on this chain, and the final update awaits it.
-            // EnsureSaveComplete() alone is not enough: it resolves on the entity's 'save' event,
-            // which BaseEntity raises before the save finishes committing, so a progress save
-            // can still be in flight when the final update calls Save(). BaseEntity.Save() hands
-            // a concurrent caller the in-flight save's promise, so the final status was dropped
-            // and the detail stayed 'In-Progress' with the last progress message.
-            let progressSaves: Promise<void> = Promise.resolve();
-
-            // Wrap progress callback to update agent response detail
-            const originalOnProgress = params.onProgress;
-            const wrappedOnProgress: AgentExecutionProgressCallback | undefined = agentResponseDetail
-                ? async (progress: Parameters<AgentExecutionProgressCallback>[0]) => {
-                    // Skip DB save if agent already completed - prevents race condition
-                    // where late progress overwrites final Status='Complete'
-                    if (agentExecutionCompleted) {
-                        // Still call original callback for PubSub streaming
-                        if (originalOnProgress) {
-                            await originalOnProgress(progress);
-                        }
-                        return;
-                    }
-
-                    // Update the agent response detail with progress message
-                    if (agentResponseDetail && progress.message) {
-                        const detail = agentResponseDetail;
-                        const message: string = progress.message;
-                        progressSaves = progressSaves.then(async () => {
-                            if (agentExecutionCompleted) {
-                                return;
-                            }
+            // Progress saves run one at a time in the background and coalesce intermediate messages
+            // while a Save() is in flight, so the agent loop never blocks on DB progress writes.
+            // Both updateDetail() and the error catch path await progressSaves before writing final
+            // status. EnsureSaveComplete() alone is not enough: it resolves on the entity's 'save'
+            // event, which BaseEntity raises before the save finishes committing, so a progress save
+            // can still be in flight when the final update calls Save().
+            const scheduleProgressSave = (detail: MJConversationDetailEntityExtended, message: string): void => {
+                pendingProgressMessage = message;
+                if (progressSaveInFlight) {
+                    return;
+                }
+                progressSaveInFlight = true;
+                progressSaves = (async () => {
+                    try {
+                        while (!agentExecutionCompleted && pendingProgressMessage !== null) {
+                            const nextMessage = pendingProgressMessage;
+                            pendingProgressMessage = null;
                             try {
-                                detail.Message = message;
+                                detail.Message = nextMessage;
                                 if (!(await detail.Save())) {
                                     LogError(`Failed to save agent response detail progress update: ${AgentRunner.saveFailureReason(detail)}`);
                                 }
@@ -709,14 +699,33 @@ export class AgentRunner {
                                 // A failed progress save must not break the chain the final update awaits
                                 LogError(`Failed to save agent response detail progress update: ${error}`, undefined, error);
                             }
-                        });
+                        }
+                    } finally {
+                        progressSaveInFlight = false;
+                        pendingProgressMessage = null;
                     }
-                    // Call original callback immediately if provided so WebSocket progress is emitted without waiting on DB save
+                })();
+            };
+
+            // Wrap progress callback to emit live updates immediately and persist progress asynchronously
+            const originalOnProgress = params.onProgress;
+            const wrappedOnProgress: AgentExecutionProgressCallback | undefined = agentResponseDetail
+                ? async (progress: Parameters<AgentExecutionProgressCallback>[0]) => {
+                    // Emit live WebSocket/PubSub progress immediately without waiting on DB writes
                     if (originalOnProgress) {
                         await originalOnProgress(progress);
                     }
-                    // Wait for in-flight progress saves to settle so callers that await onProgress still wait for the save
-                    await progressSaves;
+
+                    // Skip DB save if agent already completed - prevents race condition
+                    // where late progress overwrites final Status='Complete'
+                    if (agentExecutionCompleted) {
+                        return;
+                    }
+
+                    // Queue coalesced background DB progress write without blocking agent execution
+                    if (agentResponseDetail && progress.message) {
+                        scheduleProgressSave(agentResponseDetail, progress.message);
+                    }
                 }
                 : originalOnProgress;
 
@@ -761,8 +770,9 @@ export class AgentRunner {
 
             const agentResult = await this.RunAgent<C, R>(modifiedParams);
 
-            // Mark execution as completed to stop progress saves
+            // Mark execution as completed to stop any queued progress saves
             agentExecutionCompleted = true;
+            pendingProgressMessage = null;
 
             // LATENCY OPTIMIZATION (Opt #5): Steps 5, 6, and 7 are now parallelized.
             //
@@ -778,10 +788,14 @@ export class AgentRunner {
             // - Step 7 (media) creates new AIAgentRunMedia and ConversationDetailAttachment records —
             //   entirely separate from steps 5 and 6
             //
-            // IMPORTANT: All of these MUST complete before the resolver publishes the 'complete'
-            // event, because the client reloads all conversation data from the DB when it receives
-            // that event. If any write hasn't flushed yet, the client would see stale data. They run
-            // SEQUENTIALLY (not in parallel) — see the dispatch note below the definitions.
+            // IMPORTANT: All user-visible writes MUST complete before the resolver publishes the
+            // 'complete' event, because the client reloads all conversation data from the DB when
+            // it receives that event. If any write hasn't flushed yet, the client would see stale
+            // data. They run SEQUENTIALLY (not in parallel) — see the dispatch note below.
+            // Exception: internal 'System Only' payload-only artifacts (not user-visible) are
+            // deliberately deferred asynchronously after user-visible writes settle so they never
+            // block completion, and leave `artifactInfo` undefined so no client artifact notification
+            // is sent for an internal payload record.
 
             // Step 5: Update agent response detail with final result.
             const updateDetail = async () => {
@@ -1041,10 +1055,28 @@ export class AgentRunner {
                 }
                 throw replySaveError;
             }
-            const payloadArtifact = await processArtifacts();
+            const deferSystemOnlyPayloadArtifact = await this.shouldDeferSystemOnlyPayloadArtifact(
+                params.agent,
+                agentResult,
+                contextUser
+            );
+            let payloadArtifact: CreatedArtifactInfo | undefined;
+            if (!deferSystemOnlyPayloadArtifact) {
+                payloadArtifact = await processArtifacts();
+            }
             const fileArtifacts = await processFileArtifacts();
             const touchedArtifacts = await processTouchedArtifacts();
             await saveMedia();
+
+            if (deferSystemOnlyPayloadArtifact) {
+                // Persist internal 'System Only' payload artifacts asynchronously AFTER all
+                // user-visible artifact/media transactions have finished so they never interleave
+                // on the DB connection and never block the user-facing completion event.
+                void processArtifacts().catch((artifactError) => {
+                    const msg = artifactError instanceof Error ? artifactError.message : String(artifactError);
+                    LogError(`Deferred System Only payload artifact persistence failed for agent run ${agentResult.agentRun?.ID}: ${msg}`, undefined, artifactError);
+                });
+            }
 
             // A file or workspace-touched collaborative artifact wins over raw JSON payload state.
             const artifactInfo = SelectPrimaryArtifact([...fileArtifacts, ...touchedArtifacts], payloadArtifact);
@@ -1060,6 +1092,10 @@ export class AgentRunner {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             LogError(`RunAgentInConversation failed: ${errorMessage}`, undefined, error);
+            // Stop any queued progress saves and drain an in-flight save before writing Error status.
+            pendingProgressMessage = null;
+            agentExecutionCompleted = true;
+            await progressSaves;
             if (agentResponseDetail && agentResponseDetail.Status === 'In-Progress') {
                 try {
                     await agentResponseDetail.EnsureSaveComplete();
@@ -1857,25 +1893,18 @@ export class AgentRunner {
      * }
      * ```
      */
-    public async ProcessAgentArtifacts<R = AgentRunnerJsonObject>(
-        agentResult: ExecuteAgentResult<R>,
-        conversationDetailId: string | undefined,
-        sourceArtifactId: string | undefined,
-        contextUser: UserInfo,
-        provider?: IMetadataProvider
-    ): Promise<{ artifactId: string; versionId: string; versionNumber: number } | undefined> {
-        const payload = agentResult.payload;
-        const agentRun = agentResult.agentRun;
-
-        if (!payload || Object.keys(payload).length === 0) {
-            LogStatus('No payload to create artifact from');
-            return undefined;
-        }
-
-        // Check agent's ArtifactCreationMode
+    /**
+     * Resolves the effective agent and ArtifactCreationMode for payload artifact persistence,
+     * applying the specialist sub-agent delegation promotion rule shared with `ProcessAgentArtifacts`.
+     */
+    private async resolveEffectiveArtifactCreationConfig(
+        fallbackAgent: MJAIAgentEntityExtended | undefined,
+        agentRun: MJAIAgentRunEntityExtended | undefined,
+        contextUser: UserInfo
+    ): Promise<{ agent: MJAIAgentEntityExtended | undefined; creationMode: MJAIAgentEntityExtended['ArtifactCreationMode'] | undefined }> {
         await AIEngine.Instance.Config(false, contextUser);
         const agentsById = IndexByUUID(AIEngine.Instance.Agents);
-        let agent = agentsById.Get(agentRun.AgentID);
+        let agent = (agentRun?.AgentID ? agentsById.Get(agentRun.AgentID) : undefined) ?? fallbackAgent;
         let creationMode = agent?.ArtifactCreationMode;
 
         // When an orchestrator with ArtifactCreationMode='Never' or 'System Only' (or no
@@ -1905,6 +1934,44 @@ export class AgentRunner {
                 }
             }
         }
+
+        return { agent, creationMode };
+    }
+
+    /**
+     * Returns true when `RunAgentInConversation` can safely defer internal `'System Only'` payload
+     * artifact persistence off the reply critical path: the run carries no explicit `artifactDirective`
+     * and the effective artifact creation mode (after sub-agent delegation resolution) is `'System Only'`.
+     */
+    private async shouldDeferSystemOnlyPayloadArtifact<R>(
+        agent: MJAIAgentEntityExtended,
+        agentResult: ExecuteAgentResult<R>,
+        contextUser: UserInfo
+    ): Promise<boolean> {
+        if (!agentResult.success || !agentResult.payload || agentResult.artifactDirective != null) {
+            return false;
+        }
+        const { creationMode } = await this.resolveEffectiveArtifactCreationConfig(agent, agentResult.agentRun, contextUser);
+        return creationMode === 'System Only';
+    }
+
+    public async ProcessAgentArtifacts<R = AgentRunnerJsonObject>(
+        agentResult: ExecuteAgentResult<R>,
+        conversationDetailId: string | undefined,
+        sourceArtifactId: string | undefined,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<{ artifactId: string; versionId: string; versionNumber: number } | undefined> {
+        const payload = agentResult.payload;
+        const agentRun = agentResult.agentRun;
+
+        if (!payload || Object.keys(payload).length === 0) {
+            LogStatus('No payload to create artifact from');
+            return undefined;
+        }
+
+        // Check agent's ArtifactCreationMode (including delegated specialist promotion)
+        const { agent, creationMode } = await this.resolveEffectiveArtifactCreationConfig(undefined, agentRun, contextUser);
 
         if (creationMode === 'Never') {
             LogStatus(`Skipping artifact creation - agent "${agent?.Name}" has ArtifactCreationMode='Never'`);
@@ -3560,6 +3627,10 @@ export class AgentRunner {
      * conversation is ever scanned twice.
      */
     private async hydrateConversationArtifacts<C>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentParams<C>> {
+        // Callers that already resolved artifacts (RunAgentInConversation, BaseAgent sub-agent
+        // delegation) pass `inputArtifacts` (at least `[]`), avoiding duplicate DB scans while
+        // callers that pass `parentRun` with `inputArtifacts: undefined` (e.g. realtime delegation
+        // without client artifact summaries) still scan the conversation.
         if (params.inputArtifacts !== undefined || !params.contextUser) {
             return params;
         }
