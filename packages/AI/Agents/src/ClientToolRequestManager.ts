@@ -8,7 +8,7 @@
  */
 
 import { BaseSingleton, MJLruCache } from '@memberjunction/global';
-import { LogStatus, LogError } from '@memberjunction/core';
+import { CODE_FALLBACK_LIMITS, LimitsConfigResolver, LogStatus, LogError } from '@memberjunction/core';
 import { ClientToolMetadata, ClientToolResponse } from '@memberjunction/ai-core-plus';
 
 /** Internal record for a pending tool request */
@@ -41,11 +41,11 @@ export class ClientToolRequestManager extends BaseSingleton<ClientToolRequestMan
     private pendingRequests = new Map<string, PendingRequest>();
 
     /** Max sessions whose tool definitions are retained (least-recently-used evicted beyond this) */
-    private static readonly MAX_SESSIONS = 1000;
+    private static readonly MAX_SESSIONS = CODE_FALLBACK_LIMITS.Tuning.MaxClientToolSessions;
     /** Idle lifetime of a session's tool definitions; sessions have no production teardown hook yet */
     private static readonly SESSION_TTL_MS = 6 * 60 * 60 * 1000;
     /** Max tool definitions accepted per session — a client-supplied array must not be arbitrarily large */
-    public static readonly MAX_TOOLS_PER_SESSION = 200;
+    public static readonly MAX_TOOLS_PER_SESSION = CODE_FALLBACK_LIMITS.Tuning.MaxToolsPerSession;
 
     /**
      * Enriched tool definitions per session (from client decoration). Keyed by a caller-supplied
@@ -53,7 +53,7 @@ export class ClientToolRequestManager extends BaseSingleton<ClientToolRequestMan
      * relying on `ClearSession`.
      */
     private sessionTools = new MJLruCache<string, ClientToolMetadata[]>({
-        maxSize: ClientToolRequestManager.MAX_SESSIONS,
+        maxSize: LimitsConfigResolver.Resolve().Limits.Tuning.MaxClientToolSessions,
         ttlMs: ClientToolRequestManager.SESSION_TTL_MS,
     });
 

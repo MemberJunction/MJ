@@ -60,8 +60,8 @@ describe('resolveToolChoiceForTurn', () => {
     });
 
     it('falls back to the shared absolute cap when no limit is configured', () => {
-        expect(new Probe(4999).Choice(params())).toBe('auto');
-        expect(new Probe(5000).Choice(params())).toEqual(FORCED_COMPLETION);
+        expect(new Probe(99_999).Choice(params())).toBe('auto');
+        expect(new Probe(100_000).Choice(params())).toEqual(FORCED_COMPLETION);
     });
 
     it('takes whichever limit binds first', () => {

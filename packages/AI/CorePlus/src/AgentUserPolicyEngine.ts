@@ -13,7 +13,7 @@
  * @module @memberjunction/ai-core-plus
  */
 
-import { BaseEntity, BaseEntityEvent, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, BaseEntityEvent, IMetadataProvider, IRunViewProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     MJAIAgentUserPolicyEntity,
     MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule,
@@ -138,7 +138,7 @@ export function ApplyDefaultAgentUserPolicyValues(
 export type PolicyLookupResult =
     | { status: 'found'; policy: MJAIAgentUserPolicyEntity }
     | { status: 'none'; policy: null }
-    | { status: 'error'; policy: null; errorMessage: string };
+    | { status: 'error'; policy: null; errorMessage: string; missingRunViewProvider?: boolean };
 
 /**
  * Options for {@link AgentUserPolicyEngine.ResolvePolicyForAgentAndUser}.
@@ -650,10 +650,20 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
             return { status: 'none', policy: null };
         } catch (error) {
             const errMessage = error instanceof Error ? error.message : String(error);
-            LogError(
-                `AgentUserPolicyEngine.ResolvePolicyForAgentAndUser threw for agent=${agentId}, user=${userId}: ${errMessage}`
-            );
-            return { status: 'error', policy: null, errorMessage: errMessage };
+            const missingRunViewProvider =
+                Boolean(options?.provider) &&
+                typeof (options?.provider as Partial<IRunViewProvider>).RunView !== 'function';
+            if (!missingRunViewProvider) {
+                LogError(
+                    `AgentUserPolicyEngine.ResolvePolicyForAgentAndUser threw for agent=${agentId}, user=${userId}: ${errMessage}`
+                );
+            }
+            return {
+                status: 'error',
+                policy: null,
+                errorMessage: errMessage,
+                ...(missingRunViewProvider ? { missingRunViewProvider: true } : {}),
+            };
         }
     }
 

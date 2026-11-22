@@ -248,6 +248,12 @@ export class AgentRunner {
                 Message: byUser ? 'Stopped by user' : `Stopped: ${run.ErrorMessage || 'the run was cancelled'}`,
             };
         }
+        if (run?.Status === 'Paused' || agentResult.paused) {
+            return {
+                Status: 'Complete',
+                Message: run?.Message || 'Paused awaiting human approval',
+            };
+        }
         return {
             Status: agentResult.success ? 'Complete' : 'Error',
             Message: run?.Message || (agentResult.success ? '✅ Completed' : run?.ErrorMessage || '❌ Failed'),
