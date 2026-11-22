@@ -1,0 +1,109 @@
+[
+  {
+    "fields": {
+      "Name": "Graph Edges: Flip Concept Edges to Artifact → Concept",
+      "Description": "One-time repair for edges stored before the four concept edge types took one direction. Defines, Describes, Measures and Implements run from the artifact (entity, field, view, query, action, skill or agent) to the Graph Concept. Earlier Content Pipeline runs stored them with the concept as the source; this process swaps the source and target of every such edge. Run it with DryRun first to review the per-edge diff, then apply. Swapping what an Approved edge connects is a review decision, so the user who applies it needs the \"Graph: Approve Edges\" authorization. The scope selects only edges still stored the old way, so a second run finds nothing.",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Graph Edges",
+      "WorkType": "FieldRules",
+      "ScopeType": "Filter",
+      "ScopeFilter": "EdgeType IN ('Defines', 'Describes', 'Measures', 'Implements') AND SourceEntity = 'MJ: Graph Concepts' AND TargetEntity <> 'MJ: Graph Concepts'",
+      "Status": "Active",
+      "OnChangeEnabled": false,
+      "ScheduleEnabled": false,
+      "OnDemandEnabled": true,
+      "SkipUnchanged": false,
+      "Configuration": {
+        "Rules": [
+          {
+            "TargetField": "SourceEntityID",
+            "Source": {
+              "Kind": "field",
+              "Field": "TargetEntityID"
+            }
+          },
+          {
+            "TargetField": "TargetEntityID",
+            "Source": {
+              "Kind": "field",
+              "Field": "SourceEntityID"
+            }
+          },
+          {
+            "TargetField": "SourceRecordID",
+            "Source": {
+              "Kind": "field",
+              "Field": "TargetRecordID"
+            }
+          },
+          {
+            "TargetField": "TargetRecordID",
+            "Source": {
+              "Kind": "field",
+              "Field": "SourceRecordID"
+            }
+          }
+        ]
+      }
+    },
+    "primaryKey": {
+      "ID": "09318058-DFC8-4459-9A4F-B1B699870F56"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Graph Edges: Retype NarrowerThan as BroaderThan",
+      "Description": "One-time repair for edges stored under the retired NarrowerThan edge type. NarrowerThan is now only the inverse label of BroaderThan, so each such edge becomes a BroaderThan edge with its source and target swapped (narrower → broader becomes broader → narrower). Run it with DryRun first to review the per-edge diff, then apply. Changing what an Approved edge connects is a review decision, so the user who applies it needs the \"Graph: Approve Edges\" authorization. A second run finds nothing.",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Graph Edges",
+      "WorkType": "FieldRules",
+      "ScopeType": "Filter",
+      "ScopeFilter": "EdgeTypeID = '2AC4EAD6-1FF7-44FB-9C6C-BE13451FE40D'",
+      "Status": "Active",
+      "OnChangeEnabled": false,
+      "ScheduleEnabled": false,
+      "OnDemandEnabled": true,
+      "SkipUnchanged": false,
+      "Configuration": {
+        "Rules": [
+          {
+            "TargetField": "SourceEntityID",
+            "Source": {
+              "Kind": "field",
+              "Field": "TargetEntityID"
+            }
+          },
+          {
+            "TargetField": "TargetEntityID",
+            "Source": {
+              "Kind": "field",
+              "Field": "SourceEntityID"
+            }
+          },
+          {
+            "TargetField": "SourceRecordID",
+            "Source": {
+              "Kind": "field",
+              "Field": "TargetRecordID"
+            }
+          },
+          {
+            "TargetField": "TargetRecordID",
+            "Source": {
+              "Kind": "field",
+              "Field": "SourceRecordID"
+            }
+          },
+          {
+            "TargetField": "EdgeTypeID",
+            "Source": {
+              "Kind": "static",
+              "Value": "12797109-63C1-4581-BDB4-F1816020ACBF"
+            }
+          }
+        ]
+      }
+    },
+    "primaryKey": {
+      "ID": "7C4D65BD-1FEB-47ED-9CF7-B75D72F28A0B"
+    }
+  }
+]

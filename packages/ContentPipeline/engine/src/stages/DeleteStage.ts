@@ -12,7 +12,7 @@
 import { BaseEntity, CompositeKey, LogError, RunView } from '@memberjunction/core';
 import { MJContentItemEntity, MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
-import { RegisterClass } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass } from '@memberjunction/global';
 import { ContentVectorInfrastructure } from '@memberjunction/content-autotagging';
 import { IsRouteFailure, RouteVectorRecords } from '../VectorRouting.js';
 import {
@@ -329,7 +329,34 @@ export class DeleteStage extends BaseDeleteStage {
                 return true;
             }
         }
-        return false;
+        return this.hasGraphEdges(chunkEntity.ID, chunkID, context);
+    }
+
+    /**
+     * Whether a graph edge still names this chunk as an endpoint. Graph edges are polymorphic, so no
+     * foreign key shows them in `RelatedEntities`. Retraction has already removed the `Inferred` edges
+     * the Graph stage wrote; what is left was placed by a person (`Declared`), and deleting the row
+     * would leave that edge pointing at nothing, so the chunk stays as a tombstone instead.
+     */
+    private async hasGraphEdges(chunkEntityID: string, chunkID: string, context: StageContext): Promise<boolean> {
+        if (!context.Provider.EntityByName('MJ: Graph Edges')) {
+            return false; // No graph on this provider, so nothing can point at the chunk.
+        }
+        const entity = `'${EscapeSQLString(chunkEntityID)}'`;
+        const record = `'${EscapeSQLString(chunkID)}'`;
+        const result = await RunView.FromMetadataProvider(context.Provider).RunView(
+            {
+                EntityName: 'MJ: Graph Edges',
+                ExtraFilter:
+                    `([SourceEntityID] = ${entity} AND [SourceRecordID] = ${record}) OR ` +
+                    `([TargetEntityID] = ${entity} AND [TargetRecordID] = ${record})`,
+                ResultType: 'count_only',
+                BypassCache: true,
+            },
+            context.ContextUser,
+        );
+        // A failed check counts as referenced, as for foreign keys above.
+        return !result.Success || (result.TotalRowCount ?? 0) > 0;
     }
 }
 
