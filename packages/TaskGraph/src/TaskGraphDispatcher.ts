@@ -117,6 +117,7 @@ import {
     RunWhileLoop,
     type LoopBodyInvoker,
     type LoopExecutionOptions,
+    type LoopIterationOutcome,
 } from './TaskLoopExecutor';
 import { RegisterTaskGraphKick } from './task-graph-kick';
 import {
@@ -327,7 +328,7 @@ type TaskBodyOutcome = {
      */
     IsOutputTainted?: boolean;
     /** The parameters an Action step's action was given, recorded as `runtime.actionInput` for its compensation. */
-    ActionInput?: Record<string, unknown>;
+    ActionInput?: NonNullable<TaskStepConfiguration['runtime']>['actionInput'];
     /** Optional USD cost incurred by executing this task body for budget governance accounting. */
     CostUsd?: number;
     /** Optional token count consumed by executing this task body. */
@@ -5172,7 +5173,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         // become false: the loop burned every iteration re-examining the original input and always
         // took the give-up branch, making the other branch unreachable. The loop ran, reported
         // success, and its result was predetermined.
-        let livePayload: Record<string, unknown> = savedCursor?.LivePayload
+        let livePayload = savedCursor?.LivePayload
             ? { ...savedCursor.LivePayload }
             : { ...payload };
 
@@ -5262,18 +5263,13 @@ export class TaskGraphDispatcher implements IShutdownable {
              * because the loop as a whole did not finish.
              */
             const absorb = <
-                T extends {
-                    Success: boolean;
-                    Output?: unknown;
-                    ErrorMessage?: string;
+                T extends LoopIterationOutcome & {
                     PromptRunID?: string;
                     AgentRunID?: string;
                     ActionLogID?: string;
                     IsOutputTainted?: boolean;
-                    CostUsd?: number;
-                    TokensUsed?: number;
                 },
-            >(outcome: T, bodyInput: unknown): T => {
+            >(outcome: T, bodyInput: LoopIterationOutcome['Output']): T => {
                 if (outcome.IsOutputTainted) {
                     markLoopTainted();
                 }
@@ -5564,7 +5560,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         budget: IterationPayloadBudget;
         securityEnvelope?: TaskSecurityEnvelope;
         onIterationTainted?: () => void;
-    }): Promise<{ Success: boolean; Output?: unknown; ErrorMessage?: string; ActionLogID?: string; CostUsd?: number; TokensUsed?: number }> {
+    }): Promise<LoopIterationOutcome & { ActionLogID?: string }> {
         const {
             task, op, steps, stepActionIds, index, bindings,
             getLivePayload, setLivePayload, deferLivePayloadFold, deferredFoldsByIndex,

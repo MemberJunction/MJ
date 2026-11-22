@@ -450,7 +450,7 @@ function buildPausedLoopResult(
     loopType: 'ForEach' | 'While',
     nextIterationIndex: number,
     completedIndices: number[],
-    results: unknown[],
+    results: LoopIterationOutcome['Output'][],
     succeeded: number,
     failed: number,
     pauseReason?: string,

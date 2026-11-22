@@ -19,7 +19,7 @@ import {
     type TaskGraphNodeConfigMap,
 } from '@memberjunction/ai-core-plus';
 import type { MJTaskEntity_ITaskLoopIteration, MJTaskEntity_ITaskStepConfiguration } from '@memberjunction/core-entities';
-import type { LoopCursorSnapshot } from './TaskLoopExecutor';
+import type { LoopCursorSnapshot, LoopIterationOutcome } from './TaskLoopExecutor';
 import { ParseConditionOutput } from './condition-gate';
 import type { TaskCompensationStepMetadata } from './saga-compensation';
 
@@ -85,7 +85,7 @@ export type TaskStepConfiguration = MJTaskEntity_ITaskStepConfiguration & {
         /** Durable loop cursor state persisted on the Task row when a loop pauses mid-execution under governance. */
         loopCursor?: {
             Cursor: LoopCursorSnapshot;
-            LivePayload: Record<string, unknown>;
+            LivePayload: Record<string, LoopIterationOutcome['Output']>;
             IterationTrace: MJTaskEntity_ITaskLoopIteration[];
             AccumulatedCostUsd: number;
             AccumulatedTokensUsed: number;

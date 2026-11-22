@@ -2727,7 +2727,7 @@ describe('Non-destructive pause, persisted checkpoint, owner notification, and h
 
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunView: vi.fn(async () => ({ Success: true, Results: [] })),
-            RunViews: vi.fn(async (paramsArray: Array<unknown>) =>
+            RunViews: vi.fn(async (paramsArray: Array<RunViewParams>) =>
                 paramsArray.map(() => ({ Success: true, Results: [] })),
             ),
         } as Partial<RunView> as RunView);

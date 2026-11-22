@@ -71,7 +71,7 @@ import {
     type PendingGovernanceCheckpointContext,
     type TaskGraphDebugState,
 } from './debug-state';
-import type { LoopIterationBatchOutcome, LoopIterationGovernanceVerdict } from './TaskLoopExecutor';
+import type { LoopIterationBatchOutcome, LoopIterationGovernanceVerdict, LoopIterationOutcome } from './TaskLoopExecutor';
 import type { TaskGraphGovernanceConfig, TaskGraphObserver } from './types';
 
 interface SettledNodeMetrics {
@@ -695,14 +695,8 @@ export class TaskGraphGovernanceCoordinator {
         CompletedIterations: number;
         AccumulatedLoopCostUsd: number;
         AccumulatedLoopTokensUsed: number;
-        LivePayload: Record<string, unknown>;
-        LastOutcome?: {
-            Success: boolean;
-            Output?: unknown;
-            ErrorMessage?: string;
-            CostUsd?: number;
-            TokensUsed?: number;
-        };
+        LivePayload: Record<string, LoopIterationOutcome['Output']>;
+        LastOutcome?: LoopIterationOutcome;
         BatchOutcomes?: readonly LoopIterationBatchOutcome[];
         Observer?: TaskGraphObserver;
         DebugStateCache?: Map<string, TaskGraphDebugState>;
@@ -783,7 +777,7 @@ export class TaskGraphGovernanceCoordinator {
         } else if (this.shouldEvaluateProgress(resolvedLimits)) {
             const outcomesToRecord: Array<{
                 Index: number;
-                Outcome: { Success: boolean; Output?: unknown; ErrorMessage?: string; CostUsd?: number; TokensUsed?: number };
+                Outcome: LoopIterationOutcome;
             }> = args.BatchOutcomes && args.BatchOutcomes.length > 0
                 ? args.BatchOutcomes.map((b) => ({ Index: b.Index, Outcome: b.Outcome }))
                 : args.LastOutcome

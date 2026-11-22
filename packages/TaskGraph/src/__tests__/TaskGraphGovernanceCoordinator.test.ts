@@ -34,11 +34,17 @@ import {
 import { SQLServerDialect } from '@memberjunction/sql-dialect';
 import type { TaskGraphDebugState } from '../debug-state';
 import { ParseTaskGraphDebugState } from '../debug-state';
+import type { TaskStepConfiguration } from '../decision-node';
 import { TaskClaimStore } from '../TaskClaimStore';
 import { TaskGraphDispatcher } from '../TaskGraphDispatcher';
 import { TaskGraphGovernanceCoordinator } from '../TaskGraphGovernanceCoordinator';
+import type { LoopCursorSnapshot } from '../TaskLoopExecutor';
 import { TaskGraphService } from '../TaskGraphService';
 import type { TaskActionRunner, TaskAgentRunner, TaskGraphFrame } from '../types';
+
+interface LoopTestActionInput {
+    val?: string;
+}
 
 const capturedErrors: string[] = [];
 
@@ -1911,8 +1917,8 @@ describe('TaskGraphGovernanceCoordinator — default opt-in, 5-tier policy scope
         submitRun.Status = 'Running';
         await submitRun.Save();
 
-        const seenIterationsDisp1: unknown[] = [];
-        const seenIterationsDisp2: unknown[] = [];
+        const seenIterationsDisp1: string[] = [];
+        const seenIterationsDisp2: string[] = [];
         const frames1: TaskGraphFrame[] = [];
 
         const disp1 = new TaskGraphDispatcher(
@@ -1930,11 +1936,11 @@ describe('TaskGraphGovernanceCoordinator — default opt-in, 5-tier policy scope
             { OnFrame: (f) => frames1.push(f) },
             {
                 RunActionForTask: async (ctx) => {
-                    const p = ctx.InputPayload as Record<string, unknown>;
-                    seenIterationsDisp1.push(p['val']);
+                    const p = ctx.InputPayload as LoopTestActionInput;
+                    seenIterationsDisp1.push(p.val ?? '');
                     return {
                         Success: true,
-                        Output: { processed: p['val'] },
+                        Output: { processed: p.val },
                         CostUsd: 0.10,
                         TokensUsed: 100,
                     };
@@ -2004,7 +2010,7 @@ describe('TaskGraphGovernanceCoordinator — default opt-in, 5-tier policy scope
                     governanceCostUsd?: number;
                     loopCursor?: {
                         AccumulatedCostUsd: number;
-                        Cursor: { NextIterationIndex: number; CompletedIndices: number[]; PartialResults: unknown[] };
+                        Cursor: LoopCursorSnapshot;
                     };
                 };
             };
@@ -2032,11 +2038,11 @@ describe('TaskGraphGovernanceCoordinator — default opt-in, 5-tier policy scope
             undefined,
             {
                 RunActionForTask: async (ctx) => {
-                    const p = ctx.InputPayload as Record<string, unknown>;
-                    seenIterationsDisp2.push(p['val']);
+                    const p = ctx.InputPayload as LoopTestActionInput;
+                    seenIterationsDisp2.push(p.val ?? '');
                     return {
                         Success: true,
-                        Output: { processed: p['val'] },
+                        Output: { processed: p.val },
                         CostUsd: 0.10,
                         TokensUsed: 100,
                     };
@@ -2068,7 +2074,7 @@ describe('TaskGraphGovernanceCoordinator — default opt-in, 5-tier policy scope
             const out = JSON.parse(completedLoop.OutputPayload!) as { results: Array<{ processed: string }> };
             expect(out.results.map((r) => r.processed)).toEqual(['A', 'B', 'C', 'D', 'E']);
             const finalCfg = JSON.parse(completedLoop.Configuration!) as {
-                runtime?: { loopCursor?: unknown; iterations?: Array<{ cost?: number }> };
+                runtime?: { loopCursor?: NonNullable<TaskStepConfiguration['runtime']>['loopCursor']; iterations?: Array<{ cost?: number }> };
             };
             expect(finalCfg.runtime?.loopCursor).toBeUndefined();
             expect(finalCfg.runtime?.iterations).toHaveLength(5);
@@ -2235,7 +2241,7 @@ describe('TaskGraphGovernanceCoordinator — default opt-in, 5-tier policy scope
             expect(disp2Calls).toHaveLength(2);
             const completedLoop = db.Tasks.get(loopTaskId.toLowerCase())!;
             expect(completedLoop.Status).toBe('Complete');
-            const out = JSON.parse(completedLoop.OutputPayload!) as { iterations: number; results: unknown[] };
+            const out = JSON.parse(completedLoop.OutputPayload!) as { iterations: number; results: Array<{ progress?: string; done?: boolean }> };
             expect(out.iterations).toBe(6);
             expect(out.results).toHaveLength(6);
         } finally {
@@ -2254,8 +2260,8 @@ describe('TaskGraphGovernanceCoordinator — default opt-in, 5-tier policy scope
         submitRun.Status = 'Running';
         await submitRun.Save();
 
-        const disp1Items: unknown[] = [];
-        const disp2Items: unknown[] = [];
+        const disp1Items: string[] = [];
+        const disp2Items: string[] = [];
 
         const disp1 = new TaskGraphDispatcher(
             { CreateProvider: async () => provider },
@@ -2272,11 +2278,11 @@ describe('TaskGraphGovernanceCoordinator — default opt-in, 5-tier policy scope
             undefined,
             {
                 RunActionForTask: async (ctx) => {
-                    const p = ctx.InputPayload as Record<string, unknown>;
-                    disp1Items.push(p['val']);
+                    const p = ctx.InputPayload as LoopTestActionInput;
+                    disp1Items.push(p.val ?? '');
                     return {
                         Success: true,
-                        Output: { item: p['val'] },
+                        Output: { item: p.val },
                         CostUsd: 0.10,
                         TokensUsed: 100,
                     };
@@ -2365,11 +2371,11 @@ describe('TaskGraphGovernanceCoordinator — default opt-in, 5-tier policy scope
             undefined,
             {
                 RunActionForTask: async (ctx) => {
-                    const p = ctx.InputPayload as Record<string, unknown>;
-                    disp2Items.push(p['val']);
+                    const p = ctx.InputPayload as LoopTestActionInput;
+                    disp2Items.push(p.val ?? '');
                     return {
                         Success: true,
-                        Output: { item: p['val'] },
+                        Output: { item: p.val },
                         CostUsd: 0.10,
                         TokensUsed: 100,
                     };
@@ -2402,7 +2408,7 @@ describe('TaskGraphGovernanceCoordinator — default opt-in, 5-tier policy scope
             const out = JSON.parse(completedLoop.OutputPayload!) as { results: Array<{ item: string }> };
             expect(out.results.map((r) => r.item)).toEqual(['P0', 'P1', 'P2', 'P3', 'P4', 'P5']);
             const finalCfg = JSON.parse(completedLoop.Configuration!) as {
-                runtime?: { loopCursor?: unknown; iterations?: Array<{ cost?: number }> };
+                runtime?: { loopCursor?: NonNullable<TaskStepConfiguration['runtime']>['loopCursor']; iterations?: Array<{ cost?: number }> };
             };
             expect(finalCfg.runtime?.loopCursor).toBeUndefined();
             expect(finalCfg.runtime?.iterations).toHaveLength(6);
