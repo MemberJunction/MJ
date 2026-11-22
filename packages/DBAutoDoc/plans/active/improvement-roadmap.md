@@ -305,7 +305,7 @@ is meant to sit alongside that work, not restate it.
 | **#5722** (issue) | Database-sourced text reaches prompts unsanitised; decide a trust model. | **Prerequisite for Phase 4 and for every new prompt input** (query history 2.9, module text 2.10, #5223's documents and sandbox results). |
 | **#6240** (PR) | Moves `PromptEngine` onto `@memberjunction/nunjucks-sandbox`. | Any `PromptEngine` change here waits for it. |
 | **#5816** (issue) | Store per-entity row counts and field statistics in MJ metadata for Skip. | Agree with #6505 on one source of statistics. DBAutoDoc can produce them; storing them in MJ is the consumer's job. |
-| **#6404** (PR): MJ Canon graph | Graph of entities, FKs, joins, queries and concepts rendered for agent prompts. | **Inside MJ, the ontology layer is Canon.** DBAutoDoc should not grow its own ontology store; Ossie and Auto-Ontology exporters (8.3, 8.4) are output formats for non-MJ consumers. |
+| **MJ Canon graph** (runtime on `next` in `packages/MJCoreEntities/src/graph/`; #6404 is being re-cut onto it) | Graph of entities, FKs, joins, queries and concepts rendered for agent prompts. | **Inside MJ, the ontology layer is Canon.** DBAutoDoc should not grow its own ontology store; Ossie and Auto-Ontology exporters (8.3, 8.4) are output formats for non-MJ consumers. The interface is fixed below. |
 | **#5217**, **#6466** / **#6575** | Soft-FK indexes not created on PostgreSQL; FK index guard duplicates indexes. | Phase 8.1 should emit index DDL alongside constraint DDL, as #5223 also suggests. |
 | **#6583** (PR) | Saved-query metadata moves to `QueryEngine`. | Not used by DBAutoDoc (it reads the source database's own query history), but MJ-side consumers of query evidence should read through `QueryEngine`. |
 
@@ -321,6 +321,33 @@ contamination-controlled benchmarks, and the downstream text-to-SQL benchmark.
 #6327), `discovery/ColumnStatsCache.ts` (#6505, #6499), `prompts/table-analysis.md` (#6505,
 #6499), `types/state.ts` (#6505, #6327), `prompts/PromptEngine.ts` (#6240). Work on this plan
 that touches these files starts after those PRs land.
+
+### Interface to Canon (MJ #6675, decision 7)
+
+Decided on 2026-11-18 in the [Canon master plan](https://github.com/MemberJunction/MJ/pull/6675):
+DBAutoDoc keeps describing schema, and its certified descriptions stay on entities and fields.
+When it finds something that is a business concept, it proposes it through the same route as
+every other proposer. It does not keep a second store of definitions. In practice:
+
+1. **Schema facts stay where they are.** Table and column descriptions, PKs, FKs and value lists
+   go to `MJ: Entities` and `MJ: Entity Fields` as today. Phase 7's certification state applies to
+   those rows (and to `state.json` for non-MJ runs); it is not copied into the graph.
+2. **Business concepts are proposals, never writes.** A term DBAutoDoc infers (a metric in query
+   history, a status code family, a domain like "Membership") becomes a `Proposed` graph concept
+   with `Origin = 'Inferred'`, written through the learning-cycle proposal ledger in #6213
+   (decision 2). Approval is the `Graph: Approve Edges` gate that #6731 extended to concepts.
+   Nothing DBAutoDoc writes is approved automatically.
+3. **The two proposer rules hold (decision 6).** Skip any concept name already in the graph in any
+   status, so a rejected proposal stays rejected; and write nothing unless the run is started
+   with an explicit write option. Dry run is the default.
+4. **Links use the edge contract on `next` (#6842).** A field or entity that a concept describes
+   is a `Describes` edge, **entity or entity field → concept**; a query that measures a metric is
+   `Measures`, **query → concept**. Edges go through `EntityGraphOverlayStore`, which refuses an
+   edge whose type or endpoints break the seeded contract. Use only seeded edge type names.
+5. **Query-history mining (2.9) feeds both.** Join evidence improves FK discovery (schema);
+   repeated aggregate expressions are candidate metric concepts (proposals, per item 2).
+6. **Non-MJ outputs are unaffected.** Ossie and Auto-Ontology exports (8.3, 8.4) read DBAutoDoc's
+   own state and are formats for consumers outside MJ, not a second Canon.
 
 ### Existing plans this one extends
 
