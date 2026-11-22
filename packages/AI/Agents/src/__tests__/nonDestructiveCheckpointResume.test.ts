@@ -4,6 +4,7 @@ import {
     LimitsConfigResolver,
     RunView,
     type IMetadataProvider,
+    type RunViewParams,
     type UserInfo,
 } from '@memberjunction/core';
 import {
@@ -14,6 +15,7 @@ import {
     type AgentConfiguration,
     type AIPromptParams,
     type AIPromptRunResult,
+    type BaseAgentNextStep,
     type ExecuteAgentParams,
     type MJAIAgentEntityExtended,
     type MJAIAgentRunEntityExtended,
@@ -234,6 +236,7 @@ class InMemoryCheckpointHarness {
             ErrorMessage: null,
             Message: null,
             UserID: USER_ID,
+            ScheduledJobRunID: null,
             TotalPromptIterations: 0,
             TotalTokensUsed: 0,
             TotalPromptTokensUsed: 0,
@@ -376,11 +379,16 @@ function makePromptResult(
 
 class TestableCheckpointAgent extends BaseAgent {
     private readonly scriptedPromptCalls: Array<() => AIPromptRunResult<ScriptedEnvelope>>;
+    private readonly failOnStepCount?: number;
     public readonly PromptCalls: AIPromptParams[] = [];
 
-    constructor(scripted: Array<() => AIPromptRunResult<ScriptedEnvelope>>) {
+    constructor(
+        scripted: Array<() => AIPromptRunResult<ScriptedEnvelope>>,
+        options?: { failOnStepCount?: number },
+    ) {
         super();
         this.scriptedPromptCalls = scripted;
+        this.failOnStepCount = options?.failOnStepCount;
         const promptRunnerStub = {
             ExecutePrompt: vi.fn(async (promptParams: AIPromptParams) => {
                 this.PromptCalls.push(promptParams);
@@ -393,6 +401,18 @@ class TestableCheckpointAgent extends BaseAgent {
             FlushPendingSaves: vi.fn(async () => ({ failures: 0 })),
         };
         Reflect.set(this, '_promptRunner', promptRunnerStub);
+    }
+
+    protected override async executeNextStep<P = Record<string, RunawayJsonValue>>(
+        params: ExecuteAgentParams,
+        config: AgentConfiguration,
+        previousDecision: BaseAgentNextStep<P> | undefined,
+        stepCount: number,
+    ): Promise<BaseAgentNextStep<P>> {
+        if (this.failOnStepCount !== undefined && stepCount === this.failOnStepCount) {
+            throw new Error('Simulated fatal step failure after judge timeout');
+        }
+        return super.executeNextStep<P>(params, config, previousDecision, stepCount);
     }
 
     protected override async loadAgentConfiguration(): Promise<AgentConfiguration> {
@@ -2603,7 +2623,7 @@ describe('Non-destructive pause, persisted checkpoint, owner notification, and h
         }));
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunView: vi.fn(async () => ({ Success: true, Results: [] })),
-            RunViews: vi.fn(async (paramsArray: Array<unknown>) =>
+            RunViews: vi.fn(async (paramsArray: Array<RunViewParams>) =>
                 paramsArray.map(() => ({ Success: true, Results: runSnapshots })),
             ),
         } as Partial<RunView> as RunView);
@@ -2731,5 +2751,457 @@ describe('Non-destructive pause, persisted checkpoint, owner notification, and h
         expect(evalRes.Ledger.RunWallClockMs).toBe(10_000);
         expect(evalRes.Ledger.RoutineWallClockMs).toBe(10_000);
         expect(evalRes.Ledger.UserDailyWallClockMs).toBe(10_000);
+    });
+
+    it('CR-JUDGE-TIMEOUT-USAGE: durably persists late deferred FastConvergenceJudge usage on Failed runs and attributes PerRoutine / PerUserPerDay spend exactly once', async () => {
+        const provider = harness.CreateProvider();
+        const contextUser = { ID: USER_ID, Name: 'Alice Owner', Email: 'alice@example.com' } as UserInfo;
+        const routineId = 'routine-late-judge-failed';
+        const agentEntity = {
+            ID: AGENT_ID,
+            Name: 'LateJudgeFailedRunAgent',
+            TypeID: AGENT_TYPE_ID,
+            Status: 'Active',
+            MaxCostPerRun: null,
+            MaxTokensPerRun: null,
+            MaxTimePerRun: null,
+            MaxIterationsPerRun: null,
+            TypeConfiguration: null,
+        } as Partial<MJAIAgentEntityExtended> as MJAIAgentEntityExtended;
+
+        const makeAmbiguousTurn = (idx: number) =>
+            makePromptResult(
+                {
+                    taskComplete: false,
+                    reasoning: idx % 2 === 0
+                        ? `Inspecting schema partition ${idx} metadata without mutating state`
+                        : `Evaluating selectivity for candidate partition ${idx * 13}`,
+                    nextStep: {
+                        type: 'Actions',
+                        actions: [{ name: 'ProcessBatchItem', params: {} }],
+                    },
+                },
+                0.02,
+                1_800,
+            );
+
+        let releaseDeferredJudge!: (res: {
+            Converging: boolean;
+            Reason: string;
+            LatencyMs: number;
+            TimedOut: boolean;
+            UsedFallback: boolean;
+            Source: 'Model';
+            CostUsd: number;
+            TokensUsed: number;
+        }) => void;
+        const deferredJudgePromise = new Promise<{
+            Converging: boolean;
+            Reason: string;
+            LatencyMs: number;
+            TimedOut: boolean;
+            UsedFallback: boolean;
+            Source: 'Model';
+            CostUsd: number;
+            TokensUsed: number;
+        }>((resolve) => {
+            releaseDeferredJudge = resolve;
+        });
+
+        // 3 ambiguous turns ($0.06, 5,400 tokens) trigger FastConvergenceJudge at step 6,
+        // which times out at 25ms (ContinueWithWarning) while the evaluator ignores AbortSignal.
+        // Step 6 (Turn 4) throws fatally so the originating run is persisted as Status='Failed' BEFORE the judge resolves.
+        const agent = new TestableCheckpointAgent(
+            [
+                () => makeAmbiguousTurn(1),
+                () => makeAmbiguousTurn(2),
+                () => makeAmbiguousTurn(3),
+            ],
+            { failOnStepCount: 6 },
+        );
+
+        const failedResult = await agent.Execute({
+            agent: agentEntity,
+            conversationMessages: [{ role: 'user', content: 'Run that fails before late judge settles' }],
+            contextUser,
+            provider,
+            userId: USER_ID,
+            routineId,
+            scheduledJobRunId: routineId,
+            limitsOverride: {
+                Budgets: {
+                    PerRun: { MaxCostUsd: 5.0, MaxWallClockMs: 60_000 },
+                },
+                ProgressDetector: {
+                    Enabled: true,
+                    MinIterationsBeforeCheck: 6,
+                    WindowSize: 6,
+                    AmbiguityLowScoreThreshold: 0.25,
+                    AmbiguityHighScoreThreshold: 0.65,
+                    FastJudgeEnabled: true,
+                    FastJudgeTimeoutMs: 25,
+                    FastJudgeFailureFallback: 'ContinueWithWarning',
+                },
+            },
+            fastConvergenceJudgeEvaluator: async () => deferredJudgePromise,
+        });
+
+        expect(failedResult.success).toBe(false);
+        expect(failedResult.agentRun.Status).toBe('Failed');
+        expect(failedResult.agentRun.TotalCost).toBeCloseTo(0.06, 5);
+        expect(failedResult.agentRun.TotalTokensUsed).toBe(5_400);
+
+        const saveSpy = vi.spyOn(failedResult.agentRun, 'Save');
+        const initialSaveCount = saveSpy.mock.calls.length;
+
+        // Release nonzero usage AFTER the run has already been persisted as Failed
+        releaseDeferredJudge({
+            Converging: true,
+            Reason: 'Late response ignoring abort after Failed persistence',
+            LatencyMs: 120,
+            TimedOut: false,
+            UsedFallback: false,
+            Source: 'Model',
+            CostUsd: 0.07,
+            TokensUsed: 700,
+        });
+
+        const flushed = await agent.WaitForPendingFastJudgeEvaluations();
+        expect(flushed).toBe(true);
+        expect(saveSpy.mock.calls.length).toBeGreaterThan(initialSaveCount);
+
+        // Reload the run from the provider store on a fresh entity instance
+        const reloadedRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
+        expect(await reloadedRun.Load(failedResult.agentRun.ID)).toBe(true);
+        expect(reloadedRun.Status).toBe('Failed');
+        expect(reloadedRun.TotalCost).toBeCloseTo(0.13, 5);
+        expect(reloadedRun.TotalTokensUsed).toBe(6_100);
+
+        // Calling Flush/Wait again must NOT double-charge
+        expect(await agent.WaitForPendingFastJudgeEvaluations()).toBe(true);
+        const reloadedAgain = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
+        expect(await reloadedAgain.Load(failedResult.agentRun.ID)).toBe(true);
+        expect(reloadedAgain.TotalCost).toBeCloseTo(0.13, 5);
+        expect(reloadedAgain.TotalTokensUsed).toBe(6_100);
+
+        // Shared historical PerRoutine and PerUserPerDay ledger sees $0.13 exactly once
+        const runSnapshots = Array.from(harness.Runs.values()).map((r) => ({
+            ID: r.ID,
+            ParentRunID: r.ParentRunID ?? null,
+            UserID: r.UserID,
+            TotalCost: r.TotalCost,
+            TotalCostRollup: r.TotalCostRollup ?? r.TotalCost,
+            StartedAt: r.StartedAt,
+            CompletedAt: r.CompletedAt,
+            __mj_UpdatedAt: new Date(),
+            ScheduledJobRunID: r.ScheduledJobRunID ?? null,
+            Status: r.Status,
+            Data: r.Data,
+        }));
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn(async () => ({ Success: true, Results: [] })),
+            RunViews: vi.fn(async (paramsArray: Array<RunViewParams>) =>
+                paramsArray.map(() => ({ Success: true, Results: runSnapshots })),
+            ),
+        } as Partial<RunView> as RunView);
+
+        const guard = new BudgetEnforcementGuard();
+        const sharedCheck = await guard.Evaluate({
+            Budgets: {
+                ...CODE_FALLBACK_LIMITS.Budgets,
+                PerRoutine: { MaxCostUsd: 0.15, MaxWallClockMs: null },
+                PerUserPerDay: { MaxCostUsd: 0.15, MaxWallClockMs: null, DayBoundaryTimezone: 'UTC' },
+                AllowedInFlightOvershootUsd: 0,
+            },
+            AgentRunID: '99999999-9999-4999-8999-999999999992',
+            UserID: USER_ID,
+            RoutineID: routineId,
+            CurrentRunCostUsd: 0.03,
+            CurrentRunStartedAtMs: Date.now() - 100,
+            Provider: provider,
+            ContextUser: contextUser,
+        });
+        expect(sharedCheck.Exceeded).toBe(true);
+        expect(sharedCheck.Ledger.RoutineCostUsd).toBeCloseTo(0.16, 5);
+        expect(sharedCheck.Ledger.UserDailyCostUsd).toBeCloseTo(0.16, 5);
+    });
+
+    it('CR-JUDGE-TIMEOUT-USAGE: durably persists late deferred FastConvergenceJudge usage on Cancelled runs with transient Save() failure reload-and-retry without double-charging', async () => {
+        const provider = harness.CreateProvider();
+        const contextUser = { ID: USER_ID, Name: 'Alice Owner', Email: 'alice@example.com' } as UserInfo;
+        const routineId = 'routine-late-judge-cancelled';
+        const agentEntity = {
+            ID: AGENT_ID,
+            Name: 'LateJudgeCancelledRunAgent',
+            TypeID: AGENT_TYPE_ID,
+            Status: 'Active',
+            MaxCostPerRun: null,
+            MaxTokensPerRun: null,
+            MaxTimePerRun: null,
+            MaxIterationsPerRun: null,
+            TypeConfiguration: null,
+        } as Partial<MJAIAgentEntityExtended> as MJAIAgentEntityExtended;
+
+        const makeAmbiguousTurn = (idx: number) =>
+            makePromptResult(
+                {
+                    taskComplete: false,
+                    reasoning: idx % 2 === 0
+                        ? `Inspecting schema partition ${idx} metadata without mutating state`
+                        : `Evaluating selectivity for candidate partition ${idx * 13}`,
+                    nextStep: {
+                        type: 'Actions',
+                        actions: [{ name: 'ProcessBatchItem', params: {} }],
+                    },
+                },
+                0.02,
+                1_800,
+            );
+
+        let releaseDeferredJudge!: (res: {
+            Converging: boolean;
+            Reason: string;
+            LatencyMs: number;
+            TimedOut: boolean;
+            UsedFallback: boolean;
+            Source: 'Model';
+            CostUsd: number;
+            TokensUsed: number;
+        }) => void;
+        const deferredJudgePromise = new Promise<{
+            Converging: boolean;
+            Reason: string;
+            LatencyMs: number;
+            TimedOut: boolean;
+            UsedFallback: boolean;
+            Source: 'Model';
+            CostUsd: number;
+            TokensUsed: number;
+        }>((resolve) => {
+            releaseDeferredJudge = resolve;
+        });
+
+        const abortController = new AbortController();
+        const agent = new TestableCheckpointAgent([
+            () => makeAmbiguousTurn(1),
+            () => makeAmbiguousTurn(2),
+            () => makeAmbiguousTurn(3),
+            () => {
+                abortController.abort('Operator cancelled during execution');
+                throw new Error('Cancelled during execution');
+            },
+        ]);
+
+        const cancelledResult = await agent.Execute({
+            agent: agentEntity,
+            conversationMessages: [{ role: 'user', content: 'Run that gets cancelled before late judge settles' }],
+            contextUser,
+            provider,
+            userId: USER_ID,
+            routineId,
+            scheduledJobRunId: routineId,
+            cancellationToken: abortController.signal,
+            limitsOverride: {
+                Budgets: {
+                    PerRun: { MaxCostUsd: 5.0, MaxWallClockMs: 60_000 },
+                },
+                ProgressDetector: {
+                    Enabled: true,
+                    MinIterationsBeforeCheck: 6,
+                    WindowSize: 6,
+                    AmbiguityLowScoreThreshold: 0.25,
+                    AmbiguityHighScoreThreshold: 0.65,
+                    FastJudgeEnabled: true,
+                    FastJudgeTimeoutMs: 25,
+                    FastJudgeFailureFallback: 'ContinueWithWarning',
+                },
+            },
+            fastConvergenceJudgeEvaluator: async () => deferredJudgePromise,
+        });
+
+        expect(cancelledResult.success).toBe(false);
+        expect(cancelledResult.agentRun.Status).toBe('Cancelled');
+        expect(cancelledResult.agentRun.TotalCost).toBeCloseTo(0.06, 5);
+        expect(cancelledResult.agentRun.TotalTokensUsed).toBe(5_400);
+
+        // Wrap provider with snapshot-backed persistence so failed Save() calls do NOT mutate persisted state
+        const persistedSnapshots = new Map<string, {
+            ID: string;
+            AgentID: string;
+            UserID: string | null;
+            ParentRunID: string | null;
+            ScheduledJobRunID: string | null;
+            Status: MJAIAgentRunEntityExtended['Status'];
+            StartedAt: Date;
+            CompletedAt: Date | null;
+            TotalCost: number;
+            TotalCostRollup: number;
+            TotalTokensUsed: number;
+            Data: string | null;
+        }>();
+        const seedRun = cancelledResult.agentRun;
+        persistedSnapshots.set(seedRun.ID, {
+            ID: seedRun.ID,
+            AgentID: seedRun.AgentID,
+            UserID: seedRun.UserID ?? null,
+            ParentRunID: seedRun.ParentRunID ?? null,
+            ScheduledJobRunID: seedRun.ScheduledJobRunID ?? null,
+            Status: seedRun.Status,
+            StartedAt: seedRun.StartedAt,
+            CompletedAt: seedRun.CompletedAt ?? null,
+            TotalCost: seedRun.TotalCost ?? 0,
+            TotalCostRollup: seedRun.TotalCostRollup ?? seedRun.TotalCost ?? 0,
+            TotalTokensUsed: seedRun.TotalTokensUsed ?? 0,
+            Data: seedRun.Data ?? null,
+        });
+
+        let allowSave = false;
+        vi.spyOn(seedRun, 'Save').mockImplementation(async () => {
+            if (!allowSave) {
+                return false;
+            }
+            persistedSnapshots.set(seedRun.ID, {
+                ID: seedRun.ID,
+                AgentID: seedRun.AgentID,
+                UserID: seedRun.UserID ?? null,
+                ParentRunID: seedRun.ParentRunID ?? null,
+                ScheduledJobRunID: seedRun.ScheduledJobRunID ?? null,
+                Status: seedRun.Status,
+                StartedAt: seedRun.StartedAt,
+                CompletedAt: seedRun.CompletedAt ?? null,
+                TotalCost: seedRun.TotalCost ?? 0,
+                TotalCostRollup: seedRun.TotalCostRollup ?? seedRun.TotalCost ?? 0,
+                TotalTokensUsed: seedRun.TotalTokensUsed ?? 0,
+                Data: seedRun.Data ?? null,
+            });
+            return true;
+        });
+
+        const origGetEntityObject = provider.GetEntityObject.getMockImplementation()!;
+        vi.spyOn(provider, 'GetEntityObject').mockImplementation(async (entityName, cu) => {
+            const entity = await origGetEntityObject(entityName, cu);
+            if (entityName === 'MJ: AI Agent Runs') {
+                const runEntity = entity as MJAIAgentRunEntityExtended;
+                vi.spyOn(runEntity, 'Load').mockImplementation(async (id: string) => {
+                    const snap = persistedSnapshots.get(id);
+                    if (!snap) {
+                        return false;
+                    }
+                    runEntity.ID = snap.ID;
+                    runEntity.AgentID = snap.AgentID;
+                    runEntity.UserID = snap.UserID;
+                    runEntity.ParentRunID = snap.ParentRunID;
+                    runEntity.ScheduledJobRunID = snap.ScheduledJobRunID;
+                    runEntity.Status = snap.Status;
+                    runEntity.StartedAt = snap.StartedAt;
+                    runEntity.CompletedAt = snap.CompletedAt;
+                    runEntity.TotalCost = snap.TotalCost;
+                    runEntity.TotalCostRollup = snap.TotalCostRollup;
+                    runEntity.TotalTokensUsed = snap.TotalTokensUsed;
+                    runEntity.Data = snap.Data;
+                    return true;
+                });
+                vi.spyOn(runEntity, 'Save').mockImplementation(async () => {
+                    if (!allowSave) {
+                        return false;
+                    }
+                    persistedSnapshots.set(runEntity.ID, {
+                        ID: runEntity.ID,
+                        AgentID: runEntity.AgentID,
+                        UserID: runEntity.UserID ?? null,
+                        ParentRunID: runEntity.ParentRunID ?? null,
+                        ScheduledJobRunID: runEntity.ScheduledJobRunID ?? null,
+                        Status: runEntity.Status,
+                        StartedAt: runEntity.StartedAt,
+                        CompletedAt: runEntity.CompletedAt ?? null,
+                        TotalCost: runEntity.TotalCost ?? 0,
+                        TotalCostRollup: runEntity.TotalCostRollup ?? runEntity.TotalCost ?? 0,
+                        TotalTokensUsed: runEntity.TotalTokensUsed ?? 0,
+                        Data: runEntity.Data ?? null,
+                    });
+                    return true;
+                });
+            }
+            return entity;
+        });
+
+        releaseDeferredJudge({
+            Converging: true,
+            Reason: 'Late response ignoring abort after Cancelled persistence',
+            LatencyMs: 140,
+            TimedOut: false,
+            UsedFallback: false,
+            Source: 'Model',
+            CostUsd: 0.09,
+            TokensUsed: 900,
+        });
+
+        // Storage outage active -> WaitForPendingFastJudgeEvaluations returns false and does NOT mark settled
+        const firstFlush = await agent.WaitForPendingFastJudgeEvaluations();
+        expect(firstFlush).toBe(false);
+
+        const beforeRecovery = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
+        expect(await beforeRecovery.Load(cancelledResult.agentRun.ID)).toBe(true);
+        expect(beforeRecovery.TotalCost).toBeCloseTo(0.06, 5);
+        expect(beforeRecovery.TotalTokensUsed).toBe(5_400);
+
+        // Storage recovers -> retry flush reloads latest entity, applies delta once, saves, and returns true!
+        allowSave = true;
+        const secondFlush = await agent.FlushPendingLateFastJudgeSaves();
+        expect(secondFlush).toBe(true);
+
+        const reloadedRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
+        expect(await reloadedRun.Load(cancelledResult.agentRun.ID)).toBe(true);
+        expect(reloadedRun.Status).toBe('Cancelled');
+        expect(reloadedRun.TotalCost).toBeCloseTo(0.15, 5);
+        expect(reloadedRun.TotalTokensUsed).toBe(6_300);
+
+        // Calling FlushPendingLateFastJudgeSaves again must NOT double-charge
+        expect(await agent.FlushPendingLateFastJudgeSaves()).toBe(true);
+        const reloadedAgain = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
+        expect(await reloadedAgain.Load(cancelledResult.agentRun.ID)).toBe(true);
+        expect(reloadedAgain.TotalCost).toBeCloseTo(0.15, 5);
+        expect(reloadedAgain.TotalTokensUsed).toBe(6_300);
+
+        // Shared historical PerRoutine and PerUserPerDay ledger sees $0.15 exactly once
+        const runSnapshots = Array.from(persistedSnapshots.values()).map((r) => ({
+            ID: r.ID,
+            ParentRunID: r.ParentRunID,
+            UserID: r.UserID,
+            TotalCost: r.TotalCost,
+            TotalCostRollup: r.TotalCostRollup,
+            StartedAt: r.StartedAt,
+            CompletedAt: r.CompletedAt,
+            __mj_UpdatedAt: new Date(),
+            ScheduledJobRunID: r.ScheduledJobRunID,
+            Status: r.Status,
+            Data: r.Data,
+        }));
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn(async () => ({ Success: true, Results: [] })),
+            RunViews: vi.fn(async (paramsArray: Array<RunViewParams>) =>
+                paramsArray.map(() => ({ Success: true, Results: runSnapshots })),
+            ),
+        } as Partial<RunView> as RunView);
+
+        const guard = new BudgetEnforcementGuard();
+        const sharedCheck = await guard.Evaluate({
+            Budgets: {
+                ...CODE_FALLBACK_LIMITS.Budgets,
+                PerRoutine: { MaxCostUsd: 0.17, MaxWallClockMs: null },
+                PerUserPerDay: { MaxCostUsd: 0.17, MaxWallClockMs: null, DayBoundaryTimezone: 'UTC' },
+                AllowedInFlightOvershootUsd: 0,
+            },
+            AgentRunID: '99999999-9999-4999-8999-999999999993',
+            UserID: USER_ID,
+            RoutineID: routineId,
+            CurrentRunCostUsd: 0.03,
+            CurrentRunStartedAtMs: Date.now() - 100,
+            Provider: provider,
+            ContextUser: contextUser,
+        });
+        expect(sharedCheck.Exceeded).toBe(true);
+        expect(sharedCheck.Ledger.RoutineCostUsd).toBeCloseTo(0.18, 5);
+        expect(sharedCheck.Ledger.UserDailyCostUsd).toBeCloseTo(0.18, 5);
     });
 });

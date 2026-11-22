@@ -158,6 +158,7 @@ class GovernanceInMemoryDb {
     public UserPolicies: Array<Partial<MJAIAgentUserPolicyEntity>> = [];
     public AgentRunSaveMode: 'ok' | 'false' | 'throw' = 'ok';
     public DebugWriteMode: 'ok' | 'false' | 'throw' = 'ok';
+    public TaskSaveMode: 'ok' | 'false' | 'throw' = 'ok';
     private readonly dialect = new SQLServerDialect();
 
     private wrapTask(initial?: StoredTaskRow): MJTaskEntity {
@@ -257,6 +258,12 @@ class GovernanceInMemoryDb {
                 return true;
             },
             Save: async () => {
+                if (db.TaskSaveMode === 'false') {
+                    return false;
+                }
+                if (db.TaskSaveMode === 'throw') {
+                    throw new Error('Simulated Task.Save failure');
+                }
                 if (!backing.ID) backing.ID = randomUUID();
                 backing.__mj_UpdatedAt = new Date();
                 const existing = db.Tasks.get(backing.ID.toLowerCase());
@@ -312,6 +319,12 @@ class GovernanceInMemoryDb {
             LatestResult: { CompleteMessage: '' },
             NewRecord: () => true,
             Save: async () => {
+                if (db.TaskSaveMode === 'false') {
+                    return false;
+                }
+                if (db.TaskSaveMode === 'throw') {
+                    throw new Error('Simulated Task.Save failure');
+                }
                 if (!backing.ID) backing.ID = randomUUID();
                 const copy: StoredDepRow = { ...backing };
                 const list = db.DepsByTask.get(copy.TaskID.toLowerCase()) ?? [];
@@ -2397,6 +2410,294 @@ describe('TaskGraphGovernanceCoordinator — default opt-in, 5-tier policy scope
             expect(settled?.Ledger?.RunCostUsd).toBeCloseTo(0.60, 5);
         } finally {
             await disp2.Stop();
+        }
+    });
+
+    it('CR-APPROVAL-CLOSES-PAUSE-EARLY: keeps PausedIntervals open when ClearDebugPauseFields or checkpoint Save() fails at t1 and excludes the entire t0->t2 window upon replacement retry at t2', async () => {
+        const db = new GovernanceInMemoryDb();
+        const provider = db.CreateProvider();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation((p) => p as Partial<RunView> as RunView);
+
+        const runIdPauseEarly = '50000000-0000-4000-8000-000000000061';
+        const submitRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', TEST_USER);
+        submitRun.ID = runIdPauseEarly;
+        submitRun.Status = 'Running';
+        await submitRun.Save();
+
+        const executedDisp1: string[] = [];
+        const executedDisp2: string[] = [];
+        const disp1 = new TaskGraphDispatcher(
+            { CreateProvider: async () => provider },
+            { RunAgentForTask: async () => ({ Success: true }) },
+            TEST_USER,
+            {
+                InstanceID: 'pause-early-disp-1',
+                MaxConcurrentTasks: 1,
+                PollIntervalSeconds: 0.01,
+                HeartbeatIntervalSeconds: 60,
+                ReconciliationIntervalSeconds: 60,
+            },
+            undefined,
+            undefined,
+            {
+                RunActionForTask: async (ctx) => {
+                    executedDisp1.push(ctx.TaskID);
+                    return { Success: true, Output: { idx: executedDisp1.length }, CostUsd: 0.10, TokensUsed: 50 };
+                },
+            },
+        );
+
+        let parentId = '';
+        await disp1.Start();
+        try {
+            const service = new TaskGraphService();
+            const subRes = await service.Submit(buildLinearSpec(4, 'CR-APPROVAL-CLOSES-PAUSE-EARLY Graph'), {
+                EnvironmentID: 'env-1',
+                Provider: provider,
+                ContextUser: TEST_USER,
+                AgentRunID: runIdPauseEarly,
+                LimitsOverride: {
+                    Budgets: {
+                        PerRun: { MaxCostUsd: 0.15, MaxWallClockMs: 30_000 },
+                        CountPausedTimeTowardsWallClock: false,
+                    },
+                },
+            });
+            expect(subRes.Success).toBe(true);
+            parentId = subRes.ParentTaskID!;
+
+            await waitUntil(
+                () => disp1.Governance.GetGraphDiagnostics(parentId)?.PausedByGovernance === true,
+                5_000,
+                () => disp1.Kick(),
+            );
+            expect(executedDisp1).toHaveLength(2);
+        } finally {
+            await disp1.Stop();
+        }
+
+        const pausedCp = ExtractRunawayCheckpointFromRunData(db.AgentRuns.get(runIdPauseEarly.toLowerCase())?.Data);
+        expect(pausedCp).not.toBeNull();
+        const t0Pause = pausedCp!.PausedAtMs;
+        const t1Attempt = t0Pause + 30_000;
+        const t2Retry = t0Pause + 180_000;
+
+        let controlledNowMs = t1Attempt;
+        const dateNowSpy = vi.spyOn(Date, 'now').mockImplementation(() => controlledNowMs);
+        try {
+            // 1) At t1: ClearDebugPauseFields fails -> ApproveAndResumePausedGraph MUST return Success=false
+            // and keep PausedIntervals OPEN (ResumedAtMs === null) in the persisted checkpoint.
+            db.DebugWriteMode = 'false';
+            const failedClearRes = await disp1.Governance.ApproveAndResumePausedGraph({
+                ParentTaskID: parentId,
+                Provider: provider,
+                ContextUser: TEST_USER,
+                BudgetExtension: { NewPerRunMaxCostUsd: 1.0, NewPerRunMaxWallClockMs: 30_000 },
+            });
+            expect(failedClearRes.Success).toBe(false);
+
+            const cpAfterFailedClear = ExtractRunawayCheckpointFromRunData(
+                db.AgentRuns.get(runIdPauseEarly.toLowerCase())?.Data,
+            );
+            expect(cpAfterFailedClear?.HumanApproval.Status).toBe('Approved');
+            expect(cpAfterFailedClear?.CumulativeLedger.PausedIntervals).toEqual([
+                { PausedAtMs: t0Pause, ResumedAtMs: null },
+            ]);
+
+            // 2) At t1 + 5s: ClearDebugPauseFields succeeds, but checkpoint Save() fails -> MUST return
+            // Success=false (never Success=true), roll back $.debug pause latch, and keep PausedIntervals open.
+            controlledNowMs = t1Attempt + 5_000;
+            db.DebugWriteMode = 'ok';
+            db.AgentRunSaveMode = 'false';
+            const coordSaveFail = new TaskGraphGovernanceCoordinator(new TaskClaimStore('coord-save-fail'));
+            const failedSaveRes = await coordSaveFail.ApproveAndResumePausedGraph({
+                ParentTaskID: parentId,
+                Provider: provider,
+                ContextUser: TEST_USER,
+            });
+            expect(failedSaveRes.Success).toBe(false);
+
+            const debugAfterRollback = ParseTaskGraphDebugState(db.Tasks.get(parentId.toLowerCase())?.InputPayload);
+            expect(debugAfterRollback.paused).toBe(true);
+            expect(debugAfterRollback.pausedReason).toBe('governance');
+            expect(debugAfterRollback.governancePauseActive).toBe(true);
+
+            const cpAfterFailedSave = ExtractRunawayCheckpointFromRunData(
+                db.AgentRuns.get(runIdPauseEarly.toLowerCase())?.Data,
+            );
+            expect(cpAfterFailedSave?.CumulativeLedger.PausedIntervals).toEqual([
+                { PausedAtMs: t0Pause, ResumedAtMs: null },
+            ]);
+
+            // 3) At t2 (180s after t0): storage recovers, replacement coordinator retries -> succeeds and
+            // closes PausedIntervals across the ENTIRE t0 -> t2 window!
+            db.AgentRunSaveMode = 'ok';
+            controlledNowMs = t2Retry;
+            const disp2 = new TaskGraphDispatcher(
+                { CreateProvider: async () => provider },
+                { RunAgentForTask: async () => ({ Success: true }) },
+                TEST_USER,
+                {
+                    InstanceID: 'pause-early-disp-2',
+                    MaxConcurrentTasks: 1,
+                    PollIntervalSeconds: 0.01,
+                    HeartbeatIntervalSeconds: 60,
+                    ReconciliationIntervalSeconds: 60,
+                },
+                undefined,
+                undefined,
+                {
+                    RunActionForTask: async (ctx) => {
+                        executedDisp2.push(ctx.TaskID);
+                        return { Success: true, Output: { idx: executedDisp2.length }, CostUsd: 0.10, TokensUsed: 50 };
+                    },
+                },
+            );
+
+            const retryApproveRes = await disp2.Governance.ApproveAndResumePausedGraph({
+                ParentTaskID: parentId,
+                Provider: provider,
+                ContextUser: TEST_USER,
+            });
+            expect(retryApproveRes.Success).toBe(true);
+
+            const cpAfterRetry = ExtractRunawayCheckpointFromRunData(
+                db.AgentRuns.get(runIdPauseEarly.toLowerCase())?.Data,
+            );
+            expect(cpAfterRetry?.CumulativeLedger.PausedIntervals).toEqual([
+                { PausedAtMs: t0Pause, ResumedAtMs: t2Retry },
+            ]);
+            expect(cpAfterRetry?.CumulativeLedger.PausedWallClockMs).toBe(180_000);
+
+            // Restore real clock so waitUntil polling runs normally, and verify remaining nodes complete
+            dateNowSpy.mockRestore();
+            await disp2.Start();
+            try {
+                await waitUntil(
+                    () => db.Tasks.get(parentId.toLowerCase())?.Status === 'Complete',
+                    5_000,
+                    () => disp2.Kick(),
+                );
+                expect(executedDisp2).toHaveLength(2);
+            } finally {
+                await disp2.Stop();
+            }
+        } finally {
+            dateNowSpy.mockRestore();
+        }
+    });
+
+    it('CR-APPROVAL-CLOSES-PAUSE-EARLY (standalone graph): keeps PausedIntervals open on ClearDebugPauseFields/Save failure at t1 and excludes full t0->t2 window on retry at t2', async () => {
+        const db = new GovernanceInMemoryDb();
+        const provider = db.CreateProvider();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation((p) => p as Partial<RunView> as RunView);
+
+        const disp1 = new TaskGraphDispatcher(
+            { CreateProvider: async () => provider },
+            { RunAgentForTask: async () => ({ Success: true }) },
+            TEST_USER,
+            {
+                InstanceID: 'standalone-pause-early-1',
+                MaxConcurrentTasks: 1,
+                PollIntervalSeconds: 0.01,
+                HeartbeatIntervalSeconds: 60,
+                ReconciliationIntervalSeconds: 60,
+            },
+            undefined,
+            undefined,
+            {
+                RunActionForTask: async () => ({ Success: true, Output: { ok: true }, CostUsd: 0.15, TokensUsed: 50 }),
+            },
+        );
+
+        let parentId = '';
+        await disp1.Start();
+        try {
+            const service = new TaskGraphService();
+            const subRes = await service.Submit(buildLinearSpec(4, 'Standalone Pause Early Graph'), {
+                EnvironmentID: 'env-1',
+                Provider: provider,
+                ContextUser: TEST_USER,
+                LimitsOverride: {
+                    Budgets: {
+                        PerRun: { MaxCostUsd: 0.25, MaxWallClockMs: 30_000 },
+                        CountPausedTimeTowardsWallClock: false,
+                    },
+                },
+            });
+            expect(subRes.Success).toBe(true);
+            parentId = subRes.ParentTaskID!;
+
+            await waitUntil(
+                () => disp1.Governance.GetGraphDiagnostics(parentId)?.PausedByGovernance === true,
+                5_000,
+                () => disp1.Kick(),
+            );
+        } finally {
+            await disp1.Stop();
+        }
+
+        const rawCfg0 = JSON.parse(db.Tasks.get(parentId.toLowerCase())!.Configuration!) as {
+            governanceCheckpoint?: {
+                PausedAtISO: string;
+                Status: string;
+                CumulativeLedger: { PausedIntervals: Array<{ PausedAtMs: number; ResumedAtMs: number | null }> };
+            };
+        };
+        const t0Pause = rawCfg0.governanceCheckpoint!.CumulativeLedger.PausedIntervals[0]?.PausedAtMs ?? Date.parse(rawCfg0.governanceCheckpoint!.PausedAtISO);
+        const t1Attempt = t0Pause + 25_000;
+        const t2Retry = t0Pause + 125_000;
+
+        let controlledNowMs = t1Attempt;
+        const dateNowSpy = vi.spyOn(Date, 'now').mockImplementation(() => controlledNowMs);
+        try {
+            // Force ClearDebugPauseFields to fail at t1 -> standalone checkpoint interval remains open
+            db.DebugWriteMode = 'false';
+            const res1 = await disp1.Governance.ApproveAndResumePausedGraph({
+                ParentTaskID: parentId,
+                Provider: provider,
+                ContextUser: TEST_USER,
+                BudgetExtension: { NewPerRunMaxCostUsd: 1.0 },
+            });
+            expect(res1.Success).toBe(false);
+            const cfgAfterClearFail = JSON.parse(db.Tasks.get(parentId.toLowerCase())!.Configuration!) as typeof rawCfg0;
+            expect(cfgAfterClearFail.governanceCheckpoint?.CumulativeLedger.PausedIntervals).toEqual([
+                { PausedAtMs: t0Pause, ResumedAtMs: null },
+            ]);
+
+            // Force Task.Save() to fail on closing interval at t1 + 5s -> returns Success=false and rolls back debug pause
+            controlledNowMs = t1Attempt + 5_000;
+            db.DebugWriteMode = 'ok';
+            db.TaskSaveMode = 'false';
+            const coordSaveFail = new TaskGraphGovernanceCoordinator(new TaskClaimStore('standalone-save-fail'));
+            const res2 = await coordSaveFail.ApproveAndResumePausedGraph({
+                ParentTaskID: parentId,
+                Provider: provider,
+                ContextUser: TEST_USER,
+            });
+            expect(res2.Success).toBe(false);
+            expect(ParseTaskGraphDebugState(db.Tasks.get(parentId.toLowerCase())?.InputPayload).paused).toBe(true);
+            const cfgAfterSaveFail = JSON.parse(db.Tasks.get(parentId.toLowerCase())!.Configuration!) as typeof rawCfg0;
+            expect(cfgAfterSaveFail.governanceCheckpoint?.CumulativeLedger.PausedIntervals).toEqual([
+                { PausedAtMs: t0Pause, ResumedAtMs: null },
+            ]);
+
+            // Retry with replacement coordinator at t2 -> closes full t0 -> t2 pause window
+            db.TaskSaveMode = 'ok';
+            controlledNowMs = t2Retry;
+            const replacementCoord = new TaskGraphGovernanceCoordinator(new TaskClaimStore('standalone-retry-ok'));
+            const res3 = await replacementCoord.ApproveAndResumePausedGraph({
+                ParentTaskID: parentId,
+                Provider: provider,
+                ContextUser: TEST_USER,
+            });
+            expect(res3.Success).toBe(true);
+            const cfgAfterRetry = JSON.parse(db.Tasks.get(parentId.toLowerCase())!.Configuration!) as typeof rawCfg0;
+            expect(cfgAfterRetry.governanceCheckpoint?.CumulativeLedger.PausedIntervals).toEqual([
+                { PausedAtMs: t0Pause, ResumedAtMs: t2Retry },
+            ]);
+        } finally {
+            dateNowSpy.mockRestore();
         }
     });
 });

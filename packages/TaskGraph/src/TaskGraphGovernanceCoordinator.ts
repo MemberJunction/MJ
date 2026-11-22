@@ -47,6 +47,7 @@ import {
     type CumulativeBudgetLedger,
     type MJAIAgentRunEntityExtended,
     type ProgressEvaluationResult,
+    type RunawayCheckpointState,
     type RunawayJsonValue,
     type RunawayPauseReason,
     type WorkflowLimitsMetadataInput,
@@ -1035,47 +1036,108 @@ export class TaskGraphGovernanceCoordinator {
         const resumeNowMs = Date.now();
 
         if (agentRun) {
-            const existingCp = ExtractRunawayCheckpointFromAgentRun(agentRun);
-            const approvedCp = existingCp?.HumanApproval.Status === 'Approved' && !input.BudgetExtension && !input.DecisionNotes
-                ? existingCp
-                : await this.checkpointManager.ApproveCheckpoint({
-                    AgentRun: agentRun,
-                    ApprovedByUserID: input.ApprovedByUserID ?? input.ContextUser.ID,
-                    BudgetExtension: input.BudgetExtension,
-                    DecisionNotes: input.DecisionNotes ?? null,
-                    Provider: input.Provider,
-                    ContextUser: input.ContextUser,
-                    NowMs: resumeNowMs,
-                });
-            // Close any open pause interval at the actual resume transition (ApproveCheckpoint leaves it open).
+            let approvedCp: RunawayCheckpointState;
+            try {
+                const existingCp = ExtractRunawayCheckpointFromAgentRun(agentRun);
+                approvedCp = existingCp?.HumanApproval.Status === 'Approved' && !input.BudgetExtension && !input.DecisionNotes
+                    ? existingCp
+                    : await this.checkpointManager.ApproveCheckpoint({
+                        AgentRun: agentRun,
+                        ApprovedByUserID: input.ApprovedByUserID ?? input.ContextUser.ID,
+                        BudgetExtension: input.BudgetExtension,
+                        DecisionNotes: input.DecisionNotes ?? null,
+                        Provider: input.Provider,
+                        ContextUser: input.ContextUser,
+                        NowMs: resumeNowMs,
+                    });
+            } catch (err) {
+                return {
+                    Success: false,
+                    ParentTaskID: input.ParentTaskID,
+                    AgentRunID: agentRunId,
+                    CheckpointID: null,
+                    ExtendedBudgets: null,
+                    PriorCumulativeCostUsd: 0,
+                    Message: err instanceof Error
+                        ? err.message
+                        : `Failed to approve checkpoint for graph '${input.ParentTaskID}'.`,
+                };
+            }
+            shouldResetProgressWindow = approvedCp.HumanApproval.BudgetExtension?.ResetProgressDetectorWindow !== false;
+            checkpointId = approvedCp.CheckpointID;
+            priorCostUsd = approvedCp.CumulativeLedger.RunCostUsd;
+            extendedBudgets = ApplyBudgetExtensionToBudgets(baseBudgets, approvedCp.HumanApproval.BudgetExtension);
+
+            // Step 2: Perform the durable unpause transition BEFORE closing PausedIntervals so a
+            // ClearDebugPauseFields failure never leaves the interval prematurely closed at t1.
+            if (!(await this.tryClearDebugPauseFields(input.Provider, input.ParentTaskID, parentRow.TypeID, input.ContextUser))) {
+                return {
+                    Success: false,
+                    ParentTaskID: input.ParentTaskID,
+                    AgentRunID: agentRunId,
+                    CheckpointID: checkpointId,
+                    ExtendedBudgets: extendedBudgets,
+                    PriorCumulativeCostUsd: priorCostUsd,
+                    Message: `Failed to clear paused debug flag on task graph '${input.ParentTaskID}'.`,
+                };
+            }
+
+            // Step 3: Close any open pause interval at the actual unpause transition and verify Save().
+            const closeNowMs = Date.now();
             const closedIntervals = this.closeOpenIntervalsAtResume(
                 approvedCp.CumulativeLedger.PausedIntervals,
                 approvedCp.PausedAtMs,
-                resumeNowMs,
+                closeNowMs,
             );
             const hadOpenInterval = approvedCp.CumulativeLedger.PausedIntervals.some(
                 (i) => i.ResumedAtMs === undefined || i.ResumedAtMs === null,
             );
             if (hadOpenInterval || approvedCp.CumulativeLedger.PausedIntervals.length === 0) {
-                approvedCp.CumulativeLedger = {
-                    ...approvedCp.CumulativeLedger,
-                    PausedIntervals: closedIntervals,
-                    PausedWallClockMs: ComputeTotalPausedMs(closedIntervals, resumeNowMs),
-                    AsOfISO: new Date(resumeNowMs).toISOString(),
+                const closedCp: RunawayCheckpointState = {
+                    ...approvedCp,
+                    CumulativeLedger: {
+                        ...approvedCp.CumulativeLedger,
+                        PausedIntervals: closedIntervals,
+                        PausedWallClockMs: ComputeTotalPausedMs(closedIntervals, closeNowMs),
+                        AsOfISO: new Date(closeNowMs).toISOString(),
+                    },
                 };
-                AttachRunawayCheckpointToAgentRun(agentRun, approvedCp);
-                await agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+                AttachRunawayCheckpointToAgentRun(agentRun, closedCp);
+                let saved = false;
+                try {
+                    saved = await agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+                } catch {
+                    saved = false;
+                }
+                if (!saved) {
+                    // Roll back in-memory interval closure and re-assert durable pause fields.
+                    AttachRunawayCheckpointToAgentRun(agentRun, approvedCp);
+                    await this.restoreGovernanceDebugPauseFields(
+                        input.Provider,
+                        input.ParentTaskID,
+                        parentRow.TypeID,
+                        effectiveUserId,
+                        input.ContextUser,
+                    );
+                    return {
+                        Success: false,
+                        ParentTaskID: input.ParentTaskID,
+                        AgentRunID: agentRunId,
+                        CheckpointID: checkpointId,
+                        ExtendedBudgets: extendedBudgets,
+                        PriorCumulativeCostUsd: priorCostUsd,
+                        Message: `Failed to persist closed pause interval on agent run '${agentRunId ?? 'unknown'}' for graph '${input.ParentTaskID}'.`,
+                    };
+                }
             }
             resumedPausedIntervals = closedIntervals;
-            shouldResetProgressWindow = approvedCp.HumanApproval.BudgetExtension?.ResetProgressDetectorWindow !== false;
-            checkpointId = approvedCp.CheckpointID;
-            priorCostUsd = approvedCp.CumulativeLedger.RunCostUsd;
-            extendedBudgets = ApplyBudgetExtensionToBudgets(baseBudgets, approvedCp.HumanApproval.BudgetExtension);
         } else {
+            // Step 1: Persist standalone approval while keeping PausedIntervals open.
             const standaloneOutcome = await this.saveStandaloneApprovedCheckpoint(
                 input,
                 parentDebug.pendingCheckpointContext ?? null,
                 resumeNowMs,
+                false,
             );
             if (!standaloneOutcome.Saved) {
                 return {
@@ -1088,29 +1150,50 @@ export class TaskGraphGovernanceCoordinator {
                     Message: standaloneOutcome.ErrorMessage ?? `Failed to persist approval on standalone graph '${input.ParentTaskID}'.`,
                 };
             }
-            resumedPausedIntervals = standaloneOutcome.PausedIntervals;
             shouldResetProgressWindow = standaloneOutcome.AppliedExtension?.ResetProgressDetectorWindow !== false;
             checkpointId = standaloneOutcome.CheckpointID;
             priorCostUsd = standaloneOutcome.PriorCostUsd;
             extendedBudgets = ApplyBudgetExtensionToBudgets(baseBudgets, standaloneOutcome.AppliedExtension);
-        }
 
-        const ok = await this.ClearDebugPauseFields(
-            input.Provider,
-            input.ParentTaskID,
-            parentRow.TypeID,
-            input.ContextUser,
-        );
-        if (!ok) {
-            return {
-                Success: false,
-                ParentTaskID: input.ParentTaskID,
-                AgentRunID: agentRunId,
-                CheckpointID: checkpointId,
-                ExtendedBudgets: extendedBudgets,
-                PriorCumulativeCostUsd: priorCostUsd,
-                Message: `Failed to clear paused debug flag on task graph '${input.ParentTaskID}'.`,
-            };
+            // Step 2: Clear durable governance debug pause fields before closing intervals.
+            if (!(await this.tryClearDebugPauseFields(input.Provider, input.ParentTaskID, parentRow.TypeID, input.ContextUser))) {
+                return {
+                    Success: false,
+                    ParentTaskID: input.ParentTaskID,
+                    AgentRunID: null,
+                    CheckpointID: checkpointId,
+                    ExtendedBudgets: extendedBudgets,
+                    PriorCumulativeCostUsd: priorCostUsd,
+                    Message: `Failed to clear paused debug flag on task graph '${input.ParentTaskID}'.`,
+                };
+            }
+
+            // Step 3: Close open pause intervals after ClearDebugPauseFields succeeds and verify Save().
+            const closeOutcome = await this.closeStandalonePauseIntervalsAtResume(
+                input.Provider,
+                input.ParentTaskID,
+                Date.now(),
+                input.ContextUser,
+            );
+            if (!closeOutcome.Saved) {
+                await this.restoreGovernanceDebugPauseFields(
+                    input.Provider,
+                    input.ParentTaskID,
+                    parentRow.TypeID,
+                    effectiveUserId,
+                    input.ContextUser,
+                );
+                return {
+                    Success: false,
+                    ParentTaskID: input.ParentTaskID,
+                    AgentRunID: null,
+                    CheckpointID: checkpointId,
+                    ExtendedBudgets: extendedBudgets,
+                    PriorCumulativeCostUsd: priorCostUsd,
+                    Message: closeOutcome.ErrorMessage ?? `Failed to persist closed pause interval on standalone graph '${input.ParentTaskID}'.`,
+                };
+            }
+            resumedPausedIntervals = closeOutcome.PausedIntervals;
         }
 
         const key = this.normId(input.ParentTaskID);
@@ -2271,6 +2354,7 @@ export class TaskGraphGovernanceCoordinator {
         input: ApproveAndResumePausedGraphInput,
         pendingDebugContext: PendingGovernanceCheckpointContext | null,
         resumeNowMs: number = Date.now(),
+        closeIntervals: boolean = false,
     ): Promise<{
         Saved: boolean;
         CheckpointID: string | null;
@@ -2294,17 +2378,22 @@ export class TaskGraphGovernanceCoordinator {
             const existingCp = this.extractStandaloneCheckpointFromConfiguration(parentTask.Configuration);
             if (existingCp?.Status === 'Approved' && !input.BudgetExtension && !input.DecisionNotes) {
                 const pausedAtFallback = Date.parse(existingCp.PausedAtISO) || resumeNowMs;
-                const closed = this.closeOpenIntervalsAtResume(
-                    existingCp.CumulativeLedger.PausedIntervals,
-                    pausedAtFallback,
-                    resumeNowMs,
-                );
+                const intervals = closeIntervals
+                    ? this.closeOpenIntervalsAtResume(
+                        existingCp.CumulativeLedger.PausedIntervals,
+                        pausedAtFallback,
+                        resumeNowMs,
+                    )
+                    : this.openPauseIntervalsAtApproval(
+                        existingCp.CumulativeLedger.PausedIntervals,
+                        pausedAtFallback,
+                    );
                 return {
                     Saved: true,
                     CheckpointID: existingCp.CheckpointID,
                     PriorCostUsd: existingCp.CumulativeLedger.RunCostUsd,
                     AppliedExtension: existingCp.BudgetExtension,
-                    PausedIntervals: closed,
+                    PausedIntervals: intervals,
                 };
             }
             const fallbackLedger: CumulativeBudgetLedger = pendingDebugContext?.cumulativeLedger ?? {
@@ -2323,11 +2412,16 @@ export class TaskGraphGovernanceCoordinator {
             };
             const baseLedger = existingCp?.CumulativeLedger ?? fallbackLedger;
             const pausedAtFallback = Date.parse(existingCp?.PausedAtISO ?? pendingDebugContext?.pausedAtIso ?? '') || resumeNowMs;
-            const closedIntervals = this.closeOpenIntervalsAtResume(
-                baseLedger.PausedIntervals,
-                pausedAtFallback,
-                resumeNowMs,
-            );
+            const nextIntervals = closeIntervals
+                ? this.closeOpenIntervalsAtResume(
+                    baseLedger.PausedIntervals,
+                    pausedAtFallback,
+                    resumeNowMs,
+                )
+                : this.openPauseIntervalsAtApproval(
+                    baseLedger.PausedIntervals,
+                    pausedAtFallback,
+                );
             const appliedExtension = input.BudgetExtension ?? existingCp?.BudgetExtension;
             const approvedCp: StandaloneGraphGovernanceCheckpointState = {
                 CheckpointID: existingCp?.CheckpointID || randomUUID(),
@@ -2339,8 +2433,8 @@ export class TaskGraphGovernanceCoordinator {
                 CompletedNodeIDs: existingCp?.CompletedNodeIDs ?? pendingDebugContext?.completedTaskIds ?? [],
                 CumulativeLedger: {
                     ...baseLedger,
-                    PausedIntervals: closedIntervals,
-                    PausedWallClockMs: ComputeTotalPausedMs(closedIntervals, resumeNowMs),
+                    PausedIntervals: nextIntervals,
+                    PausedWallClockMs: ComputeTotalPausedMs(nextIntervals, resumeNowMs),
                     AsOfISO: new Date(resumeNowMs).toISOString(),
                 },
                 ...(existingCp?.BudgetBreach
@@ -2360,7 +2454,7 @@ export class TaskGraphGovernanceCoordinator {
                     CheckpointID: approvedCp.CheckpointID,
                     PriorCostUsd: approvedCp.CumulativeLedger.RunCostUsd,
                     AppliedExtension: appliedExtension,
-                    PausedIntervals: closedIntervals,
+                    PausedIntervals: nextIntervals,
                     ErrorMessage: parentTask.LatestResult?.CompleteMessage || `Failed to save approval on standalone task '${input.ParentTaskID}'.`,
                 };
             }
@@ -2369,7 +2463,7 @@ export class TaskGraphGovernanceCoordinator {
                 CheckpointID: approvedCp.CheckpointID,
                 PriorCostUsd: approvedCp.CumulativeLedger.RunCostUsd,
                 AppliedExtension: appliedExtension,
-                PausedIntervals: closedIntervals,
+                PausedIntervals: nextIntervals,
             };
         } catch (err) {
             return {
@@ -2381,6 +2475,120 @@ export class TaskGraphGovernanceCoordinator {
                 ErrorMessage: err instanceof Error ? err.message : String(err),
             };
         }
+    }
+
+    private async closeStandalonePauseIntervalsAtResume(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        resumeNowMs: number,
+        contextUser: UserInfo,
+    ): Promise<{
+        Saved: boolean;
+        PausedIntervals: BudgetPausedInterval[];
+        ErrorMessage?: string;
+    }> {
+        try {
+            const parentTask = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', contextUser);
+            if (!(await parentTask.Load(parentTaskID))) {
+                return {
+                    Saved: false,
+                    PausedIntervals: [],
+                    ErrorMessage: `Standalone root task '${parentTaskID}' could not be loaded while closing pause interval.`,
+                };
+            }
+            const cp = this.extractStandaloneCheckpointFromConfiguration(parentTask.Configuration);
+            if (!cp) {
+                return { Saved: true, PausedIntervals: [] };
+            }
+            const pausedAtFallback = Date.parse(cp.PausedAtISO) || resumeNowMs;
+            const closedIntervals = this.closeOpenIntervalsAtResume(
+                cp.CumulativeLedger.PausedIntervals,
+                pausedAtFallback,
+                resumeNowMs,
+            );
+            const hadOpenInterval = cp.CumulativeLedger.PausedIntervals.some(
+                (i) => i.ResumedAtMs === undefined || i.ResumedAtMs === null,
+            );
+            if (!hadOpenInterval && cp.CumulativeLedger.PausedIntervals.length > 0) {
+                return { Saved: true, PausedIntervals: closedIntervals };
+            }
+            const updatedCp: StandaloneGraphGovernanceCheckpointState = {
+                ...cp,
+                CumulativeLedger: {
+                    ...cp.CumulativeLedger,
+                    PausedIntervals: closedIntervals,
+                    PausedWallClockMs: ComputeTotalPausedMs(closedIntervals, resumeNowMs),
+                    AsOfISO: new Date(resumeNowMs).toISOString(),
+                },
+            };
+            parentTask.Configuration = this.writeStandaloneCheckpointToConfiguration(parentTask.Configuration, updatedCp);
+            if (!(await parentTask.Save())) {
+                return {
+                    Saved: false,
+                    PausedIntervals: cp.CumulativeLedger.PausedIntervals.map((p) => ({ ...p })),
+                    ErrorMessage: parentTask.LatestResult?.CompleteMessage || `Failed to persist closed pause interval on standalone task '${parentTaskID}'.`,
+                };
+            }
+            return { Saved: true, PausedIntervals: closedIntervals };
+        } catch (err) {
+            return {
+                Saved: false,
+                PausedIntervals: [],
+                ErrorMessage: err instanceof Error ? err.message : String(err),
+            };
+        }
+    }
+
+    private async tryClearDebugPauseFields(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        workflowTaskTypeID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        try {
+            return await this.ClearDebugPauseFields(provider, parentTaskID, workflowTaskTypeID, contextUser);
+        } catch {
+            return false;
+        }
+    }
+
+    private async restoreGovernanceDebugPauseFields(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        workflowTaskTypeID: string,
+        userId: string | null,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        try {
+            return await this.claims.TryWriteDebugFields(
+                provider,
+                parentTaskID,
+                [
+                    TaskClaimStore.DebugField('$.debug.paused', { Kind: 'bool', Value: true }),
+                    TaskClaimStore.DebugField('$.debug.pausedReason', { Kind: 'string', Value: 'governance' }),
+                    TaskClaimStore.DebugField('$.debug.governancePauseActive', { Kind: 'bool', Value: true }),
+                    TaskClaimStore.DebugField('$.debug.pausedBy', userId ? { Kind: 'string', Value: userId } : { Kind: 'null' }),
+                    TaskClaimStore.DebugField('$.debug.pausedAtTaskID', { Kind: 'null' }),
+                    TaskClaimStore.DebugField('$.debug.step', { Kind: 'null' }),
+                    TaskClaimStore.DebugField('$.debug.checkpointPersisted', { Kind: 'bool', Value: true }),
+                    TaskClaimStore.DebugField('$.debug.pendingCheckpointContext', { Kind: 'null' }),
+                ],
+                workflowTaskTypeID,
+                contextUser,
+            );
+        } catch {
+            return false;
+        }
+    }
+
+    private openPauseIntervalsAtApproval(
+        existing: readonly BudgetPausedInterval[],
+        pausedAtFallbackMs: number,
+    ): BudgetPausedInterval[] {
+        if (!existing || existing.length === 0) {
+            return [{ PausedAtMs: pausedAtFallbackMs, ResumedAtMs: null }];
+        }
+        return existing.map((interval) => ({ ...interval }));
     }
 
     private closeOpenIntervalsAtResume(

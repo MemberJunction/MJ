@@ -596,5 +596,30 @@ describe('FastConvergenceJudge — Ambiguous-only invocation, <200ms bound, and 
         expect(drainedFirst[0].TokensUsed).toBe(720);
         // Second drain is empty — guaranteed single reconciliation
         expect(judge.DrainPendingLateUsage()).toHaveLength(0);
+
+        // 3) Handler returning false or rejecting leaves settlement retryable in pending queue
+        judge.ResetCooldown();
+        let allowDurableSave = false;
+        let handlerCalls = 0;
+        const retryResult = await judge.EvaluateIfAmbiguous({
+            DetectorResult: ambiguousDet,
+            Iteration: 18,
+            StateSummary: 'late-settling judge durable retry test',
+            Config: config,
+            Evaluator: slowUnabortableEvaluator,
+            OnLateUsageSettled: async () => {
+                handlerCalls++;
+                return allowDurableSave;
+            },
+        });
+        expect(retryResult.FastJudgeResult?.TimedOut).toBe(true);
+        await judge.WaitForPendingEvaluations();
+        expect(handlerCalls).toBe(1);
+        allowDurableSave = true;
+        const retryQueued = judge.DrainPendingLateUsage();
+        expect(retryQueued).toHaveLength(1);
+        expect(retryQueued[0].InvocationId).toBe(retryResult.FastJudgeResult?.InvocationId);
+        expect(retryQueued[0].CostUsd).toBeCloseTo(0.075, 6);
+        expect(judge.DrainPendingLateUsage()).toHaveLength(0);
     });
 });

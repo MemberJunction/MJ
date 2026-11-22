@@ -64,7 +64,7 @@ import { FailingStepError, GetMaxRepeatedFailingStep, IsPromptTurnStep, Repeated
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import { ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckLink, type SelfCheckLinkRow } from './self-check';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
-import { CopyScalarsAndArrays, GroupByUUID, IndexByUUID, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, UUIDSet, EscapeSQLString, IsPlainObject, CleanAndParseJSON, IsValidUUID } from '@memberjunction/global';
+import { CopyScalarsAndArrays, GroupByUUID, IndexByUUID, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, SafeJSONParse, UUIDsEqual, UUIDSet, EscapeSQLString, IsPlainObject, CleanAndParseJSON, IsValidUUID } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
 import { PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
 // AST-aware code reduction (CodeCompressor-inspired) — opt-in per agent type
@@ -325,6 +325,68 @@ import { AgentContextAssembler } from './AgentContextAssembler';
 import { AgentStepDispatcher, type LoopIterationError } from './AgentStepDispatcher';
 import { ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import _ from 'lodash';
+
+const RECONCILED_FAST_JUDGE_IDS_DATA_KEY = '__reconciledFastJudgeIds' as const;
+
+interface PendingDurableFastJudgeSettlement {
+    InvocationId: string;
+    CostUsd: number;
+    TokensUsed: number;
+    TimestampMs: number;
+}
+
+interface RunLateJudgeScope {
+    AgentRun: MJAIAgentRunEntityExtended | null;
+    Provider: IMetadataProvider;
+    ContextUser?: UserInfo;
+    CostEvents: BudgetCostEvent[];
+    DayCostBaselines: Record<string, number>;
+    TreeBudget?: AgentTreeBudget;
+    LoopExited: boolean;
+    InMemoryReconciledIds: Set<string>;
+    PersistedIds: Set<string>;
+    PendingDurableSettlements: Map<string, PendingDurableFastJudgeSettlement>;
+    LateSaveChain: Promise<boolean>;
+    ActiveFinalSavePromise: Promise<void> | null;
+}
+
+function extractReconciledFastJudgeIdsFromRunData(dataJson: string | null | undefined): Set<string> {
+    const ids = new Set<string>();
+    if (typeof dataJson !== 'string' || dataJson.trim().length === 0) {
+        return ids;
+    }
+    const parsed = SafeJSONParse<Record<string, RunawayJsonValue>>(dataJson);
+    if (!IsPlainObject(parsed)) {
+        return ids;
+    }
+    const raw = parsed[RECONCILED_FAST_JUDGE_IDS_DATA_KEY];
+    if (!Array.isArray(raw)) {
+        return ids;
+    }
+    for (const item of raw) {
+        if (typeof item === 'string' && item.trim().length > 0) {
+            ids.add(item);
+        }
+    }
+    return ids;
+}
+
+function attachReconciledFastJudgeIdToRunData(
+    existingDataJson: string | null | undefined,
+    invocationId: string,
+): string {
+    let baseData: Record<string, RunawayJsonValue> = {};
+    if (typeof existingDataJson === 'string' && existingDataJson.trim().length > 0) {
+        const parsed = SafeJSONParse<Record<string, RunawayJsonValue>>(existingDataJson);
+        if (IsPlainObject(parsed)) {
+            baseData = { ...parsed };
+        }
+    }
+    const existingIds = extractReconciledFastJudgeIdsFromRunData(existingDataJson);
+    existingIds.add(invocationId);
+    baseData[RECONCILED_FAST_JUDGE_IDS_DATA_KEY] = ToRunawayJsonValue(Array.from(existingIds));
+    return JSON.stringify(baseData);
+}
 
 /**
  * Base iteration context for tracking loop execution in BaseAgent.
@@ -923,7 +985,8 @@ export class BaseAgent {
     private _fastJudgeCostUsd: number = 0;
     private _fastJudgeTokensUsed: number = 0;
     private readonly _reconciledFastJudgeInvocationIds = new Set<string>();
-    private _agentRunLateSaveChain: Promise<void> = Promise.resolve();
+    private _currentLateJudgeScope: RunLateJudgeScope | null = null;
+    private readonly _trackedLateJudgeScopes = new Set<RunLateJudgeScope>();
     private _priorDayCostBaselineUsd: number | undefined = undefined;
     private _priorDayWallClockBaselineMs: number | undefined = undefined;
     private _lastObservedDaySnapshot: { DayBucketUTC: string; CostUsd: number; WallClockMs: number } | null = null;
@@ -3098,7 +3161,7 @@ export class BaseAgent {
         this._fastJudgeCostUsd = 0;
         this._fastJudgeTokensUsed = 0;
         this._reconciledFastJudgeInvocationIds.clear();
-        this._agentRunLateSaveChain = Promise.resolve();
+        this._currentLateJudgeScope = null;
         this._priorDayCostBaselineUsd = undefined;
         this._priorDayWallClockBaselineMs = undefined;
         this._lastObservedDaySnapshot = null;
@@ -3122,6 +3185,7 @@ export class BaseAgent {
         // Capture per-request provider for the duration of this execution so all entity
         // saves go through the isolated provider, never the global singleton's transaction.
         this._activeProvider = params.provider ?? Metadata.Provider;
+        this.initCurrentLateJudgeScope(params);
 
         // =====================================================================================
         // UNIVERSAL WALL-CLOCK TIMEOUT
@@ -5690,6 +5754,7 @@ export class BaseAgent {
             return null;
         }
 
+        const judgeScope = this._currentLateJudgeScope;
         const evaluated = detResult.Classification === 'Ambiguous'
             ? await this._fastConvergenceJudge.EvaluateIfAmbiguous({
                 DetectorResult: detResult,
@@ -5701,6 +5766,9 @@ export class BaseAgent {
                 ContextUser: params.contextUser,
                 ExecutionScope: this._runExecutionScope,
                 Evaluator: params.fastConvergenceJudgeEvaluator,
+                OnLateUsageSettled: judgeScope
+                    ? (settlement) => this.handleLateFastJudgeUsageForScope(judgeScope, settlement)
+                    : undefined,
             })
             : detResult;
 
@@ -5795,21 +5863,87 @@ export class BaseAgent {
         return parts.join('\n').slice(0, 2000);
     }
 
+    private initCurrentLateJudgeScope(params: ExecuteAgentParams): void {
+        const scope: RunLateJudgeScope = {
+            AgentRun: this._agentRun,
+            Provider: this._activeProvider,
+            ContextUser: params.contextUser,
+            CostEvents: this._budgetCostEvents,
+            DayCostBaselines: this._budgetDayBaselines,
+            TreeBudget: this._treeBudget,
+            LoopExited: false,
+            InMemoryReconciledIds: new Set<string>(),
+            PersistedIds: new Set<string>(),
+            PendingDurableSettlements: new Map<string, PendingDurableFastJudgeSettlement>(),
+            LateSaveChain: Promise.resolve(true),
+            ActiveFinalSavePromise: null,
+        };
+        this._currentLateJudgeScope = scope;
+        this._trackedLateJudgeScopes.add(scope);
+    }
+
+    /**
+     * Awaits any in-flight timed-out FastConvergenceJudge evaluations and flushes any pending
+     * durable late-settlement saves across tracked run scopes.
+     */
+    public async WaitForPendingFastJudgeEvaluations(): Promise<boolean> {
+        await this.__fastConvergenceJudge?.WaitForPendingEvaluations();
+        this.drainPendingFastJudgeUsage();
+        return this.FlushPendingLateFastJudgeSaves();
+    }
+
+    /**
+     * Flushes any pending durable late-settlement saves for runs that have exited the execution
+     * loop (Completed, Paused, Failed, Cancelled, AwaitingFeedback), returning `true` only when
+     * every pending settlement has been durably saved.
+     */
+    public async FlushPendingLateFastJudgeSaves(): Promise<boolean> {
+        let allPersisted = true;
+        for (const scope of Array.from(this._trackedLateJudgeScopes)) {
+            if (scope.PendingDurableSettlements.size > 0) {
+                const persisted = await this.enqueueScopeLateSave(scope);
+                if (!persisted) {
+                    allPersisted = false;
+                }
+            } else {
+                await scope.LateSaveChain;
+            }
+            if (scope.LoopExited && scope.PendingDurableSettlements.size === 0 && scope !== this._currentLateJudgeScope) {
+                this._trackedLateJudgeScopes.delete(scope);
+            }
+        }
+        return allPersisted;
+    }
+
     private attributeFastJudgeUsage(evaluation: ProgressEvaluationResult): void {
         this.drainPendingFastJudgeUsage();
         if (!evaluation.FastJudgeInvoked || !evaluation.FastJudgeResult || evaluation.FastJudgeResult.TimedOut) {
             return;
         }
-        this.reconcileFastJudgeUsage({
-            InvocationId: evaluation.FastJudgeResult.InvocationId,
-            CostUsd: evaluation.FastJudgeResult.CostUsd,
-            TokensUsed: evaluation.FastJudgeResult.TokensUsed,
-            SettledAfterDeadline: false,
-        });
+        const scope = this._currentLateJudgeScope;
+        if (scope) {
+            void this.reconcileFastJudgeUsageForScope(scope, {
+                InvocationId: evaluation.FastJudgeResult.InvocationId,
+                CostUsd: evaluation.FastJudgeResult.CostUsd,
+                TokensUsed: evaluation.FastJudgeResult.TokensUsed,
+                SettledAfterDeadline: false,
+            });
+        }
     }
 
-    private handleLateFastJudgeUsage(settlement: FastJudgeUsageSettlement): void {
-        this.reconcileFastJudgeUsage({
+    private handleLateFastJudgeUsage(settlement: FastJudgeUsageSettlement): Promise<boolean> | boolean {
+        const scope = this._currentLateJudgeScope;
+        if (!scope) {
+            return false;
+        }
+        return this.handleLateFastJudgeUsageForScope(scope, settlement);
+    }
+
+    private handleLateFastJudgeUsageForScope(
+        scope: RunLateJudgeScope,
+        settlement: FastJudgeUsageSettlement,
+    ): Promise<boolean> | boolean {
+        return this.reconcileFastJudgeUsageForScope(scope, {
             InvocationId: settlement.InvocationId,
             CostUsd: settlement.CostUsd,
             TokensUsed: settlement.TokensUsed,
@@ -5823,16 +5957,19 @@ export class BaseAgent {
             return;
         }
         for (const settlement of pending) {
-            this.handleLateFastJudgeUsage(settlement);
+            void this.handleLateFastJudgeUsage(settlement);
         }
     }
 
-    private reconcileFastJudgeUsage(usage: {
-        InvocationId?: string;
-        CostUsd?: number;
-        TokensUsed?: number;
-        SettledAfterDeadline: boolean;
-    }): void {
+    private reconcileFastJudgeUsageForScope(
+        scope: RunLateJudgeScope,
+        usage: {
+            InvocationId?: string;
+            CostUsd?: number;
+            TokensUsed?: number;
+            SettledAfterDeadline: boolean;
+        },
+    ): Promise<boolean> | boolean {
         const costUsd = typeof usage.CostUsd === 'number' && Number.isFinite(usage.CostUsd)
             ? Math.max(0, usage.CostUsd)
             : 0;
@@ -5840,45 +5977,220 @@ export class BaseAgent {
             ? Math.max(0, usage.TokensUsed)
             : 0;
         if (costUsd <= 0 && tokensUsed <= 0) {
-            return;
+            return true;
         }
-        if (usage.InvocationId) {
-            if (this._reconciledFastJudgeInvocationIds.has(usage.InvocationId)) {
-                return;
+        const timestampMs = Date.now();
+        const isNewInMemory = !usage.InvocationId || !scope.InMemoryReconciledIds.has(usage.InvocationId);
+        if (isNewInMemory) {
+            if (usage.InvocationId) {
+                scope.InMemoryReconciledIds.add(usage.InvocationId);
             }
-            this._reconciledFastJudgeInvocationIds.add(usage.InvocationId);
-        }
-        if (costUsd > 0) {
-            this._fastJudgeCostUsd += costUsd;
-            if (this._treeBudget) {
-                this._treeBudget.totalCost += costUsd;
+            if (this._currentLateJudgeScope === scope) {
+                if (usage.InvocationId) {
+                    this._reconciledFastJudgeInvocationIds.add(usage.InvocationId);
+                }
+                if (costUsd > 0) {
+                    this._fastJudgeCostUsd += costUsd;
+                    this._lastRecordedCostUsd += costUsd;
+                }
+                if (tokensUsed > 0) {
+                    this._fastJudgeTokensUsed += tokensUsed;
+                }
             }
-            this._lastRecordedCostUsd += costUsd;
-        }
-        if (tokensUsed > 0) {
-            this._fastJudgeTokensUsed += tokensUsed;
-            if (this._treeBudget) {
-                this._treeBudget.totalTokens += tokensUsed;
+            if (scope.TreeBudget) {
+                if (costUsd > 0) {
+                    scope.TreeBudget.totalCost += costUsd;
+                }
+                if (tokensUsed > 0) {
+                    scope.TreeBudget.totalTokens += tokensUsed;
+                }
+            }
+            if (scope.AgentRun) {
+                BudgetEnforcementGuard.RecordBatchedPromptCost({
+                    AgentRun: scope.AgentRun,
+                    CostEvents: scope.CostEvents,
+                    DayCostBaselines: scope.DayCostBaselines,
+                    CostUsd: costUsd,
+                    TokensUsed: tokensUsed,
+                    TimestampMs: timestampMs,
+                });
+                if (usage.InvocationId) {
+                    scope.AgentRun.Data = attachReconciledFastJudgeIdToRunData(scope.AgentRun.Data, usage.InvocationId);
+                }
             }
         }
-        if (this._agentRun) {
-            BudgetEnforcementGuard.RecordBatchedPromptCost({
-                AgentRun: this._agentRun,
-                CostEvents: this._budgetCostEvents,
-                DayCostBaselines: this._budgetDayBaselines,
+
+        if (!usage.SettledAfterDeadline) {
+            return true;
+        }
+        if (usage.InvocationId && scope.PersistedIds.has(usage.InvocationId)) {
+            return true;
+        }
+        if (!scope.AgentRun?.ID) {
+            return false;
+        }
+
+        const settlementKey = usage.InvocationId ?? `anon-${timestampMs}-${Math.random().toString(36).slice(2, 8)}`;
+        if (!scope.PendingDurableSettlements.has(settlementKey)) {
+            scope.PendingDurableSettlements.set(settlementKey, {
+                InvocationId: settlementKey,
                 CostUsd: costUsd,
                 TokensUsed: tokensUsed,
+                TimestampMs: timestampMs,
             });
-            if (usage.SettledAfterDeadline && this._agentRun.ID && (this._agentRun.Status === 'Completed' || this._agentRun.Status === 'Paused')) {
-                const runRef = this._agentRun;
-                this._agentRunLateSaveChain = this._agentRunLateSaveChain.then(async () => {
-                    try {
-                        await runRef.Save({ SaveReturnMode: 'datestamps_only' });
-                    } catch {
-                        // Best-effort persistence for post-completion late judge settlement
-                    }
-                });
+        }
+
+        // Persist immediately whenever the run has exited the execution loop OR is in any non-Running
+        // state (Completed, Paused, Failed, Cancelled, AwaitingFeedback).
+        if (scope.LoopExited || scope.AgentRun.Status !== 'Running') {
+            return this.enqueueScopeLateSave(scope);
+        }
+
+        // Still inside the active execution loop: the exit path (finalizeAgentRun, createFailureResult,
+        // createCancelledResult, or pauseNonDestructively) will persist the updated totals.
+        return true;
+    }
+
+    private enqueueScopeLateSave(scope: RunLateJudgeScope): Promise<boolean> {
+        const next = scope.LateSaveChain.then(
+            () => this.persistPendingLateJudgeSettlements(scope),
+            () => this.persistPendingLateJudgeSettlements(scope),
+        );
+        scope.LateSaveChain = next;
+        return next;
+    }
+
+    private async persistPendingLateJudgeSettlements(scope: RunLateJudgeScope): Promise<boolean> {
+        if (scope.ActiveFinalSavePromise) {
+            await scope.ActiveFinalSavePromise;
+        }
+        const pendingEntries = Array.from(scope.PendingDurableSettlements.values());
+        if (pendingEntries.length === 0) {
+            return true;
+        }
+        const runRef = scope.AgentRun;
+        if (!runRef || !runRef.ID) {
+            return false;
+        }
+
+        let saved = false;
+        try {
+            saved = await runRef.Save({ SaveReturnMode: 'datestamps_only' });
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            LogError(`[BaseAgent] Late FastConvergenceJudge usage save threw for run ${runRef.ID}: ${msg}`);
+            saved = false;
+        }
+        if (saved) {
+            this.markScopeSettlementsPersisted(scope, pendingEntries);
+            return true;
+        }
+
+        // Reload the latest persisted run entity and apply only unrecorded deltas so transient
+        // Save() failures recover cleanly without double-charging.
+        try {
+            const freshRun = await scope.Provider.GetEntityObject<MJAIAgentRunEntityExtended>(
+                'MJ: AI Agent Runs',
+                scope.ContextUser,
+            );
+            if (!(await freshRun.Load(runRef.ID))) {
+                return false;
             }
+            const alreadyOnFresh = extractReconciledFastJudgeIdsFromRunData(freshRun.Data);
+            const freshEvents = ExtractBudgetCostEventsFromRunData(freshRun.Data);
+            const freshBaselines = ExtractBudgetDayBaselinesFromRunData(freshRun.Data);
+            const mergedBaselines = { ...freshBaselines, ...scope.DayCostBaselines };
+            let mutatedFresh = false;
+            for (const entry of pendingEntries) {
+                if (alreadyOnFresh.has(entry.InvocationId)) {
+                    continue;
+                }
+                BudgetEnforcementGuard.RecordBatchedPromptCost({
+                    AgentRun: freshRun,
+                    CostEvents: freshEvents,
+                    DayCostBaselines: mergedBaselines,
+                    CostUsd: entry.CostUsd,
+                    TokensUsed: entry.TokensUsed,
+                    TimestampMs: entry.TimestampMs,
+                });
+                freshRun.Data = attachReconciledFastJudgeIdToRunData(freshRun.Data, entry.InvocationId);
+                mutatedFresh = true;
+            }
+            if (!mutatedFresh && freshRun !== runRef) {
+                // Ensure CostEvents/Totals from freshRun are up to date even if already present.
+                this.markScopeSettlementsPersisted(scope, pendingEntries);
+                return true;
+            }
+            const retrySaved = await freshRun.Save({ SaveReturnMode: 'datestamps_only' });
+            if (retrySaved) {
+                runRef.TotalCost = freshRun.TotalCost;
+                runRef.TotalTokensUsed = freshRun.TotalTokensUsed;
+                runRef.Data = freshRun.Data;
+                this.markScopeSettlementsPersisted(scope, pendingEntries);
+                return true;
+            }
+        } catch (retryErr) {
+            const msg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+            LogError(`[BaseAgent] Late FastConvergenceJudge reload-and-retry save failed for run ${runRef.ID}: ${msg}`);
+        }
+        return false;
+    }
+
+    private markScopeSettlementsPersisted(
+        scope: RunLateJudgeScope,
+        entries: readonly PendingDurableFastJudgeSettlement[],
+    ): void {
+        for (const entry of entries) {
+            scope.PersistedIds.add(entry.InvocationId);
+            scope.PendingDurableSettlements.delete(entry.InvocationId);
+        }
+    }
+
+    private prepareRunForFinalSave(run: MJAIAgentRunEntityExtended): {
+        Scope: RunLateJudgeScope | null;
+        ReconciledBeforeSave: string[];
+    } {
+        this.drainPendingFastJudgeUsage();
+        const scope = this._currentLateJudgeScope;
+        const reconciledBeforeSave = scope ? Array.from(scope.InMemoryReconciledIds) : [];
+        this.applyTokenStatsToRun(run, this.calculateTokenStats());
+        for (const id of reconciledBeforeSave) {
+            run.Data = attachReconciledFastJudgeIdToRunData(run.Data, id);
+        }
+        return { Scope: scope, ReconciledBeforeSave: reconciledBeforeSave };
+    }
+
+    private markPreSaveFastJudgeIdsPersisted(
+        scope: RunLateJudgeScope | null,
+        reconciledBeforeSave: readonly string[],
+        saved: boolean,
+    ): void {
+        if (!saved || !scope) {
+            return;
+        }
+        for (const id of reconciledBeforeSave) {
+            scope.PersistedIds.add(id);
+            scope.PendingDurableSettlements.delete(id);
+        }
+    }
+
+    private async trackScopeFinalSave<T>(
+        scope: RunLateJudgeScope | null,
+        saveFn: () => Promise<T>,
+    ): Promise<T> {
+        if (!scope) {
+            return saveFn();
+        }
+        scope.LoopExited = true;
+        const promise = saveFn();
+        scope.ActiveFinalSavePromise = promise.then(
+            () => undefined,
+            () => undefined,
+        );
+        try {
+            return await promise;
+        } finally {
+            scope.ActiveFinalSavePromise = null;
         }
     }
 
@@ -5964,7 +6276,7 @@ export class BaseAgent {
             this._stepSaveQueue.Flush(),
             this.flushPromptRunnerSaves(),
         ]);
-        this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
+        const { Scope: scope, ReconciledBeforeSave: reconciledBeforeSave } = this.prepareRunForFinalSave(this._agentRun);
         const pauseInput: PauseRunWithCheckpointInput = {
             AgentRun: this._agentRun,
             AgentID: params.agent.ID,
@@ -5990,9 +6302,13 @@ export class BaseAgent {
         let pauseResult: PauseRunWithCheckpointResult | null = null;
         let persistenceError: string | null = null;
         try {
-            pauseResult = await this._checkpointManager.PauseRunWithCheckpoint(pauseInput);
+            pauseResult = await this.trackScopeFinalSave(scope, () =>
+                this._checkpointManager.PauseRunWithCheckpoint(pauseInput),
+            );
             if (!pauseResult.Saved) {
                 persistenceError = pauseResult.SaveError ?? (this._agentRun.LatestResult?.CompleteMessage || 'Save() returned false');
+            } else {
+                this.markPreSaveFastJudgeIdsPersisted(scope, reconciledBeforeSave, true);
             }
         } catch (err) {
             persistenceError = err instanceof Error ? err.message : String(err);
@@ -16565,6 +16881,10 @@ The context is now within limits. Please retry your request with the recovered c
             const errorMessage = JSON.stringify(CopyScalarsAndArrays(this._agentRun.LatestResult));
             throw new Error(`Failed to create agent run record: Details: ${errorMessage}`);
         }
+        if (this._currentLateJudgeScope) {
+            this._currentLateJudgeScope.AgentRun = this._agentRun;
+            this._currentLateJudgeScope.TreeBudget = this._treeBudget;
+        }
 
         // Hand the now-persisted run (it has a stable ID) to the watchdog so a process restart,
         // crash, or failed terminal-state write can't leave it stuck 'Running' forever. Only the
@@ -16657,7 +16977,6 @@ The context is now within limits. Please retry your request with the recovered c
         this._fastJudgeCostUsd = 0;
         this._fastJudgeTokensUsed = 0;
         this._reconciledFastJudgeInvocationIds.clear();
-        this._agentRunLateSaveChain = Promise.resolve();
         this._fastConvergenceJudge.ResetTracking();
         this._priorDayCostBaselineUsd = restored.PriorDayCostBaselineUsd;
         this._priorDayWallClockBaselineMs = restored.PriorDayWallClockBaselineMs;
@@ -16675,6 +16994,13 @@ The context is now within limits. Please retry your request with the recovered c
             ? storedBaselines
             : { ...(restored.Checkpoint.CumulativeLedger.DayCostBaselines ?? {}) };
         this._lastRecordedCostUsd = restored.PriorCumulativeCostUsd;
+        if (this._currentLateJudgeScope) {
+            this._currentLateJudgeScope.AgentRun = this._agentRun;
+            this._currentLateJudgeScope.CostEvents = this._budgetCostEvents;
+            this._currentLateJudgeScope.DayCostBaselines = this._budgetDayBaselines;
+            this._currentLateJudgeScope.TreeBudget = this._treeBudget;
+            this._currentLateJudgeScope.LoopExited = false;
+        }
         await this._checkpointManager.MarkResumeStarted(this._agentRun);
         this._promptTurnCount = restored.StartingPromptTurns;
 
@@ -22510,6 +22836,7 @@ The context is now within limits. Please retry your request with the recovered c
             const limits = this._activeLimitsResolution?.Limits ?? this.resolvedLimits(args.Params);
             const detResult = this._progressDetector.Evaluate(limits.ProgressDetector);
             if (detResult.Checked) {
+                const judgeScope = this._currentLateJudgeScope;
                 const evaluated = detResult.Classification === 'Ambiguous'
                     ? await this._fastConvergenceJudge.EvaluateIfAmbiguous({
                         DetectorResult: detResult,
@@ -22521,6 +22848,9 @@ The context is now within limits. Please retry your request with the recovered c
                         ContextUser: args.Params.contextUser,
                         ExecutionScope: this._runExecutionScope,
                         Evaluator: args.Params.fastConvergenceJudgeEvaluator,
+                        OnLateUsageSettled: judgeScope
+                            ? (settlement) => this.handleLateFastJudgeUsageForScope(judgeScope, settlement)
+                            : undefined,
                     })
                     : detResult;
                 this.attributeFastJudgeUsage(evaluated);
@@ -23601,9 +23931,11 @@ The context is now within limits. Please retry your request with the recovered c
                 : errorMessage;
             
             // Calculate total tokens even for failed runs
-            this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
-
-            const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+            const { Scope: scope, ReconciledBeforeSave: reconciledBeforeSave } = this.prepareRunForFinalSave(this._agentRun);
+            const ok = await this.trackScopeFinalSave(scope, () =>
+                this._agentRun!.Save({ SaveReturnMode: 'datestamps_only' }),
+            );
+            this.markPreSaveFastJudgeIdsPersisted(scope, reconciledBeforeSave, ok);
             this.releaseFinishedRun(ok);
         }
 
@@ -23661,7 +23993,7 @@ The context is now within limits. Please retry your request with the recovered c
             }
 
             // Calculate total tokens even for cancelled runs
-            this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
+            const { Scope: scope, ReconciledBeforeSave: reconciledBeforeSave } = this.prepareRunForFinalSave(this._agentRun);
 
             // Mark as a trusted server-initiated cancellation so finalizing a timeout, system
             // abort, or attributed-user run (where params.userId !== contextUser.ID) is never
@@ -23669,7 +24001,10 @@ The context is now within limits. Please retry your request with the recovered c
             if (typeof this._agentRun.MarkServerCancellation === 'function') {
                 this._agentRun.MarkServerCancellation();
             }
-            const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+            const ok = await this.trackScopeFinalSave(scope, () =>
+                this._agentRun!.Save({ SaveReturnMode: 'datestamps_only' }),
+            );
+            this.markPreSaveFastJudgeIdsPersisted(scope, reconciledBeforeSave, ok);
             this.releaseFinishedRun(ok);
         }
         
@@ -23849,9 +24184,12 @@ The context is now within limits. Please retry your request with the recovered c
             this._agentRun.FinalPayload = finalPayloadJson;
             
             // Calculate total tokens from all prompts and sub-agents
-            this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
+            const { Scope: scope, ReconciledBeforeSave: reconciledBeforeSave } = this.prepareRunForFinalSave(this._agentRun);
 
-            const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+            const ok = await this.trackScopeFinalSave(scope, () =>
+                this._agentRun!.Save({ SaveReturnMode: 'datestamps_only' }),
+            );
+            this.markPreSaveFastJudgeIdsPersisted(scope, reconciledBeforeSave, ok);
             this.releaseFinishedRun(ok);
             if (!ok) {
                 LogError(`Failed to finalize agent run ${this._agentRun.ID}`);
