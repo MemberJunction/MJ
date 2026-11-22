@@ -35,13 +35,17 @@ import {
     GovernedRunArtifactSummary,
     AttachLimitsDiagnosticsToAgentRun,
     BuildLimitsDiagnosticsSnapshot,
+    ClearCooperativePauseRequestFromRunData,
+    ExtractCooperativePauseRequestFromRunData,
     ResolveAgentRunLimits,
     type ArtifactJsonValue,
     type ArtifactToolArgs,
     type BudgetBreachDetail,
     type BudgetScope,
+    type CooperativePauseRequestSignal,
     type PendingLoopCursorState,
     type ProgressEvaluationResult,
+    type RunawayJsonObject,
     type RunawayJsonValue,
     type RunawayPauseReason,
     type RunawaySerializable,
@@ -49,7 +53,7 @@ import {
 } from "@memberjunction/ai-core-plus";
 import { GovernedArtifactService, MergeTouchedArtifactSummary } from './GovernedArtifactService';
 import { CollectDelegatedRunArtifactsSafely, ExtractDirectActionArtifacts } from './realtime/realtime-artifact-helpers';
-import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase, ToPlainJSON, ServerOperationScopeManager, CODE_FALLBACK_LIMITS, LimitsConfigResolver, type MJLimitsBudgetsConfig, type MJLimitsConfig, type MJLimitsResolutionResult } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, IRunViewProvider, DatabaseProviderBase, ToPlainJSON, ServerOperationScopeManager, CODE_FALLBACK_LIMITS, LimitsConfigResolver, type MJLimitsBudgetsConfig, type MJLimitsConfig, type MJLimitsResolutionResult } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult, GetSentPrefixFingerprint } from '@memberjunction/ai-prompts';
 import { BaseLLM, ChatMessage, ChatMessageContent, AIErrorType, AIAPIKeyResolver, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
@@ -912,7 +916,7 @@ export class BaseAgent {
         PauseReason: RunawayPauseReason;
         BudgetBreach?: BudgetBreachDetail;
         ProgressEvaluation?: ProgressEvaluationResult;
-        Payload: unknown;
+        Payload: RunawaySerializable;
     } | null = null;
 
     /**
@@ -2941,7 +2945,7 @@ export class BaseAgent {
      * Static continuation helper resolving and resuming a paused run from its persisted checkpoint
      * on a fresh `BaseAgent` (or subclass) instance.
      */
-    public static async ResumePausedRun<C = Record<string, unknown>, R = Record<string, unknown>>(
+    public static async ResumePausedRun<C = RunawayJsonObject, R = RunawayJsonObject>(
         agentInstance: BaseAgent,
         params: ExecuteAgentParams<C>,
     ): Promise<ExecuteAgentResult<R>> {
@@ -2952,7 +2956,7 @@ export class BaseAgent {
      * Resumes a paused agent run non-destructively from its persisted {@link RunawayCheckpointState}
      * after human approval and optional budget extension.
      */
-    public async ResumePausedRun<C = Record<string, unknown>, R = Record<string, unknown>>(
+    public async ResumePausedRun<C = RunawayJsonObject, R = RunawayJsonObject>(
         params: ExecuteAgentParams<C>,
     ): Promise<ExecuteAgentResult<R>> {
         if (!params.resumeCheckpointRunId) {
@@ -5175,7 +5179,14 @@ export class BaseAgent {
 
             // Enforce cooperative pause requests & multi-scope budgets before dispatching the next step
             const preStepPayload = (currentNextStep?.newPayload ?? currentNextStep?.previousPayload ?? params.payload) as P;
-            const preCoopPaused = await this.checkAndPauseOnCooperativeRequest(params, preStepPayload, currentNextStep);
+            const allowRemotePausePoll = stepCount > 0 || this._promptTurnCount > 0 || Boolean(this._resumedCheckpointContext);
+            const preCoopPaused = await this.checkAndPauseOnCooperativeRequest(
+                params,
+                preStepPayload,
+                currentNextStep,
+                undefined,
+                allowRemotePausePoll,
+            );
             if (preCoopPaused) {
                 return {
                     finalStep: {
@@ -5448,17 +5459,67 @@ export class BaseAgent {
         });
     }
 
+    private async checkPersistedCooperativePauseRequest(
+        params: ExecuteAgentParams,
+        allowRemotePoll = true,
+    ): Promise<CooperativePauseRequestSignal | null> {
+        const runId = this._agentRun?.ID;
+        if (!runId) {
+            return null;
+        }
+        const localSignal = ExtractCooperativePauseRequestFromRunData(this._agentRun?.Data);
+        if (localSignal) {
+            return localSignal;
+        }
+        if (!allowRemotePoll) {
+            return null;
+        }
+        const provider = params.provider || this._activeProvider;
+        if (!provider || typeof (provider as Partial<IRunViewProvider>).RunView !== 'function') {
+            return null;
+        }
+        try {
+            const rv = RunView.FromMetadataProvider(provider);
+            const res = await rv.RunView<{ ID: string; Data: string | null }>(
+                {
+                    EntityName: 'MJ: AI Agent Runs',
+                    ExtraFilter: `ID='${EscapeSQLString(runId)}'`,
+                    Fields: ['ID', 'Data'],
+                    ResultType: 'simple',
+                    BypassCache: true,
+                    MaxRows: 1,
+                },
+                params.contextUser,
+            );
+            const row = res?.Success ? res.Results?.[0] : undefined;
+            return row ? ExtractCooperativePauseRequestFromRunData(row.Data) : null;
+        } catch {
+            return null;
+        }
+    }
+
     private async checkAndPauseOnCooperativeRequest<P>(
         params: ExecuteAgentParams,
         inFlightPayload: P,
         nextStepToResume: BaseAgentNextStep<P> | null,
         loopCursor?: PendingLoopCursorState | null,
+        allowRemotePoll = true,
     ): Promise<typeof this._pausedRunOutcome> {
-        if (!this._cooperativePauseState?.Requested) {
-            return null;
+        let summary: string | null = null;
+        if (this._cooperativePauseState?.Requested) {
+            summary = this._cooperativePauseState.Summary?.trim() || 'Paused cooperatively at safe step boundary';
+        } else {
+            const remoteSignal = await this.checkPersistedCooperativePauseRequest(params, allowRemotePoll);
+            if (!remoteSignal) {
+                return null;
+            }
+            summary = remoteSignal.Summary.trim() || 'Paused cooperatively at safe step boundary';
+        }
+
+        if (this._agentRun) {
+            this._agentRun.Data = ClearCooperativePauseRequestFromRunData(this._agentRun.Data);
         }
         const ledger = await this.captureCurrentBudgetLedger(params);
-        const summary = this._cooperativePauseState.Summary?.trim() || 'Paused cooperatively at safe step boundary';
         return this.pauseNonDestructively(params, {
             PauseReason: 'ManualPause',
             Summary: summary,
@@ -5551,7 +5612,7 @@ export class BaseAgent {
         stepCount: number,
         prevCompletedTasksCount: number,
         tokensDelta: number,
-        inFlightPayload: unknown,
+        inFlightPayload: P,
     ): IterationProgressSample {
         const currentCompletedTasks = this._scratchpadManager.GetTaskCounts().completed;
         const tasksClosed = Math.max(0, currentCompletedTasks - prevCompletedTasksCount);
@@ -5702,29 +5763,59 @@ export class BaseAgent {
             this.flushPromptRunnerSaves(),
         ]);
         this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
-        const pauseResult = await this._checkpointManager.PauseRunWithCheckpoint({
-            AgentRun: this._agentRun,
-            AgentID: params.agent.ID,
-            AgentName: params.agent.Name ?? 'Unknown Agent',
-            UserID: this._agentRun.UserID ?? params.userId ?? params.contextUser?.ID ?? null,
-            RoutineID: params.routineId ?? null,
-            PauseReason: details.PauseReason,
-            Summary: details.Summary,
-            CompletedPromptTurns: this._promptTurnCount,
-            ConversationMessages: params.conversationMessages,
-            InFlightPayload: details.InFlightPayload,
-            Scratchpad: this._scratchpadManager.ToJSON(),
-            NextStepToResume: details.NextStepToResume,
-            LoopCursor: details.LoopCursor ?? null,
-            BudgetBreach: details.BudgetBreach,
-            ProgressEvaluation: details.ProgressEvaluation,
-            FastJudgeResult: details.FastJudgeResult,
-            CumulativeLedger: details.Ledger,
-            Provider: params.provider || this._activeProvider,
-            ContextUser: params.contextUser,
-            OnOwnerNotification: params.onOwnerPauseNotification,
-        });
-        if (pauseResult.Saved && this._agentRun.ID) {
+        let pauseResult: PauseRunWithCheckpointResult | null = null;
+        let persistenceError: string | null = null;
+        try {
+            pauseResult = await this._checkpointManager.PauseRunWithCheckpoint({
+                AgentRun: this._agentRun,
+                AgentID: params.agent.ID,
+                AgentName: params.agent.Name ?? 'Unknown Agent',
+                UserID: this._agentRun.UserID ?? params.userId ?? params.contextUser?.ID ?? null,
+                RoutineID: params.routineId ?? null,
+                PauseReason: details.PauseReason,
+                Summary: details.Summary,
+                CompletedPromptTurns: this._promptTurnCount,
+                ConversationMessages: params.conversationMessages,
+                InFlightPayload: details.InFlightPayload,
+                Scratchpad: this._scratchpadManager.ToJSON(),
+                NextStepToResume: details.NextStepToResume,
+                LoopCursor: details.LoopCursor ?? null,
+                BudgetBreach: details.BudgetBreach,
+                ProgressEvaluation: details.ProgressEvaluation,
+                FastJudgeResult: details.FastJudgeResult,
+                CumulativeLedger: details.Ledger,
+                Provider: params.provider || this._activeProvider,
+                ContextUser: params.contextUser,
+                OnOwnerNotification: params.onOwnerPauseNotification,
+            });
+            if (!pauseResult.Saved) {
+                persistenceError = pauseResult.SaveError ?? (this._agentRun.LatestResult?.CompleteMessage || 'Save() returned false');
+            }
+        } catch (err) {
+            persistenceError = err instanceof Error ? err.message : String(err);
+            pauseResult = null;
+        }
+
+        if (persistenceError || !pauseResult || !pauseResult.Saved) {
+            const detail = persistenceError || 'Checkpoint persistence returned Saved=false';
+            if (this._cooperativePauseState && this._cooperativePauseState.Waiters.length > 0) {
+                const waiters = [...this._cooperativePauseState.Waiters];
+                this._cooperativePauseState.Waiters.length = 0;
+                this._cooperativePauseState.Requested = false;
+                const coopFailRes: CooperativePauseResult = {
+                    Paused: false,
+                    CheckpointID: null,
+                    Status: this._agentRun.Status,
+                    Summary: `Failed to persist durable checkpoint for pause (${details.PauseReason}): ${detail}`,
+                };
+                for (const resolve of waiters) {
+                    resolve(coopFailRes);
+                }
+            }
+            throw new Error(`Failed to persist runaway pause checkpoint for run ${this._agentRun.ID}: ${detail}`);
+        }
+
+        if (this._agentRun.ID) {
             AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
             ActiveRunGovernanceRegistry.Instance.UnregisterActiveRun(this._agentRun.ID, this._activeProvider);
         }
@@ -21441,6 +21532,11 @@ The context is now within limits. Please retry your request with the recovered c
             EnvironmentID: MJEnvironmentEntityExtended.DefaultEnvironmentID,
             ConversationDetailID: params.conversationDetailId ?? null,
             AgentRunID: this._agentRun?.ID ?? null,
+            AgentID: params.agent.ID,
+            RoutineID: params.routineId ?? null,
+            LimitsOverride: params.limitsOverride,
+            UserPolicyLimitsOverride: params.userPolicyLimitsOverride,
+            EnableGovernance: params.enableRunawayGovernance,
             ParentAgentHierarchy: this._agentHierarchy.length > 0 ? [...this._agentHierarchy] : undefined,
             // If THIS run was itself started by a finished graph, the graph it emits inherits that
             // depth + 1. Without this the chain restarts at zero on every hop and

@@ -695,7 +695,8 @@ describe('Limits.* BaseRemotableOperation implementations', () => {
             ActiveRunGovernanceRegistry.Instance.UnregisterActiveRun(RUN_ID_ACTIVE, providerB);
         }
 
-        // 2) Inactive/detached run record in DB preserves existing messages, scratchpad, payload, and routine
+        // 2) Remote/detached run with NO local handle in ActiveRunGovernanceRegistry:
+        //    MUST NOT fabricate an empty checkpoint or flip Status='Paused'; persists durable cooperative pause signal and returns Pending=true
         const priorCheckpoint: RunawayCheckpointState = {
             SchemaVersion: 'mj-runaway-checkpoint/v1',
             CheckpointID: 'cp-detached-prior',
@@ -786,12 +787,13 @@ describe('Limits.* BaseRemotableOperation implementations', () => {
             { provider: detachedProvider, user: OWNER_USER, emitProgress: () => undefined },
         );
         expect(detachedRes.Success).toBe(true);
-        const savedCp = detachedRun.RunawayCheckpoint;
-        expect(savedCp?.RoutineID).toBe('routine-detached-99');
-        expect(savedCp?.ConversationMessages).toEqual([{ Role: 'user', Content: 'Keep my prompt history' }]);
-        expect(savedCp?.Scratchpad.notes).toBe('Preserved note');
-        expect(savedCp?.InFlightPayload).toEqual({ preservedKey: 'keep-me' });
-        expect(savedCp?.PendingStepDecision?.actions?.[0]?.name).toBe('RunStep');
+        expect(detachedRes.Output?.Success).toBe(false);
+        expect(detachedRes.Output?.Pending).toBe(true);
+        expect(detachedRes.Output?.Status).toBe('Running');
+        expect(detachedRes.Output?.CheckpointID).toBeNull();
+        expect(detachedStatus).toBe('Running');
+        expect(detachedData).toContain('__cooperativePauseRequest');
+        expect(detachedData).toContain('Pause detached run cleanly');
     });
 
     it('resolves durable Tier-4 user policy limits server-side in Limits.GetDiagnostics and clamps widening RunOverrides (CR-5)', async () => {
@@ -1146,5 +1148,133 @@ describe('Limits.* BaseRemotableOperation implementations', () => {
             LoadLimitsOperations();
             ActiveRunGovernanceRegistry.Instance.ClearDispatchedClaims();
         }
+    });
+
+    it('CR-PAUSE-REMOTE-WORKER-CHECKPOINT: persists durable pause signal from API server and lets owning remote worker flush full safe-point checkpoint', async () => {
+        const sharedRunId = '99999999-1111-4111-8111-000000000001';
+        let sharedStatus = 'Running';
+        let sharedData = JSON.stringify({ existingKey: 'preserve-me' });
+        let sharedCheckpoint: RunawayCheckpointState | null = null;
+
+        const makeSharedRunEntity = (): MJAIAgentRunEntityExtended => {
+            const ent = {
+                ID: sharedRunId,
+                AgentID: AGENT_ID,
+                Agent: 'RemoteWorkerAgent',
+                UserID: OWNER_USER.ID,
+                ScheduledJobRunID: 'routine-remote-1',
+                StartedAt: new Date(Date.now() - 2_000),
+                CompletedAt: null as Date | null,
+                Success: null as boolean | null,
+                ErrorMessage: null as string | null,
+                Message: null as string | null,
+                TotalCost: 0.25,
+                TotalCostRollup: 0.25,
+                TotalTokensUsed: 300,
+                TotalPromptIterations: 2,
+                FinalPayload: null as string | null,
+                FinalPayloadObject: null as object | null,
+                Steps: [],
+                get Status() { return sharedStatus; },
+                set Status(v: string) { sharedStatus = v; },
+                get Data() { return sharedData; },
+                set Data(v: string | null) { sharedData = v ?? ''; },
+                get RunawayCheckpoint() { return sharedCheckpoint ?? ExtractRunawayCheckpointFromRunData(sharedData); },
+                set RunawayCheckpoint(v: RunawayCheckpointState | null) { sharedCheckpoint = v; },
+                LatestResult: { CompleteMessage: '' },
+                Load: vi.fn(async (id: string) => id === sharedRunId),
+                Save: vi.fn(async () => true),
+            };
+            return ent as Partial<MJAIAgentRunEntityExtended> as MJAIAgentRunEntityExtended;
+        };
+
+        const makeAuxEntity = (entityName: string) => ({
+            EntityName: entityName,
+            ID: `${entityName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-1`,
+            Status: '',
+            LatestResult: { CompleteMessage: '' },
+            Save: vi.fn(async () => true),
+            Load: vi.fn(async () => false),
+        });
+
+        // Provider 1 (Worker 1 process) vs Provider 2 (API server process without Worker 1's handle)
+        const workerProvider = {
+            Authorizations: [],
+            GetEntityObject: vi.fn(async (entityName: string) =>
+                entityName === 'MJ: AI Agent Runs' ? makeSharedRunEntity() : makeAuxEntity(entityName),
+            ),
+            RunView: vi.fn(async (params: { EntityName: string }) => {
+                if (params.EntityName === 'MJ: AI Agent Runs') {
+                    return { Success: true, Results: [{ ID: sharedRunId, Data: sharedData }] };
+                }
+                return { Success: true, Results: [] };
+            }),
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+
+        const apiServerProvider = {
+            Authorizations: [],
+            GetEntityObject: vi.fn(async (entityName: string) =>
+                entityName === 'MJ: AI Agent Runs' ? makeSharedRunEntity() : makeAuxEntity(entityName),
+            ),
+        } as Partial<IMetadataProvider> as IMetadataProvider;
+
+        // Worker 1 registers its handle only on workerProvider (NOT on apiServerProvider)
+        const pauseOp = new LimitsPauseRunServerOperation();
+        const adminPauseRes = await pauseOp.ExecuteServer(
+            { AgentRunID: sharedRunId, Summary: 'Cross-server admin pause' },
+            { provider: apiServerProvider, user: OWNER_USER, emitProgress: () => undefined },
+        );
+
+        // API server does NOT fabricate an empty checkpoint or mark Paused!
+        expect(adminPauseRes.Success).toBe(true);
+        expect(adminPauseRes.Output?.Success).toBe(false);
+        expect(adminPauseRes.Output?.Pending).toBe(true);
+        expect(adminPauseRes.Output?.Status).toBe('Running');
+        expect(adminPauseRes.Output?.CheckpointID).toBeNull();
+        expect(sharedStatus).toBe('Running');
+
+        // Simulate Worker 1 reaching its safe boundary in BaseAgent.checkAndPauseOnCooperativeRequest
+        const worker = new BaseAgent();
+        const workerRun = makeSharedRunEntity();
+        Reflect.set(worker, '_agentRun', workerRun);
+        Reflect.set(worker, '_activeProvider', workerProvider);
+        Reflect.set(worker, '_promptTurnCount', 3);
+        const scratchpadMgr = Reflect.get(worker, '_scratchpadManager') as {
+            SetNotes(n: string): void;
+            UpsertTasks(t: Array<{ id: string; title: string; status: 'pending' | 'in_progress' | 'completed' | 'blocked' }>): void;
+        };
+        scratchpadMgr.SetNotes('Remote worker safe-point notes');
+        scratchpadMgr.UpsertTasks([{ id: 't-remote', title: 'Remote step', status: 'in_progress' }]);
+
+        const checkCoopFn = Reflect.get(worker, 'checkAndPauseOnCooperativeRequest') as (
+            p: { agent: { ID: string; Name: string }; conversationMessages: Array<{ role: string; content: string }>; contextUser: UserInfo; provider: IMetadataProvider; routineId?: string },
+            inFlightPayload: { phase: string },
+            nextStep: { step: string; terminate: boolean },
+        ) => Promise<{ PauseResult: { Checkpoint: RunawayCheckpointState } } | null>;
+
+        const outcome = await checkCoopFn.call(
+            worker,
+            {
+                agent: { ID: AGENT_ID, Name: 'RemoteWorkerAgent' },
+                conversationMessages: [{ role: 'user', content: 'Full worker conversation history' }],
+                contextUser: OWNER_USER,
+                provider: workerProvider,
+                routineId: 'routine-remote-1',
+            },
+            { phase: 'step-3-in-flight' },
+            { step: 'Retry', terminate: false },
+        );
+
+        expect(outcome).not.toBeNull();
+        expect(sharedStatus).toBe('Paused');
+        const flushedCp = ExtractRunawayCheckpointFromRunData(sharedData);
+        expect(flushedCp).not.toBeNull();
+        expect(flushedCp?.Summary).toBe('Cross-server admin pause');
+        expect(flushedCp?.ConversationMessages).toEqual([{ Role: 'user', Content: 'Full worker conversation history' }]);
+        expect(flushedCp?.Scratchpad.notes).toBe('Remote worker safe-point notes');
+        expect(flushedCp?.InFlightPayload).toEqual({ phase: 'step-3-in-flight' });
+        expect(flushedCp?.PendingStepDecision?.step).toBe('Retry');
+        // Cooperative pause request signal was cleared once acknowledged
+        expect(sharedData).not.toContain('__cooperativePauseRequest');
     });
 });

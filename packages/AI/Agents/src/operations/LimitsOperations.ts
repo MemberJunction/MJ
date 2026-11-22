@@ -7,6 +7,7 @@
  * @module @memberjunction/ai-agents
  */
 
+import { randomUUID } from 'node:crypto';
 import {
     AuthorizationEvaluator,
     BaseRemotableOperation,
@@ -26,6 +27,7 @@ import {
 } from '@memberjunction/core';
 import type { MJAIAgentEntity, MJAIAgentRunEntity, MJAIAgentUserPolicyEntity } from '@memberjunction/core-entities';
 import {
+    AttachCooperativePauseRequestToRunData,
     ExtractLimitsDiagnosticsFromAgentRun,
     ExtractLimitsDiagnosticsFromRunData,
     ExtractProgressDiagnosticsFromRunData,
@@ -50,11 +52,8 @@ import {
     type LimitsResumePausedRunOutput,
     type LimitsTierSummary,
     type MJAIAgentRunEntityExtended,
-    type RunawayJsonValue,
-    type RunawaySerializable,
 } from '@memberjunction/ai-core-plus';
-import { EscapeSQLString, IsValidUUID, RegisterClass, SafeJSONParse } from '@memberjunction/global';
-import type { ChatMessage } from '@memberjunction/ai';
+import { EscapeSQLString, IsValidUUID, RegisterClass } from '@memberjunction/global';
 import { ActiveRunGovernanceRegistry, type ResumeContinuationDispatchResult } from '../ActiveRunGovernanceRegistry';
 import { InstallDefaultResumeContinuationDispatcher } from '../DefaultResumeContinuationDispatcher';
 import { ComputeActiveWallClockOverlapMs, ComputeDayBoundaryWindow } from '../BudgetEnforcementGuard';
@@ -947,86 +946,58 @@ export class LimitsPauseRunServerOperation extends LimitsPauseRunOperation {
             requestedSummary,
             provider,
         );
-        if (cooperativeResult?.Paused) {
+        if (cooperativeResult) {
+            if (cooperativeResult.Paused) {
+                return {
+                    Success: true,
+                    Pending: false,
+                    AgentRunID: runId,
+                    Status: cooperativeResult.Status,
+                    CheckpointID: cooperativeResult.CheckpointID,
+                    Message: `Run ${runId} cooperatively paused at safe boundary (checkpoint ${cooperativeResult.CheckpointID ?? 'n/a'}).`,
+                };
+            }
             return {
-                Success: true,
+                Success: false,
+                Pending: false,
                 AgentRunID: runId,
                 Status: cooperativeResult.Status,
                 CheckpointID: cooperativeResult.CheckpointID,
-                Message: `Run ${runId} cooperatively paused at safe boundary (checkpoint ${cooperativeResult.CheckpointID ?? 'n/a'}).`,
+                Message: cooperativeResult.Summary || `Run ${runId} failed to persist cooperative pause checkpoint.`,
             };
         }
 
-        const nowMs = Date.now();
-        const startedAtMs = agentRun.StartedAt ? new Date(agentRun.StartedAt).getTime() : nowMs;
-        const runCost = typeof agentRun.TotalCostRollup === 'number' && agentRun.TotalCostRollup > 0
-            ? agentRun.TotalCostRollup
-            : (typeof agentRun.TotalCost === 'number' ? agentRun.TotalCost : 0);
-        const existingCheckpoint = ExtractRunawayCheckpointFromAgentRun(agentRun);
-        const snapshot = ExtractLimitsDiagnosticsFromAgentRun(agentRun);
-        const budgets = snapshot?.ResolvedLimits.Budgets ?? LimitsConfigResolver.Resolve().Limits.Budgets;
-        const dayWindow = ComputeDayBoundaryWindow(nowMs, budgets.PerUserPerDay.DayBoundaryTimezone);
-
-        const preservedMessages: ChatMessage[] = existingCheckpoint
-            ? existingCheckpoint.ConversationMessages.map((m) => ({ role: m.Role, content: m.Content }))
-            : [];
-        const preservedPayload: RunawaySerializable =
-            (agentRun.FinalPayloadObject as RunawaySerializable) ??
-            (typeof agentRun.FinalPayload === 'string' && agentRun.FinalPayload.trim().length > 0
-                ? SafeJSONParse<RunawayJsonValue>(agentRun.FinalPayload)
-                : null) ??
-            existingCheckpoint?.InFlightPayload ??
-            null;
-        const preservedScratchpad = existingCheckpoint?.Scratchpad ?? { notes: '', tasks: [] };
-        const preservedRoutineId = existingCheckpoint?.RoutineID ?? snapshot?.Context.RoutineID ?? agentRun.ScheduledJobRunID ?? null;
-        const checkpointManager = new RunawayCheckpointManager();
-        const preservedNextStep = existingCheckpoint?.PendingStepDecision
-            ? checkpointManager.RestoreNextStepFromDecision(existingCheckpoint.PendingStepDecision)
-            : null;
-        const preservedLoopCursor = existingCheckpoint?.LoopCursor ?? existingCheckpoint?.PendingStepDecision?.LoopCursor ?? null;
-
-        const pauseResult = await checkpointManager.PauseRunWithCheckpoint({
-            AgentRun: agentRun,
-            AgentID: agentRun.AgentID,
-            AgentName: agentRun.Agent ?? 'Agent',
-            UserID: agentRun.UserID ?? user.ID,
-            RoutineID: preservedRoutineId,
-            PauseReason: 'ManualPause',
+        // No in-process worker handle on this server: persist a durable cooperative pause signal
+        // for the owning remote worker to pick up at its next safe boundary rather than fabricating
+        // an incomplete checkpoint while the remote worker is still running.
+        agentRun.Data = AttachCooperativePauseRequestToRunData(agentRun.Data, {
+            RequestID: randomUUID(),
+            RequestedAtISO: new Date().toISOString(),
+            RequestedByUserID: user.ID ?? null,
             Summary: requestedSummary,
-            CompletedPromptTurns: Math.max(agentRun.TotalPromptIterations ?? 0, existingCheckpoint?.CompletedPromptTurns ?? 0),
-            CompletedNodeIDs: existingCheckpoint?.CompletedNodeIDs,
-            ConversationMessages: preservedMessages,
-            InFlightPayload: preservedPayload,
-            Scratchpad: preservedScratchpad,
-            NextStepToResume: preservedNextStep,
-            LoopCursor: preservedLoopCursor,
-            CumulativeLedger: {
-                RunCostUsd: runCost,
-                RunWallClockMs: Math.max(0, nowMs - startedAtMs),
-                RunTokens: agentRun.TotalTokensUsed ?? 0,
-                RoutineCostUsd: runCost,
-                RoutineWallClockMs: Math.max(0, nowMs - startedAtMs),
-                UserDailyCostUsd: runCost,
-                UserDailyWallClockMs: Math.max(0, nowMs - startedAtMs),
-                PausedWallClockMs: existingCheckpoint?.CumulativeLedger.PausedWallClockMs ?? 0,
-                PausedIntervals: existingCheckpoint?.CumulativeLedger.PausedIntervals ?? [],
-                DayBucketUTC: dayWindow.DayBucketUTC,
-                DayBoundaryTimezone: budgets.PerUserPerDay.DayBoundaryTimezone,
-                AsOfISO: new Date(nowMs).toISOString(),
-            },
-            Provider: provider,
-            ContextUser: user,
-            NowMs: nowMs,
         });
+        const signalSaved = await agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+        if (!signalSaved) {
+            const errDetail = agentRun.LatestResult?.CompleteMessage || 'agentRun.Save() returned false';
+            return {
+                Success: false,
+                Pending: false,
+                AgentRunID: runId,
+                Status: agentRun.Status,
+                CheckpointID: null,
+                Message: `Failed to persist cooperative pause signal for remote run ${runId}: ${errDetail}.`,
+            };
+        }
 
         return {
-            Success: pauseResult.Saved,
+            Success: false,
+            Pending: true,
             AgentRunID: runId,
             Status: agentRun.Status,
-            CheckpointID: pauseResult.Checkpoint.CheckpointID,
-            Message: pauseResult.Saved
-                ? `Run ${runId} paused non-destructively at checkpoint ${pauseResult.Checkpoint.CheckpointID}.`
-                : `Run ${runId} checkpoint created but save returned false.`,
+            CheckpointID: null,
+            Message:
+                `Cooperative pause request persisted for remote worker on run ${runId}; ` +
+                `awaiting owning worker safe-point checkpoint acknowledgment.`,
         };
     }
 }

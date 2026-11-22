@@ -82,6 +82,10 @@ export interface PauseRunWithCheckpointInput {
     ContextUser?: UserInfo;
     NowMs?: number;
     CreateApprovalRequest?: boolean;
+    /** Maximum save attempts for transient persistence failures (defaults to 3). */
+    MaxSaveAttempts?: number;
+    /** Base retry delay in milliseconds between transient save attempts (defaults to 25ms). */
+    SaveRetryDelayMs?: number;
     OnOwnerNotification?: (payload: OwnerPauseNotificationPayload) => Promise<void> | void;
 }
 
@@ -92,6 +96,8 @@ export interface PauseRunWithCheckpointResult {
     OwnerNotificationID: string | null;
     ApprovalRequestID: string | null;
     Saved: boolean;
+    /** Persistence error detail when `Saved === false`. */
+    SaveError?: string | null;
 }
 
 /** Input parameters for {@link RunawayCheckpointManager.ApproveCheckpoint}. */
@@ -162,6 +168,17 @@ export class RunawayCheckpointManager {
         };
 
         const checkpoint = this.buildCheckpointState(input, updatedLedger, nowMs, pausedAtISO);
+        const priorRunSnapshot = {
+            Status: input.AgentRun.Status,
+            CompletedAt: input.AgentRun.CompletedAt,
+            Success: input.AgentRun.Success,
+            ErrorMessage: input.AgentRun.ErrorMessage,
+            Message: input.AgentRun.Message,
+            FinalPayload: input.AgentRun.FinalPayload,
+            FinalPayloadObject: input.AgentRun.FinalPayloadObject,
+            Data: input.AgentRun.Data,
+            RunawayCheckpoint: input.AgentRun.RunawayCheckpoint,
+        };
         this.applyPausedStateToRun(input.AgentRun, checkpoint, input.InFlightPayload);
 
         const notificationPayload = this.buildOwnerNotificationPayload(checkpoint);
@@ -178,9 +195,49 @@ export class RunawayCheckpointManager {
         checkpoint.HumanApproval.ApprovalRequestID = approvalRequestId;
         AttachRunawayCheckpointToAgentRun(input.AgentRun, checkpoint);
 
-        const saved = await input.AgentRun.Save({ SaveReturnMode: 'datestamps_only' });
+        const maxAttempts = Math.max(1, Math.trunc(input.MaxSaveAttempts ?? 3));
+        const baseDelayMs = Math.max(0, Math.trunc(input.SaveRetryDelayMs ?? 25));
+        let saved = false;
+        let lastSaveError: string | null = null;
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                saved = await input.AgentRun.Save({ SaveReturnMode: 'datestamps_only' });
+                if (saved) {
+                    lastSaveError = null;
+                    break;
+                }
+                lastSaveError = input.AgentRun.LatestResult?.CompleteMessage || 'Save() returned false';
+            } catch (err) {
+                saved = false;
+                lastSaveError = err instanceof Error ? err.message : String(err);
+            }
+            if (attempt < maxAttempts && baseDelayMs > 0) {
+                await new Promise((resolve) => setTimeout(resolve, baseDelayMs * attempt));
+            }
+        }
+
         if (!saved) {
-            LogError(`RunawayCheckpointManager: failed to save paused run ${input.AgentRun.ID}: ${input.AgentRun.LatestResult?.CompleteMessage ?? 'unspecified error'}`);
+            input.AgentRun.Status = priorRunSnapshot.Status;
+            input.AgentRun.CompletedAt = priorRunSnapshot.CompletedAt;
+            input.AgentRun.Success = priorRunSnapshot.Success;
+            input.AgentRun.ErrorMessage = priorRunSnapshot.ErrorMessage;
+            input.AgentRun.Message = priorRunSnapshot.Message;
+            input.AgentRun.FinalPayloadObject = priorRunSnapshot.FinalPayloadObject;
+            input.AgentRun.FinalPayload = priorRunSnapshot.FinalPayload;
+            input.AgentRun.Data = priorRunSnapshot.Data;
+            input.AgentRun.RunawayCheckpoint = priorRunSnapshot.RunawayCheckpoint;
+            LogError(
+                `RunawayCheckpointManager: failed to save paused run ${input.AgentRun.ID} after ${maxAttempts} attempt(s): ${lastSaveError ?? 'unspecified error'}`,
+            );
+            return {
+                Checkpoint: checkpoint,
+                NotificationPayload: notificationPayload,
+                OwnerNotificationID: ownerNotificationId,
+                ApprovalRequestID: approvalRequestId,
+                Saved: false,
+                SaveError: lastSaveError,
+            };
         }
 
         if (input.OnOwnerNotification) {
@@ -196,7 +253,8 @@ export class RunawayCheckpointManager {
             NotificationPayload: notificationPayload,
             OwnerNotificationID: ownerNotificationId,
             ApprovalRequestID: approvalRequestId,
-            Saved: saved,
+            Saved: true,
+            SaveError: null,
         };
     }
 

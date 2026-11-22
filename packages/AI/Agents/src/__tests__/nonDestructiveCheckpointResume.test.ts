@@ -1909,4 +1909,174 @@ describe('Non-destructive pause, persisted checkpoint, owner notification, and h
             aiInstanceSpy.mockRestore();
         }
     });
+
+    it('CR-CHECKPOINT-SAVE-FAILURE: retries transient Save failures and fails closed without claiming Paused when Save returns false or throws', async () => {
+        const provider = harness.CreateProvider();
+        const contextUser = { ID: USER_ID, Name: 'Alice Owner', Email: 'alice@example.com' } as UserInfo;
+        const cpManager = new RunawayCheckpointManager();
+
+        // 1) Transient failure on attempt 1 followed by success on attempt 2 -> Saved=true
+        let attempts = 0;
+        const transientRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
+        transientRun.ID = '77777777-0000-4000-8000-000000000001';
+        transientRun.Status = 'Running';
+        transientRun.Save = vi.fn(async () => {
+            attempts++;
+            return attempts >= 2;
+        });
+
+        const notifications: OwnerPauseNotificationPayload[] = [];
+        const transientRes = await cpManager.PauseRunWithCheckpoint({
+            AgentRun: transientRun,
+            AgentID: AGENT_ID,
+            AgentName: 'TransientAgent',
+            UserID: USER_ID,
+            RoutineID: null,
+            PauseReason: 'BudgetExceeded',
+            Summary: 'Transient retry test',
+            CompletedPromptTurns: 1,
+            ConversationMessages: [],
+            InFlightPayload: { ok: true },
+            Scratchpad: { notes: '', tasks: [] },
+            CumulativeLedger: {
+                RunCostUsd: 0.5,
+                RunWallClockMs: 1000,
+                RunTokens: 100,
+                RoutineCostUsd: 0.5,
+                RoutineWallClockMs: 1000,
+                UserDailyCostUsd: 0.5,
+                UserDailyWallClockMs: 1000,
+                PausedWallClockMs: 0,
+                PausedIntervals: [],
+                DayBucketUTC: '2026-11-21',
+                DayBoundaryTimezone: 'UTC',
+                AsOfISO: new Date().toISOString(),
+            },
+            Provider: provider,
+            ContextUser: contextUser,
+            MaxSaveAttempts: 3,
+            SaveRetryDelayMs: 5,
+            OnOwnerNotification: (p) => {
+                notifications.push(p);
+            },
+        });
+        expect(attempts).toBe(2);
+        expect(transientRes.Saved).toBe(true);
+        expect(transientRun.Status).toBe('Paused');
+        expect(notifications).toHaveLength(1);
+
+        // 2) Save() returns false on every attempt -> Saved=false, Status restored to 'Running', no notification
+        const falseRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
+        falseRun.ID = '77777777-0000-4000-8000-000000000002';
+        falseRun.Status = 'Running';
+        falseRun.LatestResult = { CompleteMessage: 'DB write rejected' } as MJAIAgentRunEntityExtended['LatestResult'];
+        falseRun.Save = vi.fn(async () => false);
+        const falseNotifications: OwnerPauseNotificationPayload[] = [];
+        const falseRes = await cpManager.PauseRunWithCheckpoint({
+            AgentRun: falseRun,
+            AgentID: AGENT_ID,
+            AgentName: 'FalseSaveAgent',
+            UserID: USER_ID,
+            RoutineID: null,
+            PauseReason: 'BudgetExceeded',
+            Summary: 'Save returns false',
+            CompletedPromptTurns: 1,
+            ConversationMessages: [],
+            InFlightPayload: { step: 1 },
+            Scratchpad: { notes: '', tasks: [] },
+            CumulativeLedger: transientRes.Checkpoint.CumulativeLedger,
+            Provider: provider,
+            ContextUser: contextUser,
+            MaxSaveAttempts: 2,
+            SaveRetryDelayMs: 5,
+            OnOwnerNotification: (p) => {
+                falseNotifications.push(p);
+            },
+        });
+        expect(falseRes.Saved).toBe(false);
+        expect(falseRes.SaveError).toContain('DB write rejected');
+        expect(falseRun.Status).toBe('Running');
+        expect(falseNotifications).toHaveLength(0);
+
+        // 3) Save() throws on every attempt -> Saved=false, SaveError captured, Status restored
+        const throwRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
+        throwRun.ID = '77777777-0000-4000-8000-000000000003';
+        throwRun.Status = 'Running';
+        throwRun.Save = vi.fn(async () => {
+            throw new Error('SQL connection dropped');
+        });
+        const throwRes = await cpManager.PauseRunWithCheckpoint({
+            AgentRun: throwRun,
+            AgentID: AGENT_ID,
+            AgentName: 'ThrowSaveAgent',
+            UserID: USER_ID,
+            RoutineID: null,
+            PauseReason: 'ManualPause',
+            Summary: 'Save throws',
+            CompletedPromptTurns: 1,
+            ConversationMessages: [],
+            InFlightPayload: { step: 1 },
+            Scratchpad: { notes: '', tasks: [] },
+            CumulativeLedger: transientRes.Checkpoint.CumulativeLedger,
+            Provider: provider,
+            ContextUser: contextUser,
+            MaxSaveAttempts: 2,
+            SaveRetryDelayMs: 5,
+        });
+        expect(throwRes.Saved).toBe(false);
+        expect(throwRes.SaveError).toContain('SQL connection dropped');
+        expect(throwRun.Status).toBe('Running');
+
+        // 4) BaseAgent.pauseNonDestructively fails closed when Save() returns false or throws (resolves cooperative waiters Paused=false and throws)
+        const testAgent = new TestableCheckpointAgent([]);
+        const failAgentRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
+        failAgentRun.ID = '77777777-0000-4000-8000-000000000004';
+        failAgentRun.Status = 'Running';
+        failAgentRun.Save = vi.fn(async () => false);
+        Reflect.set(testAgent, '_agentRun', failAgentRun);
+        Reflect.set(testAgent, '_activeProvider', provider);
+
+        const reqCoopFn = Reflect.get(testAgent, 'requestCooperativePause') as (summary?: string) => Promise<{
+            Paused: boolean;
+            CheckpointID: string | null;
+            Status: string;
+            Summary: string;
+        } | null>;
+        const waiterPromise = reqCoopFn.call(testAgent, 'Pause waiter test');
+
+        const pauseNonDestructivelyFn = Reflect.get(testAgent, 'pauseNonDestructively') as (
+            p: ExecuteAgentParams,
+            d: {
+                PauseReason: 'BudgetExceeded';
+                Summary: string;
+                InFlightPayload: { x: number };
+                NextStepToResume: null;
+                Ledger: typeof transientRes.Checkpoint.CumulativeLedger;
+            },
+        ) => Promise<unknown>;
+
+        await expect(
+            pauseNonDestructivelyFn.call(
+                testAgent,
+                {
+                    agent: { ID: AGENT_ID, Name: 'FailCloseAgent' } as MJAIAgentEntityExtended,
+                    conversationMessages: [],
+                    contextUser,
+                    provider,
+                },
+                {
+                    PauseReason: 'BudgetExceeded',
+                    Summary: 'Budget hit',
+                    InFlightPayload: { x: 1 },
+                    NextStepToResume: null,
+                    Ledger: transientRes.Checkpoint.CumulativeLedger,
+                },
+            ),
+        ).rejects.toThrow('Failed to persist runaway pause checkpoint');
+
+        const waiterOutcome = await waiterPromise;
+        expect(waiterOutcome?.Paused).toBe(false);
+        expect(waiterOutcome?.CheckpointID).toBeNull();
+        expect(Reflect.get(testAgent, '_pausedRunOutcome')).toBeNull();
+    });
 });

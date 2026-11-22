@@ -880,4 +880,133 @@ describe('BudgetEnforcementGuard — all 6 scope x dimension combinations', () =
         );
         expect(unattributed.CostUsd).toBe(100);
     });
+
+    it('CR-ROUTINE-RESUMED-TIME: tracks additional post-resume active time on Status="Running" rows and honors CountPausedTimeTowardsWallClock on Paused rows', async () => {
+        const guard = new BudgetEnforcementGuard();
+        const t0 = Date.UTC(2026, 10, 21, 12, 0, 0);
+        const pausedAtMs = t0 + 10_000;  // active 10s before pause
+        const resumedAtMs = t0 + 50_000; // paused for 40s
+        const nowMs = t0 + 70_000;       // active 20s after resume -> 30s total active, 70s total wall
+
+        const resumedCheckpoint: RunawayCheckpointState = {
+            SchemaVersion: 'mj-runaway-checkpoint/v1',
+            CheckpointID: 'cp-routine-resumed-1',
+            AgentRunID: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1',
+            AgentID: '11111111-1111-4111-8111-111111111119',
+            AgentName: 'RoutineRunA',
+            UserID: USER_ID,
+            RoutineID: ROUTINE_ID,
+            PausedAtISO: new Date(pausedAtMs).toISOString(),
+            PausedAtMs: pausedAtMs,
+            PauseReason: 'BudgetExceeded',
+            Summary: 'Paused after 10s',
+            CompletedStepCount: 1,
+            CompletedStepIDs: ['s1'],
+            CompletedPromptTurns: 1,
+            CompletedNodeIDs: [],
+            ConversationMessages: [],
+            InFlightPayload: {},
+            Scratchpad: { notes: '', tasks: [] },
+            NextStepSummary: 'Retry',
+            Evidence: { RecentStepSummaries: [] },
+            CumulativeLedger: {
+                RunCostUsd: 0.1,
+                RunWallClockMs: 10_000,
+                RunTokens: 100,
+                RoutineCostUsd: 0.1,
+                RoutineWallClockMs: 10_000,
+                UserDailyCostUsd: 0.1,
+                UserDailyWallClockMs: 10_000,
+                PausedWallClockMs: 40_000,
+                PausedIntervals: [{ PausedAtMs: pausedAtMs, ResumedAtMs: resumedAtMs }],
+                DayBucketUTC: '2026-11-21',
+                DayBoundaryTimezone: 'UTC',
+                AsOfISO: new Date(resumedAtMs).toISOString(),
+            },
+            HumanApproval: { Status: 'Approved' },
+        };
+
+        const runARunningRow: AgentRunBudgetLedgerRow = {
+            ID: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1',
+            UserID: USER_ID,
+            TotalCost: 0.1,
+            TotalCostRollup: 0.1,
+            StartedAt: new Date(t0),
+            CompletedAt: null,
+            ScheduledJobRunID: ROUTINE_ID,
+            Status: 'Running',
+            Data: JSON.stringify({ __runawayCheckpoint: resumedCheckpoint }),
+        };
+
+        // 1) Status='Running' after resume with CountPausedTimeTowardsWallClock=false:
+        //    Run A active time = 10,000 + 20,000 = 30,000ms (NOT frozen at 10,000ms!); Run B = 6,000ms -> 36,000ms >= 35,000ms limit
+        const { Provider: provRunning } = createMockRunViewsProvider([runARunningRow], []);
+        const excludePausedBudgets = createBudgets({
+            PerRun: { MaxCostUsd: 10, MaxWallClockMs: 600_000, MaxTokens: null },
+            PerRoutine: { MaxCostUsd: null, MaxWallClockMs: 35_000 },
+            CountPausedTimeTowardsWallClock: false,
+        });
+        const resExcludePaused = await guard.Evaluate({
+            Budgets: excludePausedBudgets,
+            AgentRunID: ACTIVE_RUN_ID,
+            UserID: USER_ID,
+            RoutineID: ROUTINE_ID,
+            CurrentRunCostUsd: 0.05,
+            CurrentRunStartedAtMs: nowMs - 6_000,
+            NowMs: nowMs,
+            Provider: provRunning,
+        });
+        expect(resExcludePaused.Exceeded).toBe(true);
+        expect(resExcludePaused.Breach?.Scope).toBe('PerRoutine');
+        expect(resExcludePaused.Breach?.Dimension).toBe('WallClockMs');
+        expect(resExcludePaused.Ledger.RoutineWallClockMs).toBe(36_000);
+
+        // 2) Status='Paused' honors CountPausedTimeTowardsWallClock=true (uses nowMs -> 70,000ms) vs false (uses PausedAtMs -> 10,000ms)
+        const pausedOnlyCheckpoint: RunawayCheckpointState = {
+            ...resumedCheckpoint,
+            CumulativeLedger: {
+                ...resumedCheckpoint.CumulativeLedger,
+                PausedIntervals: [{ PausedAtMs: pausedAtMs, ResumedAtMs: null }],
+            },
+            HumanApproval: { Status: 'Pending' },
+        };
+        const runAPausedRow: AgentRunBudgetLedgerRow = {
+            ...runARunningRow,
+            Status: 'Paused',
+            Data: JSON.stringify({ __runawayCheckpoint: pausedOnlyCheckpoint }),
+        };
+        const { Provider: provPaused } = createMockRunViewsProvider([runAPausedRow], []);
+
+        const resPausedExcluded = await guard.Evaluate({
+            Budgets: createBudgets({
+                PerRoutine: { MaxCostUsd: null, MaxWallClockMs: 50_000 },
+                CountPausedTimeTowardsWallClock: false,
+            }),
+            AgentRunID: ACTIVE_RUN_ID,
+            UserID: USER_ID,
+            RoutineID: ROUTINE_ID,
+            CurrentRunCostUsd: 0.01,
+            CurrentRunStartedAtMs: nowMs - 5_000,
+            NowMs: nowMs,
+            Provider: provPaused,
+        });
+        expect(resPausedExcluded.Exceeded).toBe(false);
+        expect(resPausedExcluded.Ledger.RoutineWallClockMs).toBe(15_000); // 10,000 paused row + 5,000 active
+
+        const resPausedIncluded = await guard.Evaluate({
+            Budgets: createBudgets({
+                PerRoutine: { MaxCostUsd: null, MaxWallClockMs: 50_000 },
+                CountPausedTimeTowardsWallClock: true,
+            }),
+            AgentRunID: ACTIVE_RUN_ID,
+            UserID: USER_ID,
+            RoutineID: ROUTINE_ID,
+            CurrentRunCostUsd: 0.01,
+            CurrentRunStartedAtMs: nowMs - 5_000,
+            NowMs: nowMs,
+            Provider: provPaused,
+        });
+        expect(resPausedIncluded.Exceeded).toBe(true);
+        expect(resPausedIncluded.Ledger.RoutineWallClockMs).toBe(75_000); // 70,000 total wall + 5,000 active
+    });
 });

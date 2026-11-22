@@ -1020,16 +1020,18 @@ export class BudgetEnforcementGuard {
         nowMs: number,
     ): number {
         const checkpoint = ExtractRunawayCheckpointFromRunData(row.Data);
-        if (checkpoint && checkpoint.CumulativeLedger.RunWallClockMs > 0 && row.Status === 'Paused') {
-            return checkpoint.CumulativeLedger.RunWallClockMs;
-        }
         if (!row.StartedAt) {
+            if (checkpoint && checkpoint.CumulativeLedger.RunWallClockMs > 0 && row.Status === 'Paused' && !countPausedTime) {
+                return checkpoint.CumulativeLedger.RunWallClockMs;
+            }
             return 0;
         }
         const startMs = new Date(row.StartedAt).getTime();
         const endMs = row.CompletedAt
             ? new Date(row.CompletedAt).getTime()
-            : (checkpoint?.PausedAtMs ?? nowMs);
+            : row.Status === 'Paused'
+                ? (countPausedTime ? nowMs : (checkpoint?.PausedAtMs ?? nowMs))
+                : nowMs;
         if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
             return 0;
         }
@@ -1037,7 +1039,11 @@ export class BudgetEnforcementGuard {
         if (countPausedTime || !checkpoint) {
             return rawMs;
         }
-        const pausedMs = ComputeTotalPausedMs(checkpoint.CumulativeLedger.PausedIntervals, endMs);
+        const intervals = checkpoint.CumulativeLedger.PausedIntervals;
+        const applicableIntervals = row.Status === 'Running'
+            ? intervals.filter((p) => p.ResumedAtMs !== undefined && p.ResumedAtMs !== null)
+            : intervals;
+        const pausedMs = ComputeTotalPausedMs(applicableIntervals, endMs);
         return Math.max(0, rawMs - pausedMs);
     }
 
