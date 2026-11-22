@@ -2230,12 +2230,6 @@ export const MJAIAgentRhythmTemplateSchema = z.object({
     *   * Active
     *   * Inactive
         * * Description: Whether this rhythm template is currently Active or Inactive.`),
-    DefaultAgentConfigurationID: z.string().nullable().describe(`
-        * * Field Name: DefaultAgentConfigurationID
-        * * Display Name: Default Agent Configuration ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
-        * * Description: Optional default AI Configuration (model tier such as Fast, Standard, or High Power) seeded onto UserRoutine.AgentConfigurationID when this rhythm template is enabled and used as a fallback on wake.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -2246,6 +2240,12 @@ export const MJAIAgentRhythmTemplateSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    DefaultAgentConfigurationID: z.string().nullable().describe(`
+        * * Field Name: DefaultAgentConfigurationID
+        * * Display Name: Default Agent Configuration ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+        * * Description: Optional default AI Configuration (model tier such as Fast, Standard, or High Power) seeded onto UserRoutine.AgentConfigurationID when this rhythm template is enabled and used as a fallback on wake.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent

@@ -6558,20 +6558,6 @@ export class MJAIAgentRhythmTemplateEntity extends BaseEntity<MJAIAgentRhythmTem
     }
 
     /**
-    * * Field Name: DefaultAgentConfigurationID
-    * * Display Name: Default Agent Configuration ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
-    * * Description: Optional default AI Configuration (model tier preset such as Fast, Standard, or High Power) seeded onto user routines created from this rhythm template.
-    */
-    get DefaultAgentConfigurationID(): string | null {
-        return this.Get('DefaultAgentConfigurationID');
-    }
-    set DefaultAgentConfigurationID(value: string | null) {
-        this.Set('DefaultAgentConfigurationID', value);
-    }
-
-    /**
     * * Field Name: __mj_CreatedAt
     * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
@@ -6589,6 +6575,20 @@ export class MJAIAgentRhythmTemplateEntity extends BaseEntity<MJAIAgentRhythmTem
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: DefaultAgentConfigurationID
+    * * Display Name: Default Agent Configuration ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+    * * Description: Optional default AI Configuration (model tier such as Fast, Standard, or High Power) seeded onto UserRoutine.AgentConfigurationID when this rhythm template is enabled and used as a fallback on wake.
+    */
+    get DefaultAgentConfigurationID(): string | null {
+        return this.Get('DefaultAgentConfigurationID');
+    }
+    set DefaultAgentConfigurationID(value: string | null) {
+        this.Set('DefaultAgentConfigurationID', value);
     }
 
     /**
@@ -6612,7 +6612,7 @@ export class MJAIAgentRhythmTemplateEntity extends BaseEntity<MJAIAgentRhythmTem
     /**
     * * Field Name: DefaultAgentConfiguration
     * * Display Name: Default Agent Configuration
-    * * SQL Data Type: nvarchar(255)
+    * * SQL Data Type: nvarchar(100)
     */
     get DefaultAgentConfiguration(): string | null {
         return this.Get('DefaultAgentConfiguration');
@@ -117556,7 +117556,7 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
     * * Display Name: Agent Configuration ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
-    * * Description: Optional AI Configuration (model tier preset such as Fast, Standard, or High Power) used for agent runs triggered by this routine. Seeded from the rhythm template DefaultAgentConfigurationID on creation and customizable per user.
+    * * Description: Optional AI Configuration (model tier such as Fast, Standard, or High Power) used when executing this routine's Agent target. Seeded from the originating rhythm template's DefaultAgentConfigurationID on creation and changeable by the user or agent.
     */
     get AgentConfigurationID(): string | null {
         return this.Get('AgentConfigurationID');
@@ -117604,7 +117604,7 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
     /**
     * * Field Name: AgentConfiguration
     * * Display Name: Agent Configuration
-    * * SQL Data Type: nvarchar(255)
+    * * SQL Data Type: nvarchar(100)
     */
     get AgentConfiguration(): string | null {
         return this.Get('AgentConfiguration');
