@@ -31397,9 +31397,9 @@
     "fields": {
       "Name": "Gemini 4 Hydrogen (Medium)",
       "PowerRank": 26,
-      "Description": "Google Gemini 4 Hydrogen (Medium effort) — high-speed, high-intelligence coding and reasoning model",
+      "Description": "Google Gemini 4 Hydrogen (Medium effort) — deprecated split-effort row; superseded by unified Gemini 4 Hydrogen with AIPrompt.EffortLevel.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 11,
       "CostRank": 7,
       "InheritTypeModalities": true,
@@ -31440,7 +31440,7 @@
             "Priority": 1,
             "Status": "Active",
             "DriverClass": "GeminiLLM",
-            "APIName": "gemini-4-hydrogen-medium",
+            "APIName": "gemini-4-hydrogen",
             "MaxInputTokens": 1000000,
             "MaxOutputTokens": 65536,
             "SupportedResponseFormats": "Any, JSON",
@@ -31496,9 +31496,9 @@
     "fields": {
       "Name": "Gemini 4 Hydrogen (High)",
       "PowerRank": 27,
-      "Description": "Google Gemini 4 Hydrogen (High effort) — high-reasoning coding and architecture model via Google Antigravity CLI and Gemini API.",
+      "Description": "Google Gemini 4 Hydrogen (High effort) — deprecated split-effort row; superseded by unified Gemini 4 Hydrogen with AIPrompt.EffortLevel.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 8,
       "CostRank": 6,
       "InheritTypeModalities": true,
@@ -31539,7 +31539,7 @@
             "Priority": 1,
             "Status": "Active",
             "DriverClass": "GeminiLLM",
-            "APIName": "gemini-4-hydrogen-high",
+            "APIName": "gemini-4-hydrogen",
             "MaxInputTokens": 1000000,
             "MaxOutputTokens": 65536,
             "SupportedResponseFormats": "Any, JSON",
@@ -32134,6 +32134,318 @@
     "sync": {
       "lastModified": "2026-11-18T00:23:26.616Z",
       "checksum": "11f18a16215afb2fc04c2d88748b37f4ace8575141031b848b671dab59acb550"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gemini 4 Neon",
+      "PowerRank": 27,
+      "Description": "Google's frontier-level Gemini 4 model (gemini-4-neon), released November 2026 and positioned between Gemini 4 Hydrogen and Gemini 4 Carbon. Unified 1,048,576-token context window supporting multimodal inputs, 65,536-token synchronous output (up to 1M with long decode), tunable thinking effort levels, function calling, and structured outputs. Paid-tier Gemini API pricing is $3.00/1M input, $15.00/1M output (inclusive of thinking tokens), and $0.15/1M cached input.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 10,
+      "CostRank": 6,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "D075FCAF-B978-4CDF-BB09-4F6DA2E52E7D"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "GeminiLLM",
+            "APIName": "gemini-4-neon",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "CBA50F33-2500-41EE-883C-6EE139DD1634"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "7AB644D2-38EE-4288-9C83-4D4481838207"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "VertexLLM",
+            "APIName": "gemini-4-neon",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "0A913D3D-5706-4A1B-B85D-FF78B9D62145"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "google/gemini-4-neon",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "8E1B8761-8321-43DB-B195-1E42E8FC5D32"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-11-18T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 3,
+            "OutputPricePerUnit": 15,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 4 Neon (gemini-4-neon) paid-tier pricing on Google direct: $3.00/1M input, $15.00/1M output (inclusive of thinking tokens), $0.15/1M cached input.",
+            "CacheReadPricePerUnit": 0.15,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "0B9956CD-F0C9-4491-AD09-0027FE6A6C37"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "StartedAt": "2026-11-18T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 3,
+            "OutputPricePerUnit": 15,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 4 Neon (gemini-4-neon) pricing on Vertex AI, mirrored at parity with Google direct: $3.00/1M input, $15.00/1M output (inclusive of thinking tokens), $0.15/1M cached input.",
+            "CacheReadPricePerUnit": 0.15,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "304A529C-0949-4C35-9142-3AF06435DAB2"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6931BA2A-343A-4476-8B55-0416349C65CC"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gemini 4 Hydrogen",
+      "PowerRank": 26,
+      "Description": "Google's high-speed, high-intelligence Gemini 4 Hydrogen model (gemini-4-hydrogen) for coding, reasoning, and agentic workflows via Gemini API, Vertex AI, and Google Antigravity CLI. Unified 1,000,000-token context window, 65,536-token synchronous output, tunable thinking effort levels (low, medium, high via AIPrompt.EffortLevel / AIAgent.DefaultPromptEffortLevel), function calling, and structured outputs.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 11,
+      "CostRank": 7,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "70F0F764-A0A4-45A4-8D65-25AA3ECFDB98"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "GeminiLLM",
+            "APIName": "gemini-4-hydrogen",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "60432E4F-A301-4749-8919-A87A0B71E7D0"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "CEF49D59-39E1-4AC4-98BF-F1AE60F2FB80"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "VertexLLM",
+            "APIName": "gemini-4-hydrogen",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "E1C4C308-BA6E-48EE-A642-E0FB76BEB856"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "google/gemini-4-hydrogen",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "CCD79E15-F3A1-4ABA-B03D-E012DCD76560"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-10-13T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.45,
+            "OutputPricePerUnit": 1.8,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 4 Hydrogen (gemini-4-hydrogen) baseline pricing tier on Google direct for cost accounting when run outside Google Antigravity CLI.",
+            "CacheReadPricePerUnit": 0.045,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "59409AC4-E9F8-42DB-A460-D268C6740EEE"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "StartedAt": "2026-10-13T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.45,
+            "OutputPricePerUnit": 1.8,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 4 Hydrogen (gemini-4-hydrogen) baseline pricing tier on Vertex AI, mirrored at parity with Google direct.",
+            "CacheReadPricePerUnit": 0.045,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "20427D79-7B68-44B8-BE53-EE0A61BEFA87"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "DC9D6197-C12E-4741-A836-864E8A3ABF06"
     }
   }
 ]
