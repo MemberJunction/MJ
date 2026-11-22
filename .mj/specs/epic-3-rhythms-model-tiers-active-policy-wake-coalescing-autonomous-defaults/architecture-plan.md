@@ -20,6 +20,11 @@ Implements Epic 3 across database schema/stored procedures, entity server defaul
    - Enforce identical defaults in SQL table `DEFAULT` constraints, `spCreateAIAgentUserPolicy` parameters, `MJAIAgentUserPolicyEntityServer.Save()` on new records, `ConfigureAgentUserPolicyAction`, fallback phone checks, and UI `CreateDefaultPolicyDraft()`.
    - Expose `EvaluatePhoneOperation(policy, direction)` in `AgentUserPolicyEngine`.
 
+## Scope Reconciliation & Dual-Dialect Verification
+- **PostgreSQL Dual-Dialect Counterpart (`CR-DUAL-DIALECT-CONTRACT`)**: Per `.github/workflows/pg-migrations.yml` and `migrations/CLAUDE.md`, feature PRs do not commit files directly under `migrations-pg/**` (release-time transpilation and `check-pg-migration-content.mjs` enforce release parity). To provide full pre-merge dialect inspectability, the deterministic `packages/SQLConverter` output for `V202611220625__v6.3.x__Rhythm_Model_Tiers.sql` (0 errors, 0 gaps) is committed at `.mj/specs/epic-3-rhythms-model-tiers-active-policy-wake-coalescing-autonomous-defaults/V202611220625__v6.3.x__Rhythm_Model_Tiers.pg.sql` and verified in `packages/AI/Agents/src/__tests__/rhythm-model-tiers.spec.ts`.
+- **CodeGen Angular Core Entity Forms**: Running `mj codegen` after `V202611220625__v6.3.x__Rhythm_Model_Tiers.sql` regenerated `packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJAIAgentRhythmTemplate/*`, `MJAIConfiguration/*`, and `MJUserRoutine/*` to surface `DefaultAgentConfigurationID` and `AgentConfigurationID` form fields and related-entity grids cleanly in MJ Explorer.
+- **Chief of Staff Dashboard Context Default Alignment**: Aligned `CreateDefaultPolicyDraft()` in `packages/Angular/Explorer/dashboards/src/ChiefOfStaff/chief-of-staff-agent-context.ts` (and `chief-of-staff-agent-context.test.ts`) to `CoordinationMode: 'Autonomous'` so UI-created policy drafts match the SQL schema, `spCreateAIAgentUserPolicy`, `MJAIAgentUserPolicyEntityServer`, and `AgentUserPolicyEngine` defaults.
+
 ## EARS Acceptance Specifications
 | Criterion | EARS Requirement | Verified By |
 | --- | --- | --- |

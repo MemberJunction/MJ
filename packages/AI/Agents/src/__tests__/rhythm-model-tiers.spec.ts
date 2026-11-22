@@ -242,6 +242,51 @@ describe('Rhythm Model Tiers (Slice 1)', () => {
         expect(sql).toContain('FK_UserRoutine_AIConfiguration');
     });
 
+    it('ships verified SQLConverter PostgreSQL counterpart matching T-SQL schema additions and policy defaults (CR-DUAL-DIALECT-CONTRACT)', () => {
+        const repoRoot = path.resolve(__dirname, '../../../../..');
+        const tsMigrationPath = path.join(repoRoot, 'migrations/v6/V202611220625__v6.3.x__Rhythm_Model_Tiers.sql');
+        const pgMigrationPath = path.join(
+            repoRoot,
+            '.mj/specs/epic-3-rhythms-model-tiers-active-policy-wake-coalescing-autonomous-defaults/V202611220625__v6.3.x__Rhythm_Model_Tiers.pg.sql'
+        );
+
+        const tsSql = fs.readFileSync(tsMigrationPath, 'utf8');
+        expect(tsSql).not.toMatch(/deferred to the release build engineer/i);
+        expect(tsSql).toContain('V202611220625__v6.3.x__Rhythm_Model_Tiers.pg.sql');
+
+        expect(fs.existsSync(pgMigrationPath)).toBe(true);
+        const pgSql = fs.readFileSync(pgMigrationPath, 'utf8');
+
+        // Zero SQLConverter gap/error markers
+        expect(pgSql).not.toContain('-- Could not parse');
+        expect(pgSql).not.toContain('-- ERROR converting batch');
+        expect(pgSql).not.toContain('-- UNPARSED');
+
+        // Schema additions: DefaultAgentConfigurationID & AgentConfigurationID + FKs + views + functions
+        expect(pgSql).toContain('ALTER TABLE __mj."AIAgentRhythmTemplate"');
+        expect(pgSql).toContain('ADD COLUMN IF NOT EXISTS "DefaultAgentConfigurationID" UUID NULL');
+        expect(pgSql).toContain('FK_AIAgentRhythmTemplate_AIConfiguration');
+
+        expect(pgSql).toContain('ALTER TABLE __mj."UserRoutine"');
+        expect(pgSql).toContain('ADD COLUMN IF NOT EXISTS "AgentConfigurationID" UUID NULL');
+        expect(pgSql).toContain('FK_UserRoutine_AIConfiguration');
+
+        expect(pgSql).toContain('CREATE OR REPLACE VIEW __mj."vwAIAgentRhythmTemplates"');
+        expect(pgSql).toContain('CREATE OR REPLACE VIEW __mj."vwUserRoutines"');
+        expect(pgSql).toContain('CREATE OR REPLACE FUNCTION __mj."spCreateAIAgentRhythmTemplate"');
+        expect(pgSql).toContain('CREATE OR REPLACE FUNCTION __mj."spCreateUserRoutine"');
+
+        // Policy defaults: Autonomous, DraftOnly, ProposeWithApproval, Disabled
+        expect(pgSql).toContain('ALTER COLUMN "CoordinationMode" SET DEFAULT \'Autonomous\'');
+        expect(pgSql).toContain('ALTER COLUMN "CalendarChannelMode" SET DEFAULT \'ProposeWithApproval\'');
+        expect(pgSql).toContain('ALTER COLUMN "PhoneChannelMode" SET DEFAULT \'Disabled\'');
+        expect(pgSql).toContain('CREATE OR REPLACE FUNCTION __mj."spCreateAIAgentUserPolicy"');
+        expect(pgSql).toContain("COALESCE(p_CoordinationMode, 'Autonomous')");
+        expect(pgSql).toContain("COALESCE(p_EmailChannelMode, 'DraftOnly')");
+        expect(pgSql).toContain("COALESCE(p_CalendarChannelMode, 'ProposeWithApproval')");
+        expect(pgSql).toContain("COALESCE(p_PhoneChannelMode, 'Disabled')");
+    });
+
     it('seeds routine AgentConfigurationID from template default on creation unless explicitly overridden', () => {
         expect(
             ResolveSeededRoutineAgentConfigurationID({

@@ -19,7 +19,9 @@
 -- Conventions (migrations/CLAUDE.md):
 --   - Plain DDL + sp_addextendedproperty only (no existence guards).
 --   - Single-column FK indexes are omitted; CodeGen generates them.
---   - PostgreSQL counterpart is deferred to the release build engineer.
+--   - PostgreSQL counterpart verified via packages/SQLConverter (0 errors, 0 gaps) and archived at
+--     .mj/specs/epic-3-rhythms-model-tiers-active-policy-wake-coalescing-autonomous-defaults/V202611220625__v6.3.x__Rhythm_Model_Tiers.pg.sql
+--     in accordance with .github/workflows/pg-migrations.yml.
 -- =====================================================================================
 
 SET ANSI_NULLS ON;
