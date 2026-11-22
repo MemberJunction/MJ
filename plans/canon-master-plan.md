@@ -182,6 +182,7 @@ Not started and not to be opened as pull requests. Each becomes a `canon` issue 
 - Triggers driven by a Canon metric crossing a threshold.
 - Exposing Canon context to outside assistants over MCP, after the MCP security work lands.
 - Portable Canon bundles ([MJ 6811](https://github.com/MemberJunction/MJ/issues/6811)): export a graph and import it into another instance as `Proposed`, the export half of MJ 6765's taxonomy import. Prompted by the TrustGraph comparison.
+- Durable record-mention doc links ([MJ 6835](https://github.com/MemberJunction/MJ/pull/6835), `cmbrock-BC`): MJ 6762 follow-up to the sponsor's design. It writes `LinksTo` record links from mention tokens, so it uses a seeded edge type, and it does not overlap MJ 6842's files. Watched.
 - Authority per concept ([MJ 6757](https://github.com/MemberJunction/MJ/issues/6757)): an `AuthoritativeFor` edge from a content source or item to a concept, with an optional authority tier on the edge. Depends on 5b to 5d. The review should settle which tier wins when a source's tier and an edge's tier disagree, so decision 4 holds.
 
 ## Timeline
@@ -242,3 +243,4 @@ December 1 closes the *coordination* problem. It does not mean the v6.3 learning
 | 2026-11-22 | MJ 6762 merged. `cmbrock-BC` regenerated MJ 6731's manifests and `rkihm-BC` approved it, noting two follow-ups from 6762's merge: `GraphConcept.Origin` is not yet a governed field on approved concepts, and 6762's evidence retractor deletes concepts outside the scope 5a's gate honours, which can leave edgeless concepts behind. |
 | 2026-11-22 | MJ 6731 (5a) merged. The two follow-ups are filed as MJ 6837. The SQL Server integration failures on 6731 (`fls-closeout-client.CW7`/`CW8`, `work-bus-core.WBC10`) were already failing on `next` since MJ 6817 and 6825 merged, and are not Canon. |
 | 2026-11-22 | MJ 6667 merged by the sponsor after its conflicts with `next` were resolved (workstream 1, first half). The sponsor approved MJ 6765's U0 bug fixes (F3, F4, F11) to go ahead now, in one pull request together with the repair of the integration checks broken by MJ 6817 and 6825. |
+| 2026-11-22 | MJ 6842 opened for MJ 6765's U0 (F3, F4, F11) plus the integration checks broken by MJ 6817 and 6825; green, waiting on one approval. The daily check found MJ 6835 (6762 follow-up, watched) and MJ 6831 (`MJ: Record Links` read filter, related to 5c). |
