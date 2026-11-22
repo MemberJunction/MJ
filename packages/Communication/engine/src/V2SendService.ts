@@ -414,7 +414,20 @@ export class V2SendService {
     contextUser: UserInfo,
     getProvider: (name: string) => BaseCommunicationProvider,
   ): Promise<SendV2Result> {
-    const sender = await this.resolveSender(params.Envelope.SenderID, contextUser);
+    let sender: MJCommunicationSenderEntity | undefined;
+    try {
+      sender = await this.resolveSender(params.Envelope.SenderID, contextUser);
+    } catch (err) {
+      return {
+        Success: false,
+        IsAsyncRun: false,
+        TotalCount: params.Recipients.length,
+        QueuedCount: 0,
+        BlockedCount: params.Recipients.length,
+        DeferredCount: 0,
+        ErrorMessage: err instanceof Error ? err.message : String(err),
+      };
+    }
     if (!sender) {
       return {
         Success: false,
@@ -427,7 +440,20 @@ export class V2SendService {
       };
     }
 
-    const senderPermCheck = await this.checkSenderPermission(sender, contextUser);
+    let senderPermCheck: { Allowed: boolean; ErrorMessage?: string };
+    try {
+      senderPermCheck = await this.checkSenderPermission(sender, contextUser);
+    } catch (err) {
+      return {
+        Success: false,
+        IsAsyncRun: false,
+        TotalCount: params.Recipients.length,
+        QueuedCount: 0,
+        BlockedCount: params.Recipients.length,
+        DeferredCount: 0,
+        ErrorMessage: err instanceof Error ? err.message : String(err),
+      };
+    }
     if (!senderPermCheck.Allowed) {
       return {
         Success: false,
@@ -610,7 +636,6 @@ export class V2SendService {
       });
 
       if (target.Decision === 'Deferred' || scheduledInFuture) {
-        deferredCount++;
         const deferUntil =
           target.DeferUntil && scheduledAt && scheduledInFuture
             ? (target.DeferUntil.getTime() > scheduledAt.getTime() ? target.DeferUntil : scheduledAt)
@@ -667,10 +692,22 @@ export class V2SendService {
         ),
       );
       for (let j = 0; j < batch.length; j++) {
+        const claim = claims[j];
+        if (!claim.Log) {
+          outcomes.push({
+            Principal: batch[j].target.Principal,
+            Endpoint: batch[j].target.Endpoint,
+            Status: 'Failed',
+            Reason: claim.FailureReason ?? 'LogCreationFailed',
+            Detail: claim.FailureDetail,
+          });
+          continue;
+        }
+        deferredCount++;
         outcomes.push({
           Principal: batch[j].target.Principal,
           Endpoint: batch[j].target.Endpoint,
-          CommunicationLogID: claims[j].Log?.ID,
+          CommunicationLogID: claim.Log.ID,
           Status: 'Deferred',
           DeferUntil: batch[j].deferUntil,
         });
@@ -767,92 +804,109 @@ export class V2SendService {
     const driver = target.Principal ? this.getPrincipalDriver(target.Principal.EntityID) : undefined;
     const hookState = this.createMessageContext(params.Envelope, target, payload);
 
-    if (driver && target.Principal) {
-      await driver.PreProcess([hookState.Context], contextUser);
-      await driver.PostProcess([hookState.Context], contextUser);
-    }
+    try {
+      if (driver && target.Principal) {
+        await driver.PreProcess([hookState.Context], contextUser);
+        await driver.PostProcess([hookState.Context], contextUser);
+      }
 
-    // Assert protected compliance elements were not tampered with by hooks
-    if (ComputeProtectedElementsHash(snapshot) !== expectedHash) {
-      throw new Error('Protected compliance elements failed SHA-256 integrity assertion after PostProcess');
-    }
+      // Assert protected compliance elements were not tampered with by hooks
+      if (ComputeProtectedElementsHash(snapshot) !== expectedHash) {
+        throw new Error('Protected compliance elements failed SHA-256 integrity assertion after PostProcess');
+      }
 
-    const finalPayload = this.finalizePayload(
-      payload,
-      hookState,
-      snapshot,
-      obligations,
-      params.Envelope,
-      trackingToken,
-      hmacSecret,
-      baseUrl,
-    );
+      const finalPayload = this.finalizePayload(
+        payload,
+        hookState,
+        snapshot,
+        obligations,
+        params.Envelope,
+        trackingToken,
+        hmacSecret,
+        baseUrl,
+      );
 
-    const enforcementMode =
-      sender.EnforcementMode ?? this.config.InstanceEnforcementMode ?? 'Enforce';
-    if (enforcementMode === 'Enforce') {
-      const obligationError = this.validateBodyObligations(finalPayload, obligations);
-      if (obligationError) {
-        log.Status = 'Failed';
-        log.ErrorMessage = obligationError;
-        if (!(await log.Save())) {
-          LogError(`V2SendService: failed to save failed CommunicationLog ${log.ID}: ${log.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+      const enforcementMode =
+        sender.EnforcementMode ?? this.config.InstanceEnforcementMode ?? 'Enforce';
+      if (enforcementMode === 'Enforce') {
+        const obligationError = this.validateBodyObligations(finalPayload, obligations);
+        if (obligationError) {
+          log.Status = 'Failed';
+          log.ErrorMessage = obligationError;
+          if (!(await log.Save())) {
+            LogError(`V2SendService: failed to save failed CommunicationLog ${log.ID}: ${log.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+          }
+          return {
+            Principal: target.Principal,
+            Endpoint: target.Endpoint,
+            CommunicationLogID: log.ID,
+            Status: 'Blocked',
+            Reason: 'ObligationValidationFailed',
+            Detail: obligationError,
+          };
         }
+      }
+
+      this.assertProtectedElementsIntact(finalPayload, snapshot);
+
+      const msg = new Message();
+      msg.MessageType = pmt as NonNullable<typeof pmt>;
+      msg.From = snapshot.From;
+      msg.FromName = sender.FromName ?? sender.Name;
+      msg.To = snapshot.To;
+      msg.Subject = finalPayload.Subject;
+      msg.Body = finalPayload.Body;
+      msg.HTMLBody = finalPayload.HTMLBody;
+      msg.Headers = finalPayload.Headers;
+      msg.DryRun = params.Envelope.DryRun;
+      msg.CorrelationLogID = log.ID;
+      msg.DisableProviderTracking = true;
+
+      const processed = new ProcessedMessageServer(msg);
+      processed.ProcessedSubject = finalPayload.Subject ?? '';
+      processed.ProcessedBody = finalPayload.Body ?? '';
+      processed.ProcessedHTMLBody = finalPayload.HTMLBody ?? '';
+
+      const sendRes = await provider.SendSingleMessage(processed, senderCredentials);
+      log.Status = sendRes.Success ? 'Complete' : 'Failed';
+      log.ProviderMessageID = sendRes.ProviderMessageID ?? log.ProviderMessageID;
+      log.ErrorMessage = sendRes.Error || null;
+      if (!(await log.Save())) {
+        const saveErr = log.LatestResult?.CompleteMessage ?? 'unknown error';
+        LogError(`V2SendService: failed to update CommunicationLog ${log.ID} after send: ${saveErr}`);
         return {
           Principal: target.Principal,
           Endpoint: target.Endpoint,
           CommunicationLogID: log.ID,
-          Status: 'Blocked',
-          Reason: 'ObligationValidationFailed',
-          Detail: obligationError,
+          Status: 'Failed',
+          Reason: 'PostSendLogSaveFailed',
+          Detail: saveErr,
         };
       }
-    }
 
-    this.assertProtectedElementsIntact(finalPayload, snapshot);
-
-    const msg = new Message();
-    msg.MessageType = pmt as NonNullable<typeof pmt>;
-    msg.From = snapshot.From;
-    msg.FromName = sender.FromName ?? sender.Name;
-    msg.To = snapshot.To;
-    msg.Subject = finalPayload.Subject;
-    msg.Body = finalPayload.Body;
-    msg.HTMLBody = finalPayload.HTMLBody;
-    msg.Headers = finalPayload.Headers;
-    msg.DryRun = params.Envelope.DryRun;
-    msg.CorrelationLogID = log.ID;
-    msg.DisableProviderTracking = true;
-
-    const processed = new ProcessedMessageServer(msg);
-    processed.ProcessedSubject = finalPayload.Subject ?? '';
-    processed.ProcessedBody = finalPayload.Body ?? '';
-    processed.ProcessedHTMLBody = finalPayload.HTMLBody ?? '';
-
-    const sendRes = await provider.SendSingleMessage(processed, senderCredentials);
-    log.Status = sendRes.Success ? 'Complete' : 'Failed';
-    log.ProviderMessageID = sendRes.ProviderMessageID ?? log.ProviderMessageID;
-    log.ErrorMessage = sendRes.Error || null;
-    if (!(await log.Save())) {
-      const saveErr = log.LatestResult?.CompleteMessage ?? 'unknown error';
-      LogError(`V2SendService: failed to update CommunicationLog ${log.ID} after send: ${saveErr}`);
+      return {
+        Principal: target.Principal,
+        Endpoint: target.Endpoint,
+        CommunicationLogID: log.ID,
+        Status: sendRes.Success ? 'Sent' : 'Failed',
+        Detail: sendRes.Error || undefined,
+      };
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      log.Status = 'Failed';
+      log.ErrorMessage = detail;
+      if (!(await log.Save())) {
+        LogError(`V2SendService: failed to save Failed CommunicationLog ${log.ID}: ${log.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+      }
       return {
         Principal: target.Principal,
         Endpoint: target.Endpoint,
         CommunicationLogID: log.ID,
         Status: 'Failed',
-        Reason: 'PostSendLogSaveFailed',
-        Detail: saveErr,
+        Reason: 'DispatchException',
+        Detail: detail,
       };
     }
-
-    return {
-      Principal: target.Principal,
-      Endpoint: target.Endpoint,
-      CommunicationLogID: log.ID,
-      Status: sendRes.Success ? 'Sent' : 'Failed',
-      Detail: sendRes.Error || undefined,
-    };
   }
 
   private finalizePayload(
@@ -1038,7 +1092,12 @@ export class V2SendService {
       },
       contextUser,
     );
-    const found = res.Success && res.Results.length > 0 ? res.Results[0] : undefined;
+    if (!res.Success) {
+      throw new Error(
+        `Failed loading communication sender '${senderID ?? 'default'}': ${res.ErrorMessage ?? 'RunView failed'}`,
+      );
+    }
+    const found = res.Results.length > 0 ? res.Results[0] : undefined;
     if (found) {
       const expiresAt = Date.now() + CACHE_TTL_MS;
       this.senderCache.set(cacheKey, { value: found, expiresAt });

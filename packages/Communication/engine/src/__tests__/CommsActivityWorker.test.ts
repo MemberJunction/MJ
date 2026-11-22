@@ -429,7 +429,7 @@ describe('CommsActivityWorker', () => {
   // row (CK_CommunicationSuppression_PolicyLink), Save() returns false, createSuppression throws, and the
   // catch right after only logs it — so the endpoint is never suppressed. This test previously passed only
   // because the fake accepted the invalid row.
-  it.fails('without a SoftBounceThresholdPolicy row, does not attempt a Policy suppression the database rejects', async () => {
+  it('without a SoftBounceThresholdPolicy row, does not attempt a Policy suppression the database rejects', async () => {
     const ep = seedSoftBouncingEndpoint(4);
 
     await worker.ProcessActivityBatch(

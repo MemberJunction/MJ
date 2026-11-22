@@ -1269,6 +1269,10 @@ export class SoftBounceThresholdPolicy extends BaseCommunicationSuppressionPolic
           p.Status === 'Active' &&
           (p.DriverClass === 'SoftBounceThresholdPolicy' || p.Name === 'SoftBounceThresholdPolicy'),
       )?.ID ?? null;
+    if (!policyId) {
+      // CK_CommunicationSuppression_PolicyLink requires a PolicyID when Reason = 'Policy'
+      return;
+    }
 
     const endpointIds = Array.from(
       new Set(softBounces.map((e) => e.CommunicationEndpointID as string)),
