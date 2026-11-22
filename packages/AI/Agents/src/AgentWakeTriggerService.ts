@@ -24,19 +24,30 @@ import { IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo, We
 import { BaseSingleton, EscapeSQLString, GetGlobalObjectStore, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
     MJAIAgentRequestEntity,
-    MJAIAgentUserPolicyEntity,
     MJAIBridgeAgentIdentityEntity,
     MJAgentChannelEntity,
     MJAgentChannelParticipantEntity,
     MJUserRoutineEntity,
     MJUserRoutineEntity_IRoutineWakeConfiguration,
 } from '@memberjunction/core-entities';
-import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import {
     LookupActiveRhythmTemplateForWorkstream,
     ResolveSeededRoutineAgentConfigurationID,
 } from './rhythm-model-tiers';
+import {
+    BuildPolicyPairKey,
+    CheckActivePoliciesForBatch,
+    CheckActivePolicyForAgentAndUser,
+} from './wake-policy-guard';
+import {
+    BuildAppWorkstreamKey,
+    BuildUserAppWakeKey,
+    DEFAULT_MAX_RETAINED_COALESCED_EVENTS,
+    EventWakeCoalescer,
+    NormalizeApplicationKey,
+    WakeStartupGuard,
+} from './wake-coalescer';
 
 /**
  * Type of `resumeState` derived directly from `MJUserRoutineEntity_IRoutineWakeConfiguration`.
@@ -130,6 +141,16 @@ export interface TriggerWorkstreamWakeInput {
     workstreamKey: string;
     /** Human-readable reason explaining why the agent is being woken. */
     wakeReason: string;
+    /** Optional Application ID used to coalesce events per `(UserID, ApplicationID)` within the coalescing window. */
+    applicationID?: string;
+    /** Optional override for the per-(UserID, ApplicationID) coalescing window in milliseconds (default 60000). */
+    coalescingWindowMs?: number;
+    /** Optional maximum retained payloads in `resumeState.pendingEvents` (default 25). */
+    maxRetainedEvents?: number;
+    /** Optional timestamp of when the underlying event occurred (used by startup/deploy watermark guard). */
+    eventTimestamp?: Date;
+    /** Set true when invoked from server bootstrap/metadata-sync code to guarantee suppression. */
+    isStartupOrSyncOrigin?: boolean;
     /** Optional structured payload delivered to the agent in `resumeState` (and `resumeState.pendingEvents`). */
     resumeState?: AgentWakeResumeState;
     /** Acting caller `UserInfo` (may be the target user, an Owner/system user, or a webhook service user). */
@@ -146,6 +167,7 @@ export interface TriggerWorkstreamWakeInput {
 export type AgentWakeTriggerResultCode =
     | 'WAKE_SCHEDULED'
     | 'SKIPPED_NOT_APPLICABLE'
+    | 'SKIPPED_STARTUP_GUARD'
     | 'POLICY_DENIED'
     | 'AGENT_NOT_FOUND'
     | 'MISSING_REQUIRED_INPUT'
@@ -201,6 +223,9 @@ export interface AgentWakeTriggerResult {
     targetAgentID: string | null;
     workstreamKey: string | null;
     nextRunAtISO: string | null;
+    coalesced?: boolean;
+    coalescedCount?: number;
+    coalesceKey?: string | null;
 }
 
 /**
@@ -217,6 +242,9 @@ interface ImmediateWakeRoutineParams {
     contextUser: UserInfo;
     metadataProvider?: IMetadataProvider;
     now: Date;
+    applicationID?: string | null;
+    coalescingWindowMs?: number;
+    maxRetainedEvents?: number;
 }
 
 /**
@@ -307,6 +335,14 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             return this.notTriggered('SKIPPED_NOT_APPLICABLE', `Request status "${request.Status}" is not a resolved status.`);
         }
 
+        const startupEval = WakeStartupGuard.Instance.EvaluateEventWakeTrigger({
+            EventTimestamp: request.RespondedAt ?? now,
+            Source: 'AgentRequestResolution',
+        });
+        if (!startupEval.Allowed) {
+            return this.notTriggered('SKIPPED_STARTUP_GUARD', startupEval.Reason);
+        }
+
         const envelope = this.parseInterAgentEnvelope(request.Comments);
         const isInterAgent = envelope?.interAgentCoordination === true && Boolean(envelope.senderUserID);
 
@@ -321,25 +357,16 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             : 'approval-resolution';
 
         const saveUser = this.resolveRoutineSaveUser(targetUserID, contextUser);
-        const policyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
+        const policyEval = await CheckActivePolicyForAgentAndUser(
             targetAgentID,
             targetUserID,
             saveUser,
-            { provider: metadataProvider }
+            { provider: metadataProvider, preferCache: true }
         );
-        if (policyLookup.status === 'error') {
-            return this.notTriggered(
-                'POLICY_DENIED',
-                `Could not verify target user policy for agent ${targetAgentID}: ${policyLookup.errorMessage}`
-            );
+        if (!policyEval.Allowed || !policyEval.Policy) {
+            return this.notTriggered('POLICY_DENIED', policyEval.Reason);
         }
-        const policy = policyLookup.policy;
-        if (policy && (policy.Status === 'Disabled' || policy.Status === 'Paused')) {
-            return this.notTriggered(
-                'POLICY_DENIED',
-                `Target user ${targetUserID} has ${policy.Status} policy for agent ${targetAgentID}.`
-            );
-        }
+        const policy = policyEval.Policy;
 
         const parsedResponseData = request.ResponseData
             ? SafeJSONParse<AgentWakeResumeState>(request.ResponseData)
@@ -418,26 +445,28 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             return this.notTriggered('SKIPPED_NOT_APPLICABLE', 'No targetUserID found on InterAgent request.');
         }
 
+        const startupEval = WakeStartupGuard.Instance.EvaluateEventWakeTrigger({
+            EventTimestamp: now,
+            Source: 'InterAgentRequestReceived',
+        });
+        if (!startupEval.Allowed) {
+            return this.notTriggered('SKIPPED_STARTUP_GUARD', startupEval.Reason);
+        }
+
         const saveUser = this.resolveRoutineSaveUser(targetUserID, contextUser);
-        const policyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
+        const policyEval = await CheckActivePolicyForAgentAndUser(
             request.AgentID,
             targetUserID,
             saveUser,
-            { provider: metadataProvider }
+            { provider: metadataProvider, preferCache: true }
         );
-        if (policyLookup.status === 'error') {
-            return this.notTriggered(
-                'POLICY_DENIED',
-                `Could not verify target user policy for agent ${request.AgentID}: ${policyLookup.errorMessage}`
-            );
+        if (!policyEval.Allowed || !policyEval.Policy || policyEval.Policy.AllowInterAgentCoordination === false) {
+            const reason = policyEval.Allowed && policyEval.Policy
+                ? `Target user ${targetUserID} does not have AllowInterAgentCoordination enabled.`
+                : policyEval.Reason;
+            return this.notTriggered('POLICY_DENIED', reason);
         }
-        const policy = policyLookup.policy;
-        if (!policy || policy.Status !== 'Active' || policy.AllowInterAgentCoordination === false) {
-            return this.notTriggered(
-                'POLICY_DENIED',
-                `Target user ${targetUserID} does not have an active policy with AllowInterAgentCoordination enabled.`
-            );
-        }
+        const policy = policyEval.Policy;
 
         const workstreamKey = envelope.workstreamKey?.trim() || 'inter-agent-inbox';
         const wakeReason = `Incoming inter-agent request from ${envelope.senderUserName || 'colleague'}: "${envelope.subject || 'Coordination request'}"`;
@@ -492,6 +521,16 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
 
         if (!normalizedTo || !normalizedFrom) {
             return this.notTriggered('IDENTITY_NOT_FOUND', 'Both toAddress and fromAddress are required.');
+        }
+
+        const parsedReceivedAt = input.receivedAtISO ? new Date(input.receivedAtISO) : now;
+        const emailTimestamp = Number.isNaN(parsedReceivedAt.getTime()) ? now : parsedReceivedAt;
+        const startupEval = WakeStartupGuard.Instance.EvaluateEventWakeTrigger({
+            EventTimestamp: emailTimestamp,
+            Source: 'InboundUtilityMailboxEmail',
+        });
+        if (!startupEval.Allowed) {
+            return this.notTriggered('SKIPPED_STARTUP_GUARD', startupEval.Reason);
         }
 
         // 1. Resolve active Email bridge identity matching toAddress
@@ -555,25 +594,16 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
         }
 
         // 4. Enforce user's Chief of Staff / Agent policy in senderUser's context
-        const policyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
+        const policyEval = await CheckActivePolicyForAgentAndUser(
             identity.AgentID,
             senderUser.ID,
             senderUser,
-            { provider: md }
+            { provider: md, preferCache: true }
         );
-        if (policyLookup.status === 'error') {
-            return this.notTriggered(
-                'POLICY_DENIED',
-                `Could not verify policy for ${senderUser.Email} on agent ${identity.AgentID}: ${policyLookup.errorMessage}`
-            );
+        if (!policyEval.Allowed || !policyEval.Policy) {
+            return this.notTriggered('POLICY_DENIED', policyEval.Reason);
         }
-        const policy: MJAIAgentUserPolicyEntity | null = policyLookup.policy;
-        if (!policy || policy.Status !== 'Active') {
-            const reason = !policy
-                ? `User ${senderUser.Email} has no active policy for agent ${identity.AgentID}; wake suppressed until the user onboards.`
-                : `User ${senderUser.Email} has ${policy.Status} policy for agent ${identity.AgentID}; wake suppressed.`;
-            return this.notTriggered('POLICY_DENIED', reason);
-        }
+        const policy = policyEval.Policy;
         if (policy.EmailChannelMode === 'Disabled') {
             return this.notTriggered(
                 'POLICY_DENIED',
@@ -644,6 +674,15 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             return this.notTriggered('POLICY_DENIED', 'contextUser is required to trigger a workstream wake.');
         }
 
+        const startupEval = WakeStartupGuard.Instance.EvaluateEventWakeTrigger({
+            EventTimestamp: input.eventTimestamp ?? now,
+            IsStartupOrSyncOrigin: input.isStartupOrSyncOrigin,
+            Source: `Workstream:${workstreamKey}`,
+        });
+        if (!startupEval.Allowed) {
+            return this.notTriggered('SKIPPED_STARTUP_GUARD', startupEval.Reason);
+        }
+
         const isSelfWake = UUIDsEqual(input.contextUser.ID, targetUserID);
         if (!isSelfWake && !this.isPrivilegedCrossUserWakeCaller(input.contextUser)) {
             return this.notTriggered(
@@ -677,27 +716,24 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             );
         }
 
-        const policyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
+        const policyEval = await CheckActivePolicyForAgentAndUser(
             resolvedAgent.ID,
             targetUserID,
             saveUser,
-            { provider: md }
+            { provider: md, preferCache: true }
         );
-        if (policyLookup.status === 'error') {
-            return this.notTriggered(
-                'POLICY_DENIED',
-                `Could not verify target user policy for agent "${resolvedAgent.Name ?? resolvedAgent.ID}": ${policyLookup.errorMessage}`
-            );
+        if (!policyEval.Allowed || !policyEval.Policy) {
+            return this.notTriggered('POLICY_DENIED', policyEval.Reason);
         }
-        const policy: MJAIAgentUserPolicyEntity | null = policyLookup.policy;
-        if (!policy || policy.Status !== 'Active') {
-            const reason = !policy
-                ? `Target user "${targetUserID}" has no active policy for agent "${resolvedAgent.Name ?? resolvedAgent.ID}"; wake suppressed until the user onboards.`
-                : `Target user policy for agent "${resolvedAgent.Name ?? resolvedAgent.ID}" is ${policy.Status}; wake suppressed.`;
-            return this.notTriggered('POLICY_DENIED', reason);
-        }
+        const policy = policyEval.Policy;
 
         const baseResumeState: AgentWakeResumeState = input.resumeState ?? {};
+        const rawAppID =
+            input.applicationID?.trim() ||
+            (typeof baseResumeState['applicationID'] === 'string' ? baseResumeState['applicationID'].trim() : '');
+        const applicationID = rawAppID.length > 0 ? rawAppID : null;
+        const effectiveWorkstreamKey = BuildAppWorkstreamKey(applicationID, workstreamKey);
+
         const canonicalTriggerType =
             typeof baseResumeState['triggerType'] === 'string' && baseResumeState['triggerType'].trim().length > 0
                 ? baseResumeState['triggerType'].trim()
@@ -705,7 +741,9 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
         const resumeState: AgentWakeResumeState = {
             ...baseResumeState,
             triggerType: canonicalTriggerType,
-            workstreamKey,
+            workstreamKey: effectiveWorkstreamKey,
+            sourceWorkstreamKey: workstreamKey,
+            ...(applicationID ? { applicationID, coalesceKey: BuildUserAppWakeKey(targetUserID, applicationID) } : {}),
             wakeReason,
             triggeredAt: now.toISOString(),
         };
@@ -713,13 +751,16 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
         return this.upsertImmediateWakeRoutine({
             targetUserID,
             targetAgentID: resolvedAgent.ID,
-            targetAgentName: resolvedAgent.Name ?? policy?.Agent ?? null,
-            workstreamKey,
+            targetAgentName: resolvedAgent.Name ?? policy.Agent ?? null,
+            workstreamKey: effectiveWorkstreamKey,
             wakeReason,
             resumeState,
             contextUser: input.contextUser,
             metadataProvider: md,
             now,
+            applicationID,
+            coalescingWindowMs: input.coalescingWindowMs,
+            maxRetainedEvents: input.maxRetainedEvents,
         });
     }
 
@@ -768,6 +809,20 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
                         'contextUser is required to trigger an Agent Channel wake.'
                     ),
                 ],
+            };
+        }
+
+        const startupEval = WakeStartupGuard.Instance.EvaluateEventWakeTrigger({
+            EventTimestamp: now,
+            Source: `AgentChannel:${channelID}`,
+        });
+        if (!startupEval.Allowed) {
+            return {
+                channelID,
+                channelStatus: 'Open',
+                pausedByGuard: false,
+                pauseReason: null,
+                results: [this.notTriggered('SKIPPED_STARTUP_GUARD', startupEval.Reason)],
             };
         }
 
@@ -938,33 +993,26 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
         const trimmedPreview = (input.messagePreview ?? '').trim().slice(0, 500);
         const results: AgentWakeTriggerResult[] = [];
 
+        const policyEvaluations = await CheckActivePoliciesForBatch(
+            peers.map((peer) => ({ AgentID: peer.AgentID, UserID: peer.UserID })),
+            systemUser,
+            { provider: md, preferCache: true }
+        );
+
         for (const peer of peers) {
-            const policyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
-                peer.AgentID,
-                peer.UserID,
-                systemUser,
-                { provider: md }
-            );
-            if (policyLookup.status === 'error') {
+            const evalResult = policyEvaluations.get(BuildPolicyPairKey(peer.AgentID, peer.UserID));
+            if (!evalResult?.Allowed || !evalResult.Policy) {
                 results.push(
                     this.notTriggered(
                         'POLICY_DENIED',
-                        `Could not verify peer policy for user "${peer.UserID}": ${policyLookup.errorMessage}`
+                        evalResult?.Reason ??
+                            `Peer user "${peer.UserID}" does not have an Active coordination policy for agent "${peer.AgentID}".`
                     )
                 );
                 continue;
             }
-            const policy = policyLookup.policy;
-            if (policy && (policy.Status === 'Disabled' || policy.Status === 'Paused')) {
-                results.push(
-                    this.notTriggered(
-                        'POLICY_DENIED',
-                        `Peer user "${peer.UserID}" has ${policy.Status} policy for agent "${peer.AgentID}".`
-                    )
-                );
-                continue;
-            }
-            if (policy && policy.AllowInterAgentCoordination === false) {
+            const policy = evalResult.Policy;
+            if (policy.AllowInterAgentCoordination === false) {
                 results.push(
                     this.notTriggered(
                         'POLICY_DENIED',
@@ -991,7 +1039,7 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             const wakeResult = await this.upsertImmediateWakeRoutine({
                 targetUserID: peer.UserID,
                 targetAgentID: peer.AgentID,
-                targetAgentName: policy?.Agent ?? null,
+                targetAgentName: policy.Agent ?? null,
                 workstreamKey,
                 wakeReason,
                 resumeState,
@@ -1185,25 +1233,6 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
         return systemUser;
     }
 
-    /**
-     * Events that must reach the agent on the next wake. While a routine is still waiting for the dispatcher
-     * (`Status = 'Active'` with a `NextRunAt`), a new event is appended to the queue already stored in its
-     * `resumeState.pendingEvents` rather than replacing it, so two approvals clicked within one sweep both
-     * arrive. Once the dispatcher has claimed the routine (`NextRunAt` nulled, later `Disabled`), the queue
-     * starts over. The same request in the same status is queued once.
-     */
-    private buildPendingEvents(
-        routine: MJUserRoutineEntity,
-        existingConfig: Partial<MJUserRoutineEntity_IRoutineWakeConfiguration>,
-        newEvent: AgentWakeResumeState
-    ): AgentWakeResumeState[] {
-        const isUnclaimedPending = routine.Status === 'Active' && routine.NextRunAt != null && !!routine.ID;
-        const prior = isUnclaimedPending ? this.readPendingEvents(existingConfig.resumeState) : [];
-        const key = this.wakeEventKey(newEvent);
-        const deduped = prior.filter((e) => this.wakeEventKey(e) !== key);
-        return [...deduped, newEvent];
-    }
-
     private readPendingEvents(resumeState: Record<string, unknown> | undefined): AgentWakeResumeState[] {
         if (!resumeState) {
             return [];
@@ -1221,6 +1250,7 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             event['requestID'] ??
             event['messageID'] ??
             event['conversationDetailID'] ??
+            event['taskID'] ??
             event['eventID'] ??
             event['recordID'] ??
             '';
@@ -1228,12 +1258,20 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
         return `${String(event['triggerType'] ?? '')}:${String(id)}:${String(qualifier)}`.toLowerCase();
     }
 
-    private buildCoalescedWakeReason(workstreamKey: string, latestReason: string, pendingEvents: AgentWakeResumeState[]): string {
-        if (pendingEvents.length <= 1) {
+    private buildCoalescedWakeReason(
+        workstreamKey: string,
+        latestReason: string,
+        pendingEvents: AgentWakeResumeState[],
+        totalCoalescedCount: number,
+        overflowCount: number
+    ): string {
+        if (totalCoalescedCount <= 1 && pendingEvents.length <= 1) {
             return latestReason;
         }
         const lines = pendingEvents.map((e, i) => `${i + 1}. ${this.describeWakeEvent(e)}`);
-        return `${pendingEvents.length} events require action in workstream "${workstreamKey}" (all listed in resumeState.pendingEvents):\n${lines.join('\n')}`;
+        const overflowNotice =
+            overflowCount > 0 ? `\n(+${overflowCount} additional coalesced events in window)` : '';
+        return `${totalCoalescedCount} events require action in workstream "${workstreamKey}" (listed in resumeState.pendingEvents):\n${lines.join('\n')}${overflowNotice}`;
     }
 
     private describeWakeEvent(event: AgentWakeResumeState): string {
@@ -1343,10 +1381,58 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
 
             const existingConfig: Partial<MJUserRoutineEntity_IRoutineWakeConfiguration> =
                 routine.WakeConfigurationObject ?? {};
-            const pendingEvents = this.buildPendingEvents(routine, existingConfig, params.resumeState);
-            const wakeReason = this.buildCoalescedWakeReason(params.workstreamKey, params.wakeReason, pendingEvents);
-            // Latest event stays at the top level for consumers that predate the queue; the full list rides alongside.
-            const coalescedResumeState: AgentWakeResumeState = { ...params.resumeState, pendingEvents };
+            const scheduleEval = EventWakeCoalescer.Instance.EvaluateWindowSchedule({
+                UserID: params.targetUserID,
+                ApplicationID: params.applicationID,
+                Now: params.now,
+                WindowMs: params.coalescingWindowMs,
+                ExistingRoutineStatus: routine.Status,
+                ExistingRoutineNextRunAt: routine.NextRunAt,
+                ExistingRoutineLastRunAt: routine.LastRunAt,
+                HasExistingRoutineID: Boolean(routine.ID),
+            });
+
+            const isUnclaimedPending =
+                (routine.Status === 'Active' && routine.NextRunAt != null && Boolean(routine.ID)) ||
+                scheduleEval.ShouldDeferUntilWindowExpiry;
+            const existingResumeState = existingConfig.resumeState as Record<string, unknown> | undefined;
+            const priorEvents = isUnclaimedPending ? this.readPendingEvents(existingResumeState) : [];
+            const existingCoalescedCount =
+                isUnclaimedPending && typeof existingResumeState?.['coalescedEventCount'] === 'number'
+                    ? (existingResumeState['coalescedEventCount'] as number)
+                    : priorEvents.length;
+            const existingOverflowCount =
+                isUnclaimedPending && typeof existingResumeState?.['overflowEventCount'] === 'number'
+                    ? (existingResumeState['overflowEventCount'] as number)
+                    : 0;
+
+            const mergeResult = EventWakeCoalescer.Instance.MergeCoalescedEvents({
+                PriorEvents: priorEvents,
+                NewEvent: params.resumeState,
+                CoalesceKey: scheduleEval.CoalesceKey,
+                ApplicationID: NormalizeApplicationKey(params.applicationID),
+                MaxRetainedEvents: params.maxRetainedEvents ?? DEFAULT_MAX_RETAINED_COALESCED_EVENTS,
+                ExistingCoalescedCount: existingCoalescedCount,
+                ExistingOverflowCount: existingOverflowCount,
+                EventKeyExtractor: (e) => this.wakeEventKey(e),
+            });
+
+            const wakeReason = this.buildCoalescedWakeReason(
+                params.workstreamKey,
+                params.wakeReason,
+                mergeResult.PendingEvents,
+                mergeResult.TotalCoalescedCount,
+                mergeResult.OverflowCount
+            );
+            // Latest event stays at the top level for consumers that predate the queue; the full bounded list rides alongside.
+            const coalescedResumeState: AgentWakeResumeState = {
+                ...params.resumeState,
+                coalesceKey: scheduleEval.CoalesceKey,
+                coalescedEventCount: mergeResult.TotalCoalescedCount,
+                overflowEventCount: mergeResult.OverflowCount,
+                ...(mergeResult.SummaryText ? { coalescedSummary: mergeResult.SummaryText } : {}),
+                pendingEvents: mergeResult.PendingEvents,
+            };
             const updatedConfig: MJUserRoutineEntity_IRoutineWakeConfiguration = {
                 ...existingConfig,
                 workstreamKey: params.workstreamKey,
@@ -1355,7 +1441,7 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             };
 
             routine.Status = 'Active';
-            routine.NextRunAt = params.now;
+            routine.NextRunAt = scheduleEval.EffectiveNextRunAt;
             routine.InitialMessage = `[AgentWake:${params.workstreamKey}] Resume workstream "${params.workstreamKey}": ${wakeReason}`;
             routine.StartingPayload = JSON.stringify({
                 workstreamKey: params.workstreamKey,
@@ -1372,6 +1458,15 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
                 return this.notTriggered('SAVE_FAILED', errMessage);
             }
 
+            EventWakeCoalescer.Instance.RecordEventBuffered(
+                params.targetUserID,
+                params.applicationID,
+                this.wakeEventKey(params.resumeState),
+                params.now,
+                mergeResult.TotalCoalescedCount,
+                mergeResult.OverflowCount
+            );
+
             return {
                 triggered: true,
                 resultCode: 'WAKE_SCHEDULED',
@@ -1380,7 +1475,10 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
                 targetUserID: params.targetUserID,
                 targetAgentID: params.targetAgentID,
                 workstreamKey: params.workstreamKey,
-                nextRunAtISO: params.now.toISOString(),
+                nextRunAtISO: scheduleEval.EffectiveNextRunAt.toISOString(),
+                coalesced: mergeResult.TotalCoalescedCount > 1 || scheduleEval.IsCoalescedIntoActiveWindow,
+                coalescedCount: mergeResult.TotalCoalescedCount,
+                coalesceKey: scheduleEval.CoalesceKey,
             };
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
