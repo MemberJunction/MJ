@@ -135,7 +135,7 @@ function baseHappyPathStubs(): void {
     vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
     vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
     vi.mocked(DownloadMigrations).mockResolvedValue({ Success: true, Files: [] } as unknown as Awaited<ReturnType<typeof DownloadMigrations>>);
-    vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+    vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
     vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
     vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
     vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });

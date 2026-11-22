@@ -4,7 +4,10 @@ import {
     ClassifiedTag,
     ContentChunkSeedInput,
     ExistingGraphConceptSeed,
+    FatalStageError,
+    GraphAuthorityTierDescriptor,
     GraphConceptTypeDescriptor,
+    GraphTypeDescriptor,
     SchemaGroundingTarget,
     StageContext,
     SynthesizedGraphConcept,
@@ -20,8 +23,40 @@ import {
 } from '../stages/GraphStage.js';
 import { TAG_STAGE } from '../stages/TagStage.js';
 
+const CANON_GRAPH_TYPE: GraphTypeDescriptor = {
+    ID: 'GT-CANON',
+    Name: 'Canon',
+    IsCanon: true,
+    Rank: 10,
+    DefaultAuthorityTierID: 'TIER-SOP',
+    DefaultConceptTaxonomyMode: 'propose-only',
+    DefaultGroundingMode: 'full-canon',
+};
+
+const KNOWLEDGE_GRAPH_TYPE: GraphTypeDescriptor = {
+    ID: 'GT-KNOWLEDGE',
+    Name: 'Knowledge',
+    IsCanon: false,
+    Rank: 20,
+    DefaultAuthorityTierID: 'TIER-REF',
+    DefaultConceptTaxonomyMode: 'auto-grow',
+    DefaultGroundingMode: 'none',
+};
+
 class InMemoryGraphOverlayStore implements IGraphOverlayStore {
     public ExistingConcepts: ExistingGraphConceptSeed[] = [];
+    /** Seeded authority tiers as a fixture: the stage must get them only from the store. */
+    public AuthorityTiers: GraphAuthorityTierDescriptor[] = [
+        { ID: 'TIER-BYLAWS', Name: 'Bylaws', Rank: 100 },
+        { ID: 'TIER-BOARD', Name: 'Board Policy', Rank: 80 },
+        { ID: 'TIER-SOP', Name: 'Executive SOP', Rank: 60 },
+        { ID: 'TIER-DEPT', Name: 'Department Practice', Rank: 40 },
+        { ID: 'TIER-REF', Name: 'Reference', Rank: 20 },
+    ];
+    /** Graph type per graph ID; a graph whose ID mentions CANON is a Canon graph. */
+    public GraphTypeFor(graphID: string): GraphTypeDescriptor {
+        return graphID.includes('CANON') ? CANON_GRAPH_TYPE : KNOWLEDGE_GRAPH_TYPE;
+    }
     public ConceptTypes: GraphConceptTypeDescriptor[] = [
         { ID: 'B2F6C8D1-5E22-4A3B-9D81-200000000001', Name: 'Policy', Rank: 10 },
         { ID: 'B2F6C8D1-5E22-4A3B-9D81-200000000002', Name: 'Metric', Rank: 20 },
@@ -51,6 +86,14 @@ class InMemoryGraphOverlayStore implements IGraphOverlayStore {
 
     public async LoadConceptTypes(): Promise<GraphConceptTypeDescriptor[]> {
         return this.ConceptTypes;
+    }
+
+    public async LoadAuthorityTiers(): Promise<GraphAuthorityTierDescriptor[]> {
+        return this.AuthorityTiers;
+    }
+
+    public async LoadGraphType(graphID: string): Promise<GraphTypeDescriptor | null> {
+        return this.GraphTypeFor(graphID);
     }
 
     public async LoadGroundingTargets(): Promise<SchemaGroundingTarget[]> {
@@ -400,7 +443,7 @@ describe('GraphStage (@memberjunction/content-pipeline)', () => {
         expect(synth.Concept.ParentConceptName).toBe('Membership Governance');
 
         const edgeTypes = synth.Edges.map((e) => e.EdgeTypeName);
-        expect(edgeTypes).toContain('Broader Than');
+        expect(edgeTypes).toContain('BroaderThan');
         expect(edgeTypes).toContain('Measures'); // MJ: Queries included in schema-and-queries mode
         expect(edgeTypes).not.toContain('Implements'); // MJ: Actions excluded in schema-and-queries mode
         expect(synth.Edges.every((e) => e.Origin === 'Inferred')).toBe(true);
@@ -448,5 +491,56 @@ describe('GraphStage (@memberjunction/content-pipeline)', () => {
         expect(store.SavedEdges.length).toBeGreaterThan(0);
         expect(store.SavedEdges.every((e) => e.Status === 'Proposed')).toBe(true);
         expect(store.SavedEdges.every((e) => e.Edge.Origin === 'Inferred')).toBe(true);
+    });
+    it('fails the stage when a source names an authority tier that does not exist', async () => {
+        store.CustomChunks = [
+            {
+                ChunkID: 'CHUNK-X',
+                ContentItemID: 'ITEM-X',
+                ContentSourceID: 'SOURCE-X',
+                ContentItemTitle: 'Doc',
+                HeadingPath: 'Doc > Grace Period',
+                Text: 'The grace period is 60 days.',
+                Tags: [],
+            },
+        ];
+        const stage = new GraphStage();
+        const record = new WorkingRecord(new WorkingRecordIdentity('Content Item', 'https://canon.test/x.pdf', 'ITEM-X'));
+        await expect(
+            stage.Run(
+                record,
+                buildStageContext({
+                    GraphOverlay: { EnableGraphOverlay: true, GraphID: 'GRAPH-KNOWLEDGE-X', AuthorityTier: 'Bylawz' },
+                    GraphOverlayStore: store,
+                }),
+            ),
+        ).rejects.toThrow(FatalStageError);
+    });
+
+    it("takes a source's tier and taxonomy from its graph type when the source names none", async () => {
+        store.CustomChunks = [
+            {
+                ChunkID: 'CHUNK-Y',
+                ContentItemID: 'ITEM-Y',
+                ContentSourceID: 'SOURCE-Y',
+                ContentItemTitle: 'Doc',
+                HeadingPath: 'Doc > Refund Window',
+                Text: 'Refunds are allowed within 14 days.',
+                Tags: ['Refund Window'],
+            },
+        ];
+        const stage = new GraphStage();
+        const record = new WorkingRecord(new WorkingRecordIdentity('Content Item', 'https://canon.test/y.pdf', 'ITEM-Y'));
+        record.SetExtension(TAG_STAGE, 'tags', [{ Name: 'Refund Window', Score: 0.9 }]);
+        const outcome = await stage.Run(
+            record,
+            buildStageContext({ GraphOverlay: { EnableGraphOverlay: true, GraphID: 'GRAPH-CANON-Y' }, GraphOverlayStore: store }),
+        );
+        expect(outcome.Status).toBe('Complete');
+        const summary = record.GetExtension<GraphStageExecutionSummary>(GRAPH_STAGE, 'summary')!;
+        expect(summary.OverlayConfig.IsCanon).toBe(true);
+        expect(summary.OverlayConfig.ConceptTaxonomyMode).toBe('propose-only');
+        expect(summary.OverlayConfig.AuthorityTier).toBe('Executive SOP');
+        expect(store.SavedConcepts.every((c) => c.Status === 'Proposed')).toBe(true);
     });
 });
