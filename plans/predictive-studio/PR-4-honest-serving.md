@@ -11376,7 +11376,7 @@ are monitored on real outcomes.
 - Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, PS_SEED_LIMIT, PS_SIGN_IN_URL, PS_STORAGE_PROVIDER, PW_BASE_URL, STORAGE_LOCAL_ROOT<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->29<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->29<!-- /gen:checks -->
-- Head: <!-- gen:head -->ca7f33b0b1<!-- /gen:head -->
+- Head: <!-- gen:head -->c85a74b4b1<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,
@@ -13605,6 +13605,33 @@ round). Nothing pushed. Code at `c84d3f9289` (phase 3 + the review fixes) throug
   item or carries a merge of `next`, and is recorded here as `### <date> — <agent> — R<k>`.
 - **Open deferrals:** OF4-5 (a kept incumbent-heuristic rule is recorded and not delivered) — expiry PR 6; OF4-3 out of
   scope, no deferred work. **Rulings:** D4-261…D4-273. **Flags:** OF4-55, OF4-56, OF4-57; OF4-34 resolved.
+
+### 2026-11-22 — Claude (Opus 5.5) — R3 (MJExplorer user walk: chat + Predictive Studio, real data)
+
+- **Walk:** walk users `fv-walk-authorized` / `fv-walk-restricted`, MJAPI :4041, Explorer :4201, sidecar :64203. C1 dues
+  renewal in chat (Sage → Model Development Agent); W1 membership renewal built in chat (Pipeline Builder → gate kept the
+  simple baseline, honestly reported), published from chat, scored 16,776 records through Operate → Run now (168 batch runs,
+  16,776 Feature Values), Predictions grid (Medium 1,677 → Save as list → List of 1,677), record panel (authorized: card,
+  drivers, lineage, in-training note; restricted: no card, grid 0 rows), Monitoring → Check now (insufficient-rows).
+- **Fixed (tests first; commits `b4900b6a25`, `1794067970`):** (1) Score Record Set without a binding returned every
+  prediction inline — the agent read 16,776 predictions (1.31M tokens) and died; predict-only calls are limited to 250
+  (`MAX_INLINE_PREDICTIONS`, `READ_CAP_EXCEEDED` before scoring), metadata and the agent prompt say so and the prompt no
+  longer offers a one-off write nor lets a sample pass for a ranking; (2) a refused binding left its Record Process and
+  monthly Scheduled Job behind — the two saves now share one transaction (`SaveScoringProcessWithBinding`); (3) as-of
+  calendar dates showed the previous day west of UTC (scoring runs, record panel) and the grid's "Scored At" showed the
+  as-of date as a time — UTC calendar dates, compute time for Scored At.
+- **Findings left open (owner calls / outside PS):** OF4-60 the Data Scout invents queries, a feature pipeline and fields
+  that do not exist when no approved source fits (C1; agent control path = PR 5) and its `EXISTING_APPROVED_MODELS` data
+  source selects `Name` (no such column; PR 5 per §4.2); OF4-61 a binding repoints to the newest Record Process (D-058), so
+  "Run now" after "schedule monthly" leaves the monthly process unbound (it would run with no Feature Values) — needs an
+  owner ruling on binding ↔ process; OF4-62 binary class codes reach the UI raw ("0 risk", "Predicted 0") because the
+  semantics label rule names classes by value; OF4-63 "predicts Renewed within 1 days" (PR 3 `DescribeLabelRule` stored in
+  `TargetVariable`); OF4-64 KeepBaseline models store no Metrics/FeatureImportance ("Train log loss —", "no data");
+  OF4-65 restricted users see "No predictions available — run this model" instead of "not authorized"; Operate's
+  "Run history only" label vs its Feature Value summary; agent's "Workbench Pipelines tab". Outside PS (reported, not
+  changed): Sage routed a modeling request to Codesmith (sandbox, 500 rows); a task-graph follow-up is not pushed to an
+  open chat; redeeming a new magic link in a browser context that already held a session sends the previous token (401,
+  "Taking longer than expected") — the provider prefers the fragment, so the fragment is gone before `initialize()`.
 
 ### 2026-11-22 — Claude (Opus 5.5) — R2 (the publishing switches leave CorePlus, D4-278)
 
