@@ -34,7 +34,9 @@ import {
 import { SQLServerDialect } from '@memberjunction/sql-dialect';
 import type { TaskGraphDebugState } from '../debug-state';
 import { ParseTaskGraphDebugState } from '../debug-state';
+import { TaskClaimStore } from '../TaskClaimStore';
 import { TaskGraphDispatcher } from '../TaskGraphDispatcher';
+import { TaskGraphGovernanceCoordinator } from '../TaskGraphGovernanceCoordinator';
 import { TaskGraphService } from '../TaskGraphService';
 import type { TaskActionRunner, TaskAgentRunner, TaskGraphFrame } from '../types';
 
@@ -461,6 +463,32 @@ class GovernanceInMemoryDb {
                             Reflect.set(debugBag, prop, field.Value);
                         }
                     }
+                    payload.debug = debugBag;
+                    row.InputPayload = JSON.stringify(payload);
+                    return [{ AffectedRows: 1 }];
+                }
+                if (sql.includes('spTaskGraphConsumeStepMarker')) {
+                    const [parentId] = args as [string, string];
+                    const row = db.Tasks.get(parentId.toLowerCase());
+                    if (!row || !row.InputPayload) return [{ AffectedRows: 0 }];
+                    const payload = JSON.parse(row.InputPayload) as { debug?: TaskGraphDebugState };
+                    if (!payload.debug || payload.debug.step == null) return [{ AffectedRows: 0 }];
+                    Reflect.deleteProperty(payload.debug, 'step');
+                    row.InputPayload = JSON.stringify(payload);
+                    return [{ AffectedRows: 1 }];
+                }
+                if (sql.includes('spTaskGraphPauseAtBreakpoint')) {
+                    const [parentId, breakpointTaskId] = args as [string, string, string];
+                    const row = db.Tasks.get(parentId.toLowerCase());
+                    if (!row) return [{ AffectedRows: 0 }];
+                    const payload = row.InputPayload ? (JSON.parse(row.InputPayload) as { debug?: TaskGraphDebugState }) : {};
+                    const debugBag: TaskGraphDebugState = payload.debug && typeof payload.debug === 'object'
+                        ? { ...payload.debug }
+                        : {};
+                    if (debugBag.paused === true) return [{ AffectedRows: 0 }];
+                    debugBag.paused = true;
+                    debugBag.pausedReason = 'breakpoint';
+                    debugBag.pausedAtTaskID = breakpointTaskId;
                     payload.debug = debugBag;
                     row.InputPayload = JSON.stringify(payload);
                     return [{ AffectedRows: 1 }];
@@ -1428,6 +1456,271 @@ describe('TaskGraphGovernanceCoordinator — default opt-in, 5-tier policy scope
             expect(executedDisp2.every((id) => !executedDisp1.includes(id))).toBe(true);
         } finally {
             await disp2.Stop();
+        }
+    });
+
+    it('CR-GRAPH-DEBUG-PAUSE-LATCH: keeps ordinary user and breakpoint pauses separate from governance latch so StepGraph and ResumeGraph complete remaining tasks without dispatcher restart', async () => {
+        const db = new GovernanceInMemoryDb();
+        const provider = db.CreateProvider();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation((p) => p as Partial<RunView> as RunView);
+
+        const service = new TaskGraphService();
+        const ctx = {
+            EnvironmentID: 'env-1',
+            Provider: provider,
+            ContextUser: TEST_USER,
+            LimitsOverride: { Budgets: { PerRun: { MaxCostUsd: 10.0 } } },
+        };
+
+        // Scenario A: PauseGraph (pausedReason: 'user') -> Poll -> StepGraph('one') -> ResumeGraph
+        const subA = await service.Submit(buildLinearSpec(4, 'User Pause Step Resume Graph'), ctx);
+        expect(subA.Success).toBe(true);
+        const parentA = subA.ParentTaskID!;
+        const pauseRes = await service.PauseGraph(parentA, ctx, TEST_USER.ID);
+        expect(pauseRes.Success).toBe(true);
+        expect(pauseRes.Debug?.pausedReason).toBe('user');
+
+        const executedA: string[] = [];
+        const framesA: TaskGraphFrame[] = [];
+        const dispatcher = new TaskGraphDispatcher(
+            { CreateProvider: async () => provider },
+            { RunAgentForTask: async () => ({ Success: true }) },
+            TEST_USER,
+            {
+                InstanceID: 'debug-pause-latch-test',
+                MaxConcurrentTasks: 1,
+                PollIntervalSeconds: 0.01,
+                HeartbeatIntervalSeconds: 60,
+                ReconciliationIntervalSeconds: 60,
+            },
+            undefined,
+            { OnFrame: (frame) => framesA.push(frame) },
+            {
+                RunActionForTask: async (taskCtx) => {
+                    executedA.push(taskCtx.TaskID);
+                    return { Success: true, Output: { step: executedA.length }, CostUsd: 0.05, TokensUsed: 50 };
+                },
+            },
+        );
+
+        await dispatcher.Start();
+        try {
+            // Allow live PollAndDispatch ticks to observe the user-paused graph
+            await waitUntil(
+                () => framesA.some((f) => f.Kind === 'GraphPaused' && f.ParentTaskID === parentA && f.Reason === 'paused by user'),
+                5_000,
+                () => dispatcher.Kick(),
+            );
+            for (let i = 0; i < 3; i++) {
+                dispatcher.Kick();
+                await new Promise((r) => setTimeout(r, 20));
+            }
+            expect(executedA).toHaveLength(0);
+            expect(dispatcher.Governance.IsLocallyPaused(parentA)).toBe(false);
+            expect(dispatcher.Governance.GetGraphDiagnostics(parentA)?.PausedByGovernance).toBe(false);
+            expect(
+                await dispatcher.Governance.CanClaimTasks(
+                    provider,
+                    parentA,
+                    { paused: true, pausedReason: 'user' },
+                    null,
+                    TEST_USER,
+                ),
+            ).toBe(true);
+
+            // Single-step one task without restarting the dispatcher
+            const stepRes = await service.StepGraph(parentA, 'one', ctx);
+            expect(stepRes.Success).toBe(true);
+            await waitUntil(
+                () => executedA.length === 1 && db.Tasks.get(executedA[0].toLowerCase())?.Status === 'Complete',
+                5_000,
+                () => dispatcher.Kick(),
+            );
+            // Extra poll ticks while still paused must NOT claim step 2
+            for (let i = 0; i < 3; i++) {
+                dispatcher.Kick();
+                await new Promise((r) => setTimeout(r, 20));
+            }
+            expect(executedA).toHaveLength(1);
+            expect(dispatcher.Governance.IsLocallyPaused(parentA)).toBe(false);
+
+            // ResumeGraph without restarting the dispatcher -> remaining 3 tasks complete cleanly
+            const resumeA = await service.ResumeGraph(parentA, ctx);
+            expect(resumeA.Success).toBe(true);
+            await waitUntil(
+                () => db.Tasks.get(parentA.toLowerCase())?.Status === 'Complete',
+                5_000,
+                () => dispatcher.Kick(),
+            );
+            expect(executedA).toHaveLength(4);
+            expect(framesA.some((f) => f.Kind === 'GraphResumed' && f.ParentTaskID === parentA)).toBe(true);
+
+            // Scenario B: Breakpoint pause (pausedReason: 'breakpoint') -> Poll -> StepGraph('one') -> ResumeGraph
+            const subB = await service.Submit(buildLinearSpec(4, 'Breakpoint Step Resume Graph'), {
+                ...ctx,
+                Debug: { paused: true, pausedReason: 'user', pausedBy: TEST_USER.ID },
+            });
+            expect(subB.Success).toBe(true);
+            const parentB = subB.ParentTaskID!;
+            const childrenB = (db.TasksByParent.get(parentB.toLowerCase()) ?? []).slice();
+            expect(childrenB).toHaveLength(4);
+            const step2Id = childrenB[1].ID;
+
+            const bpSet = await service.SetBreakpoints(parentB, [step2Id], ctx);
+            expect(bpSet.Success).toBe(true);
+            // Resume from initial submit pause so step-1 runs and hits breakpoint at step-2
+            const initialResumeB = await service.ResumeGraph(parentB, ctx);
+            expect(initialResumeB.Success).toBe(true);
+
+            await waitUntil(
+                () =>
+                    framesA.some(
+                        (f) => f.Kind === 'BreakpointHit' && f.ParentTaskID === parentB && f.TaskID === step2Id,
+                    ),
+                5_000,
+                () => dispatcher.Kick(),
+            );
+            for (let i = 0; i < 3; i++) {
+                dispatcher.Kick();
+                await new Promise((r) => setTimeout(r, 20));
+            }
+            // Only step-1 ran; step-2 is held at breakpoint
+            expect(executedA).toHaveLength(5);
+            expect(dispatcher.Governance.IsLocallyPaused(parentB)).toBe(false);
+            expect(dispatcher.Governance.GetGraphDiagnostics(parentB)?.PausedByGovernance).toBe(false);
+            expect(
+                await dispatcher.Governance.CanClaimTasks(
+                    provider,
+                    parentB,
+                    { paused: true, pausedReason: 'breakpoint', pausedAtTaskID: step2Id },
+                    null,
+                    TEST_USER,
+                ),
+            ).toBe(true);
+
+            // Single-step across the breakpointed task (step-2)
+            const stepB = await service.StepGraph(parentB, 'one', ctx);
+            expect(stepB.Success).toBe(true);
+            await waitUntil(
+                () => executedA.length === 6 && db.Tasks.get(step2Id.toLowerCase())?.Status === 'Complete',
+                5_000,
+                () => dispatcher.Kick(),
+            );
+            for (let i = 0; i < 3; i++) {
+                dispatcher.Kick();
+                await new Promise((r) => setTimeout(r, 20));
+            }
+            expect(executedA).toHaveLength(6);
+
+            // ResumeGraph completes step-3 and step-4
+            const resumeB = await service.ResumeGraph(parentB, ctx);
+            expect(resumeB.Success).toBe(true);
+            await waitUntil(
+                () => db.Tasks.get(parentB.toLowerCase())?.Status === 'Complete',
+                5_000,
+                () => dispatcher.Kick(),
+            );
+            expect(executedA).toHaveLength(8);
+        } finally {
+            await dispatcher.Stop();
+        }
+    });
+
+    it('CR-GRAPH-DEBUG-PAUSE-LATCH: actual governance pauses still block claiming until ApproveAndResumePausedGraph, and stale local PausedByGovernance clears once durable resume lands', async () => {
+        const db = new GovernanceInMemoryDb();
+        const provider = db.CreateProvider();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockImplementation((p) => p as Partial<RunView> as RunView);
+
+        const runIdGov = '50000000-0000-4000-8000-000000000044';
+        const submitRun = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', TEST_USER);
+        submitRun.ID = runIdGov;
+        submitRun.Status = 'Running';
+        await submitRun.Save();
+
+        const executed: string[] = [];
+        const frames: TaskGraphFrame[] = [];
+        const disp = new TaskGraphDispatcher(
+            { CreateProvider: async () => provider },
+            { RunAgentForTask: async () => ({ Success: true }) },
+            TEST_USER,
+            {
+                InstanceID: 'gov-pause-still-blocks',
+                MaxConcurrentTasks: 1,
+                PollIntervalSeconds: 0.01,
+                HeartbeatIntervalSeconds: 60,
+                ReconciliationIntervalSeconds: 60,
+            },
+            undefined,
+            { OnFrame: (frame) => frames.push(frame) },
+            {
+                RunActionForTask: async (ctx) => {
+                    executed.push(ctx.TaskID);
+                    return { Success: true, Output: { step: executed.length }, CostUsd: 0.15, TokensUsed: 100 };
+                },
+            },
+        );
+
+        await disp.Start();
+        try {
+            const service = new TaskGraphService();
+            const ctx = {
+                EnvironmentID: 'env-1',
+                Provider: provider,
+                ContextUser: TEST_USER,
+                AgentRunID: runIdGov,
+                LimitsOverride: { Budgets: { PerRun: { MaxCostUsd: 0.25 } } },
+            };
+            const subRes = await service.Submit(buildLinearSpec(4, 'Governance Pause Blocks Step/Resume Graph'), ctx);
+            expect(subRes.Success).toBe(true);
+            const parentId = subRes.ParentTaskID!;
+
+            await waitUntil(
+                () => disp.Governance.GetGraphDiagnostics(parentId)?.PausedByGovernance === true,
+                5_000,
+                () => disp.Kick(),
+            );
+            expect(executed).toHaveLength(2);
+            expect(disp.Governance.IsLocallyPaused(parentId)).toBe(true);
+
+            // Ordinary StepGraph and ResumeGraph MUST NOT bypass a governance pause with an unapproved checkpoint
+            await service.StepGraph(parentId, 'one', ctx);
+            for (let i = 0; i < 3; i++) {
+                disp.Kick();
+                await new Promise((r) => setTimeout(r, 20));
+            }
+            expect(executed).toHaveLength(2);
+
+            await service.ResumeGraph(parentId, ctx);
+            for (let i = 0; i < 3; i++) {
+                disp.Kick();
+                await new Promise((r) => setTimeout(r, 20));
+            }
+            expect(executed).toHaveLength(2);
+            expect(disp.Governance.IsLocallyPaused(parentId)).toBe(true);
+            expect(
+                await disp.Governance.IsGraphBlockedByGovernance(provider, parentId, {}, null, TEST_USER),
+            ).toBe(true);
+
+            // External ApproveAndResumePausedGraph on a separate coordinator clears durable pause + approves checkpoint
+            const externalCoord = new TaskGraphGovernanceCoordinator(new TaskClaimStore('external-approver'));
+            const approveRes = await externalCoord.ApproveAndResumePausedGraph({
+                ParentTaskID: parentId,
+                Provider: provider,
+                ContextUser: TEST_USER,
+                BudgetExtension: { NewPerRunMaxCostUsd: 1.0 },
+            });
+            expect(approveRes.Success).toBe(true);
+
+            // Active dispatcher detects cleared durable pause, clears stale local PausedByGovernance, and completes remaining nodes
+            await waitUntil(
+                () => db.Tasks.get(parentId.toLowerCase())?.Status === 'Complete',
+                5_000,
+                () => disp.Kick(),
+            );
+            expect(executed).toHaveLength(4);
+            expect(disp.Governance.IsLocallyPaused(parentId)).toBe(false);
+        } finally {
+            await disp.Stop();
         }
     });
 });

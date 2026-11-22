@@ -371,8 +371,7 @@ export class TaskGraphGovernanceCoordinator {
         let resolvedDebug = debug;
         const needsParentForPending =
             !resolvedParent &&
-            resolvedDebug.paused === true &&
-            resolvedDebug.pausedReason === 'governance' &&
+            this.isGovernanceDebugPause(resolvedDebug) &&
             resolvedDebug.checkpointPersisted === false;
 
         if (needsParentForPending && typeof (provider as Partial<IRunViewProvider>).RunView === 'function') {
@@ -422,8 +421,7 @@ export class TaskGraphGovernanceCoordinator {
             state.CompletedNodeCount = Math.max(state.CompletedNodeCount, state.CompletedNodeSet.size);
         }
 
-        const isGovernanceDebugPause =
-            resolvedDebug.paused === true && resolvedDebug.pausedReason === 'governance';
+        const isGovernanceDebugPause = this.isGovernanceDebugPause(resolvedDebug);
         const needsSyncOrFlush =
             isGovernanceDebugPause &&
             (resolvedDebug.checkpointPersisted === false ||
@@ -441,7 +439,16 @@ export class TaskGraphGovernanceCoordinator {
             needsSyncOrFlush && !graphNodes,
         );
 
+        // Synchronize stale local PausedByGovernance when durable root debug state is no longer governance-paused
+        if (!isGovernanceDebugPause && !state.PausePersistencePending && !state.PolicyLookupError && state.PausedByGovernance) {
+            await this.reconcileClearedDurablePause(provider, state, contextUser);
+        }
+
         if (!needsSyncOrFlush) {
+            if (isGovernanceDebugPause && !state.PausePersistencePending) {
+                state.PausedByGovernance = true;
+                state.DebugFieldsPersisted = true;
+            }
             return;
         }
 
@@ -482,10 +489,12 @@ export class TaskGraphGovernanceCoordinator {
 
     /**
      * Returns true when `graphID` must not claim any new nodes (either `PausePersistencePending` is
-     * active, `$.debug.paused` is set, policy lookup failed closed, or the submitting agent run carries
-     * an unapproved governance pause checkpoint).
-     * While `PausePersistencePending` is active, automatically retries persisting the missing pause
-     * checkpoint / debug fields while continuing to block claims fail-closed.
+     * active, durable `$.debug` carries a governance pause, policy lookup failed closed, or the
+     * submitting agent run carries an unapproved governance pause checkpoint).
+     *
+     * Ordinary debugger pauses (`pausedReason: 'user' | 'breakpoint'` without governance markers)
+     * return `false` here so `DecideClaimGate` handles pause, single-step, and breakpoint gates
+     * without latching `PausedByGovernance`.
      */
     public async IsGraphBlockedByGovernance(
         provider: IMetadataProvider,
@@ -501,8 +510,8 @@ export class TaskGraphGovernanceCoordinator {
             await this.FlushPendingPausePersistence(provider, graphID, contextUser);
             return true;
         }
-        if (debug.paused) {
-            if (debug.pausedReason === 'governance' && debug.checkpointPersisted === false) {
+        if (this.isGovernanceDebugPause(debug)) {
+            if (debug.checkpointPersisted === false) {
                 return true;
             }
             state.PausedByGovernance = true;
@@ -986,19 +995,74 @@ export class TaskGraphGovernanceCoordinator {
             }
             if (meta.submittedByAgentID && !existing.AgentID) {
                 existing.AgentID = meta.submittedByAgentID;
+                existing.PolicyScopeHydrated = false;
             }
             if (meta.routineID && !existing.RoutineID) {
                 existing.RoutineID = meta.routineID;
             }
             if (meta.submittedByUserID && !existing.UserID) {
                 existing.UserID = meta.submittedByUserID;
+                existing.PolicyScopeHydrated = false;
+            }
+            if (meta.submittedByAgentRunID && !existing.SubmittingAgentRunID) {
+                existing.SubmittingAgentRunID = meta.submittedByAgentRunID;
+                existing.HydratedFromCheckpoint = false;
             }
         }
         if (parent?.AgentRunID && !existing.SubmittingAgentRunID) {
             existing.SubmittingAgentRunID = parent.AgentRunID;
+            existing.HydratedFromCheckpoint = false;
         }
         if (parent?.AgentID && !existing.AgentID) {
             existing.AgentID = parent.AgentID;
+            existing.PolicyScopeHydrated = false;
+        }
+    }
+
+    private isGovernanceDebugPause(debug: TaskGraphDebugState): boolean {
+        if (debug.paused !== true) {
+            return false;
+        }
+        return (
+            debug.pausedReason === 'governance' ||
+            debug.pendingCheckpointContext != null ||
+            debug.checkpointPersisted === false
+        );
+    }
+
+    private async reconcileClearedDurablePause(
+        provider: IMetadataProvider,
+        state: GraphGovernanceState,
+        contextUser: UserInfo,
+    ): Promise<void> {
+        if (!state.SubmittingAgentRunID) {
+            state.PausedByGovernance = false;
+            state.DebugFieldsPersisted = false;
+            state.CheckpointStatusSyncedInDebug = false;
+            return;
+        }
+        try {
+            const run = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
+            if (!(await run.Load(state.SubmittingAgentRunID))) {
+                state.PausedByGovernance = false;
+                return;
+            }
+            const cp = ExtractRunawayCheckpointFromAgentRun(run);
+            if (run.Status === 'Paused' && cp && cp.HumanApproval.Status !== 'Approved') {
+                state.PausedByGovernance = true;
+                state.CheckpointPersisted = true;
+                return;
+            }
+            state.PausedByGovernance = false;
+            state.CheckpointPersisted = false;
+            state.DebugFieldsPersisted = false;
+            state.CheckpointStatusSyncedInDebug = false;
+            if (cp && cp.HumanApproval.Status === 'Approved') {
+                const baseBudgets = this.resolveStateLimits(state).Budgets;
+                state.ExtendedBudgets = ApplyBudgetExtensionToBudgets(baseBudgets, cp.HumanApproval.BudgetExtension);
+            }
+        } catch {
+            // Keep fail-closed state on transient agent run read failures
         }
     }
 
