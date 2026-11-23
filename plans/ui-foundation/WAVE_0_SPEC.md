@@ -1,6 +1,6 @@
 # Project Lego: Wave 0 Spec
 
-**Status:** DRAFT 2026-11-13, for review. Updated 2026-11-18 with decisions from Matt and Colin's UI/UX Check-In.
+**Status:** DRAFT 2026-11-13, for review. Updated 2026-11-18 with decisions from Matt and Colin's UI/UX Check-In. Updated 2026-11-23: every layer kind gets a phone presentation, not only dialogs (Matt; Section 6.2.1).
 **Parents:** [UNIFIED_PLAN.md](UNIFIED_PLAN.md), [NAMING.md](NAMING.md), [WAVE_0_PLAN.md](WAVE_0_PLAN.md)
 
 This spec defines the Wave 0 foundation in Angular terms: the CSS cascade contract, the three-tier token architecture, the unified CDK overlay/announcer base, the three Wave 0 primitives (`surface`, `layer`, `row`), the event and L0-L3 layering rules, the package shape (D9), the intentional visible changes, and the prototype gate criteria.
@@ -63,8 +63,8 @@ Closed union types for visual axes (`visual-role`, `tone`, `density`, `emphasis`
 - **Runtime variable mapping**: primitives bind runtime private variables on their host (`--_mj-tone-text: var(--mj-tone-<name>-text, ...)`, `--_mj-visual-role-bg: var(--mj-visual-role-<name>-bg, ...)`) so a brand adds a custom tone or visual role purely by declaring `--mj-tone-<name>-*` or `--mj-visual-role-<name>-*` tokens in `:root` without writing CSS selectors against primitive internals. Shipped tones `success`, `warning`, `error`, and `info` default to `--mj-status-<name>-*`.
 
 ### 2.3 PascalCase Angular inputs vs. kebab-case Custom Element attributes
-MemberJunction's Angular convention uses PascalCase inputs in both TypeScript and Angular templates (`[Density]="'sm'"`, `[AllowPhoneSheet]="true"`), while HTML parsers lowercase Custom Element attributes (`density="sm"`, `allow-phone-sheet="true"`). Note that Angular's `input(..., { alias: 'density' })` would replace the Angular template binding name and create two dialects across MJ components, so `alias` is **not** used.
-- **Rule**: New L1 primitives adopt signal `input()` / `output()` properties (`Density`, `Interactive`, `AllowPhoneSheet`) as a deliberate convention so Angular templates keep `[Density]` everywhere. In the Angular Elements registrar (`defineElement`), `reflectComponentType(component)` derives kebab-case attribute names (`AllowPhoneSheet` -> `allow-phone-sheet`) and extends `ctor.observedAttributes` and `ctor.prototype.attributeChangedCallback` / `connectedCallback` automatically.
+MemberJunction's Angular convention uses PascalCase inputs in both TypeScript and Angular templates (`[Density]="'sm'"`, `[PhonePresentation]="'anchored'"`), while HTML parsers lowercase Custom Element attributes (`density="sm"`, `phone-presentation="anchored"`). Note that Angular's `input(..., { alias: 'density' })` would replace the Angular template binding name and create two dialects across MJ components, so `alias` is **not** used.
+- **Rule**: New L1 primitives adopt signal `input()` / `output()` properties (`Density`, `Interactive`, `PhonePresentation`) as a deliberate convention so Angular templates keep `[Density]` everywhere. In the Angular Elements registrar (`defineElement`), `reflectComponentType(component)` derives kebab-case attribute names (`PhonePresentation` -> `phone-presentation`) and extends `ctor.observedAttributes` and `ctor.prototype.attributeChangedCallback` / `connectedCallback` automatically.
 - **Why**: Zero dialect split in Angular templates, zero `MutationObserver`, and native Custom Element attribute reactivity. Primitives are zoneless-compatible (`provideZonelessChangeDetection()`); the Wave 0 prototype Element bundle runs without `zone.js`, while `ng-realtime-widget` migrates off its `zone.js` entry and `@layer mj-realtime-widget-defaults` in Phase 2.
 
 ---
@@ -176,7 +176,7 @@ A single CDK-backed service pair replaces the four separate overlay implementati
 - **Focus trap, popover/menu entry, & restore**: Uses `ConfigurableFocusTrapFactory` (`@angular/cdk/a11y`) on modal/sheet/panel layers, moves initial focus into both modal and non-modal `popover`/`menu` portals (since CDK portals render at the end of `document.body` outside natural DOM Tab order), synchronizes `aria-expanded` on anchor triggers, provides Arrow/Home/End roving focus on `Kind="menu"`, and restores focus to the trigger element on close.
 - **Angular Elements portal safety (`DomPortal`)**: Uses CDK `DomPortal` backed by a hidden staging wrapper (`.mj-layer-staging`) rather than `TemplatePortal` when hosting custom elements so nested Angular Elements are not destroyed by `@angular/elements`'s disconnect timer while closed.
 - **Ref-counted scroll lock**: Replaces direct `document.body.style.overflow = 'hidden'` mutations with a ref-counted lock (or CDK `BlockScrollStrategy`) so closing a nested modal never unlocks scroll while a parent sheet is still open.
-- **Responsive collapse**: A `layer` configured as `Kind="dialog"` automatically renders as a bottom sheet on phone viewports (`@media` / `PhoneViewport` breakpoint) unless `AllowPhoneSheet="false"`.
+- **Phone presentation**: On phone viewports the service presents each layer as a bottom sheet, full screen, or anchored, per its `PhonePresentation` (Section 6.2.1). Dialogs, menus and popovers default to a sheet, side sheets fill an upright phone, and tooltips stay anchored.
 
 ### 5.2 `MJAnnouncerService` (on `@angular/cdk/a11y` `LiveAnnouncer`)
 - Wraps `LiveAnnouncer` with polite (`polite`) and assertive (`assertive`) channels, deduplicating rapid identical announcements and cleaning up on destroy.
@@ -209,12 +209,42 @@ The structural primitive rendered inside `MJLayerService` (or declaratively) for
 - **Inputs**:
   - `Kind: 'dialog' | 'sheet' | 'popover' | 'menu' | 'tooltip' | 'toast' | string = 'dialog'`
   - `Placement: 'center' | 'start' | 'end' | 'bottom' | 'top' | string = 'center'`
-  - `Modal: boolean | undefined = undefined` (defaults by `Kind`: `true` for `'dialog'` and `'sheet'`, `false` for `'popover'`, `'menu'`, `'tooltip'`, and `'toast'`; explicit boolean overrides)
+  - `Modal: boolean | undefined = undefined` (defaults by `Kind`: `true` for `'dialog'` and `'sheet'`, `false` for `'popover'`, `'menu'`, `'tooltip'`, and `'toast'`, except that a layer presented as a sheet or full screen on a phone defaults to `true` (Section 6.2.1); explicit boolean overrides)
   - `Closeable: boolean = true`
   - `Size: 'sm' | 'md' | 'lg' | 'full' | string = 'md'`
+  - `PhonePresentation: 'sheet' | 'full-screen' | 'anchored' | undefined = undefined` (defaults by `Kind`, Section 6.2.1; explicit value overrides). Replaces the earlier `AllowPhoneSheet` boolean, which applied to dialogs only and could not express full screen.
 - **Named parts**: `mjLayerHeader`, `mjLayerTitle` (attribute directive on consumer's `<h2>`/`<h3>`), `mjLayerBody`, `mjLayerFooter` (affirmative button on the left, decline on the right per `packages/Angular/CLAUDE.md`).
-- **Exposed tokens**: `--mj-layer-bg` (`--mj-surface-overlay-bg`), `--mj-layer-radius` (`--mj-radius-overlay`), `--mj-layer-shadow`, `--mj-layer-padding`, `--mj-layer-max-width`, `--mj-layer-backdrop-bg` (`--mj-bg-overlay`).
+- **Exposed tokens**: `--mj-layer-bg` (`--mj-surface-overlay-bg`), `--mj-layer-radius` (`--mj-radius-overlay`), `--mj-layer-shadow`, `--mj-layer-padding`, `--mj-layer-max-width`, `--mj-layer-sheet-max-width` (unset: full width on a phone held upright, 640px on a phone held sideways; Section 6.2.1), `--mj-layer-backdrop-bg` (`--mj-bg-overlay`).
 - **Accessibility**: `role="dialog"` + `aria-modal="true"` + `aria-labelledby` wired to `mjLayerTitle` when modal; non-modal `role="dialog"` / `role="menu"` / `role="tooltip"` for anchored kinds; `role="status"` / `role="alert"` for `toast`; Escape + focus trap (when modal) + focus return guaranteed by `MJLayerService`.
+
+#### 6.2.1 Phone presentation
+
+On phones, anything people choose from or fill in opens as a bottom sheet. Anything read at a glance, or tied to a field being typed into, stays anchored.
+
+- **One breakpoint, two shapes.** "Phone" is the `PhoneViewport` media query: a narrow screen (`max-width: 640px`, a phone held upright) or a short touch screen (`max-height: 480px` and `pointer: coarse`, a phone held sideways). The touch pointer keeps a short desktop window used with a mouse out of phone mode. `MJLayerService` checks the query when a layer opens and marks the overlay pane (`mj-layer-pane-phone-sheet` or `mj-layer-pane-phone-full-screen`, plus `mj-layer-pane-phone-short` when held sideways), and the stylesheet styles only those marks, so CSS and behavior never disagree.
+- **Defaults by `Kind`.** An explicit `PhonePresentation` overrides the default.
+
+| `Kind` | On phones | Why |
+| --- | --- | --- |
+| `dialog` | `sheet` | Thumb reach: the bottom of the screen is where one hand reaches. Heavy configuration sets `full-screen`. |
+| `sheet` | bottom: `sheet`; side: `full-screen` upright | A bottom sheet already is one. A side sheet at 92% width leaves a strip of page beside it, which reads as a gap rather than as context, so on a phone held upright it fills the screen and still slides in from its side. Held sideways, the side panel fits beside the page and stays as it is on desktop. |
+| `menu` | `sheet` | Menus open from triggers in headers and toolbars, the hardest place to reach one-handed. Full-width rows are bigger targets than a narrow menu's. |
+| `popover` | `sheet` | Covers pickers and option lists: the dropdown list, filter popover, datepicker and icon picker. At phone width an anchored panel near an edge gets flipped or squeezed; a sheet always has the full width. |
+| `tooltip` | `anchored` | Read at a glance and tied to the element it describes. |
+| `toast` | not affected | Toasts have their own placement and are never anchored or presented as a sheet. |
+
+- **`anchored` is for content tied to a field being typed into.** Combobox and autocomplete suggestion lists set `PhonePresentation="anchored"`. The on-screen keyboard covers roughly the bottom 40% of a phone screen, so a sheet would open behind it or pull the suggestions away from the text they match.
+- **`full-screen` is for content that needs the whole screen**: side sheets on an upright phone, heavy configuration, long forms, and search-first pickers such as the foreign-key search grid. It is the "or full screen" half of the unified plan's dialog rule. A full-screen layer covers its backdrop and phones have no Escape key, so it must show a visible close or back control.
+- **Tooltips on touch.** Phones have no hover, so a tooltip opens on tap or focus, and nothing people need to finish a task lives only in a tooltip.
+
+When a kind that is anchored on desktop is presented as a sheet or full screen on a phone:
+
+- **It becomes modal.** `Modal` defaults to `true`: backdrop (`--mj-layer-backdrop-bg`), focus trap, ref-counted scroll lock, and dismissal by backdrop tap or Escape. An explicit `Modal` still overrides.
+- **Roles hold.** The container is `role="dialog"` with `aria-modal="true"`, named by the layer's `Label`, its title, or the trigger's accessible name. For a menu the overlay pane is that container, so the list inside it keeps `role="menu"` and its Arrow/Home/End roving focus. Choosing an item closes the sheet, as it closes the anchored menu, and focus returns to the trigger.
+- **It shows a title.** Anchored, a menu is identified by sitting next to its trigger. A sheet at the bottom of the screen loses that link, so it shows `mjLayerTitle`. When the consumer gives none, the layer shows its `Label`, or else the trigger's accessible name.
+- **It fits the screen.** The sheet sizes to its content up to a maximum that leaves the top of the page visible, its body scrolls inside, and its bottom padding includes `env(safe-area-inset-bottom)` so the last row clears the iPhone home indicator.
+- **Width.** On a phone held upright the sheet spans the full width, as platform sheets do: every row gets the whole screen as its target, and touching both side edges says the sheet came from the screen, not from the trigger. Held sideways, a full-width sheet would be a banner, so it caps at 640px (Material's bottom sheet maximum) and centers. `--mj-layer-sheet-max-width` overrides both, so a brand that wants inset, floating sheets sets one value. It applies to any layer presented as a sheet on a phone, not to `Kind="sheet"` side sheets on desktop.
+- **Not in Wave 0:** swipe-down to dismiss and drag handles. Backdrop tap and Escape cover dismissal.
 
 ### 6.3 `mj-row`
 A horizontal flex/grid item primitive for list items, nav rows, menu items, picker options, and toolbar rows.
@@ -285,6 +315,7 @@ These changes are intentional and must be called out in PR descriptions and veri
 | Inputs & dropdowns height (desktop) | 38px | 40px (`--mj-control-height-md`; 44px on `pointer: coarse`) | Tokens: Colin (WS6b, Phase 0). Adoption: Matt (Wave 2 `input`/`dropdown` PRs). |
 | View toggle height (desktop) | 28px | 32px (`--mj-control-height-sm`; 44px on `pointer: coarse`) | Tokens: Colin (WS6b, Phase 0). Adoption: Matt (Wave 1 `view-toggle` PR). |
 | Dark-theme overlays (`dialog`, `sheet`, `slide-panel`, `window`) | Base surface (`neutral-800`) | One step lighter (`elevated` / `neutral-700`) via `--mj-surface-overlay-bg` | Tokens: Colin (WS6b, Phase 0). Adoption: Matt (Wave 2 `layer` conversions). |
+| Menus, popovers and pickers on phones (`menu`, `popover`, dropdown list, filter popover, datepicker, icon picker) | Anchored under the trigger | Bottom sheet (`PhonePresentation="sheet"`, Section 6.2.1) | Matt (Wave 2 `popover` and `menu` PRs; each picker as it converts). |
 
 ---
 
@@ -297,7 +328,7 @@ The Wave 0 prototype builds `mj-surface`, `mj-layer`, and `mj-row` in a private,
 3. **Host wins**: A single unlayered host CSS rule overrides a primitive style with **no `!important`**.
 4. **Hostile host & strict CSP**: Primitives survive the test page's hostile host CSS, strict CSP mode (no `unsafe-eval`, no inline style violations), and render fonts and icons cleanly.
 5. **Open axes**: A custom `VisualRole` (`--mj-visual-role-<name>-*`) and a custom `Tone` (`--mj-tone-<name>-*`) not shipped in the library's defaults both render and fall back cleanly.
-6. **Layer mechanics**: `dialog`, `sheet`, and `popover` run on `MJLayerService`; keyboard Tab trap, Escape dismiss, ref-counted scroll lock, and focus return all pass, and `dialog` collapses to `sheet` on phone width.
+6. **Layer mechanics**: `dialog`, `sheet`, and `popover` run on `MJLayerService`; keyboard Tab trap, Escape dismiss, ref-counted scroll lock, and focus return all pass. At phone width `dialog`, `menu` and `popover` present as sheets, a layer set to `PhonePresentation="anchored"` stays anchored, and a menu presented as a sheet keeps `role="menu"` with Arrow-key focus and returns focus to its trigger on close. A side sheet fills an upright phone with no gap. On a phone held sideways a sheet caps at 640px and centers, a side sheet keeps its side panel, and a short desktop window used with a mouse stays in desktop mode.
 7. **Accessibility**: `@axe-core/playwright` (`e2e/ui-primitives/`) and `ExpectNoAxeViolations` (`@memberjunction/ng-test-utils` in co-located Vitest DOM specs) pass with zero violations; focus rings are visible in all three looks; interactive touch targets measure at least 44px at phone width (`pointer: coarse`).
 
 **Step 7 Exit Check (Explorer layer migration)**: After the Step 6 Prototype Gate passes, Step 7 declares `@layer reset, foundation, primitives;` in `@memberjunction/ng-shared-generic` and wraps `_typography.scss` and `_common.scss` in `@layer reset`, deleting or wrapping the alternate `styles/main.scss` entry per Section 4.3. Step 7 passes only when `e2e/specs/ui-foundation-baseline.spec.ts` (`PW_VISUAL_BASELINE=1`, reusing `e2e/fixtures.ts`'s authenticated MSAL profile) shows **zero unexpected visual diffs** against the Step 4 baseline screenshots.
