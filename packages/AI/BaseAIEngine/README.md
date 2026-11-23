@@ -251,6 +251,24 @@ Use the availability set for the user-requested path (`/skill` mentions → `Exe
 
 Bundle membership is resolved by ID via `GetSkillActionIDs(skillID)` / `GetSkillSubAgentIDs(skillID)`; skill permission rows are cached on `SkillPermissions` and evaluated by `AISkillPermissionHelper` (open-by-default). Full architecture: [Agent Skills & Plan Mode Guide](../../../guides/AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md).
 
+## Multi-Level Prototype Inheritance & 2×2 RBAC
+
+`AIEngineBase` resolves multi-level `AIAgent.BaseAgentID` prototype chains (max depth 5, cycle-safe) live from cache without cloning agent metadata, and enforces the 2×2 RBAC model with fail-closed Ancestor `CanRun` verification.
+
+| API Method / Helper | Responsibility |
+| --- | --- |
+| `GetAgentInheritanceChain(agentId)` / `GetRootAgent(agentId)` | Walks `BaseAgentID` safely up to `MAX_AGENT_INHERITANCE_DEPTH` (5), returning `[root, ..., parent, leaf]`. |
+| `ResolveEffectiveAgentProperties(agent)` | Nearest non-null descendant scalar inheritance + monotonic narrowing (`Isolation`, `AcceptsSkills`, `SkillActivationMode`, run limits) + root → leaf deep-merged `TypeConfiguration` & `AgentTypePromptParams`. |
+| `GetEffectiveAgentPrompts(agentId, status?)` | Returns leaf active prompts when defined, otherwise inherits from the nearest prompt-owning ancestor. |
+| `GetEffectiveAgentActions(agentId)` | Unions `AIAgentAction` rows root → leaf by `ActionID`; descendant non-`Active` rows (`Revoked`/`Pending`) veto inherited actions. |
+| `GetStackedAdditionalInstructions(agentId)` | Collects non-empty `AdditionalInstructions` root → leaf so org/dept rules precede personal preferences. |
+| `GetSubAgents`, `GetSkillsForAgent`, `GetAutoActivatableSkillsForAgent`, `GetAgentConfigurationPresets`, `GetClientToolsForAgent`, `GetAgentModalities`, `ResolveAgentPersona` | Walk the `BaseAgentID` chain so Open App skills, sub-agents, presets, tools, modalities, and personas flow down live to derived instances. |
+| `AIAgentPermissionHelper.ComputeEffectivePermissionsSync` | Evaluates 2×2 RBAC (`BaseAgentID == null` + 0 ACL = public; `BaseAgentID != null` + 0 ACL = private to `OwnerUserID`) plus fail-closed Ancestor `CanRun` invariant. |
+| `GetInstantiableAgents(user)` / `GetUserDerivedAgents(user)` | Lists templates with `InstantiationMode !== 'None'` and the user's personal/shared derived instances (`Required` templates are excluded from `GetUserRunnableAgentDirectory`). |
+| `ResolveAgentForUser(nameOrId, user)` / `ResolvePrimaryUserAgentInstance(baseAgentId, userId)` | Collision-free name lookup (user-owned → shared derived → root catalog) and primary active instance resolution per `(OwnerUserID, RootBaseAgentID)`. |
+
+Full architecture & diagrams: [Agent Permissions & Inheritance Guide](../../../guides/AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md).
+
 ## Dependencies
 
 - `@memberjunction/core` -- BaseEngine, Metadata, RunView

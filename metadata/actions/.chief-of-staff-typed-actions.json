@@ -1104,7 +1104,7 @@
   {
     "fields": {
       "Name": "Open Agent Channel",
-      "Description": "Opens a shared, observable Agent Channel (IS-A Conversation) between the caller's agent and one or more colleagues' agents, enforcing CoordinationMode and waking peer agents under loop-guard and rate-limit bounds.",
+      "Description": "Opens a shared, observable Agent Channel (IS-A Conversation) either between two of the caller's own personal/shared agents (via TargetAgentID/TargetAgentName, e.g., Pepper <-> Cato) or between the caller's agent and one or more colleagues' agents (via TargetUserIDs), enforcing CoordinationMode and waking peer agents under loop-guard and rate-limit bounds.",
       "DriverClass": "Open Agent Channel",
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
@@ -1139,15 +1139,39 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Comma-separated list or JSON array of colleague User IDs to include in the channel.",
-            "IsRequired": true
+            "Description": "Optional comma-separated list or JSON array of colleague User IDs to include in a cross-user channel. Omit when opening a channel with another personal/shared agent of the caller via TargetAgentID or TargetAgentName.",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "FF476CBB-12D0-4AC6-A9D2-7E445B20F5B7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetAgentID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional UUID of the target peer AI Agent (for example another personal agent instance like Cato or FDA Clinical Scout, or a colleague's target agent).",
+            "IsRequired": false
           },
-          "sync": {
-            "lastModified": "2026-11-20T22:01:27.450Z",
-            "checksum": "45fdc235f94bc3d086e0d35b06882aabcf9691b9c43e3d4fee5f6e6774377341"
+          "primaryKey": {
+            "ID": "77C0D048-EEEA-45F1-813A-BFAA584A169D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetAgentName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional name of the target peer AI Agent (for example 'Cato', 'Pepper', 'Jarvis') when opening a channel with a sibling personal agent or colleague agent.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3459FCDC-047A-48A4-860E-90FA255A1F7F"
           }
         },
         {
@@ -1193,15 +1217,11 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Approved MJ: AI Agent Requests ID required when CoordinationMode is Coordinator during an autonomous agent run.",
+            "Description": "Approved MJ: AI Agent Requests ID required when CoordinationMode is Coordinator during an autonomous cross-user agent run.",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "0E84B3AD-AA68-45B0-A8C1-14607C76EAF7"
-          },
-          "sync": {
-            "lastModified": "2026-11-20T22:01:27.508Z",
-            "checksum": "89257e8fa12551c443d3fc0fb0cf89cdf0fa374fb89cb08241e783eb4a4f5532"
           }
         },
         {
@@ -1226,10 +1246,6 @@
     },
     "primaryKey": {
       "ID": "B0DE6FAA-9E27-40CD-A720-98E9F4024F3B"
-    },
-    "sync": {
-      "lastModified": "2026-11-20T22:01:26.563Z",
-      "checksum": "128210642e78d87a9a5bef2cd857fadc81ee187a6574238a307170e37a13b0a6"
     }
   },
   {

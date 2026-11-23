@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentEntity, MJAIAgentTypeEntity, MJAIAgentUserPolicyEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentConfigurationEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, MJAIPromptRunEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
+import { MJAIAgentEntity, MJAIAgentPromptEntity, MJAIAgentActionEntity, MJAIAgentTypeEntity, MJAIAgentUserPolicyEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentConfigurationEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, MJAIPromptRunEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
 import { BuildActionToolSet, CoerceActionArguments, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
 import { DescribeValueSchemaInline, GetStoredValueSchema } from './native-tools/action-param-schema';
 import { ApplyBoundActionParams, BindingsForAction, BoundParamsApplication, IsBoundParamName, UnboundParams } from './bound-action-params';
@@ -110,6 +110,7 @@ import { ConversationToolManager, ConversationToolCall, ConversationToolExecutio
 import { FormatToolResultSection, FormatToolErrorSection, RenderToolResultData, ToolResultSectionParts, CarryForwardToolFamily, CarryForwardToolStepOutput, CarryForwardStepRecord, StoppedRunStepRecord } from './tool-result-format';
 import { PriorTurnToolResultCache } from './prior-turn-tool-result-cache';
 import { PromptComponentResolver, InjectScopedPromptParts, type PromptComponentScope } from './prompt-component-resolver';
+import { BuildAgentPersonaAndInstructionsBlock } from './agent-persona-prompt';
 import { ScopedPromptConfigResolver, ApplyScopedPromptConfig } from './scoped-prompt-config-resolver';
 import { AgentPreExecutionRAGResult } from './agent-pre-execution-rag';
 import {
@@ -860,9 +861,24 @@ export class BaseAgent {
     /** Resolves full 5-tier execution limits with provenance for the current run. */
     private resolveFullRunLimits(params?: ExecuteAgentParams): MJLimitsResolutionResult {
         const effectiveUserPolicy = params?.userPolicy ?? this._resolvedUserPolicy ?? null;
+        const agentChain =
+            params?.agent?.ID && typeof AIEngine.Instance?.GetAgentInheritanceChain === 'function'
+                ? AIEngine.Instance.GetAgentInheritanceChain(params.agent.ID)
+                : [];
+        const ancestorAgents = agentChain.length > 1 ? agentChain.slice(0, -1) : undefined;
+        const userId = params?.userId || params?.contextUser?.ID;
+        const ancestorUserPolicies =
+            ancestorAgents && userId
+                ? ancestorAgents
+                      .map((a) => AgentUserPolicyEngine.Instance.GetCachedPolicy(a.ID, userId, params?.provider))
+                      .filter((p): p is MJAIAgentUserPolicyEntity => p != null)
+                : undefined;
+
         return ResolveAgentRunLimits({
             Agent: params?.agent ?? null,
+            AncestorAgents: ancestorAgents,
             UserPolicy: effectiveUserPolicy,
+            AncestorUserPolicies: ancestorUserPolicies && ancestorUserPolicies.length > 0 ? ancestorUserPolicies : undefined,
             UserPolicyLimitsOverride: params?.userPolicyLimitsOverride ?? null,
             RunParams: params ? {
                 absoluteMaxIterations: params.absoluteMaxIterations,
@@ -875,7 +891,11 @@ export class BaseAgent {
             ContextUser: params?.contextUser ?? null,
             Provider: this.ProviderToUse,
             Options: {
-                EnforceUserPolicyAsCeiling: Boolean(effectiveUserPolicy || params?.userPolicyLimitsOverride),
+                EnforceUserPolicyAsCeiling: Boolean(
+                    effectiveUserPolicy ||
+                    params?.userPolicyLimitsOverride ||
+                    (ancestorUserPolicies && ancestorUserPolicies.length > 0)
+                ),
                 EnforceConfiguredCeilings: Boolean(params?.contextUser),
                 AllowAuthorizedCeilingOverride: Boolean(params?.contextUser),
             },
@@ -3124,6 +3144,19 @@ export class BaseAgent {
             return { status: 'ok', policy: null };
         }
         try {
+            const chainIds =
+                params.agent.BaseAgentID && typeof AIEngine.Instance?.GetAgentInheritanceChain === 'function'
+                    ? AIEngine.Instance.GetAgentInheritanceChain(params.agent.ID).map((a) => a.ID)
+                    : [params.agent.ID];
+            if (chainIds.length > 1) {
+                const effectivePolicy = await AgentUserPolicyEngine.Instance.GetEffectivePolicyForAgentChain(
+                    chainIds,
+                    userId,
+                    params.contextUser,
+                    { provider: params.provider ?? Metadata.Provider }
+                );
+                return { status: 'ok', policy: effectivePolicy };
+            }
             const lookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
                 params.agent.ID,
                 userId,
@@ -3595,10 +3628,11 @@ export class BaseAgent {
             // Resume (or summarize) a run the user stopped, now that nothing else is writing the list.
             this.applyStoppedRunContinuation(wrappedParams, stoppedRunContinuation, continuationMessage);
 
-            // Inject scope-resolved prompt parts (role-faithful) for this agent's prompt, alongside
-            // memory/RAG. Synchronous — parts are cached on AIEngine. Uses the same run scope.
+            // Inject scope-resolved prompt parts (role-faithful) and resolved Persona + stacked
+            // AdditionalInstructions (with Audience-Aware Tone Guardrail) for this agent.
             const messagesBeforeParts = new Set(wrappedParams.conversationMessages);
             this.InjectScopedPromptParts(params.agent, wrappedParams.conversationMessages, runScope.EntityID, runScope.RecordID, runScope.Secondary);
+            this.InjectAgentPersonaAndInstructions(params.agent, wrappedParams.conversationMessages, params.contextUser, this._resolvedUserPolicy);
             await this.replaceScopedPartPlaceholders(wrappedParams.conversationMessages, messagesBeforeParts, params.contextUser);
 
             // Restore open sub-agent consults from a resumed Chat run and splice the reminder immediately
@@ -6624,6 +6658,87 @@ export class BaseAgent {
      * messages it adds are replaced afterwards ({@link replaceScopedPartPlaceholders}), so an override
      * gets that too.
      */
+    /**
+     * Resolves active `AIAgentPrompt` rows for `agentId`, walking `BaseAgentID` prototype ancestors
+     * via `AIEngine.Instance.GetEffectiveAgentPrompts` (with safe fallback for partial test mocks).
+     */
+    protected getEffectiveAgentPrompts(agentId: string): MJAIAgentPromptEntity[] {
+        const engine = AIEngine.Instance;
+        if (typeof engine.GetEffectiveAgentPrompts === 'function') {
+            return engine.GetEffectiveAgentPrompts(agentId, 'Active');
+        }
+        return (engine.AgentPrompts ?? [])
+            .filter(ap => UUIDsEqual(ap.AgentID, agentId) && ap.Status === 'Active')
+            .sort((a, b) => (a.ExecutionOrder ?? 0) - (b.ExecutionOrder ?? 0));
+    }
+
+    /**
+     * Resolves active `AIAgentAction` rows for `agentId`, walking `BaseAgentID` prototype ancestors
+     * (with child veto semantics) via `AIEngine.Instance.GetEffectiveAgentActions` (with safe fallback).
+     */
+    protected getEffectiveAgentActions(agentId: string): MJAIAgentActionEntity[] {
+        const engine = AIEngine.Instance;
+        if (typeof engine.GetEffectiveAgentActions === 'function') {
+            return engine.GetEffectiveAgentActions(agentId);
+        }
+        return (engine.AgentActions ?? []).filter(
+            aa => UUIDsEqual(aa.AgentID, agentId) && aa.Status === 'Active'
+        );
+    }
+
+    /**
+     * Injects resolved Persona style (`Tone`, `SpeakingStyle`, `Persona.Description`, `StyleOverrideObject`),
+     * stacked `AdditionalInstructions` along the `BaseAgentID` chain, and the Audience-Aware Tone
+     * Guardrail as a system message so text chat personality unifies seamlessly with Realtime voice.
+     */
+    protected InjectAgentPersonaAndInstructions(
+        agent: MJAIAgentEntityExtended,
+        conversationMessages: ChatMessage[],
+        contextUser?: UserInfo,
+        userPolicy?: MJAIAgentUserPolicyEntity | null
+    ): void {
+        try {
+            const engine = AIEngine.Instance;
+            const persona =
+                typeof engine.ResolveAgentPersona === 'function'
+                    ? engine.ResolveAgentPersona(agent.ID, {
+                          preferredPersonaId: userPolicy?.PreferredPersonaID ?? null,
+                      })
+                    : null;
+            const stackedInstructions =
+                typeof engine.GetStackedAdditionalInstructions === 'function'
+                    ? engine.GetStackedAdditionalInstructions(agent.ID)
+                    : agent.AdditionalInstructions?.trim()
+                      ? [
+                            {
+                                AgentID: agent.ID,
+                                AgentName: agent.Name ?? agent.ID,
+                                IsRootOrTemplate: !agent.BaseAgentID || agent.InstantiationMode !== 'None',
+                                Instructions: agent.AdditionalInstructions.trim(),
+                            },
+                        ]
+                      : [];
+            const effectiveAgentName =
+                agent.BaseAgentID
+                    ? agent.Name || userPolicy?.DisplayNameOverride?.trim() || 'Assistant'
+                    : userPolicy?.DisplayNameOverride?.trim() || agent.Name || 'Assistant';
+            const block = BuildAgentPersonaAndInstructionsBlock({
+                AgentName: effectiveAgentName,
+                OwnerUserName: contextUser?.Name ?? null,
+                Persona: persona,
+                StackedInstructions: stackedInstructions,
+            });
+            if (block) {
+                conversationMessages.unshift({
+                    role: 'system',
+                    content: block,
+                });
+            }
+        } catch (e) {
+            this.logError(e instanceof Error ? e : new Error(String(e)), { category: 'AgentPersonaInjection' });
+        }
+    }
+
     protected InjectScopedPromptParts(
         agent: MJAIAgentEntityExtended,
         conversationMessages: ChatMessage[],
@@ -6632,9 +6747,7 @@ export class BaseAgent {
         secondaryScopes?: Record<string, SecondaryScopeValue>
     ): void {
         try {
-            const prompts = AIEngine.Instance.AgentPrompts
-                .filter(ap => UUIDsEqual(ap.AgentID, agent.ID) && ap.Status === 'Active')
-                .sort((a, b) => (a.ExecutionOrder ?? 0) - (b.ExecutionOrder ?? 0));
+            const prompts = this.getEffectiveAgentPrompts(agent.ID);
             if (prompts.length === 0) return;
 
             // Obtain the (possibly downstream-overridden) resolver via the class factory, so any
@@ -7389,20 +7502,27 @@ export class BaseAgent {
     protected async loadAgentConfiguration(agent: MJAIAgentEntityExtended): Promise<AgentConfiguration> {
         const engine = AIEngine.Instance;
 
+        const effectiveProps =
+            typeof engine.ResolveEffectiveAgentProperties === 'function'
+                ? engine.ResolveEffectiveAgentProperties(agent)
+                : null;
+        const effectiveDriverClass = effectiveProps?.DriverClass ?? agent.DriverClass;
+        const effectiveTypeId = effectiveProps?.TypeID ?? agent.TypeID;
+
         // first check to see if we have a custom driver class if we do, we do NOT validate the rest of
         // the metadata as the custom sub-class can do whatever it wants with/without prompts/etc.
         let metadataOptional: boolean = false;
-        if (agent.DriverClass) {
-            this.logStatus(`🔧 Using custom driver class '${agent.DriverClass}' for agent '${agent.Name}'`, true);   
+        if (effectiveDriverClass) {
+            this.logStatus(`🔧 Using custom driver class '${effectiveDriverClass}' for agent '${agent.Name}'`, true);   
             metadataOptional = true;
         }
 
         // Find the agent type
-        const agentType = engine.AgentTypes.find(at => UUIDsEqual(at.ID, agent.TypeID));
+        const agentType = engine.AgentTypes.find(at => UUIDsEqual(at.ID, effectiveTypeId));
         if (!agentType && !metadataOptional) {
             return {
                 success: false,
-                errorMessage: `Agent type not found for ID: ${agent.TypeID}`
+                errorMessage: `Agent type not found for ID: ${effectiveTypeId}`
             };
         }
 
@@ -7417,10 +7537,8 @@ export class BaseAgent {
             metadataOptional = true; // If no system prompt, we can skip some validations
         }
 
-        // Find the first active agent prompt (optional for agent types that don't require them)
-        const agentPrompt = engine.AgentPrompts
-            .filter(ap => UUIDsEqual(ap.AgentID, agent.ID) && ap.Status === 'Active')
-            .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder)[0];
+        // Find the first active agent prompt (walking BaseAgentID inheritance chain when derived)
+        const agentPrompt = this.getEffectiveAgentPrompts(agent.ID)[0];
 
         if (!agentPrompt && !metadataOptional && requiresAgentLevelPrompts) {
             return {
@@ -7748,7 +7866,7 @@ export class BaseAgent {
         // envelope step, so a hidden action or sub-agent left undeclared could not be called at all.
         const actions = FilterDeclarableActions(
             this.getEffectiveActionsForValidation(params.agent.ID),
-            AIEngine.Instance.AgentActions.filter((aa) => UUIDsEqual(aa.AgentID, params.agent.ID))
+            this.getEffectiveAgentActions(params.agent.ID)
         );
         const subAgents = this.getEffectiveSubAgentsForValidation(params.agent.ID);
         const agentTools = this.GetAgentTools(params);
@@ -8383,8 +8501,12 @@ export class BaseAgent {
             }
         }
 
-        // Handle model selection mode
-        if (params.agent.ModelSelectionMode === 'Agent') {
+        // Handle model selection mode (respecting BaseAgentID prototype inheritance)
+        const effectiveModelSelectionMode =
+            typeof AIEngine.Instance.ResolveEffectiveAgentProperties === 'function'
+                ? AIEngine.Instance.ResolveEffectiveAgentProperties(params.agent).ModelSelectionMode
+                : params.agent.ModelSelectionMode;
+        if (effectiveModelSelectionMode === 'Agent') {
             // Use the child prompt (agent's specific prompt) for model selection
             promptParams.modelSelectionPrompt = childPrompt;
             this.logStatus(`🎯 Agent '${params.agent.Name}' configured to use its own prompt for model selection`, true, params);
@@ -9617,10 +9739,8 @@ export class BaseAgent {
         // Falls back to database-configured actions only when the list was never computed for this run
         const effectiveActions = this.getEffectiveActionsForValidation(params.agent.ID);
 
-        // Also get the database-configured agent actions for MaxExecutionsPerRun lookup
-        const dbAgentActions = AIEngine.Instance.AgentActions.filter(
-            aa => UUIDsEqual(aa.AgentID, params.agent.ID) && aa.Status === 'Active'
-        );
+        // Also get the database-configured agent actions (including inherited BaseAgentID actions) for MaxExecutionsPerRun lookup
+        const dbAgentActions = this.getEffectiveAgentActions(params.agent.ID);
 
         const resolvedByAction = new Map<AgentAction, MJActionEntityExtended>();
         const missingActions = nextStep.actions?.filter(action => {
@@ -9730,10 +9850,8 @@ export class BaseAgent {
             return this._effectiveActions;
         }
 
-        // Fallback: compute from database configuration
-        const agentActions = AIEngine.Instance.AgentActions.filter(
-            aa => UUIDsEqual(aa.AgentID, agentId) && aa.Status === 'Active'
-        );
+        // Fallback: compute from database configuration (walking BaseAgentID inheritance chain)
+        const agentActions = this.getEffectiveAgentActions(agentId);
         return ActionEngineServer.Instance.Actions.filter(a =>
             agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID)) && a.Status === 'Active'
         );
@@ -14404,9 +14522,13 @@ The context is now within limits. Please retry your request with the recovered c
 
             // Agent type prompt params: reuse cached base merge unless a runtime override is present.
             const runtimePromptParamOverrides = extraData?.__agentTypePromptParams as Record<string, unknown> | undefined;
+            const effectiveProps = typeof engine.ResolveEffectiveAgentProperties === 'function'
+                ? engine.ResolveEffectiveAgentProperties(agent)
+                : null;
             let agentTypePromptParams: Record<string, unknown>;
             if (runtimePromptParamOverrides) {
-                const agentType = engine.AgentTypes.find(at => UUIDsEqual(at.ID, agent.TypeID));
+                const effectiveTypeID = effectiveProps?.TypeID ?? agent.TypeID;
+                const agentType = engine.AgentTypes.find(at => UUIDsEqual(at.ID, effectiveTypeID));
                 agentTypePromptParams = this.buildAgentTypePromptParams(agentType, agent, runtimePromptParamOverrides);
             } else {
                 // Fast path: shallow-clone the cached base params before handing them out. The cached
@@ -14476,9 +14598,27 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
 
+            const inheritanceChain = typeof engine.GetAgentInheritanceChain === 'function'
+                ? engine.GetAgentInheritanceChain(agent.ID)
+                : [agent];
             const cachedUserPolicy = _contextUser?.ID
-                ? AgentUserPolicyEngine.Instance.GetCachedPolicy(agent.ID, _contextUser.ID)
+                ? (agent.BaseAgentID && inheritanceChain.length > 1
+                    ? AgentUserPolicyEngine.Instance.GetCachedEffectivePolicyForAgentChain(
+                          inheritanceChain.map(a => a.ID),
+                          _contextUser.ID
+                      )
+                    : AgentUserPolicyEngine.Instance.GetCachedPolicy(agent.ID, _contextUser.ID))
                 : null;
+
+            const agentIsDerivedInstance = Boolean(agent.BaseAgentID);
+            const baseAgentEntity = agent.BaseAgentID
+                ? engine.Agents.find(a => UUIDsEqual(a.ID, agent.BaseAgentID))
+                : undefined;
+            const agentBaseAgentName = baseAgentEntity?.Name ?? '';
+            const effectiveAgentName = agentIsDerivedInstance
+                ? agent.Name
+                : (cachedUserPolicy?.DisplayNameOverride?.trim() || agent.Name);
+            const activeConversationId = this._executeParams?.conversationId ?? this._agentRun?.ConversationID ?? '';
 
             const runnableAgentDirectory =
                 typeof engine.GetUserRunnableAgentDirectory === 'function'
@@ -14497,8 +14637,8 @@ The context is now within limits. Please retry your request with the recovered c
             const availableAgentDetails = availableAgentLines.join('\n');
 
             const contextData: AgentContextData = {
-                agentName: cachedUserPolicy?.DisplayNameOverride?.trim() || agent.Name,
-                agentDescription: agent.Description,
+                agentName: effectiveAgentName,
+                agentDescription: agent.Description || baseAgentEntity?.Description || '',
                 parentAgentName: agent.Parent ? agent.Parent.trim() : "",
                 subAgentCount: subAgentCount,
                 subAgentDetails: subAgentDetails,
@@ -14522,6 +14662,14 @@ The context is now within limits. Please retry your request with the recovered c
             // is built separately with proper merge precedence (schema < agent < runtime)
             const result: AgentContextData & Record<string, unknown> = {
                 ...contextData,
+                ...(agentIsDerivedInstance
+                    ? {
+                          agentIsDerivedInstance: true,
+                          agentBaseAgentName,
+                          agentInstanceID: agent.ID,
+                      }
+                    : {}),
+                ...(activeConversationId ? { conversationId: activeConversationId } : {}),
                 __agentTypePromptParams: agentTypePromptParams,
                 ...(cachedUserPolicy
                     ? {
@@ -14652,12 +14800,17 @@ The context is now within limits. Please retry your request with the recovered c
         subAgents: MJAIAgentEntityExtended[],
         skills: MJAISkillEntity[]
     ): CatalogNarrowingCandidate[] {
-        const requiredActionIDs = AIEngine.Instance.AgentActions
-            .filter(aa => UUIDsEqual(aa.AgentID, agent.ID) && aa.Status === 'Active' && (aa.MinExecutionsPerRun ?? 0) > 0)
+        const requiredActionIDs = this.getEffectiveAgentActions(agent.ID)
+            .filter(aa => (aa.MinExecutionsPerRun ?? 0) > 0)
             .map(aa => aa.ActionID);
+        const chainIdSet = new UUIDSet(
+            typeof AIEngine.Instance.GetAgentInheritanceChain === 'function'
+                ? AIEngine.Instance.GetAgentInheritanceChain(agent.ID).map(a => a.ID)
+                : [agent.ID]
+        );
         const assignedSkillIDs = new UUIDSet(
             (AIEngine.Instance.AgentSkills ?? [])
-                .filter(as => UUIDsEqual(as.AgentID, agent.ID) && as.Status === 'Active')
+                .filter(as => chainIdSet.Has(as.AgentID) && as.Status === 'Active')
                 .map(as => as.SkillID)
         );
         const hasUnpinnedSkills = skills.some(s => !assignedSkillIDs.Has(s.ID));
@@ -14880,25 +15033,56 @@ The context is now within limits. Please retry your request with the recovered c
      * @protected
      */
     protected buildAgentBaseCatalog(agent: MJAIAgentEntityExtended, engine: AIEngine): AgentBaseCatalog {
-        // Resolve sub-agents: direct ParentID children + active relationships, de-duped, ordered.
+        // Resolve sub-agents (including those inherited through BaseAgentID): direct ParentID children +
+        // active relationships across the inheritance chain, leaf-first, de-duped, ordered.
         // Only Active agents are kept, so a Disabled relationship target never reaches the catalog.
-        const activeSubAgents = engine.Agents.filter(a => UUIDsEqual(a.ParentID, agent.ID) && a.Status === 'Active')
-            .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder);
-        const activeAgentRelationships = engine.AgentRelationships.filter(ar => UUIDsEqual(ar.AgentID, agent.ID) && ar.Status === 'Active');
+        const chainIDs = agent.BaseAgentID && typeof engine.GetAgentInheritanceChain === 'function'
+            ? engine.GetAgentInheritanceChain(agent.ID).map(a => a.ID)
+            : (agent.ID ? [agent.ID] : []);
+        const chainIdSet = new UUIDSet(chainIDs);
+        const childrenByParent = new Map<string, MJAIAgentEntityExtended[]>();
+        for (const a of (engine.Agents ?? [])) {
+            if (a.Status === 'Active' && a.ParentID && chainIdSet.Has(a.ParentID)) {
+                const key = a.ParentID.toLowerCase();
+                const list = childrenByParent.get(key) ?? [];
+                list.push(a);
+                childrenByParent.set(key, list);
+            }
+        }
+        const relsByAgent = new Map<string, MJAIAgentRelationshipEntity[]>();
+        for (const ar of (engine.AgentRelationships ?? [])) {
+            if (ar.Status === 'Active' && ar.AgentID && chainIdSet.Has(ar.AgentID)) {
+                const key = ar.AgentID.toLowerCase();
+                const list = relsByAgent.get(key) ?? [];
+                list.push(ar);
+                relsByAgent.set(key, list);
+            }
+        }
         const uniqueActiveSubAgentIDs = new Set<string>();
-        activeSubAgents.forEach(a => uniqueActiveSubAgentIDs.add(a.ID));
-        activeAgentRelationships.forEach(ar => uniqueActiveSubAgentIDs.add(ar.SubAgentID));
+        for (const cid of chainIDs) {
+            if (!cid) continue;
+            const key = cid.toLowerCase();
+            const activeSubAgents = (childrenByParent.get(key) ?? [])
+                .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder);
+            const activeAgentRelationships = relsByAgent.get(key) ?? [];
+            activeSubAgents.forEach(a => uniqueActiveSubAgentIDs.add(a.ID));
+            activeAgentRelationships.forEach(ar => uniqueActiveSubAgentIDs.add(ar.SubAgentID));
+        }
         const uniqueActiveSubAgents = Array.from(uniqueActiveSubAgentIDs)
             .map(id => engine.Agents.find(a => UUIDsEqual(a.ID, id)))
             .filter((a): a is MJAIAgentEntityExtended => !!a && a.Status === 'Active');
 
-        // Resolve actions from the agent's active AIAgentAction junctions.
-        const agentActions = engine.AgentActions.filter(aa => UUIDsEqual(aa.AgentID, agent.ID) && aa.Status === 'Active');
+        // Resolve actions from the agent's effective (including BaseAgentID-inherited) active AIAgentAction junctions.
+        const agentActions = this.getEffectiveAgentActions(agent.ID);
         const baseActionsRaw: MJActionEntityExtended[] = ActionEngineServer.Instance.Actions.filter(a => agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID)));
         const activeActions = baseActionsRaw.filter(a => a.Status === 'Active');
 
-        // Base agent-type prompt params (schema defaults + agent config; NO runtime overrides).
-        const agentType = engine.AgentTypes.find(at => UUIDsEqual(at.ID, agent.TypeID));
+        // Base agent-type prompt params (schema defaults + inherited/merged agent config; NO runtime overrides).
+        const effectiveProps = typeof engine.ResolveEffectiveAgentProperties === 'function'
+            ? engine.ResolveEffectiveAgentProperties(agent)
+            : null;
+        const effectiveTypeID = effectiveProps?.TypeID ?? agent.TypeID;
+        const agentType = engine.AgentTypes.find(at => UUIDsEqual(at.ID, effectiveTypeID));
         const baseAgentTypePromptParams = this.buildAgentTypePromptParams(agentType, agent, undefined);
 
         return {
@@ -15010,8 +15194,11 @@ The context is now within limits. Please retry your request with the recovered c
         const schemaJson = agentType?.PromptParamsSchema;
         const schemaDefaults = this.extractSchemaDefaults(schemaJson);
 
-        // 2. Parse agent-level config
-        const agentParamsJson = agent.AgentTypePromptParams;
+        // 2. Parse agent-level config (deep-merged across BaseAgentID inheritance chain when derived)
+        const effectiveProps = agent.BaseAgentID && typeof AIEngine.Instance.ResolveEffectiveAgentProperties === 'function'
+            ? AIEngine.Instance.ResolveEffectiveAgentProperties(agent)
+            : null;
+        const agentParamsJson = effectiveProps?.AgentTypePromptParams ?? agent.AgentTypePromptParams;
         let agentParams: Record<string, unknown> = {};
         if (agentParamsJson) {
             try {
@@ -15576,6 +15763,9 @@ The context is now within limits. Please retry your request with the recovered c
         if (params.agent?.Name) {
             actionContext.AgentName = params.agent.Name;
         }
+        if (params.conversationId && !actionContext.ConversationID) {
+            actionContext.ConversationID = params.conversationId;
+        }
         // The skills active in THIS run, as a fact the action can trust. An action that takes a
         // skill principal (Scoped Search's AISkillID) must not have to believe a parameter the model
         // authored: with this it can default the principal to the run's active skill and refuse a
@@ -15999,6 +16189,11 @@ The context is now within limits. Please retry your request with the recovered c
             }
         };
         add(params.agent?.ID);
+        if (params.agent?.BaseAgentID && typeof AIEngine.Instance.GetAgentInheritanceChain === 'function') {
+            for (const chainMember of AIEngine.Instance.GetAgentInheritanceChain(params.agent.ID)) {
+                add(chainMember.ID);
+            }
+        }
         for (const ceilingId of params.policyCeilingAgentIDs ?? []) {
             add(ceilingId);
         }
@@ -16103,10 +16298,26 @@ The context is now within limits. Please retry your request with the recovered c
         const engine = AIEngine.Instance;
         let messages: ChatMessage[] = [];
 
-        // Check for related sub-agent configuration (AIAgentRelationship)
-        const relationship = engine.AgentRelationships.find(
-            r => UUIDsEqual(r.AgentID, params.agent.ID) && UUIDsEqual(r.SubAgentID, subAgent.ID)
-        );
+        // Check for related sub-agent configuration (AIAgentRelationship), walking BaseAgentID chain leaf-first
+        const chainIDs = typeof engine.GetAgentInheritanceChain === 'function'
+            ? engine.GetAgentInheritanceChain(params.agent.ID).map(a => a.ID).reverse()
+            : [params.agent.ID];
+        const relByAgentId = new Map<string, MJAIAgentRelationshipEntity>();
+        for (const r of engine.AgentRelationships) {
+            if (UUIDsEqual(r.SubAgentID, subAgent.ID)) {
+                const key = r.AgentID.toLowerCase();
+                if (!relByAgentId.has(key)) {
+                    relByAgentId.set(key, r);
+                }
+            }
+        }
+        let relationship: MJAIAgentRelationshipEntity | undefined;
+        for (const cid of chainIDs) {
+            relationship = relByAgentId.get(cid.toLowerCase());
+            if (relationship) {
+                break;
+            }
+        }
 
         // Get MessageMode and MaxMessages from either relationship or child agent
         let messageMode = relationship?.MessageMode || subAgent.MessageMode || 'None';
@@ -16518,8 +16729,7 @@ The context is now within limits. Please retry your request with the recovered c
      */
     protected getAgentPromptParameters(agent: MJAIAgentEntityExtended): Array<MJTemplateParamEntity> {
         const engine = AIEngine.Instance;
-        const agentPrompt = engine.AgentPrompts
-            .filter(ap => UUIDsEqual(ap.AgentID, agent.ID) && ap.Status === 'Active')
+        const agentPrompt = this.getEffectiveAgentPrompts(agent.ID)
             .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder)[0];
 
         if (!agentPrompt) return [];
@@ -19797,8 +20007,12 @@ The context is now within limits. Please retry your request with the recovered c
         allowAnyActiveAgent: boolean = false
     ): { subAgentEntity: MJAIAgentEntityExtended; relationship?: MJAIAgentRelationshipEntity } | undefined {
         const normalized = name.trim().toLowerCase();
+        const chainIDs = typeof AIEngine.Instance.GetAgentInheritanceChain === 'function'
+            ? AIEngine.Instance.GetAgentInheritanceChain(params.agent.ID).map(a => a.ID).reverse()
+            : [params.agent.ID];
+        const chainIdSet = new UUIDSet(chainIDs);
         const activeChildAgents = AIEngine.Instance.Agents.filter(a =>
-            UUIDsEqual(a.ParentID, params.agent.ID) && a.Status === 'Active'
+            a.ParentID != null && chainIdSet.Has(a.ParentID) && a.Status === 'Active'
         );
         const childAgent =
             activeChildAgents.find(a => a.Name.trim().toLowerCase() === normalized)
@@ -19806,9 +20020,20 @@ The context is now within limits. Please retry your request with the recovered c
         if (childAgent) {
             return { subAgentEntity: childAgent };
         }
-        const activeRelationships = AIEngine.Instance.AgentRelationships.filter(ar =>
-            UUIDsEqual(ar.AgentID, params.agent.ID) && ar.Status === 'Active'
-        );
+        // Walk leaf-first across BaseAgentID inheritance chain so a closer relationship overrides an ancestor's.
+        const activeRelationships: MJAIAgentRelationshipEntity[] = [];
+        const seenSubAgentIds = new Set<string>();
+        for (const cid of chainIDs) {
+            for (const ar of AIEngine.Instance.AgentRelationships) {
+                if (UUIDsEqual(ar.AgentID, cid) && ar.Status === 'Active') {
+                    const key = ar.SubAgentID.toLowerCase();
+                    if (!seenSubAgentIds.has(key)) {
+                        seenSubAgentIds.add(key);
+                        activeRelationships.push(ar);
+                    }
+                }
+            }
+        }
         const relatedPairs: Array<{ agent: MJAIAgentEntityExtended; rel: MJAIAgentRelationshipEntity }> = [];
         for (const rel of activeRelationships) {
             const relatedAgent = AIEngine.Instance.Agents.find(a =>
@@ -21225,8 +21450,8 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
 
-            // Get the AIAgentAction metadata records for this agent (used for expiration settings)
-            const agentActions = AIEngine.Instance.AgentActions.filter(aa => UUIDsEqual(aa.AgentID, params.agent.ID));
+            // Get the effective AIAgentAction metadata records for this agent (including BaseAgentID-inherited ones)
+            const agentActions = this.getEffectiveAgentActions(params.agent.ID);
 
             // Use _effectiveActions which includes runtime action changes applied in gatherPromptTemplateData
             // getEffectiveActionsForValidation falls back to the configured actions only when none were computed;
@@ -22262,8 +22487,8 @@ The context is now within limits. Please retry your request with the recovered c
         if (this._skillInvocations.length === 0 || !actionId) {
             return undefined;
         }
-        const isNative = AIEngine.Instance.AgentActions.some(aa =>
-            UUIDsEqual(aa.AgentID, agent.ID) && UUIDsEqual(aa.ActionID, actionId) && aa.Status === 'Active'
+        const isNative = this.getEffectiveAgentActions(agent.ID).some(aa =>
+            UUIDsEqual(aa.ActionID, actionId)
         );
         if (isNative) {
             return undefined;
@@ -22287,9 +22512,14 @@ The context is now within limits. Please retry your request with the recovered c
         if (this._skillInvocations.length === 0 || !subAgent) {
             return undefined;
         }
-        const isParentChild = subAgent.ParentID != null && UUIDsEqual(subAgent.ParentID, agent.ID);
+        const chainIdSet = new UUIDSet(
+            typeof AIEngine.Instance.GetAgentInheritanceChain === 'function'
+                ? AIEngine.Instance.GetAgentInheritanceChain(agent.ID).map(a => a.ID)
+                : [agent.ID]
+        );
+        const isParentChild = subAgent.ParentID != null && chainIdSet.Has(subAgent.ParentID);
         const isReferenced = AIEngine.Instance.AgentRelationships.some(rel =>
-            UUIDsEqual(rel.AgentID, agent.ID) && UUIDsEqual(rel.SubAgentID, subAgent.ID) && rel.Status === 'Active'
+            chainIdSet.Has(rel.AgentID) && UUIDsEqual(rel.SubAgentID, subAgent.ID) && rel.Status === 'Active'
         );
         if (isParentChild || isReferenced) {
             return undefined;
@@ -22781,6 +23011,16 @@ The context is now within limits. Please retry your request with the recovered c
         }
         if (this.runAudienceAddsReader(params)) {
             this.logStatus('📋 No feedback request raised: the run has an audience, so it is answered in the conversation, not resumed', true, params);
+            return;
+        }
+        const isInteractiveConversation = Boolean(
+            params.conversationDetailId ||
+            this._agentRun?.ConversationDetailID ||
+            this._agentRun?.ConversationID
+        );
+        const hasStructuredGate = Boolean(decision.responseForm) || String(decision.step) === 'Plan';
+        if (isInteractiveConversation && !hasStructuredGate) {
+            this.logStatus('📋 No feedback request raised: interactive conversation Chat turn without structured responseForm or Plan gate', true, params);
             return;
         }
         await this.createFeedbackRequest(params, stepEntity, decision);
@@ -23795,11 +24035,9 @@ The context is now within limits. Please retry your request with the recovered c
             }
         }
 
-        // Look up the loop's action config for expiration settings
+        // Look up the loop's action config for expiration settings (including BaseAgentID-inherited ones)
         if (actionName) {
-            const agentActions = AIEngine.Instance.AgentActions.filter(
-                aa => UUIDsEqual(aa.AgentID, params.agent.ID)
-            );
+            const agentActions = this.getEffectiveAgentActions(params.agent.ID);
             const effectiveActions = this.getEffectiveActionsForValidation(params.agent.ID);
             const matchedAction =
                 effectiveActions.find(a => a.Name.trim().toLowerCase() === actionName.trim().toLowerCase())
@@ -24702,11 +24940,9 @@ The context is now within limits. Please retry your request with the recovered c
     protected async checkMinimumExecutionRequirements(agent: MJAIAgentEntityExtended, agentRun: MJAIAgentRunEntityExtended): Promise<string[]> {
         const violations: string[] = [];
 
-        // Check action minimum requirements from database-configured actions only.
+        // Check action minimum requirements from database-configured (including BaseAgentID-inherited) actions only.
         // Dynamically added actions do not have MinExecutionsPerRun requirements.
-        const agentActions = AIEngine.Instance.AgentActions.filter(aa =>
-            UUIDsEqual(aa.AgentID, agent.ID) &&
-            aa.Status === 'Active' &&
+        const agentActions = this.getEffectiveAgentActions(agent.ID).filter(aa =>
             aa.MinExecutionsPerRun != null &&
             aa.MinExecutionsPerRun > 0
         );

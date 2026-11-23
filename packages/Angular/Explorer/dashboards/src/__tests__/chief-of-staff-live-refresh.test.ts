@@ -22,6 +22,11 @@ describe('IsChiefOfStaffEntityChange', () => {
     expect(IsChiefOfStaffEntityChange(entityEvent('remote-invalidate', 'MJ: AI Agent Requests'))).toBe(true);
     expect(IsChiefOfStaffEntityChange(entityEvent('remote-invalidate', 'MJ: User Routines'))).toBe(true);
     expect(IsChiefOfStaffEntityChange(entityEvent('remote-invalidate', 'MJ: AI Agent User Policies'))).toBe(true);
+    expect(IsChiefOfStaffEntityChange(entityEvent('remote-invalidate', 'MJ: AI Agent Permissions'))).toBe(true);
+    expect(IsChiefOfStaffEntityChange(entityEvent('remote-invalidate', 'MJ: User Settings'))).toBe(true);
+    expect(IsChiefOfStaffEntityChange(entityEvent('remote-invalidate', 'MJ: Agent Channels'))).toBe(true);
+    expect(IsChiefOfStaffEntityChange(entityEvent('remote-invalidate', 'MJ: Agent Channel Participants'))).toBe(true);
+    expect(IsChiefOfStaffEntityChange(entityEvent('remote-invalidate', 'MJ: Conversation Details'))).toBe(true);
   });
 
   it('does not match an Open App entity: an app that adds a page reloads that page itself', () => {
@@ -31,11 +36,12 @@ describe('IsChiefOfStaffEntityChange', () => {
   it('matches a local save or delete of such an entity, whatever the name casing', () => {
     expect(IsChiefOfStaffEntityChange(entityEvent('save', 'mj: ai agent requests'))).toBe(true);
     expect(IsChiefOfStaffEntityChange(entityEvent('delete', 'MJ: User Routines'))).toBe(true);
+    expect(IsChiefOfStaffEntityChange(entityEvent('save', 'MJ: Conversation Details'))).toBe(true);
   });
 
   it('ignores entities the pages do not show', () => {
     expect(IsChiefOfStaffEntityChange(entityEvent('remote-invalidate', 'MJ: Users'))).toBe(false);
-    expect(IsChiefOfStaffEntityChange(entityEvent('save', 'MJ: Conversation Details'))).toBe(false);
+    expect(IsChiefOfStaffEntityChange(entityEvent('save', 'MJ: Applications'))).toBe(false);
   });
 
   it('ignores events that are not entity events', () => {

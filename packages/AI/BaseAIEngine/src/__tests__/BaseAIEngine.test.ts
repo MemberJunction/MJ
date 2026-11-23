@@ -112,27 +112,38 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
         IsActive = true; InheritTypeModalities = true; ModelVendors: unknown[] = [];
     },
     MJAIAgentEntityExtended: class {
-        ID = ''; Name = ''; Status = 'Active'; ParentID: string | null = null;
-        OwnerUserID = ''; Actions: unknown[] = []; Notes: unknown[] = [];
+        ID = ''; Name = ''; Status = 'Active'; ParentID: string | null = null; BaseAgentID: string | null = null;
+        OwnerUserID = ''; InstantiationMode = 'None'; Actions: Array<{ ID: string }> = []; Notes: Array<{ ID: string }> = [];
+    },
+    MAX_AGENT_INHERITANCE_DEPTH: 5,
+    DeepMergeAgentConfigObjects: (base: Record<string, unknown>, over: Record<string, unknown>) => ({ ...base, ...over }),
+    ParseAgentConfigJsonObject: (raw: string | null | undefined) => {
+        if (!raw) return null;
+        try { return JSON.parse(raw); } catch { return null; }
     },
 }));
 
-vi.mock('../AIAgentPermissionHelper', () => ({
-    AIAgentPermissionHelper: {
-        HasPermission: vi.fn().mockResolvedValue(true),
-        GetEffectivePermissions: vi.fn().mockResolvedValue({
-            canView: true, canRun: true, canEdit: true, canDelete: true, isOwner: true,
-        }),
-        GetAccessibleAgents: vi.fn().mockResolvedValue([]),
-        IsDirectlyDiscoverable: vi.fn(
-            (a: { ParentID: string | null; ExposeAsAction: boolean; InvocationMode: string }) =>
-                a.ParentID === null && a.ExposeAsAction && a.InvocationMode !== 'Sub-Agent'
-        ),
-        ClearCache: vi.fn(),
-        RefreshCache: vi.fn().mockResolvedValue(undefined),
-    },
-    EffectiveAgentPermissions: class {},
-}));
+vi.mock('../AIAgentPermissionHelper', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../AIAgentPermissionHelper')>();
+    return {
+        AIAgentPermissionHelper: {
+            ...actual.AIAgentPermissionHelper,
+            HasPermission: vi.fn().mockResolvedValue(true),
+            GetEffectivePermissions: vi.fn().mockResolvedValue({
+                canView: true, canRun: true, canEdit: true, canDelete: true, isOwner: true,
+            }),
+            GetAccessibleAgents: vi.fn().mockResolvedValue([]),
+            ComputeEffectivePermissionsSync: actual.AIAgentPermissionHelper.ComputeEffectivePermissionsSync.bind(actual.AIAgentPermissionHelper),
+            IsDirectlyDiscoverable: vi.fn(
+                (a: { ParentID: string | null; ExposeAsAction: boolean; InvocationMode: string; InstantiationMode?: string }) =>
+                    a.ParentID === null && a.ExposeAsAction && a.InvocationMode !== 'Sub-Agent' && a.InstantiationMode !== 'Required'
+            ),
+            ClearCache: vi.fn(),
+            RefreshCache: vi.fn().mockResolvedValue(undefined),
+        },
+        EffectiveAgentPermissions: class {},
+    };
+});
 
 import { AIEngineBase } from '../BaseAIEngine';
 import { TimePerMinutePriceUnitType, PerMillionTokensPriceUnitType, type BasePriceUnitType } from '../PriceUnitTypes';
